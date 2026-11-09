@@ -8,9 +8,9 @@ you define that keep looking for issues. It works while Claude Code is open.
 
 - **The board** lives in your project as `.symcc/board.json`. Each task is *to do*,
   *doing*, *waiting for you*, *failed*, *done* or *dropped*. You see it in a side panel
-  above the prompt, in Claude Code's own task list (**Ctrl+T**), and in the status line.
+  above the prompt and in the status line.
   `/board` prints it; `/board T-3` shows one task in full. Workers show in Claude Code's
-  agents list while they run, so you can open one and watch it work.
+  background tasks (Ctrl+T) while they run, so you can open one and watch it work.
 - **The lead** is your normal Claude Code chat. Tell it what you want; it puts tasks on
   the board with its symcc tools, changes them when you ask, and decides what happens
   when a task fails or a scout finds something.

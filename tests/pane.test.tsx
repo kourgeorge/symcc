@@ -12,9 +12,8 @@ const task = (id: string, status: string, title: string, extra: Record<string, u
 test('the panel shows the board, waiting tasks first, with their question', async ($, on) => {
   on('state.get', () => ({
     value: {
-      value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [{ name: 'tests', every_minutes: 30, last_run: null, running: true }], paused: false, test_commands: ['npm test'] },
+      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [{ name: 'tests', every_minutes: 30, last_run: null, running: true }], paused: false, test_commands: ['npm test'] } },
       version: 1,
-      shape: 'view-1',
     },
   }))
   for (const surface of ['terminal', 'desktop'] as const) {
@@ -44,9 +43,8 @@ const BAND = {
 test('the band above the prompt sums up the board and lists what needs you or is running', async ($, on) => {
   on('state.get', () => ({
     value: {
-      value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], paused: false, test_commands: [] },
+      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], paused: false, test_commands: [] } },
       version: 1,
-      shape: 'view-1',
     },
   }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
