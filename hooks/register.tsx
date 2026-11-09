@@ -74,6 +74,52 @@ async function publish($: $, b: Board) {
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
   $.ui.status(b.tasks.length ? `board: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : undefined)
+  void mirror($, b)
+}
+
+// ---------------- the native task list (Ctrl+T) ----------------
+// Claude Code's own task list shows the board too. It is per session, so it is a
+// mirror: the board file is the truth, and each board task gets one native task,
+// kept in step by status. Native ids are this session's alone, held in memory.
+const nativeId = new Map<string, string>() // board id → native id
+const nativeSeen = new Map<string, string>() // board id → what we last wrote
+let mirroring: Promise<unknown> = Promise.resolve()
+let mirrorBroken = false
+
+const nativeStatus = (s: SymccTask['status']) => (s === 'doing' ? 'in_progress' : s === 'done' ? 'completed' : s === 'dropped' ? 'deleted' : 'pending')
+const nativeSubject = (t: SymccTask) => `${t.id} ${t.title}${t.status === 'waiting' ? ' (waiting for you)' : t.status === 'failed' ? ' (failed)' : ''}`.slice(0, 200)
+
+function mirror($: $, b: Board) {
+  if (mirrorBroken) return mirroring
+  mirroring = mirroring
+    .then(async () => {
+      for (const t of b.tasks) {
+        const status = nativeStatus(t.status)
+        const subject = nativeSubject(t)
+        const key = `${status}|${subject}`
+        if (nativeSeen.get(t.id) === key) continue
+        let id = nativeId.get(t.id)
+        if (!id) {
+          if (status === 'deleted' || status === 'completed') {
+            nativeSeen.set(t.id, key)
+            continue // nothing to show for work that ended before this session
+          }
+          const r = await $.tool.call({ tool: 'TaskCreate', subject, description: t.details.slice(0, 2000), activeForm: `Working on ${t.id}` })
+          id = (r as { result?: { task?: { id?: string } } }).result?.task?.id
+          if (!id) throw new Error('TaskCreate gave no id')
+          nativeId.set(t.id, id)
+        }
+        await $.tool.call({ tool: 'TaskUpdate', taskId: id, subject, status })
+        nativeSeen.set(t.id, key)
+        if (status === 'deleted') nativeId.delete(t.id)
+      }
+    })
+    .catch((e: Error) => {
+      // The native list is a convenience: if this Claude Code can't take it, stop trying.
+      mirrorBroken = true
+      $.ui.log(`symcc: can't show the board in the native task list: ${e.message}`, { to: 'debug' })
+    })
+  return mirroring
 }
 
 // ---------------- telling the lead ----------------
@@ -308,6 +354,17 @@ async function scheduleScouts($: $) {
 
 // ---------------- the lead's tools ----------------
 
+function taskText(t: SymccTask, running: boolean): string {
+  const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', todo: 'to do', done: 'done', dropped: 'dropped' }
+  const L = [`${t.id}  ${t.title}  [${word[t.status]}]`]
+  if (t.status === 'waiting' && t.question) L.push(`asks: ${t.question}`)
+  if (t.note) L.push(`now: ${t.note}`)
+  L.push('', t.details, '', `files: ${t.files.join(', ') || 'anywhere'}${t.after.length ? ` · after: ${t.after.join(', ')}` : ''}${t.branch ? ` · branch: ${t.branch}` : ''} · tries: ${t.attempts}`)
+  if (t.history.length) L.push('', 'What happened:', ...t.history.map(h => `  • ${h}`))
+  if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
+  return L.join('\n')
+}
+
 const LEAD_GUIDE = `## symcc: you are the lead (main conversation only)
 This section is for the main conversation only. If you are a subagent (a symcc worker or scout, or any other), ignore it and do the job you were given.
 
@@ -440,7 +497,7 @@ export const register: Register = on => {
     })
     for (const t of TOOLS) await $.tool.register({ ...t, isDeferred: false })
     for (const c of [
-      { name: 'board', description: 'Show the symcc task board (and open its panel)' },
+      { name: 'board', description: 'Show the symcc task board, or one task in full: /board T-3', argumentHint: '[T-id]' },
       { name: 'scouts', description: 'List symcc scouts, or run one now: /scouts run <name>', argumentHint: '[run <name>]' },
       { name: 'stop-all', description: 'Stop every symcc worker and scout now; nothing new starts until /resume-all' },
       { name: 'resume-all', description: 'Let symcc start work again' },
@@ -494,8 +551,15 @@ export const register: Register = on => {
 
   // /board prints the board; in fullscreen it also opens it as a sidebar beside the chat.
   on('command.run', { command: 'board' }, async ($, e) => {
+    const b = await load($)
+    const arg = e.args.trim()
+    if (arg) {
+      const t = find(b, arg)
+      if (!t) return { text: `${arg} is not on the board` }
+      return { text: taskText(t, [...workers.values()].some(w => w.task === t.id)) }
+    }
     if (e.presentation.isFullscreen) await $.ui.open({ id: PANE, title: 'Board' })
-    return { text: boardText(await load($)) }
+    return { text: `${boardText(b)}\n\n/board T-1 shows one task in full · Ctrl+T shows the tasks in Claude Code's task list` }
   })
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
