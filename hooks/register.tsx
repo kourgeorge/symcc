@@ -449,7 +449,6 @@ export const register: Register = on => {
     await scheduleScouts($)
     const b = await load($)
     await publish($, b)
-    void $.ui.open({ id: PANE, title: 'Board' })
     void pump($)
     return started
   })
@@ -493,9 +492,56 @@ export const register: Register = on => {
     return r
   })
 
-  on('command.run', { command: 'board' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Board' })
+  // /board prints the board; in fullscreen it also opens it as a sidebar beside the chat.
+  on('command.run', { command: 'board' }, async ($, e) => {
+    if (e.presentation.isFullscreen) await $.ui.open({ id: PANE, title: 'Board' })
     return { text: boardText(await load($)) }
+  })
+
+  // The band above the prompt: the board, always in view inside Claude Code's own screen.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || e.props.view.agentId) return next(e)
+    const v = (await $.state.get({ plugin: 'symcc', key: 'view' })).value as unknown as SymccView | undefined
+    const tasks = v?.tasks ?? []
+    if (!tasks.length) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    const count = (s: string) => tasks.filter(t => t.status === s).length
+    const summary = [
+      count('doing') && `${count('doing')} doing`,
+      count('todo') && `${count('todo')} to do`,
+      count('waiting') && `${count('waiting')} waiting for you`,
+      count('failed') && `${count('failed')} failed`,
+      count('done') && `${count('done')} done`,
+    ].filter(Boolean).join(' · ')
+    const order = ['waiting', 'failed', 'doing']
+    const live = tasks.filter(t => order.includes(t.status)).sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || a.order - b.order)
+    const room = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
+    const color: Record<string, string> = { waiting: 'yellow', failed: 'red', doing: 'green' }
+    const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing' }
+    const running = (v?.scouts ?? []).filter(s => s.running).map(s => s.name)
+    return (
+      <Box flexDirection="column">
+        <Text wrap="truncate">
+          <Text bold>Board</Text>
+          <Text dimColor>
+            {' '}
+            {summary}
+            {v?.paused ? ' · PAUSED (/resume-all)' : ''}
+            {running.length ? ` · scouting: ${running.join(', ')}` : ''} · /board
+          </Text>
+        </Text>
+        {live.slice(0, room).map(t => (
+          <Text wrap="truncate">
+            <Text color={color[t.status] as never}>
+              {t.id} {word[t.status]}
+            </Text>
+            <Text> {t.title}</Text>
+            <Text dimColor>{t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
+          </Text>
+        ))}
+        {live.length > room && <Text dimColor>+{live.length - room} more · /board</Text>}
+      </Box>
+    )
   })
 
   on('command.run', { command: 'scouts' }, async ($, e) => {
