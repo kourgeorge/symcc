@@ -1,0 +1,7 @@
+{
+  "name": "symcc",
+  "version": "0.1.0",
+  "description": "A shared task board the main chat (the lead) manages, workers that build tasks in parallel in their own worktrees and merge what passes the tests, and scouts you define that look for issues on a timer.",
+  "types": "./types/index.d.ts",
+  "license": "MIT"
+}
