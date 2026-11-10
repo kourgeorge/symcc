@@ -1,6 +1,19 @@
 // symcc's values the panel and status line draw from.
 export type SymccStatus = 'todo' | 'doing' | 'paused' | 'waiting' | 'failed' | 'done' | 'dropped'
 
+/**
+ * One worker try on a task: when it started and ended (ISO times), and what it used.
+ * `tokens` comes from the worker's turn result (all input, cache and output tokens added up).
+ * `cost` (US dollars) is kept for when a result reports it: the worker's turn result in the
+ * Claude Code types gives token counts but no dollar cost, so today only time and tokens are filled.
+ */
+export type SymccRun = {
+  started: string
+  ended?: string
+  tokens?: number
+  cost?: number
+}
+
 export type SymccTask = {
   id: string
   title: string
@@ -21,6 +34,8 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
+  /** one entry per worker try, oldest first */
+  runs?: SymccRun[]
   branch: string | null
   /** the agent id of the last worker started on this task */
   agent?: string

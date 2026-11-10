@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -214,4 +214,55 @@ test('after a reload, a task whose old worker is still alive stays "doing"', () 
   b = patchTask(b, 'T-2', { status: 'doing', session: 'me' }, T)
   const after = resetDoing(b, 'me', null, 0, 'restarted', T, ['T-1'])
   expect(after.tasks.map(t => t.status)).toEqual(['doing', 'todo'])
+})
+
+test('time and cost: a try records its start and end, and leaving "doing" ends it', async () => {
+  let [b, t] = addTask(emptyBoard(), { title: 'timed' }, T)
+  b = patchTask(b, t.id, { status: 'doing', runs: startRun(undefined, '2026-11-09T10:00:00.000Z') }, T)
+  expect(b.tasks[0]!.runs).toEqual([{ started: '2026-11-09T10:00:00.000Z' }])
+  const ended = endRun(b.tasks[0]!.runs, '2026-11-09T10:12:00.000Z', { tokens: 1500 })
+  expect(ended).toEqual([{ started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: 1500 }])
+  // A second end keeps the first end time.
+  expect(endRun(ended, '2026-11-09T11:00:00.000Z', { cost: 0.5 })[0]).toEqual({ ...ended[0], cost: 0.5 })
+  // A task that leaves "doing" with an open try gets it ended.
+  b = patchTask(b, t.id, { status: 'failed' }, '2026-11-09T10:05:00.000Z')
+  expect(b.tasks[0]!.runs![0]!.ended).toBe('2026-11-09T10:05:00.000Z')
+  expect(usageTokens({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 1 })).toBe(116)
+  expect(usageTokens(undefined)).toBe(undefined)
+})
+
+test('time and cost: tries add up, and a running try counts up to now', async () => {
+  const runs = [
+    { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: 1000, cost: 0.4 },
+    { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 3 },
+    { started: '2026-11-09T13:00:00.000Z' },
+  ]
+  expect(sumRuns(runs, Date.parse('2026-11-09T13:05:00.000Z'))).toEqual({ ms: 77 * 60_000, tries: 3, tokens: 1000, cost: 3.4 })
+  expect(sumRuns(runs).ms).toBe(72 * 60_000)
+  expect(sumRuns([])).toEqual({ ms: 0, tries: 0 })
+  expect(sumRuns([{ started: 'bad', ended: 'worse' }]).ms).toBe(0)
+  expect(fmtRun(runs[2]!, 2, Date.parse('2026-11-09T13:05:00.000Z'))).toBe('try 3: 5m (running)')
+  let [b] = addTask(emptyBoard(), { title: 'a' }, T)
+  expect(boardText(b)).not.toContain('total:')
+  b = { ...b, tasks: b.tasks.map(t => ({ ...t, runs: runs.slice(0, 2) })) }
+  expect(boardTotal(b).tries).toBe(2)
+  expect(boardText(b).split('\n').at(-1)).toBe('total: 1h 12m · 1k tokens · ~$3.40 over 2 tries')
+})
+
+test('time and cost: formatting', async () => {
+  expect(fmtDuration(0)).toBe('0s')
+  expect(fmtDuration(45_000)).toBe('45s')
+  expect(fmtDuration(12 * 60_000)).toBe('12m')
+  expect(fmtDuration(65 * 60_000)).toBe('1h 05m')
+  expect(fmtDuration(72 * 60_000)).toBe('1h 12m')
+  expect(fmtDuration(NaN)).toBe('0s')
+  expect(fmtCost(0.42)).toBe('$0.42')
+  expect(fmtCost(3.4)).toBe('$3.40')
+  expect(fmtCost(0.001)).toBe('<$0.01')
+  expect(fmtCost(0)).toBe('$0.00')
+  expect(fmtTokens(950)).toBe('950')
+  expect(fmtTokens(12_340)).toBe('12.3k')
+  expect(fmtTokens(1_200_000)).toBe('1.2M')
+  expect(fmtTotal({ ms: 72 * 60_000, tries: 1, cost: 3.4 })).toBe('1h 12m · ~$3.40')
+  expect(fmtTotal({ ms: 60_000, tries: 1 })).toBe('1m')
 })

@@ -49,6 +49,9 @@ worthwhile ones as tasks. `examples/scouts/` has two to copy.
 - `/board`: open the interactive board: ↑↓ to move, Enter to open a task, Esc to close.
   An open task shows everything about it and has buttons to pause, resume, retry, drop,
   watch its worker live, and a box to answer it when it waits for you. `/board T-3` opens that task directly. `ctrl+x tab` goes back to it.
+  Each task also lists how long each worker try took and the tokens it used, with a total;
+  the board ends with a total line for all tasks (e.g. `total: 1h 12m · 1.2M tokens over 4 tries`).
+  Claude Code reports tokens but not dollars for a worker, so a cost (`~$3.40`) shows only when one is recorded.
 - `/scouts`: list scouts; `/scouts run <name>` runs one now
 - `/stop-all`: stop every worker and scout now; nothing new starts until `/resume-all`
 - `/resume-all`: start work again

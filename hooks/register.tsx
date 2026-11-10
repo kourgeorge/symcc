@@ -35,6 +35,13 @@ import {
   clampRetries,
   onTestFail,
   testTail,
+  startRun,
+  endRun,
+  usageTokens,
+  sumRuns,
+  fmtRun,
+  fmtTotal,
+  totalLine,
   ownedHere,
   outOfScope,
   parseBoard,
@@ -397,7 +404,8 @@ async function startWorker($: $, id: string) {
     const t = await change($, x => {
       const cur = find(x, id)
       if (!mayStart(cur, agents)) return [x, null]
-      const y = patchTask(x, id, { status: 'doing', session: me, attempts: cur!.attempts + 1, branch, note: 'worker on it' }, now())
+      const at = now()
+      const y = patchTask(x, id, { status: 'doing', session: me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at) }, at)
       return [y, find(y, id)!]
     })
     if (!t) return
@@ -436,12 +444,19 @@ async function waitEnded($: $, ids: string[], ms: number): Promise<AgentInfo[]> 
   }
 }
 
-async function workerFinished($: $, agentId: string, answer: string, aborted: boolean) {
+async function workerFinished($: $, agentId: string, answer: string, aborted: boolean, tokens?: number) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
   finishing.add(w.task)
   try {
+    // The try ends now (checking and merging is not counted). The turn result gives tokens but
+    // no dollar cost, so `cost` stays empty until Claude Code reports one.
+    const ended = now()
+    await change($, x => {
+      const t = find(x, w.task)
+      return t?.status === 'doing' && t.runs?.length ? patchTask(x, w.task, { runs: endRun(t.runs, ended, { tokens }) }, ended) : x
+    })
     await finishWork($, agentId, w, answer, aborted)
   } finally {
     finishing.delete(w.task)
@@ -693,6 +708,7 @@ function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string
     }
   }
   if (t.history.length) L.push('', `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map(line => `  • ${line}`))
+  if (t.runs?.length) L.push('', 'Time and cost:', ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`)
   if (t.branch) L.push('', `branch: ${t.branch}`)
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
   return L.join('\n')
@@ -820,7 +836,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   switch (name) {
     case 'board':
-      return boardText(await load($))
+      return boardText(await load($), Date.now())
     case 'add': {
       const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined }, now()))
       void pump($)
@@ -995,7 +1011,7 @@ export const register: Register = on => {
   // A worker's or scout's run ended: its final answer arrives here.
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
-    if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted)
+    if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer)
     return r
   })
@@ -1280,6 +1296,16 @@ export const register: Register = on => {
             </Box>
           )}
 
+          {(t.runs?.length ?? 0) > 0 && (
+            <Box flexDirection="column">
+              {heading('Time and cost')}
+              {t.runs!.map((r, i) => (
+                <Text color={C(r.ended ? 'subtle' : 'success')}>{`  ${fmtRun(r, i, Date.now())}`}</Text>
+              ))}
+              <Text bold color={C('text')}>{`  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`}</Text>
+            </Box>
+          )}
+
           {t.branch && (
             <Text>
               <Text color={C('subtle')}>branch: </Text>
@@ -1348,6 +1374,7 @@ export const register: Register = on => {
             <Text color={C('subtle')}> · /scouts run &lt;name&gt;</Text>
           </Text>
         )}
+        {totalLine(v, Date.now()) && <Text color={C('subtle')}>{totalLine(v, Date.now())}</Text>}
       </Box>
     )
   })

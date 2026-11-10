@@ -131,3 +131,25 @@ test('a paused task shows as paused and can be resumed from the board', async ($
   expect(await ui.find({ key: 'pause' })).toBeUndefined()
   await ui.unmount()
 })
+
+const RUNS = [
+  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: 40_000 },
+  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 0.42 },
+]
+
+test('an opened task shows the time of each try and the total', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS })], working: [], scouts: [], paused: false, test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /Time and cost/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 2: 1h 00m · ~\$0\.42/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens · ~\$0\.42/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the board list ends with the total time and cost of all tries', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], paused: false, test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens · ~\$0\.42 over 2 tries/ })).toBeDefined()
+  await ui.unmount()
+})
