@@ -29,6 +29,8 @@ import {
 type $ = EngineInterface
 
 const PANE = 'symcc-board'
+/** which task the board panel has open; '' = the list */
+const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } as SymccView, { shape: 'view-1' })
 
 // ---------------- what this module holds while it is loaded ----------------
@@ -175,7 +177,7 @@ ${t.details}
 Files you may change: ${t.files.length ? t.files.join(', ') : 'whatever the task needs'}. Changes anywhere else are thrown away.
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: symcc commits, tests and merges your work.
-${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(h => `- ${h}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
+${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
 async function pump($: $) {
@@ -314,7 +316,7 @@ function taskText(t: SymccTask, running: boolean): string {
   if (t.status === 'waiting' && t.question) L.push(`asks: ${t.question}`)
   if (t.note) L.push(`now: ${t.note}`)
   L.push('', t.details, '', `files: ${t.files.join(', ') || 'anywhere'}${t.after.length ? ` · after: ${t.after.join(', ')}` : ''}${t.branch ? ` · branch: ${t.branch}` : ''} · tries: ${t.attempts}`)
-  if (t.history.length) L.push('', 'What happened:', ...t.history.map(h => `  • ${h}`))
+  if (t.history.length) L.push('', 'What happened:', ...t.history.map(line => `  • ${line}`))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
   return L.join('\n')
 }
@@ -510,10 +512,13 @@ export const register: Register = on => {
     if (arg) {
       const t = find(b, arg)
       if (!t) return { text: `${arg} is not on the board` }
-      return { text: taskText(t, [...workers.values()].some(w => w.task === t.id)) }
+      await update($, opened, () => t.id)
+      await $.ui.open({ id: PANE, title: 'Board', focus: true, closeOnEscape: true })
+      return { text: taskText(t, [...workers.values()].some(w => w.task === t.id)), isTextDisplayOnly: true }
     }
-    if (e.presentation.isFullscreen) await $.ui.open({ id: PANE, title: 'Board' })
-    return { text: `${boardText(b)}\n\n/board T-1 shows one task in full` }
+    await update($, opened, () => '')
+    await $.ui.open({ id: PANE, title: 'Board', focus: true, closeOnEscape: true })
+    return { text: `Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`, isTextDisplayOnly: true }
   })
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
@@ -522,7 +527,7 @@ export const register: Register = on => {
     const v = await read($, view)
     const tasks = v?.tasks ?? []
     if (!tasks.length) return next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const count = (s: string) => tasks.filter(t => t.status === s).length
     const summary = [
       count('doing') && `${count('doing')} doing`,
@@ -539,15 +544,18 @@ export const register: Register = on => {
     const running = (v?.scouts ?? []).filter(s => s.running).map(s => s.name)
     return (
       <Box flexDirection="column">
-        <Text wrap="truncate">
+        <Box flexDirection="row">
+          <Text wrap="truncate">
           <Text bold>Board</Text>
           <Text dimColor>
             {' '}
             {summary}
             {v?.paused ? ' · PAUSED (/resume-all)' : ''}
-            {running.length ? ` · scouting: ${running.join(', ')}` : ''} · /board
+            {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
           </Text>
-        </Text>
+          </Text>
+          <Button key="open-board" label="open board" dimColor onPress={() => void update($, opened, () => '').then(() => $.ui.open({ id: PANE, title: 'Board', focus: true, closeOnEscape: true }))} />
+        </Box>
         {live.slice(0, room).map(t => (
           <Text wrap="truncate">
             <Text color={color[t.status] as never}>
@@ -597,39 +605,85 @@ export const register: Register = on => {
     return { text: 'Resumed: workers start on ready tasks again.' }
   })
 
-  // The side panel: the board, live.
+  // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button, Input } = $.ui.resolve(e)
     const v = await read($, view)
-    const tasks = v?.tasks ?? []
-    const width = Math.max(20, e.props.bodyColumns ?? 40)
+    const open = await read($, opened)
+    const width = Math.max(20, e.props.bodyColumns ?? 60)
     const color: Record<string, string | undefined> = { waiting: 'yellow', failed: 'red', doing: 'green', todo: undefined, done: 'gray', dropped: 'gray' }
-    const order = ['waiting', 'failed', 'doing', 'todo', 'done', 'dropped']
-    const rows = [...tasks].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || a.order - b.order)
-    const room = Math.max(3, (e.viewport?.rows ?? 30) - 6)
     const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', todo: 'to do', done: 'done', dropped: 'dropped' }
+    const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(`symcc: ${err.message}`))
+    const t = open ? v.tasks.find(x => x.id === open) : undefined
+
+    if (t) {
+      const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
+      return (
+        <Box flexDirection="column">
+          <Text wrap="truncate">
+            <Text bold>{t.id}</Text> <Text color={color[t.status] as never}>{word[t.status]}</Text> · {t.title}
+          </Text>
+          {t.status === 'waiting' && t.question && <Text color="yellow">asks: {t.question}</Text>}
+          {t.note && <Text dimColor>now: {t.note}</Text>}
+          <Text>{t.details.slice(0, width * 6)}</Text>
+          <Text dimColor wrap="truncate">
+            files: {t.files.join(', ') || 'anywhere'}
+            {t.after.length ? ` · after ${t.after.join(', ')}` : ''} · tries: {t.attempts}
+          </Text>
+          {t.history.slice(-3).map(line => (
+            <Text dimColor wrap="truncate">
+              • {line}
+            </Text>
+          ))}
+          {t.status === 'waiting' && (
+            <Input
+              key="answer"
+              label="Your answer: "
+              placeholder="type and press Enter"
+              autoFocus
+              onSubmit={value =>
+                act(async () => {
+                  if (!value.trim()) return
+                  await runTool($, 'change', { task: t.id, details: `${t.details}\n\nOwner's answer to "${t.question ?? ''}": ${value.trim()}` })
+                  tellLead($, `The owner answered ${t.id} on the board: "${value.trim()}". I put it into the task and sent it back to work.`)
+                })()
+              }
+            />
+          )}
+          <Box flexDirection="row" gap={1}>
+            <Button key="back" label="Back" hotkey="b" autoFocus={t.status === 'waiting' ? undefined : true} onPress={act(() => update($, opened, () => ''))} />
+            {agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />}
+            {(t.status === 'failed' || t.status === 'dropped') && (
+              <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'start', { task: t.id }), tellLead($, `The owner retried ${t.id} from the board.`)))} />
+            )}
+            {t.status !== 'done' && t.status !== 'dropped' && (
+              <Button key="drop" label="Drop" hotkey="x" onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
+            )}
+          </Box>
+        </Box>
+      )
+    }
+
+    const order = ['waiting', 'failed', 'doing', 'todo', 'done', 'dropped']
+    const rows = [...v.tasks].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || a.order - b.order)
     return (
       <Box flexDirection="column">
         <Text dimColor wrap="truncate">
-          {v?.paused ? 'PAUSED · ' : ''}tests: {v?.test_commands.join(' && ') || 'none'}
+          {v.paused ? 'PAUSED · ' : ''}tests: {v.test_commands.join(' && ') || 'none'} · Enter opens a task · Esc closes
         </Text>
         {rows.length === 0 && <Text dimColor>The board is empty. Tell the lead what you want.</Text>}
-        {rows.slice(0, room).map(t => (
-          <Box flexDirection="column">
-            <Text color={color[t.status] as never} wrap="truncate">
-              {t.id} {word[t.status]} · {t.title}
+        {rows.map((x, i) => (
+          <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
+            <Text color={color[x.status] as never}>
+              {x.id} {word[x.status]}
             </Text>
-            {(t.status === 'waiting' || t.status === 'failed' || t.status === 'doing') && (t.question || t.note) && (
-              <Text dimColor wrap="truncate">
-                {'  '}
-                {(t.status === 'waiting' ? t.question ?? t.note : t.note).slice(0, width * 2)}
-              </Text>
-            )}
-          </Box>
+            <Text> {x.title.slice(0, Math.max(10, width - 30))}</Text>
+            <Text dimColor>{x.status === 'waiting' ? ` — ${x.question ?? ''}` : x.note ? ` — ${x.note}` : ''}</Text>
+          </Button>
         ))}
-        {(v?.scouts.length ?? 0) > 0 && (
+        {v.scouts.length > 0 && (
           <Text dimColor wrap="truncate">
-            scouts: {v!.scouts.map(s => `${s.name}${s.running ? ' (running)' : ''}`).join(', ')}
+            scouts: {v.scouts.map(sc => `${sc.name}${sc.running ? ' (running)' : ''}`).join(', ')} · /scouts run &lt;name&gt;
           </Text>
         )}
       </Box>

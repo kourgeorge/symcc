@@ -46,7 +46,9 @@ worthwhile ones as tasks. `examples/scouts/` has two to copy.
 
 ## Commands
 
-- `/board`: show the board (in fullscreen also as a sidebar); `/board T-3` shows one task
+- `/board`: open the interactive board: ↑↓ to move, Enter to open a task, Esc to close.
+  An open task has buttons to retry, drop, watch its worker live, and a box to answer it
+  when it waits for you. `/board T-3` opens that task directly. `ctrl+x tab` goes back to it.
 - `/scouts`: list scouts; `/scouts run <name>` runs one now
 - `/stop-all`: stop every worker and scout now; nothing new starts until `/resume-all`
 - `/resume-all`: start work again
