@@ -28,6 +28,10 @@ import {
   normId,
   onConflict,
   MAX_CONFLICT_TRIES,
+  DEFAULT_AUTO_RETRIES,
+  clampRetries,
+  onTestFail,
+  testTail,
   ownedHere,
   outOfScope,
   parseBoard,
@@ -283,7 +287,7 @@ async function removeWorktree($: $, dir: string) {
 }
 
 /** Commit the worker's changes, check scope, bring in the latest main, test, then move main forward. */
-async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b: Board): Promise<{ ok: boolean; detail: string; conflict?: boolean }> {
+async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b: Board): Promise<{ ok: boolean; detail: string; conflict?: boolean; testOutput?: string }> {
   const target = b.target_branch
   await git($, ['add', '-A', '--', '.'], dir)
   await git($, ['-c', 'user.name=symcc', '-c', 'user.email=symcc@localhost', 'commit', '-q', '--no-verify', '-m', `${t.id}: ${t.title}`], dir)
@@ -307,7 +311,7 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b:
     const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: 600_000 }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
       const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-      return { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}` }
+      return { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
     }
   }
   // Move main forward (compare-and-swap). If the person has main checked out, update
@@ -337,7 +341,7 @@ ${t.details}
 Files you may change: ${t.files.length ? t.files.join(', ') : 'whatever the task needs'}. Changes anywhere else are thrown away.
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: symcc commits, tests and merges your work.
-${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
+${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
 async function pump($: $) {
@@ -388,7 +392,7 @@ async function workerFinished($: $, agentId: string, answer: string, aborted: bo
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with symcc ask.`)
   } else {
     await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
-    const r: { ok: boolean; detail: string; conflict?: boolean } = await checkAndMerge($, t, w.worktree, w.branch, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string } = await checkAndMerge($, t, w.worktree, w.branch, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     const line = `try ${t.attempts}: ${summary.slice(0, 300)} → ${r.detail}`
     const tries = t.conflict_tries ?? 0
     if (r.conflict && onConflict(t) === 'retry') {
@@ -398,11 +402,21 @@ async function workerFinished($: $, agentId: string, answer: string, aborted: bo
       tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
       return void (await pump($))
     }
+    const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
+    const testTries = t.test_tries ?? 0
+    if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
+      // Don't fail yet: a new worker gets the failing test output and fixes it.
+      const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
+      await change($, x => patchTask(x, t.id, { status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...t.history, line] }, now()))
+      tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
+      return void (await pump($))
+    }
     const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
     const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
-    await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, history: [...t.history, done] }, now()))
+    await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
     if (r.ok) await removeWorktree($, w.worktree)
-    tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}`)
+    const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
+    tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
   }
   await pump($)
 }
@@ -635,7 +649,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   lead: `The lead (this chat) has these tools:
   board · add · change · start · ask · drop · stop · resume · stop_all · resume_all · settings
   settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
-  max_minutes (a worker running longer is stopped), paused.
+  max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
+  after failing tests, 2 by default), paused.
   After each worker finishes, the lead gets a "[symcc] Update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
@@ -706,8 +721,8 @@ const TOOLS = [
   { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
-    description: 'Change how the team works: test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
-    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, paused: { type: 'boolean' } } },
+    description: 'Change how the team works: test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
+    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, paused: { type: 'boolean' } } },
   },
 ]
 
@@ -747,7 +762,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       if (!t) throw new Error(`${id} is not on the board`)
       if (t.status === 'doing') return `${t.id} is already running`
       if (t.status === 'done') return `${t.id} is already done`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'queued' }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'queued', test_tries: 0 }, now()))
       void pump($)
       return `${t.id} queued`
     }
@@ -797,6 +812,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (list(a.test_commands)) ((y.test_commands = list(a.test_commands)!.map(x => x.trim()).filter(Boolean).slice(0, 5)), parts.push(`tests: ${y.test_commands.join(' && ') || 'none'}`))
         if (typeof a.max_parallel === 'number') ((y.max_parallel = Math.max(1, Math.min(8, Math.round(a.max_parallel)))), parts.push(`up to ${y.max_parallel} at once`))
         if (typeof a.max_minutes === 'number') ((y.max_minutes = Math.max(5, Math.min(600, Math.round(a.max_minutes)))), parts.push(`a worker may run ${y.max_minutes} min`))
+        if (typeof a.auto_retries === 'number') ((y.auto_retries = clampRetries(a.auto_retries)), parts.push(`${y.auto_retries} automatic ${y.auto_retries === 1 ? 'retry' : 'retries'} after failing tests`))
         if (typeof a.paused === 'boolean') ((y.paused = a.paused), parts.push(a.paused ? 'paused' : 'resumed'))
         return y
       })

@@ -12,6 +12,8 @@ export type Board = {
   max_parallel: number
   /** a worker running longer than this is stopped and its task marked failed */
   max_minutes: number
+  /** how many new tries a task gets on its own after its tests fail, before it is marked failed */
+  auto_retries: number
   tasks: BoardTask[]
 }
 
@@ -49,7 +51,7 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
 
 export function emptyBoard(): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -157,6 +159,30 @@ export function outOfScope(changed: string[], allowed: string[]): string[] {
   return changed.filter(f => f.startsWith('.symcc/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
+// ---------------- when the tests fail ----------------
+
+/** How many automatic retries after failing tests a new board allows. */
+export const DEFAULT_AUTO_RETRIES = 2
+/** How much of the failing test output the next worker is shown (the end of it). */
+export const TEST_OUTPUT_CHARS = 3000
+
+/**
+ * A task's tests failed. 'retry': send it back to "todo" so a new worker fixes it, with the
+ * test output; 'fail': it already had `max` automatic retries, so the lead decides.
+ */
+export function onTestFail(t: Pick<SymccTask, 'test_tries'>, max = DEFAULT_AUTO_RETRIES): 'retry' | 'fail' {
+  return (t.test_tries ?? 0) < max ? 'retry' : 'fail'
+}
+
+/** The last `n` characters of the test output, so it fits in the next worker's prompt. */
+export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
+  const s = String(output ?? '').trim()
+  return s.length > n ? '…' + s.slice(-n) : s
+}
+
+/** A settings value for auto_retries: a whole number from 0 to 10. */
+export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(Number.isFinite(n) ? n : DEFAULT_AUTO_RETRIES)))
+
 // ---------------- when the branch conflicts with main ----------------
 
 /** How many new tries a task gets to merge main into its branch after a conflict. */
@@ -185,7 +211,7 @@ export function boardText(b: Board): string {
     const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })
-  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min`
+  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   return [head, ...lines].join('\n')
 }
 

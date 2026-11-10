@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -149,4 +149,32 @@ test('a conflict with main gets a new try at most twice, then the task fails', (
   expect(onConflict(b.tasks[0]!)).toBe('fail')
   expect(onConflict({ conflict_tries: 3 })).toBe('fail')
   expect(onConflict({ conflict_tries: 0 }, 0)).toBe('fail')
+})
+
+test('failing tests get a new try on their own until auto_retries, then the task fails', () => {
+  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  expect(DEFAULT_AUTO_RETRIES).toBe(2)
+  expect(emptyBoard().auto_retries).toBe(2)
+  // an old board without the setting gets the default
+  expect(parseBoard(JSON.stringify({ version: 1, tasks: [] })).auto_retries).toBe(2)
+  // under the cap: retry
+  expect(onTestFail(b.tasks[0]!, b.auto_retries)).toBe('retry')
+  b = patchTask(b, 'T-1', { test_tries: 1, test_output: 'expected 1, got 2' }, T)
+  expect(onTestFail(b.tasks[0]!, b.auto_retries)).toBe('retry')
+  // at the cap: give up (the count and output survive a save and a load)
+  b = parseBoard(JSON.stringify(patchTask(b, 'T-1', { test_tries: 2 }, T)))
+  expect(b.tasks[0]!.test_output).toBe('expected 1, got 2')
+  expect(onTestFail(b.tasks[0]!, b.auto_retries)).toBe('fail')
+  expect(onTestFail({ test_tries: 0 }, 0)).toBe('fail')
+  expect(onTestFail({}, 3)).toBe('retry')
+  // the next worker sees only the end of long test output
+  const long = 'x'.repeat(5000) + 'THE END'
+  const tail = testTail(long)
+  expect(tail.length).toBe(TEST_OUTPUT_CHARS + 1)
+  expect(tail.endsWith('THE END')).toBe(true)
+  expect(testTail('  short  ')).toBe('short')
+  // the setting is kept to a sensible whole number
+  expect(clampRetries(3.4)).toBe(3)
+  expect(clampRetries(-1)).toBe(0)
+  expect(clampRetries(99)).toBe(10)
 })

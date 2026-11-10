@@ -64,6 +64,12 @@ stops a worker that runs longer than the limit (45 minutes unless you change it)
 marks its task failed, notices a worker that ended without a result, and reminds the
 lead about failed tasks nobody acted on for 10 minutes.
 
+When a finished task fails its tests, symcc starts a new try by itself: the task goes
+back to "to do" and the next worker is shown the end of the failing test output and told
+to fix it. The lead gets one short line each time. After `auto_retries` tries (2 unless
+you change it, e.g. "allow 3 automatic retries") the task is marked failed and the lead
+gets the last test output to decide what to do.
+
 A stopped worker can't do anything more: symcc refuses every tool it tries.
 
 ## Install
