@@ -1,5 +1,5 @@
 // symcc's values the panel and status line draw from.
-export type SymccStatus = 'todo' | 'doing' | 'waiting' | 'failed' | 'done' | 'dropped'
+export type SymccStatus = 'todo' | 'doing' | 'paused' | 'waiting' | 'failed' | 'done' | 'dropped'
 
 export type SymccTask = {
   id: string

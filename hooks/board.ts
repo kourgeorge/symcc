@@ -10,14 +10,16 @@ export type Board = {
   test_commands: string[]
   target_branch: string
   max_parallel: number
+  /** a worker running longer than this is stopped and its task marked failed */
+  max_minutes: number
   tasks: SymccTask[]
 }
 
 export const BOARD_FILE = '.symcc/board.json'
-export const OPEN: SymccStatus[] = ['todo', 'doing', 'waiting', 'failed']
+export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
 
 export function emptyBoard(): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -120,17 +122,22 @@ export function outOfScope(changed: string[], allowed: string[]): string[] {
   return changed.filter(f => f.startsWith('.symcc/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
+/** For showing the board: newest task first (by when it was made, then by its number). */
+export function newestFirst(x: SymccTask, y: SymccTask): number {
+  const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
+  return (y.created_at || '').localeCompare(x.created_at || '') || num(y.id) - num(x.id)
+}
+
 /** One line per task for the model and for /board. */
 export function boardText(b: Board): string {
   if (!b.tasks.length) return 'The board is empty.'
-  const order: SymccStatus[] = ['waiting', 'failed', 'doing', 'todo', 'done', 'dropped']
-  const rows = [...b.tasks].sort((x, y) => order.indexOf(x.status) - order.indexOf(y.status) || x.order - y.order)
+  const rows = [...b.tasks].sort(newestFirst)
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : ''
     const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })
-  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once`
+  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min`
   return [head, ...lines].join('\n')
 }
 

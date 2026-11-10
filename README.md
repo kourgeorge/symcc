@@ -47,14 +47,24 @@ worthwhile ones as tasks. `examples/scouts/` has two to copy.
 ## Commands
 
 - `/board`: open the interactive board: ↑↓ to move, Enter to open a task, Esc to close.
-  An open task has buttons to retry, drop, watch its worker live, and a box to answer it
-  when it waits for you. `/board T-3` opens that task directly. `ctrl+x tab` goes back to it.
+  An open task shows everything about it and has buttons to pause, resume, retry, drop,
+  watch its worker live, and a box to answer it when it waits for you. `/board T-3` opens that task directly. `ctrl+x tab` goes back to it.
 - `/scouts`: list scouts; `/scouts run <name>` runs one now
 - `/stop-all`: stop every worker and scout now; nothing new starts until `/resume-all`
 - `/resume-all`: start work again
 
 Everything else you just say to the lead: "what's going on?", "do T-4 first",
-"T-3 should also handle emails", "drop T-2", "set the test command to npm test".
+"T-3 should also handle emails", "drop T-2", "pause T-5", "stop everything",
+"set the test command to npm test", "give workers 90 minutes".
+
+## Keeping work moving
+
+Every two minutes symcc checks the board by itself. It starts tasks that are ready,
+stops a worker that runs longer than the limit (45 minutes unless you change it) and
+marks its task failed, notices a worker that ended without a result, and reminds the
+lead about failed tasks nobody acted on for 10 minutes.
+
+A stopped worker can't do anything more: symcc refuses every tool it tries.
 
 ## Install
 

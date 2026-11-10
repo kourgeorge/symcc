@@ -40,3 +40,19 @@ test('a scout file: front matter sets how often, the body is its instructions', 
   expect(parseScout('plain', 'Just instructions.')?.every_minutes).toBe(60)
   expect(parseScout('empty', '---\nevery_minutes: 5\n---\n')).toBe(null)
 })
+
+test('the board lists the newest task at the top and the oldest at the bottom', () => {
+  const [b1] = addTask(emptyBoard(), { title: 'Old' }, '2026-01-01T00:00:00Z')
+  const [b2] = addTask(b1, { title: 'Middle' }, '2026-01-02T00:00:00Z')
+  const [b3] = addTask(b2, { title: 'New' }, '2026-01-03T00:00:00Z')
+  const lines = boardText(b3).split('\n').slice(1)
+  expect(lines.map(l => l.trim().split(/\s+/).pop())).toEqual(['New', 'Middle', 'Old'])
+})
+
+test('a paused task is not started, and a new board has a time limit for workers', () => {
+  const [b1, t] = addTask(emptyBoard(), { title: 'A' }, '2026-01-01T00:00:00Z')
+  expect(emptyBoard().max_minutes).toBe(45)
+  expect(ready(b1).map(x => x.id)).toEqual([t.id])
+  const b2 = patchTask(b1, t.id, { status: 'paused' }, '2026-01-01T00:01:00Z')
+  expect(ready(b2)).toEqual([])
+})
