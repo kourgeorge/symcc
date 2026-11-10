@@ -871,38 +871,103 @@ export const register: Register = on => {
     const v = await read($, view)
     const open = await read($, opened)
     const width = Math.max(20, e.props.bodyColumns ?? 60)
-    const color: Record<string, string | undefined> = { waiting: 'yellow', failed: 'red', doing: 'green', paused: 'blue', todo: undefined, done: 'gray', dropped: 'gray' }
+    // Theme colors, so the board reads well in both light and dark themes.
+    const color: Record<string, string> = { waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
     const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
+    const mark: Record<string, string> = { waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
     const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(`symcc: ${err.message}`))
     const t = open ? v.tasks.find(x => x.id === open) : undefined
+    const C = (c: string) => c as never
+    /** Text with task IDs, `code` and file paths picked out in color. */
+    const rich = (text: string, base = 'text') => {
+      const parts = text.split(/(\bT-\d+\b|`[^`\n]+`|(?:[\w.-]+\/)+[\w.-]+|\b[\w-]+\.(?:md|ts|tsx|js|json|py|txt|csv|yml|yaml)\b)/g)
+      return parts.map((p, i) =>
+        i % 2 === 0 ? (
+          p
+        ) : /^T-\d+$/.test(p) ? (
+          <Text bold color={C('claude')}>{p}</Text>
+        ) : p.startsWith('`') ? (
+          <Text color={C('ide')}>{p.slice(1, -1)}</Text>
+        ) : (
+          <Text color={C('autoAccept')}>{p}</Text>
+        ),
+      ).map(x => (typeof x === 'string' ? (x ? <Text color={C(base)}>{x}</Text> : null) : x))
+    }
 
     if (t) {
       const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
       const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
       const heading = (label: string) => (
-        <Text bold color="text">
-          {label}
+        <Text bold color={C('suggestion')}>
+          ▍{label}
         </Text>
       )
+      // The details, line by line: headings, bullets and numbered steps stand out.
       const paragraphs = (text: string) =>
-        text
-          .split(/\n/)
-          .map((line, i) => (line.trim() ? <Text color="text">{line}</Text> : <Text key={`gap-${i}`}> </Text>))
+        text.split(/\n/).map((line, i) => {
+          if (!line.trim()) return <Text key={`gap-${i}`}> </Text>
+          const head = /^\s*#{1,6}\s+(.*)$/.exec(line)
+          if (head) return <Text bold color={C('claude')}>{head[1]}</Text>
+          const li = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(line)
+          if (li)
+            return (
+              <Text>
+                {li[1]}
+                <Text color={C('claude')}>{/\d/.test(li[2]!) ? li[2] : '•'}</Text> {rich(li[3]!)}
+              </Text>
+            )
+          const kv = /^(\s*)([A-Z][\w ]{1,30}):\s+(.*)$/.exec(line)
+          if (kv)
+            return (
+              <Text>
+                {kv[1]}
+                <Text bold color={C('text')}>{kv[2]}:</Text> {rich(kv[3]!)}
+              </Text>
+            )
+          return <Text>{rich(line)}</Text>
+        })
+      // History lines: the try number, then the result colored by how it went.
+      const historyLine = (line: string) => {
+        const m = /^(try \S+:)\s*(.*)$/.exec(line)
+        const body = m ? m[2]! : line
+        const [said, result] = body.includes(' → ') ? [body.slice(0, body.lastIndexOf(' → ')), body.slice(body.lastIndexOf(' → ') + 3)] : [body, '']
+        const bad = /not merged|fail|stopped|refused|error|outside|without a result/i.test(result || body)
+        const good = /merged into|^merged/i.test(result)
+        return (
+          <Text>
+            <Text color={C(bad ? 'error' : good ? 'success' : 'subtle')}>{bad ? '✗' : good ? '✓' : '•'}</Text>{' '}
+            {m && <Text bold color={C('subtle')}>{m[1]} </Text>}
+            <Text color={C('subtle')}>{said}</Text>
+            {result && (
+              <Text color={C(bad ? 'error' : good ? 'success' : 'text')}>
+                {' '}→ {result}
+              </Text>
+            )}
+          </Text>
+        )
+      }
       return (
         <Box flexDirection="column" gap={1}>
           <Box flexDirection="column">
             <Text>
-              <Text bold>{t.id}</Text> <Text color={color[t.status] as never} bold>
-                {word[t.status]}
+              <Text bold color={C('claude')}>{t.id}</Text>{' '}
+              <Text color={C(color[t.status]!)} bold>
+                {mark[t.status]} {word[t.status]}
               </Text>
-              <Text dimColor>
-                {' '}· added {when(t.created_at)} · changed {when(t.updated_at)} · tries {t.attempts}
+              <Text color={C('subtle')}>
+                {' '}· added {when(t.created_at)} · changed {when(t.updated_at)} · tries{' '}
               </Text>
+              <Text color={C(t.attempts > 2 ? 'warning' : 'subtle')}>{t.attempts}</Text>
             </Text>
-            <Text bold color="text">
+            <Text bold color={C('text')}>
               {t.title}
             </Text>
-            {t.note && <Text dimColor>now: {t.note}</Text>}
+            {t.note && (
+              <Text>
+                <Text color={C(color[t.status]!)}>now: </Text>
+                <Text italic color={C('subtle')}>{t.note}</Text>
+              </Text>
+            )}
           </Box>
 
           <Box flexDirection="row" gap={1}>
@@ -923,8 +988,11 @@ export const register: Register = on => {
           </Box>
 
           {t.status === 'waiting' && (
-            <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-              <Text color="yellow">asks: {t.question ?? '(no question)'}</Text>
+            <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+              <Text>
+                <Text bold color={C('warning')}>asks: </Text>
+                <Text color={C('text')}>{t.question ?? '(no question)'}</Text>
+              </Text>
               <Input
                 key="answer"
                 label="Your answer: "
@@ -943,12 +1011,21 @@ export const register: Register = on => {
 
           <Box flexDirection="column">
             {heading('What to do')}
-            {t.details.trim() ? paragraphs(t.details) : <Text dimColor>(no details)</Text>}
+            {t.details.trim() ? paragraphs(t.details) : <Text color={C('subtle')}>(no details)</Text>}
           </Box>
 
           <Box flexDirection="column">
             {heading('May change')}
-            {t.files.length ? t.files.map(f => <Text color="text">  {f}</Text>) : <Text dimColor>  anywhere in the project</Text>}
+            {t.files.length ? (
+              t.files.map(f => (
+                <Text>
+                  {'  '}
+                  <Text color={C('autoAccept')}>{f}</Text>
+                </Text>
+              ))
+            ) : (
+              <Text color={C('subtle')}>  anywhere in the project</Text>
+            )}
           </Box>
 
           {t.after.length > 0 && (
@@ -957,10 +1034,11 @@ export const register: Register = on => {
               {t.after.map(id => {
                 const dep = v.tasks.find(x => x.id === id)
                 return (
-                  <Text color="text">
+                  <Text>
                     {'  '}
-                    {id} <Text color={(dep ? color[dep.status] : 'red') as never}>{dep ? word[dep.status] : 'missing'}</Text>
-                    {dep ? <Text dimColor> · {dep.title}</Text> : null}
+                    <Text bold color={C('claude')}>{id}</Text>{' '}
+                    <Text color={C(dep ? color[dep.status]! : 'error')}>{dep ? `${mark[dep.status]} ${word[dep.status]}` : 'missing'}</Text>
+                    {dep ? <Text color={C('subtle')}> · {dep.title}</Text> : null}
                   </Text>
                 )
               })}
@@ -970,37 +1048,76 @@ export const register: Register = on => {
           {t.history.length > 0 && (
             <Box flexDirection="column">
               {heading(`What happened (${t.history.length}, newest first)`)}
-              {[...t.history].reverse().map(line => (
-                <Text dimColor>• {line}</Text>
-              ))}
+              {[...t.history].reverse().map(historyLine)}
             </Box>
           )}
 
-          {t.branch && <Text dimColor>branch: {t.branch}</Text>}
-          <Text dimColor>↑↓ scroll · b back{agentId ? ' · w watch worker' : ''}</Text>
+          {t.branch && (
+            <Text>
+              <Text color={C('subtle')}>branch: </Text>
+              <Text color={C('ide')}>{t.branch}</Text>
+            </Text>
+          )}
+          <Text color={C('subtle')}>↑↓ scroll · b back{agentId ? ' · w watch worker' : ''}</Text>
         </Box>
       )
     }
 
     const rows = [...v.tasks].sort(newestFirst)
+    const count = (st: string) => v.tasks.filter(x => x.status === st).length
+    const tally = (['doing', 'waiting', 'failed', 'paused', 'todo', 'done'] as const).filter(st => count(st) > 0)
+    const idWidth = Math.max(4, ...rows.map(x => x.id.length))
+    const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
       <Box flexDirection="column">
-        <Text dimColor wrap="truncate">
-          {v.paused ? 'PAUSED · ' : ''}tests: {v.test_commands.join(' && ') || 'none'} · Enter opens a task · Esc closes
-        </Text>
-        {rows.length === 0 && <Text dimColor>The board is empty. Tell the lead what you want.</Text>}
-        {rows.map((x, i) => (
-          <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
-            <Text color={color[x.status] as never}>
-              {x.id} {word[x.status]}
+        <Text wrap="truncate">
+          {v.paused && <Text bold color={C('warning')}>PAUSED · </Text>}
+          {tally.map((st, i) => (
+            <Text>
+              {i ? <Text color={C('subtle')}> · </Text> : null}
+              <Text color={C(color[st]!)}>
+                {count(st)} {word[st]}
+              </Text>
             </Text>
-            <Text color="text"> {x.title.slice(0, Math.max(10, width - 30))}</Text>
-            <Text dimColor>{x.status === 'waiting' ? ` — ${x.question ?? ''}` : x.note ? ` — ${x.note}` : ''}</Text>
-          </Button>
-        ))}
+          ))}
+        </Text>
+        <Text wrap="truncate">
+          <Text color={C('subtle')}>tests: </Text>
+          <Text color={C(v.test_commands.length ? 'ide' : 'warning')}>{v.test_commands.join(' && ') || 'none set'}</Text>
+          <Text color={C('subtle')}> · Enter opens a task · Esc closes</Text>
+        </Text>
+        {rows.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
+        {rows.map((x, i) => {
+          const closed = x.status === 'done' || x.status === 'dropped'
+          const extra = x.status === 'waiting' ? x.question ?? '' : x.note
+          return (
+            <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
+              <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
+                {x.id.padEnd(idWidth)}
+              </Text>
+              <Text color={C(color[x.status]!)}>
+                {' '}
+                {mark[x.status]} {word[x.status]!.padEnd(wordWidth)}
+              </Text>
+              <Text bold={x.status === 'waiting' || x.status === 'failed'} color={C(closed ? 'inactive' : 'text')}>
+                {' '}
+                {x.title.slice(0, Math.max(10, width - idWidth - wordWidth - 8))}
+              </Text>
+              {extra ? <Text color={C(x.status === 'waiting' ? 'warning' : x.status === 'failed' ? 'error' : 'subtle')}> — {extra}</Text> : null}
+            </Button>
+          )
+        })}
         {v.scouts.length > 0 && (
-          <Text dimColor wrap="truncate">
-            scouts: {v.scouts.map(sc => `${sc.name}${sc.running ? ' (running)' : ''}`).join(', ')} · /scouts run &lt;name&gt;
+          <Text wrap="truncate">
+            <Text color={C('subtle')}>scouts: </Text>
+            {v.scouts.map((sc, i) => (
+              <Text>
+                {i ? <Text color={C('subtle')}>, </Text> : null}
+                <Text color={C(sc.running ? 'success' : 'text')}>{sc.name}</Text>
+                {sc.running ? <Text color={C('success')}> (running)</Text> : null}
+              </Text>
+            ))}
+            <Text color={C('subtle')}> · /scouts run &lt;name&gt;</Text>
           </Text>
         )}
       </Box>

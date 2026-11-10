@@ -26,12 +26,14 @@ test('the panel shows the board, newest task first, with their question', async 
   }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Text', text: /T-2 waiting for you/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^T-2\s*$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /waiting for you/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Search mode/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /T-3 doing/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /scouts: tests \(running\)/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /tests: npm test/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^T-3\s*$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /▶ doing/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^tests$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^npm test$/ }))).toBeDefined()
     await ui.unmount()
   }
 })
