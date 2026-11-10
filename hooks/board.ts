@@ -157,6 +157,19 @@ export function outOfScope(changed: string[], allowed: string[]): string[] {
   return changed.filter(f => f.startsWith('.symcc/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
+// ---------------- when the branch conflicts with main ----------------
+
+/** How many new tries a task gets to merge main into its branch after a conflict. */
+export const MAX_CONFLICT_TRIES = 2
+
+/**
+ * A task's branch conflicted with the latest main. 'retry': send it back to "todo" so a new
+ * worker merges main and resolves the conflict; 'fail': it was already tried `max` times.
+ */
+export function onConflict(t: Pick<SymccTask, 'conflict_tries'>, max = MAX_CONFLICT_TRIES): 'retry' | 'fail' {
+  return (t.conflict_tries ?? 0) < max ? 'retry' : 'fail'
+}
+
 /** For showing the board: newest task first (by when it was made, then by its number). */
 export function newestFirst(x: SymccTask, y: SymccTask): number {
   const num = (id: string) => Number(id.replace(/\D/g, '')) || 0

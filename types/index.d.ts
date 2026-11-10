@@ -12,6 +12,10 @@ export type SymccTask = {
   order: number
   after: string[]
   attempts: number
+  /** how many times a new try was started because the branch conflicted with main */
+  conflict_tries?: number
+  /** set when the next try must first merge main into the branch and resolve conflicts */
+  merge_main?: boolean
   history: string[]
   branch: string | null
   created_at: string

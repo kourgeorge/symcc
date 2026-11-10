@@ -26,6 +26,8 @@ import {
   liveDriver,
   lockText,
   normId,
+  onConflict,
+  MAX_CONFLICT_TRIES,
   ownedHere,
   outOfScope,
   parseBoard,
@@ -281,7 +283,7 @@ async function removeWorktree($: $, dir: string) {
 }
 
 /** Commit the worker's changes, check scope, bring in the latest main, test, then move main forward. */
-async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b: Board): Promise<{ ok: boolean; detail: string }> {
+async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b: Board): Promise<{ ok: boolean; detail: string; conflict?: boolean }> {
   const target = b.target_branch
   await git($, ['add', '-A', '--', '.'], dir)
   await git($, ['-c', 'user.name=symcc', '-c', 'user.email=symcc@localhost', 'commit', '-q', '--no-verify', '-m', `${t.id}: ${t.title}`], dir)
@@ -297,7 +299,7 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b:
     const m = await git($, ['-c', 'user.name=symcc', '-c', 'user.email=symcc@localhost', 'merge', '--no-edit', '-m', `${t.id}: bring up to date with ${target}`, main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
-      return { ok: false, detail: `conflicts with the latest ${target}` }
+      return { ok: false, detail: `conflicts with the latest ${target}`, conflict: true }
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
   }
@@ -335,7 +337,7 @@ ${t.details}
 Files you may change: ${t.files.length ? t.files.join(', ') : 'whatever the task needs'}. Changes anywhere else are thrown away.
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: symcc commits, tests and merges your work.
-${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
+${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
 async function pump($: $) {
@@ -386,11 +388,21 @@ async function workerFinished($: $, agentId: string, answer: string, aborted: bo
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with symcc ask.`)
   } else {
     await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
-    const r = await checkAndMerge($, t, w.worktree, w.branch, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: { ok: boolean; detail: string; conflict?: boolean } = await checkAndMerge($, t, w.worktree, w.branch, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     const line = `try ${t.attempts}: ${summary.slice(0, 300)} → ${r.detail}`
-    await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: r.detail.slice(0, 300), history: [...t.history, line] }, now()))
+    const tries = t.conflict_tries ?? 0
+    if (r.conflict && onConflict(t) === 'retry') {
+      // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
+      const note = `conflicts with the latest ${b.target_branch}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
+      await change($, x => patchTask(x, t.id, { status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...t.history, line] }, now()))
+      tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
+      return void (await pump($))
+    }
+    const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
+    const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
+    await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, history: [...t.history, done] }, now()))
     if (r.ok) await removeWorktree($, w.worktree)
-    tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${r.detail}\nWorker said: ${summary.slice(0, 300)}`)
+    tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}`)
   }
   await pump($)
 }

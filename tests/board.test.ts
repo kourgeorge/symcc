@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -135,4 +135,18 @@ test('a task forgets its session when it leaves "doing"', () => {
   // a session left on a task that isn't running is dropped on load
   const text = JSON.stringify({ ...b, tasks: [{ ...b.tasks[0], status: 'todo', session: 'x' }] })
   expect('session' in parseBoard(text).tasks[0]!).toBe(false)
+})
+
+test('a conflict with main gets a new try at most twice, then the task fails', () => {
+  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  expect(MAX_CONFLICT_TRIES).toBe(2)
+  // a task that never conflicted (an old board has no count) is retried
+  expect(onConflict(b.tasks[0]!)).toBe('retry')
+  b = patchTask(b, 'T-1', { conflict_tries: 1 }, T)
+  expect(onConflict(b.tasks[0]!)).toBe('retry')
+  // the count is kept through a save and a load
+  b = parseBoard(JSON.stringify(patchTask(b, 'T-1', { conflict_tries: 2 }, T)))
+  expect(onConflict(b.tasks[0]!)).toBe('fail')
+  expect(onConflict({ conflict_tries: 3 })).toBe('fail')
+  expect(onConflict({ conflict_tries: 0 }, 0)).toBe('fail')
 })
