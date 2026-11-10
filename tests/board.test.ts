@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { LOCK_STALE_MS, addTask, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -74,4 +74,25 @@ test('a board lock counts as stale only after about 30 seconds', () => {
   expect(isLockStale('{half', t0 + 31_000, t0)).toBe(true)
   expect(isLockStale('', t0)).toBe(true)
   expect(isLockStale(lock, t0 + 5_000, undefined, 1_000)).toBe(true)
+})
+
+test('only one session drives the board: the first one, until its heartbeat goes stale', () => {
+  const t0 = 1_800_000_000_000
+  expect(LEAD_STALE_MS).toBe(180_000)
+  // nobody drives yet (no file, or a broken one): this session becomes the driver
+  expect(whoDrives(null, 'a', t0)).toBe('become')
+  expect(whoDrives('', 'a', t0)).toBe('become')
+  expect(whoDrives('{half', 'a', t0)).toBe('become')
+  const lead = leadText('a', t0)
+  expect(parseLead(lead)).toEqual({ session: 'a', heartbeat: t0 })
+  // the driver keeps driving
+  expect(whoDrives(lead, 'a', t0 + 30_000)).toBe('keep')
+  // another session follows while the heartbeat is fresh
+  expect(whoDrives(lead, 'b', t0)).toBe('follow')
+  expect(whoDrives(lead, 'b', t0 + 179_000)).toBe('follow')
+  expect(whoDrives(lead, 'b', t0 + 180_000)).toBe('follow')
+  // and takes over once it is stale
+  expect(whoDrives(lead, 'b', t0 + 180_001)).toBe('takeover')
+  // a heartbeat dated far in the future (a broken clock) can't hold the lead forever
+  expect(whoDrives(lead, 'b', t0 - 10 * 60_000)).toBe('takeover')
 })

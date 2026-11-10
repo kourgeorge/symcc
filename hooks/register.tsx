@@ -13,6 +13,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { SymccScout, SymccTask, SymccView } from '../types'
 import {
   BOARD_FILE,
+  LEAD_BEAT_MS,
+  LEAD_FILE,
   LOCK_FILE,
   addTask,
   boardText,
@@ -20,12 +22,15 @@ import {
   emptyBoard,
   find,
   isLockStale,
+  leadText,
   lockText,
   outOfScope,
   parseBoard,
   parseScout,
+  parseLead,
   patchTask,
   ready,
+  whoDrives,
   type Board,
   type ScoutDef,
 } from './board'
@@ -53,6 +58,10 @@ const timers: { cancel(): void }[] = []
 const leadQueue: string[] = []
 let leadTimer: { cancel(): void } | null = null
 let writing: Promise<unknown> = Promise.resolve()
+/** this session's id, and whether it drives the board (only the driver starts work; see .symcc/lead.json) */
+let me = ''
+let driving = false
+let beat: { cancel(): void } | null = null
 
 // ---------------- the board on disk ----------------
 
@@ -115,22 +124,100 @@ async function saveBoard($: $, b: Board) {
  * never lose an update; the lock file does the same between sessions.
  */
 function change<T>($: $, fn: (b: Board) => [Board, T] | Board): Promise<T> {
-  const run = writing.then(async () => {
-    const mine = await takeLock($)
-    let after: Board, value: T
-    try {
-      const before = await load($)
-      const out = fn(before)
-      ;[after, value] = Array.isArray(out) ? out : [out, undefined as T]
-      await saveBoard($, after)
-    } finally {
-      await dropLock($, mine)
-    }
+  return locked($, async () => {
+    const before = await load($)
+    const out = fn(before)
+    const [after, value] = Array.isArray(out) ? out : [out, undefined as T]
+    await saveBoard($, after)
+    return [after, value] as const
+  }).then(async ([after, value]) => {
     await publish($, after)
     return value
   })
+}
+
+/** Runs fn while holding the board lock, one at a time within this session too. */
+function locked<T>($: $, fn: () => Promise<T>): Promise<T> {
+  const run = writing.then(async () => {
+    const mine = await takeLock($)
+    try {
+      return await fn()
+    } finally {
+      await dropLock($, mine)
+    }
+  })
   writing = run.catch(() => undefined)
   return run
+}
+
+// ---------------- who drives the board ----------------
+// Only one session (the driver) starts workers, merges, runs scouts and the regular check.
+// It keeps .symcc/lead.json fresh; the others read and change the board but start nothing.
+
+async function writeLead($: $, text: string) {
+  const file = path(LEAD_FILE)
+  const tmp = `${file}.${me.replace(/[^\w.-]/g, '_')}.tmp`
+  await $.fs.write(tmp, text)
+  const r = await $.process.run(['mv', '-f', tmp, file])
+  if (r.exitCode !== 0) throw new Error(`couldn't write ${LEAD_FILE}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+}
+
+/**
+ * Looks at lead.json and acts on it: becomes the driver if nobody drives, refreshes the
+ * heartbeat if this session drives, takes over if the driver's heartbeat went stale, and
+ * steps down if another session drives. `fresh` = this copy of the plugin just loaded,
+ * so any worker it had is gone. Returns whether this session drives now.
+ */
+async function claimLead($: $, fresh = false): Promise<boolean> {
+  const was = driving
+  const move = await locked($, async () => {
+    const text = await $.fs.read(path(LEAD_FILE)).catch(() => null)
+    const m = whoDrives(text, me, Date.now())
+    if (m !== 'follow') await writeLead($, leadText(me, Date.now()))
+    return m
+  })
+  driving = move !== 'follow'
+  if (driving && (!was || fresh)) {
+    // Workers the old driver (or an earlier load of this plugin) left behind are stopped
+    // first, and their tasks go back to "todo", so a task never has two workers.
+    const orphans = await stopOrphans($)
+    if (orphans) $.ui.toast(`symcc: stopped ${orphans} old worker${orphans > 1 ? 's' : ''} left behind`)
+    const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : 'restarted after Claude Code was reopened'
+    if (await $.fs.exists(path(BOARD_FILE))) await change($, b => ({ ...b, tasks: b.tasks.map(t => (t.status === 'doing' ? { ...t, status: 'todo' as const, note } : t)) }))
+    if (move === 'takeover' && !fresh) $.ui.toast('symcc: the session driving the board stopped answering; this session drives it now')
+  }
+  if (was && !driving) {
+    // Another session took over (this one stopped answering for too long): its workers own the tasks now.
+    for (const [agentId] of [...workers]) {
+      workers.delete(agentId)
+      await halt($, agentId, 'another session drives the board now')
+    }
+    for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, 'another session drives the board now')
+    scoutRuns.clear()
+    for (const st of scoutState.values()) st.running = false
+    $.ui.toast('symcc: another session drives the board now; this one only shows and changes it')
+  }
+  if (driving) {
+    // A task stopped, dropped or changed from another session: stop its worker here.
+    const b = await load($)
+    for (const [agentId, w] of [...workers]) {
+      if (find(b, w.task)?.status === 'doing') continue
+      workers.delete(agentId)
+      await halt($, agentId, 'the task was changed on the board')
+    }
+  }
+  if (was !== driving || fresh) await publish($, await load($))
+  return driving
+}
+
+/** On session end the driver lets go of lead.json, so another session can take over at once. */
+async function releaseLead($: $) {
+  if (!driving) return
+  driving = false
+  await locked($, async () => {
+    const file = path(LEAD_FILE)
+    if (parseLead(await $.fs.read(file).catch(() => null))?.session === me) await $.process.run(['rm', '-f', file])
+  }).catch(() => undefined)
 }
 
 async function publish($: $, b: Board) {
@@ -139,7 +226,8 @@ async function publish($: $, b: Board) {
   await update($, view, () => v)
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
-  $.ui.status(b.tasks.length ? `board: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : undefined)
+  const label = driving ? 'board' : 'board (driven by another session)'
+  $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : driving ? undefined : `${label}: empty`)
 }
 
 // ---------------- telling the lead ----------------
@@ -245,6 +333,7 @@ ${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${l
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
 async function pump($: $) {
+  if (!driving) return // another session drives the board and starts its work
   const b = await load($)
   if (b.paused) return
   for (const t of ready(b)) {
@@ -363,6 +452,7 @@ async function stopOrphans($: $): Promise<number> {
 
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
 async function check($: $) {
+  if (!driving) return
   await stopOrphans($)
   const b = await load($)
   const agents = await $.agent.list().catch(() => undefined)
@@ -410,7 +500,7 @@ async function loadScouts($: $): Promise<ScoutDef[]> {
 
 async function runScout($: $, s: ScoutDef) {
   const st = scoutState.get(s.name)
-  if (!st || st.running) return
+  if (!st || st.running || !driving) return
   const b = await load($)
   if (b.paused) return
   st.running = true
@@ -696,13 +786,11 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     root = (await $.session.repo())?.root ?? (await $.session.root())
-    // Old workers still running from before a reload are stopped first, so a task never has two.
-    const orphans = await stopOrphans($)
-    if (orphans) $.ui.toast(`symcc: stopped ${orphans} old worker${orphans > 1 ? 's' : ''} left from a reload`)
-    // Workers lost to a restart or reload go back to "todo".
-    if (await $.fs.exists(path(BOARD_FILE))) {
-      await change($, b => ({ ...b, tasks: b.tasks.map(t => (t.status === 'doing' ? { ...t, status: 'todo' as const, note: 'restarted after Claude Code was reopened' } : t)) }))
-    } else await publish($, emptyBoard())
+    me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
+    // Become the driver if nobody drives the board. As the driver, old workers still running
+    // from before a reload are stopped first and their tasks go back to "todo".
+    await claimLead($, true).catch(() => (driving = false))
+    if (!(await $.fs.exists(path(BOARD_FILE)))) await publish($, emptyBoard())
     await $.agent.register({
       name: 'worker',
       description: 'symcc worker: builds one task from the symcc board in its own worktree. Started by symcc only.',
@@ -730,6 +818,13 @@ export const register: Register = on => {
     await scheduleScouts($)
     watchdog?.cancel()
     watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))
+    // The driver refreshes its heartbeat; the others look whether it went stale and take over.
+    beat?.cancel()
+    beat = $.clock.every(LEAD_BEAT_MS, () =>
+      void claimLead($)
+        .then(async d => (d ? pump($) : undefined))
+        .catch(() => undefined),
+    )
     const b = await load($)
     await publish($, b)
     void pump($)
@@ -740,6 +835,9 @@ export const register: Register = on => {
     for (const t of timers.splice(0)) t.cancel()
     watchdog?.cancel()
     watchdog = null
+    beat?.cancel()
+    beat = null
+    await releaseLead($)
     return next(e)
   })
 
@@ -852,6 +950,7 @@ export const register: Register = on => {
     if (m) {
       const s = defs.find(d => d.name === m[1])
       if (!s) return { text: `no scout named ${m[1]} (have: ${defs.map(d => d.name).join(', ') || 'none'})` }
+      if (!driving) return { text: `scouts run in the session that drives the board; run /scouts run ${s.name} there` }
       void runScout($, s)
       return { text: `scout ${s.name} started` }
     }

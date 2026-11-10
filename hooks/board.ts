@@ -183,3 +183,45 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   const every = Number(meta.every_minutes ?? meta.every ?? 60)
   return { name: meta.name || name, every_minutes: Number.isFinite(every) && every >= 1 ? every : 60, model: meta.model || undefined, prompt }
 }
+
+// ---------------- who drives the board ----------------
+// Several sessions may have the same project open. Only one of them, the driver, starts
+// workers, merges, runs scouts and the regular check. It writes .symcc/lead.json and
+// refreshes the heartbeat in it; the others only read and change the board.
+
+export const LEAD_FILE = '.symcc/lead.json'
+/** how often the driver refreshes its heartbeat (and the others look at it) */
+export const LEAD_BEAT_MS = 30_000
+/** a heartbeat older than this means the driver is gone, and another session may take over */
+export const LEAD_STALE_MS = 3 * 60_000
+
+export type Lead = { session: string; heartbeat: number }
+
+export const leadText = (session: string, heartbeat: number) => JSON.stringify({ session, heartbeat }) + '\n'
+
+export function parseLead(text: string | null): Lead | null {
+  try {
+    const l = JSON.parse(text ?? '') as Partial<Lead>
+    return typeof l.session === 'string' && l.session && typeof l.heartbeat === 'number' && Number.isFinite(l.heartbeat) ? { session: l.session, heartbeat: l.heartbeat } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Who should drive, as seen by session `me` reading lead.json (`text`) at `nowMs`:
+ * - 'become': nobody drives (no file, or one we can't read); `me` starts driving.
+ * - 'keep': `me` already drives; refresh the heartbeat.
+ * - 'follow': another session drives and its heartbeat is fresh.
+ * - 'takeover': another session's heartbeat is stale (or dated far in the future, a
+ *   broken clock); `me` takes over and first stops what the old driver left running.
+ */
+export type LeadMove = 'become' | 'keep' | 'follow' | 'takeover'
+
+export function whoDrives(text: string | null, me: string, nowMs: number, staleMs = LEAD_STALE_MS): LeadMove {
+  const l = parseLead(text)
+  if (!l) return 'become'
+  if (l.session === me) return 'keep'
+  const fresh = nowMs - l.heartbeat <= staleMs && l.heartbeat - nowMs <= staleMs
+  return fresh ? 'follow' : 'takeover'
+}
