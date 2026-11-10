@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -177,4 +177,41 @@ test('failing tests get a new try on their own until auto_retries, then the task
   expect(clampRetries(3.4)).toBe(3)
   expect(clampRetries(-1)).toBe(0)
   expect(clampRetries(99)).toBe(10)
+})
+
+test('a worker starts on a task only if it is "todo" and no live worker is on it', () => {
+  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  const t = () => b.tasks[0]!
+  // a "todo" task with no agent around: start
+  expect(mayStart(t(), [])).toBe(true)
+  // agents for other tasks, scouts, and ended workers don't count
+  expect(mayStart(t(), [
+    { id: 'x', type: 'symcc:worker', status: 'running', description: 'T-2 other' },
+    { id: 'y', type: 'symcc:scout', status: 'running', description: 'scout: T-1 tests' },
+    { id: 'z', type: 'symcc:worker', status: 'completed', description: 'T-1 A' },
+    { id: 'k', type: 'symcc:worker', status: 'killed', description: 'T-1 A' },
+  ])).toBe(true)
+  // a live worker for the task (by its description): no start
+  for (const status of ['running', 'pending', 'waiting'])
+    expect(mayStart(t(), [{ id: 'w', type: 'symcc:worker', status, description: 'T-1 A' }])).toBe(false)
+  expect(mayStart(t(), [{ id: 'w', type: 'symcc:worker', status: 'running', description: 'T-10 other' }])).toBe(true)
+  // a live agent recorded on the task: no start, whatever its description says
+  b = patchTask(b, 'T-1', { agent: 'w1' }, T)
+  expect(parseBoard(JSON.stringify(b)).tasks[0]!.agent).toBe('w1')
+  expect(mayStart(t(), [{ id: 'w1', status: 'running', description: 'something' }])).toBe(false)
+  expect(mayStart(t(), [{ id: 'w1', status: 'completed', description: 'something' }])).toBe(true)
+  expect(liveWorkersFor(t(), [{ id: 'w1', status: 'running' }]).map(a => a.id)).toEqual(['w1'])
+  // a task that isn't "todo" (already claimed, paused, done...) never gets a new worker
+  for (const status of ['doing', 'paused', 'waiting', 'failed', 'done', 'dropped'] as const)
+    expect(mayStart(patchTask(b, 'T-1', { status }, T).tasks[0]!, [])).toBe(false)
+  expect(mayStart(undefined, [])).toBe(false)
+})
+
+test('after a reload, a task whose old worker is still alive stays "doing"', () => {
+  let b = emptyBoard()
+  for (const title of ['alive', 'gone']) b = addTask(b, { title }, T)[0]
+  b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
+  b = patchTask(b, 'T-2', { status: 'doing', session: 'me' }, T)
+  const after = resetDoing(b, 'me', null, 0, 'restarted', T, ['T-1'])
+  expect(after.tasks.map(t => t.status)).toEqual(['doing', 'todo'])
 })

@@ -22,6 +22,8 @@ export type SymccTask = {
   test_output?: string
   history: string[]
   branch: string | null
+  /** the agent id of the last worker started on this task */
+  agent?: string
   created_at: string
   updated_at: string
 }

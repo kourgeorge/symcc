@@ -17,8 +17,11 @@ export type Board = {
   tasks: BoardTask[]
 }
 
-/** A task as the board file keeps it: while it is "doing", `session` names the session whose worker owns it. */
-export type BoardTask = SymccTask & { session?: string }
+/**
+ * A task as the board file keeps it: while it is "doing", `session` names the session whose
+ * worker owns it; `agent` is the agent id of the last worker started on it.
+ */
+export type BoardTask = SymccTask & { session?: string; agent?: string }
 
 export const BOARD_FILE = '.symcc/board.json'
 /** held by one session while it reads, changes and writes the board */
@@ -295,16 +298,42 @@ export function ownedHere(t: BoardTask, me: string, live: string | null): boolea
 /**
  * At session start the driver sends "doing" tasks whose worker is gone back to "todo":
  * those of this session, of a dead session, or with no session recorded. `leadBefore`
- * is lead.json as it was before this session wrote its own heartbeat.
+ * is lead.json as it was before this session wrote its own heartbeat. Tasks in `keep`
+ * (an old worker of theirs is still alive) stay "doing" until that worker has ended.
  */
-export function resetDoing(b: Board, me: string, leadBefore: string | null, nowMs: number, note: string, now: string): Board {
+export function resetDoing(b: Board, me: string, leadBefore: string | null, nowMs: number, note: string, now: string, keep: string[] = []): Board {
   const live = liveDriver(leadBefore, nowMs)
   return {
     ...b,
     tasks: b.tasks.map(t => {
-      if (t.status !== 'doing' || !ownedHere(t, me, live)) return t
+      if (t.status !== 'doing' || !ownedHere(t, me, live) || keep.includes(t.id)) return t
       const { session: _gone, ...rest } = t
       return { ...rest, status: 'todo' as const, note, updated_at: now }
     }),
   }
+}
+
+// ---------------- never two workers on one task ----------------
+
+/** An agent as $.agent.list() reports it. */
+export type AgentInfo = { id: string; type?: string; status: string; description?: string }
+
+/** Agent statuses that mean it has ended; anything else counts as still alive. */
+export const ENDED_STATUSES = ['completed', 'failed', 'killed']
+
+/** The live symcc workers for task `id`: the one recorded on the task (`agent`), or any whose description starts with the task id. */
+export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[]): AgentInfo[] {
+  return agents.filter(a => {
+    if (ENDED_STATUSES.includes(a.status)) return false
+    if (t.agent && a.id === t.agent) return true
+    return a.type === 'symcc:worker' && normId(String(a.description ?? '').split(/\s/)[0] ?? '') === t.id
+  })
+}
+
+/**
+ * Whether a new worker may start on task `t`: it is still "todo", and no live agent
+ * (in `agents`, $.agent.list() plus the workers this session knows) works on it.
+ */
+export function mayStart(t: BoardTask | undefined, agents: AgentInfo[]): boolean {
+  return !!t && t.status === 'todo' && liveWorkersFor(t, agents).length === 0
 }

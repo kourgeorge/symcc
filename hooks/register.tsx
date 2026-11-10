@@ -23,6 +23,9 @@ import {
   find,
   isLockStale,
   leadText,
+  liveWorkersFor,
+  mayStart,
+  type AgentInfo,
   liveDriver,
   lockText,
   normId,
@@ -57,6 +60,10 @@ const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], workin
 // whose worker was lost to a reload goes back to "todo" at session.start.
 let root = ''
 const workers = new Map<string, { task: string; worktree: string; branch: string; since: number }>() // agentId → work
+/** tasks this copy has claimed and is starting a worker for (not yet in `workers`) */
+const starting = new Set<string>()
+/** tasks whose worker finished and whose work is being checked and merged now */
+const finishing = new Set<string>()
 const scoutRuns = new Map<string, string>() // agentId → scout name
 /** agents symcc has stopped: every tool they try is refused, so they can't change anything and end soon */
 const stopped = new Set<string>()
@@ -191,11 +198,16 @@ async function claimLead($: $, fresh = false): Promise<boolean> {
     // Workers the old driver (or an earlier load of this plugin) left behind are stopped
     // first, and their tasks go back to "todo", so a task never has two workers.
     const orphans = await stopOrphans($, leadBefore)
-    if (orphans) $.ui.toast(`symcc: stopped ${orphans} old worker${orphans > 1 ? 's' : ''} left behind`)
+    if (orphans.length) $.ui.toast(`symcc: stopped ${orphans.length} old worker${orphans.length > 1 ? 's' : ''} left behind`)
+    // A stopped worker may still be running for a while: wait until it has really ended.
+    // A task whose old worker is still alive after that stays "doing"; the regular check
+    // sends it back to "todo" once that worker has ended, so a task never has two workers.
+    const alive = await waitEnded($, orphans, ORPHAN_WAIT_MS)
     const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : 'restarted after Claude Code was reopened'
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
-    if (await $.fs.exists(path(BOARD_FILE))) await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now()))
+    if (await $.fs.exists(path(BOARD_FILE)))
+      await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive).length > 0).map(t => t.id)))
     if (move === 'takeover' && !fresh) $.ui.toast('symcc: the session driving the board stopped answering; this session drives it now')
   }
   if (was && !driving) {
@@ -281,9 +293,18 @@ async function prepareWorktree($: $, t: SymccTask, target: string) {
   return { dir, branch }
 }
 
-async function removeWorktree($: $, dir: string) {
+/**
+ * Removes a task's worktree, but never while a live agent may still use it (`except` = the
+ * worker that just finished there). Returns whether it was removed.
+ */
+async function removeWorktree($: $, taskId: string, dir: string, except?: string): Promise<boolean> {
+  const agents = await agentsNow($)
+  if (!agents) return false
+  const t = find(await load($), taskId)
+  if (liveWorkersFor({ id: taskId, agent: t?.agent }, agents).some(a => a.id !== except)) return false
   await git($, ['worktree', 'remove', '--force', dir])
   await git($, ['worktree', 'prune'])
+  return true
 }
 
 /** Commit the worker's changes, check scope, bring in the latest main, test, then move main forward. */
@@ -350,7 +371,7 @@ async function pump($: $) {
   if (b.paused) return
   for (const t of ready(b)) {
     if (workers.size >= b.max_parallel) break
-    if ([...workers.values()].some(w => w.task === t.id)) continue
+    if (starting.has(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
     await startWorker($, t.id).catch(async (err: Error) => {
       await change($, x => patchTask(x, t.id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}` }, now()))
       tellLead($, `${t.id} couldn't start: ${err.message.slice(0, 300)}`)
@@ -358,30 +379,80 @@ async function pump($: $) {
   }
 }
 
+/**
+ * Starts a worker on task `id`, but only if it is still "todo" and no live agent works on it
+ * (see mayStart). The claim happens inside change(), so two starts can't both win.
+ */
 async function startWorker($: $, id: string) {
-  const b = await load($)
-  const t0 = find(b, id)
-  if (!t0) return
-  const { dir, branch } = await prepareWorktree($, t0, b.target_branch)
-  const t = await change($, x => {
-    const cur = find(x, id)!
-    const y = patchTask(x, id, { status: 'doing', session: me, attempts: cur.attempts + 1, branch, note: 'worker on it' }, now())
-    return [y, find(y, id)!]
-  })
-  const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: 'symcc:worker', cwd: dir })
-  if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
-  if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
-  workers.set(spawned.agentId, { task: id, worktree: dir, branch, since: Date.now() })
-  await publish($, await load($))
+  if (starting.has(id) || [...workers.values()].some(w => w.task === id)) return
+  starting.add(id)
+  try {
+    const listed = await agentsNow($)
+    if (!listed) return // can't see which agents run; try again on the next pump
+    const agents = [...listed, ...knownWorkers()]
+    const b = await load($)
+    const t0 = find(b, id)
+    if (!mayStart(t0, agents)) return
+    const { dir, branch } = await prepareWorktree($, t0!, b.target_branch)
+    const t = await change($, x => {
+      const cur = find(x, id)
+      if (!mayStart(cur, agents)) return [x, null]
+      const y = patchTask(x, id, { status: 'doing', session: me, attempts: cur!.attempts + 1, branch, note: 'worker on it' }, now())
+      return [y, find(y, id)!]
+    })
+    if (!t) return
+    const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: 'symcc:worker', cwd: dir })
+    if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
+    if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
+    const agentId = spawned.agentId
+    workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
+    // Record which agent works on the task, so a reloaded copy can find it.
+    await change($, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId }, now()) : x))
+  } finally {
+    starting.delete(id)
+  }
+}
+
+/** The agents of this session as $.agent.list() reports them; null if the list can't be read. */
+async function agentsNow($: $): Promise<AgentInfo[] | null> {
+  return ((await $.agent.list().catch(() => null)) as AgentInfo[] | null) ?? null
+}
+
+/** The workers this copy of the plugin started, as agents (they may not be listed yet). */
+const knownWorkers = (): AgentInfo[] => [...workers].map(([id, w]) => ({ id, type: 'symcc:worker', status: 'running', description: w.task }))
+
+/** How long a reload waits for old workers it stopped to really end. */
+const ORPHAN_WAIT_MS = 20_000
+
+/** Waits up to `ms` until the agents `ids` have ended; returns those still alive (all of them if the list can't be read). */
+async function waitEnded($: $, ids: string[], ms: number): Promise<AgentInfo[]> {
+  if (!ids.length) return []
+  const until = Date.now() + ms
+  for (;;) {
+    const agents = await agentsNow($)
+    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED.has(a.status)) : ids.map(id => ({ id, type: 'symcc:worker', status: 'running' }))
+    if (!alive.length || Date.now() > until) return alive
+    await $.clock.sleep(500)
+  }
 }
 
 async function workerFinished($: $, agentId: string, answer: string, aborted: boolean) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
+  finishing.add(w.task)
+  try {
+    await finishWork($, agentId, w, answer, aborted)
+  } finally {
+    finishing.delete(w.task)
+  }
+  await pump($)
+}
+
+async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean) {
   const b = await load($)
   const t = find(b, w.task)
-  if (!t || t.status !== 'doing') return void pump($) // changed or dropped meanwhile
+  if (!t || t.status !== 'doing') return // changed or dropped meanwhile
   const summary = answer.trim().slice(0, 600) || '(no summary)'
   const q = /^\s*QUESTION:\s*(.+)$/im.exec(answer)
   if (aborted) {
@@ -400,7 +471,7 @@ async function workerFinished($: $, agentId: string, answer: string, aborted: bo
       const note = `conflicts with the latest ${b.target_branch}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
       await change($, x => patchTask(x, t.id, { status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...t.history, line] }, now()))
       tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
-      return void (await pump($))
+      return
     }
     const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
     const testTries = t.test_tries ?? 0
@@ -409,16 +480,15 @@ async function workerFinished($: $, agentId: string, answer: string, aborted: bo
       const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
       await change($, x => patchTask(x, t.id, { status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...t.history, line] }, now()))
       tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
-      return void (await pump($))
+      return
     }
     const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
     const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
     await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
-    if (r.ok) await removeWorktree($, w.worktree)
+    if (r.ok) await removeWorktree($, t.id, w.worktree, agentId)
     const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
     tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
   }
-  await pump($)
 }
 
 /** Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. */
@@ -468,14 +538,14 @@ const LIVE = new Set(['pending', 'running', 'waiting'])
  * same folders; without this, every reload adds one more worker per running task.
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
-async function stopOrphans($: $, leadNow?: string | null): Promise<number> {
+async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
   const agents = await $.agent.list().catch(() => [])
   // $.agent.list() names this session's agents only, but in case it ever lists another
   // session's too: never stop a worker whose task the live driver (another session) owns.
   const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(LEAD_FILE)).catch(() => null)
   const live = liveDriver(lead, Date.now())
   const b = agents.some(a => a.type === 'symcc:worker') ? await load($).catch(() => emptyBoard()) : emptyBoard()
-  let n = 0
+  const out: string[] = []
   for (const a of agents) {
     if (a.type !== 'symcc:worker' && a.type !== 'symcc:scout') continue
     if (workers.has(a.id) || scoutRuns.has(a.id)) continue
@@ -486,9 +556,9 @@ async function stopOrphans($: $, leadNow?: string | null): Promise<number> {
     }
     stopped.add(a.id)
     if (LIVE.has(a.status)) await halt($, a.id, 'symcc was reloaded and a new worker took over this task')
-    n++
+    out.push(a.id)
   }
-  return n
+  return out
 }
 
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
@@ -517,6 +587,22 @@ async function check($: $) {
       await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `try ${t?.attempts ?? '?'}: the worker ended without a result`] }, now()))
       tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (symcc start), change it, or drop it.`)
     }
+  }
+  // A task kept "doing" after a reload because its old worker was still alive: once no live
+  // agent works on it any more, it goes back to "todo" for a fresh worker.
+  if (agents) {
+    const mine = new Set([...workers.values()].map(w => w.task))
+    const live = liveDriver(await $.fs.read(path(LEAD_FILE)).catch(() => null), Date.now())
+    const idle = (await load($)).tasks.filter(t => t.status === 'doing' && t.session === me && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && ownedHere(t, me, live) && !liveWorkersFor(t, agents as AgentInfo[]).length).map(t => t.id)
+    if (idle.length)
+      await change($, x => ({
+        ...x,
+        tasks: x.tasks.map(t => {
+          if (!idle.includes(t.id) || t.status !== 'doing' || [...workers.values()].some(w => w.task === t.id) || starting.has(t.id) || finishing.has(t.id)) return t
+          const { session: _s, ...rest } = t
+          return { ...rest, status: 'todo' as const, note: 'restarted: the old worker has ended', updated_at: now() }
+        }),
+      }))
   }
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
@@ -779,7 +865,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       if (t.status === 'done') throw new Error(`${t.id} is already done`)
       if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
       await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped' }, now()))
-      await removeWorktree($, worktreeDir(t.id)).catch(() => undefined)
+      await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
       void pump($)
       return `${t.id} dropped`
     }
