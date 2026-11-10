@@ -23,13 +23,17 @@ import {
   find,
   isLockStale,
   leadText,
+  liveDriver,
   lockText,
+  normId,
+  ownedHere,
   outOfScope,
   parseBoard,
   parseScout,
   parseLead,
   patchTask,
   ready,
+  resetDoing,
   whoDrives,
   type Board,
   type ScoutDef,
@@ -170,20 +174,22 @@ async function writeLead($: $, text: string) {
  */
 async function claimLead($: $, fresh = false): Promise<boolean> {
   const was = driving
-  const move = await locked($, async () => {
+  const [move, leadBefore] = await locked($, async () => {
     const text = await $.fs.read(path(LEAD_FILE)).catch(() => null)
     const m = whoDrives(text, me, Date.now())
     if (m !== 'follow') await writeLead($, leadText(me, Date.now()))
-    return m
+    return [m, text] as const
   })
   driving = move !== 'follow'
   if (driving && (!was || fresh)) {
     // Workers the old driver (or an earlier load of this plugin) left behind are stopped
     // first, and their tasks go back to "todo", so a task never has two workers.
-    const orphans = await stopOrphans($)
+    const orphans = await stopOrphans($, leadBefore)
     if (orphans) $.ui.toast(`symcc: stopped ${orphans} old worker${orphans > 1 ? 's' : ''} left behind`)
     const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : 'restarted after Claude Code was reopened'
-    if (await $.fs.exists(path(BOARD_FILE))) await change($, b => ({ ...b, tasks: b.tasks.map(t => (t.status === 'doing' ? { ...t, status: 'todo' as const, note } : t)) }))
+    // Only tasks of this session, of a session that no longer drives, or with no session
+    // recorded go back: a task whose worker runs in the live driver keeps it.
+    if (await $.fs.exists(path(BOARD_FILE))) await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now()))
     if (move === 'takeover' && !fresh) $.ui.toast('symcc: the session driving the board stopped answering; this session drives it now')
   }
   if (was && !driving) {
@@ -353,7 +359,7 @@ async function startWorker($: $, id: string) {
   const { dir, branch } = await prepareWorktree($, t0, b.target_branch)
   const t = await change($, x => {
     const cur = find(x, id)!
-    const y = patchTask(x, id, { status: 'doing', attempts: cur.attempts + 1, branch, note: 'worker on it' }, now())
+    const y = patchTask(x, id, { status: 'doing', session: me, attempts: cur.attempts + 1, branch, note: 'worker on it' }, now())
     return [y, find(y, id)!]
   })
   const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: 'symcc:worker', cwd: dir })
@@ -436,13 +442,22 @@ const LIVE = new Set(['pending', 'running', 'waiting'])
  * same folders; without this, every reload adds one more worker per running task.
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
-async function stopOrphans($: $): Promise<number> {
+async function stopOrphans($: $, leadNow?: string | null): Promise<number> {
   const agents = await $.agent.list().catch(() => [])
+  // $.agent.list() names this session's agents only, but in case it ever lists another
+  // session's too: never stop a worker whose task the live driver (another session) owns.
+  const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(LEAD_FILE)).catch(() => null)
+  const live = liveDriver(lead, Date.now())
+  const b = agents.some(a => a.type === 'symcc:worker') ? await load($).catch(() => emptyBoard()) : emptyBoard()
   let n = 0
   for (const a of agents) {
     if (a.type !== 'symcc:worker' && a.type !== 'symcc:scout') continue
     if (workers.has(a.id) || scoutRuns.has(a.id)) continue
     if (ENDED.has(a.status)) continue
+    if (a.type === 'symcc:worker') {
+      const t = find(b, normId(a.description.split(/\s/)[0] ?? ''))
+      if (t && t.status === 'doing' && !ownedHere(t, me, live)) continue
+    }
     stopped.add(a.id)
     if (LIVE.has(a.status)) await halt($, a.id, 'symcc was reloaded and a new worker took over this task')
     n++

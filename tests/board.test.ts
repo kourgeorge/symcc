@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -95,4 +95,44 @@ test('only one session drives the board: the first one, until its heartbeat goes
   expect(whoDrives(lead, 'b', t0 + 180_001)).toBe('takeover')
   // a heartbeat dated far in the future (a broken clock) can't hold the lead forever
   expect(whoDrives(lead, 'b', t0 - 10 * 60_000)).toBe('takeover')
+})
+
+
+test('at session start, only "doing" tasks of this session, a dead session or no session go back to "todo"', () => {
+  const t0 = 1_800_000_000_000
+  let b = emptyBoard()
+  for (const title of ['mine', 'dead', 'old', 'live', 'idle']) b = addTask(b, { title }, T)[0]
+  b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
+  b = patchTask(b, 'T-2', { status: 'doing', session: 'gone' }, T)
+  b = patchTask(b, 'T-3', { status: 'doing' }, T)
+  b = patchTask(b, 'T-4', { status: 'doing', session: 'other' }, T)
+  // the session is kept through a save and a load
+  b = parseBoard(JSON.stringify(b))
+  expect(b.tasks.map(t => t.session)).toEqual(['me', 'gone', undefined, 'other', undefined])
+  const lead = leadText('other', t0)
+  expect(liveDriver(lead, t0 + 60_000)).toBe('other')
+  const after = resetDoing(b, 'me', lead, t0 + 60_000, 'restarted', T)
+  expect(after.tasks.map(t => t.status)).toEqual(['todo', 'todo', 'todo', 'doing', 'todo'])
+  expect(after.tasks.map(t => t.session)).toEqual([undefined, undefined, undefined, 'other', undefined])
+  // once the other session's heartbeat is stale, its tasks are reset too
+  expect(liveDriver(lead, t0 + LEAD_STALE_MS + 1)).toBe(null)
+  expect(resetDoing(b, 'me', lead, t0 + LEAD_STALE_MS + 1, 'restarted', T).tasks.every(t => t.status === 'todo')).toBe(true)
+  // no lead file: nobody else drives, so every running task is ours to restart
+  expect(resetDoing(b, 'me', null, t0, 'restarted', T).tasks.every(t => t.status === 'todo')).toBe(true)
+  // the live driver's own workers are never ours to stop
+  expect(ownedHere(b.tasks[3]!, 'me', 'other')).toBe(false)
+  expect(ownedHere(b.tasks[3]!, 'me', null)).toBe(true)
+})
+
+test('a task forgets its session when it leaves "doing"', () => {
+  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
+  expect(b.tasks[0]!.session).toBe('me')
+  b = patchTask(b, 'T-1', { note: 'checking and merging' }, T)
+  expect(b.tasks[0]!.session).toBe('me')
+  b = patchTask(b, 'T-1', { status: 'failed' }, T)
+  expect('session' in b.tasks[0]!).toBe(false)
+  // a session left on a task that isn't running is dropped on load
+  const text = JSON.stringify({ ...b, tasks: [{ ...b.tasks[0], status: 'todo', session: 'x' }] })
+  expect('session' in parseBoard(text).tasks[0]!).toBe(false)
 })

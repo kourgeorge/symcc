@@ -12,8 +12,11 @@ export type Board = {
   max_parallel: number
   /** a worker running longer than this is stopped and its task marked failed */
   max_minutes: number
-  tasks: SymccTask[]
+  tasks: BoardTask[]
 }
+
+/** A task as the board file keeps it: while it is "doing", `session` names the session whose worker owns it. */
+export type BoardTask = SymccTask & { session?: string }
 
 export const BOARD_FILE = '.symcc/board.json'
 /** held by one session while it reads, changes and writes the board */
@@ -53,7 +56,11 @@ export function parseBoard(text: string | null): Board {
   if (!text) return emptyBoard()
   try {
     const b = JSON.parse(text) as Partial<Board>
-    return { ...emptyBoard(), ...b, tasks: Array.isArray(b.tasks) ? b.tasks : [] }
+    const tasks = (Array.isArray(b.tasks) ? b.tasks : []).map(t => {
+      const { session, ...rest } = t
+      return typeof session === 'string' && session && t.status === 'doing' ? { ...rest, session } : rest
+    })
+    return { ...emptyBoard(), ...b, tasks }
   } catch {
     return emptyBoard()
   }
@@ -101,10 +108,11 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
 
-export function patchTask(b: Board, id: string, patch: Partial<SymccTask>, now: string): Board {
+export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: string): Board {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
-  const next: SymccTask = { ...t, ...patch, updated_at: now }
+  const next: BoardTask = { ...t, ...patch, updated_at: now }
+  if (next.status !== 'doing' || !next.session) delete next.session
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, 8000)
   if (patch.files !== undefined) next.files = cleanFiles(patch.files)
@@ -224,4 +232,40 @@ export function whoDrives(text: string | null, me: string, nowMs: number, staleM
   if (l.session === me) return 'keep'
   const fresh = nowMs - l.heartbeat <= staleMs && l.heartbeat - nowMs <= staleMs
   return fresh ? 'follow' : 'takeover'
+}
+
+// ---------------- which session owns a running task ----------------
+
+/** The session that drives the board now, by lead.json `text` at `nowMs`; null if nobody does (or its heartbeat is stale). */
+export function liveDriver(text: string | null, nowMs: number, staleMs = LEAD_STALE_MS): string | null {
+  const l = parseLead(text)
+  if (!l) return null
+  const fresh = nowMs - l.heartbeat <= staleMs && l.heartbeat - nowMs <= staleMs
+  return fresh ? l.session : null
+}
+
+/**
+ * Whether session `me` may take over a task's worker: the task names no session (an old
+ * board), names `me`, or names a session that no longer drives the board (`live`).
+ * A task owned by the live driver, another session, is never touched.
+ */
+export function ownedHere(t: BoardTask, me: string, live: string | null): boolean {
+  return !t.session || t.session === me || t.session !== live
+}
+
+/**
+ * At session start the driver sends "doing" tasks whose worker is gone back to "todo":
+ * those of this session, of a dead session, or with no session recorded. `leadBefore`
+ * is lead.json as it was before this session wrote its own heartbeat.
+ */
+export function resetDoing(b: Board, me: string, leadBefore: string | null, nowMs: number, note: string, now: string): Board {
+  const live = liveDriver(leadBefore, nowMs)
+  return {
+    ...b,
+    tasks: b.tasks.map(t => {
+      if (t.status !== 'doing' || !ownedHere(t, me, live)) return t
+      const { session: _gone, ...rest } = t
+      return { ...rest, status: 'todo' as const, note, updated_at: now }
+    }),
+  }
 }
