@@ -14,6 +14,8 @@ export type Board = {
   max_minutes: number
   /** how many new tries a task gets on its own after its tests fail, before it is marked failed */
   auto_retries: number
+  /** open the board panel by itself when a session starts (true unless turned off) */
+  open_on_start: boolean
   tasks: BoardTask[]
 }
 
@@ -54,7 +56,7 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
 
 export function emptyBoard(): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -184,6 +186,9 @@ export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
   const s = String(output ?? '').trim()
   return s.length > n ? '…' + s.slice(-n) : s
 }
+
+/** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */
+export const openOnStart = (b: Partial<Pick<Board, 'open_on_start'>>) => b.open_on_start !== false
 
 /** A settings value for auto_retries: a whole number from 0 to 10. */
 export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(Number.isFinite(n) ? n : DEFAULT_AUTO_RETRIES)))

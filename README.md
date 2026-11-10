@@ -46,6 +46,12 @@ worthwhile ones as tasks. `examples/scouts/` has two to copy.
 
 ## Commands
 
+- The board panel opens by itself when a session starts (in every session, driving or not),
+  showing the task list; the cursor stays in the prompt so you can type right away. Turn
+  this off with the `open_on_start` setting (e.g. "symcc settings open_on_start false").
+  Claude Code only places a panel it wasn't asked for when the terminal is wide enough
+  (about 144 columns); on a narrower one nothing opens and no error shows. The band above
+  the prompt and `/board` still work.
 - `/board`: open the interactive board: ↑↓ to move, Enter to open a task, Esc to close.
   An open task shows everything about it and has buttons to pause, resume, retry, drop,
   watch its worker live, and a box to answer it when it waits for you. `/board T-3` opens that task directly. `ctrl+x tab` goes back to it.

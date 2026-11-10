@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -265,4 +265,15 @@ test('time and cost: formatting', async () => {
   expect(fmtTokens(1_200_000)).toBe('1.2M')
   expect(fmtTotal({ ms: 72 * 60_000, tries: 1, cost: 3.4 })).toBe('1h 12m · ~$3.40')
   expect(fmtTotal({ ms: 60_000, tries: 1 })).toBe('1m')
+})
+
+test('the board panel opens on start unless the open_on_start setting is turned off', async () => {
+  const b = emptyBoard()
+  expect(b.open_on_start).toBe(true)
+  expect(openOnStart(b)).toBe(true)
+  expect(openOnStart(parseBoard(JSON.stringify({ version: 1, tasks: [] })))).toBe(true)
+  expect(openOnStart({})).toBe(true)
+  const off = { ...b, open_on_start: false }
+  expect(openOnStart(off)).toBe(false)
+  expect(openOnStart(parseBoard(JSON.stringify(off)))).toBe(false)
 })

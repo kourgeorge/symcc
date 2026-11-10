@@ -33,6 +33,7 @@ import {
   MAX_CONFLICT_TRIES,
   DEFAULT_AUTO_RETRIES,
   clampRetries,
+  openOnStart,
   onTestFail,
   testTail,
   startRun,
@@ -752,7 +753,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   board · add · change · start · ask · drop · stop · resume · stop_all · resume_all · settings
   settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
-  after failing tests, 2 by default), paused.
+  after failing tests, 2 by default), open_on_start (open the board panel when a
+  session starts, on by default), paused.
   After each worker finishes, the lead gets a "[symcc] Update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
@@ -823,8 +825,8 @@ const TOOLS = [
   { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
-    description: 'Change how the team works: test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
-    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, paused: { type: 'boolean' } } },
+    description: 'Change how the team works: test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
+    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, paused: { type: 'boolean' } } },
   },
 ]
 
@@ -915,6 +917,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.max_parallel === 'number') ((y.max_parallel = Math.max(1, Math.min(8, Math.round(a.max_parallel)))), parts.push(`up to ${y.max_parallel} at once`))
         if (typeof a.max_minutes === 'number') ((y.max_minutes = Math.max(5, Math.min(600, Math.round(a.max_minutes)))), parts.push(`a worker may run ${y.max_minutes} min`))
         if (typeof a.auto_retries === 'number') ((y.auto_retries = clampRetries(a.auto_retries)), parts.push(`${y.auto_retries} automatic ${y.auto_retries === 1 ? 'retry' : 'retries'} after failing tests`))
+        if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), parts.push(a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
         if (typeof a.paused === 'boolean') ((y.paused = a.paused), parts.push(a.paused ? 'paused' : 'resumed'))
         return y
       })
@@ -972,6 +975,13 @@ export const register: Register = on => {
     )
     const b = await load($)
     await publish($, b)
+    // Open the board panel by itself (every session, driver or not), without taking the cursor
+    // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
+    // that is fine: the band above the prompt and /board still work.
+    if (openOnStart(b))
+      await update($, opened, () => '')
+        .then(() => $.ui.open({ id: PANE, title: 'Board' }))
+        .catch(() => undefined)
     void pump($)
     return started
   })
