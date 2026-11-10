@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addTask, boardText, emptyBoard, outOfScope, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { LOCK_STALE_MS, addTask, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -55,4 +55,23 @@ test('a paused task is not started, and a new board has a time limit for workers
   expect(ready(b1).map(x => x.id)).toEqual([t.id])
   const b2 = patchTask(b1, t.id, { status: 'paused' }, '2026-01-01T00:01:00Z')
   expect(ready(b2)).toEqual([])
+})
+
+test('a board lock counts as stale only after about 30 seconds', () => {
+  const t0 = 1_800_000_000_000
+  const lock = lockText('session-a', t0)
+  expect(parseLock(lock)).toEqual({ session: 'session-a', at: t0 })
+  expect(LOCK_STALE_MS).toBe(30_000)
+  expect(isLockStale(lock, t0)).toBe(false)
+  expect(isLockStale(lock, t0 + 29_000)).toBe(false)
+  expect(isLockStale(lock, t0 + 30_000)).toBe(false)
+  expect(isLockStale(lock, t0 + 30_001)).toBe(true)
+  // a lock dated far in the future (a broken clock) can't hold the board forever
+  expect(isLockStale(lock, t0 - 60_000)).toBe(true)
+  // a lock that can't be read is judged by the file's own time, or taken over
+  expect(parseLock('{half')).toBe(null)
+  expect(isLockStale('{half', t0 + 1_000, t0)).toBe(false)
+  expect(isLockStale('{half', t0 + 31_000, t0)).toBe(true)
+  expect(isLockStale('', t0)).toBe(true)
+  expect(isLockStale(lock, t0 + 5_000, undefined, 1_000)).toBe(true)
 })

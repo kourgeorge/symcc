@@ -16,6 +16,33 @@ export type Board = {
 }
 
 export const BOARD_FILE = '.symcc/board.json'
+/** held by one session while it reads, changes and writes the board */
+export const LOCK_FILE = '.symcc/board.lock'
+/** a lock older than this was left by a session that died, and may be taken over */
+export const LOCK_STALE_MS = 30_000
+
+export type Lock = { session: string; at: number }
+
+export const lockText = (session: string, at: number) => JSON.stringify({ session, at }) + '\n'
+
+export function parseLock(text: string | null): Lock | null {
+  try {
+    const l = JSON.parse(text ?? '') as Partial<Lock>
+    return typeof l.session === 'string' && typeof l.at === 'number' && Number.isFinite(l.at) ? { session: l.session, at: l.at } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a lock may be taken over: it is older than LOCK_STALE_MS (or dated far in
+ * the future, a broken clock). A lock we can't read is judged by the file's own time.
+ */
+export function isLockStale(text: string | null, nowMs: number, fileMs?: number, maxAgeMs = LOCK_STALE_MS): boolean {
+  const at = parseLock(text)?.at ?? fileMs
+  if (at === undefined || !Number.isFinite(at)) return true
+  return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
+}
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
 
 export function emptyBoard(): Board {

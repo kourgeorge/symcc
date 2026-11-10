@@ -13,11 +13,14 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { SymccScout, SymccTask, SymccView } from '../types'
 import {
   BOARD_FILE,
+  LOCK_FILE,
   addTask,
   boardText,
   newestFirst,
   emptyBoard,
   find,
+  isLockStale,
+  lockText,
   outOfScope,
   parseBoard,
   parseScout,
@@ -61,13 +64,68 @@ async function load($: $): Promise<Board> {
   return exists ? parseBoard(await $.fs.read(path(BOARD_FILE))) : emptyBoard()
 }
 
-/** Every change goes through here, one at a time, so two workers finishing together never lose an update. */
+/**
+ * Take .symcc/board.lock so no other session reads or writes the board meanwhile.
+ * The lock is written to its own temp file first and then hard-linked into place:
+ * `ln` fails if the lock exists, so only one session can win, and nobody ever sees
+ * a half-written lock. A stale lock (its session died) is removed and taken over.
+ */
+async function takeLock($: $): Promise<string> {
+  const lock = path(LOCK_FILE)
+  const me = `${await $.session.id().catch(() => 'unknown')}:${Math.random().toString(36).slice(2, 10)}`
+  const mine = lockText(me, Date.now())
+  const tmp = `${lock}.${me.replace(/[^\w.-]/g, '_')}.tmp`
+  await $.fs.write(tmp, mine)
+  try {
+    const until = Date.now() + 5_000
+    for (;;) {
+      if ((await $.process.run(['ln', tmp, lock])).exitCode === 0) return mine
+      const held = await $.fs.read(lock).catch(() => null)
+      const st = await $.fs.stat(lock).catch(() => null)
+      if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs)) {
+        // remove it only if it is still the same stale lock we just read
+        if ((await $.fs.read(lock).catch(() => null)) === held) await $.process.run(['rm', '-f', lock])
+        continue
+      }
+      if (Date.now() > until) throw new Error('the board is busy (another session holds .symcc/board.lock); try again')
+      await $.clock.sleep(100)
+    }
+  } finally {
+    await $.process.run(['rm', '-f', tmp]).catch(() => undefined)
+  }
+}
+
+async function dropLock($: $, mine: string) {
+  const lock = path(LOCK_FILE)
+  if ((await $.fs.read(lock).catch(() => null)) === mine) await $.process.run(['rm', '-f', lock]).catch(() => undefined)
+}
+
+/** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
+async function saveBoard($: $, b: Board) {
+  const file = path(BOARD_FILE)
+  const tmp = `${file}.tmp`
+  await $.fs.write(tmp, JSON.stringify(b, null, 2) + '\n')
+  // $.fs has no rename; mv within one folder is an atomic rename
+  const r = await $.process.run(['mv', '-f', tmp, file])
+  if (r.exitCode !== 0) throw new Error(`couldn't save the board: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+}
+
+/**
+ * Every change goes through here, one at a time, so two workers finishing together
+ * never lose an update; the lock file does the same between sessions.
+ */
 function change<T>($: $, fn: (b: Board) => [Board, T] | Board): Promise<T> {
   const run = writing.then(async () => {
-    const before = await load($)
-    const out = fn(before)
-    const [after, value] = Array.isArray(out) ? out : [out, undefined as T]
-    await $.fs.write(path(BOARD_FILE), JSON.stringify(after, null, 2) + '\n')
+    const mine = await takeLock($)
+    let after: Board, value: T
+    try {
+      const before = await load($)
+      const out = fn(before)
+      ;[after, value] = Array.isArray(out) ? out : [out, undefined as T]
+      await saveBoard($, after)
+    } finally {
+      await dropLock($, mine)
+    }
     await publish($, after)
     return value
   })
