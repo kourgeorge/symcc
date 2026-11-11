@@ -209,6 +209,15 @@ test('a worker starts on a task only if it is "todo" and no live worker is on it
   expect(mayStart(undefined, [])).toBe(false)
 })
 
+test('a worker is found by its name: the task id, or the id with a suffix the host added', () => {
+  const w = (id: string, name: string) => ({ id, name, type: 'symcc:worker', status: 'running' })
+  const agents = [w('a', 'T-3'), w('b', 'T-3-2'), w('c', 'T-30'), w('d', 'T-30-2')]
+  expect(liveWorkersFor({ id: 'T-3' }, agents).map(a => a.id)).toEqual(['a', 'b'])
+  expect(liveWorkersFor({ id: 'T-30' }, agents).map(a => a.id)).toEqual(['c', 'd'])
+  expect(liveWorkersFor({ id: 'T-3' }, [w('c', 'T-30')])).toEqual([])
+  expect(liveWorkersFor({ id: 'T-3' }, [{ ...w('a', 'T-3'), status: 'completed' }])).toEqual([])
+})
+
 test('after a reload, a task whose old worker is still alive stays "doing"', () => {
   let b = emptyBoard()
   for (const title of ['alive', 'gone']) b = addTask(b, { title }, T)[0]

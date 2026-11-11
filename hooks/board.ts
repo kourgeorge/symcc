@@ -803,18 +803,25 @@ export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
 // ---------------- never two workers on one task ----------------
 
 /** An agent as $.agent.list() reports it. */
-export type AgentInfo = { id: string; type?: string; status: string; description?: string }
+export type AgentInfo = { id: string; type?: string; status: string; description?: string; name?: string }
 
 /** Agent statuses that mean it has ended; anything else counts as still alive. */
 export const ENDED_STATUSES = ['completed', 'failed', 'killed']
 
-/** The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any whose description starts with the task id. */
+/**
+ * The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any
+ * whose name is the task id (or the id plus a suffix the host added, e.g. "T-3-2"), or whose
+ * description starts with the task id.
+ */
 export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name: string = DEFAULT_NAME): AgentInfo[] {
   const worker = namesFor(name).worker
   return agents.filter(a => {
     if (ENDED_STATUSES.includes(a.status)) return false
     if (t.agent && a.id === t.agent) return true
-    return a.type === worker && normId(String(a.description ?? '').split(/\s/)[0] ?? '') === t.id
+    if (a.type !== worker) return false
+    const n = String(a.name ?? '')
+    if (n && (n === t.id || n.startsWith(`${t.id}-`))) return true
+    return normId(String(a.description ?? '').split(/\s/)[0] ?? '') === t.id
   })
 }
 

@@ -604,7 +604,7 @@ async function startWorker($: $, id: string) {
     const before = find(b, id)!
     let agentId: string
     try {
-      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: N.worker, cwd: dir })
+      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), name: t.id, description: `${t.id} ${t.title}`.slice(0, 60), subagentType: N.worker, cwd: dir })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
       if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
