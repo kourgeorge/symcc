@@ -20,6 +20,12 @@ import {
   boardLabel,
   boardTitle,
   boardWhere,
+  SCOUT_REPORT_CHARS,
+  scoutFile,
+  scoutHowTo,
+  scoutReport,
+  scoutRow,
+  sortScouts,
   bannerLines,
   bannerRule,
   branchWarning,
@@ -79,9 +85,13 @@ type $ = EngineInterface
 
 // The one exception: the panel's state values. Claude Code reads which values a plugin keeps
 // from its code before it runs, so their owner must be written out here as text. It must be
-// the plugin's name: on a rename, change it in these two lines and in types/index.d.ts too.
+// the plugin's name: on a rename, change it in these four lines and in types/index.d.ts too.
 /** which task the board panel has open; '' = the list */
 const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
+/** which view the board panel shows: 'scouts', or anything else for the tasks; kept while the panel is open */
+const tab = atom({ plugin: 'symcc', key: 'tab' } as const, '')
+/** which scout the Scouts view has open; '' = the list */
+const scoutOpen = atom({ plugin: 'symcc', key: 'scout' } as const, '')
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } as SymccView, { shape: 'view-1' })
 let N = namesFor(DEFAULT_NAME)
 let named = false
@@ -821,7 +831,10 @@ async function scoutFinished($: $, agentId: string, answer: string) {
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
   const st = scoutState.get(name)
-  if (st) st.running = false
+  if (st) {
+    st.running = false
+    st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
+  }
   await publish($, await load($))
   const found = answer.split('\n').filter(l => /^\s*-\s+\S/.test(l)).slice(0, 3)
   if (!found.length || /^\s*NOTHING\s*$/m.test(answer)) return
@@ -833,10 +846,38 @@ async function scheduleScouts($: $) {
   const defs = await loadScouts($)
   for (const k of [...scoutState.keys()]) if (!defs.some(d => d.name === k)) scoutState.delete(k)
   for (const s of defs) {
-    scoutState.set(s.name, { name: s.name, every_minutes: s.every_minutes, last_run: scoutState.get(s.name)?.last_run ?? null, running: scoutState.get(s.name)?.running ?? false })
-    timers.push($.clock.every(s.every_minutes * 60_000, () => void runScout($, s)))
+    const old = scoutState.get(s.name)
+    const ms = s.every_minutes * 60_000
+    const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt, next_run: new Date(Date.now() + ms).toISOString() }
+    if (s.model) st.model = s.model
+    if (old?.last_report !== undefined) st.last_report = old.last_report
+    scoutState.set(s.name, st)
+    timers.push(
+      $.clock.every(ms, () => {
+        st.next_run = new Date(Date.now() + ms).toISOString()
+        void runScout($, s)
+      }),
+    )
   }
   return defs
+}
+
+/** Runs scout `name` now (/scouts run <name>, or "run now" in the panel); says what happened. */
+async function runScoutNow($: $, name: string): Promise<string> {
+  const defs = await scheduleScouts($)
+  const s = defs.find(d => d.name === name)
+  if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
+  if (!driving) return `scouts run in the session that drives the board; run /scouts run ${s.name} there`
+  void runScout($, s)
+  return `scout ${s.name} started`
+}
+
+/** Opens the board panel on a view ('tasks' or 'scouts'), with nothing opened in it. */
+async function openPane($: $, which: 'tasks' | 'scouts', focus = true) {
+  await update($, opened, () => '')
+  await update($, scoutOpen, () => '')
+  await update($, tab, () => which)
+  return $.ui.open({ id: N.pane, title: boardTitle(root, N.name), ...(focus ? { focus: true as const, closeOnEscape: true as const } : {}) })
 }
 
 // ---------------- the lead's tools ----------------
@@ -876,7 +917,7 @@ const MANUAL = (): Record<string, string> => ({
   commands: `Commands
   /board            open the board panel (↑↓ move, Enter opens a task, Esc closes)
   /board T-3        open one task
-  /scouts           list scouts and reload their files
+  /scouts           show the scouts in the board panel (t / s switch views) and reload their files
   /scouts run NAME  run a scout now
   /stop-all         stop every worker and scout, pause the board
   /resume-all       start work again
@@ -1226,11 +1267,11 @@ export const register: Register = on => {
       const t = find(b, arg)
       if (!t) return { text: `${arg} is not on the board` }
       await update($, opened, () => t.id)
+      await update($, tab, () => 'tasks')
       await $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true })
       return { text: taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks), isTextDisplayOnly: true }
     }
-    await update($, opened, () => '')
-    await $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true })
+    await openPane($, 'tasks')
     return { text: `Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`, isTextDisplayOnly: true }
   })
 
@@ -1287,15 +1328,13 @@ export const register: Register = on => {
 
   on('command.run', { command: 'scouts' }, async ($, e) => {
     useName($)
-    const defs = await scheduleScouts($)
     const m = /^run\s+(\S+)/.exec(e.args.trim())
-    if (m) {
-      const s = defs.find(d => d.name === m[1])
-      if (!s) return { text: `no scout named ${m[1]} (have: ${defs.map(d => d.name).join(', ') || 'none'})` }
-      if (!driving) return { text: `scouts run in the session that drives the board; run /scouts run ${s.name} there` }
-      void runScout($, s)
-      return { text: `scout ${s.name} started` }
-    }
+    if (m) return { text: await runScoutNow($, m[1]!) }
+    const defs = await scheduleScouts($)
+    await publish($, await load($))
+    // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
+    const placed = await openPane($, 'scouts').then(r => r.isPlaced).catch(() => false)
+    if (placed) return { text: `Scouts opened: Enter opens a scout, t tasks, Esc closes.`, isTextDisplayOnly: true }
     if (!defs.length) return { text: `No scouts yet. Add one as ${N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
     return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}`).join('\n') }
   })
@@ -1316,10 +1355,18 @@ export const register: Register = on => {
     return e.command === N.man ? { text: manual(e.args), isTextDisplayOnly: true } : next(e)
   })
 
-  // Opened days are forgotten when the board panel closes.
-  on('ui.close', ($, e, next) => {
+  // Esc in an opened scout goes back to the Scouts list (the panel stays open).
+  // Opened days and the active view are forgotten when the board panel closes.
+  on('ui.close', async ($, e, next) => {
     useName($)
-    if (e.id === N.pane) openDays.clear()
+    if (e.id !== N.pane) return next(e)
+    if (e.origin.kind === 'person' && (await read($, tab)) === 'scouts' && (await read($, scoutOpen))) {
+      await update($, scoutOpen, () => '')
+      return { value: undefined }
+    }
+    openDays.clear()
+    await update($, tab, () => '').catch(() => undefined)
+    await update($, scoutOpen, () => '').catch(() => undefined)
     return next(e)
   })
 
@@ -1336,8 +1383,48 @@ export const register: Register = on => {
     const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
     const mark: Record<string, string> = { waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
     const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(N.toast(err.message)))
-    const t = open ? v.tasks.find(x => x.id === open) : undefined
+    const onScouts = (await read($, tab)) === 'scouts'
+    const t = open && !onScouts ? v.tasks.find(x => x.id === open) : undefined
     const C = (c: string) => c as never
+    const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
+    /** The banner at the top: the drawing, the board's facts, and the rule under them. */
+    const banner = () => {
+      const d = emptyBoard()
+      const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
+      const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'subtle', warning: 'warning' }
+      return [
+        ...bannerLines(facts, root, home, v.driving ?? driving, width, Date.now(), N.name).map((l, i) => (
+          <Text key={`banner-${i}`} wrap="truncate">
+            {l.art ? <Text color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
+            {l.parts.map(p => (
+              <Text bold={p.bold} color={C(tone[p.tone])}>{p.text}</Text>
+            ))}
+          </Text>
+        )),
+        <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>,
+      ]
+    }
+    /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */
+    const tabs = () => {
+      const go = (which: 'tasks' | 'scouts') => act(async () => (await update($, opened, () => ''), await update($, scoutOpen, () => ''), await update($, tab, () => which)))
+      const one = (which: 'tasks' | 'scouts', label: string) => {
+        const active = which === 'scouts' ? onScouts : !onScouts
+        return (
+          <Button key={`tab-${which}`} hotkey={which[0]} onPress={go(which)}>
+            <Text bold={active} color={C(active ? 'ide' : 'subtle')}>{label}</Text>
+          </Button>
+        )
+      }
+      return (
+        <Box flexDirection="row">
+          {one('tasks', `[t] Tasks (${v.tasks.length})`)}
+          <Text color={C('subtle')}> │ </Text>
+          {one('scouts', `[s] Scouts (${scouts.length})`)}
+        </Box>
+      )
+    }
+    const HINT = 'Enter opens · t tasks · s scouts · Esc closes'
+
     /** Text with task IDs, `code` and file paths picked out in color. */
     const rich = (text: string, base = 'text') => {
       const parts = text.split(/(\bT-\d+\b|`[^`\n]+`|(?:[\w.-]+\/)+[\w.-]+|\b[\w-]+\.(?:md|ts|tsx|js|json|py|txt|csv|yml|yaml)\b)/g)
@@ -1354,6 +1441,74 @@ export const register: Register = on => {
       ).map(x => (typeof x === 'string' ? (x ? <Text color={C(base)}>{x}</Text> : null) : x))
     }
 
+    if (onScouts) {
+      const nowMs = Date.now()
+      const opener = await read($, scoutOpen)
+      const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
+      if (sc) {
+        const r = scoutRow(sc, nowMs)
+        const file = scoutFile(sc.name, N.name)
+        const heading = (label: string) => (
+          <Text bold color={C('suggestion')}>
+            ▍{label}
+          </Text>
+        )
+        const report = scoutReport(sc.last_report)
+        return (
+          <Box flexDirection="column" gap={1}>
+            <Box flexDirection="column">
+              {tabs()}
+              <Text>
+                <Text bold color={C('claude')}>{sc.name}</Text>
+                <Text color={C('subtle')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · </Text>
+                {r.state ? <Text color={C(sc.running ? 'success' : 'text')}>{r.state}</Text> : null}
+                <Text color={C('subtle')}>{r.state ? ' · ' : ''}{r.ran}</Text>
+              </Text>
+              <Text>
+                <Text color={C('subtle')}>file: </Text>
+                <Text color={C('autoAccept')}>{file}</Text>
+              </Text>
+            </Box>
+            <Box flexDirection="row" gap={1}>
+              <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => update($, scoutOpen, () => ''))} />
+              <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(N.toast(await runScoutNow($, sc.name))))} />
+              <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(async () => $.ui.toast(N.toast(`to edit it, open ${root ? `${root}/` : ''}${file}`)))} />
+            </Box>
+            <Box flexDirection="column">
+              {heading('Instructions')}
+              {sc.prompt?.trim() ? sc.prompt.split('\n').map(line => <Text>{line.trim() ? rich(line) : ' '}</Text>) : <Text color={C('subtle')}>(not loaded yet: run /scouts)</Text>}
+            </Box>
+            <Box flexDirection="column">
+              {heading('Last report')}
+              {report === 'nothing found' ? <Text color={C('subtle')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : report.split('\n').map(line => <Text>{line.trim() ? rich(line) : ' '}</Text>)}
+            </Box>
+            <Text color={C('subtle')}>b back · r run now · e edit · Esc back</Text>
+          </Box>
+        )
+      }
+      const nameWidth = Math.max(4, ...scouts.map(x => x.name.length))
+      const everyWidth = Math.max(0, ...scouts.map(x => scoutRow(x, nowMs).every.length))
+      return (
+        <Box flexDirection="column">
+          {banner()}
+          {tabs()}
+          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
+          {scouts.length === 0 && scoutHowTo(N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'subtle')}>{line}</Text>)}
+          {scouts.map((x, i) => {
+            const r = scoutRow(x, nowMs)
+            return (
+              <Button key={`scout:${x.name}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, scoutOpen, () => x.name))}>
+                <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
+                <Text color={C('subtle')}> {r.every.padEnd(everyWidth)}</Text>
+                {r.model ? <Text color={C('subtle')}> · {r.model}</Text> : null}
+                {r.state ? <Text color={C(x.running ? 'success' : 'text')}> · {r.state}</Text> : null}
+                <Text color={C('subtle')}> · {r.ran}</Text>
+              </Button>
+            )
+          })}
+        </Box>
+      )
+    }
     if (t) {
       const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
       const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
@@ -1551,21 +1706,9 @@ export const register: Register = on => {
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
       <Box flexDirection="column">
-        {(() => {
-          const d = emptyBoard()
-          const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
-          const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'subtle', warning: 'warning' }
-          return bannerLines(facts, root, home, v.driving ?? driving, width, Date.now(), N.name).map((l, i) => (
-            <Text key={`banner-${i}`} wrap="truncate">
-              {l.art ? <Text color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
-              {l.parts.map(p => (
-                <Text bold={p.bold} color={C(tone[p.tone])}>{p.text}</Text>
-              ))}
-            </Text>
-          ))
-        })()}
-        <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>
-        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.days.length ? 'Enter opens a task or a day · Esc closes' : 'Enter opens a task · Esc closes'}</Text>}
+        {banner()}
+        {tabs()}
+        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
         {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {list.map((r, i) => {
           if (!('task' in r))

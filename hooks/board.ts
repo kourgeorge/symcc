@@ -1,6 +1,6 @@
 // The task board: plain data, kept in <project>/.<name>/board.json (see name.ts). Every function
 // here is pure (takes a board, returns a new one) so it can be tested without Claude.
-import type { SymccRun, SymccStatus, SymccTask } from '../types'
+import type { SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
 import { DEFAULT_NAME, ICON, ICON_ART, dataDir, namesFor } from './name'
 
 export type Board = {
@@ -567,6 +567,83 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   if (!prompt) return null
   const every = Number(meta.every_minutes ?? meta.every ?? 60)
   return { name: meta.name || name, every_minutes: Number.isFinite(every) && every >= 1 ? every : 60, model: meta.model || undefined, prompt }
+}
+
+// ---------------- scouts in the board panel ----------------
+
+/** How much of a scout's last answer is kept (SymccScout.last_report). */
+export const SCOUT_REPORT_CHARS = 2000
+
+/** How often a scout runs: "every 30 min", "every hour", "every 2 hours", "every 90 min". */
+export function everyText(minutes: number): string {
+  const m = Math.max(1, Math.round(Number.isFinite(minutes) ? minutes : 60))
+  if (m === 60) return 'every hour'
+  if (m % 60 === 0) return `every ${m / 60} hours`
+  return `every ${m} min`
+}
+
+/** What a scout is doing: "running", "next in 12m", "due now", or '' when no run is planned. */
+export function scoutStateText(s: Pick<SymccScout, 'running' | 'next_run'>, nowMs: number): string {
+  if (s.running) return 'running'
+  const at = Date.parse(s.next_run ?? '')
+  if (!Number.isFinite(at)) return ''
+  return at <= nowMs ? 'due now' : `next in ${fmtDuration(at - nowMs)}`
+}
+
+/** When a scout last ran: "ran 8m ago", or "never ran". */
+export function scoutRanText(s: Pick<SymccScout, 'last_run'>, nowMs: number): string {
+  const at = Date.parse(s.last_run ?? '')
+  return Number.isFinite(at) ? `ran ${fmtDuration(Math.max(0, nowMs - at))} ago` : 'never ran'
+}
+
+/** The pieces of a scout's row in the panel; `model` and `state` are '' when there is none. */
+export function scoutRow(s: SymccScout, nowMs: number): { name: string; every: string; model: string; state: string; ran: string } {
+  return { name: s.name, every: everyText(s.every_minutes), model: s.model ?? '', state: scoutStateText(s, nowMs), ran: scoutRanText(s, nowMs) }
+}
+
+/** A scout's row as one line of text: "tests · every 30 min · sonnet · next in 12m · ran 8m ago". */
+export function scoutRowText(s: SymccScout, nowMs: number): string {
+  const r = scoutRow(s, nowMs)
+  return [r.name, r.every, r.model, r.state, r.ran].filter(Boolean).join(' · ')
+}
+
+/** The order of scouts in the panel: running ones first, then the soonest next run (none planned last), then by name. */
+export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run'>, b: Pick<SymccScout, 'name' | 'running' | 'next_run'>): number {
+  if (a.running !== b.running) return a.running ? -1 : 1
+  const at = (s: { next_run?: string }) => {
+    const t = Date.parse(s.next_run ?? '')
+    return Number.isFinite(t) ? t : Infinity
+  }
+  const d = at(a) - at(b)
+  if (d) return d
+  return a.name.localeCompare(b.name)
+}
+
+/** Sorted for the panel; see scoutOrder. */
+export const sortScouts = <S extends SymccScout>(scouts: S[]): S[] => [...scouts].sort(scoutOrder)
+
+/** A scout's file in the project: ".<plugin name>/scouts/<scout>.md". */
+export const scoutFile = (scout: string, name: string = DEFAULT_NAME) => `${namesFor(name).scouts}/${scout}.md`
+
+/** A scout's last report for the panel: "nothing found" when empty (or NOTHING), else its text cut to `n` characters. */
+export function scoutReport(text: string | undefined, n = 800): string {
+  const s = String(text ?? '').trim()
+  if (!s || /^NOTHING\.?$/i.test(s)) return 'nothing found'
+  return s.length > n ? s.slice(0, n).trimEnd() + '…' : s
+}
+
+/** The how-to shown when there are no scouts. */
+export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
+  return [
+    'No scouts yet. A scout reads the project on a timer and suggests work.',
+    `Add one as ${namesFor(name).scouts}/<name>.md:`,
+    '  ---',
+    '  every_minutes: 30',
+    '  model: sonnet        (optional)',
+    '  ---',
+    '  What to look for, in plain words.',
+    `examples/scouts/ in the plugin has two to copy. Then run /scouts.`,
+  ]
 }
 
 // ---------------- who drives the board ----------------

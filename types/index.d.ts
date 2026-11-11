@@ -48,6 +48,14 @@ export type SymccScout = {
   every_minutes: number
   last_run: string | null
   running: boolean
+  /** the model from the scout file's front matter, if set */
+  model?: string
+  /** the scout's instructions: the body of its file */
+  prompt?: string
+  /** what the scout answered last time (its first ~2000 characters) */
+  last_report?: string
+  /** when its timer fires next (ISO time) */
+  next_run?: string
 }
 
 export type SymccView = {
@@ -61,6 +69,6 @@ export type SymccView = {
 declare module 'claude-code' {
   interface PluginState {
     // keyed by the plugin's name: keep it the same as "name" in .claude-plugin/plugin.json
-    symcc: { view: Shaped<SymccView>; opened: string }
+    symcc: { view: Shaped<SymccView>; opened: string; tab: string; scout: string }
   }
 }

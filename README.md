@@ -172,6 +172,11 @@ start nothing. If the driving window closes, another one takes over within a few
   close. An open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and a box to answer it when it waits for you.
   `/board T-3` opens one task directly.
+- The panel has two views, Tasks and Scouts, shown as tabs under the banner. Press `t` or
+  `s` (or click a tab) to switch. The Scouts view lists each scout: how often it runs, its
+  model, whether it is running or when it runs next, and when it last ran. Enter opens a
+  scout: its file, its instructions, its last report, and buttons to run it now or see
+  where to edit it. Esc goes back to the list.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a
   total, e.g. `total: 1h 12m · 1.2M tokens over 4 tries`.
@@ -183,7 +188,7 @@ start nothing. If the driving window closes, another one takes over within a few
 | Command | What it does |
 |---|---|
 | `/board` | Open the board (`/board T-3` for one task) |
-| `/scouts` | List scouts (`/scouts run <name>` runs one now) |
+| `/scouts` | Open the panel on the Scouts view (a text list if the panel can't be shown); `/scouts run <name>` runs one now |
 | `/stop-all` | Stop every worker and scout now and pause the board |
 | `/resume-all` | Let work start again |
 | `/symcc-man` | The built-in manual |

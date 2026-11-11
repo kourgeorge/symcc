@@ -209,3 +209,82 @@ test('finished tasks of older days fold into one row per day, which opens on Ent
   expect(await ui.find({ key: 'T-1' })).toBeUndefined()
   await ui.unmount()
 })
+
+const scout = (name: string, extra: Record<string, unknown> = {}) => ({ name, every_minutes: 30, last_run: null, running: false, ...extra })
+
+test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one', async ($, on) => {
+  const soon = new Date(Date.now() + 12 * 60_000 + 20_000).toISOString()
+  const ran = new Date(Date.now() - 8 * 60_000).toISOString()
+  stateOf(on, {
+    view: {
+      shape: 'view-1',
+      value: {
+        tasks: [task('T-1', 'todo', 'Build it')],
+        working: [],
+        scouts: [scout('bugs', { model: 'sonnet', next_run: soon, last_run: ran, prompt: 'Look for crashes.', last_report: '- crash in parser | src/p.ts:3 | src/p.ts' }), scout('tests', { running: true })],
+        paused: false,
+        test_commands: [],
+      },
+    },
+  })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    // the tab row: both tabs, Tasks active; each a Button with its letter key
+    const tasksTab = await ui.find({ key: 'tab-tasks' })
+    const scoutsTab = await ui.find({ key: 'tab-scouts' })
+    expect(tasksTab?.props.hotkey).toBe('t')
+    expect(scoutsTab?.props.hotkey).toBe('s')
+    expect(await ui.find({ type: 'Text', text: /^\[t\] Tasks \(1\)$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^\[s\] Scouts \(2\)$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Enter opens · t tasks · s scouts · Esc closes/ })).toBeDefined()
+    expect(await ui.find({ key: 'T-1' })).toBeDefined()
+    // "s" presses the Scouts tab
+    await ui.press({ key: 'tab-scouts' })
+    expect(await ui.find({ key: 'T-1' })).toBeUndefined()
+    const active = (await ui.findAll({ type: 'Text', text: /^\[s\] Scouts \(2\)$/ })).find(x => x.props.bold)
+    expect(active?.props.color).toBe('ide')
+    // one row per scout, running first
+    const rows = await ui.findAll({ type: 'Button' })
+    const keys = rows.map(r => r.props.key).filter(k => String(k).startsWith('scout:'))
+    expect(keys).toEqual(['scout:tests', 'scout:bugs'])
+    expect(await ui.find({ type: 'Text', text: /every 30 min/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /sonnet/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /next in 12m/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /ran 8m ago/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /never ran/ })).toBeDefined()
+    const running = (await ui.findAll({ type: 'Text', text: /running/ })).find(x => x.props.color === 'success')
+    expect(running).toBeDefined()
+    // Enter on a scout opens its detail
+    await ui.press({ key: 'scout:bugs' })
+    expect(await ui.find({ type: 'Text', text: /\.symcc\/scouts\/bugs\.md/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Look for crashes/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /crash in parser/ })).toBeDefined()
+    expect(await ui.find({ key: 'scout-run' })).toBeDefined()
+    expect(await ui.find({ key: 'scout-edit' })).toBeDefined()
+    await ui.press({ key: 'scout-back' })
+    expect(await ui.find({ key: 'scout:bugs' })).toBeDefined()
+    // "t" goes back to the tasks
+    await ui.press({ key: 'tab-tasks' })
+    expect(await ui.find({ key: 'T-1' })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('a scout that found nothing says so', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { last_run: new Date().toISOString(), last_report: 'NOTHING' })], paused: false, test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^nothing found$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('with no scouts the Scouts view shows how to add one', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-scouts' })
+  expect(await ui.find({ type: 'Text', text: /No scouts yet/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\.symcc\/scouts\/<name>\.md/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /every_minutes: 30/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /examples\/scouts\// })).toBeDefined()
+  await ui.press({ key: 'tab-tasks' })
+  await ui.unmount()
+})

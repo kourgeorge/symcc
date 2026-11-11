@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -475,4 +475,36 @@ test('boardText lists open and today in full, and one line per older day', () =>
   expect(lines.map(l => l.split(/\s+/)[0])).toEqual(['T-2', 'T-3', '▸', '▸'])
   expect(lines.slice(2)).toEqual(['▸ Yesterday · 1 done', '▸ Mon 9 Nov · 1 done'])
   expect(lines.join('\n')).not.toContain('T-1')
+})
+
+test('a scout row says how often it runs, when it runs next and when it last ran', async () => {
+  const at = Date.parse('2026-11-09T12:00:00.000Z')
+  const iso = (min: number) => new Date(at + min * 60_000).toISOString()
+  expect(everyText(30)).toBe('every 30 min')
+  expect(everyText(60)).toBe('every hour')
+  expect(everyText(120)).toBe('every 2 hours')
+  expect(everyText(90)).toBe('every 90 min')
+  expect(scoutStateText({ running: true, next_run: iso(5) }, at)).toBe('running')
+  expect(scoutStateText({ running: false, next_run: iso(12) }, at)).toBe('next in 12m')
+  expect(scoutStateText({ running: false, next_run: iso(-1) }, at)).toBe('due now')
+  expect(scoutStateText({ running: false }, at)).toBe('')
+  expect(scoutRanText({ last_run: iso(-8) }, at)).toBe('ran 8m ago')
+  expect(scoutRanText({ last_run: null }, at)).toBe('never ran')
+  expect(scoutRow({ name: 'tests', every_minutes: 30, last_run: null, running: false, model: 'sonnet', next_run: iso(12) }, at)).toEqual({ name: 'tests', every: 'every 30 min', model: 'sonnet', state: 'next in 12m', ran: 'never ran' })
+  expect(scoutRowText({ name: 'bugs', every_minutes: 60, last_run: iso(-8), running: true }, at)).toBe('bugs · every hour · running · ran 8m ago')
+  expect(scoutFile('bugs')).toBe('.symcc/scouts/bugs.md')
+  expect(scoutFile('bugs', 'other')).toBe('.other/scouts/bugs.md')
+  expect(scoutReport('')).toBe('nothing found')
+  expect(scoutReport('NOTHING')).toBe('nothing found')
+  expect(scoutReport('- a | b | c')).toBe('- a | b | c')
+  expect(scoutReport('x'.repeat(900), 800)).toBe('x'.repeat(800) + '…')
+  expect(scoutHowTo('other').join('\n')).toContain('.other/scouts/<name>.md')
+  expect(scoutHowTo().join('\n')).toContain('examples/scouts/')
+})
+
+test('scouts are sorted running first, then by their next run', async () => {
+  const s = (name: string, running: boolean, next_run?: string) => ({ name, every_minutes: 30, last_run: null, running, ...(next_run ? { next_run } : {}) })
+  const sorted = sortScouts([s('late', false, '2026-11-09T13:00:00.000Z'), s('none', false), s('soon', false, '2026-11-09T12:05:00.000Z'), s('busy', true, '2026-11-09T14:00:00.000Z'), s('also', true)])
+  expect(sorted.map(x => x.name)).toEqual(['busy', 'also', 'soon', 'late', 'none'])
+  expect(scoutOrder(s('a', false), s('b', false))).toBeLessThan(0)
 })
