@@ -235,6 +235,7 @@ start nothing. If the driving window closes, another one takes over within a few
 | `/board approve T-5` · `/board reject T-5 <reason>` | Merge a task that is ready for review, or send it back with a reason |
 | `/board diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
 | `/board mode [auto\|review]` | Show or set the approval mode |
+| `/automerge [on\|off]` | Quick switch for the approval mode: `on` = auto, `off` = review, no word switches to the other one |
 | `/scouts` | Open the panel on the Scouts view (a text list if the panel can't be shown); `/scouts run <name>` runs one now |
 | `/stop-all` | Stop every worker and scout now and pause the board |
 | `/resume-all` | Let work start again |

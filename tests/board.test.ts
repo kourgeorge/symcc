@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseBoardCommand, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseBoardCommand, parseAutomergeCommand, automergeText, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -855,4 +855,16 @@ test('/board subcommands: approve, reject with a reason, mode, diff, and wrong u
 test('in the panel, tasks in review, waiting and failed come first, the rest keep their order', () => {
   const ts = (['done', 'doing', 'failed', 'todo', 'review', 'waiting', 'review'] as const).map((status, i) => ({ id: `T-${i}`, status }))
   expect(needsYouFirst(ts).map(t => t.id)).toEqual(['T-4', 'T-6', 'T-5', 'T-2', 'T-0', 'T-1', 'T-3'])
+})
+
+test('parseAutomergeCommand: none switches, on/off set the mode, junk gives usage', () => {
+  expect(parseAutomergeCommand('')).toEqual({ kind: 'toggle' })
+  expect(parseAutomergeCommand('  ')).toEqual({ kind: 'toggle' })
+  expect(parseAutomergeCommand('on')).toEqual({ kind: 'set', mode: 'auto' })
+  expect(parseAutomergeCommand(' OFF ')).toEqual({ kind: 'set', mode: 'review' })
+  const bad = parseAutomergeCommand('maybe')
+  expect(bad.kind).toBe('bad')
+  expect(parseAutomergeCommand('on off').kind).toBe('bad')
+  expect(automergeText('auto')).toBe('auto-merge on: finished tasks merge on their own')
+  expect(automergeText('review')).toBe('auto-merge off: finished tasks wait for your review')
 })

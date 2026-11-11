@@ -361,6 +361,23 @@ export function parseBoardCommand(args: string): BoardCommand {
   return { kind: 'bad', message: 'Use: /board, /board T-5, /board approve T-5, /board reject T-5 <reason>, /board mode [auto|review], /board diff T-5 [file]' }
 }
 
+/** What /automerge asks for: switch to the other mode, set one, or wrong use (a usage line). */
+export type AutomergeCommand = { kind: 'toggle' } | { kind: 'set'; mode: Approval } | { kind: 'bad'; message: string }
+
+/** Reads the words after /automerge: nothing (switch to the other mode), "on" (auto), "off" (review). */
+export function parseAutomergeCommand(args: string): AutomergeCommand {
+  const s = String(args ?? '').trim().toLowerCase()
+  if (!s) return { kind: 'toggle' }
+  if (s === 'on') return { kind: 'set', mode: 'auto' }
+  if (s === 'off') return { kind: 'set', mode: 'review' }
+  return { kind: 'bad', message: 'Use: /automerge (switch), /automerge on, or /automerge off' }
+}
+
+/** The one line /automerge answers with for the new mode. */
+export function automergeText(mode: Approval): string {
+  return mode === 'review' ? 'auto-merge off: finished tasks wait for your review' : 'auto-merge on: finished tasks merge on their own'
+}
+
 /** The text for /board mode: what the approval mode is and what it means. */
 export function modeText(mode: Approval): string {
   return mode === 'review' ? 'approval: review (finished work waits for you to approve or reject it)' : 'approval: auto (finished work that passes is merged at once)'

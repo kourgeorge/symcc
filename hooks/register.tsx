@@ -94,6 +94,8 @@ import {
   DIFF_COLOR,
   DIFF_LINES,
   parseBoardCommand,
+  parseAutomergeCommand,
+  automergeText,
   modeText,
   needsYouFirst,
   type DiffFile,
@@ -1157,6 +1159,7 @@ const MANUAL = (): Record<string, string> => ({
   /board reject T-5 REASON    send it back to "todo" with the reason
   /board diff T-5 [FILE]      the files it changed (+/- lines), or one file's diff
   /board mode [auto|review]   show or set the approval mode
+  /automerge [on|off]         auto-merge on (approval auto) or off (review); no word switches it
   /scouts           show the scouts in the board panel (t / s switch views) and reload their files
   /scouts run NAME  run a scout now
   /stop-all         stop every worker and scout, pause the board
@@ -1440,6 +1443,7 @@ async function registerAll($: $) {
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
   for (const c of [
     { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3. Review: /board approve T-5, /board reject T-5 <reason>, /board diff T-5 [file], /board mode [auto|review]`, argumentHint: '[T-id | approve T-id | reject T-id <reason> | diff T-id [file] | mode [auto|review]]' },
+    { name: 'automerge', description: `Switch ${N.name} auto-merge: /automerge on (finished tasks merge on their own), /automerge off (they wait for your review), no word switches it`, argumentHint: '[on|off]' },
     { name: 'scouts', description: `List ${N.name} scouts, or run one now: /scouts run <name>`, argumentHint: '[run <name>]' },
     { name: 'stop-all', description: `Stop every ${N.name} worker and scout now; nothing new starts until /resume-all` },
     { name: 'resume-all', description: `Let ${N.name} start work again` },
@@ -1650,6 +1654,17 @@ export const register: Register = on => {
         {live.length > room && <Text dimColor>+{live.length - room} more · /board</Text>}
       </Box>
     )
+  })
+
+  // /automerge [on|off]: the quick way to set the approval mode (same path as /board mode).
+  on('command.run', { command: 'automerge' }, async ($, e) => {
+    useName($)
+    const cmd = parseAutomergeCommand(e.args)
+    if (cmd.kind === 'bad') return { text: cmd.message, isTextDisplayOnly: true }
+    const mode = cmd.kind === 'set' ? cmd.mode : approvalOf(await load($)) === 'review' ? 'auto' : 'review'
+    const r = await runTool($, 'settings', { approval: mode })
+    tellLead($, `The owner set approval to "${mode}" with /automerge: ${r}`)
+    return { text: `${automergeText(mode)} (${r})`, isTextDisplayOnly: true }
   })
 
   on('command.run', { command: 'scouts' }, async ($, e) => {
