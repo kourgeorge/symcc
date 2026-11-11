@@ -1,6 +1,7 @@
-// The task board: plain data, kept in <project>/.symcc/board.json. Every function
+// The task board: plain data, kept in <project>/.<name>/board.json (see name.ts). Every function
 // here is pure (takes a board, returns a new one) so it can be tested without Claude.
 import type { SymccRun, SymccStatus, SymccTask } from '../types'
+import { DEFAULT_NAME, dataDir, namesFor } from './name'
 
 export type Board = {
   version: 1
@@ -25,9 +26,11 @@ export type Board = {
  */
 export type BoardTask = SymccTask & { session?: string; agent?: string }
 
-export const BOARD_FILE = '.symcc/board.json'
+/** The data folder for the default name; the paths below are for it too. For another name use namesFor(name). */
+export const DATA_DIR = dataDir()
+export const BOARD_FILE = namesFor().boardFile
 /** held by one session while it reads, changes and writes the board */
-export const LOCK_FILE = '.symcc/board.lock'
+export const LOCK_FILE = namesFor().lockFile
 /** a lock older than this was left by a session that died, and may be taken over */
 export const LOCK_STALE_MS = 30_000
 
@@ -83,16 +86,16 @@ export const find = (b: Board, id: string) => b.tasks.find(t => t.id === normId(
 // eslint-disable-next-line no-control-regex
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, n)
 
-/** Repository-relative paths only; never the board itself or Git internals. */
-export function cleanFiles(files: unknown): string[] {
+/** Repository-relative paths only; never the plugin's data folder `dir` (the board) or Git internals. */
+export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
   if (!Array.isArray(files)) return []
   return files
     .map(f => String(f).trim().replace(/\\/g, '/').replace(/^\.\//, ''))
-    .filter(f => f && !f.startsWith('/') && !f.split('/').includes('..') && !f.startsWith('.symcc') && !f.startsWith('.git/') && f !== '.git')
+    .filter(f => f && !f.startsWith('/') && !f.split('/').includes('..') && !f.startsWith(dir) && !f.startsWith('.git/') && f !== '.git')
     .slice(0, 30)
 }
 
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number }, now: string): [Board, SymccTask] {
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => find(b, x))
@@ -100,7 +103,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     id: `T-${b.next_id}`,
     title,
     details: clean(f.details ?? title, 8000),
-    files: cleanFiles(f.files),
+    files: cleanFiles(f.files, dir),
     status: 'todo',
     note: '',
     question: null,
@@ -115,7 +118,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
 
-export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: string): Board {
+export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: string, dir: string = DATA_DIR): Board {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
   const next: BoardTask = { ...t, ...patch, updated_at: now }
@@ -124,7 +127,7 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'doing' || !next.session) delete next.session
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, 8000)
-  if (patch.files !== undefined) next.files = cleanFiles(patch.files)
+  if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
   if (patch.after !== undefined) next.after = patch.after.map(normId).filter(x => x !== t.id && find(b, x))
   if (next.status !== 'waiting') next.question = null
   return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
@@ -139,7 +142,7 @@ export function ready(b: Board): SymccTask[] {
 }
 
 /** Changed files outside the task's files (or touching the board / Git). Empty `allowed` = anywhere. */
-export function outOfScope(changed: string[], allowed: string[]): string[] {
+export function outOfScope(changed: string[], allowed: string[], dir: string = DATA_DIR): string[] {
   const re = (g: string) => {
     let s = g.trim().replace(/^\.\//, '')
     if (s.endsWith('/')) s += '**'
@@ -163,7 +166,7 @@ export function outOfScope(changed: string[], allowed: string[]): string[] {
       const n = g.trim().replace(/^\.\//, '')
       return re(n).test(f) || (!/[*?]/.test(n) && f.startsWith(n.replace(/\/$/, '') + '/'))
     })
-  return changed.filter(f => f.startsWith('.symcc/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
+  return changed.filter(f => f.startsWith(dir + '/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
 // ---------------- when the tests fail ----------------
@@ -310,7 +313,7 @@ export function totalLine(b: { tasks: Pick<SymccTask, 'runs'>[] }, nowMs?: numbe
   return t.tries ? `total: ${fmtTotal(t)} over ${t.tries} ${t.tries === 1 ? 'try' : 'tries'}` : ''
 }
 
-/** The project's folder name, the last part of a path: "/Users/me/repositories/symcc" → "symcc". */
+/** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
 export function folderName(path: string): string {
   return path.replace(/\/+$/, '').split('/').pop() ?? ''
 }
@@ -323,17 +326,17 @@ export function shortHome(path: string, home?: string): string {
   return path.startsWith(h + '/') ? '~' + path.slice(h.length) : path
 }
 
-/** The plugin's name for its board, and the small mark shown before it. All titles are built from these. */
-export const BOARD_NAME = 'symcc board'
+/** The board's name for the default plugin name ("<name> board"), and the small mark shown before it. All titles are built from these. */
+export const BOARD_NAME = namesFor().boardName
 export const BOARD_MARK = '◆'
-/** "◆ symcc board": the bold, colored part of a title. */
-export const boardBrand = () => `${BOARD_MARK} ${BOARD_NAME}`
-/** " · symcc": the dimmed project part of a title, or '' when the folder is unknown. */
+/** "◆ <name> board": the bold, colored part of a title. */
+export const boardBrand = (name: string = DEFAULT_NAME) => `${BOARD_MARK} ${namesFor(name).boardName}`
+/** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
-/** The board's title: "◆ symcc board · symcc", or just "◆ symcc board" when the folder is unknown. */
-export const boardTitle = (root: string) => `${boardBrand()}${boardWhere(root)}`
-/** The status line label, without the mark (Claude Code adds its own): "symcc board · symcc". */
-export const boardLabel = (root: string) => `${BOARD_NAME}${boardWhere(root)}`
+/** The board's title: "◆ <name> board · <folder>", or just "◆ <name> board" when the folder is unknown. */
+export const boardTitle = (root: string, name: string = DEFAULT_NAME) => `${boardBrand(name)}${boardWhere(root)}`
+/** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
+export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
 // ---------------- the banner at the top of the board panel ----------------
 
@@ -372,12 +375,12 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
  * BANNER_NARROW the 3x3 drawing sits on the left; narrower, only the text, cut to fit.
  * The separator under it is `bannerRule(width)`.
  */
-export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number): BannerLine[] {
+export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME): BannerLine[] {
   const sep: BannerPart = { text: ' · ', tone: 'dim' }
   const join = (groups: BannerPart[][]) => groups.flatMap((g, i) => (i ? [sep, ...g] : g))
   const dim = (text: string): BannerPart[] => [{ text, tone: 'dim' }]
   const folder = folderName(root)
-  const l1: BannerPart[] = [{ text: BOARD_NAME, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
+  const l1: BannerPart[] = [{ text: namesFor(name).boardName, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
   const l2 = join([
     ...(root ? [dim(shortHome(root, home))] : []),
     dim(b.target_branch),
@@ -413,8 +416,8 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
 
 /** One line per task for the model and for /board, then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart. */
-export function boardText(b: Board, nowMs?: number, where?: string): string {
-  const top = where ? [`${boardBrand()} · ${where}`] : []
+export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME): string {
+  const top = where ? [`${boardBrand(name)} · ${where}`] : []
   if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
   const rows = [...b.tasks].sort(newestFirst)
   const lines = rows.map(t => {
@@ -427,7 +430,7 @@ export function boardText(b: Board, nowMs?: number, where?: string): string {
   return [...top, head, ...lines, ...(total ? [total] : [])].join('\n')
 }
 
-/** A scout file: `.symcc/scouts/<name>.md`, front matter + instructions. */
+/** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
 export type ScoutDef = { name: string; every_minutes: number; model?: string; prompt: string }
 
 export function parseScout(name: string, text: string): ScoutDef | null {
@@ -445,10 +448,10 @@ export function parseScout(name: string, text: string): ScoutDef | null {
 
 // ---------------- who drives the board ----------------
 // Several sessions may have the same project open. Only one of them, the driver, starts
-// workers, merges, runs scouts and the regular check. It writes .symcc/lead.json and
+// workers, merges, runs scouts and the regular check. It writes .<name>/lead.json and
 // refreshes the heartbeat in it; the others only read and change the board.
 
-export const LEAD_FILE = '.symcc/lead.json'
+export const LEAD_FILE = namesFor().leadFile
 /** how often the driver refreshes its heartbeat (and the others look at it) */
 export const LEAD_BEAT_MS = 30_000
 /** a heartbeat older than this means the driver is gone, and another session may take over */
@@ -530,12 +533,13 @@ export type AgentInfo = { id: string; type?: string; status: string; description
 /** Agent statuses that mean it has ended; anything else counts as still alive. */
 export const ENDED_STATUSES = ['completed', 'failed', 'killed']
 
-/** The live symcc workers for task `id`: the one recorded on the task (`agent`), or any whose description starts with the task id. */
-export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[]): AgentInfo[] {
+/** The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any whose description starts with the task id. */
+export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name: string = DEFAULT_NAME): AgentInfo[] {
+  const worker = namesFor(name).worker
   return agents.filter(a => {
     if (ENDED_STATUSES.includes(a.status)) return false
     if (t.agent && a.id === t.agent) return true
-    return a.type === 'symcc:worker' && normId(String(a.description ?? '').split(/\s/)[0] ?? '') === t.id
+    return a.type === worker && normId(String(a.description ?? '').split(/\s/)[0] ?? '') === t.id
   })
 }
 
@@ -543,6 +547,6 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
  * Whether a new worker may start on task `t`: it is still "todo", and no live agent
  * (in `agents`, $.agent.list() plus the workers this session knows) works on it.
  */
-export function mayStart(t: BoardTask | undefined, agents: AgentInfo[]): boolean {
-  return !!t && t.status === 'todo' && liveWorkersFor(t, agents).length === 0
+export function mayStart(t: BoardTask | undefined, agents: AgentInfo[], name: string = DEFAULT_NAME): boolean {
+  return !!t && t.status === 'todo' && liveWorkersFor(t, agents, name).length === 0
 }

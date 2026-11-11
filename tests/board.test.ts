@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
+import { DEFAULT_NAME, cleanName, namesFor } from '../hooks/name'
 import { bannerLines, bannerRule, bannerText, folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
@@ -335,4 +336,30 @@ test('a narrow banner drops the drawing and cuts lines to fit', () => {
   expect(text[2]!.endsWith('…')).toBe(true)
   // a wide banner also never runs past the width
   expect(bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 55).every(l => bannerText(l).length <= 55)).toBe(true)
+})
+
+test('another plugin name changes every path, branch, agent type and text made from it', () => {
+  const n = namesFor('crew')
+  const root = '/Users/me/repositories/app'
+  const b = { ...emptyBoard(), test_commands: ['npm test'] }
+  const [b1, t] = addTask(b, { title: 'x', files: ['src/', '.crew/board.json', '.symcc/old.json'] }, T, n.dir)
+  const made = [
+    n.dir, n.boardFile, n.lockFile, n.leadFile, n.worktrees, n.scouts,
+    n.branch('T-1'), n.author.name, n.author.email, n.worker, n.scout, n.tool('board'), n.pane, n.boardName, n.man, n.toast('stopped 1 old worker'),
+    boardTitle(root, 'crew'), boardLabel(root, 'crew'), boardText(b1, 0, '~/repositories/app', 'crew'),
+    ...bannerLines(b1, root, '/Users/me', true, 80, 0, 'crew').map(bannerText),
+  ]
+  expect(made.filter(s => s.includes('symcc'))).toEqual([])
+  expect([n.dir, n.boardFile, n.lockFile, n.leadFile, n.worktrees, n.scouts]).toEqual(['.crew', '.crew/board.json', '.crew/board.lock', '.crew/lead.json', '.crew/worktrees', '.crew/scouts'])
+  expect([n.branch('T-1'), n.worker, n.scout, n.tool('add'), n.man]).toEqual(['crew/T-1', 'crew:worker', 'crew:scout', 'mcp__crew__add', 'crew-man'])
+  expect(n.author).toEqual({ name: 'crew', email: 'crew@localhost' })
+  expect(boardTitle(root, 'crew')).toBe('◆ crew board · app')
+  // the new data folder is never a task's file, and a change in it is always out of scope
+  expect(t.files).toEqual(['src/', '.symcc/old.json'])
+  expect(outOfScope(['.crew/board.json', 'src/a.js'], ['src/'], n.dir)).toEqual(['.crew/board.json'])
+  // a worker of this name counts; one of another name does not
+  expect(liveWorkersFor({ id: 'T-1' }, [{ id: 'a', type: 'crew:worker', status: 'running', description: 'T-1 x' }, { id: 'b', type: 'symcc:worker', status: 'running', description: 'T-1 x' }], 'crew').map(a => a.id)).toEqual(['a'])
+  // the defaults stay as they were
+  expect(namesFor().boardFile).toBe('.symcc/board.json')
+  expect([cleanName(''), cleanName('a/b'), cleanName('crew')]).toEqual([DEFAULT_NAME, DEFAULT_NAME, 'crew'])
 })

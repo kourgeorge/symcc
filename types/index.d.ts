@@ -60,6 +60,7 @@ export type SymccView = {
 
 declare module 'claude-code' {
   interface PluginState {
+    // keyed by the plugin's name: keep it the same as "name" in .claude-plugin/plugin.json
     symcc: { view: Shaped<SymccView>; opened: string }
   }
 }

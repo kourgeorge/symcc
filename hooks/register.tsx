@@ -1,9 +1,9 @@
-// symcc: a shared task board, the main chat as its lead, workers that build tasks in
+// symcc (the name comes from plugin.json, see name.ts): a shared task board, the main chat as its lead, workers that build tasks in
 // parallel in their own Git worktrees and merge what passes the tests, and scouts you
-// define in .symcc/scouts/*.md that look for issues on a timer.
+// define in .<name>/scouts/*.md that look for issues on a timer.
 //
 // How work flows:
-//   you ⇄ lead (the main chat)  ──board tools──▶  .symcc/board.json
+//   you ⇄ lead (the main chat)  ──board tools──▶  .<name>/board.json
 //   a task is ready  ──▶  worktree + background worker subagent
 //   worker done      ──▶  commit · scope check · tests · merge into main  ──▶  the lead is told
 //   scout on a timer ──▶  findings  ──▶  the lead is told and decides what goes on the board
@@ -11,11 +11,9 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { SymccScout, SymccTask, SymccView } from '../types'
+import { DEFAULT_NAME, cleanName, dataDir, namesFor } from './name'
 import {
-  BOARD_FILE,
   LEAD_BEAT_MS,
-  LEAD_FILE,
-  LOCK_FILE,
   addTask,
   boardText,
   boardBrand,
@@ -65,12 +63,31 @@ import {
 
 type $ = EngineInterface
 
-const PANE = 'symcc-board'
-/** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean }>
+// ---------------- the plugin's name ----------------
+// Everything made from the name (data folder, branches, agent types, tool names, text) comes
+// from N. It starts as DEFAULT_NAME and is set once, from $.plugin.name (plugin.json), the
+// first time any hook runs: every hook calls useName($) first.
+
+// The one exception: the panel's state values. Claude Code reads which values a plugin keeps
+// from its code before it runs, so their owner must be written out here as text. It must be
+// the plugin's name: on a rename, change it in these two lines and in types/index.d.ts too.
 /** which task the board panel has open; '' = the list */
 const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } as SymccView, { shape: 'view-1' })
+let N = namesFor(DEFAULT_NAME)
+let named = false
+
+/** Takes the plugin's name from plugin.json (via $.plugin.name), once; DEFAULT_NAME if it has none. */
+function useName($: $) {
+  if (named) return
+  named = true
+  const name = cleanName($.plugin.name)
+  if (name === N.name) return
+  N = namesFor(name)
+}
+
+/** The view as published: SymccView plus the facts the panel's banner shows. */
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
@@ -84,7 +101,7 @@ const starting = new Set<string>()
 /** tasks whose worker finished and whose work is being checked and merged now */
 const finishing = new Set<string>()
 const scoutRuns = new Map<string, string>() // agentId → scout name
-/** agents symcc has stopped: every tool they try is refused, so they can't change anything and end soon */
+/** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 const stopped = new Set<string>()
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */
 const reminded = new Map<string, string>()
@@ -94,7 +111,7 @@ const timers: { cancel(): void }[] = []
 const leadQueue: string[] = []
 let leadTimer: { cancel(): void } | null = null
 let writing: Promise<unknown> = Promise.resolve()
-/** this session's id, and whether it drives the board (only the driver starts work; see .symcc/lead.json) */
+/** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
 let me = ''
 let driving = false
 let beat: { cancel(): void } | null = null
@@ -105,18 +122,18 @@ const now = () => new Date().toISOString()
 const path = (rel: string) => `${root}/${rel}`
 
 async function load($: $): Promise<Board> {
-  const exists = await $.fs.exists(path(BOARD_FILE))
-  return exists ? parseBoard(await $.fs.read(path(BOARD_FILE))) : emptyBoard()
+  const exists = await $.fs.exists(path(N.boardFile))
+  return exists ? parseBoard(await $.fs.read(path(N.boardFile))) : emptyBoard()
 }
 
 /**
- * Take .symcc/board.lock so no other session reads or writes the board meanwhile.
+ * Take .<name>/board.lock so no other session reads or writes the board meanwhile.
  * The lock is written to its own temp file first and then hard-linked into place:
  * `ln` fails if the lock exists, so only one session can win, and nobody ever sees
  * a half-written lock. A stale lock (its session died) is removed and taken over.
  */
 async function takeLock($: $): Promise<string> {
-  const lock = path(LOCK_FILE)
+  const lock = path(N.lockFile)
   const me = `${await $.session.id().catch(() => 'unknown')}:${Math.random().toString(36).slice(2, 10)}`
   const mine = lockText(me, Date.now())
   const tmp = `${lock}.${me.replace(/[^\w.-]/g, '_')}.tmp`
@@ -132,7 +149,7 @@ async function takeLock($: $): Promise<string> {
         if ((await $.fs.read(lock).catch(() => null)) === held) await $.process.run(['rm', '-f', lock])
         continue
       }
-      if (Date.now() > until) throw new Error('the board is busy (another session holds .symcc/board.lock); try again')
+      if (Date.now() > until) throw new Error(`the board is busy (another session holds ${N.lockFile}); try again`)
       await $.clock.sleep(100)
     }
   } finally {
@@ -141,13 +158,13 @@ async function takeLock($: $): Promise<string> {
 }
 
 async function dropLock($: $, mine: string) {
-  const lock = path(LOCK_FILE)
+  const lock = path(N.lockFile)
   if ((await $.fs.read(lock).catch(() => null)) === mine) await $.process.run(['rm', '-f', lock]).catch(() => undefined)
 }
 
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
 async function saveBoard($: $, b: Board) {
-  const file = path(BOARD_FILE)
+  const file = path(N.boardFile)
   const tmp = `${file}.tmp`
   await $.fs.write(tmp, JSON.stringify(b, null, 2) + '\n')
   // $.fs has no rename; mv within one folder is an atomic rename
@@ -188,14 +205,14 @@ function locked<T>($: $, fn: () => Promise<T>): Promise<T> {
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
-// It keeps .symcc/lead.json fresh; the others read and change the board but start nothing.
+// It keeps .<name>/lead.json fresh; the others read and change the board but start nothing.
 
 async function writeLead($: $, text: string) {
-  const file = path(LEAD_FILE)
+  const file = path(N.leadFile)
   const tmp = `${file}.${me.replace(/[^\w.-]/g, '_')}.tmp`
   await $.fs.write(tmp, text)
   const r = await $.process.run(['mv', '-f', tmp, file])
-  if (r.exitCode !== 0) throw new Error(`couldn't write ${LEAD_FILE}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+  if (r.exitCode !== 0) throw new Error(`couldn't write ${N.leadFile}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
 }
 
 /**
@@ -207,7 +224,7 @@ async function writeLead($: $, text: string) {
 async function claimLead($: $, fresh = false): Promise<boolean> {
   const was = driving
   const [move, leadBefore] = await locked($, async () => {
-    const text = await $.fs.read(path(LEAD_FILE)).catch(() => null)
+    const text = await $.fs.read(path(N.leadFile)).catch(() => null)
     const m = whoDrives(text, me, Date.now())
     if (m !== 'follow') await writeLead($, leadText(me, Date.now()))
     return [m, text] as const
@@ -217,7 +234,7 @@ async function claimLead($: $, fresh = false): Promise<boolean> {
     // Workers the old driver (or an earlier load of this plugin) left behind are stopped
     // first, and their tasks go back to "todo", so a task never has two workers.
     const orphans = await stopOrphans($, leadBefore)
-    if (orphans.length) $.ui.toast(`symcc: stopped ${orphans.length} old worker${orphans.length > 1 ? 's' : ''} left behind`)
+    if (orphans.length) $.ui.toast(N.toast(`stopped ${orphans.length} old worker${orphans.length > 1 ? 's' : ''} left behind`))
     // A stopped worker may still be running for a while: wait until it has really ended.
     // A task whose old worker is still alive after that stays "doing"; the regular check
     // sends it back to "todo" once that worker has ended, so a task never has two workers.
@@ -225,9 +242,9 @@ async function claimLead($: $, fresh = false): Promise<boolean> {
     const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : 'restarted after Claude Code was reopened'
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
-    if (await $.fs.exists(path(BOARD_FILE)))
-      await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive).length > 0).map(t => t.id)))
-    if (move === 'takeover' && !fresh) $.ui.toast('symcc: the session driving the board stopped answering; this session drives it now')
+    if (await $.fs.exists(path(N.boardFile)))
+      await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive, N.name).length > 0).map(t => t.id)))
+    if (move === 'takeover' && !fresh) $.ui.toast(N.toast('the session driving the board stopped answering; this session drives it now'))
   }
   if (was && !driving) {
     // Another session took over (this one stopped answering for too long): its workers own the tasks now.
@@ -238,7 +255,7 @@ async function claimLead($: $, fresh = false): Promise<boolean> {
     for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, 'another session drives the board now')
     scoutRuns.clear()
     for (const st of scoutState.values()) st.running = false
-    $.ui.toast('symcc: another session drives the board now; this one only shows and changes it')
+    $.ui.toast(N.toast('another session drives the board now; this one only shows and changes it'))
   }
   if (driving) {
     // A task stopped, dropped or changed from another session: stop its worker here.
@@ -258,7 +275,7 @@ async function releaseLead($: $) {
   if (!driving) return
   driving = false
   await locked($, async () => {
-    const file = path(LEAD_FILE)
+    const file = path(N.leadFile)
     if (parseLead(await $.fs.read(file).catch(() => null))?.session === me) await $.process.run(['rm', '-f', file])
   }).catch(() => undefined)
 }
@@ -270,7 +287,7 @@ async function publish($: $, b: Board) {
   await update($, view, () => v)
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
-  const label = `${boardLabel(root)}${driving ? '' : ' (driven by another session)'}`
+  const label = `${boardLabel(root, N.name)}${driving ? '' : ' (driven by another session)'}`
   $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : driving ? undefined : `${label}: empty`)
 }
 
@@ -285,7 +302,7 @@ function tellLead($: $, text: string) {
     leadTimer = null
     const body = leadQueue.splice(0).join('\n\n')
     if (!body) return
-    void $.prompt.submit({ text: `[symcc] Update from the team:\n\n${body}\n\nDecide what happens next on the board (use the symcc tools), then tell me briefly.` }).catch(() => undefined)
+    void $.prompt.submit({ text: `[${N.name}] Update from the team:\n\n${body}\n\nDecide what happens next on the board (use the ${N.name} tools), then tell me briefly.` }).catch(() => undefined)
   })
 }
 
@@ -300,11 +317,11 @@ async function gitOk($: $, args: string[], cwd = root, timeoutMs = 120_000) {
   return r.stdout.trim()
 }
 
-const worktreeDir = (id: string) => `${root}/.symcc/worktrees/${id}`
+const worktreeDir = (id: string) => `${root}/${N.worktrees}/${id}`
 
 async function prepareWorktree($: $, t: SymccTask, target: string) {
   const dir = worktreeDir(t.id)
-  const branch = t.branch ?? `symcc/${t.id}`
+  const branch = t.branch ?? N.branch(t.id)
   if (await $.fs.exists(`${dir}/.git`)) return { dir, branch }
   await git($, ['worktree', 'prune'])
   const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`])).exitCode === 0
@@ -321,7 +338,7 @@ async function removeWorktree($: $, taskId: string, dir: string, except?: string
   const agents = await agentsNow($)
   if (!agents) return false
   const t = find(await load($), taskId)
-  if (liveWorkersFor({ id: taskId, agent: t?.agent }, agents).some(a => a.id !== except)) return false
+  if (liveWorkersFor({ id: taskId, agent: t?.agent }, agents, N.name).some(a => a.id !== except)) return false
   await git($, ['worktree', 'remove', '--force', dir])
   await git($, ['worktree', 'prune'])
   return true
@@ -331,17 +348,17 @@ async function removeWorktree($: $, taskId: string, dir: string, except?: string
 async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b: Board): Promise<{ ok: boolean; detail: string; conflict?: boolean; testOutput?: string }> {
   const target = b.target_branch
   await git($, ['add', '-A', '--', '.'], dir)
-  await git($, ['-c', 'user.name=symcc', '-c', 'user.email=symcc@localhost', 'commit', '-q', '--no-verify', '-m', `${t.id}: ${t.title}`], dir)
+  await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'commit', '-q', '--no-verify', '-m', `${t.id}: ${t.title}`], dir)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
   const changed = (await gitOk($, ['diff', '--name-only', '--no-renames', `${base}..${head}`])).split('\n').filter(Boolean)
   if (!changed.length) return { ok: false, detail: 'the worker made no change' }
-  const bad = outOfScope(changed, t.files)
+  const bad = outOfScope(changed, t.files, N.dir)
   if (bad.length) return { ok: false, detail: `changed files outside the task (${bad.slice(0, 5).join(', ')}); allowed: ${t.files.join(', ') || '-'}` }
   let candidate = head
   if ((await git($, ['merge-base', '--is-ancestor', main, head])).exitCode !== 0) {
-    const m = await git($, ['-c', 'user.name=symcc', '-c', 'user.email=symcc@localhost', 'merge', '--no-edit', '-m', `${t.id}: bring up to date with ${target}`, main], dir)
+    const m = await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'merge', '--no-edit', '-m', `${t.id}: bring up to date with ${target}`, main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       return { ok: false, detail: `conflicts with the latest ${target}`, conflict: true }
@@ -359,10 +376,10 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b:
   // their files too, but never over uncommitted changes.
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   if (current === target) {
-    const st = (await git($, ['status', '--porcelain', '--untracked-files=no'])).stdout.split('\n').filter(l => l && !l.slice(3).startsWith('.symcc/'))
+    const st = (await git($, ['status', '--porcelain', '--untracked-files=no'])).stdout.split('\n').filter(l => l && !l.slice(3).startsWith(`${N.dir}/`))
     if (st.length) return { ok: false, detail: `you have uncommitted changes on ${target}; commit or stash them, then say "retry ${t.id}"` }
   }
-  const cas = await git($, ['update-ref', '-m', `symcc ${t.id}`, `refs/heads/${target}`, candidate, main])
+  const cas = await git($, ['update-ref', '-m', `${N.name} ${t.id}`, `refs/heads/${target}`, candidate, main])
   if (cas.exitCode !== 0) return { ok: false, detail: `${target} moved during the merge; try again` }
   if (current === target) await git($, ['read-tree', '-m', '-u', main, candidate])
   return { ok: true, detail: `merged into ${target} (${candidate.slice(0, 8)})${b.test_commands.length ? `; tests passed` : '; no test command set'}` }
@@ -370,9 +387,9 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b:
 
 // ---------------- workers ----------------
 
-const WORKER_PROMPT = (t: SymccTask, b: Board, dir: string) => `You are a symcc worker. Do exactly this one task, then stop.
+const WORKER_PROMPT = (t: SymccTask, b: Board, dir: string) => `You are a ${N.name} worker. Do exactly this one task, then stop.
 
-Work ONLY inside this folder, your own copy of the project on branch ${t.branch ?? `symcc/${t.id}`}:
+Work ONLY inside this folder, your own copy of the project on branch ${t.branch ?? N.branch(t.id)}:
   ${dir}
 Use absolute paths under that folder for every Read, Edit and Write. Never touch the main project folder.
 
@@ -381,7 +398,7 @@ ${t.details}
 
 Files you may change: ${t.files.length ? t.files.join(', ') : 'whatever the task needs'}. Changes anywhere else are thrown away.
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
-Do not run git commit, push or merge: symcc commits, tests and merges your work.
+Do not run git commit, push or merge: ${N.name} commits, tests and merges your work.
 ${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
@@ -412,17 +429,17 @@ async function startWorker($: $, id: string) {
     const agents = [...listed, ...knownWorkers()]
     const b = await load($)
     const t0 = find(b, id)
-    if (!mayStart(t0, agents)) return
+    if (!mayStart(t0, agents, N.name)) return
     const { dir, branch } = await prepareWorktree($, t0!, b.target_branch)
     const t = await change($, x => {
       const cur = find(x, id)
-      if (!mayStart(cur, agents)) return [x, null]
+      if (!mayStart(cur, agents, N.name)) return [x, null]
       const at = now()
       const y = patchTask(x, id, { status: 'doing', session: me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at) }, at)
       return [y, find(y, id)!]
     })
     if (!t) return
-    const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: 'symcc:worker', cwd: dir })
+    const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: N.worker, cwd: dir })
     if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
     if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
     const agentId = spawned.agentId
@@ -440,7 +457,7 @@ async function agentsNow($: $): Promise<AgentInfo[] | null> {
 }
 
 /** The workers this copy of the plugin started, as agents (they may not be listed yet). */
-const knownWorkers = (): AgentInfo[] => [...workers].map(([id, w]) => ({ id, type: 'symcc:worker', status: 'running', description: w.task }))
+const knownWorkers = (): AgentInfo[] => [...workers].map(([id, w]) => ({ id, type: N.worker, status: 'running', description: w.task }))
 
 /** How long a reload waits for old workers it stopped to really end. */
 const ORPHAN_WAIT_MS = 20_000
@@ -451,7 +468,7 @@ async function waitEnded($: $, ids: string[], ms: number): Promise<AgentInfo[]> 
   const until = Date.now() + ms
   for (;;) {
     const agents = await agentsNow($)
-    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED.has(a.status)) : ids.map(id => ({ id, type: 'symcc:worker', status: 'running' }))
+    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED.has(a.status)) : ids.map(id => ({ id, type: N.worker, status: 'running' }))
     if (!alive.length || Date.now() > until) return alive
     await $.clock.sleep(500)
   }
@@ -488,7 +505,7 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
     tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
   } else if (q) {
     await change($, x => patchTask(x, t.id, { status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...t.history, `try ${t.attempts}: worker asked: ${q[1]}`] }, now()))
-    tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with symcc ask.`)
+    tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${N.name} ask.`)
   } else {
     await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
     const r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string } = await checkAndMerge($, t, w.worktree, w.branch, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
@@ -561,7 +578,7 @@ const ENDED = new Set(['completed', 'failed', 'killed'])
 const LIVE = new Set(['pending', 'running', 'waiting'])
 
 /**
- * Stops symcc workers and scouts this copy of the plugin doesn't know about. A reload of the
+ * Stops this plugin's workers and scouts this copy of the plugin doesn't know about. A reload of the
  * plugin forgets which worker belongs to which task while the old workers keep running in the
  * same folders; without this, every reload adds one more worker per running task.
  * Only live agents are messaged: a message to an ended agent would wake it up again.
@@ -570,20 +587,20 @@ async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
   const agents = await $.agent.list().catch(() => [])
   // $.agent.list() names this session's agents only, but in case it ever lists another
   // session's too: never stop a worker whose task the live driver (another session) owns.
-  const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(LEAD_FILE)).catch(() => null)
+  const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(N.leadFile)).catch(() => null)
   const live = liveDriver(lead, Date.now())
-  const b = agents.some(a => a.type === 'symcc:worker') ? await load($).catch(() => emptyBoard()) : emptyBoard()
+  const b = agents.some(a => a.type === N.worker) ? await load($).catch(() => emptyBoard()) : emptyBoard()
   const out: string[] = []
   for (const a of agents) {
-    if (a.type !== 'symcc:worker' && a.type !== 'symcc:scout') continue
+    if (a.type !== N.worker && a.type !== N.scout) continue
     if (workers.has(a.id) || scoutRuns.has(a.id)) continue
     if (ENDED.has(a.status)) continue
-    if (a.type === 'symcc:worker') {
+    if (a.type === N.worker) {
       const t = find(b, normId(a.description.split(/\s/)[0] ?? ''))
       if (t && t.status === 'doing' && !ownedHere(t, me, live)) continue
     }
     stopped.add(a.id)
-    if (LIVE.has(a.status)) await halt($, a.id, 'symcc was reloaded and a new worker took over this task')
+    if (LIVE.has(a.status)) await halt($, a.id, `${N.name} was reloaded and a new worker took over this task`)
     out.push(a.id)
   }
   return out
@@ -605,7 +622,7 @@ async function check($: $) {
       workers.delete(agentId)
       await halt($, agentId, `it ran longer than ${b.max_minutes} minutes`)
       await change($, x => patchTask(x, w.task, { status: 'failed', note: `stopped: ran over ${b.max_minutes} min`, history: [...(t?.history ?? []), `try ${t?.attempts ?? '?'}: stopped after ${Math.round(minutes)} min (over the limit)`] }, now()))
-      tellLead($, `${w.task} "${t?.title ?? ''}": the worker ran over ${b.max_minutes} minutes, so I stopped it. Retry it (symcc start), split it, or drop it. The limit can be changed with symcc settings max_minutes.`)
+      tellLead($, `${w.task} "${t?.title ?? ''}": the worker ran over ${b.max_minutes} minutes, so I stopped it. Retry it (${N.name} start), split it, or drop it. The limit can be changed with ${N.name} settings max_minutes.`)
       continue
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
@@ -613,15 +630,15 @@ async function check($: $) {
     if (lost) {
       workers.delete(agentId)
       await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `try ${t?.attempts ?? '?'}: the worker ended without a result`] }, now()))
-      tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (symcc start), change it, or drop it.`)
+      tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${N.name} start), change it, or drop it.`)
     }
   }
   // A task kept "doing" after a reload because its old worker was still alive: once no live
   // agent works on it any more, it goes back to "todo" for a fresh worker.
   if (agents) {
     const mine = new Set([...workers.values()].map(w => w.task))
-    const live = liveDriver(await $.fs.read(path(LEAD_FILE)).catch(() => null), Date.now())
-    const idle = (await load($)).tasks.filter(t => t.status === 'doing' && t.session === me && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && ownedHere(t, me, live) && !liveWorkersFor(t, agents as AgentInfo[]).length).map(t => t.id)
+    const live = liveDriver(await $.fs.read(path(N.leadFile)).catch(() => null), Date.now())
+    const idle = (await load($)).tasks.filter(t => t.status === 'doing' && t.session === me && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && ownedHere(t, me, live) && !liveWorkersFor(t, agents as AgentInfo[], N.name).length).map(t => t.id)
     if (idle.length)
       await change($, x => ({
         ...x,
@@ -642,7 +659,7 @@ async function check($: $) {
 // ---------------- scouts ----------------
 
 async function loadScouts($: $): Promise<ScoutDef[]> {
-  const dir = path('.symcc/scouts')
+  const dir = path(N.scouts)
   if (!(await $.fs.exists(dir))) return []
   const out: ScoutDef[] = []
   for (const f of await $.fs.list(dir)) {
@@ -662,7 +679,7 @@ async function runScout($: $, s: ScoutDef) {
   st.last_run = now()
   await publish($, b)
   const open = b.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped').map(t => `${t.id} ${t.title}`).join('\n') || '(none)'
-  const prompt = `You are the symcc scout "${s.name}". Read the project in ${root} (read only: never change a file) and look for what your instructions ask.
+  const prompt = `You are the ${N.name} scout "${s.name}". Read the project in ${root} (read only: never change a file) and look for what your instructions ask.
 
 ${s.prompt}
 
@@ -671,7 +688,7 @@ ${open}
 
 Answer with at most 3 findings, one per line, as:  - <short title> | <why it matters, with file:line> | <files a fix would touch>
 If you find nothing worth doing, answer exactly: NOTHING`
-  const spawned = await $.agent.spawn({ prompt, description: `scout: ${s.name}`, subagentType: 'symcc:scout', ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
+  const spawned = await $.agent.spawn({ prompt, description: `scout: ${s.name}`, subagentType: N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
   const agentId = 'agentId' in spawned ? spawned.agentId : undefined
   if (!agentId) {
     st.running = false
@@ -689,7 +706,7 @@ async function scoutFinished($: $, agentId: string, answer: string) {
   await publish($, await load($))
   const found = answer.split('\n').filter(l => /^\s*-\s+\S/.test(l)).slice(0, 3)
   if (!found.length || /^\s*NOTHING\s*$/m.test(answer)) return
-  tellLead($, `Scout "${name}" found:\n${found.join('\n')}\nAdd the worthwhile ones as tasks (symcc add), or ignore them.`)
+  tellLead($, `Scout "${name}" found:\n${found.join('\n')}\nAdd the worthwhile ones as tasks (${N.name} add), or ignore them.`)
 }
 
 async function scheduleScouts($: $) {
@@ -727,16 +744,16 @@ function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string
   return L.join('\n')
 }
 
-const MANUAL: Record<string, string> = {
-  overview: `symcc turns this session into a small team.
-  • The board (.symcc/board.json) holds the tasks. You and the lead manage it by talking.
+const MANUAL = (): Record<string, string> => ({
+  overview: `${N.name} turns this session into a small team.
+  • The board (${N.dir}/board.json) holds the tasks. You and the lead manage it by talking.
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
   • Workers are background agents. Each builds one task in its own copy of the code
-    (.symcc/worktrees/T-n). When it finishes, symcc checks the files it changed, runs the
+    (${N.dir}/worktrees/T-n). When it finishes, ${N.name} checks the files it changed, runs the
     tests and merges into main only if they pass.
   • Scouts are background agents on a timer. They read the project and suggest work;
     the lead decides whether to add it.
-  Topics: /symcc-man commands · tasks · lead · workers · scouts · safety`,
+  Topics: /${N.man} commands · tasks · lead · workers · scouts · safety`,
   commands: `Commands
   /board            open the board panel (↑↓ move, Enter opens a task, Esc closes)
   /board T-3        open one task
@@ -744,7 +761,7 @@ const MANUAL: Record<string, string> = {
   /scouts run NAME  run a scout now
   /stop-all         stop every worker and scout, pause the board
   /resume-all       start work again
-  /symcc-man [TOPIC] this manual
+  /${N.man} [TOPIC] this manual
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker.
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
 "set the test command to npm test", "give workers 90 minutes".`,
@@ -767,20 +784,20 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
   session starts, on by default), paused.
-  After each worker finishes, the lead gets a "[symcc] Update" message and decides what
+  After each worker finishes, the lead gets a "[${N.name}] Update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
   • Up to max_parallel run at once (3 by default), one per task.
   • A worker gets only its task, its folder, its allowed files and the test commands.
     It can't see the board or this chat, and must not commit, push or merge.
   • A resumed or retried task starts over with a fresh worker.
-  • Every two minutes symcc checks by itself: starts ready tasks, stops a worker running
+  • Every two minutes ${N.name} checks by itself: starts ready tasks, stops a worker running
     longer than max_minutes (45 by default), notices a worker that ended without a result,
     reminds the lead about failed tasks nobody handled, and stops old workers left over
     from a plugin reload.
-  • A stopped worker can't do anything more: symcc refuses every tool it tries.`,
+  • A stopped worker can't do anything more: ${N.name} refuses every tool it tries.`,
   scouts: `Scouts
-  A scout is a file .symcc/scouts/NAME.md in the project:
+  A scout is a file ${N.dir}/scouts/NAME.md in the project:
       ---
       every_minutes: 60
       model: sonnet
@@ -790,37 +807,38 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   /scouts after adding or deleting a file. Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
   • Changes outside a task's files, or that fail the tests, are never merged.
-  • Main only moves by a checked merge; with uncommitted changes on it, symcc waits.
+  • Main only moves by a checked merge; with uncommitted changes on it, ${N.name} waits.
   • Workers can edit files in their own folder without asking. Their shell commands follow
     your normal permission rules (your settings' allow list applies to them too).
-  • Test commands are run by symcc itself, without a permission prompt.
-  • Add .symcc/ to the project's .gitignore.`,
-}
+  • Test commands are run by ${N.name} itself, without a permission prompt.
+  • Add ${N.dir}/ to the project's .gitignore.`,
+})
 
 function manual(arg: string): string {
+  const MAN = MANUAL()
   const key = arg.trim().toLowerCase()
-  if (!key) return Object.values(MANUAL).join('\n\n')
-  const hit = Object.keys(MANUAL).find(k => k.startsWith(key))
-  return hit ? MANUAL[hit]! : `No topic "${arg.trim()}". Topics: ${Object.keys(MANUAL).join(', ')}`
+  if (!key) return Object.values(MAN).join('\n\n')
+  const hit = Object.keys(MAN).find(k => k.startsWith(key))
+  return hit ? MAN[hit]! : `No topic "${arg.trim()}". Topics: ${Object.keys(MAN).join(', ')}`
 }
 
-const LEAD_GUIDE = `## symcc: you are the lead (main conversation only)
-This section is for the main conversation only. If you are a subagent (a symcc worker or scout, or any other), ignore it and do the job you were given.
+const leadGuide = () => `## ${N.name}: you are the lead (main conversation only)
+This section is for the main conversation only. If you are a subagent (a ${N.name} worker or scout, or any other), ignore it and do the job you were given.
 
-The project has a shared task board (.symcc/board.json) that you and the owner manage together by talking. You decide how the work runs:
-- Turn what the owner wants into tasks with symcc add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[symcc] Update" message: decide what's next (retry with symcc change / symcc start, split, symcc ask the owner, or symcc drop).
-- When the owner answers a waiting task, put the answer into the task with symcc change (that sends it back to work).
-- Set the test command with symcc settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
-- To stop work: symcc stop pauses one task (its worker is stopped; symcc resume continues it later, with a fresh worker). symcc stop_all stops every worker and scout and pauses the board; symcc resume_all starts work again.
-- symcc checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (symcc settings), and reminds you about failed tasks nobody handled.
-- Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use symcc board to see the board.`
+The project has a shared task board (${N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
+- Turn what the owner wants into tasks with ${N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes.
+- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Update" message: decide what's next (retry with ${N.name} change / ${N.name} start, split, ${N.name} ask the owner, or ${N.name} drop).
+- When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
+- Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
+- To stop work: ${N.name} stop pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} stop_all stops every worker and scout and pauses the board; ${N.name} resume_all starts work again.
+- ${N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${N.name} settings), and reminds you about failed tasks nobody handled.
+- Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${N.name} board to see the board.`
 
-const TOOLS = [
-  { name: 'board', description: 'Show the symcc task board.', inputSchema: { type: 'object', properties: {} } },
+const TOOLS = () => [
+  { name: 'board', description: `Show the ${N.name} task board.`, inputSchema: { type: 'object', properties: {} } },
   {
     name: 'add',
-    description: 'Add a task to the symcc board. A worker starts on it when it is ready.',
+    description: `Add a task to the ${N.name} board. A worker starts on it when it is ready.`,
     inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' } } },
   },
   {
@@ -831,9 +849,9 @@ const TOOLS = [
   { name: 'start', description: 'Put a task (back) to "todo" so a worker picks it up, e.g. to retry.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'ask', description: 'Make a task wait for the owner with a question.', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
-  { name: 'stop', description: 'Pause one task: its worker (if running) is stopped and no new worker starts on it until symcc resume.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
+  { name: 'stop', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'stop_all', description: 'Stop every running worker and scout now and pause the board; nothing new starts until symcc resume_all. Stopped tasks go back to "todo".', inputSchema: { type: 'object', properties: {} } },
+  { name: 'stop_all', description: `Stop every running worker and scout now and pause the board; nothing new starts until ${N.name} resume_all. Stopped tasks go back to "todo".`, inputSchema: { type: 'object', properties: {} } },
   { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
@@ -850,9 +868,9 @@ async function runTool($: $, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   switch (name) {
     case 'board':
-      return boardText(await load($), Date.now(), shortHome(root, home))
+      return boardText(await load($), Date.now(), shortHome(root, home), N.name)
     case 'add': {
-      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined }, now()))
+      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined }, now(), N.dir))
       void pump($)
       return `added ${t.id} ${t.title}`
     }
@@ -869,7 +887,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       if (list(a.files)) patch.files = list(a.files)
       if (list(a.after)) patch.after = list(a.after)
       if (typeof a.order === 'number') patch.order = a.order
-      await change($, x => patchTask(x, t.id, patch, now()))
+      await change($, x => patchTask(x, t.id, patch, now(), N.dir))
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
     }
@@ -907,7 +925,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
       await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}` }, now()))
       void pump($)
-      return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; symcc resume ${t.id} continues it`
+      return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${N.name} resume ${t.id} continues it`
     }
     case 'resume': {
       const t = find(await load($), id)
@@ -943,37 +961,42 @@ async function runTool($: $, name: string, a: In): Promise<string> {
 // ---------------- registration ----------------
 
 export const register: Register = on => {
+  // Every hook starts with useName($), so N (the plugin's name) is right everywhere.
   on('session.start', async ($, e, next) => {
+    useName($)
     const started = await next(e)
     root = (await $.session.repo())?.root ?? (await $.session.root())
+    // After a rename the old board stays in the old folder: say so once, never move it.
+    if (N.dir !== dataDir() && !(await $.fs.exists(path(N.dir))) && (await $.fs.exists(path(dataDir()))))
+      $.ui.toast(N.toast(`the old board is in ${dataDir()}/; move it to ${N.dir}/ to keep it`))
     home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
     me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
     await claimLead($, true).catch(() => (driving = false))
-    if (!(await $.fs.exists(path(BOARD_FILE)))) await publish($, emptyBoard())
+    if (!(await $.fs.exists(path(N.boardFile)))) await publish($, emptyBoard())
     await $.agent.register({
       name: 'worker',
-      description: 'symcc worker: builds one task from the symcc board in its own worktree. Started by symcc only.',
-      prompt: 'You are a symcc worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task\'s files, run the tests you were given, and finish with a one or two sentence summary.',
+      description: `${N.name} worker: builds one task from the ${N.name} board in its own worktree. Started by ${N.name} only.`,
+      prompt: `You are a ${N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary.`,
       tools: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
       background: true,
       permissionMode: 'acceptEdits',
     })
     await $.agent.register({
       name: 'scout',
-      description: 'symcc scout: reads the project and reports problems or improvements. Started by symcc only.',
-      prompt: 'You are a symcc scout. You read a project and report a few concrete, evidence-backed problems or improvements, in the format you are given. You never change a file.',
+      description: `${N.name} scout: reads the project and reports problems or improvements. Started by ${N.name} only.`,
+      prompt: `You are a ${N.name} scout. You read a project and report a few concrete, evidence-backed problems or improvements, in the format you are given. You never change a file.`,
       tools: ['Read', 'Glob', 'Grep'],
       background: true,
     })
-    for (const t of TOOLS) await $.tool.register({ ...t, isDeferred: false })
+    for (const t of TOOLS()) await $.tool.register({ ...t, isDeferred: false })
     for (const c of [
-      { name: 'board', description: 'Show the symcc task board, or one task in full: /board T-3', argumentHint: '[T-id]' },
-      { name: 'scouts', description: 'List symcc scouts, or run one now: /scouts run <name>', argumentHint: '[run <name>]' },
-      { name: 'stop-all', description: 'Stop every symcc worker and scout now; nothing new starts until /resume-all' },
-      { name: 'resume-all', description: 'Let symcc start work again' },
-      { name: 'symcc-man', description: 'Show the symcc manual: how the board, lead, workers and scouts work, and every command', argumentHint: '[topic]' },
+      { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3`, argumentHint: '[T-id]' },
+      { name: 'scouts', description: `List ${N.name} scouts, or run one now: /scouts run <name>`, argumentHint: '[run <name>]' },
+      { name: 'stop-all', description: `Stop every ${N.name} worker and scout now; nothing new starts until /resume-all` },
+      { name: 'resume-all', description: `Let ${N.name} start work again` },
+      { name: N.man, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
     ])
       await $.command.register(c)
     await scheduleScouts($)
@@ -993,13 +1016,14 @@ export const register: Register = on => {
     // that is fine: the band above the prompt and /board still work.
     if (openOnStart(b))
       await update($, opened, () => '')
-        .then(() => $.ui.open({ id: PANE, title: boardTitle(root) }))
+        .then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name) }))
         .catch(() => undefined)
     void pump($)
     return started
   })
 
   on('session.end', async ($, e, next) => {
+    useName($)
     for (const t of timers.splice(0)) t.cancel()
     watchdog?.cancel()
     watchdog = null
@@ -1011,28 +1035,37 @@ export const register: Register = on => {
 
   // The lead's guide, appended to the system prompt.
   on('prompt.compose', async ($, e, next) => {
+    useName($)
     const r = await next(e)
-    return { sections: [...r.sections, { id: 'symcc:lead', text: LEAD_GUIDE, scope: 'session' as const }] }
+    return { sections: [...r.sections, { id: `${N.name}:lead`, text: leadGuide(), scope: 'session' as const }] }
   })
 
-  // Workers and scouts only reach the agents through symcc itself.
-  on('agent.offer', { agent: 'symcc:worker' }, () => ({ isOffered: false }))
-  on('agent.offer', { agent: 'symcc:scout' }, () => ({ isOffered: false }))
+  // Workers and scouts only reach the agents through the plugin itself.
+  // (The name is only known once a hook runs, so these match inside rather than by a filter.)
+  on('agent.offer', ($, e, next) => {
+    useName($)
+    return e.agent === N.worker || e.agent === N.scout ? { isOffered: false } : next(e)
+  })
 
-  for (const t of TOOLS)
-    on('tool.call', { tool: `mcp__symcc__${t.name}` }, async ($, e) => {
-      try {
-        return { result: await runTool($, t.name, e as unknown as In) }
-      } catch (err) {
-        return { result: `error: ${(err as Error).message}` }
-      }
-    })
-
-  // A worker or scout symcc stopped can't do anything more: every tool it tries is refused.
-  on('tool.call', ($, e, next) => (e.agentId && stopped.has(e.agentId) ? { deny: 'symcc stopped this agent. Do nothing more; answer "stopped" and end.' } : next(e)))
+  // One tool.call hook for every tool (the name is only known once a hook runs):
+  // a worker or scout the plugin stopped can't do anything more, so every tool it tries is
+  // refused; and the lead's own tools, mcp__<name>__<tool>, run here.
+  const toolNames = TOOLS().map(t => t.name)
+  on('tool.call', async ($, e, next) => {
+    useName($)
+    if (e.agentId && stopped.has(e.agentId)) return { deny: `${N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
+    const name = toolNames.find(t => e.tool === N.tool(t))
+    if (!name) return next(e)
+    try {
+      return { result: await runTool($, name, e as unknown as In) }
+    } catch (err) {
+      return { result: `error: ${(err as Error).message}` }
+    }
+  })
 
   // A worker's or scout's run ended: its final answer arrives here.
   on('turn.complete', async ($, e, next) => {
+    useName($)
     const r = await next(e)
     if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer)
@@ -1041,29 +1074,32 @@ export const register: Register = on => {
 
   // Editing a scout file reschedules the scouts.
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
+    useName($)
     const r = await next(e)
-    if (String((e as { file_path?: string }).file_path ?? '').includes('.symcc/scouts/')) void scheduleScouts($)
+    if (String((e as { file_path?: string }).file_path ?? '').includes(`${N.scouts}/`)) void scheduleScouts($)
     return r
   })
 
   // /board prints the board; in fullscreen it also opens it as a sidebar beside the chat.
   on('command.run', { command: 'board' }, async ($, e) => {
+    useName($)
     const b = await load($)
     const arg = e.args.trim()
     if (arg) {
       const t = find(b, arg)
       if (!t) return { text: `${arg} is not on the board` }
       await update($, opened, () => t.id)
-      await $.ui.open({ id: PANE, title: boardTitle(root), focus: true, closeOnEscape: true })
+      await $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true })
       return { text: taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks), isTextDisplayOnly: true }
     }
     await update($, opened, () => '')
-    await $.ui.open({ id: PANE, title: boardTitle(root), focus: true, closeOnEscape: true })
+    await $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true })
     return { text: `Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`, isTextDisplayOnly: true }
   })
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    useName($)
     if (e.props.hasSurvey || e.props.view.agentId) return next(e)
     const v = await read($, view)
     const tasks = v?.tasks ?? []
@@ -1088,7 +1124,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box flexDirection="row">
           <Text wrap="truncate">
-          <Text bold color={'ide' as never}>{boardBrand()}</Text>
+          <Text bold color={'ide' as never}>{boardBrand(N.name)}</Text>
           <Text dimColor>
             {boardWhere(root)}{' '}
             {summary}
@@ -1096,7 +1132,7 @@ export const register: Register = on => {
             {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
           </Text>
           </Text>
-          <Button key="open-board" label="open board" dimColor onPress={() => void update($, opened, () => '').then(() => $.ui.open({ id: PANE, title: boardTitle(root), focus: true, closeOnEscape: true }))} />
+          <Button key="open-board" label="open board" dimColor onPress={() => void update($, opened, () => '').then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true }))} />
         </Box>
         {live.slice(0, room).map(t => (
           <Text wrap="truncate">
@@ -1113,6 +1149,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'scouts' }, async ($, e) => {
+    useName($)
     const defs = await scheduleScouts($)
     const m = /^run\s+(\S+)/.exec(e.args.trim())
     if (m) {
@@ -1122,18 +1159,30 @@ export const register: Register = on => {
       void runScout($, s)
       return { text: `scout ${s.name} started` }
     }
-    if (!defs.length) return { text: 'No scouts yet. Add one as .symcc/scouts/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.' }
+    if (!defs.length) return { text: `No scouts yet. Add one as ${N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
     return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}`).join('\n') }
   })
 
-  on('command.run', { command: 'stop-all' }, async $ => ({ text: await stopAll($, 'you') }))
+  on('command.run', { command: 'stop-all' }, async $ => {
+    useName($)
+    return { text: await stopAll($, 'you') }
+  })
 
-  on('command.run', { command: 'resume-all' }, async $ => ({ text: await resumeAll($) }))
+  on('command.run', { command: 'resume-all' }, async $ => {
+    useName($)
+    return { text: await resumeAll($) }
+  })
 
-  on('command.run', { command: 'symcc-man' }, async (_, e) => ({ text: manual(e.args), isTextDisplayOnly: true }))
+  // /<name>-man: registered under the plugin's name, so it is matched inside.
+  on('command.run', async ($, e, next) => {
+    useName($)
+    return e.command === N.man ? { text: manual(e.args), isTextDisplayOnly: true } : next(e)
+  })
 
   // The board panel: the list (each task a button), or one task with its actions.
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    useName($)
+    if (e.requestId !== N.pane) return next(e)
     const { Box, Text, Button, Input } = $.ui.resolve(e)
     const v: PaneView = await read($, view)
     const open = await read($, opened)
@@ -1142,7 +1191,7 @@ export const register: Register = on => {
     const color: Record<string, string> = { waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
     const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
     const mark: Record<string, string> = { waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
-    const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(`symcc: ${err.message}`))
+    const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(N.toast(err.message)))
     const t = open ? v.tasks.find(x => x.id === open) : undefined
     const C = (c: string) => c as never
     /** Text with task IDs, `code` and file paths picked out in color. */
@@ -1349,7 +1398,7 @@ export const register: Register = on => {
           const d = emptyBoard()
           const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
           const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'subtle', warning: 'warning' }
-          return bannerLines(facts, root, home, v.driving ?? driving, width, Date.now()).map((l, i) => (
+          return bannerLines(facts, root, home, v.driving ?? driving, width, Date.now(), N.name).map((l, i) => (
             <Text key={`banner-${i}`} wrap="truncate">
               {l.art ? <Text color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
               {l.parts.map(p => (

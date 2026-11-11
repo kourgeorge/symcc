@@ -89,6 +89,23 @@ claude --plugin-dir /path/to/symcc
 
 Add `.symcc/` to your project's `.gitignore` so the board and worktrees stay local.
 
+## Renaming the plugin
+
+The name comes from one place: `"name"` in `.claude-plugin/plugin.json`. Everything else is
+made from it: the data folder (`.<name>/`), task branches (`<name>/T-1`), the commit author,
+the agent types (`<name>:worker`, `<name>:scout`), the tool names (`mcp__<name>__add`), the
+manual command (`/<name>-man`) and all the text on the board. To rename it:
+
+1. Change `"name"` in `.claude-plugin/plugin.json`, and `DEFAULT_NAME` in `hooks/name.ts`.
+2. Change the name in the two `atom({ plugin: ... })` lines near the top of
+   `hooks/register.tsx` and under `PluginState` in `types/index.d.ts`. Claude Code reads
+   which values a plugin keeps before it runs, so these must be written out as text.
+3. Move the old data folder in each project, e.g. `mv .symcc .crew`. Nothing is moved for
+   you; if only the old folder is there, the plugin shows a note once when a session starts.
+4. Update `.gitignore` to ignore the new folder (`.crew/`).
+
+Old task branches keep their old names (`symcc/T-1`); they still work.
+
 ## Safety
 
 - Changes outside a task's files, or that fail the tests, are never merged.
