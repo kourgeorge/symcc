@@ -1,5 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
+import { ICON, ICON_ART } from '../hooks/name'
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -12,7 +15,7 @@ const PANE = {
   plugin: 'symcc',
   component: 'Pane',
   requestId: 'symcc-board',
-  props: { title: '◆ symcc board · symcc', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+  props: { title: `${ICON} symcc board · symcc`, isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...extra })
@@ -33,7 +36,11 @@ test('the panel shows the board, newest task first, with their question', async 
     expect((await ui.find({ type: 'Text', text: /^T-3\s*$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /▶ doing/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^╭─┬─┬─╮  $/ }))).toBeDefined()
+    // every line of the clef drawing is drawn, in the accent color, all the same width so the text beside it lines up
+    // (a line with only the drawing matches twice: the whole line, and the colored drawing in it)
+    const art = await Promise.all(ICON_ART.map(async l => (await ui.findAll({ type: 'Text', text: new RegExp(`^${esc(l)}  $`) })).find(t => t.props.color === 'ide')))
+    expect(art.every(t => t !== undefined)).toBe(true)
+    expect(new Set(art.map(t => t!.text.length)).size).toBe(1)
     expect((await ui.find({ type: 'Text', text: /^tests: npm test$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /1 doing · 1 waiting for you · 1 done/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^─{50}$/ }))).toBeDefined()
@@ -52,7 +59,7 @@ test('an empty board says what to do', async $ => {
 test('a narrow panel shows the banner without the drawing', async $ => {
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /╭/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(esc(ICON_ART[0]!.trim())) })).toBeUndefined()
   expect((await ui.find({ type: 'Text', text: /^─{30}$/ }))).toBeDefined()
   await ui.unmount()
 })
@@ -74,7 +81,7 @@ test('the band above the prompt sums up the board and lists what needs you or is
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: /^◆ symcc board$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: new RegExp(`^${ICON} symcc board$`, 'u') }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /1 doing · 1 to do · 1 waiting for you · 1 done/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /T-2 waiting for you/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()

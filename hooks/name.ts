@@ -5,6 +5,28 @@
 
 export const DEFAULT_NAME = 'symcc'
 
+/**
+ * The plugin's icon for one-line spots (panel title, band above the prompt, boardText's first
+ * line): a treble clef, U+1D11E. It sits outside the basic range, so in JavaScript its
+ * `.length` is 2 although it takes one column. The plugin never measures it itself: these
+ * spots hand it to the engine as one whole Text (wrap="truncate"), and the banner text that the
+ * plugin does measure (cutParts in board.ts) never contains it. If a terminal draws it badly,
+ * "♪" (U+266A, inside the basic range) is the safe fallback. The status line keeps no icon.
+ */
+export const ICON = '\u{1D11E}'
+
+/**
+ * The icon drawn for the banner at the top of the open board: a small treble clef, 4 lines
+ * tall and 5 columns wide, every line padded to the same width. A loop at the top, the line
+ * down through the middle, the curl around it, and a hook at the bottom.
+ */
+export const ICON_ART = [
+  '  ╭╮ ',
+  '╭─┼╯ ',
+  '╰─┼─╯',
+  ' ╰╯  ',
+]
+
 /** A usable plugin name: letters, digits, ".", "_" or "-"; anything else falls back to DEFAULT_NAME. */
 export function cleanName(raw: unknown): string {
   const s = String(raw ?? '').trim()

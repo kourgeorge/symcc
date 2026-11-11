@@ -1,7 +1,7 @@
 // The task board: plain data, kept in <project>/.<name>/board.json (see name.ts). Every function
 // here is pure (takes a board, returns a new one) so it can be tested without Claude.
 import type { SymccRun, SymccStatus, SymccTask } from '../types'
-import { DEFAULT_NAME, dataDir, namesFor } from './name'
+import { DEFAULT_NAME, ICON, ICON_ART, dataDir, namesFor } from './name'
 
 export type Board = {
   version: 1
@@ -372,20 +372,20 @@ export function shortHome(path: string, home?: string): string {
 
 /** The board's name for the default plugin name ("<name> board"), and the small mark shown before it. All titles are built from these. */
 export const BOARD_NAME = namesFor().boardName
-export const BOARD_MARK = '◆'
-/** "◆ <name> board": the bold, colored part of a title. */
+export const BOARD_MARK = ICON
+/** "<icon> <name> board": the bold, colored part of a title. */
 export const boardBrand = (name: string = DEFAULT_NAME) => `${BOARD_MARK} ${namesFor(name).boardName}`
 /** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
-/** The board's title: "◆ <name> board · <folder>", or just "◆ <name> board" when the folder is unknown. */
+/** The board's title: "<icon> <name> board · <folder>", or just "<icon> <name> board" when the folder is unknown. */
 export const boardTitle = (root: string, name: string = DEFAULT_NAME) => `${boardBrand(name)}${boardWhere(root)}`
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
 // ---------------- the banner at the top of the board panel ----------------
 
-/** The small drawing beside the banner: a 3x3 grid, like a task board. */
-export const BANNER_ART = ['╭─┬─┬─╮', '├─┼─┼─┤', '╰─┴─┴─╯']
+/** The small drawing beside the banner: the plugin's icon drawing (a treble clef, ICON_ART in name.ts). */
+export const BANNER_ART = ICON_ART
 /** Below this many columns the drawing is dropped and only the text lines are shown. */
 export const BANNER_NARROW = 50
 /** How a piece of banner text is drawn: accent (the 'ide' theme color), plain, dim or warning. */
@@ -417,7 +417,7 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
 /**
  * The banner lines for the board panel: the name and folder, where and who drives, the
  * settings, and (when there are tasks) the counts and total. With `width` of at least
- * BANNER_NARROW the 3x3 drawing sits on the left; narrower, only the text, cut to fit.
+ * BANNER_NARROW the drawing sits on the left; narrower, only the text, cut to fit.
  * The separator under it is `bannerRule(width)`.
  */
 export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME): BannerLine[] {
@@ -446,7 +446,9 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   }
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW
-  // A line under the drawing starts at the left edge and may use the full width.
+  // The three fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook)
+  // stand alone, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
+  if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, BANNER_ART.length - 3) }, () => [] as BannerPart[]))
   return texts.map((parts, i) => {
     const art = wide && BANNER_ART[i] ? `${BANNER_ART[i]}  ` : ''
     return { art, parts: cutParts(parts, w - art.length) }

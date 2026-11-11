@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_NAME, cleanName, namesFor } from '../hooks/name'
+import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
@@ -299,8 +299,8 @@ test('the project folder name is the last part of its path', () => {
   expect(folderName('/Users/me/repositories/symcc')).toBe('symcc')
   expect(folderName('/Users/me/repositories/symcc/')).toBe('symcc')
   expect(folderName('')).toBe('')
-  expect(boardTitle('/Users/me/repositories/symcc')).toBe('◆ symcc board · symcc')
-  expect(boardTitle('')).toBe('◆ symcc board')
+  expect(boardTitle('/Users/me/repositories/symcc')).toBe(`${ICON} symcc board · symcc`)
+  expect(boardTitle('')).toBe(`${ICON} symcc board`)
   expect(boardLabel('/Users/me/repositories/symcc')).toBe('symcc board · symcc')
   expect(boardLabel('')).toBe('symcc board')
 })
@@ -314,28 +314,43 @@ test('the home folder is shortened to "~"', () => {
 })
 
 test('boardText starts with the project path when given', () => {
-  expect(boardText(emptyBoard(), 0, '~/repositories/symcc').split('\n')[0]).toBe('◆ symcc board · ~/repositories/symcc')
+  expect(boardText(emptyBoard(), 0, '~/repositories/symcc').split('\n')[0]).toBe(`${ICON} symcc board · ~/repositories/symcc`)
   expect(boardText(emptyBoard())).toBe('The board is empty.')
 })
 
-test('the banner: a 3x3 drawing beside the name, where, who drives and the settings', () => {
+test('the icon: one treble clef character for one-line spots, a small clef drawing for the banner', () => {
+  expect(ICON).toBe('\u{1D11E}')
+  expect([...ICON]).toHaveLength(1)
+  expect(boardTitle('/x/app').startsWith(`${ICON} `)).toBe(true)
+  expect(boardLabel('/x/app')).not.toContain(ICON) // the status line keeps no icon
+  expect(ICON_ART.length >= 3 && ICON_ART.length <= 4).toBe(true)
+  const w = ICON_ART[0]!.length
+  expect(w <= 7).toBe(true)
+  expect(ICON_ART.every(l => l.length === w)).toBe(true)
+})
+
+test('the banner: the clef drawing beside the name, where, who drives and the settings', () => {
   const b = { ...emptyBoard(), test_commands: ['claude plugin test .'] }
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 80)
+  const [a0, a1, a2, a3] = ICON_ART.map(l => `${l}  `)
+  expect(lines.map(l => l.art)).toEqual(ICON_ART.map(l => `${l}  `))
   expect(lines.map(bannerText)).toEqual([
-    '╭─┬─┬─╮  symcc board · symcc',
-    '├─┼─┼─┤  ~/repositories/symcc · main · this session drives',
-    '╰─┴─┴─╯  tests: claude plugin test . · 3 at once · 45 min · 2 retries',
+    `${a0}symcc board · symcc`,
+    `${a1}~/repositories/symcc · main · this session drives`,
+    `${a2}tests: claude plugin test . · 3 at once · 45 min · 2 retries`,
+    `${a3}`,
   ])
   expect(lines[0]!.parts[0]).toEqual({ text: 'symcc board', tone: 'accent', bold: true })
   expect(bannerRule(12)).toBe('─'.repeat(12))
-  // paused, driven elsewhere, no test command, and a counts line under the drawing
+  // paused, driven elsewhere, no test command, and a counts line under the drawing, at full width
   const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: 643_700 }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
   const more = bannerLines({ ...emptyBoard(), paused: true, auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
   expect(more.map(bannerText)).toEqual([
-    '╭─┬─┬─╮  symcc board · symcc',
-    '├─┼─┼─┤  ~/repositories/symcc · main · driven by another session · PAUSED',
-    '╰─┴─┴─╯  no test command · 3 at once · 45 min · 1 retry',
+    `${a0}symcc board · symcc`,
+    `${a1}~/repositories/symcc · main · driven by another session · PAUSED`,
+    `${a2}no test command · 3 at once · 45 min · 1 retry`,
+    `${a3}`,
     '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
   expect(more[1]!.parts.at(-1)).toEqual({ text: 'PAUSED', tone: 'warning' })
@@ -347,7 +362,7 @@ test('a narrow banner drops the drawing and cuts lines to fit', () => {
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 30)
   const text = lines.map(bannerText)
   expect(text[0]).toBe('symcc board · symcc')
-  expect(text.every(l => l.length <= 30 && !l.includes('╭') && !l.includes('\n'))).toBe(true)
+  expect(text.every(l => l.length <= 30 && !l.includes(ICON_ART[0]!.trim()) && !l.includes('\n'))).toBe(true)
   expect(text[1]).toBe('~/repositories/symcc · main ·…')
   expect(text[2]!.endsWith('…')).toBe(true)
   // a wide banner also never runs past the width
@@ -369,7 +384,7 @@ test('another plugin name changes every path, branch, agent type and text made f
   expect([n.dir, n.boardFile, n.lockFile, n.leadFile, n.worktrees, n.scouts]).toEqual(['.crew', '.crew/board.json', '.crew/board.lock', '.crew/lead.json', '.crew/worktrees', '.crew/scouts'])
   expect([n.branch('T-1'), n.worker, n.scout, n.tool('add'), n.man]).toEqual(['crew/T-1', 'crew:worker', 'crew:scout', 'mcp__crew__add', 'crew-man'])
   expect(n.author).toEqual({ name: 'crew', email: 'crew@localhost' })
-  expect(boardTitle(root, 'crew')).toBe('◆ crew board · app')
+  expect(boardTitle(root, 'crew')).toBe(`${ICON} crew board · app`)
   // the new data folder is never a task's file, and a change in it is always out of scope
   expect(t.files).toEqual(['src/', '.symcc/old.json'])
   expect(outOfScope(['.crew/board.json', 'src/a.js'], ['src/'], n.dir)).toEqual(['.crew/board.json'])
