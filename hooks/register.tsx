@@ -77,6 +77,7 @@ import {
   isNotReady,
   onNotReady,
   resetDoing,
+  relabelSession,
   whoDrives,
   backToTodo,
   ENDED_STATUSES,
@@ -323,6 +324,31 @@ async function releaseLead($: $) {
     const file = path(N.leadFile)
     if (parseLead(await $.fs.read(file).catch(() => null))?.session === me) await $.process.run(['rm', '-f', file])
   }).catch(() => undefined)
+}
+
+/**
+ * After /clear: this process goes on under a new session id. lead.json and this session's
+ * "doing" tasks move to the new id (so our own live workers aren't taken for a dead
+ * session's), and the board panel is shown again for the new session.
+ */
+async function handOver($: $) {
+  const old = me
+  const fresh = await $.session.id().catch(() => old)
+  if (fresh && fresh !== old) {
+    me = fresh
+    if (driving)
+      await locked($, async () => {
+        const l = parseLead(await $.fs.read(path(N.leadFile)).catch(() => null))
+        if (!l || l.session === old) await writeLead($, leadText(me, Date.now()))
+      })
+    if (await $.fs.exists(path(N.boardFile))) await change($, b => relabelSession(b, old, me))
+  }
+  const b = await load($)
+  await publish($, b)
+  if (openOnStart(b))
+    await update($, opened, () => '')
+      .then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name) }))
+      .catch(() => undefined)
 }
 
 async function publish($: $, b: Board) {
@@ -1322,6 +1348,13 @@ export const register: Register = on => {
 
   on('session.end', async ($, e, next) => {
     useName($)
+    // /clear ends the session but the process goes on under a new session id, and no
+    // session.start follows: keep the timers, workers and scouts, and hand over to the new id.
+    if ((e as { reason?: string }).reason === 'clear') {
+      const result = await next(e)
+      await handOver($).catch(() => undefined)
+      return result
+    }
     for (const t of timers.splice(0)) t.cancel()
     watchdog?.cancel()
     watchdog = null

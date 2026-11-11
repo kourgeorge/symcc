@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -591,4 +591,22 @@ test('a new scout name and every_minutes are checked', async () => {
   expect(scoutDraftError({ every: '30', body: 'Look.' })).toBe('')
   expect(scoutDraftError({ every: '0', body: 'Look.' })).toMatch(/whole number/)
   expect(scoutDraftError({ every: '30', body: '  ' })).toMatch(/looks for/)
+})
+
+test('after /clear, this session\'s "doing" tasks move to the new session id', () => {
+  let b = emptyBoard()
+  for (const title of ['mine', 'other', 'done', 'none']) b = addTask(b, { title }, T)[0]
+  b = patchTask(b, 'T-1', { status: 'doing', session: 'old' }, T)
+  b = patchTask(b, 'T-2', { status: 'doing', session: 'other' }, T)
+  // a finished task that still names the old session (patchTask would drop it) is left alone
+  b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-3' ? { ...t, status: 'done' as const, session: 'old' } : t)) }
+  b = patchTask(b, 'T-4', { status: 'doing' }, T)
+  const after = relabelSession(b, 'old', 'new')
+  expect(after.tasks.map(t => t.session)).toEqual(['new', 'other', 'old', undefined])
+  expect(after.tasks.map(t => t.status)).toEqual(['doing', 'doing', 'done', 'doing'])
+  // the new session sees its own task as its own, even with the old id gone
+  expect(ownedHere(after.tasks[0]!, 'new', 'new')).toBe(true)
+  // same id, or no id: nothing changes
+  expect(relabelSession(b, 'old', 'old')).toBe(b)
+  expect(relabelSession(b, 'old', '')).toBe(b)
 })
