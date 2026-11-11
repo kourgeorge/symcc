@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -909,4 +909,23 @@ test('/symcc-mode: no word switches review and auto (off goes to review), a word
   expect(modeText('off')).toBe('⏹ off: no work runs; tasks in review can still be approved or rejected')
   expect(modeText('review')).toBe('⏸ review: work runs; finished tasks wait for your approve or reject')
   expect(modeText('auto')).toBe('⏵ auto: work runs; finished tasks that pass merge on their own')
+})
+
+test('agent names start with the plugin name', () => {
+  expect(workerName('symcc', 'T-33')).toBe('symcc T-33')
+  expect(workerName('other', 'T-1')).toBe('other T-1')
+  expect(workerDescription('One mode  (off / review / auto)')).toBe('One mode (off / review / auto)')
+  expect(workerDescription('x'.repeat(100)).length).toBe(AGENT_DESCRIPTION_CHARS)
+  expect(scoutAgentName('symcc', 'bugs')).toBe('symcc scout bugs')
+  expect(scoutDescription('bugs', '\n# Find bugs in the code\nmore')).toBe('Find bugs in the code')
+  expect(scoutDescription('bugs', '')).toBe('bugs')
+  expect(scoutDescription('bugs', 'y'.repeat(100)).length).toBe(AGENT_DESCRIPTION_CHARS)
+  // a worker is still found for its task by its new name, with or without a host suffix
+  const [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  const t = b.tasks[0]!
+  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-1', description: 'A' }])).toBe(false)
+  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-1-2', description: 'A' }])).toBe(false)
+  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-10', description: 'A' }])).toBe(true)
+  expect(mayStart(t, [{ id: 'w', type: 'my:worker', status: 'running', name: 'my T-1', description: 'A' }], 'my')).toBe(false)
+  expect(mayStart(t, [{ id: 's', type: 'symcc:scout', status: 'running', name: 'symcc scout T-1', description: 'T-1' }])).toBe(true)
 })

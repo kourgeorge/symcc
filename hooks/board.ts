@@ -1134,6 +1134,38 @@ export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
 
 // ---------------- never two workers on one task ----------------
 
+// ---------------- agent names ----------------
+// Workers and scouts are named after the plugin, so the agents list shows they are its own:
+// "symcc T-33", "symcc scout bugs". The name already has the task id or scout name, so the
+// description doesn't repeat it. Lookups go by agentId; liveWorkersFor also reads these names.
+
+/** How long an agent's description may be in the agents list. */
+export const AGENT_DESCRIPTION_CHARS = 60
+
+/** A worker's agent name: the plugin's name and the task id, e.g. "symcc T-33". */
+export function workerName(name: string, id: string): string {
+  return `${name} ${id}`
+}
+
+/** A worker's agent description: the task title only (the name has the id), cut to fit. */
+export function workerDescription(title: string): string {
+  return String(title ?? '').replace(/\s+/g, ' ').trim().slice(0, AGENT_DESCRIPTION_CHARS)
+}
+
+/** A scout's agent name: the plugin's name, "scout" and the scout's name, e.g. "symcc scout bugs". */
+export function scoutAgentName(name: string, scout: string): string {
+  return `${name} scout ${scout}`
+}
+
+/**
+ * A scout's agent description: what it does, the first line of its file's instructions
+ * (without markdown marks), cut to fit; the scout's name when there are none.
+ */
+export function scoutDescription(scout: string, instructions = ''): string {
+  const line = String(instructions ?? '').split('\n').map(l => l.replace(/^[\s#>*-]+/, '').trim()).find(Boolean) ?? ''
+  return (line || scout).slice(0, AGENT_DESCRIPTION_CHARS)
+}
+
 /** An agent as $.agent.list() reports it. */
 export type AgentInfo = { id: string; type?: string; status: string; description?: string; name?: string }
 
@@ -1142,8 +1174,8 @@ export const ENDED_STATUSES = ['completed', 'failed', 'killed']
 
 /**
  * The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any
- * whose name is the task id (or the id plus a suffix the host added, e.g. "T-3-2"), or whose
- * description starts with the task id.
+ * whose name is workerName (e.g. "symcc T-3") or the bare task id, maybe with a suffix the
+ * host added ("symcc T-3-2"), or whose description starts with the task id (older workers).
  */
 export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name: string = DEFAULT_NAME): AgentInfo[] {
   const worker = namesFor(name).worker
@@ -1152,7 +1184,8 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
     if (t.agent && a.id === t.agent) return true
     if (a.type !== worker) return false
     const n = String(a.name ?? '')
-    if (n && (n === t.id || n.startsWith(`${t.id}-`))) return true
+    const full = workerName(name, t.id)
+    if (n && (n === t.id || n.startsWith(`${t.id}-`) || n === full || n.startsWith(`${full}-`))) return true
     return normId(String(a.description ?? '').split(/\s/)[0] ?? '') === t.id
   })
 }

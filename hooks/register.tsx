@@ -14,6 +14,10 @@ import type { SymccMode, SymccScout, SymccTask, SymccView } from '../types'
 import { DEFAULT_NAME, cleanName, dataDir, namesFor } from './name'
 import {
   LEAD_BEAT_MS,
+  workerName,
+  workerDescription,
+  scoutAgentName,
+  scoutDescription,
   addTask,
   boardText,
   boardBrand,
@@ -663,7 +667,7 @@ async function startWorker($: $, id: string) {
     const before = find(b, id)!
     let agentId: string
     try {
-      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), name: t.id, description: `${t.id} ${t.title}`.slice(0, 60), subagentType: N.worker, cwd: dir })
+      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), name: workerName(N.name, t.id), description: workerDescription(t.title), subagentType: N.worker, cwd: dir })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
       if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
@@ -986,7 +990,7 @@ async function runScout($: $, s: ScoutDef) {
   await publish($, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status)).map(t => `${t.id} ${t.title}`)
   const prompt = scoutPrompt({ scout: s.name, root, instructions: s.prompt, open, name: N.name })
-  const spawned = await $.agent.spawn({ prompt, description: `scout: ${s.name}`, subagentType: N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
+  const spawned = await $.agent.spawn({ prompt, name: scoutAgentName(N.name, s.name), description: scoutDescription(s.name, s.prompt), subagentType: N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
   const agentId = 'agentId' in spawned ? spawned.agentId : undefined
   if (!agentId) {
     st.running = false
