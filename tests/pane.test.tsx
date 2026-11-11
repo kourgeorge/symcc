@@ -174,3 +174,38 @@ test('the banner shows the counts and the total time and cost of all tries', asy
   expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens · ~\$0\.42$/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('finished tasks of older days fold into one row per day, which opens on Enter', async ($, on) => {
+  const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+  const old = new Date(Date.now() - 3 * 86_400_000)
+  const oldKey = `day:${new Date(old.getTime() - old.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)}`
+  stateOf(on, {
+    view: {
+      shape: 'view-1',
+      value: {
+        tasks: [
+          task('T-1', 'done', 'Old work', { updated_at: day(3) }),
+          task('T-2', 'dropped', 'Old idea', { updated_at: day(3) }),
+          task('T-3', 'failed', 'Old but open', { updated_at: day(5) }),
+          task('T-4', 'done', 'Fresh work', { updated_at: day(0) }),
+        ],
+        working: [],
+        scouts: [],
+        paused: false,
+        test_commands: [],
+      },
+    },
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'T-3' })).toBeDefined()
+  expect(await ui.find({ key: 'T-4' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^▸ \w{3} \d+ \w{3}(?: \d{4})? · 1 done · 1 dropped$/ })).toBeDefined()
+  expect(await ui.find({ key: 'T-1' })).toBeUndefined()
+  await ui.press({ key: oldKey })
+  expect(await ui.find({ type: 'Text', text: /^▾ \w{3} \d+ \w{3}(?: \d{4})? · 1 done · 1 dropped$/ })).toBeDefined()
+  expect(await ui.find({ key: 'T-1' })).toBeDefined()
+  expect(await ui.find({ key: 'T-2' })).toBeDefined()
+  await ui.press({ key: oldKey })
+  expect(await ui.find({ key: 'T-1' })).toBeUndefined()
+  await ui.unmount()
+})

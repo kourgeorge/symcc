@@ -29,6 +29,9 @@ import {
   type BannerTone,
   shortHome,
   newestFirst,
+  boardSections,
+  groupLabel,
+  localOffset,
   emptyBoard,
   find,
   isLockStale,
@@ -125,6 +128,8 @@ let beat: { cancel(): void } | null = null
 let missingBranch = ''
 /** the target_branch the lead was last told is missing, so it is told once, not every check */
 let toldMissing = ''
+/** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
+const openDays = new Set<string>()
 
 // ---------------- the board on disk ----------------
 
@@ -1311,6 +1316,13 @@ export const register: Register = on => {
     return e.command === N.man ? { text: manual(e.args), isTextDisplayOnly: true } : next(e)
   })
 
+  // Opened days are forgotten when the board panel closes.
+  on('ui.close', ($, e, next) => {
+    useName($)
+    if (e.id === N.pane) openDays.clear()
+    return next(e)
+  })
+
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     useName($)
@@ -1521,7 +1533,20 @@ export const register: Register = on => {
       )
     }
 
-    const rows = [...v.tasks].sort(newestFirst)
+    const nowMs = Date.now()
+    const parts = boardSections(v.tasks, nowMs, localOffset(nowMs))
+    for (const d of [...openDays]) if (!parts.days.some(g => g.day === d)) openDays.delete(d)
+    const toggleDay = (day: string) => () => {
+      if (openDays.has(day)) openDays.delete(day)
+      else openDays.add(day)
+      $.ui.invalidate('ui.render')
+    }
+    type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
+    const list: Row[] = [
+      ...[...parts.open, ...parts.today].map(task => ({ task, indent: false })),
+      ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
+    ]
+    const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
     const idWidth = Math.max(4, ...rows.map(x => x.id.length))
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
@@ -1540,13 +1565,21 @@ export const register: Register = on => {
           ))
         })()}
         <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>
-        {rows.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a task · Esc closes</Text>}
-        {rows.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
-        {rows.map((x, i) => {
+        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.days.length ? 'Enter opens a task or a day · Esc closes' : 'Enter opens a task · Esc closes'}</Text>}
+        {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
+        {list.map((r, i) => {
+          if (!('task' in r))
+            return (
+              <Button key={`day:${r.day}`} autoFocus={i === 0 ? true : undefined} onPress={toggleDay(r.day)}>
+                <Text color={C('subtle')}>{r.label}</Text>
+              </Button>
+            )
+          const x = r.task
           const closed = x.status === 'done' || x.status === 'dropped'
           const extra = x.status === 'waiting' ? x.question ?? '' : x.note
           return (
             <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
+              {r.indent ? <Text>{'  '}</Text> : null}
               <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
                 {x.id.padEnd(idWidth)}
               </Text>

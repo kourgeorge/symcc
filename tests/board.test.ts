@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
+import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -420,4 +421,58 @@ test('the banner warns when the owner is on another branch, or the target is mis
 test('setting target_branch to a missing branch is refused with a few that exist', async () => {
   expect(noBranchText('mian', ['main', 'dev'])).toBe("Nothing changed: 'mian' is not a branch in this project. target_branch must be an existing branch, e.g. main, dev.")
   expect(noBranchText('x', [])).toBe("Nothing changed: 'x' is not a branch in this project. target_branch must be an existing branch.")
+})
+
+// ---------------- today in full, older days folded ----------------
+
+const at = (id: string, status: string, updated: string, created = updated) =>
+  ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
+const NOW = Date.parse('2026-11-11T12:00:00Z')
+
+test('open tasks from old days stay on top, today in full, older days grouped newest day first', () => {
+  const tasks = [
+    at('T-1', 'done', '2026-11-04T10:00:00Z'),
+    at('T-2', 'failed', '2026-11-01T10:00:00Z'),
+    at('T-3', 'done', '2026-11-10T09:00:00Z'),
+    at('T-4', 'dropped', '2026-11-09T09:00:00Z'),
+    at('T-5', 'done', '2026-11-09T10:00:00Z'),
+    at('T-6', 'done', '2026-11-11T08:00:00Z'),
+    at('T-7', 'todo', '2026-10-01T08:00:00Z'),
+    at('T-8', 'dropped', '2026-11-11T09:00:00Z'),
+    at('T-9', 'done', '2026-11-10T11:00:00Z'),
+  ]
+  const s = boardSections(tasks, NOW, 0)
+  expect(s.open.map(t => t.id).sort()).toEqual(['T-2', 'T-7'])
+  expect(s.today.map(t => t.id).sort()).toEqual(['T-6', 'T-8'])
+  expect(s.days.map(g => g.day)).toEqual(['2026-11-10', '2026-11-09', '2026-11-04'])
+  expect(s.days.map(g => groupLabel(g))).toEqual(['▸ Yesterday · 2 done', '▸ Mon 9 Nov · 1 done · 1 dropped', '▸ Wed 4 Nov · 1 done'])
+  expect(groupLabel(s.days[0]!, true)).toBe('▾ Yesterday · 2 done')
+  expect(s.days[1]!.tasks.map(t => t.id).sort()).toEqual(['T-4', 'T-5'])
+})
+
+test("a task's day is its local updated_at, else created_at, in the owner's time zone", () => {
+  expect(taskDay(at('T-1', 'done', '2026-11-10T23:30:00Z'), 0)).toBe('2026-11-10')
+  expect(taskDay(at('T-1', 'done', '2026-11-10T23:30:00Z'), 60)).toBe('2026-11-11')
+  expect(taskDay(at('T-1', 'done', '', '2026-11-08T12:00:00Z'), 0)).toBe('2026-11-08')
+  expect(taskDay(at('T-1', 'done', '', ''), 0)).toBe('')
+  // late yesterday in UTC is already today one hour east, so it shows in full
+  expect(boardSections([at('T-1', 'done', '2026-11-10T23:30:00Z')], NOW, 60).today.length).toBe(1)
+  expect(boardSections([at('T-1', 'done', '2026-11-10T23:30:00Z')], NOW, 0).days.length).toBe(1)
+  // a task with no readable time is shown in full
+  expect(boardSections([at('T-1', 'done', '', '')], NOW, 0).today.length).toBe(1)
+})
+
+test('day labels: Yesterday, then the date, with the year only for another year', () => {
+  expect(dayLabel('2026-11-10', '2026-11-11')).toBe('Yesterday')
+  expect(dayLabel('2026-11-04', '2026-11-11')).toBe('Wed 4 Nov')
+  expect(dayLabel('2025-12-31', '2026-01-01')).toBe('Yesterday')
+  expect(dayLabel('2025-12-30', '2026-01-02')).toBe('Tue 30 Dec 2025')
+})
+
+test('boardText lists open and today in full, and one line per older day', () => {
+  const b = { ...emptyBoard(), tasks: [at('T-1', 'done', '2026-11-09T10:00:00Z'), at('T-2', 'todo', '2026-11-01T10:00:00Z'), at('T-3', 'done', '2026-11-11T10:00:00Z'), at('T-4', 'done', '2026-11-10T10:00:00Z')] }
+  const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1)
+  expect(lines.map(l => l.split(/\s+/)[0])).toEqual(['T-2', 'T-3', '▸', '▸'])
+  expect(lines.slice(2)).toEqual(['▸ Yesterday · 1 done', '▸ Mon 9 Nov · 1 done'])
+  expect(lines.join('\n')).not.toContain('T-1')
 })
