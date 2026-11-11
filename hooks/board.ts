@@ -19,8 +19,13 @@ export type Board = {
   open_on_start: boolean
   /** say it out loud when a task is merged (true unless turned off) */
   voice: boolean
+  /** "auto": a finished task that passes is merged at once; "review": it waits for the owner (approve / reject) first */
+  approval: Approval
   tasks: BoardTask[]
 }
+
+/** How finished work is merged: at once ("auto", the default) or after the owner approves it ("review"). */
+export type Approval = 'auto' | 'review'
 
 /**
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
@@ -65,7 +70,7 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
-export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
+export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'review', 'failed']
 
 /** How many automatic retries after failing tests a new board allows. */
 export const DEFAULT_AUTO_RETRIES = 2
@@ -75,7 +80,7 @@ const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' =
 
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, approval: 'auto', tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -86,7 +91,7 @@ export function parseBoard(text: string | null): Board {
       const { session, ...rest } = t
       return typeof session === 'string' && session && t.status === 'doing' ? { ...rest, session } : rest
     })
-    return { ...emptyBoard(), ...b, tasks }
+    return { ...emptyBoard(), ...b, approval: approvalOf(b), tasks }
   } catch {
     return emptyBoard()
   }
@@ -111,7 +116,7 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
     .slice(0, 30)
 }
 
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => find(b, x))
@@ -130,6 +135,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     branch: null,
     created_at: now,
     updated_at: now,
+    ...(f.needs_review === true ? { needs_review: true } : {}),
   }
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
@@ -144,6 +150,10 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, 8000)
   if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
+  if (patch.needs_review !== undefined) {
+    if (patch.needs_review === true) next.needs_review = true
+    else delete next.needs_review
+  }
   if (patch.after !== undefined) next.after = patch.after.map(normId).filter(x => x !== t.id && find(b, x))
   if (next.status !== 'waiting') next.question = null
   return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
@@ -185,6 +195,43 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
       return re(n).test(f) || (!/[*?]/.test(n) && f.startsWith(n.replace(/\/$/, '') + '/'))
     })
   return changed.filter(f => f.startsWith(dir + '/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
+}
+
+// ---------------- review before merge ----------------
+
+/** The board's approval mode: "review" only when set so; anything else (or nothing, an old board) is "auto". */
+export const approvalOf = (b: Partial<Pick<Board, 'approval'>>): Approval => (b.approval === 'review' ? 'review' : 'auto')
+
+/** Whether a finished task that passed its checks waits for the owner instead of merging at once. */
+export function needsReview(b: Partial<Pick<Board, 'approval'>>, t: Pick<SymccTask, 'needs_review'>): boolean {
+  return approvalOf(b) === 'review' || t.needs_review === true
+}
+
+/**
+ * The board with approval set to `mode`. Tasks already in "review" stay there (switching to
+ * "auto" does not merge them); the new mode applies to tasks that finish from now on.
+ */
+export function setApproval(b: Board, mode: Approval): Board {
+  return { ...b, approval: approvalOf({ approval: mode }) }
+}
+
+/** Task `id`, which must be in "review" for approve / reject; throws otherwise. */
+export function reviewTask(b: Board, id: string, what: 'approve' | 'reject'): BoardTask {
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (t.status !== 'review') throw new Error(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); only a task in review can be ${what === 'approve' ? 'approved' : 'rejected'}`)
+  return t
+}
+
+/**
+ * The owner rejected task `id` (in "review") because of `reason`: it goes back to "todo" with the
+ * reason in its note and history, so the next worker sees it; its test retries start over.
+ */
+export function rejectTask(b: Board, id: string, reason: string, now: string): Board {
+  const t = reviewTask(b, id, 'reject')
+  const why = clean(reason, 1000)
+  if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
 }
 
 // ---------------- which branch work is merged into ----------------
@@ -490,7 +537,7 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; pause
     const doing = ids('doing'), failed = ids('failed')
     const parts = [
       doing.length && `${idList(doing)} ${STATUS_WORD.doing}`,
-      ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
+      ...statusCounts(b.tasks, ['todo', 'paused', 'review', 'waiting']),
       failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
     ].filter((x): x is string => !!x)
     return join([(join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
@@ -513,14 +560,14 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 export type BannerBoard = Pick<Board, 'paused' | 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
 
 /** The word the owner sees for each status. */
-export const STATUS_WORD: Record<SymccStatus, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
+export const STATUS_WORD: Record<SymccStatus, string> = { review: 'ready for review', waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
   return order.map(st => [tasks.filter(t => t.status === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
 }
 
-const BANNER_ORDER: SymccStatus[] = ['doing', 'waiting', 'failed', 'paused', 'todo', 'done']
+const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'done']
 
 /** Cuts parts so their text fits in `room` columns, ending with "…" when something was cut. */
 function cutParts(parts: BannerPart[], room: number): BannerPart[] {
@@ -598,7 +645,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })
-  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
+  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests${approvalOf(b) === 'review' ? ' · finished work waits for review' : ''}`
   const total = totalLine(b, nowMs)
   const days = s.days.map(g => groupLabel(g))
   return [...top, head, ...lines, ...days, ...(total ? [total] : [])].join('\n')

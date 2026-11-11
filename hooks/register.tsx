@@ -80,6 +80,10 @@ import {
   relabelSession,
   whoDrives,
   backToTodo,
+  needsReview,
+  rejectTask,
+  reviewTask,
+  setApproval,
   ENDED_STATUSES,
   OPEN,
   STATUS_WORD,
@@ -499,8 +503,16 @@ async function removeWorktree($: $, taskId: string, dir: string, except?: string
   return true
 }
 
-/** Commit the worker's changes, check scope, bring in the latest main, test, then move main forward. */
-async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b: Board): Promise<{ ok: boolean; detail: string; conflict?: boolean; testOutput?: string }> {
+/** What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner. */
+type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean }
+
+/**
+ * Commit the worker's changes, check scope, bring in the latest main, test, then move main forward.
+ * `mode` 'finish' (a worker just finished): when the task needs review (see needsReview), stop
+ * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
+ * review): the same checked merge, but the tests run again only if main had to be merged in.
+ */
+async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish'): Promise<CheckResult> {
   const target = b.target_branch
   await git($, ['add', '-A', '--', '.'], dir)
   await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'commit', '-q', '--no-verify', '-m', `${t.id}: ${t.title}`], dir)
@@ -520,13 +532,15 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b:
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
   }
-  for (const cmd of b.test_commands) {
+  const testsRun = mode === 'finish' || candidate !== head
+  for (const cmd of testsRun ? b.test_commands : []) {
     const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: 600_000 }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
       const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
       return { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
     }
   }
+  if (mode === 'finish' && needsReview(b, t)) return { ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` }
   // Move main forward (compare-and-swap). If the person has main checked out, update
   // their files too, but never over uncommitted changes.
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
@@ -537,7 +551,8 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, branch: string, b:
   const cas = await git($, ['update-ref', '-m', `${N.name} ${t.id}`, `refs/heads/${target}`, candidate, main])
   if (cas.exitCode !== 0) return { ok: false, detail: `${target} moved during the merge; try again` }
   if (current === target) await git($, ['read-tree', '-m', '-u', main, candidate])
-  return { ok: true, detail: `merged into ${target} (${candidate.slice(0, 8)})${b.test_commands.length ? `; tests passed` : '; no test command set'}` }
+  const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
+  return { ok: true, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
 }
 
 // ---------------- workers ----------------
@@ -688,32 +703,76 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${N.name} ask.`)
   } else {
     await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
-    const r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string } = await checkAndMerge($, t, w.worktree, w.branch, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    const line = `try ${t.attempts}: ${summary.slice(0, 300)} → ${r.detail}`
-    const tries = t.conflict_tries ?? 0
-    if (r.conflict && onConflict(t) === 'retry') {
-      // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
-      const note = `conflicts with the latest ${b.target_branch}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...t.history, line] }, now()))
-      tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
-      return
+    const r: CheckResult = await checkAndMerge($, t, w.worktree, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    await settle($, t, b, r, summary, w.worktree, agentId)
+  }
+}
+
+/**
+ * What happens to task `t` after its work was checked (`r`): back to "todo" for a new try after
+ * a conflict or failing tests (while it has tries left), "review" when it waits for the owner,
+ * else "done" (merged) or "failed". `summary` is what the worker (or the owner's approval) said.
+ */
+async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string) {
+  const line = `try ${t.attempts}: ${summary.slice(0, 300)} → ${r.detail}`
+  if (r.review) {
+    await change($, x => patchTask(x, t.id, { status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...t.history, line] }, now()))
+    tellLead($, `${t.id} "${t.title}" is ready for review. Worker: ${summary.slice(0, 300)}\nThe change is on branch ${t.branch ?? N.branch(t.id)} (folder ${N.dir}/worktrees/${t.id}). Show the owner what changed; then ${N.name} approve ${t.id} merges it, or ${N.name} reject ${t.id} with a reason sends it back to a fresh worker.`)
+    return
+  }
+  const tries = t.conflict_tries ?? 0
+  if (r.conflict && onConflict(t) === 'retry') {
+    // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
+    const note = `conflicts with the latest ${b.target_branch}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
+    await change($, x => patchTask(x, t.id, { status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...t.history, line] }, now()))
+    tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
+    return
+  }
+  const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
+  const testTries = t.test_tries ?? 0
+  if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
+    // Don't fail yet: a new worker gets the failing test output and fixes it.
+    const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
+    await change($, x => patchTask(x, t.id, { status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...t.history, line] }, now()))
+    tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
+    return
+  }
+  const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
+  const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
+  await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
+  if (r.ok) sayDone($, b, t.id)
+  if (r.ok) await removeWorktree($, t.id, worktree, agentId)
+  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
+  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
+}
+
+/** tasks being approved (checked and merged) now in this session, so a second approve waits its turn */
+const approving = new Set<string>()
+
+/** The owner approved task `id` (in "review"): the same checked merge as for a finished worker. */
+async function approve($: $, id: string): Promise<string> {
+  const b = await load($)
+  const t = reviewTask(b, id, 'approve')
+  if (approving.has(t.id)) return `${t.id} is already being merged`
+  if (!(await targetReady($, b))) return `${t.id} stays in review: ${missingBranchText(b.target_branch)}`
+  approving.add(t.id)
+  try {
+    const dir = worktreeDir(t.id)
+    if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, b.target_branch)
+    await change($, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: 'approved; checking and merging' }, now()) : x))
+    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve').catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const cur = find(await load($), t.id)
+    if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing more done`
+    if (!r.ok && !r.conflict && r.testOutput === undefined) {
+      // Not the work's fault (e.g. uncommitted changes on the target branch): it stays in review.
+      await change($, x => patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}` }, now()))
+      return `${t.id} was not merged and stays in review: ${r.detail}. Fix that, then approve it again.`
     }
-    const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
-    const testTries = t.test_tries ?? 0
-    if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
-      // Don't fail yet: a new worker gets the failing test output and fixes it.
-      const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...t.history, line] }, now()))
-      tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
-      return
-    }
-    const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
-    const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
-    await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
-    if (r.ok) sayDone($, b, t.id)
-    if (r.ok) await removeWorktree($, t.id, w.worktree, agentId)
-    const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
-    tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
+    await settle($, cur, b, r, 'approved by the owner', dir)
+    void pump($)
+    return r.ok ? `${t.id} approved and merged: ${r.detail}` : `${t.id} approved, but not merged: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
+  } finally {
+    approving.delete(t.id)
   }
 }
 
@@ -1050,7 +1109,8 @@ const MANUAL = (): Record<string, string> => ({
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
   • Workers are background agents. Each builds one task in its own copy of the code
     (${N.dir}/worktrees/T-n). When it finishes, ${N.name} checks the files it changed, runs the
-    tests and merges into the target branch (target_branch) only if they pass.
+    tests and merges into the target branch (target_branch) only if they pass. With
+    approval "review" (or a task's needs_review) it waits for your approve or reject first.
   • Scouts are background agents on a timer. They read the project and suggest work;
     the lead decides whether to add it.
   Topics: /${N.man} commands · tasks · lead · workers · scouts · safety`,
@@ -1074,19 +1134,26 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     doing            a worker is on it
     paused           stopped on purpose; resume to continue
     waiting for you  the lead asked you a question; answer it in the board panel
+    ready for review the worker is done and the checks passed; nothing is merged until you
+                     approve it (or reject it with a reason, which sends it back to "todo")
     failed           tests failed, files outside its list changed, or the worker stopped
     done             merged into the target branch
     dropped          given up
   The board lists the newest task at the top.`,
   lead: `The lead (this chat) has these tools:
   board · add · change · start · ask · drop · stop · resume · stop_all · resume_all · settings
+  approve · reject (only for a task ready for review)
   settings: target_branch (the branch work is merged into; a new board starts on the branch
   you have checked out, and it must be an existing branch), test_commands (must pass before
   a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
   session starts, on by default), voice (say "T-3 done" out loud when a task is merged;
-  only the session driving the board speaks; on by default), paused.
+  only the session driving the board speaks; on by default), approval ("auto" merges a
+  finished task that passes at once, the default; "review" makes every finished task wait
+  for your approve or reject), paused. add and change also take needs_review: that one
+  task waits for review even when approval is "auto".
+  Switching approval to "auto" does not merge tasks already in review; approve or reject them.
   After each worker finishes, the lead gets a "[${N.name}] Update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
@@ -1110,6 +1177,10 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   /scouts after adding or deleting a file. Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
   • Changes outside a task's files, or that fail the tests, are never merged.
+  • Review step (optional): with approval "review" (${N.name} settings) or a task's needs_review,
+    finished work that passes waits as "ready for review" (its branch and folder are kept).
+    approve runs the same checked merge (brought up to date, scope checked, tests again if it
+    had to merge); reject with a reason sends it back to "todo" for a fresh worker.
   • The target branch only moves by a checked merge; with uncommitted changes on it, ${N.name} waits.
   • A new board merges into the branch you had checked out when it was made. If you are on
     another branch, the banner and status line say so ("merging into main · you're on x").
@@ -1135,6 +1206,7 @@ This section is for the main conversation only. If you are a subagent (a ${N.nam
 The project has a shared task board (${N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
 - Turn what the owner wants into tasks with ${N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Update" message: decide what's next (retry with ${N.name} change / ${N.name} start, split, ${N.name} ask the owner, or ${N.name} drop).
+- Review before merge (optional): with ${N.name} settings approval "review", or needs_review on one task (${N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${N.name} approve T-5 (merge it) or ${N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. approval "auto" (the default) merges on its own; switching to it does not merge tasks already in review.
 - When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
 - Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - To stop work: ${N.name} stop pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} stop_all stops every worker and scout and pauses the board; ${N.name} resume_all starts work again.
@@ -1146,13 +1218,15 @@ const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' } } },
+    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (approval "auto").' } } },
   },
   {
     name: 'change',
-    description: 'Rewrite a task. A running task restarts on the new version; a waiting or failed one goes back to work.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' } } },
+    description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work. Changing only needs_review (wait for the owner before merging) just sets that flag.',
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' } } },
   },
+  { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
   { name: 'start', description: 'Put a task (back) to "todo" so a worker picks it up, e.g. to retry.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'ask', description: 'Make a task wait for the owner with a question.', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
@@ -1162,8 +1236,8 @@ const TOOLS = () => [
   { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
-    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
-    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, paused: { type: 'boolean' } } },
+    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), approval ("auto": a finished task that passes is merged at once, the default; "review": every finished task waits for the owner to approve or reject it; switching back to "auto" does not merge tasks already in review), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
+    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, approval: { type: 'string', enum: ['auto', 'review'] }, paused: { type: 'boolean' } } },
   },
 ]
 
@@ -1184,13 +1258,18 @@ async function runTool($: $, name: string, a: In): Promise<string> {
     case 'board':
       return boardText(await load($), Date.now(), shortHome(root, home), N.name)
     case 'add': {
-      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined }, now(), N.dir))
+      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true }, now(), N.dir))
       void pump($)
       return `added ${t.id} ${t.title}`
     }
     case 'change': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order'].every(k => a[k] === undefined)
+      if (flagOnly) {
+        await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), N.dir))
+        return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
+      }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
       const patch: Partial<SymccTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed' }
@@ -1199,6 +1278,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       if (list(a.files)) patch.files = list(a.files)
       if (list(a.after)) patch.after = list(a.after)
       if (typeof a.order === 'number') patch.order = a.order
+      if (typeof a.needs_review === 'boolean') patch.needs_review = a.needs_review
       await change($, x => patchTask(x, t.id, patch, now(), N.dir))
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
@@ -1242,6 +1322,14 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       void pump($)
       return `${t.id} resumed`
     }
+    case 'approve':
+      return approve($, id)
+    case 'reject': {
+      const reason = str(a.reason) ?? ''
+      await change($, x => rejectTask(x, id, reason, now()))
+      void pump($)
+      return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
+    }
     case 'stop_all':
       return stopAll($, 'the lead')
     case 'resume_all':
@@ -1261,6 +1349,11 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.auto_retries === 'number') ((y.auto_retries = clampRetries(a.auto_retries)), parts.push(`${y.auto_retries} automatic ${y.auto_retries === 1 ? 'retry' : 'retries'} after failing tests`))
         if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), parts.push(a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
         if (typeof a.voice === 'boolean') ((y.voice = a.voice), parts.push(a.voice ? 'merged tasks are said out loud' : 'merged tasks are no longer said out loud'))
+        if (a.approval === 'auto' || a.approval === 'review') {
+          const inReview = b.tasks.filter(t => t.status === 'review').length
+          Object.assign(y, setApproval(y, a.approval))
+          parts.push(a.approval === 'review' ? 'finished tasks now wait for review before merging' : `finished tasks merge on their own again${inReview ? ` (${inReview} already in review still wait for approve or reject)` : ''}`)
+        }
         if (typeof a.paused === 'boolean') ((y.paused = a.paused), parts.push(a.paused ? 'paused' : 'resumed'))
         return y
       })
@@ -1440,11 +1533,11 @@ export const register: Register = on => {
     const tasks = v?.tasks ?? []
     if (!tasks.length) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
-    const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'waiting', 'failed', 'done']).join(' · ')
-    const order = ['waiting', 'failed', 'doing']
+    const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done']).join(' · ')
+    const order = ['review', 'waiting', 'failed', 'doing']
     const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
     const room = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
-    const color: Record<string, string> = { waiting: 'yellow', failed: 'red', doing: 'green' }
+    const color: Record<string, string> = { review: 'cyan', waiting: 'yellow', failed: 'red', doing: 'green' }
     const word: Record<string, string> = STATUS_WORD
     const running = (v?.scouts ?? []).filter(s => s.running).map(s => s.name)
     return (

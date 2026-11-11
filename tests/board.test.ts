@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -655,4 +655,75 @@ test('the status line lists running and failed task IDs, without the folder or "
     expect(l).not.toContain(DEFAULT_NAME) // this repo's folder name
   }
   expect(statusLine({ tasks: [] }, true)).toBeUndefined()
+})
+
+// ---------------- review before merge ----------------
+
+test('approval defaults to "auto", also for an old board without the field', () => {
+  expect(emptyBoard().approval).toBe('auto')
+  expect(parseBoard(null).approval).toBe('auto')
+  expect(parseBoard(JSON.stringify({ version: 1, next_id: 1, tasks: [] })).approval).toBe('auto')
+  expect(parseBoard(JSON.stringify({ approval: 'review', tasks: [] })).approval).toBe('review')
+  expect(parseBoard(JSON.stringify({ approval: 'later', tasks: [] })).approval).toBe('auto')
+})
+
+test('needsReview: the board mode or the task flag makes a task wait', () => {
+  const auto = { approval: 'auto' as const }
+  const review = { approval: 'review' as const }
+  expect(needsReview(auto, {})).toBe(false)
+  expect(needsReview(auto, { needs_review: true })).toBe(true)
+  expect(needsReview(review, {})).toBe(true)
+  expect(needsReview(review, { needs_review: true })).toBe(true)
+  expect(needsReview({}, {})).toBe(false)
+})
+
+test('add and change set needs_review on a task', () => {
+  const [b1, t] = addTask(emptyBoard(), { title: 'A', needs_review: true }, T)
+  expect(b1.tasks[0]!.needs_review).toBe(true)
+  const b2 = patchTask(b1, t.id, { needs_review: false }, T)
+  expect(b2.tasks[0]!.needs_review).toBe(undefined)
+  const [b3] = addTask(emptyBoard(), { title: 'B' }, T)
+  expect(b3.tasks[0]!.needs_review).toBe(undefined)
+})
+
+test('reject sends a task in review back to "todo" with the reason in its history', () => {
+  let [b, t] = addTask(emptyBoard(), { title: 'A' }, T)
+  b = patchTask(b, t.id, { status: 'review', attempts: 1, test_tries: 1, history: ['try 1: did it → checks passed'] }, T)
+  const r = rejectTask(b, 't-1', 'the button should be blue', '2026-11-09T01:00:00.000Z')
+  const x = r.tasks[0]!
+  expect(x.status).toBe('todo')
+  expect(x.note).toContain('the button should be blue')
+  expect(x.history[x.history.length - 1]).toContain('rejected by the owner: the button should be blue')
+  expect(x.history.length).toBe(2)
+  expect(x.test_tries).toBe(0)
+  expect(ready(r).map(y => y.id)).toEqual([t.id])
+  expect(() => rejectTask(b, t.id, '  ', T)).toThrow()
+})
+
+test('approve and reject refuse a task that is not in review', () => {
+  for (const status of ['todo', 'doing', 'paused', 'waiting', 'failed', 'done', 'dropped'] as const) {
+    let [b, t] = addTask(emptyBoard(), { title: 'A' }, T)
+    b = patchTask(b, t.id, { status }, T)
+    expect(() => reviewTask(b, t.id, 'approve')).toThrow('not ready for review')
+    expect(() => rejectTask(b, t.id, 'no', T)).toThrow('not ready for review')
+  }
+  let [b, t] = addTask(emptyBoard(), { title: 'A' }, T)
+  b = patchTask(b, t.id, { status: 'review' }, T)
+  expect(reviewTask(b, t.id, 'approve').id).toBe(t.id)
+  expect(() => reviewTask(b, 'T-99', 'approve')).toThrow('not on the board')
+})
+
+test('switching approval to "auto" leaves tasks in review as they are', () => {
+  let [b, t] = addTask(setApproval(emptyBoard(), 'review'), { title: 'A' }, T)
+  expect(b.approval).toBe('review')
+  b = patchTask(b, t.id, { status: 'review' }, T)
+  const a = setApproval(b, 'auto')
+  expect(a.approval).toBe('auto')
+  expect(a.tasks[0]!.status).toBe('review')
+  expect(a.tasks).toEqual(b.tasks)
+})
+
+test('a task in review counts as open and shows as "ready for review"', () => {
+  expect(STATUS_WORD.review).toBe('ready for review')
+  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('1 ready for review')
 })

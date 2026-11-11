@@ -69,6 +69,8 @@ All four share one thing: **the board**, a plain file in your project at
    │         ├──▶ still failing / out of time ──▶ failed ───┘
    │         └──▶ worker has a question ──▶ failed + question to the lead
    │
+   ├── review   (only with the review step) checks passed; waits for YOUR approve
+   │            (merge) or reject with a reason (back to todo, fresh worker)
    ├── waiting  the lead asked YOU something; your answer sends it back to work
    ├── paused   stopped on purpose; "resume" sends it back
    └── dropped  cancelled; stays on the list, never runs
@@ -79,6 +81,7 @@ All four share one thing: **the board**, a plain file in your project at
 | `todo` | Ready to be picked up (once the tasks it waits for are done) |
 | `doing` | A worker is on it right now |
 | `waiting` | It needs an answer from you |
+| `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
 | `paused` | Stopped on purpose, until resumed |
 | `failed` | It could not be finished; the lead decides what next |
 | `done` | Merged into your branch |
@@ -123,10 +126,35 @@ This is where symcc keeps your branch safe. Step by step:
 4. **Test.** symcc runs your test commands on the combined code. If they fail, the task
    goes back to `todo` and the next worker is shown the end of the failing output and
    told to fix it (2 times by itself; then it is marked `failed` for the lead).
-5. **Merge.** Only now does your branch move forward. If you have that branch checked
+5. **Review (optional).** With the review step on (see below), the task stops here as
+   `review` ("ready for review") and nothing is merged until you say so.
+6. **Merge.** Only now does your branch move forward. If you have that branch checked
    out with uncommitted changes, symcc waits instead of overwriting them.
-6. **Tell.** The lead gets one line: merged, or why not. On a Mac you also hear
+7. **Tell.** The lead gets one line: merged, or why not. On a Mac you also hear
    "T-3 done".
+
+### Review before merge (optional)
+
+By default (`approval` = `auto`) a task that passes steps 1–4 is merged at once. To look at
+the work first:
+
+- Say "review everything before merging" (the setting `approval` = `review`): every task
+  that finishes from then on waits as `review`.
+- Or mark one task: "T-5 needs review" (`needs_review` on `symcc add` / `symcc change`).
+  That task waits even when the board is on `auto`.
+
+The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) and copy
+(`.symcc/worktrees/T-5`) are kept so you can look at the change. Then:
+
+- **Approve** ("approve T-5", tool `symcc approve`): symcc runs the same checked merge as
+  always: brings the task up to date with your branch, checks the files, runs the tests
+  again if it had to bring in new changes, and retries clashes. Then the task is `done`.
+- **Reject** with a reason ("reject T-5: the button should be blue", tool `symcc reject`):
+  nothing is merged; the task goes back to `todo` with your reason in its history, and a
+  fresh worker redoes it with that reason in front of it.
+
+Both only work on a task in `review`. Switching back to `auto` ("merge on your own again")
+does not merge tasks already waiting; approve or reject each of them.
 
 > ⚠️ **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
@@ -210,6 +238,7 @@ Change any of these by telling the lead (e.g. "give workers 90 minutes").
 | `auto_retries` | 2 | New tries after failing tests before a task is marked failed (0–10) |
 | `open_on_start` | on | Open the board panel when a session starts |
 | `voice` | on | Say "T-3 done" out loud when a task is merged |
+| `approval` | auto | `auto`: merge a finished task that passes at once. `review`: every finished task waits for you to approve or reject it |
 | `paused` | off | Stop starting new work (running workers carry on) |
 
 ---
@@ -248,7 +277,7 @@ your-project/
     ├── scouts/           your scout files (*.md)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
-                          removed after the task is merged
+                          kept while it waits for review, removed after it is merged
 ```
 
 Add `.symcc/` to your project's `.gitignore` so the board and the copies stay local.
@@ -266,6 +295,8 @@ claude --plugin-dir /path/to/symcc
 ## Safety
 
 - Changes outside a task's files, or that fail the tests, are never merged.
+- With the review step on, nothing is merged until you approve it; the lead should only
+  approve when you say so.
 - Your branch only moves through a checked merge. If you have uncommitted changes on it,
   symcc waits instead of overwriting them.
 - Workers can use Read, Edit, Write, Glob, Grep and Bash, with edits accepted

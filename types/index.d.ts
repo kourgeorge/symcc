@@ -1,5 +1,6 @@
 // symcc's values the panel and status line draw from.
-export type SymccStatus = 'todo' | 'doing' | 'paused' | 'waiting' | 'failed' | 'done' | 'dropped'
+/** "review": the worker is done and the checks passed, but nothing is merged until the owner approves. */
+export type SymccStatus = 'todo' | 'doing' | 'paused' | 'waiting' | 'review' | 'failed' | 'done' | 'dropped'
 
 /**
  * One worker try on a task: when it started and ended (ISO times), and what it used.
@@ -34,6 +35,8 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
+  /** wait for the owner's review before merging, even when the board's approval is "auto" */
+  needs_review?: boolean
   /** one entry per worker try, oldest first */
   runs?: SymccRun[]
   branch: string | null
