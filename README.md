@@ -19,7 +19,7 @@ it, work stops (and picks up again next time).
 | **You** (the owner) | The person typing | Say what you want, answer questions, decide |
 | **The lead** | Your normal Claude Code chat | Turns your wishes into tasks, watches the board, decides what to do when something fails |
 | **Workers** | Background helpers (one per task) | Each builds one task in its own copy of the project, then stops |
-| **Scouts** (optional) | Background readers you define | Look through the code on a timer and report problems; they never change files |
+| **Scouts** (optional) | Background helpers you define | On a timer, do what their file asks (read the code, run shell commands, search the web) and report to the lead; they never change files |
 
 All four share one thing: **the board**, a plain file in your project at
 `.symcc/board.json`.
@@ -260,7 +260,7 @@ Change any of these by telling the lead (e.g. "give workers 90 minutes").
 
 ---
 
-## Scouts: your own issue finders
+## Scouts: your own helpers on a timer
 
 A scout is one Markdown file in `.symcc/scouts/`. The top says how often it runs (and,
 if you like, which model); the rest is its instructions.
@@ -273,8 +273,16 @@ model: sonnet
 Look for risky code that has no tests. Point at file:line and say what could go wrong.
 ```
 
-Scouts only read files. What they find goes to the lead, which puts the worthwhile items
-on the board as tasks. `examples/scouts/` has two to copy.
+A scout does what its file says. It can read files, run shell commands (these follow your
+normal permission rules, like workers) and search or fetch web pages. It can't edit or write
+files, and it is told not to change the project at all: no installs, no git commands that
+change anything. Changes only go through board tasks. It also sees the open tasks, so it
+doesn't suggest them again.
+
+When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
+tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message. The
+last report shows on the scout's page in the board panel. `examples/scouts/` has examples to
+copy, including `deps.md`, which checks the web for new versions and security notices.
 
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page lets you change how often it runs, its
@@ -317,7 +325,8 @@ claude --plugin-dir /path/to/symcc
 - Your branch only moves through a checked merge. If you have uncommitted changes on it,
   symcc waits instead of overwriting them.
 - Workers can use Read, Edit, Write, Glob, Grep and Bash, with edits accepted
-  automatically, inside your normal Claude Code permission settings. Scouts can only read.
+  automatically, inside your normal Claude Code permission settings. Scouts can use Read, Glob, Grep,
+  Bash, WebSearch and WebFetch (no Edit or Write); their shell commands follow the same rules.
 
 ---
 

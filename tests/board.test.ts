@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseBoardCommand, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseBoardCommand, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -509,6 +509,33 @@ test('a scout row says how often it runs, when it runs next and when it last ran
   expect(scoutReport('x'.repeat(900), 800)).toBe('x'.repeat(800) + '…')
   expect(scoutHowTo('other').join('\n')).toContain('.other/scouts/<name>.md')
   expect(scoutHowTo().join('\n')).toContain('examples/scouts/')
+})
+
+test('scout prompt: the file is the job, with the open tasks and the no-changes rule', () => {
+  const p = scoutPrompt({ scout: 'deps', root: '/p', instructions: 'Check deps for new versions.', open: ['T-3 Fix login', 'T-4 Add docs'], name: 'symcc' })
+  expect(p).toContain('Check deps for new versions.')
+  expect(p).toContain('/p')
+  expect(p).toContain('T-3 Fix login')
+  expect(p).toContain('T-4 Add docs')
+  expect(p).toContain("Don't change, create or delete files")
+  expect(p).toContain('NOTHING')
+  expect(p).not.toContain('|')
+  expect(p).not.toContain('at most 3')
+  expect(p).not.toContain('look for problems')
+  expect(scoutPrompt({ scout: 'x', root: '/p', instructions: 'Go.', open: [] })).toContain('(none)')
+})
+
+test('scout lead message: the whole report, trimmed; NOTHING gives none', () => {
+  const report = 'line one\nline two\n- a\n- b\n- c\n- d'
+  const m = scoutLeadMessage('deps', `  ${report}  `)!
+  expect(m).toContain('Scout "deps" reports:')
+  expect(m).toContain(report)
+  expect(m).toContain('Add tasks for anything worth doing')
+  expect(scoutLeadMessage('deps', 'x'.repeat(SCOUT_REPORT_CHARS + 500))).toContain('x'.repeat(SCOUT_REPORT_CHARS))
+  expect(scoutLeadMessage('deps', 'x'.repeat(SCOUT_REPORT_CHARS + 500))).not.toContain('x'.repeat(SCOUT_REPORT_CHARS + 1))
+  expect(scoutLeadMessage('deps', 'NOTHING')).toBeNull()
+  expect(scoutLeadMessage('deps', ' NOTHING \n')).toBeNull()
+  expect(scoutLeadMessage('deps', '')).toBeNull()
 })
 
 test('scouts are sorted running first, then by their next run', async () => {

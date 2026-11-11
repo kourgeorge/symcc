@@ -1,12 +1,12 @@
 // symcc (the name comes from plugin.json, see name.ts): a shared task board, the main chat as its lead, workers that build tasks in
 // parallel in their own Git worktrees and merge what passes the tests, and scouts you
-// define in .<name>/scouts/*.md that look for issues on a timer.
+// define in .<name>/scouts/*.md that do what their file asks on a timer.
 //
 // How work flows:
 //   you ⇄ lead (the main chat)  ──board tools──▶  .<name>/board.json
 //   a task is ready  ──▶  worktree + background worker subagent
 //   worker done      ──▶  commit · scope check · tests · merge into main  ──▶  the lead is told
-//   scout on a timer ──▶  findings  ──▶  the lead is told and decides what goes on the board
+//   scout on a timer ──▶  report    ──▶  the lead is told and decides what goes on the board
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
@@ -23,6 +23,8 @@ import {
   SCOUT_REPORT_CHARS,
   scoutFile,
   scoutHowTo,
+  scoutLeadMessage,
+  scoutPrompt,
   scoutReport,
   scoutRow,
   sortScouts,
@@ -967,16 +969,8 @@ async function runScout($: $, s: ScoutDef) {
   st.running = true
   st.last_run = now()
   await publish($, b)
-  const open = b.tasks.filter(t => OPEN.includes(t.status)).map(t => `${t.id} ${t.title}`).join('\n') || '(none)'
-  const prompt = `You are the ${N.name} scout "${s.name}". Read the project in ${root} (read only: never change a file) and look for what your instructions ask.
-
-${s.prompt}
-
-Don't report anything already on the board:
-${open}
-
-Answer with at most 3 findings, one per line, as:  - <short title> | <why it matters, with file:line> | <files a fix would touch>
-If you find nothing worth doing, answer exactly: NOTHING`
+  const open = b.tasks.filter(t => OPEN.includes(t.status)).map(t => `${t.id} ${t.title}`)
+  const prompt = scoutPrompt({ scout: s.name, root, instructions: s.prompt, open, name: N.name })
   const spawned = await $.agent.spawn({ prompt, description: `scout: ${s.name}`, subagentType: N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
   const agentId = 'agentId' in spawned ? spawned.agentId : undefined
   if (!agentId) {
@@ -996,9 +990,8 @@ async function scoutFinished($: $, agentId: string, answer: string) {
     st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
   }
   await publish($, await load($))
-  const found = answer.split('\n').filter(l => /^\s*-\s+\S/.test(l)).slice(0, 3)
-  if (!found.length || /^\s*NOTHING\s*$/m.test(answer)) return
-  tellLead($, `Scout "${name}" found:\n${found.join('\n')}\nAdd the worthwhile ones as tasks (${N.name} add), or ignore them.`)
+  const msg = scoutLeadMessage(name, answer)
+  if (msg) tellLead($, msg)
 }
 
 async function scheduleScouts($: $) {
@@ -1153,8 +1146,9 @@ const MANUAL = (): Record<string, string> => ({
     (${N.dir}/worktrees/T-n). When it finishes, ${N.name} checks the files it changed, runs the
     tests and merges into the target branch (target_branch) only if they pass. With
     approval "review" (or a task's needs_review) it waits for your approve or reject first.
-  • Scouts are background agents on a timer. They read the project and suggest work;
-    the lead decides whether to add it.
+  • Scouts are background agents on a timer. Each does what its file asks (reading the
+    project, running shell commands, searching the web) and reports to the lead, which
+    decides what goes on the board.
   Topics: /${N.man} commands · tasks · lead · workers · scouts · safety`,
   commands: `Commands
   /board            open the board panel (↑↓ move, Enter opens a task, Esc closes)
@@ -1220,9 +1214,12 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
       every_minutes: 60
       model: sonnet
       ---
-      What to look for, in plain words.
-  It can only read files. It reports up to 3 findings to the lead, or nothing. Run
-  /scouts after adding or deleting a file. Examples: examples/scouts/ in the plugin.`,
+      What to do, in plain words.
+  It does what the file says. It can read files, run shell commands and search or fetch
+  web pages, but must not change the project (no edits, installs or git changes). It sends
+  its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
+  tells you, or ignores it. Run /scouts after adding or deleting a file.
+  Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
   • Changes outside a task's files, or that fail the tests, are never merged.
   • Review step (optional): with approval "review" (${N.name} settings) or a task's needs_review,
@@ -1236,6 +1233,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     starts (nothing is marked failed) until you set an existing one.
   • Workers can edit files in their own folder without asking. Their shell commands follow
     your normal permission rules (your settings' allow list applies to them too).
+  • Scouts can't edit or write files. They can run shell commands (these follow your normal
+    permission rules, like workers) and search and fetch web pages. They are told not to
+    change the project; changes only go through board tasks.
   • Test commands are run by ${N.name} itself, without a permission prompt.
   • Add ${N.dir}/ to the project's .gitignore.`,
 })
@@ -1432,9 +1432,9 @@ async function registerAll($: $) {
   }))
   await ok($.agent.register({
     name: 'scout',
-    description: `${N.name} scout: reads the project and reports problems or improvements. Started by ${N.name} only.`,
-    prompt: `You are a ${N.name} scout. You read a project and report a few concrete, evidence-backed problems or improvements, in the format you are given. You never change a file.`,
-    tools: ['Read', 'Glob', 'Grep'],
+    description: `${N.name} scout: does what its scout file asks (reading the project, shell commands, the web) and reports to the lead. Started by ${N.name} only.`,
+    prompt: `You are a ${N.name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`,
+    tools: ['Read', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch'],
     background: true,
   }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))

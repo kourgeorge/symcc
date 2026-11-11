@@ -938,21 +938,53 @@ export const scoutFile = (scout: string, name: string = DEFAULT_NAME) => `${name
 /** A scout's last report for the panel: "nothing found" when empty (or NOTHING), else its text cut to `n` characters. */
 export function scoutReport(text: string | undefined, n = 800): string {
   const s = String(text ?? '').trim()
-  if (!s || /^NOTHING\.?$/i.test(s)) return 'nothing found'
+  if (isNothing(s)) return 'nothing found'
   return s.length > n ? s.slice(0, n).trimEnd() + '…' : s
+}
+
+/** True when a scout's answer means "nothing to report": empty, or exactly NOTHING. */
+export const isNothing = (answer: string | undefined): boolean => {
+  const s = String(answer ?? '').trim()
+  return !s || /^NOTHING\.?$/i.test(s)
+}
+
+/**
+ * The prompt a scout run gets: its file's instructions as its job, the project folder,
+ * the open tasks on the board (`open`: "T-3 title" lines) and the rules.
+ */
+export function scoutPrompt(o: { scout: string; root: string; instructions: string; open: string[]; name?: string }): string {
+  const name = o.name ?? DEFAULT_NAME
+  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}. Your job, from your scout file:
+
+${o.instructions.trim()}
+
+Tasks already open on the board (don't suggest these again):
+${o.open.length ? o.open.join('\n') : '(none)'}
+
+Rules:
+- Don't change, create or delete files in the project: no edits, no installs, no git commands that change anything (commit, checkout, reset, stash, ...). Changes are made through board tasks, not by you.
+- You may read files, run shell commands that only look, and search or fetch pages on the web.
+- End with a short plain report of what you found or did. If there is nothing worth reporting, answer exactly: NOTHING`
+}
+
+/** What the lead is told when a scout finishes: its whole report cut to `n` characters, or null for NOTHING. */
+export function scoutLeadMessage(scout: string, answer: string | undefined, n = SCOUT_REPORT_CHARS): string | null {
+  if (isNothing(answer)) return null
+  const report = String(answer).trim().slice(0, n).trimEnd()
+  return `Scout "${scout}" reports:\n${report}\nAdd tasks for anything worth doing, tell the owner what matters, or ignore it.`
 }
 
 /** The how-to shown when there are no scouts. */
 export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
   return [
-    'No scouts yet. A scout reads the project on a timer and suggests work.',
+    'No scouts yet. A scout runs on a timer, does what its file asks and reports to the lead.',
     `Add one as ${namesFor(name).scouts}/<name>.md:`,
     '  ---',
     '  every_minutes: 30',
     '  model: sonnet        (optional)',
     '  ---',
-    '  What to look for, in plain words.',
-    `examples/scouts/ in the plugin has two to copy. Then run /scouts.`,
+    '  What to do, in plain words.',
+    `examples/scouts/ in the plugin has examples to copy. Then run /scouts.`,
     'Or press "New scout" (n) to write one right here.',
   ]
 }
