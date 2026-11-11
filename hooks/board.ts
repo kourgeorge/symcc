@@ -67,9 +67,15 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
 }
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
 
+/** How many automatic retries after failing tests a new board allows. */
+export const DEFAULT_AUTO_RETRIES = 2
+
+/** 'retry' while fewer than `max` tries were used, else 'fail'. */
+const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' => ((tries ?? 0) < max ? 'retry' : 'fail')
+
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, voice: true, tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -213,8 +219,6 @@ export const missingBranchText = (target: string) => `branch '${target}' doesn't
 
 // ---------------- when the tests fail ----------------
 
-/** How many automatic retries after failing tests a new board allows. */
-export const DEFAULT_AUTO_RETRIES = 2
 /** How much of the failing test output the next worker is shown (the end of it). */
 export const TEST_OUTPUT_CHARS = 3000
 
@@ -223,7 +227,7 @@ export const TEST_OUTPUT_CHARS = 3000
  * test output; 'fail': it already had `max` automatic retries, so the lead decides.
  */
 export function onTestFail(t: Pick<SymccTask, 'test_tries'>, max = DEFAULT_AUTO_RETRIES): 'retry' | 'fail' {
-  return (t.test_tries ?? 0) < max ? 'retry' : 'fail'
+  return retryOrFail(t.test_tries, max)
 }
 
 /** The last `n` characters of the test output, so it fits in the next worker's prompt. */
@@ -252,14 +256,14 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- when the branch conflicts with main ----------------
 
 /** How many new tries a task gets to merge main into its branch after a conflict. */
-export const MAX_CONFLICT_TRIES = 2
+export const MAX_CONFLICT_TRIES = DEFAULT_AUTO_RETRIES
 
 /**
  * A task's branch conflicted with the latest main. 'retry': send it back to "todo" so a new
  * worker merges main and resolves the conflict; 'fail': it was already tried `max` times.
  */
 export function onConflict(t: Pick<SymccTask, 'conflict_tries'>, max = MAX_CONFLICT_TRIES): 'retry' | 'fail' {
-  return (t.conflict_tries ?? 0) < max ? 'retry' : 'fail'
+  return retryOrFail(t.conflict_tries, max)
 }
 
 /** For showing the board: newest task first (by when it was made, then by its number). */
@@ -450,10 +454,8 @@ export function shortHome(path: string, home?: string): string {
   return path.startsWith(h + '/') ? '~' + path.slice(h.length) : path
 }
 
-/** The small mark shown before the board's name. All titles are built from it and namesFor(name).boardName. */
-export const BOARD_MARK = ICON
-/** "<icon> <name> board": the bold, colored part of a title. */
-export const boardBrand = (name: string = DEFAULT_NAME) => `${BOARD_MARK} ${namesFor(name).boardName}`
+/** "<icon> <name> board": the bold, colored part of a title (ICON from name.ts, then namesFor(name).boardName). */
+export const boardBrand = (name: string = DEFAULT_NAME) => `${ICON} ${namesFor(name).boardName}`
 /** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
 /** The board's title: "<icon> <name> board · <folder>", or just "<icon> <name> board" when the folder is unknown. */
@@ -463,8 +465,6 @@ export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${name
 
 // ---------------- the banner at the top of the board panel ----------------
 
-/** The small drawing beside the banner: the plugin's icon drawing (a treble clef, ICON_ART in name.ts). */
-export const BANNER_ART = ICON_ART
 /** Below this many columns the drawing is dropped and only the text lines are shown. */
 export const BANNER_NARROW = 50
 /** How a piece of banner text is drawn: accent (the 'ide' theme color), plain, dim or warning. */
@@ -535,9 +535,9 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const wide = w >= BANNER_NARROW
   // The three fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook)
   // stand alone, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
-  if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, BANNER_ART.length - 3) }, () => [] as BannerPart[]))
+  if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, ICON_ART.length - 3) }, () => [] as BannerPart[]))
   return texts.map((parts, i) => {
-    const art = wide && BANNER_ART[i] ? `${BANNER_ART[i]}  ` : ''
+    const art = wide && ICON_ART[i] ? `${ICON_ART[i]}  ` : ''
     return { art, parts: cutParts(parts, w - art.length) }
   })
 }
@@ -571,14 +571,29 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
 /** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
 export type ScoutDef = { name: string; every_minutes: number; model?: string; prompt: string }
 
+/**
+ * A file's front matter (the lines between the opening and closing `---`) and the body after it.
+ * `lines` is null when the file has no front matter; then the body is the whole text.
+ */
+function splitFrontMatter(text: string): { lines: string[] | null; body: string } {
+  const m = /^---\s*\n([\s\S]*?)\n---\s*\n?/.exec(text)
+  return m ? { lines: m[1]!.split('\n'), body: text.slice(m[0].length) } : { lines: null, body: text }
+}
+
+/** A front matter `key: value` line as its lowercased key and trimmed value, or null for other lines. */
+function frontMatterLine(line: string): { key: string; value: string } | null {
+  const kv = /^\s*([a-z_]+)\s*:\s*(.*?)\s*$/i.exec(line)
+  return kv ? { key: kv[1]!.toLowerCase(), value: kv[2]! } : null
+}
+
 export function parseScout(name: string, text: string): ScoutDef | null {
-  const m = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/.exec(text)
+  const fm = splitFrontMatter(text)
   const meta: Record<string, string> = {}
-  if (m) for (const line of m[1]!.split('\n')) {
-    const kv = /^\s*([a-z_]+)\s*:\s*(.*?)\s*$/i.exec(line)
-    if (kv) meta[kv[1]!.toLowerCase()] = kv[2]!.replace(/^["']|["']$/g, '')
+  for (const line of fm.lines ?? []) {
+    const kv = frontMatterLine(line)
+    if (kv) meta[kv.key] = kv.value.replace(/^["']|["']$/g, '')
   }
-  const prompt = (m ? m[2]! : text).trim()
+  const prompt = fm.body.trim()
   if (!prompt) return null
   const every = Number(meta.every_minutes ?? meta.every ?? 60)
   return { name: meta.name || name, every_minutes: Number.isFinite(every) && every >= 1 ? every : 60, model: meta.model || undefined, prompt }
@@ -590,13 +605,12 @@ export function parseScout(name: string, text: string): ScoutDef | null {
  * as it was, except every_minutes (an old "every" is replaced by it) and model (dropped when empty).
  */
 export function scoutText(old: string | null, set: { every_minutes: number; model?: string }, body: string): string {
-  const m = old ? /^---\s*\n([\s\S]*?)\n---\s*\n?/.exec(old) : null
   const lines: string[] = []
   let everyDone = false
   let modelDone = false
   const model = (set.model ?? '').trim()
-  for (const line of m ? m[1]!.split('\n') : []) {
-    const key = /^\s*([a-z_]+)\s*:/i.exec(line)?.[1]?.toLowerCase()
+  for (const line of (old ? splitFrontMatter(old).lines : null) ?? []) {
+    const key = frontMatterLine(line)?.key
     if (key === 'every_minutes' || key === 'every') {
       if (!everyDone) lines.push(`every_minutes: ${set.every_minutes}`)
       everyDone = true
