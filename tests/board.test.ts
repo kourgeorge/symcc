@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -491,7 +491,7 @@ test('a scout row says how often it runs, when it runs next and when it last ran
   expect(scoutRanText({ last_run: iso(-8) }, at)).toBe('ran 8m ago')
   expect(scoutRanText({ last_run: null }, at)).toBe('never ran')
   expect(scoutRow({ name: 'tests', every_minutes: 30, last_run: null, running: false, model: 'sonnet', next_run: iso(12) }, at)).toEqual({ name: 'tests', every: 'every 30 min', model: 'sonnet', state: 'next in 12m', ran: 'never ran' })
-  expect(scoutRowText({ name: 'bugs', every_minutes: 60, last_run: iso(-8), running: true }, at)).toBe('bugs · every hour · running · ran 8m ago')
+  expect(scoutRow({ name: 'bugs', every_minutes: 60, last_run: iso(-8), running: true }, at)).toEqual({ name: 'bugs', every: 'every hour', model: '', state: 'running', ran: 'ran 8m ago' })
   expect(scoutFile('bugs')).toBe('.symcc/scouts/bugs.md')
   expect(scoutFile('bugs', 'other')).toBe('.other/scouts/bugs.md')
   expect(scoutReport('')).toBe('nothing found')

@@ -143,9 +143,11 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
 }
 
+/** A task id's number ("T-12" → 12; 0 when there is none), for ordering. */
+const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
+
 /** Tasks a worker could start now: to do, and everything they wait for is done. */
 export function ready(b: Board): SymccTask[] {
-  const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
   return b.tasks
     .filter(t => t.status === 'todo' && t.after.every(a => find(b, a)?.status === 'done'))
     .sort((x, y) => x.order - y.order || num(x.id) - num(y.id))
@@ -262,7 +264,6 @@ export function onConflict(t: Pick<SymccTask, 'conflict_tries'>, max = MAX_CONFL
 
 /** For showing the board: newest task first (by when it was made, then by its number). */
 export function newestFirst(x: SymccTask, y: SymccTask): number {
-  const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
   return (y.created_at || '').localeCompare(x.created_at || '') || num(y.id) - num(x.id)
 }
 
@@ -449,8 +450,7 @@ export function shortHome(path: string, home?: string): string {
   return path.startsWith(h + '/') ? '~' + path.slice(h.length) : path
 }
 
-/** The board's name for the default plugin name ("<name> board"), and the small mark shown before it. All titles are built from these. */
-export const BOARD_NAME = namesFor().boardName
+/** The small mark shown before the board's name. All titles are built from it and namesFor(name).boardName. */
 export const BOARD_MARK = ICON
 /** "<icon> <name> board": the bold, colored part of a title. */
 export const boardBrand = (name: string = DEFAULT_NAME) => `${BOARD_MARK} ${namesFor(name).boardName}`
@@ -664,12 +664,6 @@ export function scoutRanText(s: Pick<SymccScout, 'last_run'>, nowMs: number): st
 /** The pieces of a scout's row in the panel; `model` and `state` are '' when there is none. */
 export function scoutRow(s: SymccScout, nowMs: number): { name: string; every: string; model: string; state: string; ran: string } {
   return { name: s.name, every: everyText(s.every_minutes), model: s.model ?? '', state: scoutStateText(s, nowMs), ran: scoutRanText(s, nowMs) }
-}
-
-/** A scout's row as one line of text: "tests · every 30 min · sonnet · next in 12m · ran 8m ago". */
-export function scoutRowText(s: SymccScout, nowMs: number): string {
-  const r = scoutRow(s, nowMs)
-  return [r.name, r.every, r.model, r.state, r.ran].filter(Boolean).join(' · ')
 }
 
 /** The order of scouts in the panel: running ones first, then the soonest next run (none planned last), then by name. */

@@ -81,6 +81,7 @@ import {
   whoDrives,
   backToTodo,
   ENDED_STATUSES,
+  OPEN,
   STATUS_WORD,
   statusCounts,
   type Board,
@@ -125,7 +126,8 @@ type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel'
 let root = ''
 /** the home folder, to shorten it to "~" where the project's path is shown */
 let home = ''
-const workers = new Map<string, { task: string; worktree: string; branch: string; since: number }>() // agentId → work
+type Worker = { task: string; worktree: string; branch: string; since: number }
+const workers = new Map<string, Worker>() // agentId → work
 /** tasks this copy has claimed and is starting a worker for (not yet in `workers`) */
 const starting = new Set<string>()
 /** tasks whose worker finished and whose work is being checked and merged now */
@@ -294,23 +296,13 @@ async function claimLead($: $, fresh = false): Promise<boolean> {
   }
   if (was && !driving) {
     // Another session took over (this one stopped answering for too long): its workers own the tasks now.
-    for (const [agentId] of [...workers]) {
-      workers.delete(agentId)
-      await halt($, agentId, 'another session drives the board now')
-    }
-    for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, 'another session drives the board now')
-    scoutRuns.clear()
-    for (const st of scoutState.values()) st.running = false
+    await haltAll($, 'another session drives the board now')
     $.ui.toast(N.toast('another session drives the board now; this one only shows and changes it'))
   }
   if (driving) {
     // A task stopped, dropped or changed from another session: stop its worker here.
     const b = await load($)
-    for (const [agentId, w] of [...workers]) {
-      if (find(b, w.task)?.status === 'doing') continue
-      workers.delete(agentId)
-      await halt($, agentId, 'the task was changed on the board')
-    }
+    await haltWorkers($, 'the task was changed on the board', w => find(b, w.task)?.status !== 'doing')
   }
   if (was !== driving || fresh) await publish($, await load($))
   return driving
@@ -345,10 +337,7 @@ async function handOver($: $) {
   }
   const b = await load($)
   await publish($, b)
-  if (openOnStart(b))
-    await update($, opened, () => '')
-      .then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name) }))
-      .catch(() => undefined)
+  if (openOnStart(b)) await openPane($, { focus: false, quiet: true })
 }
 
 async function publish($: $, b: Board) {
@@ -662,7 +651,7 @@ async function waitEnded($: $, ids: string[], ms: number): Promise<AgentInfo[]> 
   const until = Date.now() + ms
   for (;;) {
     const agents = await agentsNow($)
-    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED.has(a.status)) : ids.map(id => ({ id, type: N.worker, status: 'running' }))
+    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED_STATUSES.includes(a.status)) : ids.map(id => ({ id, type: N.worker, status: 'running' }))
     if (!alive.length || Date.now() > until) return alive
     await $.clock.sleep(500)
   }
@@ -737,12 +726,26 @@ async function halt($: $, agentId: string, why: string) {
   await $.session.send({ to: { agentId }, text: `Stop now: ${why}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
 }
 
-async function stopWorker($: $, taskId: string, why: string) {
+/** Stops the workers `which` picks (all by default), one by one; `then` runs after each is told to stop. */
+async function haltWorkers($: $, why: string, which: (w: Worker) => boolean = () => true, then?: (w: Worker) => Promise<unknown>) {
   for (const [agentId, w] of [...workers]) {
-    if (w.task !== taskId) continue
+    if (!which(w)) continue
     workers.delete(agentId)
     await halt($, agentId, why)
+    await then?.(w)
   }
+}
+
+/** Stops every worker, then every scout run; `then` runs after each worker is told to stop. */
+async function haltAll($: $, why: string, then?: (w: Worker) => Promise<unknown>) {
+  await haltWorkers($, why, undefined, then)
+  for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, why)
+  scoutRuns.clear()
+  for (const s of scoutState.values()) s.running = false
+}
+
+async function stopWorker($: $, taskId: string, why: string) {
+  await haltWorkers($, why, w => w.task === taskId)
   await publish($, await load($))
 }
 
@@ -750,15 +753,10 @@ async function stopWorker($: $, taskId: string, why: string) {
 async function stopAll($: $, who: string): Promise<string> {
   await change($, b => ({ ...b, paused: true }))
   const ids: string[] = []
-  for (const [agentId, w] of [...workers]) {
-    workers.delete(agentId)
+  await haltAll($, `${who} stopped all work`, async w => {
     ids.push(w.task)
-    await halt($, agentId, `${who} stopped all work`)
     await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues after resume` }, now()))
-  }
-  for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, `${who} stopped all work`)
-  scoutRuns.clear()
-  for (const s of scoutState.values()) s.running = false
+  })
   await publish($, await load($))
   return `${ids.length ? `Stopped ${ids.join(', ')}` : 'No workers were running'}. Nothing new starts until resume.`
 }
@@ -769,7 +767,6 @@ async function resumeAll($: $): Promise<string> {
   return 'Resumed: workers start on ready tasks again.'
 }
 
-const ENDED = new Set(ENDED_STATUSES)
 const LIVE = new Set(['pending', 'running', 'waiting'])
 
 /**
@@ -789,7 +786,7 @@ async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
   for (const a of agents) {
     if (a.type !== N.worker && a.type !== N.scout) continue
     if (workers.has(a.id) || scoutRuns.has(a.id)) continue
-    if (ENDED.has(a.status)) continue
+    if (ENDED_STATUSES.includes(a.status)) continue
     if (a.type === N.worker) {
       const t = find(b, normId(a.description.split(/\s/)[0] ?? ''))
       if (t && t.status === 'doing' && !ownedHere(t, me, live)) continue
@@ -821,7 +818,7 @@ async function check($: $) {
       continue
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
-    const lost = minutes > 3 && info !== undefined && ENDED.has(info.status)
+    const lost = minutes > 3 && info !== undefined && ENDED_STATUSES.includes(info.status)
     if (lost) {
       workers.delete(agentId)
       await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `try ${t?.attempts ?? '?'}: the worker ended without a result`] }, now()))
@@ -872,7 +869,7 @@ async function runScout($: $, s: ScoutDef) {
   st.running = true
   st.last_run = now()
   await publish($, b)
-  const open = b.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped').map(t => `${t.id} ${t.title}`).join('\n') || '(none)'
+  const open = b.tasks.filter(t => OPEN.includes(t.status)).map(t => `${t.id} ${t.title}`).join('\n') || '(none)'
   const prompt = `You are the ${N.name} scout "${s.name}". Read the project in ${root} (read only: never change a file) and look for what your instructions ask.
 
 ${s.prompt}
@@ -1001,12 +998,27 @@ function cancelScoutEdit($: $) {
   $.ui.invalidate('ui.render')
 }
 
-/** Opens the board panel on a view ('tasks' or 'scouts'), with nothing opened in it. */
-async function openPane($: $, which: 'tasks' | 'scouts', focus = true) {
-  await update($, opened, () => '')
+/**
+ * Sets what the board panel shows: task `task` opened ('' = the list). With `which`, it also
+ * switches to that view ('tasks' or 'scouts') with no scout opened; without, the view stays.
+ */
+async function resetPane($: $, which?: 'tasks' | 'scouts', task = '') {
+  await update($, opened, () => task)
+  if (!which) return
   await update($, scoutOpen, () => '')
   await update($, tab, () => which)
-  return $.ui.open({ id: N.pane, title: boardTitle(root, N.name), ...(focus ? { focus: true as const, closeOnEscape: true as const } : {}) })
+}
+
+/**
+ * Opens the board panel (see resetPane for `tab` and `task`). `focus` (default on) moves the
+ * cursor into it and lets Esc close it; `quiet` ignores errors (the panel then just isn't shown).
+ */
+async function openPane($: $, o: { tab?: 'tasks' | 'scouts'; task?: string; focus?: boolean; quiet?: boolean } = {}) {
+  const go = async () => {
+    await resetPane($, o.tab, o.task)
+    return $.ui.open({ id: N.pane, title: boardTitle(root, N.name), ...(o.focus !== false ? { focus: true as const, closeOnEscape: true as const } : {}) })
+  }
+  return o.quiet ? go().catch(() => undefined) : go()
 }
 
 // ---------------- the lead's tools ----------------
@@ -1335,10 +1347,7 @@ export const register: Register = on => {
       // Open the board panel by itself (every session, driver or not), without taking the cursor
       // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
       // that is fine: the band above the prompt and /board still work.
-      if (openOnStart(b))
-        await update($, opened, () => '')
-          .then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name) }))
-          .catch(() => undefined)
+      if (openOnStart(b)) await openPane($, { focus: false, quiet: true })
     } finally {
       startupDone = true
     }
@@ -1419,12 +1428,10 @@ export const register: Register = on => {
     if (arg) {
       const t = find(b, arg)
       if (!t) return { text: `${arg} is not on the board` }
-      await update($, opened, () => t.id)
-      await update($, tab, () => 'tasks')
-      await $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true })
+      await openPane($, { tab: 'tasks', task: t.id })
       return { text: taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks), isTextDisplayOnly: true }
     }
-    await openPane($, 'tasks')
+    await openPane($, { tab: 'tasks' })
     return { text: `Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`, isTextDisplayOnly: true }
   })
 
@@ -1455,7 +1462,7 @@ export const register: Register = on => {
             {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
           </Text>
           </Text>
-          <Button key="open-board" label="open board" dimColor onPress={() => void update($, opened, () => '').then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name), focus: true, closeOnEscape: true }))} />
+          <Button key="open-board" label="open board" dimColor onPress={() => void openPane($)} />
         </Box>
         {live.slice(0, room).map(t => (
           <Text wrap="truncate">
@@ -1478,7 +1485,7 @@ export const register: Register = on => {
     const defs = await scheduleScouts($)
     await publish($, await load($))
     // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
-    const placed = await openPane($, 'scouts').then(r => r.isPlaced).catch(() => false)
+    const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
     if (placed) return { text: `Scouts opened: Enter opens a scout, t tasks, Esc closes.`, isTextDisplayOnly: true }
     if (!defs.length) return { text: `No scouts yet. Add one as ${N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
     return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}`).join('\n') }
@@ -1558,7 +1565,7 @@ export const register: Register = on => {
     }
     /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */
     const tabs = () => {
-      const go = (which: 'tasks' | 'scouts') => act(async () => ((draft = null), (naming = null), await update($, opened, () => ''), await update($, scoutOpen, () => ''), await update($, tab, () => which)))
+      const go = (which: 'tasks' | 'scouts') => act(async () => ((draft = null), (naming = null), await resetPane($, which)))
       const one = (which: 'tasks' | 'scouts', label: string) => {
         const active = which === 'scouts' ? onScouts : !onScouts
         return (
