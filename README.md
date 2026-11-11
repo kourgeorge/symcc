@@ -165,7 +165,9 @@ You can do all of this yourself, too:
 - **Slash commands:** `/board approve T-5`, `/board reject T-5 <reason>`,
   `/board diff T-5` (the changed files with `+`/`-` counts) or `/board diff T-5 <file>`
   (that file's full diff), and `/board mode auto|review` (with no word: shows the mode).
-- The status line counts them by ID, e.g. `1 to review (T-5)`.
+- The status line starts with the mode, `⏸ review before merge` or `⏵ auto-merge`, and counts
+  tasks to review by ID, e.g. `⏸ review before merge · 1 to review (T-5)`. With an empty board
+  it shows the mode only in review mode, so a fresh project stays quiet.
 
 Both only work on a task in `review`. Switching back to `auto` ("merge on your own again")
 does not merge tasks already waiting; approve or reject each of them.

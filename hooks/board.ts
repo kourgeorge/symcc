@@ -677,15 +677,20 @@ function idList(ids: string[]): string {
   return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
 }
 
+/** The mode label at the start of the status line, like Claude Code's own permission mode. */
+export const MODE_LABEL: Record<Approval, string> = { review: '⏸ review before merge', auto: '⏵ auto-merge' }
+
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "T-26, T-27 doing · 1 to review (T-5) · 2 to do" or "1 failed (T-28)".
+ * The short status text Claude Code shows after "symcc:", e.g. "⏸ review before merge · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
+ * It starts with the approval mode (MODE_LABEL), so the mode is always in the same spot.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
- * undefined when there is nothing to say.
+ * undefined when there is nothing to say: an empty board this session drives, in "auto" mode, with no branch note.
  */
-export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = ''): string | undefined {
+export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = '', approval: Approval = 'auto'): string | undefined {
   const join = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
+  const mode = MODE_LABEL[approvalOf({ approval })]
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
     const parts = [
@@ -694,9 +699,11 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; pause
       ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
       failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
     ].filter((x): x is string => !!x)
-    return join([(join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
+    return join([mode, (join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
   }
-  if (!driving) return join(['empty' + other, branch_note])
+  if (!driving) return join([mode, 'empty' + other, branch_note])
+  // an empty board in "auto" stays quiet, so a fresh project shows nothing
+  if (approvalOf({ approval }) === 'review') return join([mode, branch_note])
   return branch_note || undefined
 }
 

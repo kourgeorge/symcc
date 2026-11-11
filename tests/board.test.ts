@@ -665,23 +665,39 @@ test('the status line lists running and failed task IDs, without the folder or "
     statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4'].map(id => t('failed', id)) }, true),
   ]
   expect(lines).toEqual([
-    'all done',
-    'T-26, T-27 doing · 2 to do',
-    '1 failed (T-28)',
-    '2 failed (T-28, T-29)',
-    '1 to do · paused',
-    '1 paused · 1 waiting for you',
-    'all done (driven by another session)',
-    'empty (driven by another session)',
+    '⏵ auto-merge · all done',
+    '⏵ auto-merge · T-26, T-27 doing · 2 to do',
+    '⏵ auto-merge · 1 failed (T-28)',
+    '⏵ auto-merge · 2 failed (T-28, T-29)',
+    '⏵ auto-merge · 1 to do · paused',
+    '⏵ auto-merge · 1 paused · 1 waiting for you',
+    '⏵ auto-merge · all done (driven by another session)',
+    '⏵ auto-merge · empty (driven by another session)',
     'on dev, not main',
-    'T-1, T-2, T-3 +2 doing',
-    '4 failed (T-1, T-2, T-3 +1)',
+    '⏵ auto-merge · T-1, T-2, T-3 +2 doing',
+    '⏵ auto-merge · 4 failed (T-1, T-2, T-3 +1)',
   ])
   for (const l of lines) {
     expect(l).not.toContain(board)
     expect(l).not.toContain(DEFAULT_NAME) // this repo's folder name
   }
   expect(statusLine({ tasks: [] }, true)).toBeUndefined()
+})
+
+test('the status line starts with the approval mode', () => {
+  const t = (status: SymccTask['status'], id: string) => ({ id, status })
+  const tasks = [t('doing', 'T-26'), t('review', 'T-27')]
+  expect(statusLine({ tasks }, true, '', 'review')).toBe('⏸ review before merge · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks }, true, '', 'auto')).toBe('⏵ auto-merge · T-26 doing · 1 to review (T-27)')
+  // empty board this session drives: only "review" shows the label; "auto" stays quiet
+  expect(statusLine({ tasks: [] }, true, '', 'review')).toBe('⏸ review before merge')
+  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'review')).toBe('⏸ review before merge · on dev, not main')
+  expect(statusLine({ tasks: [] }, true, '', 'auto')).toBeUndefined()
+  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'auto')).toBe('on dev, not main')
+  // driven by another session: the label shows in both modes
+  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review before merge · empty (driven by another session)')
+  expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto-merge · empty (driven by another session)')
+  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review before merge · 1 to do (driven by another session)')
 })
 
 // ---------------- review before merge ----------------
@@ -752,13 +768,13 @@ test('switching approval to "auto" leaves tasks in review as they are', () => {
 
 test('a task in review counts as open and shows as "ready for review"', () => {
   expect(STATUS_WORD.review).toBe('ready for review')
-  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('1 to review (T-5)')
+  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⏵ auto-merge · 1 to review (T-5)')
 })
 
 test('the status line lists tasks to review by ID, cut after 3', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
-  expect(statusLine({ tasks: [t('doing', 'T-1'), t('review', 'T-5'), t('todo', 'T-6'), t('failed', 'T-7')] }, true)).toBe('T-1 doing · 1 to review (T-5) · 1 to do · 1 failed (T-7)')
-  expect(statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('review', id)) }, true)).toBe('5 to review (T-1, T-2, T-3 +2)')
+  expect(statusLine({ tasks: [t('doing', 'T-1'), t('review', 'T-5'), t('todo', 'T-6'), t('failed', 'T-7')] }, true)).toBe('⏵ auto-merge · T-1 doing · 1 to review (T-5) · 1 to do · 1 failed (T-7)')
+  expect(statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('review', id)) }, true)).toBe('⏵ auto-merge · 5 to review (T-1, T-2, T-3 +2)')
 })
 
 test('the board text names a task in review', () => {

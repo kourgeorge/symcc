@@ -368,7 +368,7 @@ async function publish($: $, b: Board) {
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, approval: approvalOf(b), driving, branch_note }
   await update($, view, () => v)
-  $.ui.status(statusLine(b, driving, branch_note))
+  $.ui.status(statusLine(b, driving, branch_note, approvalOf(b)))
 }
 
 // ---------------- telling the lead ----------------
