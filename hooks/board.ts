@@ -750,3 +750,25 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
 export function mayStart(t: BoardTask | undefined, agents: AgentInfo[], name: string = DEFAULT_NAME): boolean {
   return !!t && t.status === 'todo' && liveWorkersFor(t, agents, name).length === 0
 }
+
+// ---------------- a worker that can't start yet ----------------
+// Right after a reload the worker agent type may not be registered yet: spawning then fails
+// with "Agent type '<name>:worker' not found". That is not the task's fault: it goes back to
+// "todo" with no try counted, and is only marked failed after MAX_NOT_READY misses in a row.
+
+/** How many "not ready" misses in a row a task gets before it is marked failed. */
+export const MAX_NOT_READY = 3
+
+/** Whether a spawn error only means the plugin isn't ready yet (its worker type isn't there). */
+export function isNotReady(message: string, name: string = DEFAULT_NAME): boolean {
+  const m = String(message ?? '')
+  const worker = namesFor(name).worker.toLowerCase()
+  const low = m.toLowerCase()
+  if (/agent type .* not found/.test(low) && low.includes(worker)) return true
+  return /\bnot (yet )?ready\b|not registered|still starting/.test(low)
+}
+
+/** After one more "not ready" miss (misses = the count so far): retry later, or fail now. */
+export function onNotReady(misses: number, max = MAX_NOT_READY): 'retry' | 'fail' {
+  return misses + 1 >= max ? 'fail' : 'retry'
+}

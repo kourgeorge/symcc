@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -507,4 +507,23 @@ test('scouts are sorted running first, then by their next run', async () => {
   const sorted = sortScouts([s('late', false, '2026-11-09T13:00:00.000Z'), s('none', false), s('soon', false, '2026-11-09T12:05:00.000Z'), s('busy', true, '2026-11-09T14:00:00.000Z'), s('also', true)])
   expect(sorted.map(x => x.name)).toEqual(['busy', 'also', 'soon', 'late', 'none'])
   expect(scoutOrder(s('a', false), s('b', false))).toBeLessThan(0)
+})
+
+test('a spawn that fails because the worker type is not registered yet is "not ready", other errors are real', async () => {
+  const N = namesFor(DEFAULT_NAME)
+  expect(isNotReady(`Agent type '${N.worker}' not found`)).toBe(true)
+  expect(isNotReady(`Error: Agent type '${N.worker}' not found. Available agents: general-purpose`)).toBe(true)
+  expect(isNotReady(`Agent type 'other:worker' not found`, 'other')).toBe(true)
+  expect(isNotReady(`Agent type 'someone-else:helper' not found`)).toBe(false)
+  expect(isNotReady('the worker did not start')).toBe(false)
+  expect(isNotReady('permission denied')).toBe(false)
+  expect(isNotReady('')).toBe(false)
+})
+
+test('a task is only failed after 3 "not ready" misses in a row', async () => {
+  expect(MAX_NOT_READY).toBe(3)
+  expect(onNotReady(0)).toBe('retry')
+  expect(onNotReady(1)).toBe('retry')
+  expect(onNotReady(2)).toBe('fail')
+  expect(onNotReady(5)).toBe('fail')
 })

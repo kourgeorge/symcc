@@ -70,6 +70,8 @@ import {
   parseLead,
   patchTask,
   ready,
+  isNotReady,
+  onNotReady,
   resetDoing,
   whoDrives,
   type Board,
@@ -138,6 +140,10 @@ let beat: { cancel(): void } | null = null
 let missingBranch = ''
 /** the target_branch the lead was last told is missing, so it is told once, not every check */
 let toldMissing = ''
+/** set at the end of session.start: until then pump starts no work (the worker type may not be registered yet) */
+let startupDone = false
+/** task id → spawns in a row that failed only because the plugin wasn't ready yet (see isNotReady) */
+const notReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 const openDays = new Set<string>()
 
@@ -528,6 +534,7 @@ ${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conf
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
 async function pump($: $) {
+  if (!startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!driving) return // another session drives the board and starts its work
   const b = await load($)
   if (b.paused) return
@@ -567,10 +574,31 @@ async function startWorker($: $, id: string) {
       return [y, find(y, id)!]
     })
     if (!t) return
-    const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: N.worker, cwd: dir })
-    if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
-    if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
-    const agentId = spawned.agentId
+    const before = find(b, id)!
+    let agentId: string
+    try {
+      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), description: `${t.id} ${t.title}`.slice(0, 60), subagentType: N.worker, cwd: dir })
+      if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
+      if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
+      agentId = spawned.agentId
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err)
+      const misses = notReady.get(id) ?? 0
+      if (!isNotReady(msg, N.name) || onNotReady(misses) === 'fail') {
+        notReady.delete(id)
+        throw err
+      }
+      // Not the task's fault: the worker type isn't there yet (e.g. just after a reload).
+      // Put the task back as it was, with no try counted; the next pump or check tries again.
+      notReady.set(id, misses + 1)
+      await change($, x =>
+        find(x, id)?.status === 'doing' && find(x, id)?.session === me
+          ? patchTask(x, id, { status: 'todo', session: before.session, attempts: before.attempts, branch: before.branch, note: before.note, runs: before.runs }, now())
+          : x,
+      )
+      return
+    }
+    notReady.delete(id)
     workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
     // Record which agent works on the task, so a reloaded copy can find it.
     await change($, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId }, now()) : x))
@@ -1138,66 +1166,81 @@ async function runTool($: $, name: string, a: In): Promise<string> {
 
 // ---------------- registration ----------------
 
+/** Registers the worker and scout agent types, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */
+async function registerAll($: $) {
+  const ok = (p: Promise<unknown>) => p.catch(() => undefined)
+  await ok($.agent.register({
+    name: 'worker',
+    description: `${N.name} worker: builds one task from the ${N.name} board in its own worktree. Started by ${N.name} only.`,
+    prompt: `You are a ${N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary.`,
+    tools: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
+    background: true,
+    permissionMode: 'acceptEdits',
+  }))
+  await ok($.agent.register({
+    name: 'scout',
+    description: `${N.name} scout: reads the project and reports problems or improvements. Started by ${N.name} only.`,
+    prompt: `You are a ${N.name} scout. You read a project and report a few concrete, evidence-backed problems or improvements, in the format you are given. You never change a file.`,
+    tools: ['Read', 'Glob', 'Grep'],
+    background: true,
+  }))
+  for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
+  for (const c of [
+    { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3`, argumentHint: '[T-id]' },
+    { name: 'scouts', description: `List ${N.name} scouts, or run one now: /scouts run <name>`, argumentHint: '[run <name>]' },
+    { name: 'stop-all', description: `Stop every ${N.name} worker and scout now; nothing new starts until /resume-all` },
+    { name: 'resume-all', description: `Let ${N.name} start work again` },
+    { name: N.man, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
+  ])
+    await ok($.command.register(c))
+}
+
 export const register: Register = on => {
   // Every hook starts with useName($), so N (the plugin's name) is right everywhere.
   on('session.start', async ($, e, next) => {
     useName($)
-    const started = await next(e)
-    root = (await $.session.repo())?.root ?? (await $.session.root())
-    // After a rename the old board stays in the old folder: say so once, never move it.
-    if (N.dir !== dataDir() && !(await $.fs.exists(path(N.dir))) && (await $.fs.exists(path(dataDir()))))
-      $.ui.toast(N.toast(`the old board is in ${dataDir()}/; move it to ${N.dir}/ to keep it`))
-    home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
-    me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
-    // Become the driver if nobody drives the board. As the driver, old workers still running
-    // from before a reload are stopped first and their tasks go back to "todo".
-    await claimLead($, true).catch(() => (driving = false))
-    if (!(await $.fs.exists(path(N.boardFile)))) await publish($, await load($))
-    await $.agent.register({
-      name: 'worker',
-      description: `${N.name} worker: builds one task from the ${N.name} board in its own worktree. Started by ${N.name} only.`,
-      prompt: `You are a ${N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary.`,
-      tools: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
-      background: true,
-      permissionMode: 'acceptEdits',
-    })
-    await $.agent.register({
-      name: 'scout',
-      description: `${N.name} scout: reads the project and reports problems or improvements. Started by ${N.name} only.`,
-      prompt: `You are a ${N.name} scout. You read a project and report a few concrete, evidence-backed problems or improvements, in the format you are given. You never change a file.`,
-      tools: ['Read', 'Glob', 'Grep'],
-      background: true,
-    })
-    for (const t of TOOLS()) await $.tool.register({ ...t, isDeferred: false })
-    for (const c of [
-      { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3`, argumentHint: '[T-id]' },
-      { name: 'scouts', description: `List ${N.name} scouts, or run one now: /scouts run <name>`, argumentHint: '[run <name>]' },
-      { name: 'stop-all', description: `Stop every ${N.name} worker and scout now; nothing new starts until /resume-all` },
-      { name: 'resume-all', description: `Let ${N.name} start work again` },
-      { name: N.man, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
-    ])
-      await $.command.register(c)
-    await scheduleScouts($)
-    watchdog?.cancel()
-    watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))
-    // The driver refreshes its heartbeat; the others look whether it went stale and take over.
-    beat?.cancel()
-    beat = $.clock.every(LEAD_BEAT_MS, () =>
-      void claimLead($)
-        .then(async d => (d ? pump($) : undefined))
-        .catch(() => undefined),
-    )
-    const b = await load($)
-    await publish($, b)
-    // Open the board panel by itself (every session, driver or not), without taking the cursor
-    // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
-    // that is fine: the band above the prompt and /board still work.
-    if (openOnStart(b))
-      await update($, opened, () => '')
-        .then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name) }))
-        .catch(() => undefined)
+    startupDone = false
+    // Register the agent types, tools and commands first, before anything that can wait
+    // (claimLead may wait for old workers to stop) or throw: a pump started meanwhile, e.g.
+    // by a lead tool call, must find the worker type.
+    await registerAll($)
+    const result = await next(e)
+    // Even if a later step throws, pump must not stay blocked for the whole session.
+    try {
+      root = (await $.session.repo())?.root ?? (await $.session.root())
+      // After a rename the old board stays in the old folder: say so once, never move it.
+      if (N.dir !== dataDir() && !(await $.fs.exists(path(N.dir))) && (await $.fs.exists(path(dataDir()))))
+        $.ui.toast(N.toast(`the old board is in ${dataDir()}/; move it to ${N.dir}/ to keep it`))
+      home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
+      me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
+      // Become the driver if nobody drives the board. As the driver, old workers still running
+      // from before a reload are stopped first and their tasks go back to "todo".
+      await claimLead($, true).catch(() => (driving = false))
+      if (!(await $.fs.exists(path(N.boardFile)))) await publish($, await load($))
+      await scheduleScouts($)
+      watchdog?.cancel()
+      watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))
+      // The driver refreshes its heartbeat; the others look whether it went stale and take over.
+      beat?.cancel()
+      beat = $.clock.every(LEAD_BEAT_MS, () =>
+        void claimLead($)
+          .then(async d => (d ? pump($) : undefined))
+          .catch(() => undefined),
+      )
+      const b = await load($)
+      await publish($, b)
+      // Open the board panel by itself (every session, driver or not), without taking the cursor
+      // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
+      // that is fine: the band above the prompt and /board still work.
+      if (openOnStart(b))
+        await update($, opened, () => '')
+          .then(() => $.ui.open({ id: N.pane, title: boardTitle(root, N.name) }))
+          .catch(() => undefined)
+    } finally {
+      startupDone = true
+    }
     void pump($)
-    return started
+    return result
   })
 
   on('session.end', async ($, e, next) => {
