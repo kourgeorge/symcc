@@ -1,2 +1,4 @@
 .claude-plugin/types/
 node_modules/
+.symcc/
+.DS_Store
