@@ -18,8 +18,10 @@ import {
   LOCK_FILE,
   addTask,
   boardText,
+  boardBrand,
+  boardLabel,
   boardTitle,
-  folderName,
+  boardWhere,
   shortHome,
   newestFirst,
   emptyBoard,
@@ -263,8 +265,7 @@ async function publish($: $, b: Board) {
   await update($, view, () => v)
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
-  const name = folderName(root)
-  const label = `${name ? `${name} ` : ''}board${driving ? '' : ' (driven by another session)'}`
+  const label = `${boardLabel(root)}${driving ? '' : ' (driven by another session)'}`
   $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : driving ? undefined : `${label}: empty`)
 }
 
@@ -1082,9 +1083,9 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box flexDirection="row">
           <Text wrap="truncate">
-          <Text bold>{boardTitle(root)}</Text>
+          <Text bold color={'ide' as never}>{boardBrand()}</Text>
           <Text dimColor>
-            {' '}
+            {boardWhere(root)}{' '}
             {summary}
             {v?.paused ? ' · PAUSED (/resume-all)' : ''}
             {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
@@ -1341,7 +1342,13 @@ export const register: Register = on => {
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
       <Box flexDirection="column">
-        {root ? <Text wrap="truncate" color={C('subtle')}>{shortHome(root, home)}</Text> : null}
+        {(() => {
+          const where = root ? shortHome(root, home) : ''
+          const brand = <Text bold color={C('ide')}>{boardBrand()}</Text>
+          if (!where) return brand
+          if (boardBrand().length + 3 + where.length <= width) return <Text wrap="truncate">{brand}<Text color={C('subtle')}> · {where}</Text></Text>
+          return <Box flexDirection="column">{brand}<Text wrap="truncate" color={C('subtle')}>{where}</Text></Box>
+        })()}
         <Text wrap="truncate">
           {v.paused && <Text bold color={C('warning')}>PAUSED · </Text>}
           {tally.map((st, i) => (

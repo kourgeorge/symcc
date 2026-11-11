@@ -12,7 +12,7 @@ const PANE = {
   plugin: 'symcc',
   component: 'Pane',
   requestId: 'symcc-board',
-  props: { title: 'Board', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+  props: { title: '◆ symcc board · symcc', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...extra })
@@ -34,6 +34,7 @@ test('the panel shows the board, newest task first, with their question', async 
     expect((await ui.find({ type: 'Text', text: /▶ doing/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^tests$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^npm test$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^◆ symcc board$/ }))).toBeDefined()
     await ui.unmount()
   }
 })
@@ -61,6 +62,7 @@ test('the band above the prompt sums up the board and lists what needs you or is
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
+    expect((await ui.find({ type: 'Text', text: /^◆ symcc board$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /1 doing · 1 to do · 1 waiting for you · 1 done/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /T-2 waiting for you/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()
@@ -73,7 +75,7 @@ test('the band above the prompt sums up the board and lists what needs you or is
 test('with an empty board the band shows nothing of its own', async ($, on) => {
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /Board/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /symcc board/ })).toBeUndefined()
   await ui.unmount()
 })
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { folderName, shortHome, boardTitle, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -282,8 +282,10 @@ test('the project folder name is the last part of its path', () => {
   expect(folderName('/Users/me/repositories/symcc')).toBe('symcc')
   expect(folderName('/Users/me/repositories/symcc/')).toBe('symcc')
   expect(folderName('')).toBe('')
-  expect(boardTitle('/Users/me/repositories/symcc')).toBe('Board · symcc')
-  expect(boardTitle('')).toBe('Board')
+  expect(boardTitle('/Users/me/repositories/symcc')).toBe('◆ symcc board · symcc')
+  expect(boardTitle('')).toBe('◆ symcc board')
+  expect(boardLabel('/Users/me/repositories/symcc')).toBe('symcc board · symcc')
+  expect(boardLabel('')).toBe('symcc board')
 })
 
 test('the home folder is shortened to "~"', () => {
@@ -295,6 +297,6 @@ test('the home folder is shortened to "~"', () => {
 })
 
 test('boardText starts with the project path when given', () => {
-  expect(boardText(emptyBoard(), 0, '~/repositories/symcc').split('\n')[0]).toBe('~/repositories/symcc')
+  expect(boardText(emptyBoard(), 0, '~/repositories/symcc').split('\n')[0]).toBe('◆ symcc board · ~/repositories/symcc')
   expect(boardText(emptyBoard())).toBe('The board is empty.')
 })

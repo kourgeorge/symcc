@@ -323,13 +323,22 @@ export function shortHome(path: string, home?: string): string {
   return path.startsWith(h + '/') ? '~' + path.slice(h.length) : path
 }
 
-/** The board's name in titles: "Board · symcc", or just "Board" when the folder is unknown. */
-export const boardTitle = (root: string) => (folderName(root) ? `Board · ${folderName(root)}` : 'Board')
+/** The plugin's name for its board, and the small mark shown before it. All titles are built from these. */
+export const BOARD_NAME = 'symcc board'
+export const BOARD_MARK = '◆'
+/** "◆ symcc board": the bold, colored part of a title. */
+export const boardBrand = () => `${BOARD_MARK} ${BOARD_NAME}`
+/** " · symcc": the dimmed project part of a title, or '' when the folder is unknown. */
+export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
+/** The board's title: "◆ symcc board · symcc", or just "◆ symcc board" when the folder is unknown. */
+export const boardTitle = (root: string) => `${boardBrand()}${boardWhere(root)}`
+/** The status line label, without the mark (Claude Code adds its own): "symcc board · symcc". */
+export const boardLabel = (root: string) => `${BOARD_NAME}${boardWhere(root)}`
 
 /** One line per task for the model and for /board, then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart. */
 export function boardText(b: Board, nowMs?: number, where?: string): string {
-  const top = where ? [where] : []
+  const top = where ? [`${boardBrand()} · ${where}`] : []
   if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
   const rows = [...b.tasks].sort(newestFirst)
   const lines = rows.map(t => {
