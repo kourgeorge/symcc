@@ -737,6 +737,18 @@ export function resetDoing(b: Board, me: string, leadBefore: string | null, nowM
   }
 }
 
+/**
+ * After /clear the same process goes on under a new session id: its "doing" tasks move
+ * from `oldId` to `newId`, so they are not taken for a dead session's tasks.
+ */
+export function relabelSession(b: Board, oldId: string, newId: string): Board {
+  if (!oldId || !newId || oldId === newId) return b
+  return {
+    ...b,
+    tasks: b.tasks.map(t => (t.status === 'doing' && t.session === oldId ? { ...t, session: newId } : t)),
+  }
+}
+
 /** Task `t` back to "todo" with `note`, no longer tied to a session. */
 export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
   const { session: _gone, ...rest } = t
