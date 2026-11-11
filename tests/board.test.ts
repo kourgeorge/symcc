@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setApproval, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseBoardCommand, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -725,5 +725,91 @@ test('switching approval to "auto" leaves tasks in review as they are', () => {
 
 test('a task in review counts as open and shows as "ready for review"', () => {
   expect(STATUS_WORD.review).toBe('ready for review')
-  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('1 ready for review')
+  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('1 to review (T-5)')
+})
+
+test('the status line lists tasks to review by ID, cut after 3', () => {
+  const t = (status: SymccTask['status'], id: string) => ({ id, status })
+  expect(statusLine({ tasks: [t('doing', 'T-1'), t('review', 'T-5'), t('todo', 'T-6'), t('failed', 'T-7')] }, true)).toBe('T-1 doing · 1 to review (T-5) · 1 to do · 1 failed (T-7)')
+  expect(statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('review', id)) }, true)).toBe('5 to review (T-1, T-2, T-3 +2)')
+})
+
+test('the board text names a task in review', () => {
+  let [b, t] = addTask(emptyBoard(), { title: 'Blue button' }, T)
+  b = patchTask(b, t.id, { status: 'review' }, T)
+  expect(boardText(b)).toMatch(/T-1\s+review\s+Blue button — ready for review/)
+  b = patchTask(setApproval(b, 'review'), t.id, { note: 'ready for review: the checks passed' }, T)
+  expect(boardText(b)).toContain('finished work waits for review')
+  expect(boardText(b)).toContain('— ready for review: the checks passed')
+})
+
+test('git diff --stat output becomes one row per file with +/- counts', () => {
+  const out = [
+    ' hooks/board.ts       | 12 +++++++++---',
+    ' README.md            |  4 ----',
+    ' tests/new.test.ts    |  3 +++',
+    ' img/logo.png         | Bin 0 -> 1234 bytes',
+    ' "odd name.txt"       |  1 +',
+    ' empty.txt            |  0',
+    ' 6 files changed, 16 insertions(+), 7 deletions(-)',
+  ].join('\n')
+  expect(parseDiffStat(out)).toEqual([
+    { file: 'hooks/board.ts', added: 9, removed: 3 },
+    { file: 'README.md', added: 0, removed: 4 },
+    { file: 'tests/new.test.ts', added: 3, removed: 0 },
+    { file: 'img/logo.png', added: 0, removed: 0, binary: true },
+    { file: 'odd name.txt', added: 1, removed: 0 },
+    { file: 'empty.txt', added: 0, removed: 0 },
+  ])
+  // a bar git shrank to fit: the counts are scaled back to the total
+  expect(parseDiffStat(' big.ts | 300 ++++++++----')).toEqual([{ file: 'big.ts', added: 200, removed: 100 }])
+  expect(parseDiffStat('')).toEqual([])
+  expect(statCount({ file: 'a', added: 2, removed: 1 })).toBe('+2 -1')
+  expect(statCount({ file: 'a', added: 0, removed: 0, binary: true })).toBe('binary')
+  const text = statText('T-5', parseDiffStat(out).slice(0, 2))
+  expect(text.split('\n')[0]).toBe('T-5 changes 2 files (+9 -7):')
+  expect(text).toContain('hooks/board.ts  +9 -3')
+  expect(text).toContain('/board diff T-5 <file>')
+  expect(statText('T-5', [])).toContain('no changes')
+})
+
+test('a long diff is cut with a note on how many lines are left and where to see them', () => {
+  const diff = Array.from({ length: 450 }, (_, i) => `+line ${i}`).join('\n') + '\n'
+  const cut = cutDiff(diff, 'T-5', 110)
+  expect(cut.length).toBe(111)
+  expect(cut[109]).toBe('+line 109')
+  expect(cut[110]).toBe('… 340 more lines (see /board diff T-5)')
+  expect(cutDiff(diff, 'T-5', 449, 'a.ts').at(-1)).toBe('… 1 more line (see /board diff T-5 a.ts)')
+  expect(cutDiff('+a\n-b\n', 'T-5', 10)).toEqual(['+a', '-b'])
+  expect(cutDiff('', 'T-5')).toEqual([])
+})
+
+test('diff lines are colored: added in success, removed in error, headers and hunks apart', () => {
+  const lines = ['diff --git a/x.ts b/x.ts', 'index 1..2 100644', '--- a/x.ts', '+++ b/x.ts', '@@ -1,3 +1,3 @@', ' same', '-old', '+new', '--- a line that starts with dashes', '\\ No newline at end of file', '… 3 more lines (see /board diff T-5)']
+  const kinds = diffKinds(lines)
+  expect(kinds).toEqual(['header', 'header', 'header', 'header', 'hunk', 'context', 'remove', 'add', 'remove', 'context', 'note'])
+  expect(kinds.map(k => DIFF_COLOR[k])).toEqual(['subtle', 'subtle', 'subtle', 'subtle', 'ide', 'text', 'error', 'success', 'error', 'text', 'warning'])
+})
+
+test('/board subcommands: approve, reject with a reason, mode, diff, and wrong use', () => {
+  expect(parseBoardCommand('')).toEqual({ kind: 'open' })
+  expect(parseBoardCommand(' t-3 ')).toEqual({ kind: 'show', id: 't-3' })
+  expect(parseBoardCommand('approve T-5')).toEqual({ kind: 'approve', id: 'T-5' })
+  expect(parseBoardCommand('approve t5')).toEqual({ kind: 'approve', id: 'T-5' })
+  expect(parseBoardCommand('reject T-5 the button  should be blue')).toEqual({ kind: 'reject', id: 'T-5', reason: 'the button  should be blue' })
+  expect(parseBoardCommand('mode')).toEqual({ kind: 'mode' })
+  expect(parseBoardCommand('mode review')).toEqual({ kind: 'mode', mode: 'review' })
+  expect(parseBoardCommand('MODE Auto')).toEqual({ kind: 'mode', mode: 'auto' })
+  expect(parseBoardCommand('diff T-5')).toEqual({ kind: 'diff', id: 'T-5' })
+  expect(parseBoardCommand('diff T-5 hooks/board.ts')).toEqual({ kind: 'diff', id: 'T-5', file: 'hooks/board.ts' })
+  for (const bad of ['approve', 'approve banana', 'approve T-5 now', 'reject T-5', 'reject', 'mode later', 'mode auto review', 'diff', 'diff x.ts', 'T-5 something'])
+    expect(parseBoardCommand(bad).kind).toBe('bad')
+  expect((parseBoardCommand('reject T-5') as { message: string }).message).toContain('/board reject T-5 <reason>')
+  expect(modeText('auto')).toMatch(/^approval: auto/)
+  expect(modeText('review')).toMatch(/^approval: review/)
+})
+
+test('in the panel, tasks in review, waiting and failed come first, the rest keep their order', () => {
+  const ts = (['done', 'doing', 'failed', 'todo', 'review', 'waiting', 'review'] as const).map((status, i) => ({ id: `T-${i}`, status }))
+  expect(needsYouFirst(ts).map(t => t.id)).toEqual(['T-4', 'T-6', 'T-5', 'T-2', 'T-0', 'T-1', 'T-3'])
 })

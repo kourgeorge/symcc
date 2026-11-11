@@ -153,6 +153,20 @@ The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) an
   nothing is merged; the task goes back to `todo` with your reason in its history, and a
   fresh worker redoes it with that reason in front of it.
 
+You can do all of this yourself, too:
+
+- **In the board panel**, tasks ready for review are listed near the top. Open one to see
+  the files it changed with `+`/`-` line counts. Press `d` (Show changes) for the whole
+  diff, or pick a file for just that file's diff, with added lines in green and removed
+  lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
+  A very long diff is cut, with a note like `… 340 more lines (see /board diff T-5)`.
+- The banner shows `approval: auto` or `approval: review`; press `m` to switch.
+- In any open task, `n` turns that task's own "needs review" on or off.
+- **Slash commands:** `/board approve T-5`, `/board reject T-5 <reason>`,
+  `/board diff T-5` (the changed files with `+`/`-` counts) or `/board diff T-5 <file>`
+  (that file's full diff), and `/board mode auto|review` (with no word: shows the mode).
+- The status line counts them by ID, e.g. `1 to review (T-5)`.
+
 Both only work on a task in `review`. Switching back to `auto` ("merge on your own again")
 does not merge tasks already waiting; approve or reject each of them.
 
@@ -216,6 +230,9 @@ start nothing. If the driving window closes, another one takes over within a few
 | Command | What it does |
 |---|---|
 | `/board` | Open the board (`/board T-3` for one task) |
+| `/board approve T-5` · `/board reject T-5 <reason>` | Merge a task that is ready for review, or send it back with a reason |
+| `/board diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
+| `/board mode [auto\|review]` | Show or set the approval mode |
 | `/scouts` | Open the panel on the Scouts view (a text list if the panel can't be shown); `/scouts run <name>` runs one now |
 | `/stop-all` | Stop every worker and scout now and pause the board |
 | `/resume-all` | Let work start again |

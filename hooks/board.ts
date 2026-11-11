@@ -234,6 +234,159 @@ export function rejectTask(b: Board, id: string, reason: string, now: string): B
   return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
 }
 
+// ---------------- looking at a task's changes (review) ----------------
+
+/** One changed file from `git diff --stat`: its path, lines added and removed, or binary. */
+export type DiffFile = { file: string; added: number; removed: number; binary?: boolean }
+
+/** Strips git's quoting of an unusual path ("a b\".txt" → a b".txt). */
+const unquote = (s: string) => (/^".*"$/.test(s) ? s.slice(1, -1).replace(/\\(.)/g, '$1') : s)
+
+/**
+ * The rows of `git diff --stat` output (run with --no-renames): one per file. The +/- counts come
+ * from the bar; when git shrank the bar to fit, they are scaled back to the total it gives.
+ * The summary line ("2 files changed, ...") and anything else is skipped.
+ */
+export function parseDiffStat(text: string): DiffFile[] {
+  const out: DiffFile[] = []
+  for (const line of String(text ?? '').split('\n')) {
+    const m = /^\s*(.+?)\s+\|\s+(.*)$/.exec(line)
+    if (!m) continue
+    const file = unquote(m[1]!.trim())
+    const rest = m[2]!.trim()
+    if (/^Bin\b/.test(rest)) {
+      out.push({ file, added: 0, removed: 0, binary: true })
+      continue
+    }
+    const n = /^(\d+)\s*(\+*)(-*)$/.exec(rest)
+    if (!n) continue
+    const total = Number(n[1])
+    const plus = n[2]!.length
+    const minus = n[3]!.length
+    const bar = plus + minus
+    const added = bar === 0 ? 0 : bar === total ? plus : Math.round((total * plus) / bar)
+    out.push({ file, added, removed: bar === 0 ? 0 : total - added })
+  }
+  return out
+}
+
+/** A file row's short count: "+12 -3", "binary". */
+export const statCount = (f: DiffFile) => (f.binary ? 'binary' : `+${f.added} -${f.removed}`)
+
+/** How many diff lines the board panel shows before cutting. */
+export const DIFF_LINES = 400
+
+/**
+ * A diff cut to its first `max` lines; when longer, a last line says how many more there are
+ * and where to see them: "… 340 more lines (see /board diff T-5)". `file` goes into that hint.
+ */
+export function cutDiff(text: string, id: string, max = DIFF_LINES, file = ''): string[] {
+  const lines = String(text ?? '').replace(/\n+$/, '').split('\n')
+  if (lines.length === 1 && !lines[0]) return []
+  if (lines.length <= max) return lines
+  const more = lines.length - max
+  return [...lines.slice(0, max), `… ${more} more ${more === 1 ? 'line' : 'lines'} (see /board diff ${id}${file ? ` ${file}` : ''})`]
+}
+
+/** What a diff line is: an added or removed line, a hunk start (@@), a file header, a cut note, or context. */
+export type DiffKind = 'add' | 'remove' | 'hunk' | 'header' | 'note' | 'context'
+
+/**
+ * The kind of each line of a unified diff. Lines between "diff --git" and the first "@@" are
+ * headers (so "--- a/x" and "+++ b/x" are not taken for removed and added lines).
+ */
+export function diffKinds(lines: string[]): DiffKind[] {
+  let inHeader = false
+  return lines.map(l => {
+    if (l.startsWith('diff --git ') || l.startsWith('diff --cc ')) return ((inHeader = true), 'header')
+    if (l.startsWith('@@')) return ((inHeader = false), 'hunk')
+    if (/^… \d+ more lines?\b/.test(l)) return 'note'
+    if (inHeader) return 'header'
+    if (l.startsWith('+')) return 'add'
+    if (l.startsWith('-')) return 'remove'
+    return 'context'
+  })
+}
+
+/** The theme color for each kind of diff line: added in the success color, removed in the error color. */
+export const DIFF_COLOR: Record<DiffKind, string> = { add: 'success', remove: 'error', hunk: 'ide', header: 'subtle', note: 'warning', context: 'text' }
+
+// ---------------- the /board command ----------------
+
+/** What a /board command asks for (see parseBoardCommand). */
+export type BoardCommand =
+  | { kind: 'open' }
+  | { kind: 'show'; id: string }
+  | { kind: 'approve'; id: string }
+  | { kind: 'reject'; id: string; reason: string }
+  | { kind: 'mode'; mode?: Approval }
+  | { kind: 'diff'; id: string; file?: string }
+  | { kind: 'bad'; message: string }
+
+const isId = (s: string | undefined) => !!s && /^t-?\d+$/i.test(s)
+
+/**
+ * Reads the words after /board: nothing (open the board), "T-3" (one task), "approve T-5",
+ * "reject T-5 <reason>", "mode [auto|review]", "diff T-5 [file]". Wrong use gives `bad` with a short message.
+ */
+export function parseBoardCommand(args: string): BoardCommand {
+  const s = String(args ?? '').trim()
+  if (!s) return { kind: 'open' }
+  const [word = '', ...rest] = s.split(/\s+/)
+  const w = word.toLowerCase()
+  const id = rest[0]
+  switch (w) {
+    case 'approve':
+      if (!isId(id) || rest.length > 1) return { kind: 'bad', message: 'Use: /board approve T-5' }
+      return { kind: 'approve', id: normId(id!) }
+    case 'reject': {
+      if (!isId(id)) return { kind: 'bad', message: 'Use: /board reject T-5 <reason>' }
+      const reason = s.replace(/^\S+\s+\S+\s*/, '').trim()
+      if (!reason) return { kind: 'bad', message: `Say why, so the next worker knows what to fix: /board reject ${normId(id!)} <reason>` }
+      return { kind: 'reject', id: normId(id!), reason }
+    }
+    case 'mode': {
+      if (!rest.length) return { kind: 'mode' }
+      const m = rest[0]!.toLowerCase()
+      if (rest.length > 1 || (m !== 'auto' && m !== 'review')) return { kind: 'bad', message: 'Use: /board mode auto, or /board mode review' }
+      return { kind: 'mode', mode: m }
+    }
+    case 'diff': {
+      if (!isId(id)) return { kind: 'bad', message: 'Use: /board diff T-5, or /board diff T-5 <file>' }
+      const file = s.replace(/^\S+\s+\S+\s*/, '').trim()
+      return file ? { kind: 'diff', id: normId(id!), file } : { kind: 'diff', id: normId(id!) }
+    }
+  }
+  if (rest.length === 0) return { kind: 'show', id: word }
+  return { kind: 'bad', message: 'Use: /board, /board T-5, /board approve T-5, /board reject T-5 <reason>, /board mode [auto|review], /board diff T-5 [file]' }
+}
+
+/** The text for /board mode: what the approval mode is and what it means. */
+export function modeText(mode: Approval): string {
+  return mode === 'review' ? 'approval: review (finished work waits for you to approve or reject it)' : 'approval: auto (finished work that passes is merged at once)'
+}
+
+/** The changed files as text lines for /board diff: "hooks/board.ts  +12 -3", then a total. */
+export function statText(id: string, files: DiffFile[]): string {
+  if (!files.length) return `${id} has no changes against the target branch.`
+  const w = Math.max(...files.map(f => f.file.length))
+  const add = files.reduce((n, f) => n + f.added, 0)
+  const del = files.reduce((n, f) => n + f.removed, 0)
+  return [`${id} changes ${files.length} ${files.length === 1 ? 'file' : 'files'} (+${add} -${del}):`, ...files.map(f => `  ${f.file.padEnd(w)}  ${statCount(f)}`), `One file in full: /board diff ${id} <file>`].join('\n')
+}
+
+/** Where the review/waiting/failed tasks go in the panel's list: those first (in this order), the rest after. */
+export const NEEDS_YOU: SymccStatus[] = ['review', 'waiting', 'failed']
+
+/** For the panel: tasks that need the owner (NEEDS_YOU) first, the rest keep their order. */
+export function needsYouFirst<T extends Pick<SymccTask, 'status'>>(tasks: T[]): T[] {
+  const rank = (t: T) => {
+    const i = NEEDS_YOU.indexOf(t.status)
+    return i < 0 ? NEEDS_YOU.length : i
+  }
+  return tasks.map((t, i) => [t, i] as const).sort(([a, i], [b, j]) => rank(a) - rank(b) || i - j).map(([t]) => t)
+}
+
 // ---------------- which branch work is merged into ----------------
 
 /**
@@ -525,8 +678,8 @@ function idList(ids: string[]): string {
 }
 
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "T-26, T-27 doing · 2 to do" or "1 failed (T-28)".
- * Tasks being done and failed tasks are listed by ID; other open states are counts. No folder name (the pane title has it).
+ * The short status text Claude Code shows after "symcc:", e.g. "T-26, T-27 doing · 1 to review (T-5) · 2 to do" or "1 failed (T-28)".
+ * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
  * undefined when there is nothing to say.
  */
 export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = ''): string | undefined {
@@ -534,10 +687,11 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; pause
   const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
   if (b.tasks.length) {
-    const doing = ids('doing'), failed = ids('failed')
+    const doing = ids('doing'), review = ids('review'), failed = ids('failed')
     const parts = [
       doing.length && `${idList(doing)} ${STATUS_WORD.doing}`,
-      ...statusCounts(b.tasks, ['todo', 'paused', 'review', 'waiting']),
+      review.length && `${review.length} to review (${idList(review)})`,
+      ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
       failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
     ].filter((x): x is string => !!x)
     return join([(join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
@@ -641,7 +795,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const s: BoardSections = nowMs === undefined ? { open: [], today: [...b.tasks].sort(newestFirst), days: [] } : boardSections(b.tasks, nowMs, offsetMin)
   const rows = [...s.open, ...s.today]
   const lines = rows.map(t => {
-    const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : ''
+    const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
     const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })

@@ -84,6 +84,17 @@ import {
   rejectTask,
   reviewTask,
   setApproval,
+  approvalOf,
+  parseDiffStat,
+  statText,
+  cutDiff,
+  diffKinds,
+  DIFF_COLOR,
+  DIFF_LINES,
+  parseBoardCommand,
+  modeText,
+  needsYouFirst,
+  type DiffFile,
   ENDED_STATUSES,
   OPEN,
   STATUS_WORD,
@@ -122,7 +133,7 @@ function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean; branch_note: string }>
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'approval'> & { driving: boolean; branch_note: string }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
@@ -166,6 +177,10 @@ type ScoutDraft = { scout: string; isNew: boolean; every: string; model: string;
 let draft: ScoutDraft | null = null
 /** the "new scout" name box on the Scouts view, or null when it isn't shown */
 let naming: { name: string; error: string } | null = null
+/** the changes of a task in review shown in the board panel: `file` '' = all files; null = not shown */
+let diffOpen: { task: string; file: string } | null = null
+/** the reason box for rejecting a task in review from the board panel, or null when it isn't shown */
+let rejecting: { task: string; reason: string } | null = null
 
 // ---------------- the board on disk ----------------
 
@@ -349,7 +364,7 @@ async function publish($: $, b: Board) {
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   const branch_note = missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, approval: approvalOf(b), driving, branch_note }
   await update($, view, () => v)
   $.ui.status(statusLine(b, driving, branch_note))
 }
@@ -502,6 +517,33 @@ async function removeWorktree($: $, taskId: string, dir: string, except?: string
   await git($, ['worktree', 'prune'])
   return true
 }
+
+// ---------------- a task's changes, for review ----------------
+
+/** The changes of a task: from where its branch left the target branch (the merge base) to the branch's tip. */
+const diffRange = (target: string, t: Pick<SymccTask, 'id' | 'branch'>) => `${target}...${t.branch ?? N.branch(t.id)}`
+/** read changes, by task, its last change and what was asked; forgotten when the panel closes */
+const changesCache = new Map<string, Promise<string>>()
+
+function gitDiff($: $, target: string, t: SymccTask, opts: string[], file = ''): Promise<string> {
+  const key = `${t.id}|${t.updated_at}|${target}|${opts.join(' ')}|${file}`
+  let p = changesCache.get(key)
+  if (!p) {
+    if (changesCache.size > 50) changesCache.clear()
+    p = gitOk($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', ...opts, diffRange(target, t), ...(file ? ['--', file] : [])])
+    changesCache.set(key, p)
+    p.catch(() => changesCache.delete(key))
+  }
+  return p
+}
+
+/** The files a task changed, with +/- line counts (git diff --stat against the merge base). */
+async function changedFiles($: $, target: string, t: SymccTask): Promise<DiffFile[]> {
+  return parseDiffStat(await gitDiff($, target, t, ['--stat=1000,800']))
+}
+
+/** The diff of a task's changes (all files, or just `file`) against the merge base. */
+const changesText = ($: $, target: string, t: SymccTask, file = '') => gitDiff($, target, t, [], file)
 
 /** What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner. */
 type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean }
@@ -1117,12 +1159,18 @@ const MANUAL = (): Record<string, string> => ({
   commands: `Commands
   /board            open the board panel (↑↓ move, Enter opens a task, Esc closes)
   /board T-3        open one task
+  /board approve T-5          merge a task that is ready for review
+  /board reject T-5 REASON    send it back to "todo" with the reason
+  /board diff T-5 [FILE]      the files it changed (+/- lines), or one file's diff
+  /board mode [auto|review]   show or set the approval mode
   /scouts           show the scouts in the board panel (t / s switch views) and reload their files
   /scouts run NAME  run a scout now
   /stop-all         stop every worker and scout, pause the board
   /resume-all       start work again
   /${N.man} [TOPIC] this manual
-In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker.
+In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off.
+In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
+On the board list: m switches approval between auto and review.
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
 "set the test command to npm test", "give workers 90 minutes".`,
   tasks: `Tasks
@@ -1391,7 +1439,7 @@ async function registerAll($: $) {
   }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
   for (const c of [
-    { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3`, argumentHint: '[T-id]' },
+    { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3. Review: /board approve T-5, /board reject T-5 <reason>, /board diff T-5 [file], /board mode [auto|review]`, argumentHint: '[T-id | approve T-id | reject T-id <reason> | diff T-id [file] | mode [auto|review]]' },
     { name: 'scouts', description: `List ${N.name} scouts, or run one now: /scouts run <name>`, argumentHint: '[run <name>]' },
     { name: 'stop-all', description: `Stop every ${N.name} worker and scout now; nothing new starts until /resume-all` },
     { name: 'resume-all', description: `Let ${N.name} start work again` },
@@ -1511,18 +1559,54 @@ export const register: Register = on => {
   })
 
   // /board prints the board; in fullscreen it also opens it as a sidebar beside the chat.
+  // /board approve | reject | mode | diff: the owner's review controls (see parseBoardCommand).
   on('command.run', { command: 'board' }, async ($, e) => {
     useName($)
     const b = await load($)
-    const arg = e.args.trim()
-    if (arg) {
-      const t = find(b, arg)
-      if (!t) return { text: `${arg} is not on the board` }
-      await openPane($, { tab: 'tasks', task: t.id })
-      return { text: taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks), isTextDisplayOnly: true }
+    const cmd = parseBoardCommand(e.args)
+    const say = (text: string) => ({ text, isTextDisplayOnly: true })
+    switch (cmd.kind) {
+      case 'bad':
+        return say(cmd.message)
+      case 'show': {
+        const t = find(b, cmd.id)
+        if (!t) return { text: `${cmd.id} is not on the board` }
+        await openPane($, { tab: 'tasks', task: t.id })
+        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks))
+      }
+      case 'approve':
+      case 'reject': {
+        const t = find(b, cmd.id)
+        if (!t) return say(`${cmd.id} is not on the board.`)
+        if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}).`)
+        const r = await runTool($, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
+        tellLead($, cmd.kind === 'approve' ? `The owner approved ${t.id} with /board approve: ${r}` : `The owner rejected ${t.id} with /board reject ("${cmd.reason}"): ${r}`)
+        return say(r)
+      }
+      case 'mode': {
+        if (!cmd.mode) return say(`${modeText(approvalOf(b))}. Change it: /board mode auto, or /board mode review`)
+        const r = await runTool($, 'settings', { approval: cmd.mode })
+        tellLead($, `The owner set approval to "${cmd.mode}" with /board mode: ${r}`)
+        return say(`${modeText(cmd.mode)}: ${r}`)
+      }
+      case 'diff': {
+        const t = find(b, cmd.id)
+        if (!t) return say(`${cmd.id} is not on the board.`)
+        if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /board diff shows the changes of a task in review.`)
+        try {
+          const files = await changedFiles($, b.target_branch, t)
+          if (!cmd.file) return say(statText(t.id, files))
+          const f = cmd.file.replace(/^\.\//, '')
+          if (!files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${files.map(x => x.file).join(', ') || 'nothing'}`)
+          const text = await changesText($, b.target_branch, t, f)
+          return say(cutDiff(text, t.id, 5000, f).join('\n') || `${f}: no text changes (binary?)`)
+        } catch (err) {
+          return say(`Could not read the changes of ${t.id}: ${(err as Error).message}`)
+        }
+      }
     }
     await openPane($, { tab: 'tasks' })
-    return { text: `Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`, isTextDisplayOnly: true }
+    return say(`Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`)
   })
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
@@ -1602,6 +1686,13 @@ export const register: Register = on => {
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== N.pane) return next(e)
+    // Esc in the reject box cancels it; Esc in a task's changes goes back to the task.
+    if (e.origin.kind === 'person' && (rejecting || diffOpen) && (await read($, tab)) !== 'scouts' && (await read($, opened))) {
+      if (rejecting) rejecting = null
+      else diffOpen = null
+      $.ui.invalidate('ui.render')
+      return { value: undefined }
+    }
     // Esc in a scout's edit mode (or the new scout name box) cancels it.
     if (e.origin.kind === 'person' && (draft || naming) && (await read($, tab)) === 'scouts') {
       cancelScoutEdit($)
@@ -1614,6 +1705,9 @@ export const register: Register = on => {
     openDays.clear()
     draft = null
     naming = null
+    diffOpen = null
+    rejecting = null
+    changesCache.clear()
     await update($, tab, () => '').catch(() => undefined)
     await update($, scoutOpen, () => '').catch(() => undefined)
     return next(e)
@@ -1628,15 +1722,24 @@ export const register: Register = on => {
     const open = await read($, opened)
     const width = Math.max(20, e.props.bodyColumns ?? 60)
     // Theme colors, so the board reads well in both light and dark themes.
-    const color: Record<string, string> = { waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
+    const color: Record<string, string> = { review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
     const word: Record<string, string> = STATUS_WORD
-    const mark: Record<string, string> = { waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
+    const mark: Record<string, string> = { review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
     const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(N.toast(err.message)))
     const onScouts = (await read($, tab)) === 'scouts'
     const t = open && !onScouts ? v.tasks.find(x => x.id === open) : undefined
     const C = (c: string) => c as never
     const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
-    /** The banner at the top: the drawing, the board's facts, and the rule under them. */
+    const mode = approvalOf(v)
+    const target = v.target_branch ?? emptyBoard().target_branch
+    /** Switches the approval mode, the same setting as `<name> settings approval`. */
+    const switchMode = act(async () => {
+      const other = mode === 'review' ? 'auto' : 'review'
+      const r = await runTool($, 'settings', { approval: other })
+      $.ui.toast(N.toast(r))
+      tellLead($, `The owner switched approval to "${other}" from the board: ${r}`)
+    })
+    /** The banner at the top: the drawing, the board's facts, the approval mode, and the rule under them. */
     const banner = () => {
       const d = emptyBoard()
       const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
@@ -1650,12 +1753,19 @@ export const register: Register = on => {
             ))}
           </Text>
         )),
+        <Box key="banner-mode" flexDirection="row">
+          <Text wrap="truncate">
+            <Text color={C('subtle')}>approval: </Text>
+            <Text bold color={C(mode === 'review' ? 'suggestion' : 'text')}>{mode}</Text>{' '}
+          </Text>
+          <Button key="mode" label={`[m] switch to ${mode === 'review' ? 'auto' : 'review'}`} hotkey="m" dimColor onPress={switchMode} />
+        </Box>,
         <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>,
       ]
     }
     /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */
     const tabs = () => {
-      const go = (which: 'tasks' | 'scouts') => act(async () => ((draft = null), (naming = null), await resetPane($, which)))
+      const go = (which: 'tasks' | 'scouts') => act(async () => ((draft = null), (naming = null), (diffOpen = null), (rejecting = null), await resetPane($, which)))
       const one = (which: 'tasks' | 'scouts', label: string) => {
         const active = which === 'scouts' ? onScouts : !onScouts
         return (
@@ -1867,6 +1977,94 @@ export const register: Register = on => {
     }
     if (t) {
       const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
+      const inReview = t.status === 'review'
+      const showDiff = (file: string) => () => ((diffOpen = { task: t.id, file }), $.ui.invalidate('ui.render'))
+      const approveIt = act(async () => {
+        const r = await runTool($, 'approve', { task: t.id })
+        diffOpen = null
+        rejecting = null
+        $.ui.toast(N.toast(r))
+        tellLead($, `The owner approved ${t.id} from the board: ${r}`)
+      })
+      const askReason = () => ((rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
+      const reviewButtons = inReview
+        ? [<Button key="approve" label="Approve" hotkey="a" onPress={approveIt} />, <Button key="reject" label="Reject" hotkey="x" onPress={askReason} />]
+        : []
+      /** The box that asks why, once Reject was pressed. */
+      const rejectBox =
+        inReview && rejecting?.task === t.id ? (
+          <Box flexDirection="column" borderStyle="round" borderColor={C('error')} paddingX={1}>
+            <Input
+              key="reject-reason"
+              label="Why reject it? "
+              placeholder="what to change, for the next worker; Enter sends it back"
+              value={rejecting.reason}
+              autoFocus
+              onInput={value => void (rejecting && (rejecting.reason = value))}
+              onSubmit={value =>
+                act(async () => {
+                  const why = value.trim()
+                  if (!why) return void $.ui.toast(N.toast('give a short reason, so the next worker knows what to fix'))
+                  const r = await runTool($, 'reject', { task: t.id, reason: why })
+                  rejecting = null
+                  diffOpen = null
+                  $.ui.toast(N.toast(r))
+                  tellLead($, `The owner rejected ${t.id} from the board: "${why}". ${r}`)
+                })()
+              }
+            />
+            <Text color={C('subtle')}>Enter sends it back to "todo" with the reason · Esc cancels</Text>
+          </Box>
+        ) : null
+      if (inReview && diffOpen?.task === t.id) {
+        // The changes themselves: the diff against the merge base, colored line by line.
+        const d = diffOpen
+        const got = await changesText($, target, t, d.file).then(
+          x => ({ lines: cutDiff(x, t.id, DIFF_LINES, d.file), error: '' }),
+          (err: Error) => ({ lines: [] as string[], error: err.message }),
+        )
+        const kinds = diffKinds(got.lines)
+        return (
+          <Box flexDirection="column" gap={1}>
+            <Box flexDirection="column">
+              <Text>
+                <Text bold color={C('claude')}>{t.id}</Text>{' '}
+                <Text bold color={C(color.review!)}>
+                  {mark.review} {word.review}
+                </Text>
+                <Text color={C('subtle')}> · changes in {d.file || 'all files'}</Text>
+              </Text>
+              <Text bold color={C('text')}>
+                {t.title}
+              </Text>
+            </Box>
+            <Box flexDirection="row" gap={1}>
+              <Button key="diff-back" label="Back" hotkey="b" autoFocus={rejectBox ? undefined : true} onPress={() => ((diffOpen = null), $.ui.invalidate('ui.render'))} />
+              {reviewButtons}
+              {d.file ? <Button key="diff-all" label="All files" hotkey="d" onPress={showDiff('')} /> : null}
+            </Box>
+            {rejectBox}
+            <Box flexDirection="column">
+              {got.error ? <Text color={C('error')}>Could not read the changes: {got.error}</Text> : null}
+              {!got.error && !got.lines.length ? <Text color={C('subtle')}>no text changes</Text> : null}
+              {got.lines.map((l, i) => (
+                <Text key={`diff-${i}`} bold={kinds[i] === 'hunk' || (kinds[i] === 'header' && l.startsWith('diff '))} color={C(DIFF_COLOR[kinds[i]!])}>
+                  {l.replace(/\t/g, '    ') || ' '}
+                </Text>
+              ))}
+            </Box>
+            <Text color={C('subtle')}>↑↓ scroll · b back to the task · a approve · x reject{d.file ? ' · d all files' : ''}</Text>
+          </Box>
+        )
+      }
+      // A task in review: the files it changed, each opening its diff.
+      const changes = inReview
+        ? await changedFiles($, target, t).then(
+            files => ({ files, error: '' }),
+            (err: Error) => ({ files: [] as DiffFile[], error: err.message }),
+          )
+        : null
+      const fileWidth = Math.max(4, ...(changes?.files ?? []).map(f => f.file.length))
       // History lines: the try number, then the result colored by how it went.
       const historyLine = (line: string) => {
         const m = /^(try \S+:)\s*(.*)$/.exec(line)
@@ -1912,7 +2110,9 @@ export const register: Register = on => {
           </Box>
 
           <Box flexDirection="row" gap={1}>
-            <Button key="back" label="Back" hotkey="b" autoFocus={t.status === 'waiting' ? undefined : true} onPress={act(() => update($, opened, () => ''))} />
+            <Button key="back" label="Back" hotkey="b" autoFocus={t.status === 'waiting' || rejectBox ? undefined : true} onPress={act(async () => ((diffOpen = null), (rejecting = null), await update($, opened, () => '')))} />
+            {reviewButtons}
+            {inReview && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />}
             {agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />}
             {(t.status === 'doing' || t.status === 'todo') && (
               <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool($, 'stop', { task: t.id, reason: 'paused by the owner' }), tellLead($, `The owner paused ${t.id} from the board.`)))} />
@@ -1924,9 +2124,45 @@ export const register: Register = on => {
               <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'start', { task: t.id }), tellLead($, `The owner retried ${t.id} from the board.`)))} />
             )}
             {t.status !== 'done' && t.status !== 'dropped' && (
-              <Button key="drop" label="Drop" hotkey="x" onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
+              <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
+            )}
+            {t.status !== 'done' && t.status !== 'dropped' && (
+              <Button
+                key="needs-review"
+                label={`Needs review: ${t.needs_review ? 'on' : 'off'}`}
+                hotkey="n"
+                onPress={act(async () => {
+                  const r = await runTool($, 'change', { task: t.id, needs_review: !t.needs_review })
+                  $.ui.toast(N.toast(r))
+                  tellLead($, `The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id} from the board.`)
+                })}
+              />
             )}
           </Box>
+
+          {rejectBox}
+
+          {changes && (
+            <Box flexDirection="column">
+              {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})`)}
+              {changes.error ? <Text color={C('error')}>  Could not read the changes: {changes.error}</Text> : null}
+              {!changes.error && !changes.files.length ? <Text color={C('subtle')}>  no changes</Text> : null}
+              {changes.files.map(f => (
+                <Button key={`file:${f.file}`} onPress={showDiff(f.file)}>
+                  <Text color={C('autoAccept')}>{f.file.padEnd(fileWidth)}</Text>
+                  {f.binary ? (
+                    <Text color={C('subtle')}>  binary</Text>
+                  ) : (
+                    <Text>
+                      {'  '}
+                      <Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text>
+                    </Text>
+                  )}
+                </Button>
+              ))}
+              <Text color={C('subtle')}>  Enter on a file shows its diff · d all files</Text>
+            </Box>
+          )}
 
           {t.status === 'waiting' && (
             <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
@@ -2009,7 +2245,7 @@ export const register: Register = on => {
               <Text color={C('ide')}>{t.branch}</Text>
             </Text>
           )}
-          <Text color={C('subtle')}>↑↓ scroll · b back{agentId ? ' · w watch worker' : ''}</Text>
+          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{agentId ? ' · w watch worker' : ''}</Text>
         </Box>
       )
     }
@@ -2024,7 +2260,7 @@ export const register: Register = on => {
     }
     type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
     const list: Row[] = [
-      ...[...parts.open, ...parts.today].map(task => ({ task, indent: false })),
+      ...[...needsYouFirst(parts.open), ...parts.today].map(task => ({ task, indent: false })),
       ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
     ]
     const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
@@ -2056,11 +2292,11 @@ export const register: Register = on => {
                 {' '}
                 {mark[x.status]} {word[x.status]!.padEnd(wordWidth)}
               </Text>
-              <Text bold={x.status === 'waiting' || x.status === 'failed'} color={C(closed ? 'inactive' : 'text')}>
+              <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
                 {' '}
                 {x.title.slice(0, Math.max(10, width - idWidth - wordWidth - 8))}
               </Text>
-              {extra ? <Text color={C(x.status === 'waiting' ? 'warning' : x.status === 'failed' ? 'error' : 'subtle')}> — {extra}</Text> : null}
+              {extra ? <Text color={C(x.status === 'waiting' ? 'warning' : x.status === 'failed' ? 'error' : x.status === 'review' ? color.review! : 'subtle')}> — {extra}</Text> : null}
             </Button>
           )
         })}
