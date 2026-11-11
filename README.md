@@ -17,8 +17,14 @@ you define that keep looking for issues. It works while Claude Code is open.
 - **Workers** pick up ready tasks by themselves (up to 3 at once), each in its own Git
   worktree under `.symcc/worktrees/`. When a worker finishes, symcc commits its change,
   checks it only touched the task's files, runs your test commands on the combined code,
-  and if they pass, merges it into your main branch. Then the lead is told and decides
+  and if they pass, merges it into the target branch. Then the lead is told and decides
   what's next.
+- **The target branch** is the branch you had checked out when the board was made (on a
+  detached HEAD, the repo's main branch: origin's HEAD, else `main` or `master`). Change it
+  with the `target_branch` setting (e.g. "symcc settings target_branch develop"); only an
+  existing branch is accepted. If you are on another branch, the banner and status line
+  warn you (`merging into main · you're on my-feature`). If the target branch doesn't
+  exist, no work starts and nothing is marked failed; the lead is told once.
 - **Scouts** are your own issue finders: one Markdown file each in `.symcc/scouts/`.
 
 ```
@@ -109,7 +115,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 ## Safety
 
 - Changes outside a task's files, or that fail the tests, are never merged.
-- Your main branch only moves by a checked merge. If you have uncommitted changes on it,
+- The target branch only moves by a checked merge. If you have uncommitted changes on it,
   symcc waits instead of overwriting them.
 - Workers run with `acceptEdits` and the tools Read, Edit, Write, Glob, Grep and Bash,
   inside your normal Claude Code permission settings. Scouts only read.

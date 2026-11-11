@@ -58,8 +58,9 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
 }
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'failed']
 
-export function emptyBoard(): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, tasks: [] }
+/** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
+export function emptyBoard(target_branch = 'main'): Board {
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -168,6 +169,36 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
     })
   return changed.filter(f => f.startsWith(dir + '/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
+
+// ---------------- which branch work is merged into ----------------
+
+/**
+ * The branch a new board merges into: the branch checked out now (`current`). With none
+ * (a detached HEAD), the repo's main branch: origin's HEAD (e.g. "origin/main") if set,
+ * else "main" or "master", whichever of `branches` exists; "main" when nothing helps.
+ */
+export function startBranch(current: string, originHead: string, branches: string[]): string {
+  const cur = String(current ?? '').trim()
+  if (cur) return cur
+  const origin = String(originHead ?? '').trim().replace(/^(refs\/remotes\/)?origin\//, '')
+  if (origin && origin !== 'HEAD') return origin
+  return ['main', 'master'].find(x => branches.includes(x)) ?? 'main'
+}
+
+/** The warning when the owner's checked-out branch is not the one work merges into; '' when they match (or no branch is checked out). */
+export function branchWarning(target: string, current: string): string {
+  const cur = String(current ?? '').trim()
+  return cur && cur !== target ? `merging into ${target} · you're on ${cur}` : ''
+}
+
+/** The settings tool's answer when target_branch names a branch that doesn't exist; lists a few that do. */
+export function noBranchText(name: string, branches: string[]): string {
+  const some = branches.slice(0, 8)
+  return `Nothing changed: '${name}' is not a branch in this project. target_branch must be an existing branch${some.length ? `, e.g. ${some.join(', ')}` : ''}.`
+}
+
+/** The note when the branch work merges into doesn't exist. */
+export const missingBranchText = (target: string) => `branch '${target}' doesn't exist; set target_branch`
 
 // ---------------- when the tests fail ----------------
 
@@ -350,7 +381,8 @@ export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
 /** One banner line: the drawing part on the left ('' or spaces when none) and the text beside it. */
 export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
-export type BannerBoard = Pick<Board, 'paused' | 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[] }
+/** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name. */
+export type BannerBoard = Pick<Board, 'paused' | 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
 
 const BANNER_COUNTS: [SymccStatus, string][] = [['doing', 'doing'], ['waiting', 'waiting for you'], ['failed', 'failed'], ['paused', 'paused'], ['todo', 'to do'], ['done', 'done']]
 
@@ -383,7 +415,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const l1: BannerPart[] = [{ text: namesFor(name).boardName, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
   const l2 = join([
     ...(root ? [dim(shortHome(root, home))] : []),
-    dim(b.target_branch),
+    b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : dim(b.target_branch),
     dim(driving ? 'this session drives' : 'driven by another session'),
     ...(b.paused ? [[{ text: 'PAUSED', tone: 'warning' as const }]] : []),
   ])

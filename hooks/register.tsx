@@ -22,6 +22,10 @@ import {
   boardWhere,
   bannerLines,
   bannerRule,
+  branchWarning,
+  missingBranchText,
+  noBranchText,
+  startBranch,
   type BannerTone,
   shortHome,
   newestFirst,
@@ -87,7 +91,7 @@ function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean }>
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean; branch_note: string }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
@@ -115,6 +119,10 @@ let writing: Promise<unknown> = Promise.resolve()
 let me = ''
 let driving = false
 let beat: { cancel(): void } | null = null
+/** set by pump when target_branch doesn't exist (no work starts then); '' when it does */
+let missingBranch = ''
+/** the target_branch the lead was last told is missing, so it is told once, not every check */
+let toldMissing = ''
 
 // ---------------- the board on disk ----------------
 
@@ -123,7 +131,8 @@ const path = (rel: string) => `${root}/${rel}`
 
 async function load($: $): Promise<Board> {
   const exists = await $.fs.exists(path(N.boardFile))
-  return exists ? parseBoard(await $.fs.read(path(N.boardFile))) : emptyBoard()
+  // A new board starts on the branch the owner has checked out (existing boards keep theirs).
+  return exists ? parseBoard(await $.fs.read(path(N.boardFile))) : emptyBoard(await firstBranch($))
 }
 
 /**
@@ -282,13 +291,16 @@ async function releaseLead($: $) {
 
 async function publish($: $, b: Board) {
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
+  // Which branch the owner is on is looked at here, once per publish, not on every render.
+  const branch_note = missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note }
   await update($, view, () => v)
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
   const label = `${boardLabel(root, N.name)}${driving ? '' : ' (driven by another session)'}`
-  $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : driving ? undefined : `${label}: empty`)
+  const note = branch_note ? ` · ${branch_note}` : ''
+  $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}${note}` : !driving ? `${label}: empty${note}` : note ? `${label}${note}` : undefined)
 }
 
 // ---------------- telling the lead ----------------
@@ -315,6 +327,51 @@ async function gitOk($: $, args: string[], cwd = root, timeoutMs = 120_000) {
   const r = await git($, args, cwd, timeoutMs)
   if (r.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`)
   return r.stdout.trim()
+}
+
+/** The branch checked out in the project, '' when none (a detached HEAD). */
+async function currentBranch($: $): Promise<string> {
+  if (!root) return ''
+  return (await git($, ['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => null))?.stdout.trim() ?? ''
+}
+
+/** The project's local branches. */
+async function branchList($: $): Promise<string[]> {
+  const r = await git($, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).catch(() => null)
+  return (r?.stdout ?? '').split('\n').map(x => x.trim()).filter(Boolean)
+}
+
+/** Whether `name` is a local branch. */
+async function branchExists($: $, name: string): Promise<boolean> {
+  if (!name || name.startsWith('-')) return false
+  return (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${name}`]).catch(() => null))?.exitCode === 0
+}
+
+/** The branch a new board merges into: see startBranch. */
+async function firstBranch($: $): Promise<string> {
+  if (!root) return emptyBoard().target_branch
+  const origin = (await git($, ['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD']).catch(() => null))?.stdout.trim() ?? ''
+  return startBranch(await currentBranch($), origin, await branchList($))
+}
+
+/**
+ * Whether target_branch exists, so work may start. If not, nothing starts or fails: the lead
+ * is told once (per branch name) and the banner and status line say so until it is fixed.
+ */
+async function targetReady($: $, b: Board): Promise<boolean> {
+  const ok = await branchExists($, b.target_branch)
+  const note = ok ? '' : missingBranchText(b.target_branch)
+  if (note !== missingBranch) {
+    missingBranch = note
+    await publish($, b)
+  }
+  if (ok) toldMissing = ''
+  else if (toldMissing !== b.target_branch) {
+    toldMissing = b.target_branch
+    const some = (await branchList($)).slice(0, 5)
+    tellLead($, `No work can start: the ${N.name} board merges into branch '${b.target_branch}', which doesn't exist in this project. Set an existing branch with ${N.name} settings target_branch${some.length ? ` (branches here: ${some.join(', ')})` : ''}.`)
+  }
+  return ok
 }
 
 const worktreeDir = (id: string) => `${root}/${N.worktrees}/${id}`
@@ -406,6 +463,8 @@ async function pump($: $) {
   if (!driving) return // another session drives the board and starts its work
   const b = await load($)
   if (b.paused) return
+  if (!ready(b).length) return
+  if (!(await targetReady($, b))) return // nothing starts and nothing is marked failed
   for (const t of ready(b)) {
     if (workers.size >= b.max_parallel) break
     if (starting.has(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
@@ -430,6 +489,7 @@ async function startWorker($: $, id: string) {
     const b = await load($)
     const t0 = find(b, id)
     if (!mayStart(t0, agents, N.name)) return
+    if (!(await targetReady($, b))) return // the branch to merge into is missing: leave the task "todo"
     const { dir, branch } = await prepareWorktree($, t0!, b.target_branch)
     const t = await change($, x => {
       const cur = find(x, id)
@@ -750,7 +810,7 @@ const MANUAL = (): Record<string, string> => ({
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
   • Workers are background agents. Each builds one task in its own copy of the code
     (${N.dir}/worktrees/T-n). When it finishes, ${N.name} checks the files it changed, runs the
-    tests and merges into main only if they pass.
+    tests and merges into the target branch (target_branch) only if they pass.
   • Scouts are background agents on a timer. They read the project and suggest work;
     the lead decides whether to add it.
   Topics: /${N.man} commands · tasks · lead · workers · scouts · safety`,
@@ -775,12 +835,14 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     paused           stopped on purpose; resume to continue
     waiting for you  the lead asked you a question; answer it in the board panel
     failed           tests failed, files outside its list changed, or the worker stopped
-    done             merged into main
+    done             merged into the target branch
     dropped          given up
   The board lists the newest task at the top.`,
   lead: `The lead (this chat) has these tools:
   board · add · change · start · ask · drop · stop · resume · stop_all · resume_all · settings
-  settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
+  settings: target_branch (the branch work is merged into; a new board starts on the branch
+  you have checked out, and it must be an existing branch), test_commands (must pass before
+  a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
   session starts, on by default), paused.
@@ -807,7 +869,11 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   /scouts after adding or deleting a file. Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
   • Changes outside a task's files, or that fail the tests, are never merged.
-  • Main only moves by a checked merge; with uncommitted changes on it, ${N.name} waits.
+  • The target branch only moves by a checked merge; with uncommitted changes on it, ${N.name} waits.
+  • A new board merges into the branch you had checked out when it was made. If you are on
+    another branch, the banner and status line say so ("merging into main · you're on x").
+    Change it with ${N.name} settings target_branch. If that branch doesn't exist, no work
+    starts (nothing is marked failed) until you set an existing one.
   • Workers can edit files in their own folder without asking. Their shell commands follow
     your normal permission rules (your settings' allow list applies to them too).
   • Test commands are run by ${N.name} itself, without a permission prompt.
@@ -855,8 +921,8 @@ const TOOLS = () => [
   { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
-    description: 'Change how the team works: test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
-    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, paused: { type: 'boolean' } } },
+    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
+    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, paused: { type: 'boolean' } } },
   },
 ]
 
@@ -941,8 +1007,13 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return resumeAll($)
     case 'settings': {
       const parts: string[] = []
+      const target = str(a.target_branch)?.trim()
+      if (a.target_branch !== undefined && !(target && (await branchExists($, target)))) {
+        return noBranchText(target ?? String(a.target_branch), await branchList($))
+      }
       await change($, b => {
         const y = { ...b }
+        if (target) ((y.target_branch = target), parts.push(`work merges into ${target}`))
         if (list(a.test_commands)) ((y.test_commands = list(a.test_commands)!.map(x => x.trim()).filter(Boolean).slice(0, 5)), parts.push(`tests: ${y.test_commands.join(' && ') || 'none'}`))
         if (typeof a.max_parallel === 'number') ((y.max_parallel = Math.max(1, Math.min(8, Math.round(a.max_parallel)))), parts.push(`up to ${y.max_parallel} at once`))
         if (typeof a.max_minutes === 'number') ((y.max_minutes = Math.max(5, Math.min(600, Math.round(a.max_minutes)))), parts.push(`a worker may run ${y.max_minutes} min`))
@@ -951,6 +1022,11 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.paused === 'boolean') ((y.paused = a.paused), parts.push(a.paused ? 'paused' : 'resumed'))
         return y
       })
+      if (target && missingBranch) {
+        missingBranch = ''
+        toldMissing = ''
+        await publish($, await load($))
+      }
       void pump($)
       return parts.join('; ') || 'nothing changed'
     }
@@ -974,7 +1050,7 @@ export const register: Register = on => {
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
     await claimLead($, true).catch(() => (driving = false))
-    if (!(await $.fs.exists(path(N.boardFile)))) await publish($, emptyBoard())
+    if (!(await $.fs.exists(path(N.boardFile)))) await publish($, await load($))
     await $.agent.register({
       name: 'worker',
       description: `${N.name} worker: builds one task from the ${N.name} board in its own worktree. Started by ${N.name} only.`,

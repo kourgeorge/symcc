@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { DEFAULT_NAME, cleanName, namesFor } from '../hooks/name'
-import { bannerLines, bannerRule, bannerText, folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -362,4 +362,31 @@ test('another plugin name changes every path, branch, agent type and text made f
   // the defaults stay as they were
   expect(namesFor().boardFile).toBe('.symcc/board.json')
   expect([cleanName(''), cleanName('a/b'), cleanName('crew')]).toEqual([DEFAULT_NAME, DEFAULT_NAME, 'crew'])
+})
+
+test('a new board starts on the branch the owner is on, else the repo main branch', async () => {
+  expect(startBranch('my-feature', 'origin/main', ['main', 'my-feature'])).toBe('my-feature')
+  expect(startBranch('', 'origin/develop', ['main', 'develop'])).toBe('develop')
+  expect(startBranch('', '', ['master', 'x'])).toBe('master')
+  expect(startBranch('', '', ['main', 'master'])).toBe('main')
+  expect(startBranch('', '', [])).toBe('main')
+  expect(emptyBoard('master').target_branch).toBe('master')
+  expect(emptyBoard().target_branch).toBe('main')
+})
+
+test('the banner warns when the owner is on another branch, or the target is missing', async () => {
+  expect(branchWarning('main', 'main')).toBe('')
+  expect(branchWarning('main', '')).toBe('')
+  expect(branchWarning('main', 'my-feature')).toBe("merging into main · you're on my-feature")
+  expect(missingBranchText('main')).toBe("branch 'main' doesn't exist; set target_branch")
+  const b = { ...emptyBoard(), branch_note: branchWarning('main', 'my-feature') }
+  const l2 = bannerLines(b, '/Users/me/app', '/Users/me', true, 120)[1]!
+  expect(bannerText(l2)).toContain("merging into main · you're on my-feature")
+  expect(l2.parts.find(p => p.text.includes('you\'re on'))!.tone).toBe('warning')
+  expect(bannerText(bannerLines(emptyBoard(), '/Users/me/app', '/Users/me', true, 120)[1]!)).toContain('main')
+})
+
+test('setting target_branch to a missing branch is refused with a few that exist', async () => {
+  expect(noBranchText('mian', ['main', 'dev'])).toBe("Nothing changed: 'mian' is not a branch in this project. target_branch must be an existing branch, e.g. main, dev.")
+  expect(noBranchText('x', [])).toBe("Nothing changed: 'x' is not a branch in this project. target_branch must be an existing branch.")
 })
