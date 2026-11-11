@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { folderName, shortHome, boardTitle, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -276,4 +276,25 @@ test('the board panel opens on start unless the open_on_start setting is turned 
   const off = { ...b, open_on_start: false }
   expect(openOnStart(off)).toBe(false)
   expect(openOnStart(parseBoard(JSON.stringify(off)))).toBe(false)
+})
+
+test('the project folder name is the last part of its path', () => {
+  expect(folderName('/Users/me/repositories/symcc')).toBe('symcc')
+  expect(folderName('/Users/me/repositories/symcc/')).toBe('symcc')
+  expect(folderName('')).toBe('')
+  expect(boardTitle('/Users/me/repositories/symcc')).toBe('Board · symcc')
+  expect(boardTitle('')).toBe('Board')
+})
+
+test('the home folder is shortened to "~"', () => {
+  expect(shortHome('/Users/me/repositories/symcc', '/Users/me')).toBe('~/repositories/symcc')
+  expect(shortHome('/Users/me/repositories/symcc', '/Users/me/')).toBe('~/repositories/symcc')
+  expect(shortHome('/Users/me', '/Users/me')).toBe('~')
+  expect(shortHome('/Users/meg/x', '/Users/me')).toBe('/Users/meg/x')
+  expect(shortHome('/opt/x', '')).toBe('/opt/x')
+})
+
+test('boardText starts with the project path when given', () => {
+  expect(boardText(emptyBoard(), 0, '~/repositories/symcc').split('\n')[0]).toBe('~/repositories/symcc')
+  expect(boardText(emptyBoard())).toBe('The board is empty.')
 })

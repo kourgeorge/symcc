@@ -310,9 +310,27 @@ export function totalLine(b: { tasks: Pick<SymccTask, 'runs'>[] }, nowMs?: numbe
   return t.tries ? `total: ${fmtTotal(t)} over ${t.tries} ${t.tries === 1 ? 'try' : 'tries'}` : ''
 }
 
-/** One line per task for the model and for /board, then the total time (and cost) of all tries. */
-export function boardText(b: Board, nowMs?: number): string {
-  if (!b.tasks.length) return 'The board is empty.'
+/** The project's folder name, the last part of a path: "/Users/me/repositories/symcc" → "symcc". */
+export function folderName(path: string): string {
+  return path.replace(/\/+$/, '').split('/').pop() ?? ''
+}
+
+/** A path with the home folder shortened to "~": "/Users/me/x" → "~/x". */
+export function shortHome(path: string, home?: string): string {
+  const h = (home ?? '').replace(/\/+$/, '')
+  if (!h) return path
+  if (path === h) return '~'
+  return path.startsWith(h + '/') ? '~' + path.slice(h.length) : path
+}
+
+/** The board's name in titles: "Board · symcc", or just "Board" when the folder is unknown. */
+export const boardTitle = (root: string) => (folderName(root) ? `Board · ${folderName(root)}` : 'Board')
+
+/** One line per task for the model and for /board, then the total time (and cost) of all tries.
+ *  With `where` (the project's path), that comes first so you can tell boards apart. */
+export function boardText(b: Board, nowMs?: number, where?: string): string {
+  const top = where ? [where] : []
+  if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
   const rows = [...b.tasks].sort(newestFirst)
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : ''
@@ -321,7 +339,7 @@ export function boardText(b: Board, nowMs?: number): string {
   })
   const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
-  return [head, ...lines, ...(total ? [total] : [])].join('\n')
+  return [...top, head, ...lines, ...(total ? [total] : [])].join('\n')
 }
 
 /** A scout file: `.symcc/scouts/<name>.md`, front matter + instructions. */

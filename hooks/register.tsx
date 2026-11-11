@@ -18,6 +18,9 @@ import {
   LOCK_FILE,
   addTask,
   boardText,
+  boardTitle,
+  folderName,
+  shortHome,
   newestFirst,
   emptyBoard,
   find,
@@ -67,6 +70,8 @@ const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], workin
 // A hot reload starts these over: the board itself is always on disk, and a task
 // whose worker was lost to a reload goes back to "todo" at session.start.
 let root = ''
+/** the home folder, to shorten it to "~" where the project's path is shown */
+let home = ''
 const workers = new Map<string, { task: string; worktree: string; branch: string; since: number }>() // agentId → work
 /** tasks this copy has claimed and is starting a worker for (not yet in `workers`) */
 const starting = new Set<string>()
@@ -258,7 +263,8 @@ async function publish($: $, b: Board) {
   await update($, view, () => v)
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
-  const label = driving ? 'board' : 'board (driven by another session)'
+  const name = folderName(root)
+  const label = `${name ? `${name} ` : ''}board${driving ? '' : ' (driven by another session)'}`
   $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}` : driving ? undefined : `${label}: empty`)
 }
 
@@ -838,7 +844,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   switch (name) {
     case 'board':
-      return boardText(await load($), Date.now())
+      return boardText(await load($), Date.now(), shortHome(root, home))
     case 'add': {
       const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined }, now()))
       void pump($)
@@ -934,6 +940,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     root = (await $.session.repo())?.root ?? (await $.session.root())
+    home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
     me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
@@ -980,7 +987,7 @@ export const register: Register = on => {
     // that is fine: the band above the prompt and /board still work.
     if (openOnStart(b))
       await update($, opened, () => '')
-        .then(() => $.ui.open({ id: PANE, title: 'Board' }))
+        .then(() => $.ui.open({ id: PANE, title: boardTitle(root) }))
         .catch(() => undefined)
     void pump($)
     return started
@@ -1041,11 +1048,11 @@ export const register: Register = on => {
       const t = find(b, arg)
       if (!t) return { text: `${arg} is not on the board` }
       await update($, opened, () => t.id)
-      await $.ui.open({ id: PANE, title: 'Board', focus: true, closeOnEscape: true })
+      await $.ui.open({ id: PANE, title: boardTitle(root), focus: true, closeOnEscape: true })
       return { text: taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks), isTextDisplayOnly: true }
     }
     await update($, opened, () => '')
-    await $.ui.open({ id: PANE, title: 'Board', focus: true, closeOnEscape: true })
+    await $.ui.open({ id: PANE, title: boardTitle(root), focus: true, closeOnEscape: true })
     return { text: `Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`, isTextDisplayOnly: true }
   })
 
@@ -1075,7 +1082,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box flexDirection="row">
           <Text wrap="truncate">
-          <Text bold>Board</Text>
+          <Text bold>{boardTitle(root)}</Text>
           <Text dimColor>
             {' '}
             {summary}
@@ -1083,7 +1090,7 @@ export const register: Register = on => {
             {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
           </Text>
           </Text>
-          <Button key="open-board" label="open board" dimColor onPress={() => void update($, opened, () => '').then(() => $.ui.open({ id: PANE, title: 'Board', focus: true, closeOnEscape: true }))} />
+          <Button key="open-board" label="open board" dimColor onPress={() => void update($, opened, () => '').then(() => $.ui.open({ id: PANE, title: boardTitle(root), focus: true, closeOnEscape: true }))} />
         </Box>
         {live.slice(0, room).map(t => (
           <Text wrap="truncate">
@@ -1334,6 +1341,7 @@ export const register: Register = on => {
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
       <Box flexDirection="column">
+        {root ? <Text wrap="truncate" color={C('subtle')}>{shortHome(root, home)}</Text> : null}
         <Text wrap="truncate">
           {v.paused && <Text bold color={C('warning')}>PAUSED · </Text>}
           {tally.map((st, i) => (
