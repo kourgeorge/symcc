@@ -1146,15 +1146,22 @@ export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
 
 // ---------------- agent names ----------------
 // Workers and scouts are named after the plugin, so the agents list shows they are its own:
-// "symcc T-33", "symcc scout bugs". The name already has the task id or scout name, so the
+// "symcc-T-33", "symcc-scout-bugs". Agent names may only have letters, digits, "_" and "-"
+// (and start with a letter or digit, at most 64 long), so anything else becomes "-". The name already has the task id or scout name, so the
 // description doesn't repeat it. Lookups go by agentId; liveWorkersFor also reads these names.
 
 /** How long an agent's description may be in the agents list. */
 export const AGENT_DESCRIPTION_CHARS = 60
 
-/** A worker's agent name: the plugin's name and the task id, e.g. "symcc T-33". */
+/** Makes a string a valid agent name: only letters, digits, "_" and "-", starting with a letter or digit, at most 64 long. */
+export function agentSafeName(raw: string): string {
+  const s = String(raw ?? '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+/, '').slice(0, 64).replace(/-+$/, '')
+  return s || 'agent'
+}
+
+/** A worker's agent name: the plugin's name and the task id, e.g. "symcc-T-33". */
 export function workerName(name: string, id: string): string {
-  return `${name} ${id}`
+  return agentSafeName(`${name}-${id}`)
 }
 
 /** A worker's agent description: the task title only (the name has the id), cut to fit. */
@@ -1162,9 +1169,9 @@ export function workerDescription(title: string): string {
   return String(title ?? '').replace(/\s+/g, ' ').trim().slice(0, AGENT_DESCRIPTION_CHARS)
 }
 
-/** A scout's agent name: the plugin's name, "scout" and the scout's name, e.g. "symcc scout bugs". */
+/** A scout's agent name: the plugin's name, "scout" and the scout's name, e.g. "symcc-scout-bugs". */
 export function scoutAgentName(name: string, scout: string): string {
-  return `${name} scout ${scout}`
+  return agentSafeName(`${name}-scout-${scout}`)
 }
 
 /**
@@ -1184,8 +1191,8 @@ export const ENDED_STATUSES = ['completed', 'failed', 'killed']
 
 /**
  * The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any
- * whose name is workerName (e.g. "symcc T-3") or the bare task id, maybe with a suffix the
- * host added ("symcc T-3-2"), or whose description starts with the task id (older workers).
+ * whose name is workerName (e.g. "symcc-T-3") or the bare task id, maybe with a suffix the
+ * host added ("symcc-T-3-2"), or whose description starts with the task id (older workers).
  */
 export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name: string = DEFAULT_NAME): AgentInfo[] {
   const worker = namesFor(name).worker
