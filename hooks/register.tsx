@@ -1484,6 +1484,36 @@ export const register: Register = on => {
       ).map(x => (typeof x === 'string' ? (x ? <Text color={C(base)}>{x}</Text> : null) : x))
     }
 
+    // Shared by the task page and the scout page.
+    const heading = (label: string) => (
+      <Text bold color={C('suggestion')}>
+        ▍{label}
+      </Text>
+    )
+    // The details, line by line: headings, bullets and numbered steps stand out.
+    const paragraphs = (text: string) =>
+      text.split(/\n/).map((line, i) => {
+        if (!line.trim()) return <Text key={`gap-${i}`}> </Text>
+        const head = /^\s*#{1,6}\s+(.*)$/.exec(line)
+        if (head) return <Text bold color={C('claude')}>{head[1]}</Text>
+        const li = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(line)
+        if (li)
+          return (
+            <Text>
+              {li[1]}
+              <Text color={C('claude')}>{/\d/.test(li[2]!) ? li[2] : '•'}</Text> {rich(li[3]!)}
+            </Text>
+          )
+        const kv = /^(\s*)([A-Z][\w ]{1,30}):\s+(.*)$/.exec(line)
+        if (kv)
+          return (
+            <Text>
+              {kv[1]}
+              <Text bold color={C('text')}>{kv[2]}:</Text> {rich(kv[3]!)}
+            </Text>
+          )
+        return <Text>{rich(line)}</Text>
+      })
     if (onScouts) {
       const nowMs = Date.now()
       const opener = await read($, scoutOpen)
@@ -1491,41 +1521,54 @@ export const register: Register = on => {
       if (sc) {
         const r = scoutRow(sc, nowMs)
         const file = scoutFile(sc.name, N.name)
-        const heading = (label: string) => (
-          <Text bold color={C('suggestion')}>
-            ▍{label}
-          </Text>
-        )
         const report = scoutReport(sc.last_report)
+        const title = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? sc.name
         return (
           <Box flexDirection="column" gap={1}>
             <Box flexDirection="column">
-              {tabs()}
               <Text>
-                <Text bold color={C('claude')}>{sc.name}</Text>
-                <Text color={C('subtle')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · </Text>
-                {r.state ? <Text color={C(sc.running ? 'success' : 'text')}>{r.state}</Text> : null}
-                <Text color={C('subtle')}>{r.state ? ' · ' : ''}{r.ran}</Text>
+                <Text bold color={C('claude')}>{sc.name}</Text>{' '}
+                {r.state ? (
+                  <Text bold color={C(sc.running ? 'success' : 'text')}>
+                    {sc.running ? '▶ ' : ''}
+                    {r.state}
+                  </Text>
+                ) : null}
+                <Text color={C('subtle')}>
+                  {r.state ? ' · ' : ''}
+                  {r.every}
+                  {r.model ? ` · ${r.model}` : ''} · {r.ran}
+                </Text>
               </Text>
-              <Text>
-                <Text color={C('subtle')}>file: </Text>
-                <Text color={C('autoAccept')}>{file}</Text>
+              <Text bold color={C('text')}>
+                {title}
               </Text>
             </Box>
+
             <Box flexDirection="row" gap={1}>
               <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => update($, scoutOpen, () => ''))} />
               <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(N.toast(await runScoutNow($, sc.name))))} />
               <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(async () => $.ui.toast(N.toast(`to edit it, open ${root ? `${root}/` : ''}${file}`)))} />
             </Box>
+
             <Box flexDirection="column">
-              {heading('Instructions')}
-              {sc.prompt?.trim() ? sc.prompt.split('\n').map(line => <Text>{line.trim() ? rich(line) : ' '}</Text>) : <Text color={C('subtle')}>(not loaded yet: run /scouts)</Text>}
+              {heading('What it looks for')}
+              {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('subtle')}>(not loaded yet: run /scouts)</Text>}
             </Box>
+
             <Box flexDirection="column">
               {heading('Last report')}
-              {report === 'nothing found' ? <Text color={C('subtle')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : report.split('\n').map(line => <Text>{line.trim() ? rich(line) : ' '}</Text>)}
+              {report === 'nothing found' ? <Text color={C('subtle')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : paragraphs(report)}
             </Box>
-            <Text color={C('subtle')}>b back · r run now · e edit · Esc back</Text>
+
+            <Box flexDirection="column">
+              {heading('File')}
+              <Text>
+                {'  '}
+                <Text color={C('autoAccept')}>{file}</Text>
+              </Text>
+            </Box>
+            <Text color={C('subtle')}>↑↓ scroll · b back · r run now · e edit</Text>
           </Box>
         )
       }
@@ -1555,35 +1598,6 @@ export const register: Register = on => {
     if (t) {
       const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
       const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
-      const heading = (label: string) => (
-        <Text bold color={C('suggestion')}>
-          ▍{label}
-        </Text>
-      )
-      // The details, line by line: headings, bullets and numbered steps stand out.
-      const paragraphs = (text: string) =>
-        text.split(/\n/).map((line, i) => {
-          if (!line.trim()) return <Text key={`gap-${i}`}> </Text>
-          const head = /^\s*#{1,6}\s+(.*)$/.exec(line)
-          if (head) return <Text bold color={C('claude')}>{head[1]}</Text>
-          const li = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(line)
-          if (li)
-            return (
-              <Text>
-                {li[1]}
-                <Text color={C('claude')}>{/\d/.test(li[2]!) ? li[2] : '•'}</Text> {rich(li[3]!)}
-              </Text>
-            )
-          const kv = /^(\s*)([A-Z][\w ]{1,30}):\s+(.*)$/.exec(line)
-          if (kv)
-            return (
-              <Text>
-                {kv[1]}
-                <Text bold color={C('text')}>{kv[2]}:</Text> {rich(kv[3]!)}
-              </Text>
-            )
-          return <Text>{rich(line)}</Text>
-        })
       // History lines: the try number, then the result colored by how it went.
       const historyLine = (line: string) => {
         const m = /^(try \S+:)\s*(.*)$/.exec(line)

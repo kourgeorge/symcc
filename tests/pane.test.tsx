@@ -256,6 +256,13 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(running).toBeDefined()
     // Enter on a scout opens its detail
     await ui.press({ key: 'scout:bugs' })
+    // laid out like an opened task: no tabs, sections with headings
+    expect(await ui.find({ key: 'tab-tasks' })).toBeUndefined()
+    expect(await ui.find({ key: 'tab-scouts' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /What it looks for/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Last report/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^▍File$/ })).toBeDefined()
+    expect(await ui.find({ key: 'scout-back' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /\.symcc\/scouts\/bugs\.md/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Look for crashes/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /crash in parser/ })).toBeDefined()
