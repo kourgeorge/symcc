@@ -220,9 +220,19 @@ export function setMode(b: Board, m: SymccMode): Board {
   return { ...b, mode: isMode(m) ? m : 'auto' }
 }
 
-/** The label for a mode, at the start of the status line and in the panel: "⏹ off", "⏸ review", "⏵ auto". */
-export const MODE_LABEL: Record<SymccMode, string> = { off: '⏹ off', review: '⏸ review', auto: '⏵ auto' }
+/** The short name of a mode, as shown at a glance: "off", "review merge", "auto". */
+export const MODE_NAME: Record<SymccMode, string> = { off: 'off', review: 'review merge', auto: 'auto' }
+const MODE_ICON: Record<SymccMode, string> = { off: '⏹', review: '⏸', auto: '⏵' }
+
+/** The label for a mode, in the panel banner and at the start of the status line: "⏹ off", "⏸ review merge", "⏵ auto". */
+export const MODE_LABEL: Record<SymccMode, string> = { off: `${MODE_ICON.off} ${MODE_NAME.off}`, review: `${MODE_ICON.review} ${MODE_NAME.review}`, auto: `${MODE_ICON.auto} ${MODE_NAME.auto}` }
 export const modeLabel = (m: SymccMode): string => MODE_LABEL[isMode(m) ? m : 'auto']
+
+/** The mode the panel's m button switches to: review and auto swap; off goes to review. */
+export const nextMode = (m: SymccMode): SymccMode => (modeOf({ mode: m }) === 'review' ? 'auto' : 'review')
+
+/** The panel's m button: "[m] review merge" in auto (and off), "[m] auto" in review. */
+export const modeButton = (m: SymccMode): string => `[m] ${MODE_NAME[nextMode(m)]}`
 
 /** What a mode means, in a few words. */
 export const MODE_MEANING: Record<SymccMode, string> = {
@@ -723,8 +733,8 @@ function idList(ids: string[]): string {
 }
 
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "⏸ review · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
- * It starts with the board mode (modeLabel: "⏹ off", "⏸ review", "⏵ auto"), so the mode is always in the same spot.
+ * The short status text Claude Code shows after "symcc:", e.g. "⏸ review merge · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
+ * It starts with the board mode (modeLabel: "⏹ off", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note.
  */

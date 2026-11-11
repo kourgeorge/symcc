@@ -162,15 +162,16 @@ You can do all of this yourself, too:
   diff, or pick a file for just that file's diff, with added lines in green and removed
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
   A very long diff is cut, with a note like `… 340 more lines (see /symcc-diff T-5)`.
-- The banner shows the mode, e.g. `⏸ review: work runs; finished tasks wait for your approve or reject`;
-  press `m` to switch between `review` and `auto` (`m` never turns the board off).
+- The banner shows the mode: `⏵ auto` (finished tasks that pass merge on their own),
+  `⏸ review merge` (finished tasks wait for your approve or reject) or `⏹ off` (no work runs).
+  Press `m` to switch between `review merge` and `auto` (`m` never turns the board off).
 - In any open task, `n` turns that task's own "needs review" on or off.
 - **Slash commands:** `/symcc-approve T-5`, `/symcc-reject T-5 <reason>`,
   `/symcc-diff T-5` (the changed files with `+`/`-` counts) or `/symcc-diff T-5 <file>`
   (that file's full diff), and `/symcc-mode [off|review|auto]` (with no word it switches
   between `review` and `auto`; from `off` it goes to `review`).
-- The status line starts with the mode, `⏹ off`, `⏸ review` or `⏵ auto`, and counts
-  tasks to review by ID, e.g. `⏸ review · 1 to review (T-5)`. With an empty board it
+- The status line starts with the mode, `⏹ off`, `⏸ review merge` or `⏵ auto`, and counts
+  tasks to review by ID, e.g. `⏸ review merge · 1 to review (T-5)`. With an empty board it
   shows nothing in `auto`, so a fresh project stays quiet.
 
 Both only work on a task in `review`. Switching back to `auto` ("merge on your own again")

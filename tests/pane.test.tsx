@@ -346,17 +346,17 @@ test('a task in review is listed near the top as "ready for review", and the ban
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /◆ ready for review/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^⏸ review: work runs; finished tasks wait for your approve or reject $/ })).toBeDefined()
-  expect((await ui.find({ key: 'mode' }))!.props.label).toBe('[m] switch to auto')
+  expect(await ui.find({ type: 'Text', text: /^⏸ review merge $/ })).toBeDefined()
+  expect((await ui.find({ key: 'mode' }))!.props.label).toBe('[m] auto')
   const rows = (await ui.findAll({ type: 'Text', text: /^T-\d+\s*$/ })).map(x => x.text.trim())
   expect(rows[0]).toBe('T-5')
   await ui.unmount()
 })
 
 const MODE_CASES = [
-  ['auto', /^⏵ auto: work runs; finished tasks that pass merge on their own $/, '[m] switch to review'],
-  ['off', /^⏹ off: no work runs; tasks in review can still be approved or rejected $/, '[m] switch to review'],
-  ['later', /^⏵ auto: /, '[m] switch to review'],
+  ['auto', /^⏵ auto $/, '[m] review merge'],
+  ['off', /^⏹ off $/, '[m] review merge'],
+  ['later', /^⏵ auto $/, '[m] review merge'],
 ] as const
 for (const [mode, text, label] of MODE_CASES)
   test(`the banner shows mode "${mode}" with its label, and m switches only between review and auto`, async ($, on) => {
