@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -618,4 +618,29 @@ test('after /clear, this session\'s "doing" tasks move to the new session id', (
   // same id, or no id: nothing changes
   expect(relabelSession(b, 'old', 'old')).toBe(b)
   expect(relabelSession(b, 'old', '')).toBe(b)
+})
+
+test('the status line starts with the folder, not "<name> board"', () => {
+  const t = (status: SymccTask['status']) => ({ status })
+  const board = namesFor(DEFAULT_NAME).boardName
+  const lines = [
+    statusLine('/x/app', { tasks: [t('done')] }, true),
+    statusLine('/x/app', { tasks: [t('doing'), t('todo'), t('todo')] }, true),
+    statusLine('/x/app', { tasks: [t('todo')], paused: true }, true),
+    statusLine('/x/app', { tasks: [t('done')] }, false),
+    statusLine('/x/app', { tasks: [] }, false),
+    statusLine('/x/app', { tasks: [] }, true, 'on dev, not main'),
+    statusLine('', { tasks: [t('done')] }, true),
+  ]
+  expect(lines).toEqual([
+    'app · all done',
+    'app · 1 doing · 2 to do',
+    'app · 1 to do · paused',
+    'app (driven by another session) · all done',
+    'app (driven by another session) · empty',
+    'app · on dev, not main',
+    'all done',
+  ])
+  for (const l of lines) expect(l).not.toContain(board)
+  expect(statusLine('/x/app', { tasks: [] }, true)).toBeUndefined()
 })

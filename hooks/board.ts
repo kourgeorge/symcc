@@ -463,6 +463,22 @@ export const boardTitle = (root: string, name: string = DEFAULT_NAME) => `${boar
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
+/**
+ * The status line text. Claude Code already puts the plugin name in front, so this starts with
+ * just the folder: "app · 1 doing · 2 to do", "app (driven by another session) · empty".
+ * undefined when there is nothing to say (the status is cleared).
+ */
+export function statusLine(root: string, b: { tasks: Pick<SymccTask, 'status'>[]; paused?: boolean }, driving: boolean, branch_note = ''): string | undefined {
+  const head = `${folderName(root)}${driving ? '' : ' (driven by another session)'}`.trim()
+  const join = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
+  if (b.tasks.length) {
+    const parts = statusCounts(b.tasks, ['doing', 'todo', 'paused', 'waiting', 'failed'])
+    return join([head, parts.join(' · ') || 'all done', b.paused && 'paused', branch_note])
+  }
+  if (!driving) return join([head, 'empty', branch_note])
+  return branch_note ? join([head, branch_note]) : undefined
+}
+
 // ---------------- the banner at the top of the board panel ----------------
 
 /** Below this many columns the drawing is dropped and only the text lines are shown. */
