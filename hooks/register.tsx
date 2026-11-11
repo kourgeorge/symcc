@@ -74,6 +74,10 @@ import {
   onNotReady,
   resetDoing,
   whoDrives,
+  backToTodo,
+  ENDED_STATUSES,
+  STATUS_WORD,
+  statusCounts,
   type Board,
   type ScoutDef,
 } from './board'
@@ -319,8 +323,7 @@ async function publish($: $, b: Board) {
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note }
   await update($, view, () => v)
-  const count = (s: string) => b.tasks.filter(t => t.status === s).length
-  const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
+  const parts = statusCounts(b.tasks, ['doing', 'todo', 'paused', 'waiting', 'failed'])
   const label = `${boardLabel(root, N.name)}${driving ? '' : ' (driven by another session)'}`
   const note = branch_note ? ` · ${branch_note}` : ''
   $.ui.status(b.tasks.length ? `${label}: ${parts.join(' · ') || 'all done'}${b.paused ? ' · paused' : ''}${note}` : !driving ? `${label}: empty${note}` : note ? `${label}${note}` : undefined)
@@ -731,7 +734,7 @@ async function resumeAll($: $): Promise<string> {
   return 'Resumed: workers start on ready tasks again.'
 }
 
-const ENDED = new Set(['completed', 'failed', 'killed'])
+const ENDED = new Set(ENDED_STATUSES)
 const LIVE = new Set(['pending', 'running', 'waiting'])
 
 /**
@@ -801,8 +804,7 @@ async function check($: $) {
         ...x,
         tasks: x.tasks.map(t => {
           if (!idle.includes(t.id) || t.status !== 'doing' || [...workers.values()].some(w => w.task === t.id) || starting.has(t.id) || finishing.has(t.id)) return t
-          const { session: _s, ...rest } = t
-          return { ...rest, status: 'todo' as const, note: 'restarted: the old worker has ended', updated_at: now() }
+          return backToTodo(t, 'restarted: the old worker has ended', now())
         }),
       }))
   }
@@ -910,9 +912,11 @@ async function openPane($: $, which: 'tasks' | 'scouts', focus = true) {
 
 // ---------------- the lead's tools ----------------
 
+/** A short date and time, like "Nov 11, 09:30"; "?" when there is none. */
+const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
+
 function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string {
-  const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
-  const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
+  const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
   if (t.note) L.push(`now: ${t.note}`)
   if (t.status === 'waiting' && t.question) L.push('', `ASKS: ${t.question}`)
@@ -1059,6 +1063,13 @@ type In = Record<string, unknown>
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : undefined)
 
+/** Task `id` from the board; throws "<id> is not on the board" if there is none. */
+async function taskOrThrow($: $, id: string) {
+  const t = find(await load($), id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  return t
+}
+
 async function runTool($: $, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   switch (name) {
@@ -1070,9 +1081,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return `added ${t.id} ${t.title}`
     }
     case 'change': {
-      const b = await load($)
-      const t = find(b, id)
-      if (!t) throw new Error(`${id} is not on the board`)
+      const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
@@ -1087,8 +1096,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
     }
     case 'start': {
-      const t = find(await load($), id)
-      if (!t) throw new Error(`${id} is not on the board`)
+      const t = await taskOrThrow($, id)
       if (t.status === 'doing') return `${t.id} is already running`
       if (t.status === 'done') return `${t.id} is already done`
       await change($, x => patchTask(x, t.id, { status: 'todo', note: 'queued', test_tries: 0 }, now()))
@@ -1096,15 +1104,13 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return `${t.id} queued`
     }
     case 'ask': {
-      const t = find(await load($), id)
-      if (!t) throw new Error(`${id} is not on the board`)
+      const t = await taskOrThrow($, id)
       if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you' }, now()))
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
-      const t = find(await load($), id)
-      if (!t) throw new Error(`${id} is not on the board`)
+      const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is already done`)
       if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
       await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped' }, now()))
@@ -1113,8 +1119,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return `${t.id} dropped`
     }
     case 'stop': {
-      const t = find(await load($), id)
-      if (!t) throw new Error(`${id} is not on the board`)
+      const t = await taskOrThrow($, id)
       if (t.status === 'done' || t.status === 'dropped') return `${t.id} is already ${t.status}`
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
@@ -1123,8 +1128,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${N.name} resume ${t.id} continues it`
     }
     case 'resume': {
-      const t = find(await load($), id)
-      if (!t) throw new Error(`${id} is not on the board`)
+      const t = await taskOrThrow($, id)
       if (t.status !== 'paused') return `${t.id} is not paused (it is ${t.status})`
       await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed' }, now()))
       void pump($)
@@ -1326,20 +1330,12 @@ export const register: Register = on => {
     const tasks = v?.tasks ?? []
     if (!tasks.length) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
-    const count = (s: string) => tasks.filter(t => t.status === s).length
-    const summary = [
-      count('doing') && `${count('doing')} doing`,
-      count('todo') && `${count('todo')} to do`,
-      count('paused') && `${count('paused')} paused`,
-      count('waiting') && `${count('waiting')} waiting for you`,
-      count('failed') && `${count('failed')} failed`,
-      count('done') && `${count('done')} done`,
-    ].filter(Boolean).join(' · ')
+    const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'waiting', 'failed', 'done']).join(' · ')
     const order = ['waiting', 'failed', 'doing']
     const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
     const room = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
     const color: Record<string, string> = { waiting: 'yellow', failed: 'red', doing: 'green' }
-    const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing' }
+    const word: Record<string, string> = STATUS_WORD
     const running = (v?.scouts ?? []).filter(s => s.running).map(s => s.name)
     return (
       <Box flexDirection="column">
@@ -1423,7 +1419,7 @@ export const register: Register = on => {
     const width = Math.max(20, e.props.bodyColumns ?? 60)
     // Theme colors, so the board reads well in both light and dark themes.
     const color: Record<string, string> = { waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
-    const word: Record<string, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
+    const word: Record<string, string> = STATUS_WORD
     const mark: Record<string, string> = { waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
     const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(N.toast(err.message)))
     const onScouts = (await read($, tab)) === 'scouts'
@@ -1554,7 +1550,6 @@ export const register: Register = on => {
     }
     if (t) {
       const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
-      const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
       const heading = (label: string) => (
         <Text bold color={C('suggestion')}>
           ▍{label}

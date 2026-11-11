@@ -40,13 +40,20 @@ export type Lock = { session: string; at: number }
 
 export const lockText = (session: string, at: number) => JSON.stringify({ session, at }) + '\n'
 
-export function parseLock(text: string | null): Lock | null {
+/** Reads `{ session, <key> }` JSON: the session a string, the number finite; null if it isn't that. */
+function parseStamp<K extends string>(text: string | null, key: K, emptyOk: boolean): ({ session: string } & Record<K, number>) | null {
   try {
-    const l = JSON.parse(text ?? '') as Partial<Lock>
-    return typeof l.session === 'string' && typeof l.at === 'number' && Number.isFinite(l.at) ? { session: l.session, at: l.at } : null
+    const l = JSON.parse(text ?? '') as Record<string, unknown>
+    const n = l[key]
+    if (typeof l.session !== 'string' || (!emptyOk && !l.session) || typeof n !== 'number' || !Number.isFinite(n)) return null
+    return { session: l.session, [key]: n } as { session: string } & Record<K, number>
   } catch {
     return null
   }
+}
+
+export function parseLock(text: string | null): Lock | null {
+  return parseStamp(text, 'at', true)
 }
 
 /**
@@ -469,7 +476,15 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name. */
 export type BannerBoard = Pick<Board, 'paused' | 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
 
-const BANNER_COUNTS: [SymccStatus, string][] = [['doing', 'doing'], ['waiting', 'waiting for you'], ['failed', 'failed'], ['paused', 'paused'], ['todo', 'to do'], ['done', 'done']]
+/** The word the owner sees for each status. */
+export const STATUS_WORD: Record<SymccStatus, string> = { waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
+
+/** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
+export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
+  return order.map(st => [tasks.filter(t => t.status === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+}
+
+const BANNER_ORDER: SymccStatus[] = ['doing', 'waiting', 'failed', 'paused', 'todo', 'done']
 
 /** Cuts parts so their text fits in `room` columns, ending with "…" when something was cut. */
 function cutParts(parts: BannerPart[], room: number): BannerPart[] {
@@ -512,7 +527,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   ])
   const texts = [l1, l2, l3]
   if (b.tasks.length) {
-    const counts = BANNER_COUNTS.map(([st, word]) => [b.tasks.filter(t => t.status === st).length, word] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+    const counts = statusCounts(b.tasks, BANNER_ORDER)
     const t = boardTotal(b, nowMs)
     texts.push(dim([...counts, ...(t.tries ? [fmtTotal(t)] : [])].join(' · ')))
   }
@@ -662,12 +677,12 @@ export type Lead = { session: string; heartbeat: number }
 export const leadText = (session: string, heartbeat: number) => JSON.stringify({ session, heartbeat }) + '\n'
 
 export function parseLead(text: string | null): Lead | null {
-  try {
-    const l = JSON.parse(text ?? '') as Partial<Lead>
-    return typeof l.session === 'string' && l.session && typeof l.heartbeat === 'number' && Number.isFinite(l.heartbeat) ? { session: l.session, heartbeat: l.heartbeat } : null
-  } catch {
-    return null
-  }
+  return parseStamp(text, 'heartbeat', false)
+}
+
+/** Whether a heartbeat is no more than `staleMs` old (and not dated more than that in the future, a broken clock). */
+export function isFresh(heartbeat: number, nowMs: number, staleMs = LEAD_STALE_MS): boolean {
+  return nowMs - heartbeat <= staleMs && heartbeat - nowMs <= staleMs
 }
 
 /**
@@ -684,8 +699,7 @@ export function whoDrives(text: string | null, me: string, nowMs: number, staleM
   const l = parseLead(text)
   if (!l) return 'become'
   if (l.session === me) return 'keep'
-  const fresh = nowMs - l.heartbeat <= staleMs && l.heartbeat - nowMs <= staleMs
-  return fresh ? 'follow' : 'takeover'
+  return isFresh(l.heartbeat, nowMs, staleMs) ? 'follow' : 'takeover'
 }
 
 // ---------------- which session owns a running task ----------------
@@ -694,8 +708,7 @@ export function whoDrives(text: string | null, me: string, nowMs: number, staleM
 export function liveDriver(text: string | null, nowMs: number, staleMs = LEAD_STALE_MS): string | null {
   const l = parseLead(text)
   if (!l) return null
-  const fresh = nowMs - l.heartbeat <= staleMs && l.heartbeat - nowMs <= staleMs
-  return fresh ? l.session : null
+  return isFresh(l.heartbeat, nowMs, staleMs) ? l.session : null
 }
 
 /**
@@ -719,10 +732,15 @@ export function resetDoing(b: Board, me: string, leadBefore: string | null, nowM
     ...b,
     tasks: b.tasks.map(t => {
       if (t.status !== 'doing' || !ownedHere(t, me, live) || keep.includes(t.id)) return t
-      const { session: _gone, ...rest } = t
-      return { ...rest, status: 'todo' as const, note, updated_at: now }
+      return backToTodo(t, note, now)
     }),
   }
+}
+
+/** Task `t` back to "todo" with `note`, no longer tied to a session. */
+export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
+  const { session: _gone, ...rest } = t
+  return { ...rest, status: 'todo' as const, note, updated_at: now }
 }
 
 // ---------------- never two workers on one task ----------------

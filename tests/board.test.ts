@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -526,4 +526,30 @@ test('a task is only failed after 3 "not ready" misses in a row', async () => {
   expect(onNotReady(1)).toBe('retry')
   expect(onNotReady(2)).toBe('fail')
   expect(onNotReady(5)).toBe('fail')
+})
+
+test('a heartbeat is fresh only within the stale time, in either direction', async () => {
+  expect(isFresh(1000, 1000 + LEAD_STALE_MS)).toBe(true)
+  expect(isFresh(1000, 1000 + LEAD_STALE_MS + 1)).toBe(false)
+  expect(isFresh(1000 + LEAD_STALE_MS + 1, 1000)).toBe(false)
+  expect(isFresh(0, 50, 100)).toBe(true)
+})
+
+test('backToTodo sends a task back to "todo" and forgets its session', async () => {
+  const [b] = addTask(emptyBoard(), { title: 'x' }, T)
+  const t = { ...b.tasks[0]!, status: 'doing' as const, session: 's1' }
+  const back = backToTodo(t, 'restarted', '2026-11-10T00:00:00.000Z')
+  expect(back.status).toBe('todo')
+  expect(back.note).toBe('restarted')
+  expect(back.updated_at).toBe('2026-11-10T00:00:00.000Z')
+  expect('session' in back).toBe(false)
+  expect(t.session).toBe('s1')
+})
+
+test('statusCounts names only statuses that have tasks, in the order given', async () => {
+  const tasks = [{ status: 'todo' }, { status: 'doing' }, { status: 'todo' }, { status: 'waiting' }] as Pick<SymccTask, 'status'>[]
+  expect(statusCounts(tasks, ['doing', 'todo', 'paused', 'waiting'])).toEqual(['1 doing', '2 to do', '1 waiting for you'])
+  expect(statusCounts(tasks, ['waiting', 'doing'])).toEqual(['1 waiting for you', '1 doing'])
+  expect(statusCounts([], ['doing'])).toEqual([])
+  expect(STATUS_WORD.todo).toBe('to do')
 })
