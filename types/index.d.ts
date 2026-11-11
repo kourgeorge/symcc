@@ -35,7 +35,7 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
-  /** wait for the owner's review before merging, even when the board's approval is "auto" */
+  /** wait for the owner's review before merging, even when the board's automerge is on */
   needs_review?: boolean
   /** one entry per worker try, oldest first */
   runs?: SymccRun[]

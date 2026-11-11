@@ -135,13 +135,13 @@ This is where symcc keeps your branch safe. Step by step:
 
 ### Review before merge (optional)
 
-By default (`approval` = `auto`) a task that passes steps 1–4 is merged at once. To look at
+By default (`automerge` = `true`) a task that passes steps 1–4 is merged at once. To look at
 the work first:
 
-- Say "review everything before merging" (the setting `approval` = `review`): every task
+- Say "review everything before merging" (the setting `automerge` = `false`): every task
   that finishes from then on waits as `review`.
 - Or mark one task: "T-5 needs review" (`needs_review` on `symcc add` / `symcc change`).
-  That task waits even when the board is on `auto`.
+  That task waits even when auto-merge is on.
 
 The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) and copy
 (`.symcc/worktrees/T-5`) are kept so you can look at the change. Then:
@@ -160,11 +160,11 @@ You can do all of this yourself, too:
   diff, or pick a file for just that file's diff, with added lines in green and removed
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
   A very long diff is cut, with a note like `… 340 more lines (see /board diff T-5)`.
-- The banner shows `approval: auto` or `approval: review`; press `m` to switch.
+- The banner shows `auto-merge on` or `auto-merge off (review before merge)`; press `m` to switch.
 - In any open task, `n` turns that task's own "needs review" on or off.
 - **Slash commands:** `/board approve T-5`, `/board reject T-5 <reason>`,
   `/board diff T-5` (the changed files with `+`/`-` counts) or `/board diff T-5 <file>`
-  (that file's full diff), and `/board mode auto|review` (with no word: shows the mode).
+  (that file's full diff), and `/board mode auto|review` (with no word: shows the setting; `auto` = auto-merge on, `review` = off).
 - The status line starts with the mode, `⏸ review before merge` or `⏵ auto-merge`, and counts
   tasks to review by ID, e.g. `⏸ review before merge · 1 to review (T-5)`. With an empty board
   it shows the mode only in review mode, so a fresh project stays quiet.
@@ -234,8 +234,8 @@ start nothing. If the driving window closes, another one takes over within a few
 | `/board` | Open the board (`/board T-3` for one task) |
 | `/board approve T-5` · `/board reject T-5 <reason>` | Merge a task that is ready for review, or send it back with a reason |
 | `/board diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
-| `/board mode [auto\|review]` | Show or set the approval mode |
-| `/automerge [on\|off]` | Quick switch for the approval mode: `on` = auto, `off` = review, no word switches to the other one |
+| `/board mode [auto\|review]` | Show or set auto-merge (`auto` = on, `review` = off) |
+| `/automerge [on\|off]` | Quick switch for auto-merge: `on`, `off` (review before merge), no word switches it |
 | `/scouts` | Open the panel on the Scouts view (a text list if the panel can't be shown); `/scouts run <name>` runs one now |
 | `/stop-all` | Stop every worker and scout now and pause the board |
 | `/resume-all` | Let work start again |
@@ -258,7 +258,7 @@ Change any of these by telling the lead (e.g. "give workers 90 minutes").
 | `auto_retries` | 2 | New tries after failing tests before a task is marked failed (0–10) |
 | `open_on_start` | on | Open the board panel when a session starts |
 | `voice` | on | Say "T-3 done" out loud when a task is merged |
-| `approval` | auto | `auto`: merge a finished task that passes at once. `review`: every finished task waits for you to approve or reject it |
+| `automerge` | on | On: merge a finished task that passes at once. Off: every finished task waits for you to approve or reject it |
 | `paused` | off | Stop starting new work (running workers carry on) |
 
 ---

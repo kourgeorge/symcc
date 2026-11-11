@@ -342,11 +342,11 @@ test('"New scout" asks for a name, refuses a bad or taken one, then opens the ed
   await ui.unmount()
 })
 
-test('a task in review is listed near the top as "ready for review", and the banner shows the approval mode', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], paused: false, test_commands: [], approval: 'review' } } })
+test('a task in review is listed near the top as "ready for review", and the banner shows the automerge setting', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], paused: false, test_commands: [], automerge: false } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /◆ ready for review/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^approval: review $/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^auto-merge off \(review before merge\) $/ })).toBeDefined()
   expect(await ui.find({ key: 'mode' })).toBeDefined()
   const rows = (await ui.findAll({ type: 'Text', text: /^T-\d+\s*$/ })).map(x => x.text.trim())
   expect(rows[0]).toBe('T-5')

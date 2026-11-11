@@ -19,13 +19,10 @@ export type Board = {
   open_on_start: boolean
   /** say it out loud when a task is merged (true unless turned off) */
   voice: boolean
-  /** "auto": a finished task that passes is merged at once; "review": it waits for the owner (approve / reject) first */
-  approval: Approval
+  /** true (the default): a finished task that passes is merged at once; false: it waits for the owner (approve / reject) first */
+  automerge: boolean
   tasks: BoardTask[]
 }
-
-/** How finished work is merged: at once ("auto", the default) or after the owner approves it ("review"). */
-export type Approval = 'auto' | 'review'
 
 /**
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
@@ -80,7 +77,7 @@ const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' =
 
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, approval: 'auto', tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, automerge: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -91,7 +88,7 @@ export function parseBoard(text: string | null): Board {
       const { session, ...rest } = t
       return typeof session === 'string' && session && t.status === 'doing' ? { ...rest, session } : rest
     })
-    return { ...emptyBoard(), ...b, approval: approvalOf(b), tasks }
+    return { ...emptyBoard(), ...b, automerge: automergeOf(b), tasks }
   } catch {
     return emptyBoard()
   }
@@ -199,20 +196,20 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
 
 // ---------------- review before merge ----------------
 
-/** The board's approval mode: "review" only when set so; anything else (or nothing, an old board) is "auto". */
-export const approvalOf = (b: Partial<Pick<Board, 'approval'>>): Approval => (b.approval === 'review' ? 'review' : 'auto')
+/** Whether the board merges finished work on its own: false only when set to false; anything else (or nothing) is true. */
+export const automergeOf = (b: Partial<Pick<Board, 'automerge'>>): boolean => b.automerge !== false
 
 /** Whether a finished task that passed its checks waits for the owner instead of merging at once. */
-export function needsReview(b: Partial<Pick<Board, 'approval'>>, t: Pick<SymccTask, 'needs_review'>): boolean {
-  return approvalOf(b) === 'review' || t.needs_review === true
+export function needsReview(b: Partial<Pick<Board, 'automerge'>>, t: Pick<SymccTask, 'needs_review'>): boolean {
+  return !automergeOf(b) || t.needs_review === true
 }
 
 /**
- * The board with approval set to `mode`. Tasks already in "review" stay there (switching to
- * "auto" does not merge them); the new mode applies to tasks that finish from now on.
+ * The board with automerge set to `on`. Tasks already in "review" stay there (turning auto-merge
+ * on does not merge them); the new setting applies to tasks that finish from now on.
  */
-export function setApproval(b: Board, mode: Approval): Board {
-  return { ...b, approval: approvalOf({ approval: mode }) }
+export function setAutomerge(b: Board, on: boolean): Board {
+  return { ...b, automerge: on !== false }
 }
 
 /** Task `id`, which must be in "review" for approve / reject; throws otherwise. */
@@ -319,7 +316,7 @@ export type BoardCommand =
   | { kind: 'show'; id: string }
   | { kind: 'approve'; id: string }
   | { kind: 'reject'; id: string; reason: string }
-  | { kind: 'mode'; mode?: Approval }
+  | { kind: 'mode'; automerge?: boolean }
   | { kind: 'diff'; id: string; file?: string }
   | { kind: 'bad'; message: string }
 
@@ -349,7 +346,7 @@ export function parseBoardCommand(args: string): BoardCommand {
       if (!rest.length) return { kind: 'mode' }
       const m = rest[0]!.toLowerCase()
       if (rest.length > 1 || (m !== 'auto' && m !== 'review')) return { kind: 'bad', message: 'Use: /board mode auto, or /board mode review' }
-      return { kind: 'mode', mode: m }
+      return { kind: 'mode', automerge: m === 'auto' }
     }
     case 'diff': {
       if (!isId(id)) return { kind: 'bad', message: 'Use: /board diff T-5, or /board diff T-5 <file>' }
@@ -361,26 +358,26 @@ export function parseBoardCommand(args: string): BoardCommand {
   return { kind: 'bad', message: 'Use: /board, /board T-5, /board approve T-5, /board reject T-5 <reason>, /board mode [auto|review], /board diff T-5 [file]' }
 }
 
-/** What /automerge asks for: switch to the other mode, set one, or wrong use (a usage line). */
-export type AutomergeCommand = { kind: 'toggle' } | { kind: 'set'; mode: Approval } | { kind: 'bad'; message: string }
+/** What /automerge asks for: switch it, turn it on or off, or wrong use (a usage line). */
+export type AutomergeCommand = { kind: 'toggle' } | { kind: 'set'; automerge: boolean } | { kind: 'bad'; message: string }
 
-/** Reads the words after /automerge: nothing (switch to the other mode), "on" (auto), "off" (review). */
+/** Reads the words after /automerge: nothing (switch it), "on" or "off". */
 export function parseAutomergeCommand(args: string): AutomergeCommand {
   const s = String(args ?? '').trim().toLowerCase()
   if (!s) return { kind: 'toggle' }
-  if (s === 'on') return { kind: 'set', mode: 'auto' }
-  if (s === 'off') return { kind: 'set', mode: 'review' }
+  if (s === 'on') return { kind: 'set', automerge: true }
+  if (s === 'off') return { kind: 'set', automerge: false }
   return { kind: 'bad', message: 'Use: /automerge (switch), /automerge on, or /automerge off' }
 }
 
-/** The one line /automerge answers with for the new mode. */
-export function automergeText(mode: Approval): string {
-  return mode === 'review' ? 'auto-merge off: finished tasks wait for your review' : 'auto-merge on: finished tasks merge on their own'
+/** The one line /automerge answers with for the new setting. */
+export function automergeText(on: boolean): string {
+  return on ? 'auto-merge on: finished tasks merge on their own' : 'auto-merge off: finished tasks wait for your review'
 }
 
-/** The text for /board mode: what the approval mode is and what it means. */
-export function modeText(mode: Approval): string {
-  return mode === 'review' ? 'approval: review (finished work waits for you to approve or reject it)' : 'approval: auto (finished work that passes is merged at once)'
+/** The words shown to the owner for the automerge setting. */
+export function modeText(on: boolean): string {
+  return on ? 'auto-merge on' : 'auto-merge off (review before merge)'
 }
 
 /** The changed files as text lines for /board diff: "hooks/board.ts  +12 -3", then a total. */
@@ -694,20 +691,20 @@ function idList(ids: string[]): string {
   return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
 }
 
-/** The mode label at the start of the status line, like Claude Code's own permission mode. */
-export const MODE_LABEL: Record<Approval, string> = { review: '⏸ review before merge', auto: '⏵ auto-merge' }
+/** The label at the start of the status line, like Claude Code's own permission mode. */
+export const modeLabel = (automerge: boolean): string => (automerge ? '⏵ auto-merge' : '⏸ review before merge')
 
 /**
  * The short status text Claude Code shows after "symcc:", e.g. "⏸ review before merge · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
- * It starts with the approval mode (MODE_LABEL), so the mode is always in the same spot.
+ * It starts with the automerge setting (modeLabel), so the mode is always in the same spot.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
- * undefined when there is nothing to say: an empty board this session drives, in "auto" mode, with no branch note.
+ * undefined when there is nothing to say: an empty board this session drives, with auto-merge on, with no branch note.
  */
-export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = '', approval: Approval = 'auto'): string | undefined {
+export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = '', automerge = true): string | undefined {
   const join = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
-  const mode = MODE_LABEL[approvalOf({ approval })]
+  const mode = modeLabel(automerge !== false)
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
     const parts = [
@@ -719,8 +716,8 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; pause
     return join([mode, (join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
   }
   if (!driving) return join([mode, 'empty' + other, branch_note])
-  // an empty board in "auto" stays quiet, so a fresh project shows nothing
-  if (approvalOf({ approval }) === 'review') return join([mode, branch_note])
+  // an empty board with auto-merge on stays quiet, so a fresh project shows nothing
+  if (automerge === false) return join([mode, branch_note])
   return branch_note || undefined
 }
 
@@ -823,7 +820,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })
-  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests${approvalOf(b) === 'review' ? ' · finished work waits for review' : ''}`
+  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests${automergeOf(b) ? '' : ' · finished work waits for review'}`
   const total = totalLine(b, nowMs)
   const days = s.days.map(g => groupLabel(g))
   return [...top, head, ...lines, ...days, ...(total ? [total] : [])].join('\n')
