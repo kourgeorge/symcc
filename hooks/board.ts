@@ -1,12 +1,13 @@
 // The task board: plain data, kept in <project>/.<name>/board.json (see name.ts). Every function
 // here is pure (takes a board, returns a new one) so it can be tested without Claude.
-import type { SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
+import type { SymccMode, SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
 import { DEFAULT_NAME, ICON, ICON_ART, dataDir, namesFor } from './name'
 
 export type Board = {
   version: 1
   next_id: number
-  paused: boolean
+  /** off: nothing runs; review: work runs and finished work waits for the owner; auto (the default): finished work that passes merges on its own */
+  mode: SymccMode
   /** shell commands that must pass before a task's work is merged */
   test_commands: string[]
   target_branch: string
@@ -19,8 +20,6 @@ export type Board = {
   open_on_start: boolean
   /** say it out loud when a task is merged (true unless turned off) */
   voice: boolean
-  /** true (the default): a finished task that passes is merged at once; false: it waits for the owner (approve / reject) first */
-  automerge: boolean
   tasks: BoardTask[]
 }
 
@@ -77,18 +76,21 @@ const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' =
 
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, automerge: true, tasks: [] }
+  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
   if (!text) return emptyBoard()
   try {
-    const b = JSON.parse(text) as Partial<Board>
+    const raw = JSON.parse(text) as Record<string, unknown>
+    // only the keys a board has: anything else in the file is dropped
+    const fresh = emptyBoard()
+    const b = Object.fromEntries(Object.entries(raw ?? {}).filter(([k]) => k in fresh)) as Partial<Board>
     const tasks = (Array.isArray(b.tasks) ? b.tasks : []).map(t => {
       const { session, ...rest } = t
       return typeof session === 'string' && session && t.status === 'doing' ? { ...rest, session } : rest
     })
-    return { ...emptyBoard(), ...b, automerge: automergeOf(b), tasks }
+    return { ...emptyBoard(), ...b, mode: modeOf(b), tasks }
   } catch {
     return emptyBoard()
   }
@@ -196,21 +198,41 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
 
 // ---------------- review before merge ----------------
 
-/** Whether the board merges finished work on its own: false only when set to false; anything else (or nothing) is true. */
-export const automergeOf = (b: Partial<Pick<Board, 'automerge'>>): boolean => b.automerge !== false
+/** The three board modes, in the order they are shown. */
+export const MODES: SymccMode[] = ['off', 'review', 'auto']
 
-/** Whether a finished task that passed its checks waits for the owner instead of merging at once. */
-export function needsReview(b: Partial<Pick<Board, 'automerge'>>, t: Pick<SymccTask, 'needs_review'>): boolean {
-  return !automergeOf(b) || t.needs_review === true
+/** Whether `m` is one of the board modes. */
+export const isMode = (m: unknown): m is SymccMode => typeof m === 'string' && (MODES as string[]).includes(m)
+
+/** The board's mode: "off", "review" or "auto"; a missing or bad value is "auto". */
+export const modeOf = (b: { mode?: unknown } | null | undefined): SymccMode => (isMode(b?.mode) ? b!.mode as SymccMode : 'auto')
+
+/** Whether a finished task that passed its checks waits for the owner: every task unless the mode is "auto", or a task with needs_review. */
+export function needsReview(b: { mode?: unknown }, t: Pick<SymccTask, 'needs_review'>): boolean {
+  return modeOf(b) !== 'auto' || t.needs_review === true
 }
 
 /**
- * The board with automerge set to `on`. Tasks already in "review" stay there (turning auto-merge
- * on does not merge them); the new setting applies to tasks that finish from now on.
+ * The board in mode `m`. Tasks already in "review" stay there (going to "auto" does not merge
+ * them); the new mode applies to tasks that finish from now on.
  */
-export function setAutomerge(b: Board, on: boolean): Board {
-  return { ...b, automerge: on !== false }
+export function setMode(b: Board, m: SymccMode): Board {
+  return { ...b, mode: isMode(m) ? m : 'auto' }
 }
+
+/** The label for a mode, at the start of the status line and in the panel: "⏹ off", "⏸ review", "⏵ auto". */
+export const MODE_LABEL: Record<SymccMode, string> = { off: '⏹ off', review: '⏸ review', auto: '⏵ auto' }
+export const modeLabel = (m: SymccMode): string => MODE_LABEL[isMode(m) ? m : 'auto']
+
+/** What a mode means, in a few words. */
+export const MODE_MEANING: Record<SymccMode, string> = {
+  off: 'no work runs; tasks in review can still be approved or rejected',
+  review: 'work runs; finished tasks wait for your approve or reject',
+  auto: 'work runs; finished tasks that pass merge on their own',
+}
+
+/** The one line shown for a mode: "⏵ auto: work runs; finished tasks that pass merge on their own". */
+export const modeText = (m: SymccMode): string => `${modeLabel(m)}: ${MODE_MEANING[isMode(m) ? m : 'auto']}`
 
 /** Task `id`, which must be in "review" for approve / reject; throws otherwise. */
 export function reviewTask(b: Board, id: string, what: 'approve' | 'reject'): BoardTask {
@@ -275,14 +297,14 @@ export const DIFF_LINES = 400
 
 /**
  * A diff cut to its first `max` lines; when longer, a last line says how many more there are
- * and where to see them: "… 340 more lines (see /board diff T-5)". `file` goes into that hint.
+ * and where to see them: "… 340 more lines (see /symcc-diff T-5)". `file` goes into that hint.
  */
-export function cutDiff(text: string, id: string, max = DIFF_LINES, file = ''): string[] {
+export function cutDiff(text: string, id: string, max = DIFF_LINES, file = '', name: string = DEFAULT_NAME): string[] {
   const lines = String(text ?? '').replace(/\n+$/, '').split('\n')
   if (lines.length === 1 && !lines[0]) return []
   if (lines.length <= max) return lines
   const more = lines.length - max
-  return [...lines.slice(0, max), `… ${more} more ${more === 1 ? 'line' : 'lines'} (see /board diff ${id}${file ? ` ${file}` : ''})`]
+  return [...lines.slice(0, max), `… ${more} more ${more === 1 ? 'line' : 'lines'} (see /${name}-diff ${id}${file ? ` ${file}` : ''})`]
 }
 
 /** What a diff line is: an added or removed line, a hunk start (@@), a file header, a cut note, or context. */
@@ -308,85 +330,94 @@ export function diffKinds(lines: string[]): DiffKind[] {
 /** The theme color for each kind of diff line: added in the success color, removed in the error color. */
 export const DIFF_COLOR: Record<DiffKind, string> = { add: 'success', remove: 'error', hunk: 'ide', header: 'subtle', note: 'warning', context: 'text' }
 
-// ---------------- the /board command ----------------
+// ---------------- the slash commands ----------------
 
-/** What a /board command asks for (see parseBoardCommand). */
-export type BoardCommand =
+/**
+ * What a slash command asks for (see parseCommand). Every command starts with the plugin's name:
+ * /<name> opens the panel, /<name>-<word> does one thing.
+ */
+export type Command =
   | { kind: 'open' }
+  | { kind: 'tasks' }
+  | { kind: 'scouts' }
   | { kind: 'show'; id: string }
   | { kind: 'approve'; id: string }
   | { kind: 'reject'; id: string; reason: string }
-  | { kind: 'mode'; automerge?: boolean }
   | { kind: 'diff'; id: string; file?: string }
+  | { kind: 'scout'; name: string }
+  | { kind: 'mode'; mode: SymccMode }
+  | { kind: 'help'; topic: string }
   | { kind: 'bad'; message: string }
+
+/** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
+export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'help'] as const
+
+/** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
+export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
 
 const isId = (s: string | undefined) => !!s && /^t-?\d+$/i.test(s)
 
 /**
- * Reads the words after /board: nothing (open the board), "T-3" (one task), "approve T-5",
- * "reject T-5 <reason>", "mode [auto|review]", "diff T-5 [file]". Wrong use gives `bad` with a short message.
+ * The new mode for /<name>-mode: with no word, review and auto switch (off goes to review, never
+ * to off); "off", "review" or "auto" set it; anything else gives a usage line.
  */
-export function parseBoardCommand(args: string): BoardCommand {
+export function parseModeCommand(args: string, current: SymccMode, name: string = DEFAULT_NAME): { kind: 'mode'; mode: SymccMode } | { kind: 'bad'; message: string } {
+  const s = String(args ?? '').trim().toLowerCase()
+  if (!s) return { kind: 'mode', mode: modeOf({ mode: current }) === 'review' ? 'auto' : 'review' }
+  if (isMode(s)) return { kind: 'mode', mode: s }
+  return { kind: 'bad', message: `Use: /${name}-mode (switch review and auto), or /${name}-mode off|review|auto` }
+}
+
+/**
+ * Reads a slash command: `command` is its name without the slash ("symcc-approve"), `args` the
+ * words after it, `current` the board's mode (for /<name>-mode with no word). null when the
+ * command is not one of this plugin's. Wrong use gives `bad` with a short usage line.
+ */
+export function parseCommand(command: string, args: string, current: SymccMode = 'auto', name: string = DEFAULT_NAME): Command | null {
   const s = String(args ?? '').trim()
-  if (!s) return { kind: 'open' }
-  const [word = '', ...rest] = s.split(/\s+/)
-  const w = word.toLowerCase()
-  const id = rest[0]
-  switch (w) {
+  const words = s ? s.split(/\s+/) : []
+  const id = words[0]
+  const use = (text: string): Command => ({ kind: 'bad', message: `Use: ${text}` })
+  const c = String(command ?? '').trim().replace(/^\//, '')
+  if (c === name) return s ? use(`/${name} (open the board), or /${name}-help for every command`) : { kind: 'open' }
+  if (!c.startsWith(`${name}-`)) return null
+  switch (c.slice(name.length + 1)) {
+    case 'tasks':
+      return s ? use(`/${name}-tasks`) : { kind: 'tasks' }
+    case 'scouts':
+      return s ? use(`/${name}-scouts (to run one: /${name}-scout <name>)`) : { kind: 'scouts' }
+    case 'task':
+      return isId(id) && words.length === 1 ? { kind: 'show', id: normId(id!) } : use(`/${name}-task T-3`)
     case 'approve':
-      if (!isId(id) || rest.length > 1) return { kind: 'bad', message: 'Use: /board approve T-5' }
-      return { kind: 'approve', id: normId(id!) }
+      return isId(id) && words.length === 1 ? { kind: 'approve', id: normId(id!) } : use(`/${name}-approve T-5`)
     case 'reject': {
-      if (!isId(id)) return { kind: 'bad', message: 'Use: /board reject T-5 <reason>' }
-      const reason = s.replace(/^\S+\s+\S+\s*/, '').trim()
-      if (!reason) return { kind: 'bad', message: `Say why, so the next worker knows what to fix: /board reject ${normId(id!)} <reason>` }
+      if (!isId(id)) return use(`/${name}-reject T-5 <reason>`)
+      const reason = s.replace(/^\S+\s*/, '').trim()
+      if (!reason) return { kind: 'bad', message: `Say why, so the next worker knows what to fix: /${name}-reject ${normId(id!)} <reason>` }
       return { kind: 'reject', id: normId(id!), reason }
     }
-    case 'mode': {
-      if (!rest.length) return { kind: 'mode' }
-      const m = rest[0]!.toLowerCase()
-      if (rest.length > 1 || (m !== 'auto' && m !== 'review')) return { kind: 'bad', message: 'Use: /board mode auto, or /board mode review' }
-      return { kind: 'mode', automerge: m === 'auto' }
-    }
     case 'diff': {
-      if (!isId(id)) return { kind: 'bad', message: 'Use: /board diff T-5, or /board diff T-5 <file>' }
-      const file = s.replace(/^\S+\s+\S+\s*/, '').trim()
+      if (!isId(id)) return use(`/${name}-diff T-5, or /${name}-diff T-5 <file>`)
+      const file = s.replace(/^\S+\s*/, '').trim()
       return file ? { kind: 'diff', id: normId(id!), file } : { kind: 'diff', id: normId(id!) }
     }
+    case 'scout':
+      return words.length === 1 ? { kind: 'scout', name: id! } : use(`/${name}-scout <name>`)
+    case 'mode':
+      return parseModeCommand(s, current, name)
+    case 'help':
+      return { kind: 'help', topic: s }
   }
-  if (rest.length === 0) return { kind: 'show', id: word }
-  return { kind: 'bad', message: 'Use: /board, /board T-5, /board approve T-5, /board reject T-5 <reason>, /board mode [auto|review], /board diff T-5 [file]' }
+  return null
 }
 
-/** What /automerge asks for: switch it, turn it on or off, or wrong use (a usage line). */
-export type AutomergeCommand = { kind: 'toggle' } | { kind: 'set'; automerge: boolean } | { kind: 'bad'; message: string }
-
-/** Reads the words after /automerge: nothing (switch it), "on" or "off". */
-export function parseAutomergeCommand(args: string): AutomergeCommand {
-  const s = String(args ?? '').trim().toLowerCase()
-  if (!s) return { kind: 'toggle' }
-  if (s === 'on') return { kind: 'set', automerge: true }
-  if (s === 'off') return { kind: 'set', automerge: false }
-  return { kind: 'bad', message: 'Use: /automerge (switch), /automerge on, or /automerge off' }
-}
-
-/** The one line /automerge answers with for the new setting. */
-export function automergeText(on: boolean): string {
-  return on ? 'auto-merge on: finished tasks merge on their own' : 'auto-merge off: finished tasks wait for your review'
-}
-
-/** The words shown to the owner for the automerge setting. */
-export function modeText(on: boolean): string {
-  return on ? 'auto-merge on' : 'auto-merge off (review before merge)'
-}
-
-/** The changed files as text lines for /board diff: "hooks/board.ts  +12 -3", then a total. */
-export function statText(id: string, files: DiffFile[]): string {
+/** The changed files as text lines for /<name>-diff: "hooks/board.ts  +12 -3", then a total. */
+export function statText(id: string, files: DiffFile[], name: string = DEFAULT_NAME): string {
   if (!files.length) return `${id} has no changes against the target branch.`
   const w = Math.max(...files.map(f => f.file.length))
   const add = files.reduce((n, f) => n + f.added, 0)
   const del = files.reduce((n, f) => n + f.removed, 0)
-  return [`${id} changes ${files.length} ${files.length === 1 ? 'file' : 'files'} (+${add} -${del}):`, ...files.map(f => `  ${f.file.padEnd(w)}  ${statCount(f)}`), `One file in full: /board diff ${id} <file>`].join('\n')
+  return [`${id} changes ${files.length} ${files.length === 1 ? 'file' : 'files'} (+${add} -${del}):`, ...files.map(f => `  ${f.file.padEnd(w)}  ${statCount(f)}`), `One file in full: /${name}-diff ${id} <file>`].join('\n')
 }
 
 /** Where the review/waiting/failed tasks go in the panel's list: those first (in this order), the rest after. */
@@ -691,20 +722,18 @@ function idList(ids: string[]): string {
   return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
 }
 
-/** The label at the start of the status line, like Claude Code's own permission mode. */
-export const modeLabel = (automerge: boolean): string => (automerge ? '⏵ auto-merge' : '⏸ review before merge')
-
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "⏸ review before merge · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
- * It starts with the automerge setting (modeLabel), so the mode is always in the same spot.
+ * The short status text Claude Code shows after "symcc:", e.g. "⏸ review · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
+ * It starts with the board mode (modeLabel: "⏹ off", "⏸ review", "⏵ auto"), so the mode is always in the same spot.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
- * undefined when there is nothing to say: an empty board this session drives, with auto-merge on, with no branch note.
+ * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note.
  */
-export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = '', automerge = true): string | undefined {
+export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto'): string | undefined {
   const join = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
-  const mode = modeLabel(automerge !== false)
+  const m = modeOf({ mode })
+  const label = modeLabel(m)
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
     const parts = [
@@ -713,11 +742,11 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; pause
       ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
       failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
     ].filter((x): x is string => !!x)
-    return join([mode, (join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
+    return join([label, (join(parts) || 'all done') + other, branch_note])
   }
-  if (!driving) return join([mode, 'empty' + other, branch_note])
-  // an empty board with auto-merge on stays quiet, so a fresh project shows nothing
-  if (automerge === false) return join([mode, branch_note])
+  if (!driving) return join([label, 'empty' + other, branch_note])
+  // an empty board in mode auto stays quiet, so a fresh project shows nothing
+  if (m !== 'auto') return join([label, branch_note])
   return branch_note || undefined
 }
 
@@ -732,7 +761,7 @@ export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
 export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name. */
-export type BannerBoard = Pick<Board, 'paused' | 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
+export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
 
 /** The word the owner sees for each status. */
 export const STATUS_WORD: Record<SymccStatus, string> = { review: 'ready for review', waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
@@ -775,7 +804,6 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     ...(root ? [dim(shortHome(root, home))] : []),
     b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : dim(b.target_branch),
     dim(driving ? 'this session drives' : 'driven by another session'),
-    ...(b.paused ? [[{ text: 'PAUSED', tone: 'warning' as const }]] : []),
   ])
   const l3 = join([
     b.test_commands.length ? dim(`tests: ${b.test_commands.join(' && ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
@@ -806,7 +834,7 @@ export const bannerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor
 /** A banner line as plain text (for tests and plain output). */
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
 
-/** One line per task for the model and for /board, then the total time (and cost) of all tries.
+/** One line per task for the model and for /<name>, then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart.
  *  Open tasks come first, then today's others; finished tasks of older days are one line per
  *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
@@ -820,7 +848,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })
-  const head = `${b.paused ? 'PAUSED · ' : ''}tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests${automergeOf(b) ? '' : ' · finished work waits for review'}`
+  const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
   const days = s.days.map(g => groupLabel(g))
   return [...top, head, ...lines, ...days, ...(total ? [total] : [])].join('\n')
@@ -1005,7 +1033,7 @@ export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
     '  model: sonnet        (optional)',
     '  ---',
     '  What to do, in plain words.',
-    `examples/scouts/ in the plugin has examples to copy. Then run /scouts.`,
+    `examples/scouts/ in the plugin has examples to copy. Then run /${name}-scouts.`,
     'Or press "New scout" (n) to write one right here.',
   ]
 }

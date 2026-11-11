@@ -61,8 +61,8 @@ export function namesFor(raw: string = DEFAULT_NAME) {
     pane: `${name}-board`,
     /** the board's name in titles: "<name> board" */
     boardName: `${name} board`,
-    /** the manual command, without its slash */
-    man: `${name}-man`,
+    /** the manual command, without its slash: "<name>-help" */
+    help: `${name}-help`,
     /** a toast line: "<name>: <text>" */
     toast: (text: string) => `${name}: ${text}`,
   }

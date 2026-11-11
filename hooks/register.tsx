@@ -10,7 +10,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { SymccScout, SymccTask, SymccView } from '../types'
+import type { SymccMode, SymccScout, SymccTask, SymccView } from '../types'
 import { DEFAULT_NAME, cleanName, dataDir, namesFor } from './name'
 import {
   LEAD_BEAT_MS,
@@ -85,17 +85,18 @@ import {
   needsReview,
   rejectTask,
   reviewTask,
-  setAutomerge,
-  automergeOf,
+  setMode,
+  modeOf,
+  isMode,
+  modeLabel,
   parseDiffStat,
   statText,
   cutDiff,
   diffKinds,
   DIFF_COLOR,
   DIFF_LINES,
-  parseBoardCommand,
-  parseAutomergeCommand,
-  automergeText,
+  parseCommand,
+  commandNames,
   modeText,
   needsYouFirst,
   type DiffFile,
@@ -123,7 +124,7 @@ const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
 const tab = atom({ plugin: 'symcc', key: 'tab' } as const, '')
 /** which scout the Scouts view has open; '' = the list */
 const scoutOpen = atom({ plugin: 'symcc', key: 'scout' } as const, '')
-const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } as SymccView, { shape: 'view-1' })
+const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as SymccView, { shape: 'view-1' })
 let N = namesFor(DEFAULT_NAME)
 let named = false
 
@@ -137,7 +138,7 @@ function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'automerge'> & { driving: boolean; branch_note: string }>
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean; branch_note: string }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
@@ -368,9 +369,9 @@ async function publish($: $, b: Board) {
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   const branch_note = missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, automerge: automergeOf(b), driving, branch_note }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note }
   await update($, view, () => v)
-  $.ui.status(statusLine(b, driving, branch_note, automergeOf(b)))
+  $.ui.status(statusLine(b, driving, branch_note, modeOf(b)))
 }
 
 // ---------------- telling the lead ----------------
@@ -622,7 +623,7 @@ async function pump($: $) {
   if (!startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!driving) return // another session drives the board and starts its work
   const b = await load($)
-  if (b.paused) return
+  if (modeOf(b) === 'off') return
   if (!ready(b).length) return
   if (!(await targetReady($, b))) return // nothing starts and nothing is marked failed
   for (const t of ready(b)) {
@@ -851,22 +852,34 @@ async function stopWorker($: $, taskId: string, why: string) {
   await publish($, await load($))
 }
 
-/** Stops every worker and scout and pauses the board. Stopped tasks go back to "todo" and continue after resume. */
-async function stopAll($: $, who: string): Promise<string> {
-  await change($, b => ({ ...b, paused: true }))
-  const ids: string[] = []
-  await haltAll($, `${who} stopped all work`, async w => {
-    ids.push(w.task)
-    await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues after resume` }, now()))
+/**
+ * Sets the board mode to `m`; `who` is said in the notes of stopped tasks. "off" stops every
+ * worker and scout at once (their tasks go back to "todo" and continue when work runs again);
+ * "review" or "auto" from "off" starts work again. Going to "auto" does not merge tasks already
+ * in review. Returns one short line: the new mode, what it means, and what happened.
+ */
+async function setBoardMode($: $, m: SymccMode, who: string): Promise<string> {
+  const before = modeOf(await load($))
+  const b = await change($, x => {
+    const y = setMode(x, m)
+    return [y, y] as [Board, Board]
   })
-  await publish($, await load($))
-  return `${ids.length ? `Stopped ${ids.join(', ')}` : 'No workers were running'}. Nothing new starts until resume.`
-}
-
-async function resumeAll($: $): Promise<string> {
-  await change($, b => ({ ...b, paused: false }))
-  void pump($)
-  return 'Resumed: workers start on ready tasks again.'
+  const extra: string[] = []
+  if (m === 'off') {
+    const ids: string[] = []
+    await haltAll($, `${who} turned the board off`, async w => {
+      ids.push(w.task)
+      await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again` }, now()))
+    })
+    if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
+    await publish($, await load($))
+  } else {
+    const inReview = b.tasks.filter(t => t.status === 'review').length
+    if (m === 'auto' && inReview) extra.push(`${inReview} already in review still ${inReview === 1 ? 'waits' : 'wait'} for approve or reject`)
+    if (before === 'off') extra.push('work starts again')
+    void pump($)
+  }
+  return [modeText(m), ...extra].join('; ')
 }
 
 const LIVE = new Set(['pending', 'running', 'waiting'])
@@ -967,7 +980,7 @@ async function runScout($: $, s: ScoutDef) {
   const st = scoutState.get(s.name)
   if (!st || st.running || !driving) return
   const b = await load($)
-  if (b.paused) return
+  if (modeOf(b) === 'off') return
   st.running = true
   st.last_run = now()
   await publish($, b)
@@ -1017,12 +1030,13 @@ async function scheduleScouts($: $) {
   return defs
 }
 
-/** Runs scout `name` now (/scouts run <name>, or "run now" in the panel); says what happened. */
+/** Runs scout `name` now (/<name>-scout <scout>, or "run now" in the panel); says what happened. */
 async function runScoutNow($: $, name: string): Promise<string> {
   const defs = await scheduleScouts($)
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
-  if (!driving) return `scouts run in the session that drives the board; run /scouts run ${s.name} there`
+  if (!driving) return `scouts run in the session that drives the board; run /${N.name}-scout ${s.name} there`
+  if (modeOf(await load($)) === 'off') return `the board is off, so no scout runs; turn it on with /${N.name}-mode review or /${N.name}-mode auto`
   void runScout($, s)
   return `scout ${s.name} started`
 }
@@ -1146,28 +1160,36 @@ const MANUAL = (): Record<string, string> => ({
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
   • Workers are background agents. Each builds one task in its own copy of the code
     (${N.dir}/worktrees/T-n). When it finishes, ${N.name} checks the files it changed, runs the
-    tests and merges into the target branch (target_branch) only if they pass. With
-    auto-merge off (or a task's needs_review) it waits for your approve or reject first.
+    tests and merges into the target branch (target_branch) only if they pass. In mode
+    review (or for a task with needs_review) it waits for your approve or reject first.
+  • The board has one mode: off (nothing runs), review (work runs; finished work waits for
+    you) or auto (work runs; finished work that passes merges on its own; the default).
   • Scouts are background agents on a timer. Each does what its file asks (reading the
     project, running shell commands, searching the web) and reports to the lead, which
     decides what goes on the board.
-  Topics: /${N.man} commands · tasks · lead · workers · scouts · safety`,
+  Topics: /${N.help} commands · tasks · lead · workers · scouts · safety`,
   commands: `Commands
-  /board            open the board panel (↑↓ move, Enter opens a task, Esc closes)
-  /board T-3        open one task
-  /board approve T-5          merge a task that is ready for review
-  /board reject T-5 REASON    send it back to "todo" with the reason
-  /board diff T-5 [FILE]      the files it changed (+/- lines), or one file's diff
-  /board mode [auto|review]   show or set auto-merge (auto = on, review = off)
-  /automerge [on|off]         auto-merge on, or off (review before merge); no word switches it
-  /scouts           show the scouts in the board panel (t / s switch views) and reload their files
-  /scouts run NAME  run a scout now
-  /stop-all         stop every worker and scout, pause the board
-  /resume-all       start work again
-  /${N.man} [TOPIC] this manual
+  /${N.name} opens everything; /${N.name}-WORD does one thing: a plural noun opens a view
+  (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
+  (approve, reject, diff), and mode sets the board mode. The "board" is the whole panel:
+  tasks and scouts.
+  /${N.name}                     open the board panel (↑↓ move, Enter opens, t / s switch views, Esc closes)
+  /${N.name}-tasks               open the panel on the tasks view
+  /${N.name}-scouts              open the panel on the scouts view and reload the scout files
+  /${N.name}-task T-3            open one task
+  /${N.name}-approve T-5         merge a task that is ready for review
+  /${N.name}-reject T-5 REASON   send it back to "todo" with the reason
+  /${N.name}-diff T-5 [FILE]     the files it changed (+/- lines), or one file's diff
+  /${N.name}-scout NAME          run a scout now
+  /${N.name}-mode [off|review|auto]  set the board mode; no word switches review and auto
+                       (from off, no word goes to review)
+                       off: stop every worker and scout now, start nothing new
+                       review: work runs; finished tasks wait for your approve or reject
+                       auto: work runs; finished tasks that pass merge on their own
+  /${N.help} [TOPIC]           this manual
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off.
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
-On the board list: m switches auto-merge on and off.
+On the board list: m switches the mode between review and auto (never to off).
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
 "set the test command to npm test", "give workers 90 minutes".`,
   tasks: `Tasks
@@ -1186,7 +1208,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     dropped          given up
   The board lists the newest task at the top.`,
   lead: `The lead (this chat) has these tools:
-  board · add · change · retry · ask · drop · pause · resume · pause_all · resume_all · settings
+  board · add · change · retry · ask · drop · pause · resume · settings
   approve · reject (only for a task ready for review)
   settings: target_branch (the branch work is merged into; a new board starts on the branch
   you have checked out, and it must be an existing branch), test_commands (must pass before
@@ -1194,11 +1216,12 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
   session starts, on by default), voice (say "T-3 done" out loud when a task is merged;
-  only the session driving the board speaks; on by default), automerge (true merges a
-  finished task that passes at once, the default; false makes every finished task wait
-  for your approve or reject), paused. add and change also take needs_review: that one
-  task waits for review even when auto-merge is on.
-  Turning auto-merge on does not merge tasks already in review; approve or reject them.
+  only the session driving the board speaks; on by default), mode (off stops every
+  worker and scout and starts nothing new; review makes every finished task wait for
+  your approve or reject; auto, the default, merges a finished task that passes at once).
+  add and change also take needs_review: that one task waits for review even in mode auto.
+  Going from review to auto does not merge tasks already in review; approve or reject them.
+  Tasks in review can be approved or rejected in every mode, also off.
   After each worker finishes, the lead gets a "[${N.name}] Update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
@@ -1221,11 +1244,11 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   It does what the file says. It can read files, run shell commands and search or fetch
   web pages, but must not change the project (no edits, installs or git changes). It sends
   its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
-  tells you, or ignores it. Run /scouts after adding or deleting a file.
+  tells you, or ignores it. Run /${N.name}-scouts after adding or deleting a file.
   Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
   • Changes outside a task's files, or that fail the tests, are never merged.
-  • Review step (optional): with auto-merge off (${N.name} settings automerge false) or a task's needs_review,
+  • Review step (optional): in mode review (/${N.name}-mode review) or for a task with needs_review,
     finished work that passes waits as "ready for review" (its branch and folder are kept).
     approve runs the same checked merge (brought up to date, scope checked, tests again if it
     had to merge); reject with a reason sends it back to "todo" for a fresh worker.
@@ -1257,10 +1280,11 @@ This section is for the main conversation only. If you are a subagent (a ${N.nam
 The project has a shared task board (${N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
 - Turn what the owner wants into tasks with ${N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Update" message: decide what's next (retry with ${N.name} change / ${N.name} retry, split, ${N.name} ask the owner, or ${N.name} drop).
-- Review before merge (optional): with ${N.name} settings automerge false, or needs_review on one task (${N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${N.name} approve T-5 (merge it) or ${N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. automerge true (the default) merges on its own; turning it on does not merge tasks already in review.
+- The board has one mode (${N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
+- Review before merge (optional): in mode review, or with needs_review on one task (${N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${N.name} approve T-5 (merge it) or ${N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
 - Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
-- To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} pause_all stops every worker and scout and pauses the board; ${N.name} resume_all starts work again.
+- To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - ${N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${N.name} settings), and reminds you about failed tasks nobody handled.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${N.name} board to see the board.`
 
@@ -1269,7 +1293,7 @@ const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (automerge true).' } } },
+    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' } } },
   },
   {
     name: 'change',
@@ -1283,12 +1307,10 @@ const TOOLS = () => [
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'pause_all', description: `Stop every running worker and scout now and pause the board; nothing new starts until ${N.name} resume_all. Stopped tasks go back to "todo".`, inputSchema: { type: 'object', properties: {} } },
-  { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
-    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), automerge (true: a finished task that passes is merged at once, the default; false: every finished task waits for the owner to approve or reject it; turning it back on does not merge tasks already in review), paused (stop starting new work; running workers go on, use pause_all to stop them too).',
-    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, automerge: { type: 'boolean' }, paused: { type: 'boolean' } } },
+    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
 
@@ -1381,13 +1403,10 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
     }
-    case 'pause_all':
-      return stopAll($, 'the lead')
-    case 'resume_all':
-      return resumeAll($)
     case 'settings': {
       const parts: string[] = []
       const target = str(a.target_branch)?.trim()
+      if (a.mode !== undefined && !isMode(a.mode)) return `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`
       if (a.target_branch !== undefined && !(target && (await branchExists($, target)))) {
         return noBranchText(target ?? String(a.target_branch), await branchList($))
       }
@@ -1400,12 +1419,6 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.auto_retries === 'number') ((y.auto_retries = clampRetries(a.auto_retries)), parts.push(`${y.auto_retries} automatic ${y.auto_retries === 1 ? 'retry' : 'retries'} after failing tests`))
         if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), parts.push(a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
         if (typeof a.voice === 'boolean') ((y.voice = a.voice), parts.push(a.voice ? 'merged tasks are said out loud' : 'merged tasks are no longer said out loud'))
-        if (typeof a.automerge === 'boolean') {
-          const inReview = b.tasks.filter(t => t.status === 'review').length
-          Object.assign(y, setAutomerge(y, a.automerge))
-          parts.push(a.automerge ? `auto-merge on: finished tasks merge on their own${inReview ? ` (${inReview} already in review still wait for approve or reject)` : ''}` : 'auto-merge off: finished tasks now wait for review before merging')
-        }
-        if (typeof a.paused === 'boolean') ((y.paused = a.paused), parts.push(a.paused ? 'paused' : 'resumed'))
         return y
       })
       if (target && missingBranch) {
@@ -1413,6 +1426,8 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         toldMissing = ''
         await publish($, await load($))
       }
+      const mode = a.mode
+      if (isMode(mode)) parts.push(await setBoardMode($, mode, 'the lead'))
       void pump($)
       return parts.join('; ') || 'nothing changed'
     }
@@ -1442,12 +1457,16 @@ async function registerAll($: $) {
   }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
   for (const c of [
-    { name: 'board', description: `Show the ${N.name} task board, or one task in full: /board T-3. Review: /board approve T-5, /board reject T-5 <reason>, /board diff T-5 [file], /board mode [auto|review]`, argumentHint: '[T-id | approve T-id | reject T-id <reason> | diff T-id [file] | mode [auto|review]]' },
-    { name: 'automerge', description: `Switch ${N.name} auto-merge: /automerge on (finished tasks merge on their own), /automerge off (they wait for your review), no word switches it`, argumentHint: '[on|off]' },
-    { name: 'scouts', description: `List ${N.name} scouts, or run one now: /scouts run <name>`, argumentHint: '[run <name>]' },
-    { name: 'stop-all', description: `Stop every ${N.name} worker and scout now; nothing new starts until /resume-all` },
-    { name: 'resume-all', description: `Let ${N.name} start work again` },
-    { name: N.man, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
+    { name: N.name, description: `Open the ${N.name} board panel: tasks and scouts` },
+    { name: `${N.name}-tasks`, description: `Open the ${N.name} board panel on the tasks view` },
+    { name: `${N.name}-scouts`, description: `Open the ${N.name} board panel on the scouts view and reload the scout files` },
+    { name: `${N.name}-task`, description: `Open one ${N.name} task: /${N.name}-task T-3`, argumentHint: '<T-id>' },
+    { name: `${N.name}-approve`, description: `Approve a ${N.name} task that is ready for review (merge it): /${N.name}-approve T-5`, argumentHint: '<T-id>' },
+    { name: `${N.name}-reject`, description: `Reject a ${N.name} task in review, with the reason: /${N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
+    { name: `${N.name}-diff`, description: `Show what a ${N.name} task in review changed, or one file's diff: /${N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
+    { name: `${N.name}-scout`, description: `Run a ${N.name} scout now: /${N.name}-scout <name>`, argumentHint: '<name>' },
+    { name: `${N.name}-mode`, description: `Set the ${N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
+    { name: N.help, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ])
     await ok($.command.register(c))
 }
@@ -1488,7 +1507,7 @@ export const register: Register = on => {
       await publish($, b)
       // Open the board panel by itself (every session, driver or not), without taking the cursor
       // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
-      // that is fine: the band above the prompt and /board still work.
+      // that is fine: the band above the prompt and /<name> still work.
       if (openOnStart(b)) await openPane($, { focus: false, quiet: true })
     } finally {
       startupDone = true
@@ -1562,19 +1581,43 @@ export const register: Register = on => {
     return r
   })
 
-  // /board prints the board; in fullscreen it also opens it as a sidebar beside the chat.
-  // /board approve | reject | mode | diff: the owner's review controls (see parseBoardCommand).
-  on('command.run', { command: 'board' }, async ($, e) => {
+  // Every slash command starts with the plugin's name (see parseCommand): /<name> opens the
+  // panel, /<name>-<word> does one thing. Registered under the plugin's name, so matched here.
+  on('command.run', async ($, e, next) => {
     useName($)
+    if (!commandNames(N.name).includes(e.command)) return next(e)
     const b = await load($)
-    const cmd = parseBoardCommand(e.args)
+    const cmd = parseCommand(e.command, e.args, modeOf(b), N.name)
+    if (!cmd) return next(e)
     const say = (text: string) => ({ text, isTextDisplayOnly: true })
     switch (cmd.kind) {
       case 'bad':
         return say(cmd.message)
+      case 'help':
+        return say(manual(cmd.topic))
+      case 'open':
+      case 'tasks':
+        await openPane($, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
+        return say(`Board opened: ↑↓ to move, Enter to open, t tasks, s scouts, Esc to close. (ctrl+x tab goes back to it.)`)
+      case 'scouts': {
+        const defs = await scheduleScouts($)
+        await publish($, await load($))
+        // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
+        const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
+        if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, Esc closes.`)
+        if (!defs.length) return { text: `No scouts yet. Add one as ${N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
+        return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}`).join('\n') }
+      }
+      case 'scout':
+        return { text: await runScoutNow($, cmd.name) }
+      case 'mode': {
+        const r = await setBoardMode($, cmd.mode, 'you')
+        tellLead($, `The owner set the board mode to ${cmd.mode} with /${N.name}-mode: ${r}`)
+        return say(r)
+      }
       case 'show': {
         const t = find(b, cmd.id)
-        if (!t) return { text: `${cmd.id} is not on the board` }
+        if (!t) return say(`${cmd.id} is not on the board.`)
         await openPane($, { tab: 'tasks', task: t.id })
         return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks))
       }
@@ -1584,33 +1627,26 @@ export const register: Register = on => {
         if (!t) return say(`${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}).`)
         const r = await runTool($, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
-        tellLead($, cmd.kind === 'approve' ? `The owner approved ${t.id} with /board approve: ${r}` : `The owner rejected ${t.id} with /board reject ("${cmd.reason}"): ${r}`)
+        tellLead($, cmd.kind === 'approve' ? `The owner approved ${t.id} with /${N.name}-approve: ${r}` : `The owner rejected ${t.id} with /${N.name}-reject ("${cmd.reason}"): ${r}`)
         return say(r)
-      }
-      case 'mode': {
-        if (cmd.automerge === undefined) return say(`${modeText(automergeOf(b))}. Change it: /board mode auto, or /board mode review`)
-        const r = await runTool($, 'settings', { automerge: cmd.automerge })
-        tellLead($, `The owner turned ${modeText(cmd.automerge)} with /board mode: ${r}`)
-        return say(`${modeText(cmd.automerge)}: ${r}`)
       }
       case 'diff': {
         const t = find(b, cmd.id)
         if (!t) return say(`${cmd.id} is not on the board.`)
-        if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /board diff shows the changes of a task in review.`)
+        if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${N.name}-diff shows the changes of a task in review.`)
         try {
           const files = await changedFiles($, b.target_branch, t)
-          if (!cmd.file) return say(statText(t.id, files))
+          if (!cmd.file) return say(statText(t.id, files, N.name))
           const f = cmd.file.replace(/^\.\//, '')
           if (!files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${files.map(x => x.file).join(', ') || 'nothing'}`)
           const text = await changesText($, b.target_branch, t, f)
-          return say(cutDiff(text, t.id, 5000, f).join('\n') || `${f}: no text changes (binary?)`)
+          return say(cutDiff(text, t.id, 5000, f, N.name).join('\n') || `${f}: no text changes (binary?)`)
         } catch (err) {
           return say(`Could not read the changes of ${t.id}: ${(err as Error).message}`)
         }
       }
     }
-    await openPane($, { tab: 'tasks' })
-    return say(`Board opened: ↑↓ to move, Enter to open a task, Esc to close. (ctrl+x tab goes back to it.)`)
+    return next(e)
   })
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
@@ -1636,7 +1672,7 @@ export const register: Register = on => {
           <Text dimColor>
             {boardWhere(root)}{' '}
             {summary}
-            {v?.paused ? ' · PAUSED (/resume-all)' : ''}
+            {` · ${modeLabel(modeOf(v))}`}
             {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
           </Text>
           </Text>
@@ -1651,49 +1687,9 @@ export const register: Register = on => {
             <Text dimColor>{t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
           </Text>
         ))}
-        {live.length > room && <Text dimColor>+{live.length - room} more · /board</Text>}
+        {live.length > room && <Text dimColor>+{live.length - room} more · /{N.name}</Text>}
       </Box>
     )
-  })
-
-  // /automerge [on|off]: the quick way to set the automerge setting (same path as /board mode).
-  on('command.run', { command: 'automerge' }, async ($, e) => {
-    useName($)
-    const cmd = parseAutomergeCommand(e.args)
-    if (cmd.kind === 'bad') return { text: cmd.message, isTextDisplayOnly: true }
-    const want = cmd.kind === 'set' ? cmd.automerge : !automergeOf(await load($))
-    const r = await runTool($, 'settings', { automerge: want })
-    tellLead($, `The owner turned ${modeText(want)} with /automerge: ${r}`)
-    return { text: `${automergeText(want)} (${r})`, isTextDisplayOnly: true }
-  })
-
-  on('command.run', { command: 'scouts' }, async ($, e) => {
-    useName($)
-    const m = /^run\s+(\S+)/.exec(e.args.trim())
-    if (m) return { text: await runScoutNow($, m[1]!) }
-    const defs = await scheduleScouts($)
-    await publish($, await load($))
-    // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
-    const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
-    if (placed) return { text: `Scouts opened: Enter opens a scout, t tasks, Esc closes.`, isTextDisplayOnly: true }
-    if (!defs.length) return { text: `No scouts yet. Add one as ${N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
-    return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}`).join('\n') }
-  })
-
-  on('command.run', { command: 'stop-all' }, async $ => {
-    useName($)
-    return { text: await stopAll($, 'you') }
-  })
-
-  on('command.run', { command: 'resume-all' }, async $ => {
-    useName($)
-    return { text: await resumeAll($) }
-  })
-
-  // /<name>-man: registered under the plugin's name, so it is matched inside.
-  on('command.run', async ($, e, next) => {
-    useName($)
-    return e.command === N.man ? { text: manual(e.args), isTextDisplayOnly: true } : next(e)
   })
 
   // Esc in an opened scout goes back to the Scouts list (the panel stays open).
@@ -1745,15 +1741,17 @@ export const register: Register = on => {
     const t = open && !onScouts ? v.tasks.find(x => x.id === open) : undefined
     const C = (c: string) => c as never
     const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
-    const automerge = automergeOf(v)
+    const mode = modeOf(v)
+    /** What the m key switches to: review and auto swap; from off it goes to review (m never turns the board off). */
+    const nextMode: SymccMode = mode === 'review' ? 'auto' : 'review'
     const target = v.target_branch ?? emptyBoard().target_branch
-    /** Turns auto-merge on or off, the same setting as `<name> settings automerge`. */
+    /** Switches the board mode between review and auto, the same as /<name>-mode with no word. */
     const switchMode = act(async () => {
-      const r = await runTool($, 'settings', { automerge: !automerge })
+      const r = await setBoardMode($, nextMode, 'you')
       $.ui.toast(N.toast(r))
-      tellLead($, `The owner turned ${modeText(!automerge)} from the board: ${r}`)
+      tellLead($, `The owner set the board mode to ${nextMode} from the board: ${r}`)
     })
-    /** The banner at the top: the drawing, the board's facts, the automerge setting, and the rule under them. */
+    /** The banner at the top: the drawing, the board's facts, the board mode, and the rule under them. */
     const banner = () => {
       const d = emptyBoard()
       const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
@@ -1769,9 +1767,9 @@ export const register: Register = on => {
         )),
         <Box key="banner-mode" flexDirection="row">
           <Text wrap="truncate">
-            <Text bold color={C(automerge ? 'text' : 'suggestion')}>{modeText(automerge)}</Text>{' '}
+            <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeText(mode)}</Text>{' '}
           </Text>
-          <Button key="mode" label={`[m] turn auto-merge ${automerge ? 'off' : 'on'}`} hotkey="m" dimColor onPress={switchMode} />
+          <Button key="mode" label={`[m] switch to ${nextMode}`} hotkey="m" dimColor onPress={switchMode} />
         </Box>,
         <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>,
       ]
@@ -1924,7 +1922,7 @@ export const register: Register = on => {
 
             <Box flexDirection="column">
               {heading('What it looks for')}
-              {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('subtle')}>(not loaded yet: run /scouts)</Text>}
+              {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('subtle')}>(not loaded yet: run /{N.name}-scouts)</Text>}
             </Box>
 
             <Box flexDirection="column">
@@ -1984,7 +1982,7 @@ export const register: Register = on => {
               </Button>
             )
           })}
-          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a scout · run now / edit on its page · /scouts run &lt;name&gt;</Text>}
+          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a scout · run now / edit on its page · /{N.name}-scout &lt;name&gt;</Text>}
         </Box>
       )
     }
@@ -2033,7 +2031,7 @@ export const register: Register = on => {
         // The changes themselves: the diff against the merge base, colored line by line.
         const d = diffOpen
         const got = await changesText($, target, t, d.file).then(
-          x => ({ lines: cutDiff(x, t.id, DIFF_LINES, d.file), error: '' }),
+          x => ({ lines: cutDiff(x, t.id, DIFF_LINES, d.file, N.name), error: '' }),
           (err: Error) => ({ lines: [] as string[], error: err.message }),
         )
         const kinds = diffKinds(got.lines)

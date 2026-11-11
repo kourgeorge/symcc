@@ -135,13 +135,15 @@ This is where symcc keeps your branch safe. Step by step:
 
 ### Review before merge (optional)
 
-By default (`automerge` = `true`) a task that passes steps 1–4 is merged at once. To look at
-the work first:
+The board has one mode, set with `/symcc-mode` or by telling the lead (the setting `mode`):
 
-- Say "review everything before merging" (the setting `automerge` = `false`): every task
-  that finishes from then on waits as `review`.
-- Or mark one task: "T-5 needs review" (`needs_review` on `symcc add` / `symcc change`).
-  That task waits even when auto-merge is on.
+- **`off`**: every running worker and scout stops at once and nothing new starts. Tasks
+  already in review can still be approved or rejected.
+- **`review`**: work runs; every finished task that passes waits as `review` for you.
+- **`auto`** (the default): work runs; a task that passes steps 1–4 is merged at once.
+
+Going from `off` to `review` or `auto` starts work again. In `auto` you can still mark one
+task: "T-5 needs review" (`needs_review` on `symcc add` / `symcc change`); that task waits.
 
 The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) and copy
 (`.symcc/worktrees/T-5`) are kept so you can look at the change. Then:
@@ -159,15 +161,17 @@ You can do all of this yourself, too:
   the files it changed with `+`/`-` line counts. Press `d` (Show changes) for the whole
   diff, or pick a file for just that file's diff, with added lines in green and removed
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
-  A very long diff is cut, with a note like `… 340 more lines (see /board diff T-5)`.
-- The banner shows `auto-merge on` or `auto-merge off (review before merge)`; press `m` to switch.
+  A very long diff is cut, with a note like `… 340 more lines (see /symcc-diff T-5)`.
+- The banner shows the mode, e.g. `⏸ review: work runs; finished tasks wait for your approve or reject`;
+  press `m` to switch between `review` and `auto` (`m` never turns the board off).
 - In any open task, `n` turns that task's own "needs review" on or off.
-- **Slash commands:** `/board approve T-5`, `/board reject T-5 <reason>`,
-  `/board diff T-5` (the changed files with `+`/`-` counts) or `/board diff T-5 <file>`
-  (that file's full diff), and `/board mode auto|review` (with no word: shows the setting; `auto` = auto-merge on, `review` = off).
-- The status line starts with the mode, `⏸ review before merge` or `⏵ auto-merge`, and counts
-  tasks to review by ID, e.g. `⏸ review before merge · 1 to review (T-5)`. With an empty board
-  it shows the mode only in review mode, so a fresh project stays quiet.
+- **Slash commands:** `/symcc-approve T-5`, `/symcc-reject T-5 <reason>`,
+  `/symcc-diff T-5` (the changed files with `+`/`-` counts) or `/symcc-diff T-5 <file>`
+  (that file's full diff), and `/symcc-mode [off|review|auto]` (with no word it switches
+  between `review` and `auto`; from `off` it goes to `review`).
+- The status line starts with the mode, `⏹ off`, `⏸ review` or `⏵ auto`, and counts
+  tasks to review by ID, e.g. `⏸ review · 1 to review (T-5)`. With an empty board it
+  shows nothing in `auto`, so a fresh project stays quiet.
 
 Both only work on a task in `review`. Switching back to `auto` ("merge on your own again")
 does not merge tasks already waiting; approve or reject each of them.
@@ -212,10 +216,10 @@ start nothing. If the driving window closes, another one takes over within a few
 - **The panel** opens by itself when a session starts (on a wide enough terminal, about
   144 columns). It shows a small banner (folder, branch, test command, limits, counts)
   and the task list.
-- **`/board`** opens the interactive board: ↑↓ to move, Enter to open a task, Esc to
+- **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task, Esc to
   close. An open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and a box to answer it when it waits for you.
-  `/board T-3` opens one task directly.
+  `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
 - The panel has two views, Tasks and Scouts, shown as tabs under the banner. Press `t` or
   `s` (or click a tab) to switch. The Scouts view lists each scout: how often it runs, its
   model, whether it is running or when it runs next, and when it last ran. Enter opens a
@@ -229,17 +233,27 @@ start nothing. If the driving window closes, another one takes over within a few
 
 ## Commands
 
+`/symcc` opens everything; `/symcc-<word>` does one thing: a plural noun opens a view
+(tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
+(approve, reject, diff), and `mode` sets the board mode. The "board" is the whole panel:
+tasks and scouts.
+
 | Command | What it does |
 |---|---|
-| `/board` | Open the board (`/board T-3` for one task) |
-| `/board approve T-5` · `/board reject T-5 <reason>` | Merge a task that is ready for review, or send it back with a reason |
-| `/board diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
-| `/board mode [auto\|review]` | Show or set auto-merge (`auto` = on, `review` = off) |
-| `/automerge [on\|off]` | Quick switch for auto-merge: `on`, `off` (review before merge), no word switches it |
-| `/scouts` | Open the panel on the Scouts view (a text list if the panel can't be shown); `/scouts run <name>` runs one now |
-| `/stop-all` | Stop every worker and scout now and pause the board |
-| `/resume-all` | Let work start again |
-| `/symcc-man` | The built-in manual |
+| `/symcc` | Open the board panel (tasks and scouts) |
+| `/symcc-tasks` | Open the panel on the tasks view |
+| `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
+| `/symcc-task T-3` | Open one task |
+| `/symcc-approve T-5` | Merge a task that is ready for review |
+| `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason |
+| `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
+| `/symcc-scout <name>` | Run a scout now |
+| `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
+| `/symcc-help [topic]` | The built-in manual |
+
+In the panel the keys stay the same (`a` approve, `x` reject or drop, `d` changes, `p` pause,
+`u` resume, `r` retry, `m` switch review / auto, ...). If you rename the plugin, every
+command starts with the new name instead.
 
 Everything else, just say it to the lead.
 
@@ -258,8 +272,7 @@ Change any of these by telling the lead (e.g. "give workers 90 minutes").
 | `auto_retries` | 2 | New tries after failing tests before a task is marked failed (0–10) |
 | `open_on_start` | on | Open the board panel when a session starts |
 | `voice` | on | Say "T-3 done" out loud when a task is merged |
-| `automerge` | on | On: merge a finished task that passes at once. Off: every finished task waits for you to approve or reject it |
-| `paused` | off | Stop starting new work (running workers carry on) |
+| `mode` | `auto` | `off`: stop every worker and scout, start nothing new. `review`: work runs, every finished task waits for you to approve or reject it. `auto`: merge a finished task that passes at once |
 
 ---
 
@@ -351,7 +364,7 @@ claude --plugin-dir /path/to/symcc
 The name comes from one place: `"name"` in `.claude-plugin/plugin.json`. Everything else is
 made from it: the data folder (`.<name>/`), task branches (`<name>/T-1`), the commit author,
 the agent types (`<name>:worker`, `<name>:scout`), the tool names (`mcp__<name>__add`), the
-manual command (`/<name>-man`) and all the text on the board. To rename it:
+slash commands (`/<name>`, `/<name>-mode`, `/<name>-help`, ...) and all the text on the board. To rename it:
 
 1. Change `"name"` in `.claude-plugin/plugin.json`, and `DEFAULT_NAME` in `hooks/name.ts`.
 2. Change the name in the two `atom({ plugin: ... })` lines near the top of

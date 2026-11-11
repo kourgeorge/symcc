@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setAutomerge, automergeOf, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseBoardCommand, parseAutomergeCommand, automergeText, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -352,18 +352,17 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   ])
   expect(lines[0]!.parts[0]).toEqual({ text: 'symcc board', tone: 'accent', bold: true })
   expect(bannerRule(12)).toBe('─'.repeat(12))
-  // paused, driven elsewhere, no test command, and a counts line under the drawing, at full width
+  // driven elsewhere, no test command, and a counts line under the drawing, at full width
   const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: 643_700 }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
-  const more = bannerLines({ ...emptyBoard(), paused: true, auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
+  const more = bannerLines({ ...emptyBoard(), mode: 'off', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
   expect(more.map(bannerText)).toEqual([
     `${a0}symcc board · symcc`,
-    `${a1}~/repositories/symcc · main · driven by another session · PAUSED`,
+    `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
     '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
-  expect(more[1]!.parts.at(-1)).toEqual({ text: 'PAUSED', tone: 'warning' })
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
 })
 
@@ -386,13 +385,13 @@ test('another plugin name changes every path, branch, agent type and text made f
   const [b1, t] = addTask(b, { title: 'x', files: ['src/', '.crew/board.json', '.symcc/old.json'] }, T, n.dir)
   const made = [
     n.dir, n.boardFile, n.lockFile, n.leadFile, n.worktrees, n.scouts,
-    n.branch('T-1'), n.author.name, n.author.email, n.worker, n.scout, n.tool('board'), n.pane, n.boardName, n.man, n.toast('stopped 1 old worker'),
+    n.branch('T-1'), n.author.name, n.author.email, n.worker, n.scout, n.tool('board'), n.pane, n.boardName, n.help, n.toast('stopped 1 old worker'),
     boardTitle(root, 'crew'), boardLabel(root, 'crew'), boardText(b1, 0, '~/repositories/app', 'crew'),
     ...bannerLines(b1, root, '/Users/me', true, 80, 0, 'crew').map(bannerText),
   ]
   expect(made.filter(s => s.includes('symcc'))).toEqual([])
   expect([n.dir, n.boardFile, n.lockFile, n.leadFile, n.worktrees, n.scouts]).toEqual(['.crew', '.crew/board.json', '.crew/board.lock', '.crew/lead.json', '.crew/worktrees', '.crew/scouts'])
-  expect([n.branch('T-1'), n.worker, n.scout, n.tool('add'), n.man]).toEqual(['crew/T-1', 'crew:worker', 'crew:scout', 'mcp__crew__add', 'crew-man'])
+  expect([n.branch('T-1'), n.worker, n.scout, n.tool('add'), n.help]).toEqual(['crew/T-1', 'crew:worker', 'crew:scout', 'mcp__crew__add', 'crew-help'])
   expect(n.author).toEqual({ name: 'crew', email: 'crew@localhost' })
   expect(boardTitle(root, 'crew')).toBe(`${ICON} crew board · app`)
   // the new data folder is never a task's file, and a change in it is always out of scope
@@ -656,7 +655,7 @@ test('the status line lists running and failed task IDs, without the folder or "
     statusLine({ tasks: [t('doing', 'T-26'), t('doing', 'T-27'), t('todo'), t('todo')] }, true),
     statusLine({ tasks: [t('failed', 'T-28'), t('done')] }, true),
     statusLine({ tasks: [t('failed', 'T-28'), t('failed', 'T-29')] }, true),
-    statusLine({ tasks: [t('todo')], paused: true }, true),
+    statusLine({ tasks: [t('todo')] }, true, '', 'off'),
     statusLine({ tasks: [t('waiting'), t('paused')] }, true),
     statusLine({ tasks: [t('done')] }, false),
     statusLine({ tasks: [] }, false),
@@ -665,17 +664,17 @@ test('the status line lists running and failed task IDs, without the folder or "
     statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4'].map(id => t('failed', id)) }, true),
   ]
   expect(lines).toEqual([
-    '⏵ auto-merge · all done',
-    '⏵ auto-merge · T-26, T-27 doing · 2 to do',
-    '⏵ auto-merge · 1 failed (T-28)',
-    '⏵ auto-merge · 2 failed (T-28, T-29)',
-    '⏵ auto-merge · 1 to do · paused',
-    '⏵ auto-merge · 1 paused · 1 waiting for you',
-    '⏵ auto-merge · all done (driven by another session)',
-    '⏵ auto-merge · empty (driven by another session)',
+    '⏵ auto · all done',
+    '⏵ auto · T-26, T-27 doing · 2 to do',
+    '⏵ auto · 1 failed (T-28)',
+    '⏵ auto · 2 failed (T-28, T-29)',
+    '⏹ off · 1 to do',
+    '⏵ auto · 1 paused · 1 waiting for you',
+    '⏵ auto · all done (driven by another session)',
+    '⏵ auto · empty (driven by another session)',
     'on dev, not main',
-    '⏵ auto-merge · T-1, T-2, T-3 +2 doing',
-    '⏵ auto-merge · 4 failed (T-1, T-2, T-3 +1)',
+    '⏵ auto · T-1, T-2, T-3 +2 doing',
+    '⏵ auto · 4 failed (T-1, T-2, T-3 +1)',
   ])
   for (const l of lines) {
     expect(l).not.toContain(board)
@@ -684,41 +683,56 @@ test('the status line lists running and failed task IDs, without the folder or "
   expect(statusLine({ tasks: [] }, true)).toBeUndefined()
 })
 
-test('the status line starts with the automerge setting', () => {
+test('the status line starts with the board mode: off, review or auto', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   const tasks = [t('doing', 'T-26'), t('review', 'T-27')]
-  expect(statusLine({ tasks }, true, '', false)).toBe('⏸ review before merge · T-26 doing · 1 to review (T-27)')
-  expect(statusLine({ tasks }, true, '', true)).toBe('⏵ auto-merge · T-26 doing · 1 to review (T-27)')
-  // empty board this session drives: only auto-merge off shows the label; on stays quiet
-  expect(statusLine({ tasks: [] }, true, '', false)).toBe('⏸ review before merge')
-  expect(statusLine({ tasks: [] }, true, 'on dev, not main', false)).toBe('⏸ review before merge · on dev, not main')
-  expect(statusLine({ tasks: [] }, true, '', true)).toBeUndefined()
-  expect(statusLine({ tasks: [] }, true, 'on dev, not main', true)).toBe('on dev, not main')
-  // driven by another session: the label shows either way
-  expect(statusLine({ tasks: [] }, false, '', false)).toBe('⏸ review before merge · empty (driven by another session)')
-  expect(statusLine({ tasks: [] }, false, '', true)).toBe('⏵ auto-merge · empty (driven by another session)')
-  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', false)).toBe('⏸ review before merge · 1 to do (driven by another session)')
+  expect(MODE_LABEL).toEqual({ off: '⏹ off', review: '⏸ review', auto: '⏵ auto' })
+  expect(statusLine({ tasks }, true, '', 'off')).toBe('⏹ off · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks }, true, '', 'review')).toBe('⏸ review · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks }, true, '', 'auto')).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks }, true)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
+  // empty board this session drives: off and review show the label; auto stays quiet
+  expect(statusLine({ tasks: [] }, true, '', 'off')).toBe('⏹ off')
+  expect(statusLine({ tasks: [] }, true, '', 'review')).toBe('⏸ review')
+  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'review')).toBe('⏸ review · on dev, not main')
+  expect(statusLine({ tasks: [] }, true, '', 'auto')).toBeUndefined()
+  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'auto')).toBe('on dev, not main')
+  // driven by another session: the label shows in every mode
+  expect(statusLine({ tasks: [] }, false, '', 'off')).toBe('⏹ off · empty (driven by another session)')
+  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review · empty (driven by another session)')
+  expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto · empty (driven by another session)')
+  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review · 1 to do (driven by another session)')
+  // a bad mode shows as auto
+  expect(statusLine({ tasks }, true, '', 'later' as never)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
+  expect(modeLabel('off')).toBe('⏹ off')
 })
 
 // ---------------- review before merge ----------------
 
-test('automerge defaults to true, also for a board without the field', () => {
-  expect(emptyBoard().automerge).toBe(true)
-  expect(parseBoard(null).automerge).toBe(true)
-  expect(parseBoard(JSON.stringify({ version: 1, next_id: 1, tasks: [] })).automerge).toBe(true)
-  expect(parseBoard(JSON.stringify({ automerge: false, tasks: [] })).automerge).toBe(false)
-  expect(parseBoard(JSON.stringify({ automerge: 'later', tasks: [] })).automerge).toBe(true)
-  expect(automergeOf({})).toBe(true)
+test('the board mode is "auto" by default, also for a board without it or with a bad value', () => {
+  expect(emptyBoard().mode).toBe('auto')
+  expect(parseBoard(null).mode).toBe('auto')
+  expect(parseBoard(JSON.stringify({ version: 1, next_id: 1, tasks: [] })).mode).toBe('auto')
+  expect(parseBoard(JSON.stringify({ mode: 'off', tasks: [] })).mode).toBe('off')
+  expect(parseBoard(JSON.stringify({ mode: 'review', tasks: [] })).mode).toBe('review')
+  expect(parseBoard(JSON.stringify({ mode: 'auto', tasks: [] })).mode).toBe('auto')
+  for (const bad of ['later', 'OFF', '', 1, true, null, ['off']]) expect(parseBoard(JSON.stringify({ mode: bad, tasks: [] })).mode).toBe('auto')
+  expect(modeOf({})).toBe('auto')
+  expect(modeOf(undefined)).toBe('auto')
+  // keys a board does not have are not kept
+  expect(Object.keys(parseBoard(JSON.stringify({ old_key: true, tasks: [] }))).includes('old_key')).toBe(false)
 })
 
-test('needsReview: the board mode or the task flag makes a task wait', () => {
-  const auto = { automerge: true }
-  const review = { automerge: false }
-  expect(needsReview(auto, {})).toBe(false)
-  expect(needsReview(auto, { needs_review: true })).toBe(true)
-  expect(needsReview(review, {})).toBe(true)
-  expect(needsReview(review, { needs_review: true })).toBe(true)
+test('needsReview: mode review (or off) makes every task wait; in auto only a task with needs_review waits', () => {
+  for (const mode of ['review', 'off'] as const) {
+    expect(needsReview({ mode }, {})).toBe(true)
+    expect(needsReview({ mode }, { needs_review: true })).toBe(true)
+  }
+  expect(needsReview({ mode: 'auto' }, {})).toBe(false)
+  expect(needsReview({ mode: 'auto' }, { needs_review: false })).toBe(false)
+  expect(needsReview({ mode: 'auto' }, { needs_review: true })).toBe(true)
   expect(needsReview({}, {})).toBe(false)
+  expect(needsReview({}, { needs_review: true })).toBe(true)
 })
 
 test('add and change set needs_review on a task', () => {
@@ -757,33 +771,34 @@ test('approve and reject refuse a task that is not in review', () => {
   expect(() => reviewTask(b, 'T-99', 'approve')).toThrow('not on the board')
 })
 
-test('turning auto-merge on leaves tasks in review as they are', () => {
-  let [b, t] = addTask(setAutomerge(emptyBoard(), false), { title: 'A' }, T)
-  expect(b.automerge).toBe(false)
+test('going from review to auto leaves tasks in review as they are', () => {
+  let [b, t] = addTask(setMode(emptyBoard(), 'review'), { title: 'A' }, T)
+  expect(b.mode).toBe('review')
   b = patchTask(b, t.id, { status: 'review' }, T)
-  const a = setAutomerge(b, true)
-  expect(a.automerge).toBe(true)
+  const a = setMode(b, 'auto')
+  expect(a.mode).toBe('auto')
   expect(a.tasks[0]!.status).toBe('review')
   expect(a.tasks).toEqual(b.tasks)
 })
 
 test('a task in review counts as open and shows as "ready for review"', () => {
   expect(STATUS_WORD.review).toBe('ready for review')
-  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⏵ auto-merge · 1 to review (T-5)')
+  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⏵ auto · 1 to review (T-5)')
 })
 
 test('the status line lists tasks to review by ID, cut after 3', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
-  expect(statusLine({ tasks: [t('doing', 'T-1'), t('review', 'T-5'), t('todo', 'T-6'), t('failed', 'T-7')] }, true)).toBe('⏵ auto-merge · T-1 doing · 1 to review (T-5) · 1 to do · 1 failed (T-7)')
-  expect(statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('review', id)) }, true)).toBe('⏵ auto-merge · 5 to review (T-1, T-2, T-3 +2)')
+  expect(statusLine({ tasks: [t('doing', 'T-1'), t('review', 'T-5'), t('todo', 'T-6'), t('failed', 'T-7')] }, true)).toBe('⏵ auto · T-1 doing · 1 to review (T-5) · 1 to do · 1 failed (T-7)')
+  expect(statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('review', id)) }, true)).toBe('⏵ auto · 5 to review (T-1, T-2, T-3 +2)')
 })
 
 test('the board text names a task in review', () => {
   let [b, t] = addTask(emptyBoard(), { title: 'Blue button' }, T)
   b = patchTask(b, t.id, { status: 'review' }, T)
   expect(boardText(b)).toMatch(/T-1\s+review\s+Blue button — ready for review/)
-  b = patchTask(setAutomerge(b, false), t.id, { note: 'ready for review: the checks passed' }, T)
-  expect(boardText(b)).toContain('finished work waits for review')
+  expect(boardText(b)).toContain(modeText('auto'))
+  b = patchTask(setMode(b, 'review'), t.id, { note: 'ready for review: the checks passed' }, T)
+  expect(boardText(b)).toContain('⏸ review: work runs; finished tasks wait for your approve or reject')
   expect(boardText(b)).toContain('— ready for review: the checks passed')
 })
 
@@ -813,7 +828,8 @@ test('git diff --stat output becomes one row per file with +/- counts', () => {
   const text = statText('T-5', parseDiffStat(out).slice(0, 2))
   expect(text.split('\n')[0]).toBe('T-5 changes 2 files (+9 -7):')
   expect(text).toContain('hooks/board.ts  +9 -3')
-  expect(text).toContain('/board diff T-5 <file>')
+  expect(text).toContain('/symcc-diff T-5 <file>')
+  expect(statText('T-5', parseDiffStat(out).slice(0, 2), 'crew')).toContain('/crew-diff T-5 <file>')
   expect(statText('T-5', [])).toContain('no changes')
 })
 
@@ -822,35 +838,49 @@ test('a long diff is cut with a note on how many lines are left and where to see
   const cut = cutDiff(diff, 'T-5', 110)
   expect(cut.length).toBe(111)
   expect(cut[109]).toBe('+line 109')
-  expect(cut[110]).toBe('… 340 more lines (see /board diff T-5)')
-  expect(cutDiff(diff, 'T-5', 449, 'a.ts').at(-1)).toBe('… 1 more line (see /board diff T-5 a.ts)')
+  expect(cut[110]).toBe('… 340 more lines (see /symcc-diff T-5)')
+  expect(cutDiff(diff, 'T-5', 449, 'a.ts').at(-1)).toBe('… 1 more line (see /symcc-diff T-5 a.ts)')
+  expect(cutDiff(diff, 'T-5', 449, 'a.ts', 'crew').at(-1)).toBe('… 1 more line (see /crew-diff T-5 a.ts)')
   expect(cutDiff('+a\n-b\n', 'T-5', 10)).toEqual(['+a', '-b'])
   expect(cutDiff('', 'T-5')).toEqual([])
 })
 
 test('diff lines are colored: added in success, removed in error, headers and hunks apart', () => {
-  const lines = ['diff --git a/x.ts b/x.ts', 'index 1..2 100644', '--- a/x.ts', '+++ b/x.ts', '@@ -1,3 +1,3 @@', ' same', '-old', '+new', '--- a line that starts with dashes', '\\ No newline at end of file', '… 3 more lines (see /board diff T-5)']
+  const lines = ['diff --git a/x.ts b/x.ts', 'index 1..2 100644', '--- a/x.ts', '+++ b/x.ts', '@@ -1,3 +1,3 @@', ' same', '-old', '+new', '--- a line that starts with dashes', '\\ No newline at end of file', '… 3 more lines (see /symcc-diff T-5)']
   const kinds = diffKinds(lines)
   expect(kinds).toEqual(['header', 'header', 'header', 'header', 'hunk', 'context', 'remove', 'add', 'remove', 'context', 'note'])
   expect(kinds.map(k => DIFF_COLOR[k])).toEqual(['subtle', 'subtle', 'subtle', 'subtle', 'ide', 'text', 'error', 'success', 'error', 'text', 'warning'])
 })
 
-test('/board subcommands: approve, reject with a reason, mode, diff, and wrong use', () => {
-  expect(parseBoardCommand('')).toEqual({ kind: 'open' })
-  expect(parseBoardCommand(' t-3 ')).toEqual({ kind: 'show', id: 't-3' })
-  expect(parseBoardCommand('approve T-5')).toEqual({ kind: 'approve', id: 'T-5' })
-  expect(parseBoardCommand('approve t5')).toEqual({ kind: 'approve', id: 'T-5' })
-  expect(parseBoardCommand('reject T-5 the button  should be blue')).toEqual({ kind: 'reject', id: 'T-5', reason: 'the button  should be blue' })
-  expect(parseBoardCommand('mode')).toEqual({ kind: 'mode' })
-  expect(parseBoardCommand('mode review')).toEqual({ kind: 'mode', automerge: false })
-  expect(parseBoardCommand('MODE Auto')).toEqual({ kind: 'mode', automerge: true })
-  expect(parseBoardCommand('diff T-5')).toEqual({ kind: 'diff', id: 'T-5' })
-  expect(parseBoardCommand('diff T-5 hooks/board.ts')).toEqual({ kind: 'diff', id: 'T-5', file: 'hooks/board.ts' })
-  for (const bad of ['approve', 'approve banana', 'approve T-5 now', 'reject T-5', 'reject', 'mode later', 'mode auto review', 'diff', 'diff x.ts', 'T-5 something'])
-    expect(parseBoardCommand(bad).kind).toBe('bad')
-  expect((parseBoardCommand('reject T-5') as { message: string }).message).toContain('/board reject T-5 <reason>')
-  expect(modeText(true)).toBe('auto-merge on')
-  expect(modeText(false)).toBe('auto-merge off (review before merge)')
+test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
+  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-help'])
+  expect(commandNames('crew')[0]).toBe('crew')
+  expect(commandNames('crew')).toContain('crew-help')
+  expect(parseCommand('symcc', '')).toEqual({ kind: 'open' })
+  expect(parseCommand('symcc', 'T-3')!.kind).toBe('bad')
+  expect(parseCommand('symcc-tasks', '')).toEqual({ kind: 'tasks' })
+  expect(parseCommand('symcc-scouts', ' ')).toEqual({ kind: 'scouts' })
+  expect(parseCommand('symcc-task', ' t-3 ')).toEqual({ kind: 'show', id: 'T-3' })
+  expect(parseCommand('symcc-approve', 'T-5')).toEqual({ kind: 'approve', id: 'T-5' })
+  expect(parseCommand('symcc-approve', 't5')).toEqual({ kind: 'approve', id: 'T-5' })
+  expect(parseCommand('symcc-reject', 'T-5 the button  should be blue')).toEqual({ kind: 'reject', id: 'T-5', reason: 'the button  should be blue' })
+  expect(parseCommand('symcc-diff', 'T-5')).toEqual({ kind: 'diff', id: 'T-5' })
+  expect(parseCommand('symcc-diff', 'T-5 hooks/board.ts')).toEqual({ kind: 'diff', id: 'T-5', file: 'hooks/board.ts' })
+  expect(parseCommand('symcc-scout', 'bugs')).toEqual({ kind: 'scout', name: 'bugs' })
+  expect(parseCommand('symcc-help', '')).toEqual({ kind: 'help', topic: '' })
+  expect(parseCommand('symcc-help', ' scouts ')).toEqual({ kind: 'help', topic: 'scouts' })
+  expect(parseCommand('symcc-mode', 'off')).toEqual({ kind: 'mode', mode: 'off' })
+  const bads: [string, string][] = [['symcc-tasks', 'x'], ['symcc-scouts', 'run bugs'], ['symcc-task', ''], ['symcc-task', 'banana'], ['symcc-task', 'T-3 T-4'], ['symcc-approve', ''], ['symcc-approve', 'banana'], ['symcc-approve', 'T-5 now'], ['symcc-reject', 'T-5'], ['symcc-reject', ''], ['symcc-diff', ''], ['symcc-diff', 'x.ts'], ['symcc-scout', ''], ['symcc-scout', 'a b'], ['symcc-mode', 'later']]
+  for (const [c, a] of bads) expect(parseCommand(c, a)!.kind).toBe('bad')
+  expect((parseCommand('symcc-reject', 'T-5') as { message: string }).message).toContain('/symcc-reject T-5 <reason>')
+  expect((parseCommand('symcc-approve', '') as { message: string }).message).toBe('Use: /symcc-approve T-5')
+  // not ours: old names and other plugins' commands
+  for (const c of ['board', 'scouts', 'symccx', 'other-mode', 'symcc-board', 'symcc-'])
+    expect(parseCommand(c, '')).toBeNull()
+  // a renamed plugin gets its own prefix
+  expect(parseCommand('crew-approve', 'T-5', 'auto', 'crew')).toEqual({ kind: 'approve', id: 'T-5' })
+  expect(parseCommand('symcc-approve', 'T-5', 'auto', 'crew')).toBeNull()
+  expect((parseCommand('crew-task', '', 'auto', 'crew') as { message: string }).message).toBe('Use: /crew-task T-3')
 })
 
 test('in the panel, tasks in review, waiting and failed come first, the rest keep their order', () => {
@@ -858,14 +888,25 @@ test('in the panel, tasks in review, waiting and failed come first, the rest kee
   expect(needsYouFirst(ts).map(t => t.id)).toEqual(['T-4', 'T-6', 'T-5', 'T-2', 'T-0', 'T-1', 'T-3'])
 })
 
-test('parseAutomergeCommand: none switches, on/off set it, junk gives usage', () => {
-  expect(parseAutomergeCommand('')).toEqual({ kind: 'toggle' })
-  expect(parseAutomergeCommand('  ')).toEqual({ kind: 'toggle' })
-  expect(parseAutomergeCommand('on')).toEqual({ kind: 'set', automerge: true })
-  expect(parseAutomergeCommand(' OFF ')).toEqual({ kind: 'set', automerge: false })
-  const bad = parseAutomergeCommand('maybe')
-  expect(bad.kind).toBe('bad')
-  expect(parseAutomergeCommand('on off').kind).toBe('bad')
-  expect(automergeText(true)).toBe('auto-merge on: finished tasks merge on their own')
-  expect(automergeText(false)).toBe('auto-merge off: finished tasks wait for your review')
+test('/symcc-mode: no word switches review and auto (off goes to review), a word sets it, junk gives usage', () => {
+  expect(parseModeCommand('', 'auto')).toEqual({ kind: 'mode', mode: 'review' })
+  expect(parseModeCommand('', 'review')).toEqual({ kind: 'mode', mode: 'auto' })
+  expect(parseModeCommand('  ', 'off')).toEqual({ kind: 'mode', mode: 'review' })
+  for (const now of ['off', 'review', 'auto'] as const) {
+    expect(parseModeCommand('off', now)).toEqual({ kind: 'mode', mode: 'off' })
+    expect(parseModeCommand(' Review ', now)).toEqual({ kind: 'mode', mode: 'review' })
+    expect(parseModeCommand('AUTO', now)).toEqual({ kind: 'mode', mode: 'auto' })
+  }
+  for (const junk of ['on', 'paused', 'auto review', 'maybe']) {
+    const r = parseModeCommand(junk, 'auto')
+    expect(r.kind).toBe('bad')
+    expect((r as { message: string }).message).toContain('/symcc-mode')
+  }
+  expect((parseModeCommand('x', 'auto', 'crew') as { message: string }).message).toContain('/crew-mode off|review|auto')
+  // the same through parseCommand, with the board's mode
+  expect(parseCommand('symcc-mode', '', 'review')).toEqual({ kind: 'mode', mode: 'auto' })
+  expect(parseCommand('symcc-mode', '', 'off')).toEqual({ kind: 'mode', mode: 'review' })
+  expect(modeText('off')).toBe('⏹ off: no work runs; tasks in review can still be approved or rejected')
+  expect(modeText('review')).toBe('⏸ review: work runs; finished tasks wait for your approve or reject')
+  expect(modeText('auto')).toBe('⏵ auto: work runs; finished tasks that pass merge on their own')
 })

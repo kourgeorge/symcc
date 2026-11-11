@@ -1,5 +1,8 @@
 // symcc's values the panel and status line draw from.
 /** "review": the worker is done and the checks passed, but nothing is merged until the owner approves. */
+/** The board mode: "off" (nothing runs), "review" (finished work waits for the owner), "auto" (finished work that passes merges on its own; the default). */
+export type SymccMode = 'off' | 'review' | 'auto'
+
 export type SymccStatus = 'todo' | 'doing' | 'paused' | 'waiting' | 'review' | 'failed' | 'done' | 'dropped'
 
 /**
@@ -35,7 +38,7 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
-  /** wait for the owner's review before merging, even when the board's automerge is on */
+  /** wait for the owner's review before merging, even when the board's mode is "auto" */
   needs_review?: boolean
   /** one entry per worker try, oldest first */
   runs?: SymccRun[]
@@ -65,7 +68,7 @@ export type SymccView = {
   tasks: SymccTask[]
   working: { task: string; since: number }[]
   scouts: SymccScout[]
-  paused: boolean
+  mode: SymccMode
   test_commands: string[]
 }
 

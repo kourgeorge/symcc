@@ -23,7 +23,7 @@ const task = (id: string, status: string, title: string, extra: Record<string, u
 test('the panel shows the board, newest task first, with their question', async ($, on) => {
   on('state.get', () => ({
     value: {
-      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [{ name: 'tests', every_minutes: 30, last_run: null, running: true }], paused: false, test_commands: ['npm test'] } },
+      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [{ name: 'tests', every_minutes: 30, last_run: null, running: true }], mode: 'auto', test_commands: ['npm test'] } },
       version: 1,
     },
   }))
@@ -74,7 +74,7 @@ const BAND = {
 test('the band above the prompt sums up the board and lists what needs you or is running', async ($, on) => {
   on('state.get', () => ({
     value: {
-      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], paused: false, test_commands: [] } },
+      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], mode: 'auto', test_commands: [] } },
       version: 1,
     },
   }))
@@ -99,7 +99,7 @@ test('with an empty board the band shows nothing of its own', async ($, on) => {
 })
 
 test('the board panel is interactive: open a task, see its details, go back', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'failed', 'Explore the market', { details: 'Research what is new.', note: 'the worker was stopped', history: ['try 1: stopped'] }), task('T-2', 'todo', 'Write it up')], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'failed', 'Explore the market', { details: 'Research what is new.', note: 'the worker was stopped', history: ['try 1: stopped'] }), task('T-2', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
@@ -115,7 +115,7 @@ test('the board panel is interactive: open a task, see its details, go back', as
 })
 
 test('a waiting task opens with a box to answer it', async ($, on) => {
-  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' })], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /asks: Case-sensitive/ }))).toBeDefined()
   expect((await ui.find({ key: 'answer' }))).toBeDefined()
@@ -125,7 +125,7 @@ test('a waiting task opens with a box to answer it', async ($, on) => {
 
 test('an opened task shows its details in full, in clear sections', async ($, on) => {
   const long = 'First line of the plan.\n\nSecond paragraph that is long. '.repeat(20)
-  stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /What to do/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /THE END/ })).toBeDefined()
@@ -137,7 +137,7 @@ test('an opened task shows its details in full, in clear sections', async ($, on
 })
 
 test('a task that is not running can be paused from the board', async ($, on) => {
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'pause' })).toBeDefined()
   expect(await ui.find({ key: 'resume' })).toBeUndefined()
@@ -145,7 +145,7 @@ test('a task that is not running can be paused from the board', async ($, on) =>
 })
 
 test('a paused task shows as paused and can be resumed from the board', async ($, on) => {
-  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [task('T-2', 'paused', 'Later')], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [task('T-2', 'paused', 'Later')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /paused/ })).toBeDefined()
   expect(await ui.find({ key: 'resume' })).toBeDefined()
@@ -159,7 +159,7 @@ const RUNS = [
 ]
 
 test('an opened task shows the time of each try and the total', async ($, on) => {
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS })], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /Time and cost/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens/ })).toBeDefined()
@@ -169,7 +169,7 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
 })
 
 test('the banner shows the counts and the total time and cost of all tries', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens · ~\$0\.42$/ })).toBeDefined()
   await ui.unmount()
@@ -191,7 +191,7 @@ test('finished tasks of older days fold into one row per day, which opens on Ent
         ],
         working: [],
         scouts: [],
-        paused: false,
+        mode: 'auto',
         test_commands: [],
       },
     },
@@ -222,7 +222,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
         tasks: [task('T-1', 'todo', 'Build it')],
         working: [],
         scouts: [scout('bugs', { model: 'sonnet', next_run: soon, last_run: ran, prompt: 'Look for crashes.', last_report: '- crash in parser | src/p.ts:3 | src/p.ts' }), scout('tests', { running: true })],
-        paused: false,
+        mode: 'auto',
         test_commands: [],
       },
     },
@@ -240,7 +240,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(await ui.find({ key: 'T-1' })).toBeDefined()
     // the Tasks view no longer lists the scouts at the bottom (they have their own view)
     expect(await ui.find({ type: 'Text', text: /^scouts: / })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /\/scouts run/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /\/symcc-scout / })).toBeUndefined()
     // "s" presses the Scouts tab
     await ui.press({ key: 'tab-scouts' })
     expect(await ui.find({ key: 'T-1' })).toBeUndefined()
@@ -255,7 +255,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(await ui.find({ type: 'Text', text: /next in 12m/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /ran 8m ago/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /never ran/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter opens a scout · run now \/ edit on its page · \/scouts run <name>$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter opens a scout · run now \/ edit on its page · \/symcc-scout <name>$/ })).toBeDefined()
     expect(await ui.find({ key: 'scout-new' })).toBeDefined()
     const running = (await ui.findAll({ type: 'Text', text: /running/ })).find(x => x.props.color === 'success')
     expect(running).toBeDefined()
@@ -283,14 +283,14 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
 })
 
 test('a scout that found nothing says so', async ($, on) => {
-  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { last_run: new Date().toISOString(), last_report: 'NOTHING' })], paused: false, test_commands: [] } } })
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { last_run: new Date().toISOString(), last_report: 'NOTHING' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^nothing found$/ })).toBeDefined()
   await ui.unmount()
 })
 
 test('with no scouts the Scouts view shows how to add one', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-scouts' })
   expect(await ui.find({ type: 'Text', text: /No scouts yet/ })).toBeDefined()
@@ -302,7 +302,7 @@ test('with no scouts the Scouts view shows how to add one', async ($, on) => {
 })
 
 test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', async ($, on) => {
-  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { model: 'sonnet', prompt: 'Look for crashes.\nAnd leaks.' })], paused: false, test_commands: [] } } })
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { model: 'sonnet', prompt: 'Look for crashes.\nAnd leaks.' })], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'scout-edit' })
@@ -326,7 +326,7 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
 })
 
 test('"New scout" asks for a name, refuses a bad or taken one, then opens the edit mode', async ($, on) => {
-  stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs')], paused: false, test_commands: [] } } })
+  stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs')], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'scout-new' })
   await ui.input({ key: 'scout-new-name', text: 'bugs' })
@@ -342,19 +342,33 @@ test('"New scout" asks for a name, refuses a bad or taken one, then opens the ed
   await ui.unmount()
 })
 
-test('a task in review is listed near the top as "ready for review", and the banner shows the automerge setting', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], paused: false, test_commands: [], automerge: false } } })
+test('a task in review is listed near the top as "ready for review", and the banner shows the board mode', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /◆ ready for review/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^auto-merge off \(review before merge\) $/ })).toBeDefined()
-  expect(await ui.find({ key: 'mode' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^⏸ review: work runs; finished tasks wait for your approve or reject $/ })).toBeDefined()
+  expect((await ui.find({ key: 'mode' }))!.props.label).toBe('[m] switch to auto')
   const rows = (await ui.findAll({ type: 'Text', text: /^T-\d+\s*$/ })).map(x => x.text.trim())
   expect(rows[0]).toBe('T-5')
   await ui.unmount()
 })
 
+const MODE_CASES = [
+  ['auto', /^⏵ auto: work runs; finished tasks that pass merge on their own $/, '[m] switch to review'],
+  ['off', /^⏹ off: no work runs; tasks in review can still be approved or rejected $/, '[m] switch to review'],
+  ['later', /^⏵ auto: /, '[m] switch to review'],
+] as const
+for (const [mode, text, label] of MODE_CASES)
+  test(`the banner shows mode "${mode}" with its label, and m switches only between review and auto`, async ($, on) => {
+    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Later')], working: [], scouts: [], mode, test_commands: [] } } })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text })).toBeDefined()
+    expect((await ui.find({ key: 'mode' }))!.props.label).toBe(label)
+    await ui.unmount()
+  })
+
 test('a task in review opens with Approve, Reject and Show changes; Reject asks for a reason', async ($, on) => {
-  stateOf(on, { opened: 'T-5', view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-5', view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /ready for review/ })).toBeDefined()
@@ -379,7 +393,7 @@ test('a task in review opens with Approve, Reject and Show changes; Reject asks 
 })
 
 test('a task not in review has a needs_review toggle but no review buttons', async ($, on) => {
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it', { needs_review: true })], working: [], scouts: [], paused: false, test_commands: [] } } })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it', { needs_review: true })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'needs-review' })).toBeDefined()
   expect((await ui.find({ key: 'needs-review' }))!.props.label).toBe('Needs review: on')
