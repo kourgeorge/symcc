@@ -58,6 +58,10 @@ worthwhile ones as tasks. `examples/scouts/` has two to copy.
   Claude Code only places a panel it wasn't asked for when the terminal is wide enough
   (about 144 columns); on a narrower one nothing opens and no error shows. The band above
   the prompt and `/board` still work.
+- When a task is merged you hear a short line, e.g. "T-3 done" (several close together are
+  joined: "T-3 and T-4 done"). macOS uses `say`; Linux uses `spd-say` or `espeak` if one is
+  installed; elsewhere it stays silent. Only the session driving the board speaks. Turn it
+  off with the `voice` setting (e.g. "symcc settings voice false").
 - `/board`: open the interactive board: ↑↓ to move, Enter to open a task, Esc to close.
   An open task shows everything about it and has buttons to pause, resume, retry, drop,
   watch its worker live, and a box to answer it when it waits for you. `/board T-3` opens that task directly. `ctrl+x tab` goes back to it.

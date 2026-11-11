@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { DEFAULT_NAME, cleanName, namesFor } from '../hooks/name'
-import { bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -277,6 +277,22 @@ test('the board panel opens on start unless the open_on_start setting is turned 
   const off = { ...b, open_on_start: false }
   expect(openOnStart(off)).toBe(false)
   expect(openOnStart(parseBoard(JSON.stringify(off)))).toBe(false)
+})
+
+test('a merged task is said out loud, several are joined into one line, and the voice setting turns it off', async () => {
+  expect(spokenDone(['T-3'])).toBe('T-3 done')
+  expect(spokenDone(['T-3', 'T-4'])).toBe('T-3 and T-4 done')
+  expect(spokenDone(['T-3', 'T-4', 'T-5'])).toBe('T-3, T-4 and T-5 done')
+  expect(spokenDone(['T-3', 'T-3'])).toBe('T-3 done')
+  expect(spokenDone([])).toBe('')
+  const b = emptyBoard()
+  expect(b.voice).toBe(true)
+  expect(voiceOn(b)).toBe(true)
+  expect(voiceOn({})).toBe(true)
+  expect(voiceOn(parseBoard(JSON.stringify({ version: 1, tasks: [] })))).toBe(true)
+  const off = { ...b, voice: false }
+  expect(voiceOn(off)).toBe(false)
+  expect(voiceOn(parseBoard(JSON.stringify(off)))).toBe(false)
 })
 
 test('the project folder name is the last part of its path', () => {

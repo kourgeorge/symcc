@@ -44,6 +44,8 @@ import {
   DEFAULT_AUTO_RETRIES,
   clampRetries,
   openOnStart,
+  spokenDone,
+  voiceOn,
   onTestFail,
   testTail,
   startRun,
@@ -318,6 +320,57 @@ function tellLead($: $, text: string) {
   })
 }
 
+// ---------------- saying it out loud ----------------
+
+/** task ids merged but not yet said; joined into one line so lines never talk over each other */
+const sayQueue: string[] = []
+let sayTimer: { cancel(): void } | null = null
+let saying = false
+/** how this machine speaks: a command that takes the text last, or null for silence (found once) */
+let speaker: Promise<string[][]> | null = null
+
+function speakers($: $): Promise<string[][]> {
+  speaker ??= $.process
+    .run(['uname', '-s'], { timeoutMs: 5000 })
+    .then(r => {
+      const os = String(r.stdout ?? '').trim()
+      if (os === 'Darwin') return [['say', '-r', '200']]
+      if (os === 'Linux') return [['spd-say', '-w'], ['espeak']]
+      return []
+    })
+    .catch(() => [])
+  return speaker
+}
+
+/** Says "T-3 done" for a merged task, if this session drives the board and voice is on. Never waits, never shows an error. */
+function sayDone($: $, b: Board, id: string) {
+  if (!driving || !voiceOn(b)) return
+  sayQueue.push(id)
+  if (sayTimer || saying) return
+  sayTimer = $.clock.after(1500, () => {
+    sayTimer = null
+    void sayNext($)
+  })
+}
+
+async function sayNext($: $) {
+  if (saying) return
+  const text = spokenDone(sayQueue.splice(0))
+  if (!text) return
+  saying = true
+  try {
+    for (const cmd of await speakers($)) {
+      const r = await $.process.run([...cmd, text], { timeoutMs: 30_000 }).catch(() => null)
+      if (r && r.exitCode === 0) break
+    }
+  } catch {
+    // stay silent
+  } finally {
+    saying = false
+  }
+  if (sayQueue.length) void sayNext($)
+}
+
 // ---------------- git ----------------
 
 async function git($: $, args: string[], cwd = root, timeoutMs = 120_000) {
@@ -590,6 +643,7 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
     const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
     const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
     await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
+    if (r.ok) sayDone($, b, t.id)
     if (r.ok) await removeWorktree($, t.id, w.worktree, agentId)
     const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
     tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
@@ -845,7 +899,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
-  session starts, on by default), paused.
+  session starts, on by default), voice (say "T-3 done" out loud when a task is merged;
+  only the session driving the board speaks; on by default), paused.
   After each worker finishes, the lead gets a "[${N.name}] Update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
@@ -921,8 +976,8 @@ const TOOLS = () => [
   { name: 'resume_all', description: 'Unpause the board: workers start on ready tasks again.', inputSchema: { type: 'object', properties: {} } },
   {
     name: 'settings',
-    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
-    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, paused: { type: 'boolean' } } },
+    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), paused (stop starting new work; running workers go on, use stop_all to stop them too).',
+    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, paused: { type: 'boolean' } } },
   },
 ]
 
@@ -1019,6 +1074,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.max_minutes === 'number') ((y.max_minutes = Math.max(5, Math.min(600, Math.round(a.max_minutes)))), parts.push(`a worker may run ${y.max_minutes} min`))
         if (typeof a.auto_retries === 'number') ((y.auto_retries = clampRetries(a.auto_retries)), parts.push(`${y.auto_retries} automatic ${y.auto_retries === 1 ? 'retry' : 'retries'} after failing tests`))
         if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), parts.push(a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
+        if (typeof a.voice === 'boolean') ((y.voice = a.voice), parts.push(a.voice ? 'merged tasks are said out loud' : 'merged tasks are no longer said out loud'))
         if (typeof a.paused === 'boolean') ((y.paused = a.paused), parts.push(a.paused ? 'paused' : 'resumed'))
         return y
       })

@@ -17,6 +17,8 @@ export type Board = {
   auto_retries: number
   /** open the board panel by itself when a session starts (true unless turned off) */
   open_on_start: boolean
+  /** say it out loud when a task is merged (true unless turned off) */
+  voice: boolean
   tasks: BoardTask[]
 }
 
@@ -60,7 +62,7 @@ export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'faile
 
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, tasks: [] }
+  return { version: 1, next_id: 1, paused: false, test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, voice: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -223,6 +225,17 @@ export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
 
 /** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */
 export const openOnStart = (b: Partial<Pick<Board, 'open_on_start'>>) => b.open_on_start !== false
+
+/** Should a merged task be said out loud? Yes unless the board turned voice off. */
+export const voiceOn = (b: Partial<Pick<Board, 'voice'>>) => b.voice !== false
+
+/** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
+export function spokenDone(ids: string[]): string {
+  const xs = [...new Set(ids.map(x => String(x ?? '').trim()).filter(Boolean))]
+  if (!xs.length) return ''
+  const list = xs.length === 1 ? xs[0]! : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
+  return `${list} done`
+}
 
 /** A settings value for auto_retries: a whole number from 0 to 10. */
 export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(Number.isFinite(n) ? n : DEFAULT_AUTO_RETRIES)))
