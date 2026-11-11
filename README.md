@@ -230,6 +230,11 @@ Look for risky code that has no tests. Point at file:line and say what could go 
 Scouts only read files. What they find goes to the lead, which puts the worthwhile items
 on the board as tasks. `examples/scouts/` has two to copy.
 
+You can also make and change scouts right in the board panel: on the Scouts view, "New
+scout" asks for a name, and "Edit" on a scout's page lets you change how often it runs, its
+model and its instructions. Save writes the file (other front matter keys are kept) and the
+new timing applies at once.
+
 ---
 
 ## Where everything lives

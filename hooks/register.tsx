@@ -67,6 +67,10 @@ import {
   outOfScope,
   parseBoard,
   parseScout,
+  scoutText,
+  scoutNameError,
+  scoutDraftError,
+  everyMinutesOf,
   parseLead,
   patchTask,
   ready,
@@ -150,6 +154,11 @@ let startupDone = false
 const notReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 const openDays = new Set<string>()
+/** the scout being edited in the board panel (its edit mode), or null; `isNew` for one made with "new scout" */
+type ScoutDraft = { scout: string; isNew: boolean; every: string; model: string; body: string; error: string }
+let draft: ScoutDraft | null = null
+/** the "new scout" name box on the Scouts view, or null when it isn't shown */
+let naming: { name: string; error: string } | null = null
 
 // ---------------- the board on disk ----------------
 
@@ -902,6 +911,70 @@ async function runScoutNow($: $, name: string): Promise<string> {
   return `scout ${s.name} started`
 }
 
+/** A scout file's text, or null when there is none (or it can't be read). */
+async function readScoutFile($: $, scout: string): Promise<string | null> {
+  const file = path(scoutFile(scout, N.name))
+  return (await $.fs.exists(file).catch(() => false)) ? await $.fs.read(file).catch(() => null) : null
+}
+
+/** Opens the panel's edit mode for scout `sc`, filled from its file (or from what the panel knows). */
+async function editScout($: $, sc: SymccScout) {
+  const text = await readScoutFile($, sc.name)
+  const def = text === null ? null : parseScout(sc.name, text)
+  draft = { scout: sc.name, isNew: false, every: String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
+  $.ui.invalidate('ui.render')
+}
+
+/** Starts a new scout named as typed: refused when the name is bad or taken; else opens the edit mode. */
+async function newScout($: $, name: string, shown: string[] = []) {
+  const s = name.trim()
+  const have = [...shown, ...scoutState.keys(), ...(await loadScouts($).catch(() => [] as ScoutDef[])).map(d => d.name)]
+  let err = scoutNameError(s, have)
+  if (!err && (await readScoutFile($, s)) !== null) err = `a scout named ${s} already exists`
+  if (err) {
+    naming = { name: s, error: err }
+  } else {
+    naming = null
+    draft = { scout: s, isNew: true, every: '60', model: '', body: '', error: '' }
+  }
+  $.ui.invalidate('ui.render')
+}
+
+/** Saves the edit mode to .<name>/scouts/<scout>.md, keeping the other front matter keys, and reloads the scouts. */
+async function saveScout($: $) {
+  const d = draft
+  if (!d) return
+  const err = scoutDraftError(d)
+  if (err) {
+    d.error = err
+    $.ui.invalidate('ui.render')
+    return
+  }
+  const old = await readScoutFile($, d.scout)
+  if (d.isNew && old !== null) {
+    d.error = `a scout named ${d.scout} already exists`
+    $.ui.invalidate('ui.render')
+    return
+  }
+  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model }, d.body)
+  await $.process.run(['mkdir', '-p', path(N.scouts)])
+  await $.fs.write(path(scoutFile(d.scout, N.name)), text)
+  draft = null
+  // The same path as a Write to a scout file: reschedule, so the new timing applies now.
+  await scheduleScouts($)
+  await publish($, await load($))
+  await update($, scoutOpen, () => d.scout)
+  $.ui.toast(N.toast(`saved ${scoutFile(d.scout, N.name)}`))
+  $.ui.invalidate('ui.render')
+}
+
+/** Leaves the edit mode (and the new scout name box) without saving. */
+function cancelScoutEdit($: $) {
+  draft = null
+  naming = null
+  $.ui.invalidate('ui.render')
+}
+
 /** Opens the board panel on a view ('tasks' or 'scouts'), with nothing opened in it. */
 async function openPane($: $, which: 'tasks' | 'scouts', focus = true) {
   await update($, opened, () => '')
@@ -1399,11 +1472,18 @@ export const register: Register = on => {
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== N.pane) return next(e)
+    // Esc in a scout's edit mode (or the new scout name box) cancels it.
+    if (e.origin.kind === 'person' && (draft || naming) && (await read($, tab)) === 'scouts') {
+      cancelScoutEdit($)
+      return { value: undefined }
+    }
     if (e.origin.kind === 'person' && (await read($, tab)) === 'scouts' && (await read($, scoutOpen))) {
       await update($, scoutOpen, () => '')
       return { value: undefined }
     }
     openDays.clear()
+    draft = null
+    naming = null
     await update($, tab, () => '').catch(() => undefined)
     await update($, scoutOpen, () => '').catch(() => undefined)
     return next(e)
@@ -1445,7 +1525,7 @@ export const register: Register = on => {
     }
     /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */
     const tabs = () => {
-      const go = (which: 'tasks' | 'scouts') => act(async () => (await update($, opened, () => ''), await update($, scoutOpen, () => ''), await update($, tab, () => which)))
+      const go = (which: 'tasks' | 'scouts') => act(async () => ((draft = null), (naming = null), await update($, opened, () => ''), await update($, scoutOpen, () => ''), await update($, tab, () => which)))
       const one = (which: 'tasks' | 'scouts', label: string) => {
         const active = which === 'scouts' ? onScouts : !onScouts
         return (
@@ -1510,6 +1590,48 @@ export const register: Register = on => {
           )
         return <Text>{rich(line)}</Text>
       })
+    if (onScouts && draft) {
+      // A scout's edit mode: the same header as its page, then a box per part of its file.
+      const d = draft
+      const sc = scouts.find(x => x.name === d.scout)
+      const r = sc ? scoutRow(sc, Date.now()) : undefined
+      const file = scoutFile(d.scout, N.name)
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Box flexDirection="column">
+            <Text>
+              <Text bold color={C('claude')}>{d.scout}</Text>{' '}
+              <Text bold color={C('warning')}>{d.isNew ? 'new scout' : 'editing'}</Text>
+              {r ? <Text color={C('subtle')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · {r.ran}</Text> : null}
+            </Text>
+            <Text color={C('subtle')}>save writes {file}</Text>
+          </Box>
+
+          <Box flexDirection="row" gap={1}>
+            <Button key="scout-save" label="Save" onPress={act(() => saveScout($))} />
+            <Button key="scout-cancel" label="Cancel" onPress={() => cancelScoutEdit($)} />
+          </Box>
+
+          {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
+
+          <Box flexDirection="column">
+            {heading('every (minutes)')}
+            <Input key="scout-every" value={d.every} placeholder="a whole number, 1 or more" autoFocus submitLabel="keep" onInput={value => void (d.every = value)} onSubmit={value => void (d.every = value)} />
+          </Box>
+
+          <Box flexDirection="column">
+            {heading('model')}
+            <Input key="scout-model" value={d.model} placeholder="empty: the session's model" submitLabel="keep" onInput={value => void (d.model = value)} onSubmit={value => void (d.model = value)} />
+          </Box>
+
+          <Box flexDirection="column">
+            {heading('instructions')}
+            <Input key="scout-body" value={d.body} rows={8} placeholder="what to look for, in plain words" submitLabel="keep" onInput={value => void (d.body = value)} onSubmit={value => void (d.body = value)} />
+          </Box>
+          <Text color={C('subtle')}>↑↓ move between boxes · other front matter keys are kept · Esc cancels</Text>
+        </Box>
+      )
+    }
     if (onScouts) {
       const nowMs = Date.now()
       const opener = await read($, scoutOpen)
@@ -1544,7 +1666,7 @@ export const register: Register = on => {
             <Box flexDirection="row" gap={1}>
               <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => update($, scoutOpen, () => ''))} />
               <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(N.toast(await runScoutNow($, sc.name))))} />
-              <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(async () => $.ui.toast(N.toast(`to edit it, open ${root ? `${root}/` : ''}${file}`)))} />
+              <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout($, sc))} />
             </Box>
 
             <Box flexDirection="column">
@@ -1568,6 +1690,26 @@ export const register: Register = on => {
           </Box>
         )
       }
+      /** "New scout": a button, or (once pressed) the box that asks for its name. */
+      const newBox = () =>
+        naming ? (
+          <Box flexDirection="column">
+            <Input
+              key="scout-new-name"
+              label="New scout's name: "
+              placeholder="letters, digits, - and _"
+              value={naming.name}
+              autoFocus
+              submitLabel="next"
+              onInput={value => void (naming && (naming.name = value))}
+              onSubmit={value => act(() => newScout($, value, scouts.map(x => x.name)))()}
+            />
+            {naming.error ? <Text color={C('error')}>{naming.error}</Text> : null}
+            <Text color={C('subtle')}>Enter goes on to its file · Esc cancels</Text>
+          </Box>
+        ) : (
+          <Button key="scout-new" label="New scout" hotkey="n" autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))} />
+        )
       const nameWidth = Math.max(4, ...scouts.map(x => x.name.length))
       const everyWidth = Math.max(0, ...scouts.map(x => scoutRow(x, nowMs).every.length))
       return (
@@ -1576,6 +1718,7 @@ export const register: Register = on => {
           {tabs()}
           {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
           {scouts.length === 0 && scoutHowTo(N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'subtle')}>{line}</Text>)}
+          {newBox()}
           {scouts.map((x, i) => {
             const r = scoutRow(x, nowMs)
             return (
@@ -1588,6 +1731,7 @@ export const register: Register = on => {
               </Button>
             )
           })}
+          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a scout · run now / edit on its page · /scouts run &lt;name&gt;</Text>}
         </Box>
       )
     }
@@ -1790,19 +1934,6 @@ export const register: Register = on => {
             </Button>
           )
         })}
-        {v.scouts.length > 0 && (
-          <Text wrap="truncate">
-            <Text color={C('subtle')}>scouts: </Text>
-            {v.scouts.map((sc, i) => (
-              <Text>
-                {i ? <Text color={C('subtle')}>, </Text> : null}
-                <Text color={C(sc.running ? 'success' : 'text')}>{sc.name}</Text>
-                {sc.running ? <Text color={C('success')}> (running)</Text> : null}
-              </Text>
-            ))}
-            <Text color={C('subtle')}> · /scouts run &lt;name&gt;</Text>
-          </Text>
-        )}
       </Box>
     )
   })

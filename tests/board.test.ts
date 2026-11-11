@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutRowText, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -552,4 +552,43 @@ test('statusCounts names only statuses that have tasks, in the order given', asy
   expect(statusCounts(tasks, ['waiting', 'doing'])).toEqual(['1 waiting for you', '1 doing'])
   expect(statusCounts([], ['doing'])).toEqual([])
   expect(STATUS_WORD.todo).toBe('to do')
+})
+
+test('a scout file is written from its front matter and body, keeping the other keys', async () => {
+  const old = '---\nname: Bugs finder\nevery: 30\nmodel: sonnet\ncolor: "blue"\n---\nOld text.\n'
+  const text = scoutText(old, { every_minutes: 15, model: 'opus' }, '  Look for crashes.\nAnd leaks.\n')
+  expect(text).toBe('---\nname: Bugs finder\nevery_minutes: 15\nmodel: opus\ncolor: "blue"\n---\n\nLook for crashes.\nAnd leaks.\n')
+  // round-trips through the scout parser
+  expect(parseScout('bugs', text)).toEqual({ name: 'Bugs finder', every_minutes: 15, model: 'opus', prompt: 'Look for crashes.\nAnd leaks.' })
+  // an empty model is dropped: the session's model is used
+  const noModel = scoutText(old, { every_minutes: 45, model: ' ' }, 'Body.')
+  expect(noModel).not.toContain('model:')
+  expect(noModel).toContain('color: "blue"')
+  expect(parseScout('bugs', noModel)).toEqual({ name: 'Bugs finder', every_minutes: 45, model: undefined, prompt: 'Body.' })
+  // a new scout (no old file)
+  const fresh = scoutText(null, { every_minutes: 60 }, 'Look around.')
+  expect(fresh).toBe('---\nevery_minutes: 60\n---\n\nLook around.\n')
+  expect(parseScout('new', fresh)).toEqual({ name: 'new', every_minutes: 60, model: undefined, prompt: 'Look around.' })
+  // an old file without front matter gets some
+  expect(parseScout('x', scoutText('Just text.', { every_minutes: 5, model: 'haiku' }, 'Just text.'))).toEqual({ name: 'x', every_minutes: 5, model: 'haiku', prompt: 'Just text.' })
+})
+
+test('a new scout name and every_minutes are checked', async () => {
+  expect(scoutNameError('my-scout_2', ['bugs'])).toBe('')
+  expect(scoutNameError('', [])).toMatch(/name/)
+  expect(scoutNameError('has space', [])).toMatch(/letters, digits, - and _/)
+  expect(scoutNameError('a.b', [])).toMatch(/letters, digits/)
+  expect(scoutNameError('../x', [])).toMatch(/letters, digits/)
+  expect(scoutNameError('bugs', ['bugs'])).toMatch(/already exists/)
+  expect(scoutNameError('Bugs', ['bugs'])).toMatch(/already exists/)
+  expect(everyMinutesOf('30')).toBe(30)
+  expect(everyMinutesOf(' 1 ')).toBe(1)
+  expect(everyMinutesOf('0')).toBeNull()
+  expect(everyMinutesOf('-5')).toBeNull()
+  expect(everyMinutesOf('1.5')).toBeNull()
+  expect(everyMinutesOf('ten')).toBeNull()
+  expect(everyMinutesOf('')).toBeNull()
+  expect(scoutDraftError({ every: '30', body: 'Look.' })).toBe('')
+  expect(scoutDraftError({ every: '0', body: 'Look.' })).toMatch(/whole number/)
+  expect(scoutDraftError({ every: '30', body: '  ' })).toMatch(/looks for/)
 })

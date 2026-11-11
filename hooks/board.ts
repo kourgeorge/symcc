@@ -584,6 +584,56 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   return { name: meta.name || name, every_minutes: Number.isFinite(every) && every >= 1 ? every : 60, model: meta.model || undefined, prompt }
 }
 
+/**
+ * A scout file's text from its front matter and body, as the panel's edit mode saves it.
+ * `old` is the file as it was (or null for a new scout): every front matter line it has is kept
+ * as it was, except every_minutes (an old "every" is replaced by it) and model (dropped when empty).
+ */
+export function scoutText(old: string | null, set: { every_minutes: number; model?: string }, body: string): string {
+  const m = old ? /^---\s*\n([\s\S]*?)\n---\s*\n?/.exec(old) : null
+  const lines: string[] = []
+  let everyDone = false
+  let modelDone = false
+  const model = (set.model ?? '').trim()
+  for (const line of m ? m[1]!.split('\n') : []) {
+    const key = /^\s*([a-z_]+)\s*:/i.exec(line)?.[1]?.toLowerCase()
+    if (key === 'every_minutes' || key === 'every') {
+      if (!everyDone) lines.push(`every_minutes: ${set.every_minutes}`)
+      everyDone = true
+    } else if (key === 'model') {
+      if (!modelDone && model) lines.push(`model: ${model}`)
+      modelDone = true
+    } else lines.push(line)
+  }
+  if (!everyDone) lines.push(`every_minutes: ${set.every_minutes}`)
+  if (!modelDone && model) lines.push(`model: ${model}`)
+  return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`
+}
+
+/** Why a new scout's name can't be used ('' when it can): letters, digits, - and _ only, and not one that exists. */
+export function scoutNameError(name: string, existing: string[]): string {
+  const s = name.trim()
+  if (!s) return 'give the scout a name'
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(s)) return 'use only letters, digits, - and _'
+  if (existing.some(x => x.toLowerCase() === s.toLowerCase())) return `a scout named ${s} already exists`
+  return ''
+}
+
+/** every_minutes as typed: a whole number of 1 or more, or null. */
+export function everyMinutesOf(text: string): number | null {
+  const s = text.trim()
+  if (!/^\d+$/.test(s)) return null
+  const n = Number(s)
+  return n >= 1 ? n : null
+}
+
+/** Why a scout's edit can't be saved ('' when it can). */
+export function scoutDraftError(d: { every: string; body: string }): string {
+  if (everyMinutesOf(d.every) === null) return 'every (minutes) must be a whole number, 1 or more'
+  if (!d.body.trim()) return 'write what the scout looks for'
+  return ''
+}
+
 // ---------------- scouts in the board panel ----------------
 
 /** How much of a scout's last answer is kept (SymccScout.last_report). */
@@ -658,6 +708,7 @@ export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
     '  ---',
     '  What to look for, in plain words.',
     `examples/scouts/ in the plugin has two to copy. Then run /scouts.`,
+    'Or press "New scout" (n) to write one right here.',
   ]
 }
 
