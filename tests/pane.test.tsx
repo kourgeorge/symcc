@@ -32,9 +32,11 @@ test('the panel shows the board, newest task first, with their question', async 
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^T-3\s*$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /▶ doing/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^tests$/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^npm test$/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^◆ symcc board$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^╭─┬─┬─╮  $/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^tests: npm test$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /1 doing · 1 waiting for you · 1 done/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^─{50}$/ }))).toBeDefined()
     await ui.unmount()
   }
 })
@@ -42,6 +44,16 @@ test('the panel shows the board, newest task first, with their question', async 
 test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /board is empty/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^─{50}$/ }))).toBeDefined()
+  await ui.unmount()
+})
+
+test('a narrow panel shows the banner without the drawing', async $ => {
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /╭/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^─{30}$/ }))).toBeDefined()
   await ui.unmount()
 })
 
@@ -149,9 +161,9 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
   await ui.unmount()
 })
 
-test('the board list ends with the total time and cost of all tries', async ($, on) => {
+test('the banner shows the counts and the total time and cost of all tries', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], paused: false, test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens · ~\$0\.42 over 2 tries/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens · ~\$0\.42$/ })).toBeDefined()
   await ui.unmount()
 })

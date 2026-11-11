@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
+import { bannerLines, bannerRule, bannerText, folderName, shortHome, boardTitle, boardLabel, openOnStart, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, liveDriver, ownedHere, resetDoing, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, patchTask, ready } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -299,4 +299,40 @@ test('the home folder is shortened to "~"', () => {
 test('boardText starts with the project path when given', () => {
   expect(boardText(emptyBoard(), 0, '~/repositories/symcc').split('\n')[0]).toBe('◆ symcc board · ~/repositories/symcc')
   expect(boardText(emptyBoard())).toBe('The board is empty.')
+})
+
+test('the banner: a 3x3 drawing beside the name, where, who drives and the settings', () => {
+  const b = { ...emptyBoard(), test_commands: ['claude plugin test .'] }
+  const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 80)
+  expect(lines.map(bannerText)).toEqual([
+    '╭─┬─┬─╮  symcc board · symcc',
+    '├─┼─┼─┤  ~/repositories/symcc · main · this session drives',
+    '╰─┴─┴─╯  tests: claude plugin test . · 3 at once · 45 min · 2 retries',
+  ])
+  expect(lines[0]!.parts[0]).toEqual({ text: 'symcc board', tone: 'accent', bold: true })
+  expect(bannerRule(12)).toBe('─'.repeat(12))
+  // paused, driven elsewhere, no test command, and a counts line under the drawing
+  const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: 643_700 }
+  const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
+  const more = bannerLines({ ...emptyBoard(), paused: true, auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
+  expect(more.map(bannerText)).toEqual([
+    '╭─┬─┬─╮  symcc board · symcc',
+    '├─┼─┼─┤  ~/repositories/symcc · main · driven by another session · PAUSED',
+    '╰─┴─┴─╯  no test command · 3 at once · 45 min · 1 retry',
+    '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
+  ])
+  expect(more[1]!.parts.at(-1)).toEqual({ text: 'PAUSED', tone: 'warning' })
+  expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
+})
+
+test('a narrow banner drops the drawing and cuts lines to fit', () => {
+  const b = { ...emptyBoard(), test_commands: ['claude plugin test .'] }
+  const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 30)
+  const text = lines.map(bannerText)
+  expect(text[0]).toBe('symcc board · symcc')
+  expect(text.every(l => l.length <= 30 && !l.includes('╭') && !l.includes('\n'))).toBe(true)
+  expect(text[1]).toBe('~/repositories/symcc · main ·…')
+  expect(text[2]!.endsWith('…')).toBe(true)
+  // a wide banner also never runs past the width
+  expect(bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 55).every(l => bannerText(l).length <= 55)).toBe(true)
 })

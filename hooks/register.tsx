@@ -22,6 +22,9 @@ import {
   boardLabel,
   boardTitle,
   boardWhere,
+  bannerLines,
+  bannerRule,
+  type BannerTone,
   shortHome,
   newestFirst,
   emptyBoard,
@@ -47,7 +50,6 @@ import {
   sumRuns,
   fmtRun,
   fmtTotal,
-  totalLine,
   ownedHere,
   outOfScope,
   parseBoard,
@@ -64,6 +66,8 @@ import {
 type $ = EngineInterface
 
 const PANE = 'symcc-board'
+/** The view as published: SymccView plus the facts the panel's banner shows. */
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean }>
 /** which task the board panel has open; '' = the list */
 const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], paused: false, test_commands: [] } as SymccView, { shape: 'view-1' })
@@ -261,7 +265,8 @@ async function releaseLead($: $) {
 
 async function publish($: $, b: Board) {
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
-  const v: SymccView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands }
+  // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], paused: b.paused, test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving }
   await update($, view, () => v)
   const count = (s: string) => b.tasks.filter(t => t.status === s).length
   const parts = [count('doing') && `${count('doing')} doing`, count('todo') && `${count('todo')} to do`, count('paused') && `${count('paused')} paused`, count('waiting') && `${count('waiting')} waiting for you`, count('failed') && `${count('failed')} failed`].filter(Boolean)
@@ -1130,7 +1135,7 @@ export const register: Register = on => {
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Input } = $.ui.resolve(e)
-    const v = await read($, view)
+    const v: PaneView = await read($, view)
     const open = await read($, opened)
     const width = Math.max(20, e.props.bodyColumns ?? 60)
     // Theme colors, so the board reads well in both light and dark themes.
@@ -1336,35 +1341,25 @@ export const register: Register = on => {
     }
 
     const rows = [...v.tasks].sort(newestFirst)
-    const count = (st: string) => v.tasks.filter(x => x.status === st).length
-    const tally = (['doing', 'waiting', 'failed', 'paused', 'todo', 'done'] as const).filter(st => count(st) > 0)
     const idWidth = Math.max(4, ...rows.map(x => x.id.length))
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
       <Box flexDirection="column">
         {(() => {
-          const where = root ? shortHome(root, home) : ''
-          const brand = <Text bold color={C('ide')}>{boardBrand()}</Text>
-          if (!where) return brand
-          if (boardBrand().length + 3 + where.length <= width) return <Text wrap="truncate">{brand}<Text color={C('subtle')}> · {where}</Text></Text>
-          return <Box flexDirection="column">{brand}<Text wrap="truncate" color={C('subtle')}>{where}</Text></Box>
-        })()}
-        <Text wrap="truncate">
-          {v.paused && <Text bold color={C('warning')}>PAUSED · </Text>}
-          {tally.map((st, i) => (
-            <Text>
-              {i ? <Text color={C('subtle')}> · </Text> : null}
-              <Text color={C(color[st]!)}>
-                {count(st)} {word[st]}
-              </Text>
+          const d = emptyBoard()
+          const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
+          const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'subtle', warning: 'warning' }
+          return bannerLines(facts, root, home, v.driving ?? driving, width, Date.now()).map((l, i) => (
+            <Text key={`banner-${i}`} wrap="truncate">
+              {l.art ? <Text color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
+              {l.parts.map(p => (
+                <Text bold={p.bold} color={C(tone[p.tone])}>{p.text}</Text>
+              ))}
             </Text>
-          ))}
-        </Text>
-        <Text wrap="truncate">
-          <Text color={C('subtle')}>tests: </Text>
-          <Text color={C(v.test_commands.length ? 'ide' : 'warning')}>{v.test_commands.join(' && ') || 'none set'}</Text>
-          <Text color={C('subtle')}> · Enter opens a task · Esc closes</Text>
-        </Text>
+          ))
+        })()}
+        <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>
+        {rows.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a task · Esc closes</Text>}
         {rows.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {rows.map((x, i) => {
           const closed = x.status === 'done' || x.status === 'dropped'
@@ -1399,7 +1394,6 @@ export const register: Register = on => {
             <Text color={C('subtle')}> · /scouts run &lt;name&gt;</Text>
           </Text>
         )}
-        {totalLine(v, Date.now()) && <Text color={C('subtle')}>{totalLine(v, Date.now())}</Text>}
       </Box>
     )
   })

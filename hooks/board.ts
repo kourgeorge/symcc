@@ -335,6 +335,82 @@ export const boardTitle = (root: string) => `${boardBrand()}${boardWhere(root)}`
 /** The status line label, without the mark (Claude Code adds its own): "symcc board · symcc". */
 export const boardLabel = (root: string) => `${BOARD_NAME}${boardWhere(root)}`
 
+// ---------------- the banner at the top of the board panel ----------------
+
+/** The small drawing beside the banner: a 3x3 grid, like a task board. */
+export const BANNER_ART = ['╭─┬─┬─╮', '├─┼─┼─┤', '╰─┴─┴─╯']
+/** Below this many columns the drawing is dropped and only the text lines are shown. */
+export const BANNER_NARROW = 50
+/** How a piece of banner text is drawn: accent (the 'ide' theme color), plain, dim or warning. */
+export type BannerTone = 'accent' | 'plain' | 'dim' | 'warning'
+export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
+/** One banner line: the drawing part on the left ('' or spaces when none) and the text beside it. */
+export type BannerLine = { art: string; parts: BannerPart[] }
+/** What the banner needs from the board. */
+export type BannerBoard = Pick<Board, 'paused' | 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[] }
+
+const BANNER_COUNTS: [SymccStatus, string][] = [['doing', 'doing'], ['waiting', 'waiting for you'], ['failed', 'failed'], ['paused', 'paused'], ['todo', 'to do'], ['done', 'done']]
+
+/** Cuts parts so their text fits in `room` columns, ending with "…" when something was cut. */
+function cutParts(parts: BannerPart[], room: number): BannerPart[] {
+  const len = parts.reduce((s, p) => s + p.text.length, 0)
+  if (len <= room) return parts
+  const out: BannerPart[] = []
+  let left = Math.max(0, room - 1)
+  for (const p of parts) {
+    if (left <= 0) break
+    out.push({ ...p, text: p.text.slice(0, left) })
+    left -= p.text.length
+  }
+  if (room > 0) out.push({ text: '…', tone: out[out.length - 1]?.tone ?? 'dim' })
+  return out
+}
+
+/**
+ * The banner lines for the board panel: the name and folder, where and who drives, the
+ * settings, and (when there are tasks) the counts and total. With `width` of at least
+ * BANNER_NARROW the 3x3 drawing sits on the left; narrower, only the text, cut to fit.
+ * The separator under it is `bannerRule(width)`.
+ */
+export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number): BannerLine[] {
+  const sep: BannerPart = { text: ' · ', tone: 'dim' }
+  const join = (groups: BannerPart[][]) => groups.flatMap((g, i) => (i ? [sep, ...g] : g))
+  const dim = (text: string): BannerPart[] => [{ text, tone: 'dim' }]
+  const folder = folderName(root)
+  const l1: BannerPart[] = [{ text: BOARD_NAME, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
+  const l2 = join([
+    ...(root ? [dim(shortHome(root, home))] : []),
+    dim(b.target_branch),
+    dim(driving ? 'this session drives' : 'driven by another session'),
+    ...(b.paused ? [[{ text: 'PAUSED', tone: 'warning' as const }]] : []),
+  ])
+  const l3 = join([
+    b.test_commands.length ? dim(`tests: ${b.test_commands.join(' && ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
+    dim(`${b.max_parallel} at once`),
+    dim(`${b.max_minutes} min`),
+    dim(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
+  ])
+  const texts = [l1, l2, l3]
+  if (b.tasks.length) {
+    const counts = BANNER_COUNTS.map(([st, word]) => [b.tasks.filter(t => t.status === st).length, word] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+    const t = boardTotal(b, nowMs)
+    texts.push(dim([...counts, ...(t.tries ? [fmtTotal(t)] : [])].join(' · ')))
+  }
+  const w = Math.max(1, Math.floor(width))
+  const wide = w >= BANNER_NARROW
+  // A line under the drawing starts at the left edge and may use the full width.
+  return texts.map((parts, i) => {
+    const art = wide && BANNER_ART[i] ? `${BANNER_ART[i]}  ` : ''
+    return { art, parts: cutParts(parts, w - art.length) }
+  })
+}
+
+/** The dim separator under the banner, as wide as the panel's body. */
+export const bannerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor(width)))
+
+/** A banner line as plain text (for tests and plain output). */
+export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
+
 /** One line per task for the model and for /board, then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart. */
 export function boardText(b: Board, nowMs?: number, where?: string): string {
