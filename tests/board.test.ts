@@ -620,27 +620,39 @@ test('after /clear, this session\'s "doing" tasks move to the new session id', (
   expect(relabelSession(b, 'old', '')).toBe(b)
 })
 
-test('the status line starts with the folder, not "<name> board"', () => {
-  const t = (status: SymccTask['status']) => ({ status })
+test('the status line lists running and failed task IDs, without the folder or "<name> board"', () => {
+  let n = 0
+  const t = (status: SymccTask['status'], id = `T-${++n}`) => ({ id, status })
   const board = namesFor(DEFAULT_NAME).boardName
   const lines = [
-    statusLine('/x/app', { tasks: [t('done')] }, true),
-    statusLine('/x/app', { tasks: [t('doing'), t('todo'), t('todo')] }, true),
-    statusLine('/x/app', { tasks: [t('todo')], paused: true }, true),
-    statusLine('/x/app', { tasks: [t('done')] }, false),
-    statusLine('/x/app', { tasks: [] }, false),
-    statusLine('/x/app', { tasks: [] }, true, 'on dev, not main'),
-    statusLine('', { tasks: [t('done')] }, true),
+    statusLine({ tasks: [t('done')] }, true),
+    statusLine({ tasks: [t('doing', 'T-26'), t('doing', 'T-27'), t('todo'), t('todo')] }, true),
+    statusLine({ tasks: [t('failed', 'T-28'), t('done')] }, true),
+    statusLine({ tasks: [t('failed', 'T-28'), t('failed', 'T-29')] }, true),
+    statusLine({ tasks: [t('todo')], paused: true }, true),
+    statusLine({ tasks: [t('waiting'), t('paused')] }, true),
+    statusLine({ tasks: [t('done')] }, false),
+    statusLine({ tasks: [] }, false),
+    statusLine({ tasks: [] }, true, 'on dev, not main'),
+    statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('doing', id)) }, true),
+    statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4'].map(id => t('failed', id)) }, true),
   ]
   expect(lines).toEqual([
-    'app · all done',
-    'app · 1 doing · 2 to do',
-    'app · 1 to do · paused',
-    'app (driven by another session) · all done',
-    'app (driven by another session) · empty',
-    'app · on dev, not main',
     'all done',
+    'T-26, T-27 doing · 2 to do',
+    '1 failed (T-28)',
+    '2 failed (T-28, T-29)',
+    '1 to do · paused',
+    '1 paused · 1 waiting for you',
+    'all done (driven by another session)',
+    'empty (driven by another session)',
+    'on dev, not main',
+    'T-1, T-2, T-3 +2 doing',
+    '4 failed (T-1, T-2, T-3 +1)',
   ])
-  for (const l of lines) expect(l).not.toContain(board)
-  expect(statusLine('/x/app', { tasks: [] }, true)).toBeUndefined()
+  for (const l of lines) {
+    expect(l).not.toContain(board)
+    expect(l).not.toContain(DEFAULT_NAME) // this repo's folder name
+  }
+  expect(statusLine({ tasks: [] }, true)).toBeUndefined()
 })

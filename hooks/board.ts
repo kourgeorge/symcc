@@ -468,15 +468,35 @@ export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${name
  * just the folder: "app · 1 doing · 2 to do", "app (driven by another session) · empty".
  * undefined when there is nothing to say (the status is cleared).
  */
-export function statusLine(root: string, b: { tasks: Pick<SymccTask, 'status'>[]; paused?: boolean }, driving: boolean, branch_note = ''): string | undefined {
-  const head = `${folderName(root)}${driving ? '' : ' (driven by another session)'}`.trim()
+/** At most this many task IDs are listed for one state in the status line; the rest show as "+N". */
+export const STATUS_IDS = 3
+
+/** "T-1, T-2, T-3 +2" for the first STATUS_IDS IDs. */
+function idList(ids: string[]): string {
+  const shown = ids.slice(0, STATUS_IDS).join(', ')
+  return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
+}
+
+/**
+ * The short status text Claude Code shows after "symcc:", e.g. "T-26, T-27 doing · 2 to do" or "1 failed (T-28)".
+ * Tasks being done and failed tasks are listed by ID; other open states are counts. No folder name (the pane title has it).
+ * undefined when there is nothing to say.
+ */
+export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[]; paused?: boolean }, driving: boolean, branch_note = ''): string | undefined {
   const join = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
+  const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
+  const other = driving ? '' : ' (driven by another session)'
   if (b.tasks.length) {
-    const parts = statusCounts(b.tasks, ['doing', 'todo', 'paused', 'waiting', 'failed'])
-    return join([head, parts.join(' · ') || 'all done', b.paused && 'paused', branch_note])
+    const doing = ids('doing'), failed = ids('failed')
+    const parts = [
+      doing.length && `${idList(doing)} ${STATUS_WORD.doing}`,
+      ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
+      failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
+    ].filter((x): x is string => !!x)
+    return join([(join(parts) || 'all done') + other, b.paused && 'paused', branch_note])
   }
-  if (!driving) return join([head, 'empty', branch_note])
-  return branch_note ? join([head, branch_note]) : undefined
+  if (!driving) return join(['empty' + other, branch_note])
+  return branch_note || undefined
 }
 
 // ---------------- the banner at the top of the board panel ----------------
