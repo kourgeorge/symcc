@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -928,4 +928,22 @@ test('agent names start with the plugin name', () => {
   expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-10', description: 'A' }])).toBe(true)
   expect(mayStart(t, [{ id: 'w', type: 'my:worker', status: 'running', name: 'my T-1', description: 'A' }], 'my')).toBe(false)
   expect(mayStart(t, [{ id: 's', type: 'symcc:scout', status: 'running', name: 'symcc scout T-1', description: 'T-1' }])).toBe(true)
+})
+
+test('a worker asking for more files is read from its answer', async () => {
+  expect(parseNeedFiles('NEED FILES: README.md — the docs mention it')).toEqual({ files: ['README.md'], reason: 'the docs mention it' })
+  expect(parseNeedFiles('I looked around.\n  NEED FILES: README.md, tests/x.test.ts - both need the new name')).toEqual({ files: ['README.md', 'tests/x.test.ts'], reason: 'both need the new name' })
+  expect(parseNeedFiles('NEED FILES: `src/my-file.ts`, `./docs/a.md` — rename')).toEqual({ files: ['src/my-file.ts', 'docs/a.md'], reason: 'rename' })
+  expect(parseNeedFiles('need files:  a.js ,  b.js ')).toEqual({ files: ['a.js', 'b.js'], reason: '' })
+  expect(parseNeedFiles('I changed hooks/board.ts and added tests.')).toBeUndefined()
+  expect(parseNeedFiles('QUESTION: which colour?')).toBeUndefined()
+  expect(parseNeedFiles('NEED FILES: — no files named')).toBeUndefined()
+})
+
+test('the waiting question and the failure note for files outside the list', async () => {
+  expect(needFilesQuestion('T-7', { files: ['README.md', 'tests/x.test.ts'], reason: 'docs' })).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts — docs. Allow them?')
+  expect(needFilesQuestion('T-7', { files: ['a.js'], reason: '' })).toBe('T-7 needs to change files outside its list: a.js. Allow them?')
+  const note = outOfScopeText(['docs/x.md'], ['src/'])
+  expect(note).toContain('docs/x.md')
+  expect(note).toContain('add them to files with change, or split the task')
 })

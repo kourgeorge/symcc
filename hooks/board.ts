@@ -196,6 +196,32 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
   return changed.filter(f => f.startsWith(dir + '/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
+/**
+ * A worker that must change files outside its list stops and answers
+ * `NEED FILES: path/a, path/b — reason`. Returns the files and the reason (may be empty), or
+ * undefined when the answer is not that. Spaces and backticks around the paths are fine.
+ */
+export function parseNeedFiles(answer: string): { files: string[]; reason: string } | undefined {
+  const m = /^[\s`*]*NEED\s+FILES\s*:\s*(.*)$/im.exec(answer)
+  if (!m) return undefined
+  const rest = m[1]!.trim()
+  const cut = /\s+(?:—|–|--|-)\s+|\s*[—–]\s*/.exec(rest)
+  const list = cut ? rest.slice(0, cut.index) : rest
+  const reason = cut ? rest.slice(cut.index + cut[0].length).trim() : ''
+  const files = [...new Set(list.split(/[,\s]+/).map(f => f.replace(/[`'"]/g, '').trim().replace(/^\.\//, '')).filter(Boolean))]
+  return files.length ? { files, reason } : undefined
+}
+
+/** The question a task waits with after its worker asked for more files. */
+export function needFilesQuestion(id: string, need: { files: string[]; reason: string }): string {
+  return `${id} needs to change files outside its list: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}. Allow them?`
+}
+
+/** Why a try failed when the worker changed files outside its list without asking. */
+export function outOfScopeText(bad: string[], allowed: string[]): string {
+  return `changed files outside the task (${bad.slice(0, 5).join(', ')}); allowed: ${allowed.join(', ') || '-'}. To fix: add them to files with change, or split the task`
+}
+
 // ---------------- review before merge ----------------
 
 /** The three board modes, in the order they are shown. */

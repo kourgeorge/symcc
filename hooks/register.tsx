@@ -71,6 +71,9 @@ import {
   fmtTotal,
   ownedHere,
   outOfScope,
+  outOfScopeText,
+  parseNeedFiles,
+  needFilesQuestion,
   parseBoard,
   parseScout,
   scoutText,
@@ -573,7 +576,7 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'f
   const changed = (await gitOk($, ['diff', '--name-only', '--no-renames', `${base}..${head}`])).split('\n').filter(Boolean)
   if (!changed.length) return { ok: false, detail: 'the worker made no change' }
   const bad = outOfScope(changed, t.files, N.dir)
-  if (bad.length) return { ok: false, detail: `changed files outside the task (${bad.slice(0, 5).join(', ')}); allowed: ${t.files.join(', ') || '-'}` }
+  if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
   let candidate = head
   if ((await git($, ['merge-base', '--is-ancestor', main, head])).exitCode !== 0) {
     const m = await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'merge', '--no-edit', '-m', `${t.id}: bring up to date with ${target}`, main], dir)
@@ -617,7 +620,10 @@ Use absolute paths under that folder for every Read, Edit and Write. Never touch
 Task ${t.id}: ${t.title}
 ${t.details}
 
-Files you may change: ${t.files.length ? t.files.join(', ') : 'whatever the task needs'}. Changes anywhere else are thrown away.
+Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; changes anywhere else are thrown away.
+If you find you must change a file outside this list, do NOT change it. Stop at once and answer with just one line:
+  NEED FILES: path/a, path/b — <one short reason>
+(You don't need to finish anything else first; what you already changed in your folder is kept for the next try.)` : 'whatever the task needs.'}
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${N.name} commits, tests and merges your work.
 ${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
@@ -746,9 +752,14 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
   const summary = answer.trim().slice(0, 600) || '(no summary)'
   const q = /^\s*QUESTION:\s*(.+)$/im.exec(answer)
+  const need = parseNeedFiles(answer)
   if (aborted) {
     await change($, x => patchTask(x, t.id, { status: 'failed', note: 'the worker was stopped', history: [...t.history, `try ${t.attempts}: stopped before finishing`] }, now()))
     tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
+  } else if (need) {
+    const question = needFilesQuestion(t.id, need)
+    await change($, x => patchTask(x, t.id, { status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...t.history, `try ${t.attempts}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }, now()))
+    tellLead($, `${question}\nThe task now waits for the owner. If they agree, ${N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (q) {
     await change($, x => patchTask(x, t.id, { status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...t.history, `try ${t.attempts}: worker asked: ${q[1]}`] }, now()))
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${N.name} ask.`)
@@ -1205,6 +1216,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     doing            a worker is on it
     paused           stopped on purpose; resume to continue
     waiting for you  the lead asked you a question; answer it in the board panel
+                     (also when a worker answered NEED FILES: it needs files outside its list)
     ready for review the worker is done and the checks passed; nothing is merged until you
                      approve it (or reject it with a reason, which sends it back to "todo")
     failed           tests failed, files outside its list changed, or the worker stopped
@@ -1233,6 +1245,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   • A worker gets only its task, its folder, its allowed files and the test commands.
     It can't see the board or this chat, and must not commit, push or merge.
   • A resumed or retried task starts over with a fresh worker.
+  • A worker that must change a file outside its list doesn't; it stops and answers
+    "NEED FILES: a, b — reason". The task then waits for you: allow the files (change)
+    or drop it. A worker that changes such files anyway fails its try.
   • Every two minutes ${N.name} checks by itself: starts ready tasks, stops a worker running
     longer than max_minutes (45 by default), notices a worker that ended without a result,
     reminds the lead about failed tasks nobody handled, and stops old workers left over
@@ -1286,6 +1301,7 @@ The project has a shared task board (${N.dir}/board.json) that you and the owner
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Update" message: decide what's next (retry with ${N.name} change / ${N.name} retry, split, ${N.name} ask the owner, or ${N.name} drop).
 - The board has one mode (${N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${N.name} approve T-5 (merge it) or ${N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
+- A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${N.name} change the task with the wider files (it goes back to work); otherwise ${N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
 - When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
 - Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.

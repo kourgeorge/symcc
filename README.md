@@ -67,6 +67,7 @@ All four share one thing: **the board**, a plain file in your project at
    │         ├──▶ tests fail ──▶ back to todo with the      │
    │         │    failing output (up to 2 times by itself)  │
    │         ├──▶ still failing / out of time ──▶ failed ───┘
+   │         ├──▶ worker needs files outside its list ──▶ waiting (NEED FILES)
    │         └──▶ worker has a question ──▶ failed + question to the lead
    │
    ├── review   (only with the review step) checks passed; waits for YOUR approve
@@ -119,7 +120,10 @@ This is where symcc keeps your branch safe. Step by step:
 1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
 2. **Scope check.** Every task lists the files it may change. If the worker changed
-   anything else, nothing is merged.
+   anything else, nothing is merged (the note says which files; add them to `files` with
+   `change`, or split the task). A worker that sees it needs another file should not change
+   it: it stops and answers `NEED FILES: path/a, path/b — reason`, and the task waits for
+   you to allow those files (the lead does that with `change`) or drop it.
 3. **Catch up.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).
