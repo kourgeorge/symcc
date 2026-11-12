@@ -4,7 +4,7 @@ import type { SymccTask } from '../types'
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, listHint, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -1844,7 +1844,7 @@ test('task rows: a short status column and a subtle extra; the extra goes first 
   expect(rowExtra({ ...base, role: 'general' }, tasks)).toBe('try 1')
   expect(rowExtra(tasks[1]!, tasks)).toBe('after T-5')
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
-  expect(rowExtra(tasks[3]!, tasks)).toBe('a approve · x reject')
+  expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
   expect(rowExtra(tasks[2]!, tasks)).toBe('')
   // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
   const wide = fitRow(20, 'Secrets scout example', 'frontend · try 1', 60)
@@ -1854,12 +1854,36 @@ test('task rows: a short status column and a subtle extra; the extra goes first 
   expect(fitRow(20, 'Secrets scout example', 'frontend · try 1', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
 })
 
-test('the list hint is short, never longer than the width, and names a/x only with a task in review', () => {
-  expect(listHint(100)).toBe('↑↓ move · Enter open · t s c views · Esc close')
-  expect(listHint(100, true)).toBe('↑↓ move · Enter open · a/x on review · t s c views · Esc close')
-  for (const w of [20, 30, 40, 50, 60]) for (const r of [false, true]) {
-    expect(listHint(w, r).length).toBeLessThanOrEqual(w)
-    expect(listHint(w, r)).toMatch(/Enter open/)
-  }
-  expect(listHint(60, false)).not.toMatch(/a\/x/)
+test('key hints: in order for the task state, laid out at 30, 50 and 80 columns, never split or cut', () => {
+  const words = (hs: { key: string; word: string }[]) => hs.map(hintText)
+  expect(words(taskKeys('review'))).toEqual(['a approve', 'x reject', 'd show changes', '↑↓ scroll', 'b back'])
+  expect(words(taskKeys('review', true))).toEqual(['a approve', 'x reject', 'd show changes', 'w watch worker', '↑↓ scroll', 'b back'])
+  expect(words(taskKeys('backlog'))).toEqual(['o move to todo', 'x drop', 'l role', '↑↓ scroll', 'b back'])
+  expect(words(taskKeys('todo', true))).toEqual(['w watch worker', 'k stash to backlog', 'l role', '↑↓ scroll', 'b back'])
+  expect(words(taskKeys('done'))).toEqual(['↑↓ scroll', 'b back'])
+  expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
+  expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
+  expect(words(scoutKeys())).toEqual(['r run now', 'e edit', '↑↓ scroll', 'b back'])
+  expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings', 'Esc closes'])
+  const all = [taskKeys('review', true), taskKeys('backlog'), taskKeys('todo', true), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
+  for (const w of [30, 50, 80])
+    for (const hs of all) {
+      const lines = hintLines(hs, w)
+      // every item, whole and in order, and each line fits
+      expect(lines.flat()).toEqual(hs)
+      for (const l of lines) expect(hintLineText(l).length).toBeLessThanOrEqual(w)
+      // no line could take the next line's first item
+      for (let i = 1; i < lines.length; i++) expect(hintLineText([...lines[i - 1]!, lines[i]![0]!]).length).toBeGreaterThan(w)
+    }
+  expect(hintLines(taskKeys('review', true), 80).map(hintLineText)).toEqual(['a approve · x reject · d show changes · w watch worker · ↑↓ scroll · b back'])
+  expect(hintLines(taskKeys('review', true), 30).map(hintLineText)).toEqual(['a approve · x reject', 'd show changes', 'w watch worker · ↑↓ scroll', 'b back'])
+  // the list only offers keys that work there: never a or x
+  expect(words(listKeys())).toEqual(['Enter open', '↑↓ move', 't s c views', 'Esc close'])
+  expect(listKeys().some(h => h.key === 'a' || h.key === 'x')).toBe(false)
+})
+
+test('packRows keeps order, fills each row, and gives a too-wide item a row of its own', () => {
+  expect(packRows([4, 7, 6, 12], 20, 1)).toEqual([[0, 1, 2], [3]])
+  expect(packRows([4, 25, 3], 20, 1)).toEqual([[0], [1], [2]])
+  expect(packRows([], 20, 1)).toEqual([])
 })

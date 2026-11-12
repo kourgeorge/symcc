@@ -74,7 +74,14 @@ import {
   rowExtra,
   fitRow,
   foldedRow,
-  listHint,
+  hintLines,
+  packRows,
+  listKeys,
+  viewKeys,
+  taskKeys,
+  diffKeys,
+  scoutKeys,
+  type KeyHint,
   groupLabel,
   backlogMoreLabel,
   BACKLOG_SHOWN,
@@ -2404,7 +2411,32 @@ export const register: Register = on => {
     }
     /** The whole header: banner, then the tab row, then the rule under them. */
     const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
-    const HINT = 'Enter opens · t tasks · s scouts · c settings · Esc closes'
+    /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words subtle. */
+    const keyLines = (hints: KeyHint[], name: string) =>
+      hintLines(hints, width).map((line, i) => (
+        <Text key={`${name}-${i}`} color={C('subtle')}>
+          {line.map((kh, j) => (
+            <Text key={`${name}-${i}-${j}`}>
+              {j ? ' · ' : ''}
+              <Text bold color={C('text')}>{kh.key}</Text>
+              <Text color={C('subtle')}>{` ${kh.word}`}</Text>
+            </Text>
+          ))}
+        </Text>
+      ))
+    /** A row of buttons that goes on to more rows when it does not fit, never cutting a button. */
+    const buttonRows = (buttons: unknown[], name: string) => {
+      const shown = buttons.filter(b => b && typeof b === 'object') as { props: { label?: string } }[]
+      return (
+        <Box key={name} flexDirection="column">
+          {packRows(shown.map(b => String(b.props.label ?? '').length + 2), width, 1).map((row, i) => (
+            <Box key={`${name}-${i}`} flexDirection="row" gap={1}>
+              {row.map(k => shown[k] as never)}
+            </Box>
+          ))}
+        </Box>
+      )
+    }
 
     /** Text with task IDs, `code` and file paths picked out in color. */
     const rich = (text: string, base = 'text') => {
@@ -2524,8 +2556,8 @@ export const register: Register = on => {
             </Button>,
             ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
           ])}
-          <Text wrap="truncate" color={C('subtle')}>Enter changes a setting (on/off flips) · /{N.name}-settings NAME VALUE · or tell the lead</Text>
-          <Text wrap="truncate" color={C('subtle')}>{HINT.replace('Enter opens · ', '')}</Text>
+          <Text color={C('subtle')}>Enter changes a setting (on/off flips) · /{N.name}-settings NAME VALUE · or tell the lead</Text>
+          {keyLines(viewKeys(false), 'settings-keys')}
         </Box>
       )
     }
@@ -2602,11 +2634,11 @@ export const register: Register = on => {
               </Text>
             </Box>
 
-            <Box flexDirection="row" gap={1}>
-              <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => update($, scoutOpen, () => ''))} />
-              <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(N.toast(await runScoutNow($, sc.name))))} />
-              <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout($, sc))} />
-            </Box>
+            {buttonRows([
+              <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => update($, scoutOpen, () => ''))} />,
+              <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(N.toast(await runScoutNow($, sc.name))))} />,
+              <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout($, sc))} />,
+            ], 'scout-buttons')}
 
             <Box flexDirection="column">
               {heading('What it looks for')}
@@ -2625,7 +2657,7 @@ export const register: Register = on => {
                 <Text color={C('autoAccept')}>{file}</Text>
               </Text>
             </Box>
-            <Text color={C('subtle')}>↑↓ scroll · b back · r run now · e edit</Text>
+            <Box flexDirection="column">{keyLines(scoutKeys(), 'scout-keys')}</Box>
           </Box>
         )
       }
@@ -2668,8 +2700,8 @@ export const register: Register = on => {
               </Button>
             )
           })}
-          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a scout · run now / edit on its page · /{N.name}-scout &lt;name&gt;</Text>}
-          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
+          {scouts.length > 0 && <Text color={C('subtle')}>Enter opens a scout · run now / edit on its page · /{N.name}-scout &lt;name&gt;</Text>}
+          {scouts.length > 0 && keyLines(viewKeys(), 'scouts-keys')}
         </Box>
       )
     }
@@ -2737,11 +2769,11 @@ export const register: Register = on => {
                 {t.title}
               </Text>
             </Box>
-            <Box flexDirection="row" gap={1}>
-              <Button key="diff-back" label="Back" hotkey="b" autoFocus={rejectBox ? undefined : true} onPress={() => ((diffOpen = null), $.ui.invalidate('ui.render'))} />
-              {reviewButtons}
-              {d.file ? <Button key="diff-all" label="All files" hotkey="d" onPress={showDiff('')} /> : null}
-            </Box>
+            {buttonRows([
+              <Button key="diff-back" label="Back" hotkey="b" autoFocus={rejectBox ? undefined : true} onPress={() => ((diffOpen = null), $.ui.invalidate('ui.render'))} />,
+              ...reviewButtons,
+              d.file ? <Button key="diff-all" label="All files" hotkey="d" onPress={showDiff('')} /> : null,
+            ], 'diff-buttons')}
             {rejectBox}
             <Box flexDirection="column">
               {got.error ? <Text color={C('error')}>Could not read the changes: {got.error}</Text> : null}
@@ -2752,7 +2784,7 @@ export const register: Register = on => {
                 </Text>
               ))}
             </Box>
-            <Text color={C('subtle')}>↑↓ scroll · b back to the task · a approve · x reject{d.file ? ' · d all files' : ''}</Text>
+            <Box flexDirection="column">{keyLines(diffKeys(inReview, !!d.file), 'diff-keys')}</Box>
           </Box>
         )
       }
@@ -2839,31 +2871,31 @@ export const register: Register = on => {
             </Text>
           </Box>
 
-          <Box flexDirection="row" gap={1}>
-            <Button key="back" label="Back" hotkey="b" autoFocus={t.status === 'waiting' || rejectBox ? undefined : true} onPress={act(async () => ((diffOpen = null), (rejecting = null), await update($, opened, () => '')))} />
-            {reviewButtons}
-            {inReview && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />}
-            {agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />}
-            {(t.status === 'doing' || t.status === 'todo') && (
+          {buttonRows([
+            <Button key="back" label="Back" hotkey="b" autoFocus={t.status === 'waiting' || rejectBox ? undefined : true} onPress={act(async () => ((diffOpen = null), (rejecting = null), await update($, opened, () => '')))} />,
+            ...reviewButtons,
+            inReview && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
+            agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />,
+            (t.status === 'doing' || t.status === 'todo') && (
               <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool($, 'pause', { task: t.id, reason: 'paused by the owner' }), tellLead($, `The owner paused ${t.id} from the board.`)))} />
-            )}
-            {t.status === 'paused' && (
+            ),
+            t.status === 'paused' && (
               <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool($, 'resume', { task: t.id }), tellLead($, `The owner resumed ${t.id} from the board.`)))} />
-            )}
-            {(t.status === 'failed' || t.status === 'dropped') && (
+            ),
+            (t.status === 'failed' || t.status === 'dropped') && (
               <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'retry', { task: t.id }), tellLead($, `The owner retried ${t.id} from the board.`)))} />
-            )}
-            {t.status === 'backlog' && (
+            ),
+            t.status === 'backlog' && (
               <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: false }), tellLead($, `The owner moved ${t.id} from the backlog to todo on the board.`)))} />
-            )}
-            {(t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
+            ),
+            (t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
               <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: true }), tellLead($, `The owner moved ${t.id} to the backlog on the board.`)))} />
-            )}
-            {canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />}
-            {t.status !== 'done' && t.status !== 'dropped' && (
+            ),
+            canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />,
+            t.status !== 'done' && t.status !== 'dropped' && (
               <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
-            )}
-            {t.status !== 'done' && t.status !== 'dropped' && (
+            ),
+            t.status !== 'done' && t.status !== 'dropped' && (
               <Button
                 key="needs-review"
                 label={`Needs review: ${t.needs_review ? 'on' : 'off'}`}
@@ -2874,8 +2906,8 @@ export const register: Register = on => {
                   tellLead($, `The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id} from the board.`)
                 })}
               />
-            )}
-          </Box>
+            ),
+          ], 'task-buttons')}
 
           {rejectBox}
           {roleBox}
@@ -2951,7 +2983,7 @@ export const register: Register = on => {
             </Box>
           )}
 
-          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}</Text>
+          <Box flexDirection="column">{keyLines(taskKeys(t.status, !!agentId), 'task-keys')}</Box>
         </Box>
       )
     }
@@ -3060,7 +3092,7 @@ export const register: Register = on => {
           )
         })}
         <Text key="list-blank"> </Text>
-        <Text key="list-hint" color={C('subtle')}>{listHint(width, parts.needsYou.some(x => x.status === 'review'))}</Text>
+        {keyLines(listKeys(), 'list-hint')}
       </Box>
     )
   })

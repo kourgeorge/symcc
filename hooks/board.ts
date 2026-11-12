@@ -1192,7 +1192,8 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number,
 }
 
 /** The subtle text at the right end of a task row: "frontend · try 1" for a task being worked on, "after T-3" for
- *  one waiting on unfinished tasks (else its role), the keys "a approve · x reject" in review, the question of a
+ *  one waiting on unfinished tasks (else its role), "Enter to review" in review (a and x only work on the task's
+ *  own page, so the list does not offer them), the question of a
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. */
 export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): string {
   switch (t.status) {
@@ -1204,7 +1205,7 @@ export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]
       return open.length ? `after ${open.join(', ')}` : roleMark(t)
     }
     case 'review':
-      return 'a approve · x reject'
+      return 'Enter to review'
     case 'waiting':
       return t.question ?? ''
     case 'failed':
@@ -1234,16 +1235,84 @@ const FOLDED_LABEL = 7
 export const foldedRow = (label: string, n: number, opened: boolean, countWidth = 1): string =>
   `${opened ? '▾' : '▸'} ${label.padEnd(FOLDED_LABEL)}  ${String(n).padStart(countWidth)}`
 
-/** The hint under the board list, short and never cut: the keys that work, the least needed left out first when the
- *  panel is narrow. "a/x on review" only when a task is in review. */
-export function listHint(width: number, review = false): string {
-  const parts = ['↑↓ move', 'Enter open', ...(review ? ['a/x on review'] : []), 't s c views', 'Esc close']
-  for (const drop of ['↑↓ move', 'Esc close', 't s c views', 'a/x on review']) {
-    if (parts.join(' · ').length <= width) break
-    if (parts.includes(drop)) parts.splice(parts.indexOf(drop), 1)
-  }
-  return parts.join(' · ')
+/** One key hint: the key to press and a short word for what it does ("a" "approve"). */
+export type KeyHint = { key: string; word: string }
+
+/** The columns a hint takes: "a approve". */
+export const hintText = (h: KeyHint): string => `${h.key} ${h.word}`
+
+/** The hints on one line, as plain text: "a approve · x reject". */
+export const hintLineText = (line: KeyHint[]): string => line.map(hintText).join(' · ')
+
+/** Lays hints out over as many lines as needed to fit `width` columns, " · " between them on a line. A line breaks
+ *  only between hints, so no hint is ever split or cut (one wider than the panel gets a line of its own). */
+export function hintLines(hints: KeyHint[], width: number): KeyHint[][] {
+  return packRows(hints.map(h => hintText(h).length), width, 3).map(row => row.map(i => hints[i]!))
 }
+
+/** Packs items of the given widths into rows of at most `width` columns, `gap` columns between items on a row,
+ *  keeping their order; returns each row's item indexes. An item wider than `width` gets a row of its own. */
+export function packRows(widths: number[], width: number, gap: number): number[][] {
+  const rows: number[][] = []
+  let used = 0
+  widths.forEach((w, i) => {
+    const row = rows[rows.length - 1]
+    if (row && used + gap + w <= width) {
+      row.push(i)
+      used += gap + w
+    } else {
+      rows.push([i])
+      used = w
+    }
+  })
+  return rows
+}
+
+/** The keys under the board list: only keys that work in the list (a and x work only on a task's own page). */
+export const listKeys = (): KeyHint[] => [
+  { key: 'Enter', word: 'open' },
+  { key: '↑↓', word: 'move' },
+  { key: 't s c', word: 'views' },
+  { key: 'Esc', word: 'close' },
+]
+
+/** The view keys under the scouts and settings pages; `enter` adds "Enter opens" first. */
+export const viewKeys = (enter = true): KeyHint[] => [
+  ...(enter ? [{ key: 'Enter', word: 'opens' }] : []),
+  { key: 't', word: 'tasks' },
+  { key: 's', word: 'scouts' },
+  { key: 'c', word: 'settings' },
+  { key: 'Esc', word: 'closes' },
+]
+
+/** The keys at the bottom of a task's page, the ones that matter most for its state first; "↑↓ scroll" and
+ *  "b back" always come last. `worker`: a worker is on the task now (w opens it). */
+export function taskKeys(status: SymccStatus, worker = false): KeyHint[] {
+  const k = (key: string, word: string): KeyHint => ({ key, word })
+  const keys: KeyHint[] = []
+  if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
+  if (status === 'backlog') keys.push(k('o', 'move to todo'), k('x', 'drop'))
+  if (worker) keys.push(k('w', 'watch worker'))
+  if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
+  if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
+  return [...keys, k('↑↓', 'scroll'), k('b', 'back')]
+}
+
+/** The keys at the bottom of a task's diff view: a and x while it is in review, d when one file is shown. */
+export const diffKeys = (review: boolean, oneFile: boolean): KeyHint[] => [
+  ...(review ? [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }] : []),
+  ...(oneFile ? [{ key: 'd', word: 'all files' }] : []),
+  { key: '↑↓', word: 'scroll' },
+  { key: 'b', word: 'back to the task' },
+]
+
+/** The keys at the bottom of a scout's page. */
+export const scoutKeys = (): KeyHint[] => [
+  { key: 'r', word: 'run now' },
+  { key: 'e', word: 'edit' },
+  { key: '↑↓', word: 'scroll' },
+  { key: 'b', word: 'back' },
+]
 
 /** When a task finished (its updated_at, else created_at), in ms; NaN when neither can be read. */
 const finishedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
