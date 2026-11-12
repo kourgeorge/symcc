@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -1301,4 +1301,103 @@ test('leftover temp files: other names are never chosen', () => {
   const names = ['board.json', 'lead.json', 'board.lock', 'board.json.tmp', 'board.lock..tmp', 'lead.json.tmp', 'other.abc.tmp', 'board.lock.a/b.tmp', 'xboard.lock.a.tmp', 'board.lock.a.tmp.bak', 'scouts']
   expect(leftoverTmpFiles(names.map(name => ({ name, mtimeMs: old })), now)).toEqual([])
   expect(leftoverTmpFiles(null as unknown as [], now)).toEqual([])
+})
+
+test('normId: t3, T-003, spaces and lower case all become T-3', () => {
+  expect(normId('t3')).toBe('T-3')
+  expect(normId('T3')).toBe('T-3')
+  expect(normId('t-3')).toBe('T-3')
+  expect(normId('T-003')).toBe('T-3')
+  expect(normId(' T-3 ')).toBe('T-3')
+  expect(normId('T-0')).toBe('T-0')
+  expect(normId('T-000')).toBe('T-0')
+})
+
+test('normId: a bare number, garbage or empty input is only trimmed, not turned into an id', () => {
+  expect(normId('3')).toBe('3')
+  expect(normId(' abc ')).toBe('abc')
+  expect(normId('T--3')).toBe('T--3')
+  expect(normId('T-3a')).toBe('T-3a')
+  expect(normId('T-3.5')).toBe('T-3.5')
+  expect(normId('')).toBe('')
+  expect(normId(undefined as unknown as string)).toBe('')
+})
+
+test('dayOf: midnight edges in UTC', () => {
+  const midnight = Date.UTC(2026, 10, 10)
+  expect(dayOf(midnight, 0)).toBe('2026-11-10')
+  expect(dayOf(midnight - 1, 0)).toBe('2026-11-09')
+})
+
+test('dayOf: a positive offset moves late evening UTC into the next day', () => {
+  const late = Date.UTC(2026, 10, 9, 23, 30)
+  expect(dayOf(late, 0)).toBe('2026-11-09')
+  expect(dayOf(late, 29)).toBe('2026-11-09')
+  expect(dayOf(late, 30)).toBe('2026-11-10')
+  expect(dayOf(Date.UTC(2026, 10, 9, 10), 14 * 60)).toBe('2026-11-10')
+})
+
+test('dayOf: a negative offset moves early morning UTC back to the day before, across a year end', () => {
+  const early = Date.UTC(2026, 10, 10, 0, 30)
+  expect(dayOf(early, -30)).toBe('2026-11-10')
+  expect(dayOf(early, -31)).toBe('2026-11-09')
+  expect(dayOf(Date.UTC(2027, 0, 1), -1)).toBe('2026-12-31')
+  expect(dayOf(Date.UTC(2026, 10, 9, 11), -12 * 60)).toBe('2026-11-08')
+})
+
+test('dayOf: a time that is not a number gives an empty day', () => {
+  expect(dayOf(NaN, 0)).toBe('')
+  expect(dayOf(Infinity, 60)).toBe('')
+  expect(dayOf(Date.parse('not a date'), 0)).toBe('')
+})
+
+test('isNothing: empty, missing or NOTHING (any case, with an optional dot) means nothing', () => {
+  expect(isNothing(undefined)).toBe(true)
+  expect(isNothing('')).toBe(true)
+  expect(isNothing('  \n ')).toBe(true)
+  expect(isNothing('NOTHING')).toBe(true)
+  expect(isNothing(' nothing. ')).toBe(true)
+})
+
+test('isNothing: any real text, even with NOTHING in it, is something', () => {
+  expect(isNothing('NOTHING..')).toBe(false)
+  expect(isNothing('Nothing found')).toBe(false)
+  expect(isNothing('found a bug')).toBe(false)
+})
+
+test('agentSafeName: odd characters become dashes, and leading or trailing dashes go', () => {
+  expect(agentSafeName('symcc T-3')).toBe('symcc-T-3')
+  expect(agentSafeName('a.b/c')).toBe('a-b-c')
+  expect(agentSafeName('--_x')).toBe('x')
+  expect(agentSafeName('x!!')).toBe('x')
+  expect(agentSafeName('x_')).toBe('x_')
+})
+
+test('agentSafeName: empty or all-odd input gives "agent"', () => {
+  expect(agentSafeName('')).toBe('agent')
+  expect(agentSafeName('!!!')).toBe('agent')
+  expect(agentSafeName(undefined as unknown as string)).toBe('agent')
+})
+
+test('agentSafeName: long names are cut to 64 characters, without a dash at the end', () => {
+  expect(agentSafeName('a'.repeat(100))).toBe('a'.repeat(64))
+  expect(agentSafeName('a'.repeat(63) + '-b')).toBe('a'.repeat(63))
+})
+
+test('runMs: a finished try lasts from start to end', () => {
+  expect(runMs({ started: '2026-11-09T00:00:00.000Z', ended: '2026-11-09T00:01:30.000Z' })).toBe(90_000)
+})
+
+test('runMs: an unfinished try counts up to now, or 0 when now is not given', () => {
+  const r = { started: '2026-11-09T00:00:00.000Z' }
+  expect(runMs(r, Date.parse('2026-11-09T00:00:05.000Z'))).toBe(5_000)
+  expect(runMs(r)).toBe(0)
+  expect(runMs({ ...r, ended: '' }, Date.parse('2026-11-09T00:00:02.000Z'))).toBe(2_000)
+})
+
+test('runMs: bad times or an end before the start give 0', () => {
+  expect(runMs({ started: 'bad', ended: '2026-11-09T00:00:01.000Z' })).toBe(0)
+  expect(runMs({ started: '2026-11-09T00:00:00.000Z', ended: 'bad' })).toBe(0)
+  expect(runMs({ started: '2026-11-09T00:00:10.000Z', ended: '2026-11-09T00:00:00.000Z' })).toBe(0)
+  expect(runMs({ started: '2026-11-09T00:00:00.000Z' }, NaN)).toBe(0)
 })
