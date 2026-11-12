@@ -2,6 +2,19 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## Unreleased
+
+### Traceability
+- Every task records who made it, why, and the owner's own words.
+- `symcc add` needs a why.
+- The board shows a "from:" line for each task.
+
+### Docs
+- README and guide: new text on traceability and observability.
+- README: a presentation video, with a GIF preview.
+- Slide deck in `docs/slides/symcc.pptx`.
+- README: a "Swarm Harness" vision line under the tagline.
+
 ## 0.2.0
 
 ### Board and tasks
@@ -41,6 +54,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - A short command to switch the approval mode.
 
 ### Cleanup
+- A task's branch and worktree are deleted after it is merged, and old ones are cleaned up.
 - Leftover `.tmp` files in `.symcc` are removed.
 - Repeated code was tidied in several rounds.
 - The plugin name lives in one place.
