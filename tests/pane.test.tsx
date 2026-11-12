@@ -43,7 +43,7 @@ test('the panel shows the board, newest task first, with their question', async 
     expect(new Set(art.map(t => t!.text.length)).size).toBe(1)
     expect((await ui.find({ type: 'Text', text: /^tests: npm test$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /1 doing · 1 waiting for you · 1 done/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^─{50}$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^━{50}$/ }))).toBeDefined()
     await ui.unmount()
   }
 })
@@ -52,7 +52,7 @@ test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /board is empty/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^─{50}$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^━{50}$/ }))).toBeDefined()
   await ui.unmount()
 })
 
@@ -60,7 +60,7 @@ test('a narrow panel shows the banner without the drawing', async $ => {
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
   expect(await ui.find({ type: 'Text', text: new RegExp(esc(ICON_ART[0]!.trim())) })).toBeUndefined()
-  expect((await ui.find({ type: 'Text', text: /^─{30}$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^━{30}$/ }))).toBeDefined()
   await ui.unmount()
 })
 
@@ -122,12 +122,15 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   expect(header).toBeDefined()
   expect(header?.props.color).toBe('planMode')
   expect(header?.props.bold).toBe(true)
-  // the header comes first, then a thin rule, then the open tasks (no blank line any more)
+  // the header comes first, then a light dotted rule, then the open tasks (no blank line any more)
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const at = texts.findIndex(t => /^▸ Backlog · 2$/.test(t))
-  expect(/^─+$/.test(texts[at + 1] ?? '')).toBe(true)
+  expect(/^┄+$/.test(texts[at + 1] ?? '')).toBe(true)
   expect(texts.indexOf(' ')).toBe(-1)
   expect(texts.some(t => /Enter on Backlog opens it/.test(t))).toBe(true)
+  // the dotted rule is subtle, the header rule uses the accent color
+  expect((await ui.find({ type: 'Text', text: /^┄+$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.props.color).toBe('ide')
   // folded by default: the items are hidden
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
   expect((await ui.find({ key: 'T-1' }))).toBeDefined()
@@ -160,7 +163,7 @@ test('the Backlog section comes first, then a separator rule, then open tasks, t
   expect(folded).toEqual(['day:backlog', 'T-3', 'T-1'])
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const header = texts.findIndex(t => /^▸ Backlog · 1$/.test(t))
-  const rule = texts.findIndex((t, i) => i > header && /^─+$/.test(t))
+  const rule = texts.findIndex((t, i) => i > header && /^┄+$/.test(t))
   const open = texts.findIndex(t => /Write it up/.test(t))
   const done = texts.findIndex(t => /Parser/.test(t))
   expect(header).toBeGreaterThan(-1)
@@ -173,7 +176,7 @@ test('the Backlog section comes first, then a separator rule, then open tasks, t
   expect(keys).toEqual(['day:backlog', 'T-2', 'T-3', 'T-1'])
   const after = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const item = after.findIndex(t => /Dark mode/.test(t))
-  const rule2 = after.findIndex((t, i) => i > item && /^─+$/.test(t))
+  const rule2 = after.findIndex((t, i) => i > item && /^┄+$/.test(t))
   expect(rule2).toBeGreaterThan(item)
   expect(rule2).toBeLessThan(after.findIndex(t => /Write it up/.test(t)))
   await ui.unmount()
@@ -186,7 +189,7 @@ test('a backlog with nothing below it has no separator rule', async ($, on) => {
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const header = texts.findIndex(t => /^▸ Backlog · 1$/.test(t))
   expect(header).toBeGreaterThan(-1)
-  expect(texts.slice(header + 1).some(t => /^─+$/.test(t))).toBe(false)
+  expect(texts.slice(header + 1).some(t => /^┄+$/.test(t))).toBe(false)
   await ui.unmount()
 })
 
@@ -214,8 +217,9 @@ test('an empty backlog shows no Backlog section', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'day:backlog' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Backlog ·/ })).toBeUndefined()
-  // only the rule under the header; no separator in the list
-  expect((await ui.findAll({ type: 'Text' })).filter(t => /^─+$/.test(t.text)).length).toBe(1)
+  // only the strong rule under the header; no dotted separator in the list
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /^━+$/.test(t.text)).length).toBe(1)
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /^┄+$/.test(t.text)).length).toBe(0)
   await ui.unmount()
 })
 
@@ -522,11 +526,16 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
     if (view === 'scouts') await ui.press({ key: 'tab-scouts' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const tab = texts.findIndex(t => t === '[t] Tasks (1)')
-    const rule = texts.findIndex(t => /^─{50}$/.test(t))
-    const hint = texts.findIndex(t => /^Enter opens/.test(t))
+    const rule = texts.findIndex(t => /^━{50}$/.test(t))
+    const hint = texts.findIndex(t => /^Enter opens · t tasks/.test(t))
+    const row = texts.findIndex(t => (view === 'tasks' ? /Write it up/ : /^bugs/).test(t))
     expect(tab).toBeGreaterThan(-1)
     expect(rule).toBeGreaterThan(tab)
-    expect(hint).toBeGreaterThan(rule)
+    // the hint sits at the bottom, after the last row, not between the line and the list
+    expect(row).toBeGreaterThan(rule)
+    expect(texts.slice(rule + 1, row).some(t => /^Enter opens/.test(t))).toBe(false)
+    expect(hint).toBeGreaterThan(row)
+    expect(texts.slice(hint + 1).some(t => /Write it up|^bugs/.test(t))).toBe(false)
   }
   expect(await ui.find({ key: 'scout:bugs' })).toBeDefined()
   await ui.unmount()

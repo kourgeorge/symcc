@@ -904,8 +904,11 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   })
 }
 
-/** The dim separator under the banner, as wide as the panel's body. */
-export const bannerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor(width)))
+/** The strong separator under the banner and tabs, as wide as the panel's body (drawn in the accent color). */
+export const bannerRule = (width: number) => '━'.repeat(Math.max(1, Math.floor(width)))
+
+/** The light dotted break inside the list, under the Backlog section (drawn in the subtle color). */
+export const listRule = (width: number) => '┄'.repeat(Math.max(1, Math.floor(width)))
 
 /** A banner line as plain text (for tests and plain output). */
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')

@@ -34,6 +34,7 @@ import {
   sortScouts,
   bannerLines,
   bannerRule,
+  listRule,
   branchWarning,
   missingBranchText,
   noBranchText,
@@ -1861,7 +1862,7 @@ export const register: Register = on => {
       )
     }
     /** The whole header: banner, then the tab row, then the rule under them. */
-    const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>]
+    const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
     const HINT = 'Enter opens · t tasks · s scouts · Esc closes'
 
     /** Text with task IDs, `code` and file paths picked out in color. */
@@ -2035,7 +2036,6 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column">
           {header()}
-          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
           {scouts.length === 0 && scoutHowTo(N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'subtle')}>{line}</Text>)}
           {newBox()}
           {scouts.map((x, i) => {
@@ -2051,6 +2051,7 @@ export const register: Register = on => {
             )
           })}
           {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>Enter opens a scout · run now / edit on its page · /{N.name}-scout &lt;name&gt;</Text>}
+          {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
         </Box>
       )
     }
@@ -2359,17 +2360,16 @@ export const register: Register = on => {
       ...parts.today.map(task => ({ task, indent: false })),
       ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
     ]
-    // the Backlog section comes first; a thin rule keeps it apart from the tasks below it
+    // the Backlog section comes first; a light dotted rule keeps it apart from the tasks below it
     const list: Row[] = [...backlogRows, ...rest]
     const ruleAfter = backlogRows.length && rest.length ? backlogRows.length - 1 : -1
     const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
     const idWidth = Math.max(4, ...rows.map(x => x.id.length))
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
-    const backlogRule = <Text key="backlog-rule" wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>
+    const backlogRule = <Text key="backlog-rule" wrap="truncate" color={C('subtle')}>{listRule(width)}</Text>
     return (
       <Box flexDirection="column">
         {header()}
-        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog opens it` : HINT}</Text>}
         {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {list.map((r, i) => {
           if (!('task' in r)) {
@@ -2416,6 +2416,7 @@ export const register: Register = on => {
             </Button>
           )
         })}
+        {list.length > 0 && <Text key="list-hint" wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog opens it` : HINT}</Text>}
       </Box>
     )
   })
