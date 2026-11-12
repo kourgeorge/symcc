@@ -2083,6 +2083,30 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
 }
 
 /**
+ * What a freshly loaded copy of the plugin does with a live worker agent it doesn't know
+ * (its in-memory list of workers is empty after a reload, but the agents keep running):
+ * - "adopt": the worker's task is still "doing" for this session (`me`) and the task names
+ *   this agent (or no agent yet), and no other worker was adopted for it (`taken`): keep it
+ *   working and track it again, so a reload does not stop it.
+ * - "leave": the task belongs to another session that drives the board now: not ours to touch.
+ * - "stop": anything else (task gone, not "doing", another worker named on it, a dead
+ *   session's task): a real orphan.
+ * Ended agents are always left alone. The task is found by the agent id recorded on it,
+ * then by the worker's name.
+ */
+export type OrphanMove = { move: 'adopt'; task: string } | { move: 'leave' } | { move: 'stop' }
+export function orphanMove(a: AgentInfo, b: Board, me: string, live: string | null, taken: string[] = [], name: string = DEFAULT_NAME): OrphanMove {
+  if (!a || typeof a.id !== 'string' || !a.id) return { move: 'leave' }
+  if (ENDED_STATUSES.includes(a.status)) return { move: 'leave' }
+  const tasks = Array.isArray(b?.tasks) ? b.tasks : []
+  const t = tasks.find(x => x.agent === a.id) ?? tasks.find(x => x.status === 'doing' && liveWorkersFor({ id: x.id }, [a], name).length > 0)
+  if (!t || t.status !== 'doing') return { move: 'stop' }
+  if (!ownedHere(t, me, live)) return { move: 'leave' }
+  if (!!me && t.session === me && (!t.agent || t.agent === a.id) && !taken.includes(t.id)) return { move: 'adopt', task: t.id }
+  return { move: 'stop' }
+}
+
+/**
  * Whether a new worker may start on task `t`: it is still "todo", and no live agent
  * (in `agents`, $.agent.list() plus the workers this session knows) works on it.
  */

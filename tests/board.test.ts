@@ -4,7 +4,7 @@ import type { SymccTask } from '../types'
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -1737,4 +1737,35 @@ test('/symcc-off and /symcc-on parse, and take no words', () => {
 
 test('/symcc-settings enabled off reads as the on/off switch', () => {
   expect(parseCommand('symcc-settings', 'enabled off')).toEqual({ kind: 'set', setting: 'enabled', input: { enabled: false } })
+})
+
+test('after a plugin reload, a worker of this session is adopted, not stopped (T-87)', () => {
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
+  const b = patchTask(b0, 'T-1', { status: 'doing', session: 'me', agent: 'w1' }, T)
+  const w = (id: string, name = 'symcc-T-1', status = 'running') => ({ id, name, type: 'symcc:worker', status, description: 'A' })
+  // the reloaded copy knows no workers: the running one of its own task is kept
+  expect(orphanMove(w('w1'), b, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
+  expect(orphanMove(w('w1'), b, 'me', null)).toEqual({ move: 'adopt', task: 'T-1' })
+  // found by its name when no agent was recorded yet (reload right after the spawn)
+  const noAgent = patchTask(b, 'T-1', { agent: undefined }, T)
+  expect(orphanMove(w('w9'), noAgent, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
+  // but only one worker per task: a second one is stopped
+  expect(orphanMove(w('w9'), noAgent, 'me', 'me', ['T-1'])).toEqual({ move: 'stop' })
+  // another agent is recorded on the task: this one is a real orphan
+  expect(orphanMove(w('w2'), b, 'me', 'me')).toEqual({ move: 'stop' })
+  // the task is no longer "doing" (stopped, dropped, done): stop
+  expect(orphanMove(w('w1'), patchTask(b, 'T-1', { status: 'todo' }, T), 'me', 'me')).toEqual({ move: 'stop' })
+  // no task for it at all: stop
+  expect(orphanMove(w('w3', 'symcc-T-99'), b, 'me', 'me')).toEqual({ move: 'stop' })
+  // the task belongs to another session that drives the board now: leave it alone
+  const theirs = patchTask(b, 'T-1', { session: 'other' }, T)
+  expect(orphanMove(w('w1'), theirs, 'me', 'other')).toEqual({ move: 'leave' })
+  // the task belongs to a dead session: not ours to keep, stop
+  expect(orphanMove(w('w1'), theirs, 'me', 'me')).toEqual({ move: 'stop' })
+  // ended agents are never touched; bad input is left alone
+  expect(orphanMove(w('w1', 'symcc-T-1', 'completed'), b, 'me', 'me')).toEqual({ move: 'leave' })
+  expect(orphanMove({ id: '', status: 'running' }, b, 'me', 'me')).toEqual({ move: 'leave' })
+  expect(orphanMove(w('w1'), { ...b, tasks: undefined as never }, 'me', 'me')).toEqual({ move: 'stop' })
+  // no session id known: never adopt
+  expect(orphanMove(w('w1'), patchTask(b, 'T-1', { session: '' }, T), '', null)).toEqual({ move: 'stop' })
 })

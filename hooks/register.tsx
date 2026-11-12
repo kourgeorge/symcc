@@ -101,6 +101,7 @@ import {
   fmtRun,
   fmtTotal,
   ownedHere,
+  orphanMove,
   outOfScope,
   outOfScopeText,
   parseNeedFiles,
@@ -427,11 +428,11 @@ async function claimLead($: $, fresh = false): Promise<boolean> {
     // A task whose old worker is still alive after that stays "doing"; the regular check
     // sends it back to "todo" once that worker has ended, so a task never has two workers.
     const alive = await waitEnded($, orphans, ORPHAN_WAIT_MS)
-    const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : 'restarted after Claude Code was reopened'
+    const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : move === 'keep' ? 'restarted: the plugin reloaded and the old worker was gone' : 'restarted after Claude Code was reopened'
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await $.fs.exists(path(N.boardFile)))
-      await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive, N.name).length > 0).map(t => t.id)))
+      await change($, b => resetDoing(b, me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive, N.name).length > 0 || [...workers.values()].some(w => w.task === t.id)).map(t => t.id)))
     if (move === 'takeover' && !fresh) $.ui.toast(N.toast('the session driving the board stopped answering; this session drives it now'))
   }
   if (was && !driving) {
@@ -1214,6 +1215,8 @@ const LIVE = new Set(['pending', 'running', 'waiting'])
  * Stops this plugin's workers and scouts this copy of the plugin doesn't know about. A reload of the
  * plugin forgets which worker belongs to which task while the old workers keep running in the
  * same folders; without this, every reload adds one more worker per running task.
+ * A live worker of this session whose task is still "doing" for it is not an orphan: it is
+ * tracked again (adopted) and keeps working, so a reload never stops a worker mid-task.
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
 async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
@@ -1229,8 +1232,18 @@ async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
     if (workers.has(a.id) || scoutRuns.has(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
     if (a.type === N.worker) {
-      const t = find(b, normId(a.description.split(/\s/)[0] ?? ''))
-      if (t && t.status === 'doing' && !ownedHere(t, me, live)) continue
+      // A worker of this session that was running when the plugin reloaded keeps working:
+      // track it again instead of stopping it (see orphanMove for when).
+      const taken = [...workers.values()].map(w => w.task)
+      const m = orphanMove(a as AgentInfo, b, me, live, [...taken, ...starting, ...finishing], N.name)
+      if (m.move === 'leave') continue
+      if (m.move === 'adopt') {
+        const t = find(b, m.task)!
+        const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
+        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: t.branch ?? N.branch(t.id), since: Number.isFinite(started) ? started : Date.now() })
+        if (t.agent !== a.id) await change($, x => (find(x, t.id)?.status === 'doing' && find(x, t.id)?.session === me ? patchTask(x, t.id, { agent: a.id }, now()) : x)).catch((e: Error) => $.ui.toast(N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
+        continue
+      }
     }
     stopped.add(a.id)
     if (LIVE.has(a.status)) await halt($, a.id, `${N.name} was reloaded and a new worker took over this task`)
