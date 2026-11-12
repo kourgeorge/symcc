@@ -53,6 +53,7 @@ The four parts, in known terms:
 | **Parallel agents** | Several tasks run at once (3 by default), each in its own git worktree, so they never collide. |
 | **Isolated worktrees** | Each task gets its own branch (`symcc/T-1`) and copy of the project; your branch is untouched until merge. |
 | **Scheduled discovery agents** | Scouts run on a timer, read the code, run commands and search the web, then report. They are read-only. |
+| **Task dependencies** | The lead decides which tasks must finish first: a task with `after: T-1` waits until T-1 is merged, then starts on top of it. Tasks that change the same files are put one after another, so they don't clash; independent tasks run in parallel. |
 | **Scope check** | Each task lists the files it may change; changes outside that scope are not merged. |
 | **Automatic retries** | When tests fail, a new worker gets the failing test output and tries again (2 times by default). |
 | **Test gate** | Your test commands must pass before anything is merged. |
@@ -92,7 +93,8 @@ The flow is **discovery → triage → implementation → review → merge**.
 1. **Discovery.** You ask for something ("add a search command, and make the errors
    friendlier"), or a scout finds something on its timer (say, a missing test).
 2. **Triage.** The lead turns it into tasks on the board, e.g. T-1 the index, T-2 the
-   command (after T-1), T-3 the errors.
+   command (after T-1), T-3 the errors. It also sets the order (which tasks wait for
+   which) and the files each task may change, so work running in parallel doesn't collide.
 3. **Implementation.** Workers start in parallel. Each task gets its own worktree, on its
    own branch (`symcc/T-1`).
 4. **Checks.** symcc runs the scope check and the test gate. If the tests fail, automatic
@@ -231,7 +233,7 @@ terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ 
 You never have to type a command. Just talk to the lead:
 
 - "what's going on?"
-- "do T-4 first"
+- "do T-4 first" · "T-6 should wait for T-5"
 - "T-3 should also handle emails"
 - "pause T-5" · "drop T-2" · "stop everything"
 - "set the test command to `npm test`"

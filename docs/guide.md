@@ -81,6 +81,12 @@ picks up again next time.
 | `dropped` | Cancelled |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog · N" group |
 
+**Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
+finished first: it starts only when every one of them is `done` (merged). Any other status
+keeps it waiting, also `dropped` or `failed`; then the lead changes or clears its `after`.
+Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
+lower task number).
+
 ---
 
 ## What happens when a worker finishes
