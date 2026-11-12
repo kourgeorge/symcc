@@ -503,14 +503,14 @@ async function publish($: $, b: Board) {
 // reports close together go in one message, sent when the chat is idle.
 
 function tellLead($: $, text: string) {
-  if (!enabledNow) return // the plugin is off: no "[name] Update" messages
+  if (!enabledNow) return // the plugin is off: no "[name] Board update" messages
   leadQueue.push(text)
   if (leadTimer) return
   leadTimer = $.clock.after(1500, () => {
     leadTimer = null
     const body = leadQueue.splice(0).join('\n\n')
     if (!body || !enabledNow) return
-    void $.prompt.submit({ text: `[${N.name}] Update from the team:\n\n${body}\n\nDecide what happens next on the board (use the ${N.name} tools), then tell me briefly.` }).catch(() => undefined)
+    void $.prompt.submit({ text: `[${N.name}] Board update:\n\n${body}\n\nLead: decide what happens next on the board (use the ${N.name} tools), then tell the owner briefly.` }).catch(() => undefined)
   })
 }
 
@@ -1694,7 +1694,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   add and change also take needs_review: that one task waits for review even in mode auto.
   Going from review to auto does not merge tasks already in review; approve or reject them.
   Tasks in review can be approved or rejected in every mode, also off.
-  After each worker finishes, the lead gets a "[${N.name}] Update" message and decides what
+  After each worker finishes, the lead gets a "[${N.name}] Board update" message and decides what
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
   • Up to max_parallel run at once (3 by default), one per task.
@@ -1761,7 +1761,7 @@ The project has a shared task board (${N.dir}/board.json) that you and the owner
 - Every ${N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name; for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Update" message: decide what's next (retry with ${N.name} change / ${N.name} retry, split, ${N.name} ask the owner, or ${N.name} drop).
+- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Board update" message: decide what's next (retry with ${N.name} change / ${N.name} retry, split, ${N.name} ask the owner, or ${N.name} drop).
 - The board has one mode (${N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${N.name} approve T-5 (merge it) or ${N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${N.name} change the task with the wider files (it goes back to work); otherwise ${N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
@@ -2104,7 +2104,7 @@ export const register: Register = on => {
 
   // Keep the owner's last typed prompt (at the terminal or from the phone/web bridge), so a task
   // added after it can point back to the request. Slash commands, hidden prompts and the plugin's
-  // own "[name] Update" messages are not the owner's request and are left out.
+  // own "[name] Board update" messages are not the owner's request and are left out.
   on('prompt.submit', async ($, e, next) => {
     useName($)
     const r = await next(e)
