@@ -1648,12 +1648,38 @@ export const isNothing = (answer: string | undefined): boolean => {
   return !s || /^NOTHING\.?$/i.test(s)
 }
 
+/** How many recently finished or dropped tasks a scout is shown. */
+export const SCOUT_CLOSED_SHOWN = 20
+
+/**
+ * The most recently finished and dropped tasks, newest first, as "T-5 title (done)" lines,
+ * so a scout doesn't report what was just fixed or turned down. Tasks with no readable time go last.
+ */
+export function recentClosed(tasks: Pick<SymccTask, 'id' | 'title' | 'status' | 'updated_at' | 'created_at'>[], n = SCOUT_CLOSED_SHOWN): string[] {
+  const at = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
+    const v = Date.parse(t.updated_at ?? t.created_at ?? '')
+    return Number.isFinite(v) ? v : -Infinity
+  }
+  return tasks
+    .filter(t => t.status === 'done' || t.status === 'dropped')
+    .sort((a, b) => at(b) - at(a))
+    .slice(0, Math.max(0, Math.floor(Number.isFinite(n) ? n : SCOUT_CLOSED_SHOWN)))
+    .map(t => `${t.id} ${t.title} (${t.status})`)
+}
+
 /**
  * The prompt a scout run gets: its file's instructions as its job, the project folder,
- * the open tasks on the board (`open`: "T-3 title" lines) and the rules.
+ * the open tasks on the board (`open`: "T-3 title" lines), the recently closed ones (`closed`),
+ * its own last report and last run time (both optional), and the rules for a good finding.
  */
-export function scoutPrompt(o: { scout: string; root: string; instructions: string; open: string[]; name?: string }): string {
+export function scoutPrompt(o: { scout: string; root: string; instructions: string; open: string[]; name?: string; closed?: string[]; lastReport?: string | null; lastRun?: string | null }): string {
   const name = o.name ?? DEFAULT_NAME
+  const closed = Array.isArray(o.closed) ? o.closed : []
+  const report = typeof o.lastReport === 'string' && !isNothing(o.lastReport) ? o.lastReport.trim() : ''
+  const runAt = typeof o.lastRun === 'string' && Number.isFinite(Date.parse(o.lastRun)) ? o.lastRun : ''
+  const since = runAt
+    ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:\n  git log --since=${runAt} --stat`
+    : 'This is your first run (or the time of your last run is not known). Look at the whole project, starting with the most recent changes (git log --stat -n 20).'
   return `You are the ${name} scout "${o.scout}". The project is in ${o.root}. Your job, from your scout file:
 
 ${o.instructions.trim()}
@@ -1661,10 +1687,26 @@ ${o.instructions.trim()}
 Tasks already open on the board (don't suggest these again):
 ${o.open.length ? o.open.join('\n') : '(none)'}
 
+Tasks recently finished or dropped (don't report these again: they were just fixed or turned down):
+${closed.length ? closed.join('\n') : '(none)'}
+
+Your last report (don't repeat it unless it is still true and still not on the board):
+${report || '(none)'}
+
+Since when to look:
+${since}
+
+What makes a good finding:
+- Check before you report. Read the code around it. Reproduce it if you can: run the tests, run a command that only looks, or try the input. Check that it isn't already handled somewhere else or already on the board.
+- For each finding give: where (file:line); the proof (the command and its output, or the exact lines); what goes wrong for a user, and when; how sure you are (sure or likely); and a suggested task (a title and the files to change).
+- Report at most 3 findings, the most important first. Real bugs, broken promises (the docs say one thing, the code does another), missing error handling and missing tests for risky code matter more than style, naming or typos.
+- Leave out anything you can't show proof for.
+- If nothing passes this bar, answer exactly: NOTHING. That is a good result, not a failure.
+
 Rules:
 - Don't change, create or delete files in the project: no edits, no installs, no git commands that change anything (commit, checkout, reset, stash, ...). Changes are made through board tasks, not by you.
 - You may read files, run shell commands that only look, and search or fetch pages on the web.
-- End with a short plain report of what you found or did. If there is nothing worth reporting, answer exactly: NOTHING`
+- End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
 
 /** What the lead is told when a scout finishes: its whole report cut to `n` characters, or null for NOTHING. */

@@ -35,6 +35,7 @@ import {
   scoutHowTo,
   scoutLeadMessage,
   scoutPrompt,
+  recentClosed,
   scoutReport,
   scoutRow,
   sortScouts,
@@ -1278,11 +1279,13 @@ async function runScout($: $, s: ScoutDef) {
   if (!st || st.running || !driving || gitState !== 'ok') return
   const b = await load($)
   if (modeOf(b) === 'off') return
+  const lastRun = st.last_run
+  const lastReport = st.last_report
   st.running = true
   st.last_run = now()
   await publish($, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
-  const prompt = scoutPrompt({ scout: s.name, root, instructions: s.prompt, open, name: N.name })
+  const prompt = scoutPrompt({ scout: s.name, root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: N.name })
   const spawned = await $.agent.spawn({ prompt, name: scoutAgentName(N.name, s.name), description: scoutDescription(s.name, s.prompt), subagentType: N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
   const agentId = 'agentId' in spawned ? spawned.agentId : undefined
   if (!agentId) {

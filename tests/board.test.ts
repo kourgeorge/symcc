@@ -3,7 +3,7 @@ import type { SymccTask } from '../types'
 
 import { makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -523,9 +523,50 @@ test('scout prompt: the file is the job, with the open tasks and the no-changes 
   expect(p).toContain("Don't change, create or delete files")
   expect(p).toContain('NOTHING')
   expect(p).not.toContain('|')
-  expect(p).not.toContain('at most 3')
   expect(p).not.toContain('look for problems')
   expect(scoutPrompt({ scout: 'x', root: '/p', instructions: 'Go.', open: [] })).toContain('(none)')
+})
+
+test('scout prompt: recent closed tasks, the last report, the since-time and the rules for a good finding', () => {
+  const p = scoutPrompt({ scout: 'bugs', root: '/p', instructions: 'Find crashes.', open: [], closed: ['T-7 Fix parser (done)', 'T-8 Rename x (dropped)'], lastReport: 'crash in src/p.ts:3', lastRun: '2026-11-12T08:00:00.000Z' })
+  expect(p).toContain('T-7 Fix parser (done)')
+  expect(p).toContain('T-8 Rename x (dropped)')
+  expect(p).toContain('crash in src/p.ts:3')
+  expect(p).toContain("don't repeat it unless it is still true and still not on the board")
+  expect(p).toContain('git log --since=2026-11-12T08:00:00.000Z --stat')
+  expect(p).toContain('Check before you report')
+  expect(p).toContain('file:line')
+  expect(p).toContain('sure or likely')
+  expect(p).toContain('suggested task')
+  expect(p).toContain('at most 3 findings')
+  expect(p).toContain("Leave out anything you can't show proof for")
+  expect(p).toContain('answer exactly: NOTHING. That is a good result, not a failure.')
+  expect(p).toContain("Don't change, create or delete files")
+})
+
+test('scout prompt: works with no last report, no last run and no closed tasks', () => {
+  for (const extra of [{}, { lastReport: null, lastRun: null, closed: [] }, { lastReport: 'NOTHING', lastRun: 'not a time' }, { lastReport: '   ' }]) {
+    const p = scoutPrompt({ scout: 'x', root: '/p', instructions: 'Go.', open: [], ...extra })
+    expect(p).toContain('This is your first run')
+    expect(p).not.toContain('--since=')
+    expect(p).not.toContain('undefined')
+    expect(p).not.toContain('null')
+    expect(p).toMatch(/Your last report[^\n]*\n\(none\)/)
+    expect(p).toMatch(/recently finished or dropped[^\n]*\n\(none\)/)
+  }
+})
+
+test('recent closed tasks: done and dropped only, newest first, capped', () => {
+  const t = (id: string, status: string, updated_at?: string) => ({ id, title: `title ${id}`, status, updated_at, created_at: '2026-01-01T00:00:00Z' }) as any
+  const tasks = [t('T-1', 'done', '2026-11-01T00:00:00Z'), t('T-2', 'todo', '2026-11-11T00:00:00Z'), t('T-3', 'dropped', '2026-11-10T00:00:00Z'), t('T-4', 'done', 'bad'), t('T-5', 'backlog')]
+  expect(recentClosed(tasks)).toEqual(['T-3 title T-3 (dropped)', 'T-1 title T-1 (done)', 'T-4 title T-4 (done)'])
+  expect(recentClosed(tasks, 1)).toEqual(['T-3 title T-3 (dropped)'])
+  expect(recentClosed(tasks, -2)).toEqual([])
+  expect(recentClosed([])).toEqual([])
+  const many = Array.from({ length: 30 }, (_, i) => t(`T-${i}`, 'done', new Date(Date.UTC(2026, 0, 1 + i)).toISOString()))
+  const r = recentClosed(many)
+  expect(r.length).toBe(SCOUT_CLOSED_SHOWN)
+  expect(r[0]).toBe('T-29 title T-29 (done)')
 })
 
 test('scout lead message: the whole report, trimmed; NOTHING gives none', () => {
