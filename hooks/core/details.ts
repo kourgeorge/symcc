@@ -7,7 +7,7 @@ import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
 
-/** A piece of text on the task page with its theme color name (see C() in register.tsx). */
+/** A piece of text on the task page with its theme color name (see C() in plugin/ui/parts.tsx). */
 export type Seg = { text: string; color: string; bold?: boolean; italic?: boolean }
 /** One labelled row on the task page ("Role:", "From:", …); a row with an empty label continues the one above. */
 export type DetailRow = { label: string; segs: Seg[] }
