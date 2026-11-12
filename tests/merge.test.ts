@@ -1,0 +1,474 @@
+import { expect, test } from 'claude-code/testing'
+import type { SymccTask } from '../types'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, find } from '../hooks/board'
+import { checkAndMerge } from '../hooks/plugin/review'
+import { S, leadQueue } from '../hooks/plugin/state'
+import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
+import { runTool } from '../hooks/plugin/tools'
+
+// The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
+// process globals, and nothing below the plugin answers $.fs or $.process.run. So these tests run the
+// real merge, approve and board code against a scripted fake git and in-memory files (see world()).
+
+const ROOT = '/repo'
+const WT = `${ROOT}/.symcc/worktrees/T-1`
+const BOARD = `${ROOT}/.symcc/board.json`
+const LOCK = `${ROOT}/.symcc/board.lock`
+const T0 = 1_800_000_000_000
+const ISO = '2026-11-13T00:00:00.000Z'
+// commit ids for the fake git: main (M1, M2), the worker's branch (H0 before its commit, H1 after, H2 after a merge of main), an older base (B0)
+const [M1, M2, H0, H1, H2, B0] = ['a1', 'a2', 'b0', 'b1', 'b2', 'c0'].map(x => x.repeat(20)) as [string, string, string, string, string, string]
+
+type Res = { exitCode: number; stdout: string; stderr: string }
+const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
+const fail = (stderr = '', exitCode = 1): Res => ({ exitCode, stdout: '', stderr })
+
+/**
+ * A small fake git: it keeps the commits that matter (main, the worker's HEAD) and answers the commands
+ * checkAndMerge and moveTarget run. Every command is recorded in `calls` ("cwd: git args").
+ * `answer` can replace the answer to any command (return undefined to keep the fake's own).
+ */
+type Git = {
+  main: string
+  head: string
+  /** the worker left changes to commit */
+  dirty: boolean
+  /** main is already in the worker's branch (no "bring up to date" merge needed) */
+  upToDate: boolean
+  /** merging main into the branch conflicts */
+  conflict: boolean
+  /** the files the branch changed */
+  changed: string[]
+  /** the branch the owner has checked out */
+  current: string
+  /** the owner's `git status --porcelain -z` */
+  status: string
+  answer?: (args: string[], cwd: string) => Res | undefined
+}
+
+/** Board file contents, the fake git, the commands run, and a `$` for the plugin code that uses them. */
+function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
+  const git: Git = { main: M1, head: H0, dirty: true, upToDate: true, conflict: false, changed: ['src/a.ts'], current: 'other', status: '', ...g }
+  const files = new Map<string, string>()
+  const mtime = new Map<string, number>()
+  const calls: string[] = []
+  const toasts: string[] = []
+  let clock = T0
+  const sleeps: number[] = []
+  let afterSleep = () => {}
+  const state = new Map<string, unknown>()
+  const put = (p: string, text: string) => (files.set(p, text), mtime.set(p, clock))
+
+  function runGit(args: string[], cwd: string): Res {
+    const own = git.answer?.(args, cwd)
+    if (own) return own
+    const a = args.filter((x, i) => x !== '-c' && args[i - 1] !== '-c')
+    const s = a.join(' ')
+    if (a[0] === 'commit') {
+      if (!git.dirty) return fail('nothing to commit')
+      git.dirty = false
+      git.head = H1
+      return ok()
+    }
+    if (s === 'rev-parse -q --verify HEAD' || s === 'rev-parse HEAD') return ok(git.head)
+    if (s === `rev-parse refs/heads/main`) return ok(git.main)
+    if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return git.upToDate ? ok() : fail()
+    if (a[0] === 'merge-base') return ok(git.upToDate ? git.main : B0)
+    if (a[0] === 'diff' && a.includes('--name-only')) return ok(git.changed.join(a.includes('-z') ? '\0' : '\n'))
+    if (s === 'merge --abort') return ok()
+    if (a[0] === 'merge') {
+      if (git.conflict) return { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' }
+      git.head = H2
+      return ok()
+    }
+    if (s === 'symbolic-ref --short -q HEAD') return git.current ? ok(git.current) : fail()
+    if (a[0] === 'status') return ok(git.status)
+    if (a[0] === 'update-ref') {
+      // update-ref -m note ref new old: moves only if ref is still at old
+      const [, , , ref, to, from] = a
+      if (ref !== 'refs/heads/main') return fail('unknown ref')
+      if (git.main !== from) return fail(`cannot lock ref '${ref}'`)
+      git.main = to!
+      return ok()
+    }
+    if (a[0] === 'read-tree') return ok()
+    if (s === '--version') return ok('git version 2.50.0')
+    if (s === 'rev-parse --is-inside-work-tree') return ok('true')
+    if (s === 'rev-parse --verify -q HEAD' || s === 'rev-parse --verify -q refs/heads/main') return ok('x')
+    return ok()
+  }
+
+  const $ = {
+    process: {
+      run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
+        const cwd = o.cwd ?? ROOT
+        const [cmd, ...rest] = argv
+        if (cmd === 'git') {
+          calls.push(`${cwd === WT ? 'wt' : cwd === ROOT ? 'root' : cwd}: git ${rest.join(' ')}`)
+          return runGit(rest, cwd)
+        }
+        calls.push(argv.join(' '))
+        if (cmd === '/bin/sh') return tests[rest[1]!] ?? ok()
+        if (cmd === 'ln') {
+          // ln fails when the target exists: only one session can take the lock
+          if (files.has(rest[1]!)) return fail('File exists')
+          put(rest[1]!, files.get(rest[0]!)!)
+          return ok()
+        }
+        if (cmd === 'mv') {
+          const [, from, to] = rest
+          if (!files.has(from!)) return fail('No such file')
+          put(to!, files.get(from!)!)
+          files.delete(from!)
+          return ok()
+        }
+        if (cmd === 'rm') {
+          for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
+          return ok()
+        }
+        return ok()
+      },
+    },
+    fs: {
+      exists: async (p: string) => files.has(p),
+      read: async (p: string) => {
+        if (!files.has(p)) throw new Error(`no file ${p}`)
+        return files.get(p)!
+      },
+      write: async (p: string, text: string) => put(p, text),
+      stat: async (p: string) => {
+        if (!files.has(p)) throw new Error(`no file ${p}`)
+        return { mtimeMs: mtime.get(p)! }
+      },
+    },
+    session: { id: async () => 'me', send: async () => undefined },
+    agent: { list: async () => [] },
+    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)), status: () => undefined },
+    clock: {
+      // never fires: what reaches the lead is read from leadQueue instead
+      after: () => ({ cancel() {} }),
+      // a fake wait: moves the fake time on, never really waits
+      sleep: async (ms: number) => {
+        sleeps.push(ms)
+        clock += ms
+        afterSleep()
+      },
+    },
+    prompt: { submit: async () => undefined },
+    // the panel's state values (publish writes the view there): kept here, never read by these tests
+    state: {
+      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
+      set: async (e: { key: string; value: unknown }) => {
+        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
+        state.set(e.key, { value: e.value, version })
+        return { isSet: true, version }
+      },
+    },
+  }
+  S.root = ROOT
+  S.leadTimer = null
+  S.writing = Promise.resolve()
+  S.driving = false
+  S.startupDone = false
+  S.enabledNow = true
+  leadQueue.splice(0)
+  return { $: $ as never, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f) }
+}
+
+/** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
+function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<SymccTask> = {}): [Board, SymccTask] {
+  const [b, t] = addTask({ ...emptyBoard('main'), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
+  const b2 = patchTask(b, t.id, { status: 'doing', attempts: 1, ...extra }, ISO)
+  return [b2, b2.tasks[0]!]
+}
+
+// ---------------- the board store ----------------
+
+test('saveBoard then load gives back the same board, written through a temp file', async () => {
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, b)
+  expect(w.files.has(`${BOARD}.tmp`)).toBe(false)
+  expect(w.calls).toContain(`mv -f ${BOARD}.tmp ${BOARD}`)
+  expect(await load(w.$)).toEqual(parseBoard(JSON.stringify(b)))
+  expect((await load(w.$)).tasks[0]!.title).toBe('Do it')
+})
+
+test('change() reads the board, applies the change and saves it, and drops its lock', async () => {
+  const w = world()
+  const [b] = boardWith('auto')
+  await saveBoard(w.$, b)
+  const value = await change(w.$, x => [patchTask(x, 'T-1', { note: 'changed' }, ISO), 'done'] as [Board, string])
+  expect(value).toBe('done')
+  expect(find(await load(w.$), 'T-1')!.note).toBe('changed')
+  expect(w.files.has(LOCK)).toBe(false)
+})
+
+test('a stale lock left by a dead session is taken over at once', async () => {
+  const w = world()
+  // dated at 1970: stale whatever the time is now
+  w.put(LOCK, lockText('dead-session', 0))
+  const mine = await takeLock(w.$)
+  expect(JSON.parse(mine).session).toMatch(/^me:/)
+  expect(w.files.get(LOCK)).toBe(mine)
+  expect(w.sleeps).toEqual([])
+  // its own temp file is gone
+  expect([...w.files.keys()].filter(p => p.endsWith('.tmp'))).toEqual([])
+  await dropLock(w.$, mine)
+  expect(w.files.has(LOCK)).toBe(false)
+})
+
+test('a fresh lock held by another session is not taken over: it waits until that session lets go', async () => {
+  const w = world()
+  const theirs = lockText('other-session', Date.now())
+  w.put(LOCK, theirs)
+  const seen: (string | undefined)[] = []
+  // the fake wait: look at the lock, then the other session drops it
+  w.onSleep(() => {
+    seen.push(w.files.get(LOCK))
+    w.files.delete(LOCK)
+  })
+  const mine = await takeLock(w.$)
+  expect(seen).toEqual([theirs])
+  expect(w.sleeps).toEqual([100])
+  expect(w.files.get(LOCK)).toBe(mine)
+  expect(mine).not.toBe(theirs)
+})
+
+test('dropLock leaves alone a lock that is not its own', async () => {
+  const w = world()
+  const theirs = lockText('other-session', T0)
+  w.put(LOCK, theirs)
+  await dropLock(w.$, lockText('me:abc', T0))
+  expect(w.files.get(LOCK)).toBe(theirs)
+})
+
+test('change() on a board.json that cannot be read refuses, keeps a copy, and never overwrites it', async () => {
+  const w = world()
+  const text = '{"version":1,"tasks":[{"id":"T-1",}]} change-test'
+  w.put(BOARD, text)
+  let ran = false
+  const err = await change(w.$, x => ((ran = true), x)).then(() => null, (e: Error) => e.message)
+  expect(err).toMatch(/board\.json can't be read/)
+  expect(ran).toBe(false)
+  expect(w.files.get(BOARD)).toBe(text)
+  expect(w.files.has(`${BOARD}.tmp`)).toBe(false)
+  const copies = [...w.files.entries()].filter(([p]) => p.startsWith(`${BOARD}.broken-`))
+  expect(copies.map(([, t]) => t)).toEqual([text])
+  expect(w.toasts.some(t => /board\.json can't be read/.test(t))).toBe(true)
+  expect(w.files.has(LOCK)).toBe(false)
+})
+
+test('saveBoard says so when the board cannot be moved into place', async () => {
+  const w = world()
+  const run = (w.$ as { process: { run: (a: string[]) => Promise<Res> } }).process
+  const real = run.run
+  run.run = async (a: string[]) => (a[0] === 'mv' ? fail('mv: Permission denied') : real(a))
+  const err = await saveBoard(w.$, boardWith('auto')[0]).then(() => null, (e: Error) => e.message)
+  expect(err).toBe("couldn't save the board: mv: Permission denied")
+  expect(w.files.has(BOARD)).toBe(false)
+})
+
+// ---------------- checkAndMerge ----------------
+
+const ranTests = (w: ReturnType<typeof world>) => w.calls.filter(c => c.startsWith('/bin/sh -c '))
+const movedMain = (w: ReturnType<typeof world>) => w.calls.some(c => / git update-ref .*refs\/heads\/main/.test(c))
+
+test('checkAndMerge commits the work, runs the tests and moves main to it', async () => {
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made: string[] = []
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests passed` })
+  expect(w.git.main).toBe(H1)
+  expect(made).toEqual([H1])
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  // the owner doesn't have main checked out: their files are not touched
+  expect(w.calls.some(c => / git read-tree /.test(c))).toBe(false)
+})
+
+test('checkAndMerge with no change at all merges nothing', async () => {
+  const w = world({ dirty: false, changed: [] })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made: string[] = []
+  expect(await checkAndMerge(w.$, t, WT, b, 'finish', made)).toEqual({ ok: false, detail: 'the worker made no change' })
+  expect(made).toEqual([])
+  expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge refuses a change to a file outside the task, before testing or merging', async () => {
+  const w = world({ changed: ['src/a.ts', 'docs/x.md'] })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: outOfScopeText(['docs/x.md'], ['src/']) })
+  expect(ranTests(w)).toEqual([])
+  expect(w.git.main).toBe(M1)
+})
+
+test('checkAndMerge brings the branch up to date when main moved on, tests that, and merges it', async () => {
+  const w = world({ upToDate: false })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made: string[] = []
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
+  expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
+  expect(made).toEqual([H1, H2])
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M1}`))).toBe(true)
+  expect(ranTests(w).length).toBe(1)
+  expect(w.git.main).toBe(H2)
+})
+
+test('checkAndMerge on a conflict with main aborts the merge and says it conflicts', async () => {
+  const w = world({ upToDate: false, conflict: true })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, conflict: true, detail: 'conflicts with the latest main' })
+  expect(w.calls).toContain('wt: git merge --abort')
+  expect(ranTests(w)).toEqual([])
+  expect(w.git.main).toBe(M1)
+})
+
+test('checkAndMerge when main moved during the merge leaves main where the other change put it', async () => {
+  const w = world({
+    // another merge lands on main just before ours tries to move it
+    answer: a => {
+      if (a[0] === 'update-ref') w.git.main = M2
+      return undefined
+    },
+  })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: 'main moved during the merge; try again' })
+  expect(w.git.main).toBe(M2)
+})
+
+test('checkAndMerge waits when the owner has main checked out with uncommitted changes', async () => {
+  const w = world({ current: 'main', status: ' M README.md\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: blockedText('main', 'T-1', { dirty: ['README.md'], untracked: [] }) })
+  expect(r.detail).toBe('you have uncommitted changes on main; commit or stash them, then say "retry T-1"')
+  expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge waits when an untracked file of the owner would be overwritten by the merge', async () => {
+  const w = world({ current: 'main', status: '?? src/a.ts\0?? notes.txt\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toBe('you have untracked files on main that T-1 would overwrite (src/a.ts); move, rename or commit them, then say "retry T-1"')
+  expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge on a checked-out main with only untracked files out of the way merges and updates the files', async () => {
+  const w = world({ current: 'main', status: '?? notes.txt\0?? .symcc/board.json\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); no test command set` })
+  expect(w.calls).toContain(`root: git read-tree -m -u ${M1} ${H1}`)
+})
+
+test('checkAndMerge puts main back and says "not merged" when updating the files fails after main moved', async () => {
+  const w = world({ current: 'main', answer: a => (a.join(' ') === `read-tree -m -u ${M1} ${H1}` ? fail("error: Entry 'src/a.ts' not uptodate. Cannot merge.", 128) : undefined) })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toBe('not merged: your files on main could not be updated (error: Entry \'src/a.ts\' not uptodate. Cannot merge.); main is back where it was and your files are unchanged. Fix that, then say "retry T-1"')
+  expect(w.git.main).toBe(M1)
+  expect(w.calls.filter(c => / git update-ref /.test(c))).toEqual([`root: git update-ref -m symcc T-1 refs/heads/main ${H1} ${M1}`, `root: git update-ref -m symcc T-1 (undone) refs/heads/main ${M1} ${H1}`])
+})
+
+test('checkAndMerge stops at the first failing test command and merges nothing', async () => {
+  const w = world({}, { 'npm test': { exitCode: 2, stdout: '1 test failed', stderr: 'boom' } })
+  const [b, t] = boardWith('auto', ['npm run lint', 'npm test', 'npm run e2e'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toBe('tests failed: `npm test` (exit 2). 1 test failed | boom')
+  expect(r.testOutput).toContain('$ npm test (exit 2)')
+  expect(r.testOutput).toContain('1 test failed')
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm run lint', '/bin/sh -c npm test'])
+  expect(w.git.main).toBe(M1)
+})
+
+test('checkAndMerge in mode review stops after the tests and merges nothing', async () => {
+  const w = world()
+  const [b, t] = boardWith('review', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: true, review: true, detail: 'checks passed; tests passed; ready for review, nothing merged yet' })
+  expect(movedMain(w)).toBe(false)
+})
+
+// ---------------- approve and reject ----------------
+
+/** A world where T-1 waits in review: its work is committed (h1) in its worktree and the board is saved. */
+async function inReview(g: Partial<Git> = {}, tests: Record<string, Res> = {}, test_commands = ['npm test']) {
+  const w = world({ dirty: false, head: H1, ...g }, tests)
+  const [b] = boardWith('review', test_commands)
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'review', note: 'ready for review' }, ISO))
+  w.put(`${WT}/.git`, 'gitdir: x')
+  return w
+}
+
+test('approve merges a task in review, without running the tests again when main did not move', async () => {
+  const w = await inReview()
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe(`T-1 approved and merged: merged into main (${H1.slice(0, 8)}); approved by the owner`)
+  expect(w.git.main).toBe(H1)
+  expect(ranTests(w)).toEqual([])
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  // its folder and branch are cleaned up
+  expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
+  expect(w.calls).toContain('root: git branch -d symcc/T-1')
+})
+
+test('approve when main moved runs the tests again; failing, nothing merges and the task gets a new try', async () => {
+  const w = await inReview({ upToDate: false }, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe('T-1 approved, but not merged: tests failed: `npm test` (exit 1). FAIL a.test (see the board for what happens next)')
+  expect(w.git.main).toBe(M1)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(t.test_output).toContain('FAIL a.test')
+})
+
+test('approve that is blocked by the owner\'s uncommitted changes keeps the task in review', async () => {
+  const w = await inReview({ current: 'main', status: ' M README.md\0' })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe('T-1 was not merged and stays in review: you have uncommitted changes on main; commit or stash them, then say "retry T-1". Fix that, then approve it again.')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.note).toMatch(/^approved, but not merged: you have uncommitted changes on main/)
+  expect(w.git.main).toBe(M1)
+})
+
+test('approve of a task that is not in review is refused and changes nothing', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith('review')[0])
+  const before = w.files.get(BOARD)
+  const err = await runTool(w.$, 'approve', { task: 'T-1' }).then(() => null, (e: Error) => e.message)
+  expect(err).toBe('T-1 is not ready for review (it is doing); only a task in review can be approved')
+  expect(w.files.get(BOARD)).toBe(before)
+  expect(w.calls.some(c => / git /.test(c))).toBe(false)
+})
+
+test('reject sends a task in review back to "todo" with the reason, and merges nothing', async () => {
+  const w = await inReview()
+  const out = await runTool(w.$, 'reject', { task: 'T-1', reason: 'the name is wrong' })
+  expect(out).toBe('T-1 rejected: back to "todo"; a fresh worker picks it up with the reason')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.note).toBe('rejected: the name is wrong')
+  expect(t.history.at(-1)).toBe('try 1: rejected by the owner: the name is wrong')
+  // only looking: nothing committed, merged or moved
+  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q HEAD'])
+  expect(w.git.main).toBe(M1)
+})
+
+test('reject with no reason is refused and the task stays in review', async () => {
+  const w = await inReview()
+  const err = await runTool(w.$, 'reject', { task: 'T-1', reason: '  ' }).then(() => null, (e: Error) => e.message)
+  expect(err).toBe('give a reason for rejecting, so the next worker knows what to fix')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+})
