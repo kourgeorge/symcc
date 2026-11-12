@@ -9,7 +9,11 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - `symcc add` needs a why.
 - The board shows a "from:" line for each task.
 
+### Code
+- The code is split into modules (`hooks/core/`, `hooks/plugin/`, `hooks/plugin/ui/`). No behaviour change.
+
 ### Docs
+- Guide: a code map and a note on finished workers in Claude Code's agent list.
 - README and guide: new text on traceability and observability.
 - README: a presentation video, with a GIF preview.
 - Slide deck in `docs/slides/symcc.pptx`.

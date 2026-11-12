@@ -26,8 +26,8 @@ merge), and the agents are proactive (workers build on their own, scouts find th
 | 52.5–58 | (end card) | "symcc: many agents, one board. Organized, supervised, proactive." |
 
 The status line, the banner and the Scouts view use the plugin's real text (see
-`statusLine`, `modeLabel`, `bannerLines` and `scoutRow` in `hooks/board.ts`, and the Scouts
-view in `hooks/register.tsx`), e.g. `⏸ review merge · T-1, T-3 doing · 1 to do`. The banner
+`statusLine`, `modeLabel`, `bannerLines` and `scoutRow` in `hooks/core/`, and the Scouts
+view in `hooks/plugin/ui/scouts-page.tsx`), e.g. `⏸ review merge · T-1, T-3 doing · 1 to do`. The banner
 counts and the status line are worked out from the `tasks` list in the script, so they always
 match the board.
 

@@ -422,6 +422,7 @@ start with `symcc/` are never touched.
   before finishing).
 - **Big tasks can run out of time.** A task that touches a lot of code may need more than
   45 minutes; raise `max_minutes` or split the task.
+- **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
 - **`dropped` is the end.** There is no delete; a dropped task stays on the list but
   never runs again.
 
@@ -436,8 +437,8 @@ slash commands (`/<name>`, `/<name>-mode`, `/<name>-help`, ...) and all the text
 To rename it:
 
 1. Change `"name"` in `.claude-plugin/plugin.json`, and `DEFAULT_NAME` in `hooks/name.ts`.
-2. Change the name in the two `atom({ plugin: ... })` lines near the top of
-   `hooks/register.tsx` and under `PluginState` in `types/index.d.ts`. Claude Code reads
+2. Change the name in the `atom({ plugin: ... })` lines near the top of
+   `hooks/plugin/state.ts` (`opened`, `tab`, `scout`, `view`) and under `PluginState` in `types/index.d.ts`. Claude Code reads
    which values a plugin keeps before it runs, so these must be written out as text.
 3. Move the old data folder in each project, e.g. `mv .symcc .crew`. Nothing is moved for
    you; if only the old folder is there, the plugin shows a note once when a session starts.
@@ -449,8 +450,25 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 
 ## For developers: where the code is
 
-| File | What's in it |
+| File or folder | What's in it |
 |---|---|
+| [`hooks/register.tsx`](../hooks/register.tsx) | Only the wiring: the `on(...)` calls that hand Claude Code events to the modules below |
+| [`hooks/core/`](../hooks/core/) | The board as plain data (`board-file.ts`, `task.ts`, `review.ts`, `banner.ts`, `scouts.ts`, ...). No Claude Code calls, so it's easy to test |
+| [`hooks/board.ts`](../hooks/board.ts) | A barrel: it only re-exports `hooks/core/*`, so tests and other files import from one place |
+| [`hooks/plugin/`](../hooks/plugin/) | The Claude Code side: the lead's tools (`tools.ts`), workers (`workers.ts`), git (`git.ts`), review and merge, scouts, roles. Shared state is the `S` object in `state.ts` |
+| [`hooks/plugin/ui/`](../hooks/plugin/ui/) | The panel pages and the part above the prompt (`list.tsx`, `task-page.tsx`, `scouts-page.tsx`, `settings.tsx`, ...) |
+| [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
+| [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
+| [`tests/`](../tests/) | `board.test.ts` (the board logic), `pane.test.tsx` (the panel) |
+
+**Where to add a new feature:** pure logic goes in `hooks/core/`; Claude Code wiring goes in `hooks/plugin/`; panel pages go in `hooks/plugin/ui/`.
+
+**Two rules the loader needs:**
+
+- A function that takes `$` and is imported from another file must be a `function` declaration, not an arrow `const`.
+- Panel atoms (`read` / `update`) must be used in the file that declares them. From other files, use the `readX` / `updateX` helpers in `hooks/plugin/state.ts`.
+
+---|---|
 | [`hooks/register.tsx`](../hooks/register.tsx) | Everything that talks to Claude Code: the lead's tools, starting and stopping workers, checking and merging, scouts, the panel and status line |
 | [`hooks/board.ts`](../hooks/board.ts) | The board as plain data: adding and changing tasks, which tasks are ready, the scope check, retry rules, who drives, the banner text. No Claude Code calls, so it's easy to test |
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
@@ -463,5 +481,5 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 
 - **Run the tests:** `claude plugin test .` from the project folder.
 - **Where tests live:** `tests/board.test.ts` tests the board logic; `tests/pane.test.tsx` tests the panel.
-- **Layout:** `hooks/board.ts` holds the logic you can test (plain data, no Claude Code calls). `hooks/register.tsx` does the wiring to Claude Code. Put new logic in `board.ts` when you can, so it is easy to test.
+- **Layout:** `hooks/core/` holds the logic you can test (plain data, no Claude Code calls). `hooks/plugin/` and `hooks/plugin/ui/` do the wiring to Claude Code, and `hooks/register.tsx` only connects events. Put new logic in `hooks/core/` when you can. See the code map above.
 - **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).

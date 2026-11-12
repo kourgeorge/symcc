@@ -379,8 +379,9 @@ dropped task keeps its branch so you can still look at its work. More tips are i
 
 ### For developers
 
-The code is in [`hooks/register.tsx`](hooks/register.tsx) (everything that talks to
-Claude Code) and [`hooks/board.ts`](hooks/board.ts) (the board as plain data, easy to
-test), with tests in [`tests/`](tests/). See the
+The code is split into modules: [`hooks/core/`](hooks/core/) (the board as plain data, easy
+to test), [`hooks/plugin/`](hooks/plugin/) and [`hooks/plugin/ui/`](hooks/plugin/ui/) (everything
+that talks to Claude Code, and the panel), and [`hooks/register.tsx`](hooks/register.tsx) (only
+the wiring), with tests in [`tests/`](tests/). See the
 [guide](docs/guide.md#for-developers-where-the-code-is) for more, and for
 [renaming the plugin](docs/guide.md#renaming-the-plugin).
