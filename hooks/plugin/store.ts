@@ -1,6 +1,7 @@
-import { type Board, parseBoard, emptyBoard, symccOn, lockText, isLockStale } from '../board'
+import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale } from '../board'
 import { firstBranch } from './git'
 import { publish } from './lead'
+import { tellLead } from './tell'
 import { S, type $ } from './state'
 
 // ---------------- the board on disk ----------------
@@ -8,12 +9,46 @@ import { S, type $ } from './state'
 export const now = () => new Date().toISOString()
 export const path = (rel: string) => `${S.root}/${rel}`
 
+/** board.json texts already reported (broken, or with skipped entries or bad settings), and the copy kept of each */
+const reported = new Map<string, string>()
+
+/**
+ * Keep a copy of board.json's text beside it (board.json.<what>-<time>) and tell the owner
+ * (a toast) and the lead, once per distinct text. Returns the copy's name ('' if it couldn't be written).
+ */
+async function keepCopy($: $, text: string, what: string, say: (copy: string) => string): Promise<string> {
+  const known = reported.get(text)
+  if (known !== undefined) return known
+  const copy = `${S.N.boardFile}.${what}-${now().replace(/[:.]/g, '-')}`
+  const ok = await $.fs.write(path(copy), text).then(() => true, () => false)
+  const name = ok ? copy : ''
+  reported.set(text, name)
+  const msg = say(name)
+  $.ui.toast(S.N.toast(msg))
+  tellLead($, msg)
+  return name
+}
+
 export async function load($: $): Promise<Board> {
   const exists = await $.fs.exists(path(S.N.boardFile))
   // A new board starts on the branch the owner has checked out (existing boards keep theirs).
-  const b = exists ? parseBoard(await $.fs.read(path(S.N.boardFile))) : emptyBoard(await firstBranch($))
-  S.enabledNow = symccOn(b)
-  return b
+  if (!exists) {
+    const b = emptyBoard(await firstBranch($))
+    S.enabledNow = symccOn(b)
+    return b
+  }
+  const text = await $.fs.read(path(S.N.boardFile))
+  const r = readBoard(text)
+  if (r.broken) {
+    // Never go on with a stand-in board: it would be saved over the file and lose every task.
+    // Throwing here refuses every change, start and merge until the file is fixed; workers already running are left alone.
+    const copy = await keepCopy($, text, 'broken', c => brokenBoardText(S.N.boardFile, r.broken!, c || undefined))
+    throw new Error(brokenBoardText(S.N.boardFile, r.broken, copy || undefined))
+  }
+  if (r.skipped || r.fixed.length)
+    await keepCopy($, text, 'before-fix', c => `${S.N.boardFile}: ${r.skipped ? `skipped ${r.skipped} task entr${r.skipped > 1 ? 'ies' : 'y'} that ${r.skipped > 1 ? 'are' : 'is'} not a task` : ''}${r.skipped && r.fixed.length ? '; ' : ''}${r.fixed.length ? `bad value${r.fixed.length > 1 ? 's' : ''} for ${r.fixed.join(', ')} set to the default` : ''}${c ? `. The file as it was is kept in ${c}` : ''}.`)
+  S.enabledNow = symccOn(r.board)
+  return r.board
 }
 
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
