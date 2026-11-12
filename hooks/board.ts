@@ -185,8 +185,20 @@ export function makeOrigin(o: OriginInput | undefined, now: string, b?: Board): 
 
 /** A task's origin if it has a usable one (old boards have none; a hand-edited one may be broken). */
 const originOf = (t: { origin?: unknown }): SymccOrigin | undefined => {
-  const o = t.origin as SymccOrigin | undefined
-  return o && typeof o === 'object' && (ORIGIN_BY as readonly string[]).includes(o.by) ? o : undefined
+  const o = t.origin as Record<string, unknown> | null | undefined
+  if (!o || typeof o !== 'object' || Array.isArray(o) || !(ORIGIN_BY as readonly unknown[]).includes(o.by)) return undefined
+  // keep only text fields that really are text, so one hand-edited task can't break the board
+  const text = (k: string) => (typeof o[k] === 'string' ? { [k]: o[k] as string } : {})
+  return {
+    by: o.by as SymccOrigin['by'],
+    ...text('scout'),
+    ...text('task'),
+    ...((ORIGIN_HOW as readonly unknown[]).includes(o.how) ? { how: o.how as SymccOrigin['how'] } : {}),
+    ...text('request'),
+    why: typeof o.why === 'string' ? o.why : '',
+    ...text('evidence'),
+    at: typeof o.at === 'string' ? o.at : '',
+  }
 }
 
 /** Who made a task, in words: "the owner", "scout bugs", "the worker of T-3", "the lead"; "unknown" without an origin. */

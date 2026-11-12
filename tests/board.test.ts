@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
-import { wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
+import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
@@ -1584,4 +1584,25 @@ test('scout memory: a broken file is treated as never run, bad entries are skipp
   expect(parseScoutMemory('{"scouts": []}')).toEqual({})
   expect(parseScoutMemory('null')).toEqual({})
   expect(parseScoutMemory(JSON.stringify({ scouts: { a: 5, b: { last_run: 'not a date' }, c: { last_run: 7, last_report: 'r' }, d: { last_run: T } } }))).toEqual({ c: { last_run: null, last_report: 'r' }, d: { last_run: T } })
+})
+
+test('a hand-broken task origin does not break the board or the task page', () => {
+  for (const origin of [
+    { by: 'owner', why: 5, request: 7 },
+    { by: 'owner', why: null, request: null, scout: null, task: null, how: null, evidence: null, at: null },
+    { by: 'scout', scout: 3, task: {}, how: 'nope', evidence: [1], why: 'real' },
+  ]) {
+    const [b0, t0] = addTask(emptyBoard(), { origin: W, title: 'broken' }, T)
+    const t = { ...t0, origin } as unknown as SymccTask
+    const b = { ...b0, tasks: [t] }
+    expect(boardText(b)).toContain('broken')
+    expect(() => fromText(t)).not.toThrow()
+    expect(() => originWho(t)).not.toThrow()
+    const rows = detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 })
+    expect(rows.some(r => r.label === 'From')).toBe(true)
+    expect(rows.some(r => r.label === 'Request')).toBe(false)
+  }
+  const ok = { ...addTask(emptyBoard(), { origin: W, title: 'x' }, T)[1], origin: { by: 'owner', why: 'w', request: 'add search', at: T } } as unknown as SymccTask
+  expect(fromText(ok)).toContain('add search')
+  expect(fromText({ origin: { by: 'scout', scout: 9, why: 'w' } })).toBe('from: scout ?')
 })
