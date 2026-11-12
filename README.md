@@ -66,6 +66,8 @@ retry, and scouts look ahead and suggest the next job.
 
 ## How it works
 
+![How symcc works: you, the lead, workers and scouts](docs/architecture.svg)
+
 1. **You talk.** "Add a search command, and make the errors friendlier."
 2. **The lead writes tasks on the board**, e.g. T-1 the index, T-2 the command (after
    T-1), T-3 the errors.
