@@ -8,11 +8,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-D97757" alt="Claude Code plugin">
+  <a href=".claude-plugin/plugin.json"><img src="https://img.shields.io/github/package-json/v/kourgeorge/symcc?filename=.claude-plugin%2Fplugin.json&color=blue" alt="version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/agents-parallel-4c9a2a" alt="agents: parallel">
-  <img src="https://img.shields.io/badge/worktrees-isolated-6f42c1" alt="worktrees: isolated">
-  <img src="https://img.shields.io/badge/review-before%20merge-0a7bbb" alt="review before merge">
-  <img src="https://img.shields.io/badge/scouts-proactive-e3a008" alt="scouts: proactive">
+  <a href="https://github.com/kourgeorge/symcc/commits/main"><img src="https://img.shields.io/github/last-commit/kourgeorge/symcc" alt="last commit"></a>
 </p>
 
 <p align="center">
