@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
+import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
@@ -1557,4 +1558,30 @@ test('wrapSegs breaks between words within the width and keeps every word', () =
   expect(out.map(l => l.map(s => s.text).join(''))).toEqual(['one two', 'three', 'four five'])
   expect(wrapSegs([{ text: 'abcdefghij', color: 'text' }], 4).map(l => l.map(s => s.text).join(''))).toEqual(['abcd', 'efgh', 'ij'])
   expect(wrapSegs([], 10)).toEqual([[]])
+})
+
+test('scout memory: last run and report survive a save and load', async () => {
+  const text = scoutMemoryText([
+    { name: 'recent-changes', last_run: T, last_report: 'found T-1' },
+    { name: 'docs', last_run: T },
+    { name: 'never', last_run: null },
+    { name: 'gone', last_run: T, last_report: 'old' },
+  ], ['recent-changes', 'docs', 'never'])
+  const m = parseScoutMemory(text)
+  expect(m).toEqual({ 'recent-changes': { last_run: T, last_report: 'found T-1' }, docs: { last_run: T } })
+  expect(parseScoutMemory(scoutMemoryText([{ name: 'a', last_run: T, last_report: 'x'.repeat(SCOUT_REPORT_CHARS + 50) }])).a!.last_report!.length).toBe(SCOUT_REPORT_CHARS)
+})
+
+test('scout memory: a missing file means no scout has run yet', async () => {
+  expect(parseScoutMemory(null)).toEqual({})
+  expect(parseScoutMemory(undefined)).toEqual({})
+  expect(parseScoutMemory('')).toEqual({})
+})
+
+test('scout memory: a broken file is treated as never run, bad entries are skipped', async () => {
+  expect(parseScoutMemory('{"scouts": {')).toEqual({})
+  expect(parseScoutMemory('[1,2]')).toEqual({})
+  expect(parseScoutMemory('{"scouts": []}')).toEqual({})
+  expect(parseScoutMemory('null')).toEqual({})
+  expect(parseScoutMemory(JSON.stringify({ scouts: { a: 5, b: { last_run: 'not a date' }, c: { last_run: 7, last_report: 'r' }, d: { last_run: T } } }))).toEqual({ c: { last_run: null, last_report: 'r' }, d: { last_run: T } })
 })

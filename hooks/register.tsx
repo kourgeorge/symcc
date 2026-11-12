@@ -16,6 +16,8 @@ import type { Seg } from './board'
 import {
   LEAD_BEAT_MS,
   leftoverTmpFiles,
+  parseScoutMemory,
+  scoutMemoryText,
   workerName,
   workerDescription,
   scoutAgentName,
@@ -1307,6 +1309,24 @@ async function runScout($: $, s: ScoutDef) {
   scoutRuns.set(agentId, s.name)
 }
 
+/** <dir>/scouts.json: each scout's last run time and last report, so a restart doesn't make it "first run" again. */
+const scoutMemoryFile = () => path(`${N.dir}/scouts.json`)
+
+/** The saved scout memory; a missing or broken file counts as "no scout has run yet". */
+async function loadScoutMemory($: $) {
+  const text = await $.fs.read(scoutMemoryFile()).catch(() => null)
+  return parseScoutMemory(text)
+}
+
+/** Saves the scouts in scoutState (temp file + rename, like board.json); scouts no longer in scouts/ are dropped. */
+async function saveScoutMemory($: $) {
+  const file = scoutMemoryFile()
+  const tmp = `${file}.tmp`
+  await $.fs.write(tmp, scoutMemoryText(scoutState.values()))
+  const r = await $.process.run(['mv', '-f', tmp, file])
+  if (r.exitCode !== 0) throw new Error(`couldn't save ${N.dir}/scouts.json: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+}
+
 async function scoutFinished($: $, agentId: string, answer: string) {
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
@@ -1314,6 +1334,7 @@ async function scoutFinished($: $, agentId: string, answer: string) {
   if (st) {
     st.running = false
     st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
+    await saveScoutMemory($).catch((e: Error) => tellLead($, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
   }
   await publish($, await load($))
   const msg = scoutLeadMessage(name, answer)
@@ -1329,8 +1350,10 @@ async function scheduleScouts($: $) {
   for (const t of timers.splice(0)) t.cancel()
   const defs = await loadScouts($)
   for (const k of [...scoutState.keys()]) if (!defs.some(d => d.name === k)) scoutState.delete(k)
+  // after a restart the map is empty: take each scout's last run and report from scouts.json
+  const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory($) : {}
   for (const s of defs) {
-    const old = scoutState.get(s.name)
+    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report'> | undefined = scoutState.get(s.name) ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
     const ms = s.every_minutes * 60_000
     const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt, next_run: new Date(Date.now() + ms).toISOString() }
     if (s.model) st.model = s.model

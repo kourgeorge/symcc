@@ -1590,6 +1590,49 @@ export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): st
 /** How much of a scout's last answer is kept (SymccScout.last_report). */
 export const SCOUT_REPORT_CHARS = 2000
 
+/** What is kept about one scout between restarts (in <dir>/scouts.json). */
+export type ScoutMemory = { last_run: string | null; last_report?: string }
+
+/**
+ * Reads scouts.json. A missing, empty or broken file means "no scout has run" ({}), never an error;
+ * entries with a bad shape are skipped one by one, and reports are cut to SCOUT_REPORT_CHARS.
+ */
+export function parseScoutMemory(text: string | null | undefined): Record<string, ScoutMemory> {
+  const out: Record<string, ScoutMemory> = {}
+  if (!text || !text.trim()) return out
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return out
+  }
+  const scouts = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { scouts?: unknown }).scouts : undefined
+  if (!scouts || typeof scouts !== 'object' || Array.isArray(scouts)) return out
+  for (const [name, v] of Object.entries(scouts as Record<string, unknown>)) {
+    if (!name || !v || typeof v !== 'object' || Array.isArray(v)) continue
+    const e = v as { last_run?: unknown; last_report?: unknown }
+    const last_run = typeof e.last_run === 'string' && !Number.isNaN(Date.parse(e.last_run)) ? e.last_run : null
+    const m: ScoutMemory = { last_run }
+    if (typeof e.last_report === 'string') m.last_report = e.last_report.slice(0, SCOUT_REPORT_CHARS)
+    if (m.last_run === null && m.last_report === undefined) continue
+    out[name] = m
+  }
+  return out
+}
+
+/** The text of scouts.json for these scouts; only the names in `keep` (if given) are written. */
+export function scoutMemoryText(scouts: Iterable<{ name: string; last_run: string | null; last_report?: string }>, keep?: string[]): string {
+  const out: Record<string, ScoutMemory> = {}
+  for (const s of scouts) {
+    if (keep && !keep.includes(s.name)) continue
+    if (s.last_run === null && s.last_report === undefined) continue
+    const m: ScoutMemory = { last_run: s.last_run }
+    if (s.last_report !== undefined) m.last_report = s.last_report.slice(0, SCOUT_REPORT_CHARS)
+    out[s.name] = m
+  }
+  return JSON.stringify({ scouts: out }, null, 2) + '\n'
+}
+
 /** How often a scout runs: "every 30 min", "every hour", "every 2 hours", "every 90 min". */
 export function everyText(minutes: number): string {
   const m = Math.max(1, Math.round(Number.isFinite(minutes) ? minutes : 60))
