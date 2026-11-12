@@ -1,19 +1,42 @@
-# symcc
+<p align="center">
+  <img src="docs/logo.svg" alt="symcc: lead a team of coding agents from one chat" width="760">
+</p>
 
-**Turn one Claude Code chat into a small team that works in parallel, safely.**
+<p align="center">
+  <b>Lead a team of coding agents from one chat: organized, supervised, and proactive.</b>
+</p>
 
-![symcc demo](docs/demo.svg)
+<p align="center">
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-D97757" alt="Claude Code plugin">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/agents-parallel-4c9a2a" alt="agents: parallel">
+  <img src="https://img.shields.io/badge/worktrees-isolated-6f42c1" alt="worktrees: isolated">
+  <img src="https://img.shields.io/badge/review-before%20merge-0a7bbb" alt="review before merge">
+  <img src="https://img.shields.io/badge/scouts-proactive-e3a008" alt="scouts: proactive">
+</p>
 
-You ask for something in plain words. Your chat splits it into tasks. Helpers build the
-tasks at the same time. Each change is checked and tested before it reaches your branch.
-You stay in charge the whole way.
+<p align="center">
+  <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="docs/guide.md">Guide</a> · <a href="docs/demo.svg">Demo</a>
+</p>
+
+<p align="center">
+  <img src="docs/demo.svg" alt="symcc demo" width="860">
+</p>
+
+With coding agents you are no longer one developer. You are a team lead, with many tasks
+running at once. symcc keeps that work organized: every task is on one board, each change
+is checked and tested, and nothing reaches your branch until it passes (and, if you want,
+until you approve it). At the same time the agents work on their own: workers build and
+retry, and scouts look ahead and suggest the next job.
 
 ---
 
 ## What you get
 
+### Organized and under your control
+
 - **Just talk.** Say what you want. The lead (your normal chat) splits your wish into
-  several small tasks.
+  several small tasks on one board.
 - **Work happens at the same time.** Up to 3 tasks run at once. Each one has its own copy
   of your code (a git worktree), so they never step on each other.
 - **Every change is checked.** A change may only touch its own files, and your tests must
@@ -22,11 +45,22 @@ You stay in charge the whole way.
   live.
 - **You decide.** Look at a finished change (the files, the `+`/`-` lines, the full diff)
   and approve or reject it.
-- **It looks ahead for you.** Scouts run on a timer, look for bugs, missing tests or new
-  versions of your dependencies, and suggest work. The lead tells you; nothing changes
-  without a task.
+- **You set how much freedom there is.** Three modes: `auto`, `review` or `off`. Pause or
+  drop any task at any time.
 - **It stops when you stop.** Work stops when you close Claude Code and picks up again
   next time.
+
+### Proactive and autonomous
+
+- **Workers run on their own.** A worker builds its task without asking you. If the tests
+  fail, a new worker tries again with the error in front of it.
+- **Scouts look ahead for you.** A scout wakes up on a timer. It can read the code, run
+  shell commands and search the web, for example to find bugs, missing tests or new
+  versions of your dependencies. Then it reports to the lead. Scouts never change files
+  themselves.
+- **Findings become finished work.** The lead turns a scout's findings into tasks, and
+  workers pick them up and finish them. In review mode, nothing is merged until you
+  approve it.
 
 ---
 
@@ -43,6 +77,10 @@ You stay in charge the whole way.
 6. **You look at the change and approve it** (or reject it with a reason).
 7. **It is merged into your branch, and the next tasks start.** The lead tells you each
    step.
+
+**Work can also start on its own.** A scout wakes up on its timer and finds something
+(say, a missing test). The lead adds a task for it. A worker does the task. You approve it
+(in review mode), and it is merged.
 
 ```
   you ──"add a search box"──▶ LEAD (your chat)
@@ -185,7 +223,8 @@ Change any of these by telling the lead (e.g. "give workers 90 minutes").
 ### Scouts
 
 A scout is one Markdown file in `.symcc/scouts/`: how often it runs at the top, its
-instructions below. It reports to the lead and never changes files. Copy one from
+instructions below. A scout can read the code, run shell commands and search the web. It
+reports what it finds to the lead and never changes files itself. Copy one from
 [`examples/scouts/`](examples/scouts/), or make one in the panel's Scouts view.
 More in the [guide](docs/guide.md#scouts).
 

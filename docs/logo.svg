@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220" viewBox="0 0 900 220" role="img" aria-label="symcc: lead a team of coding agents from one chat">
+  <title>symcc</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1f2a"/>
+      <stop offset="1" stop-color="#2a2233"/>
+    </linearGradient>
+    <linearGradient id="clef" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2a58a"/>
+      <stop offset="1" stop-color="#d97757"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="898" height="218" rx="24" fill="url(#bg)" stroke="#3a3f4f" stroke-width="2"/>
+  <!-- staff lines behind the clef -->
+  <g stroke="#4a5063" stroke-width="2">
+    <line x1="60" y1="70" x2="250" y2="70"/>
+    <line x1="60" y1="92" x2="250" y2="92"/>
+    <line x1="60" y1="114" x2="250" y2="114"/>
+    <line x1="60" y1="136" x2="250" y2="136"/>
+    <line x1="60" y1="158" x2="250" y2="158"/>
+  </g>
+  <text x="155" y="168" text-anchor="middle" fill="url(#clef)" font-size="170"
+        font-family="'Noto Music', 'Apple Symbols', 'Segoe UI Symbol', 'Bravura', 'FreeSerif', 'DejaVu Sans', serif">&#x1D11E;</text>
+  <text x="290" y="122" fill="#f5f5f7" font-size="92" font-weight="700" letter-spacing="2"
+        font-family="ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace">symcc</text>
+  <text x="294" y="168" fill="#b8bccb" font-size="26"
+        font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">Lead a team of coding agents from one chat.</text>
+  <text x="294" y="198" fill="#d97757" font-size="18" letter-spacing="3"
+        font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">ORGANIZED · SUPERVISED · PROACTIVE</text>
+</svg>
