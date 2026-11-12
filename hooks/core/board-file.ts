@@ -1,0 +1,156 @@
+// The board file itself: its shape, loading it safely, the lock, and finding a task.
+import type { SymccMode, SymccRun, SymccStatus, SymccTask } from '../../types'
+import { dataDir, namesFor } from '../name'
+import { parseStamp } from './text'
+
+export type Board = {
+  version: 1
+  next_id: number
+  /** off: nothing runs; review: work runs and finished work waits for the owner; auto (the default): finished work that passes merges on its own */
+  mode: SymccMode
+  /** shell commands that must pass before a task's work is merged */
+  test_commands: string[]
+  target_branch: string
+  max_parallel: number
+  /** a worker running longer than this is stopped and its task marked failed */
+  max_minutes: number
+  /** how many new tries a task gets on its own after its tests fail, before it is marked failed */
+  auto_retries: number
+  /** open the board panel by itself when a session starts (true unless turned off) */
+  open_on_start: boolean
+  /** say it out loud when a task is merged (true unless turned off) */
+  voice: boolean
+  /** the whole plugin on or off (/<name>-on, /<name>-off); off: Claude works as normal, the board is kept. true unless turned off */
+  enabled: boolean
+  tasks: BoardTask[]
+}
+
+/**
+ * A task as the board file keeps it: while it is "doing", `session` names the session whose
+ * worker owns it; `agent` is the agent id of the last worker started on it.
+ */
+export type BoardTask = SymccTask & { session?: string; agent?: string }
+
+/** The data folder for the default name; the paths below are for it too. For another name use namesFor(name). */
+export const DATA_DIR = dataDir()
+export const BOARD_FILE = namesFor().boardFile
+/** held by one session while it reads, changes and writes the board */
+export const LOCK_FILE = namesFor().lockFile
+/** a lock older than this was left by a session that died, and may be taken over */
+export const LOCK_STALE_MS = 30_000
+
+export type Lock = { session: string; at: number }
+
+export const lockText = (session: string, at: number) => JSON.stringify({ session, at }) + '\n'
+
+export function parseLock(text: string | null): Lock | null {
+  return parseStamp(text, 'at', true)
+}
+
+/**
+ * Whether a lock may be taken over: it is older than LOCK_STALE_MS (or dated far in
+ * the future, a broken clock). A lock we can't read is judged by the file's own time.
+ */
+export function isLockStale(text: string | null, nowMs: number, fileMs?: number, maxAgeMs = LOCK_STALE_MS): boolean {
+  const at = parseLock(text)?.at ?? fileMs
+  if (at === undefined || !Number.isFinite(at)) return true
+  return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
+}
+/** Names of the temp files takeLock and writeLead leave behind if their session is killed. */
+const LEFTOVER_TMP = /^(?:board\.lock|lead\.json)\.[\w.-]+\.tmp$/
+
+/**
+ * Which files in the data folder are leftover temp files that may be deleted: only
+ * board.lock.<session>.tmp and lead.json.<session>.tmp, and only once they are older than
+ * maxAgeMs (a fresh one may still be in use by another session). A file with no usable
+ * time, or dated in the future, is kept. Anything else (board.json, lead.json, ...) is never chosen.
+ */
+export function leftoverTmpFiles(files: { name: string; mtimeMs?: number }[], nowMs: number, maxAgeMs = LOCK_STALE_MS): string[] {
+  if (!Array.isArray(files) || !Number.isFinite(nowMs)) return []
+  return files
+    .filter(f => typeof f?.name === 'string' && LEFTOVER_TMP.test(f.name))
+    .filter(f => typeof f.mtimeMs === 'number' && Number.isFinite(f.mtimeMs) && f.mtimeMs <= nowMs && nowMs - f.mtimeMs > maxAgeMs)
+    .map(f => f.name)
+}
+/** Open work. Backlog tasks are not open: they never start and block nothing (see BACKLOG_FROM). */
+export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'review', 'failed']
+
+/** The states a task may be stashed into the backlog from ("doing" only after its worker is stopped). */
+export const BACKLOG_FROM: SymccStatus[] = ['todo', 'doing', 'paused', 'failed']
+
+/** How many automatic retries after failing tests a new board allows. */
+export const DEFAULT_AUTO_RETRIES = 2
+
+/** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
+export function emptyBoard(target_branch = 'main'): Board {
+  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, enabled: true, tasks: [] }
+}
+
+export function parseBoard(text: string | null): Board {
+  if (!text) return emptyBoard()
+  try {
+    const raw = JSON.parse(text) as Record<string, unknown>
+    // only the keys a board has: anything else in the file is dropped
+    const fresh = emptyBoard()
+    const b = Object.fromEntries(Object.entries(raw ?? {}).filter(([k]) => k in fresh)) as Partial<Board>
+    const tasks = (Array.isArray(b.tasks) ? b.tasks : []).map(t => {
+      const { session, ...rest } = cleanCommitFields(t)
+      return typeof session === 'string' && session && t.status === 'doing' ? { ...rest, session } : rest
+    })
+    return { ...emptyBoard(), ...b, mode: modeOf(b), tasks }
+  } catch {
+    return emptyBoard()
+  }
+}
+
+/** "t3", "T-003", " 3 " and "003" all become "T-3"; anything else is only trimmed. */
+export const normId = (id: string) => {
+  const m = /^(?:t-?)?0*(\d+)$/i.exec(String(id ?? '').trim())
+  return m ? `T-${m[1]}` : String(id ?? '').trim()
+}
+
+export const find = (b: Board, id: string) => b.tasks.find(t => t.id === normId(id))
+
+/** Repository-relative paths only; never the plugin's data folder `dir` (the board) or Git internals. */
+export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
+  if (!Array.isArray(files)) return []
+  return files
+    .map(f => String(f).trim().replace(/\\/g, '/').replace(/^\.\//, ''))
+    .filter(f => f && !f.startsWith('/') && !f.split('/').includes('..') && !f.startsWith(dir) && !f.startsWith('.git/') && f !== '.git')
+    .slice(0, 30)
+}
+/** The three board modes, in the order they are shown. */
+export const MODES: SymccMode[] = ['off', 'review', 'auto']
+
+/** Whether `m` is one of the board modes. */
+export const isMode = (m: unknown): m is SymccMode => typeof m === 'string' && (MODES as string[]).includes(m)
+
+/** The board's mode: "off", "review" or "auto"; a missing or bad value is "auto". */
+export const modeOf = (b: { mode?: unknown } | null | undefined): SymccMode => (isMode(b?.mode) ? b!.mode as SymccMode : 'auto')
+/** A full git commit id: 40 hex characters (SHA-1) or 64 (SHA-256). */
+export const isSha = (x: unknown): x is string => typeof x === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(x)
+
+/**
+ * A task from board.json with its commit fields made safe: `runs[].commits` keeps only full
+ * commit ids (a broken list is dropped), a run that is not an object is dropped, and a `merged`
+ * that is not a full commit id is dropped. Old boards
+ * without these fields load as they are.
+ */
+export function cleanCommitFields<T extends { runs?: unknown; merged?: unknown }>(t: T): T {
+  if (!t || typeof t !== 'object') return t
+  const out = { ...t } as T & { runs?: unknown; merged?: unknown }
+  if ('merged' in out && !isSha(out.merged)) delete out.merged
+  if (Array.isArray(out.runs)) {
+    // a run that is not an object (hand-edited) is dropped: totals and the task page read every run
+    out.runs = out.runs.filter(r => r && typeof r === 'object' && !Array.isArray(r)).map(r => {
+      if (!('commits' in r)) return r
+      const { commits, ...rest } = r as SymccRun
+      const ok = Array.isArray(commits) ? commits.filter(isSha) : []
+      return ok.length ? { ...rest, commits: ok } : rest
+    })
+  }
+  return out
+}
+
+/** The word the owner sees for each status. */
+export const STATUS_WORD: Record<SymccStatus, string> = { backlog: 'backlog', review: 'ready for review', waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
