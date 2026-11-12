@@ -1142,8 +1142,108 @@ export const backlogHeader = (n: number, opened = false): string => backlogLabel
 /** The line under the first BACKLOG_SHOWN backlog items when there are more. */
 export const backlogMoreLabel = (more: number): string => `… ${more} more (Enter to show all)`
 
-/** The line shown in the board panel when nothing needs the owner, runs or waits to run. */
-export const NOTHING_ACTIVE = 'Nothing running. Add a task by talking to the lead.'
+/** The two subtle lines shown in the board panel when nothing needs the owner, runs or waits to run. */
+export const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
+
+/** The bold labels over the always-open sections of the board panel. */
+export const SECTION_LABEL = { needsYou: 'NEEDS YOU', doing: 'DOING', todo: 'TO DO' } as const
+
+/** What the next scout run is: "secrets in 38m", "secrets now", "running: secrets", or '' when none is planned. */
+export function nextScoutText(scouts: Pick<SymccScout, 'name' | 'running' | 'next_run'>[], nowMs: number): string {
+  const running = scouts.find(s => s.running)
+  if (running) return `running: ${running.name}`
+  const next = scouts
+    .map(s => ({ name: s.name, at: Date.parse(s.next_run ?? '') }))
+    .filter(s => Number.isFinite(s.at))
+    .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name))[0]
+  if (!next) return ''
+  return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
+}
+
+/** The one-line status strip on top of the board list: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
+ *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
+ *  turned off shows "symcc off · /symcc-on". Busy workers are the tasks being worked on. */
+export function statusStrip(
+  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: Pick<SymccScout, 'name' | 'running' | 'next_run'>[] },
+  nowMs: number,
+  width = Infinity,
+  name: string = DEFAULT_NAME,
+): string {
+  if (v.enabled === false) return offStatusLine(name)
+  const busy = v.tasks.filter(t => t.status === 'doing').length
+  const n = v.scouts.length
+  const base = [name, v.mode, `${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
+  const next = v.mode === 'off' ? '' : nextScoutText(v.scouts, nowMs)
+  const full = next ? `${base} (${next})` : base
+  return full.length <= width ? full : base
+}
+
+/** The short status column of a task row in the board list: the time of the running try ("4m") for a task being
+ *  worked on, "review", "waiting", "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
+ *  this session's worker started, used when the task has no open try. */
+export function statusCell(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number, since?: number | string): string {
+  if (t.status === 'doing') {
+    const last = t.runs?.[t.runs.length - 1]
+    if (last && !last.ended) return fmtDuration(runMs(last, nowMs))
+    const at = typeof since === 'number' ? since : Date.parse(since ?? '')
+    return Number.isFinite(at) ? fmtDuration(Math.max(0, nowMs - at)) : ''
+  }
+  return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
+}
+
+/** The subtle text at the right end of a task row: "frontend · try 1" for a task being worked on, "after T-3" for
+ *  one waiting on unfinished tasks (else its role), the keys "a approve · x reject" in review, the question of a
+ *  waiting task, the note of a failed or backlog one, and '' for finished ones. */
+export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): string {
+  switch (t.status) {
+    case 'doing':
+      return [roleMark(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')
+    case 'todo':
+    case 'paused': {
+      const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))
+      return open.length ? `after ${open.join(', ')}` : roleMark(t)
+    }
+    case 'review':
+      return 'a approve · x reject'
+    case 'waiting':
+      return t.question ?? ''
+    case 'failed':
+      return t.note
+    case 'backlog':
+      return t.note && t.note !== 'in the backlog' ? t.note : ''
+    default:
+      return ''
+  }
+}
+
+/** Cuts text to `n` columns, ending with "…" when cut. */
+const cutTo = (s: string, n: number) => (s.length <= n ? s : n <= 1 ? '…'.slice(0, Math.max(0, n)) : `${s.slice(0, n - 1).trimEnd()}…`)
+
+/** Fits a task row's title and extra after `lead` columns (indent, id, mark and status) in `width` columns: the
+ *  extra goes to the right end (`pad` fills the gap, at least two spaces) when the whole title fits beside it;
+ *  otherwise the extra is left out first, then the title is cut with "…". */
+export function fitRow(lead: number, title: string, extra: string, width: number): { title: string; pad: string; extra: string } {
+  const room = Math.max(1, width - lead)
+  if (extra && title.length + 2 + extra.length <= room) return { title, pad: ' '.repeat(room - title.length - extra.length), extra }
+  return { title: cutTo(title, room), pad: '', extra: '' }
+}
+
+/** The longest label of a folded section, so their counts line up. */
+const FOLDED_LABEL = 7
+/** A folded section's row: "▸ Backlog   3", "▾ Done     87"; the counts right-aligned in `countWidth` columns. */
+export const foldedRow = (label: string, n: number, opened: boolean, countWidth = 1): string =>
+  `${opened ? '▾' : '▸'} ${label.padEnd(FOLDED_LABEL)}  ${String(n).padStart(countWidth)}`
+
+/** The hint under the board list, short and never cut: the keys that work, the least needed left out first when the
+ *  panel is narrow. "a/x on review" only when a task is in review. */
+export function listHint(width: number, review = false): string {
+  const parts = ['↑↓ move', 'Enter open', ...(review ? ['a/x on review'] : []), 't s c views', 'Esc close']
+  for (const drop of ['↑↓ move', 'Esc close', 't s c views', 'a/x on review']) {
+    if (parts.join(' · ').length <= width) break
+    if (parts.includes(drop)) parts.splice(parts.indexOf(drop), 1)
+  }
+  return parts.join(' · ')
+}
 
 /** When a task finished (its updated_at, else created_at), in ms; NaN when neither can be read. */
 const finishedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
@@ -1197,16 +1297,18 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
   }
 }
 
-/** The subtle text after the Done header: "last: T-88 Task page: collapse the Details rows · today" ("yesterday",
- *  or the date for older days). The title is cut with "…" so the whole header fits in `width` columns. */
+/** The subtle text after the folded Done row: "last today: T-88 Task page: collapse the Details rows" ("yesterday",
+ *  or the date for older days). The title is cut with "…" so `head`, three spaces and this fit in `width` columns;
+ *  '' when even a short title does not fit. */
 export function doneExtra(last: SymccTask | undefined, nowMs: number, offsetMin: number, head: string, width = Infinity): string {
   if (!last) return ''
   const today = dayOf(nowMs, offsetMin)
   const day = taskDay(last, offsetMin)
   const when = !day || !today || day >= today ? 'today' : dayLabel(day, today) === 'Yesterday' ? 'yesterday' : dayLabel(day, today)
-  const room = Math.max(8, width - head.length - ` · last: ${last.id}  · ${when}`.length)
-  const title = last.title.length > room ? `${last.title.slice(0, room - 1).trimEnd()}…` : last.title
-  return `last: ${last.id} ${title} · ${when}`
+  const lead = `last ${when}: ${last.id} `
+  const room = width - head.length - 3 - lead.length
+  if (room < Math.min(8, last.title.length)) return ''
+  return `${lead}${cutTo(last.title, room)}`
 }
 
 // ---------------- time and cost of each try ----------------

@@ -30,11 +30,11 @@ test('the panel shows the board, newest task first, with their question', async 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Text', text: /^T-2\s*$/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /waiting for you/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^ \? waiting\s*$/ }))?.props.color).toBe('warning')
     expect((await ui.find({ type: 'Text', text: /Search mode/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^T-3\s*$/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /▶ doing/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^ ▶ / }))?.props.color).toBe('ide')
     expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
     // every line of the clef drawing is drawn, in the accent color, all the same width so the text beside it lines up
     // (a line with only the drawing matches twice: the whole line, and the colored drawing in it)
@@ -50,7 +50,8 @@ test('the panel shows the board, newest task first, with their question', async 
 
 test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /board is empty/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^  All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^  Tell the lead what you want next\.$/ }))?.props.color).toBe('subtle')
   expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^━{50}$/ }))).toBeDefined()
   await ui.unmount()
@@ -118,33 +119,30 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up'), task('T-2', 'backlog', 'Dark mode', { details: 'Maybe later: a dark theme.' }), task('T-3', 'backlog', 'Export')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const header = await ui.find({ type: 'Text', text: /^▸ Backlog \(2\)$/ })
+  const header = await ui.find({ type: 'Text', text: /^  ▸ Backlog  2$/ })
   expect(header).toBeDefined()
-  expect(header?.props.color).toBe('planMode')
-  expect(header?.props.bold).toBe(true)
-  // the open tasks come first, then a light dotted rule, then the Backlog header (no blank line)
+  expect(header?.props.color).toBe('text')
+  // the open tasks come first, then a blank line, then the Backlog row; no dotted rule, no brackets
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const at = texts.findIndex(t => /^▸ Backlog \(2\)$/.test(t))
+  const at = texts.findIndex(t => /^  ▸ Backlog  2$/.test(t))
   expect(texts.findIndex(t => /Write it up/.test(t))).toBeLessThan(at)
-  expect(/^┄+$/.test(texts[at - 1] ?? '') || /^┄+$/.test(texts[at - 2] ?? '')).toBe(true)
-  expect(texts.indexOf(' ')).toBe(-1)
-  expect(texts.some(t => /Enter on a ▸ heading opens it/.test(t))).toBe(true)
-  // the dotted rule is subtle, the header rule uses the accent color
-  expect((await ui.find({ type: 'Text', text: /^┄+$/ }))?.props.color).toBe('subtle')
+  expect(texts[at - 1]).toBe(' ')
+  expect(texts.some(t => /┄/.test(t))).toBe(false)
+  expect(texts.some(t => /^↑↓ move · Enter open · t s c views · Esc close$/.test(t))).toBe(true)
   expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.props.color).toBe('ide')
   // folded by default: the items are hidden
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
   expect((await ui.find({ key: 'T-1' }))).toBeDefined()
   // Enter on the header opens it; again folds it
   await ui.press({ key: 'day:backlog' })
-  expect((await ui.find({ type: 'Text', text: /^▾ Backlog \(2\)$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^  ▾ Backlog  2$/ }))).toBeDefined()
   expect((await ui.find({ key: 'T-2' }))).toBeDefined()
   expect((await ui.find({ key: 'T-3' }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /◇/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /2 in backlog/ }))).toBeDefined()
   expect(await ui.find({ key: 'day:backlog-more' })).toBeUndefined()
   await ui.press({ key: 'day:backlog' })
-  expect((await ui.find({ type: 'Text', text: /^▸ Backlog \(2\)$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^  ▸ Backlog  2$/ }))).toBeDefined()
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
   await ui.press({ key: 'day:backlog' })
   await ui.press({ key: 'T-2' })
@@ -157,7 +155,7 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   await ui.unmount()
 })
 
-test('the list goes: Needs you, Doing, To do, then Backlog, Done and Dropped, with a dotted rule between', async ($, on) => {
+test('the list goes: NEEDS YOU, DOING, TO DO, then Backlog, Done and Dropped, with blank lines and no rules', async ($, on) => {
   const now = new Date().toISOString()
   stateOf(on, {
     view: {
@@ -188,22 +186,28 @@ test('the list goes: Needs you, Doing, To do, then Backlog, Done and Dropped, wi
   expect(keys).toEqual(['T-6', 'T-5', 'T-10', 'T-4', 'T-9', 'T-3', 'T-8', 'day:backlog', 'day:done', 'day:dropped'])
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const idx = (re: RegExp) => texts.findIndex(t => re.test(t))
-  const heads = [/^Needs you \(3\)$/, /^Doing \(1\)$/, /^To do \(3\)$/, /^▸ Backlog \(1\)$/, /^▸ Done \(1\)/, /^▸ Dropped \(1\)$/].map(idx)
+  const heads = [/^NEEDS YOU$/, /^DOING$/, /^TO DO$/, /^  ▸ Backlog  1$/, /^  ▸ Done     1/, /^  ▸ Dropped  1$/].map(idx)
   expect(heads.every(i => i > -1)).toBe(true)
   expect([...heads].sort((a, b) => a - b)).toEqual(heads)
-  // one dotted rule between each pair of sections, none after the last
-  for (let k = 1; k < heads.length; k++) expect(texts.slice(heads[k - 1]!, heads[k]!).filter(t => /^┄+$/.test(t)).length).toBe(1)
-  expect(texts.slice(heads.at(-1)!).filter(t => /^┄+$/.test(t)).length).toBe(0)
-  // the always-open headers are bold, not buttons
-  expect((await ui.find({ type: 'Text', text: /^Doing \(1\)$/ }))?.props.bold).toBe(true)
+  // a blank line before each section label and before the folded rows, which sit together; no rules, no brackets
+  for (const k of [1, 2, 3]) expect(texts[heads[k]! - 1]).toBe(' ')
+  expect(texts.some(t => /┄/.test(t))).toBe(false)
+  expect(texts.slice(heads[0]!).some(t => /[[\]]/.test(t))).toBe(false)
+  // the always-open labels are bold, not buttons
+  expect((await ui.find({ type: 'Text', text: /^DOING$/ }))?.props.bold).toBe(true)
+  // review and the rest of the rows: the short status word, failed in red
+  expect((await ui.find({ type: 'Text', text: /^ ✗ failed\s*$/ }))?.props.color).toBe('error')
+  expect((await ui.find({ type: 'Text', text: /^ ‖ paused\s*$/ }))).toBeDefined()
+  // with a task in review the hint names a and x
+  expect(texts.some(t => /^Enter open · a\/x on review · t s c views$/.test(t))).toBe(true)
   // folded by default: no done, dropped or backlog tasks shown
   for (const k of ['T-1', 'T-2', 'T-7']) expect(await ui.find({ key: k })).toBeUndefined()
   await ui.press({ key: 'day:done' })
-  expect(await ui.find({ type: 'Text', text: /^▾ Done \(1\)$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^  ▾ Done     1$/ })).toBeDefined()
   expect(await ui.find({ key: 'T-1' })).toBeDefined()
   expect(await ui.find({ key: 'T-7' })).toBeUndefined()
   await ui.press({ key: 'day:dropped' })
-  expect(await ui.find({ type: 'Text', text: /^▾ Dropped \(1\)$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^  ▾ Dropped  1$/ })).toBeDefined()
   expect(await ui.find({ key: 'T-7' })).toBeDefined()
   await ui.press({ key: 'day:done' })
   expect(await ui.find({ key: 'T-1' })).toBeUndefined()
@@ -211,7 +215,7 @@ test('the list goes: Needs you, Doing, To do, then Backlog, Done and Dropped, wi
   await ui.unmount()
 })
 
-test('the Done header shows the count and the task that finished last, with its day', async ($, on) => {
+test('the Done row shows the count and, when it fits, the task that finished last, with its day', async ($, on) => {
   const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
   stateOf(on, {
     view: {
@@ -232,39 +236,45 @@ test('the Done header shows the count and the task that finished last, with its 
   })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
   const head = await ui.find({ key: 'day:done' })
-  expect(head?.text).toBe('▸ Done (3) · last: T-2 Task page: collapse the Details rows · today')
-  expect((await ui.find({ type: 'Text', text: /^ · last: T-2/ }))?.props.color).toBe('subtle')
+  expect(head?.text).toBe('  ▸ Done     3   last today: T-2 Task page: collapse the Details rows')
+  expect((await ui.find({ type: 'Text', text: /^   last today: T-2/ }))?.props.color).toBe('subtle')
   await ui.unmount()
-  // a narrow panel cuts the title, but keeps the day
+  // a narrow panel cuts the title
   const narrow = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const cut = (await narrow.find({ key: 'day:done' }))?.text ?? ''
-  expect(cut).toMatch(/^▸ Done \(3\) · last: T-2 .+… · today$/)
+  expect(cut).toMatch(/^  ▸ Done     3   last today: T-2 .+…$/)
   expect(cut.length).toBeLessThanOrEqual(50)
   await narrow.unmount()
+  // too narrow for a title: just the count
+  const tiny = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  expect((await tiny.find({ key: 'day:done' }))?.text).toBe('  ▸ Done     3')
+  await tiny.unmount()
 })
 
-test('with nothing to do, need or run, one subtle line says so above the folded groups', async ($, on) => {
+test('with nothing to do, need or run, two subtle "All clear" lines sit above the folded groups', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser', { updated_at: new Date().toISOString() }), task('T-2', 'backlog', 'Dark mode')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const line = texts.findIndex(t => t === 'Nothing running. Add a task by talking to the lead.')
+  const line = texts.findIndex(t => t === '  All clear. Nothing running or waiting.')
   expect(line).toBeGreaterThan(-1)
-  expect((await ui.find({ type: 'Text', text: /^Nothing running/ }))?.props.color).toBe('subtle')
-  expect(line).toBeLessThan(texts.findIndex(t => /^▸ Backlog \(1\)$/.test(t)))
-  expect(/^┄+$/.test(texts[line + 1] ?? '')).toBe(true)
-  expect(await ui.find({ type: 'Text', text: /board is empty/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /All clear/ }))?.props.color).toBe('subtle')
+  expect(texts[line + 1]).toBe('  Tell the lead what you want next.')
+  expect(texts[line + 2]).toBe(' ')
+  expect(line).toBeLessThan(texts.findIndex(t => /^  ▸ Backlog  1$/.test(t)))
+  expect(texts.some(t => /┄|NEEDS YOU|DOING|TO DO/.test(t))).toBe(false)
   // the first button (the Backlog header) gets the focus
   expect((await ui.findAll({ type: 'Button' })).find(b => b.props.autoFocus)?.key).toBe('day:backlog')
   await ui.unmount()
 })
 
-test('a board with only active work has no folded groups and no dotted rule after the last section', async ($, on) => {
+test('a board with only active work has no folded rows, no All clear lines and no rules', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^To do \(1\)$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Nothing running/ })).toBeUndefined()
-  expect((await ui.findAll({ type: 'Text' })).filter(t => /^┄+$/.test(t.text)).length).toBe(0)
-  expect((await ui.findAll({ type: 'Text' })).some(t => /Enter on a ▸ heading/.test(t.text))).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /^TO DO$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^NEEDS YOU$|^DOING$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /All clear/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /▸/ })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /┄/.test(t.text)).length).toBe(0)
   await ui.unmount()
 })
 
@@ -275,7 +285,7 @@ test('over 5 backlog items the opened Backlog shows 5 and "… N more"', async (
   const buttons = (await ui.findAll({ type: 'Button' })).map(b => b.key)
   const first = buttons.findIndex(k => k === 'day:backlog' || k === 'day:done' || /^T-\d$/.test(String(k)))
   expect(buttons[first]).toBe('day:backlog')
-  expect((await ui.find({ type: 'Text', text: /^▸ Backlog \(7\)$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^  ▸ Backlog  7$/ }))).toBeDefined()
   await ui.press({ key: 'day:backlog' })
   const opened = (await ui.findAll({ type: 'Button' })).map(b => b.key)
   expect(opened.filter(k => /^T-[2-8]$/.test(String(k))).length).toBe(5)
@@ -291,10 +301,10 @@ test('an empty backlog shows no Backlog section', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up'), task('T-2', 'done', 'Parser')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'day:backlog' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /Backlog \(/ })).toBeUndefined()
-  // only the strong rule under the header, and one dotted rule between To do and Done
+  expect(await ui.find({ type: 'Text', text: /Backlog/ })).toBeUndefined()
+  // only the strong rule under the header, and no dotted rule
   expect((await ui.findAll({ type: 'Text' })).filter(t => /^━+$/.test(t.text)).length).toBe(1)
-  expect((await ui.findAll({ type: 'Text' })).filter(t => /^┄+$/.test(t.text)).length).toBe(1)
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /┄/.test(t.text)).length).toBe(0)
   await ui.unmount()
 })
 
@@ -436,7 +446,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(scoutsTab?.props.hotkey).toBe('s')
     expect(await ui.find({ type: 'Text', text: /^\[t\] Tasks \(1\)$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^\[s\] Scouts \(2\)$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Enter opens · t tasks · s scouts · c settings · Esc closes/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^↑↓ move · Enter open · t s c views · Esc close$/ })).toBeDefined()
     expect(await ui.find({ key: 'T-1' })).toBeDefined()
     // the Tasks view no longer lists the scouts at the bottom (they have their own view)
     expect(await ui.find({ type: 'Text', text: /^scouts: / })).toBeUndefined()
@@ -542,10 +552,11 @@ test('"New scout" asks for a name, refuses a bad or taken one, then opens the ed
   await ui.unmount()
 })
 
-test('a task in review is listed near the top as "ready for review", and the banner shows the board mode', async ($, on) => {
+test('a task in review is listed near the top as "review" with its keys, and the banner shows the board mode', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /◆ ready for review/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^ ◆ review\s*$/ }))?.props.color).toBe('warning')
+  expect((await ui.find({ type: 'Text', text: /a approve · x reject$/ }))?.props.color).toBe('subtle')
   expect(await ui.find({ type: 'Text', text: /^⏸ review merge $/ })).toBeDefined()
   expect((await ui.find({ key: 'mode' }))!.props.label).toBe('[m] auto')
   const rows = (await ui.findAll({ type: 'Text', text: /^T-\d+\s*$/ })).map(x => x.text.trim())
@@ -610,13 +621,13 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const tab = texts.findIndex(t => t === '[t] Tasks (1)')
     const rule = texts.findIndex(t => /^━{50}$/.test(t))
-    const hint = texts.findIndex(t => /^Enter opens · t tasks/.test(t))
+    const hint = texts.findIndex(t => (view === 'tasks' ? /^↑↓ move · Enter open/ : /^Enter opens · t tasks/).test(t))
     const row = texts.findIndex(t => (view === 'tasks' ? /Write it up/ : /^bugs/).test(t))
     expect(tab).toBeGreaterThan(-1)
     expect(rule).toBeGreaterThan(tab)
     // the hint sits at the bottom, after the last row, not between the line and the list
     expect(row).toBeGreaterThan(rule)
-    expect(texts.slice(rule + 1, row).some(t => /^Enter opens/.test(t))).toBe(false)
+    expect(texts.slice(rule + 1, row).some(t => /^Enter opens|^↑↓ move/.test(t))).toBe(false)
     expect(hint).toBeGreaterThan(row)
     expect(texts.slice(hint + 1).some(t => /Write it up|^bugs/.test(t))).toBe(false)
   }
@@ -685,12 +696,14 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a task shows its role after the status in a subtle color; general shows nothing', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Plain work', { role: 'general' }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tests' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const mark = await ui.find({ type: 'Text', text: /^ · tests\s*$/ })
+test('a running task shows its role and try at the right end in a subtle color; general shows only the try', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tests', attempts: 1 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
+  const mark = await ui.find({ type: 'Text', text: /^ +tests · try 1$/ })
   expect(mark).toBeDefined()
   expect(mark?.props.color).toBe('subtle')
+  expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
+  expect(await ui.find({ type: 'Text', text: /^ +try 2$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
   await ui.unmount()
 })
@@ -873,3 +886,75 @@ test('while symcc is off its tools answer that it is off and leave the board alo
   expect(JSON.stringify(r.result)).toContain('symcc is off. The owner can turn it on with /symcc-on.')
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
+
+test('the Tasks view: a status strip on top, NEEDS YOU / DOING / TO DO rows with extras, aligned folded rows, a short hint', async ($, on) => {
+  const now = Date.now()
+  const iso = (m: number) => new Date(now + m * 60_000).toISOString()
+  const tasks = [
+    task('T-94', 'review', 'Clearer board view'),
+    task('T-95', 'doing', 'Secrets scout example', { role: 'frontend', attempts: 1, runs: [{ started: iso(-4) }] }),
+    task('T-96', 'doing', 'Version 0.3.0', { role: 'docs', attempts: 1, runs: [{ started: iso(-1) }] }),
+    task('T-97', 'todo', 'Rename "off" to "pause"', { after: ['T-96'] }),
+    ...[1, 2, 3].map(n => task(`T-${n}`, 'backlog', `Idea ${n}`)),
+    ...Array.from({ length: 12 }, (_, k) => task(`T-${k + 10}`, 'done', `Work ${k}`, { updated_at: iso(-5 - k) })),
+  ]
+  const scouts = [scout('secrets', { next_run: iso(38.2) }), scout('bugs', { next_run: iso(90) })]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts, mode: 'review', max_parallel: 3, test_commands: [] } } })
+  for (const w of [40, 60, 100]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    // the strip sits right above the strong rule; the next scout only when it fits
+    const strip = texts.findIndex(t => /^symcc · review · 2\/3 workers · 2 scouts/.test(t))
+    expect(strip).toBeGreaterThan(-1)
+    expect(/^━+$/.test(texts[strip + 1] ?? '')).toBe(true)
+    expect(texts[strip]!.length).toBeLessThanOrEqual(w)
+    if (w >= 100) expect(texts[strip]).toBe('symcc · review · 2/3 workers · 2 scouts (next: secrets in 38m)')
+    // every task row fits the panel; the hint is whole and fits too
+    for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
+    const hint = texts.at(-1)!
+    expect(hint.length).toBeLessThanOrEqual(w)
+    expect(hint).toMatch(/Enter open/)
+    if (w >= 100) expect(hint).toBe('↑↓ move · Enter open · a/x on review · t s c views · Esc close')
+    // folded rows: no brackets, counts lined up
+    const backlog = (await ui.find({ key: 'day:backlog' }))!.text
+    const done = (await ui.find({ key: 'day:done' }))!.text
+    expect(backlog).toBe('  ▸ Backlog   3')
+    expect(done.startsWith('  ▸ Done     12')).toBe(true)
+    if (w >= 60) expect(done).toMatch(/^  ▸ Done     12   last today: T-10 Work 0$/)
+    expect(await ui.find({ key: 'day:dropped' })).toBeUndefined()
+    await ui.unmount()
+  }
+  // at 100 columns the extras sit at the right end of each row
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
+  expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^  T-95 ▶ 4m\s+Secrets scout example\s+frontend · try 1$/)
+  expect((await ui.find({ key: 'T-95' }))!.text.length).toBe(100)
+  expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^  T-97 ○\s+Rename "off" to "pause"\s+after T-96$/)
+  expect((await ui.find({ key: 'T-94' }))!.text).toMatch(/^  T-94 ◆ review\s+Clearer board view\s+a approve · x reject$/)
+  // focus starts on the first task, and the order is tasks first, then folded rows
+  const buttons = (await ui.findAll({ type: 'Button' })).filter(b => /^T-\d+$|^day:/.test(String(b.key)))
+  expect(buttons.find(b => b.props.autoFocus)?.key).toBe('T-94')
+  expect(buttons.map(b => String(b.key))).toEqual(['T-94', 'T-96', 'T-95', 'T-97', 'day:backlog', 'day:done'])
+  await ui.unmount()
+  // a narrow panel drops the extra first, then cuts the title
+  const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  const row = (await narrow.find({ key: 'T-95' }))!.text
+  expect(row).not.toMatch(/try 1/)
+  expect(row).toMatch(/…$/)
+  expect(row.length).toBeLessThanOrEqual(30)
+  await narrow.unmount()
+})
+
+const STRIP_CASES = [
+  ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
+  ['the board is in mode off', { mode: 'off' }, /^symcc · off · 0\/3 workers · 1 scout$/],
+] as const
+for (const [when, extra, want] of STRIP_CASES)
+  test(`the status strip when ${when}: a warning, and no next scout`, async ($, on) => {
+    const soon = new Date(Date.now() + 10 * 60_000).toISOString()
+    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [scout('bugs', { next_run: soon })], mode: 'auto', test_commands: [], ...extra } } })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+    const strip = await ui.find({ type: 'Text', text: want })
+    expect(strip).toBeDefined()
+    expect(strip?.props.color).toBe('warning')
+    await ui.unmount()
+  })

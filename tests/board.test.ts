@@ -4,7 +4,7 @@ import type { SymccTask } from '../types'
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, listHint, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -1796,8 +1796,70 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   expect(sectionHeader('Done', 42)).toBe('Done (42)')
   expect(sectionHeader('Done', 42, false)).toBe('▸ Done (42)')
   expect(sectionHeader('Done', 42, true)).toBe('▾ Done (42)')
-  expect(doneExtra(s.done[0], NOW, 0, '▸ Done (2)')).toBe('last: T-8 Task page: collapse the Details rows · today')
-  expect(doneExtra(s.done[1], NOW, 0, '▸ Done (2)')).toBe('last: T-1 Yesterday work · yesterday')
-  expect(doneExtra(s.done[0], NOW, 0, '▸ Done (2)', 50)).toBe('last: T-8 Task page: collaps… · today')
-  expect(doneExtra(undefined, NOW, 0, '▸ Done (0)')).toBe('')
+  const head = foldedRow('Done', 2, false)
+  expect(head).toBe('▸ Done     2')
+  expect(doneExtra(s.done[0], NOW, 0, head)).toBe('last today: T-8 Task page: collapse the Details rows')
+  expect(doneExtra(s.done[1], NOW, 0, head)).toBe('last yesterday: T-1 Yesterday work')
+  const cut = doneExtra(s.done[0], NOW, 0, head, 50)
+  expect(cut).toBe('last today: T-8 Task page: collaps…')
+  expect(head.length + 3 + cut.length).toBeLessThanOrEqual(50)
+  // too narrow for even a short title: just the count
+  expect(doneExtra(s.done[0], NOW, 0, head, 30)).toBe('')
+  expect(doneExtra(undefined, NOW, 0, head)).toBe('')
+})
+
+test('folded rows line up their counts; no brackets', () => {
+  const rows = [foldedRow('Backlog', 3, false, 2), foldedRow('Done', 87, false, 2), foldedRow('Dropped', 3, true, 2)]
+  expect(rows).toEqual(['▸ Backlog   3', '▸ Done     87', '▾ Dropped   3'])
+  expect(new Set(rows.map(r => r.length)).size).toBe(1)
+  expect(rows.some(r => /[()[\]]/.test(r))).toBe(false)
+})
+
+test('the status strip: name, mode, busy/max workers, scouts and the next scout when it fits; off when disabled', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const scouts = [
+    { name: 'tests', running: false, next_run: '2026-11-11T13:00:00Z' },
+    { name: 'secrets', running: false, next_run: '2026-11-11T12:38:00Z' },
+    { name: 'docs', running: false, next_run: null },
+  ]
+  const tasks = [{ status: 'doing' as const }, { status: 'todo' as const }]
+  expect(statusStrip({ mode: 'auto', max_parallel: 3, tasks, scouts }, now)).toBe('symcc · auto · 1/3 workers · 3 scouts (next: secrets in 38m)')
+  expect(statusStrip({ mode: 'review', max_parallel: 3, tasks, scouts }, now, 40)).toBe('symcc · review · 1/3 workers · 3 scouts')
+  expect(statusStrip({ mode: 'off', max_parallel: 3, tasks, scouts }, now)).toBe('symcc · off · 1/3 workers · 3 scouts')
+  expect(statusStrip({ mode: 'auto', tasks: [], scouts: [scouts[0]!] }, now)).toBe('symcc · auto · 0/3 workers · 1 scout (next: tests in 1h 00m)')
+  expect(statusStrip({ mode: 'auto', enabled: false, tasks, scouts }, now)).toBe('symcc off · /symcc-on')
+  expect(nextScoutText([{ name: 'bugs', running: true, next_run: null }, ...scouts], now)).toBe('running: bugs')
+  expect(nextScoutText([], now)).toBe('')
+})
+
+test('task rows: a short status column and a subtle extra; the extra goes first when the row is narrow', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const base = { ...at('T-5', 'doing', '2026-11-11T10:00:00Z'), title: 'Secrets scout example', role: 'frontend', attempts: 1, runs: [{ started: '2026-11-11T11:56:00Z' }] }
+  const tasks = [base, { ...at('T-6', 'todo', '2026-11-11T10:00:00Z'), after: ['T-5', 'T-1'] }, at('T-1', 'done', '2026-11-11T10:00:00Z'), at('T-7', 'review', '2026-11-11T10:00:00Z')]
+  expect(statusCell(base, now)).toBe('4m')
+  expect(statusCell({ ...base, runs: [] }, now, now - 60_000)).toBe('1m')
+  expect(statusCell({ ...base, runs: [] }, now)).toBe('')
+  expect(['review', 'waiting', 'failed', 'paused', 'todo', 'done'].map(status => statusCell({ status: status as never }, now))).toEqual(['review', 'waiting', 'failed', 'paused', '', ''])
+  expect(rowExtra(base, tasks)).toBe('frontend · try 1')
+  expect(rowExtra({ ...base, role: 'general' }, tasks)).toBe('try 1')
+  expect(rowExtra(tasks[1]!, tasks)).toBe('after T-5')
+  expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
+  expect(rowExtra(tasks[3]!, tasks)).toBe('a approve · x reject')
+  expect(rowExtra(tasks[2]!, tasks)).toBe('')
+  // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
+  const wide = fitRow(20, 'Secrets scout example', 'frontend · try 1', 60)
+  expect(20 + wide.title.length + wide.pad.length + wide.extra.length).toBe(60)
+  expect(wide.title).toBe('Secrets scout example')
+  expect(fitRow(20, 'Secrets scout example', 'frontend · try 1', 50)).toEqual({ title: 'Secrets scout example', pad: '', extra: '' })
+  expect(fitRow(20, 'Secrets scout example', 'frontend · try 1', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
+})
+
+test('the list hint is short, never longer than the width, and names a/x only with a task in review', () => {
+  expect(listHint(100)).toBe('↑↓ move · Enter open · t s c views · Esc close')
+  expect(listHint(100, true)).toBe('↑↓ move · Enter open · a/x on review · t s c views · Esc close')
+  for (const w of [20, 30, 40, 50, 60]) for (const r of [false, true]) {
+    expect(listHint(w, r).length).toBeLessThanOrEqual(w)
+    expect(listHint(w, r)).toMatch(/Enter open/)
+  }
+  expect(listHint(60, false)).not.toMatch(/a\/x/)
 })
