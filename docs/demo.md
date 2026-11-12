@@ -298,7 +298,7 @@ push(card([[PART2_END, T]], [
   text(W / 2, 425, 'claude --plugin-dir /path/to/symcc', { size: 14, anchor: 'middle', fill: C.dim }),
 ]))
 
-process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}" role="img" aria-label="symcc demo: you are the owner. You direct to the lead, it plans tasks, workers build them in parallel in their own copies, checks and tests run, you see the change and approve it, and it merges. Then a scout wakes up on its timer, finds code without tests and reports it; the lead adds a task, a worker does it, you approve it and it is merged.">
+process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}" role="img" aria-label="symcc demo: you are the owner. You talk to the lead, it plans tasks, workers build them in parallel in their own copies, checks and tests run, you see the change and approve it, and it merges. Then a scout wakes up on its timer, finds code without tests and reports it; the lead adds a task, a worker does it, you approve it and it is merged.">
 <title>symcc demo</title>
 <defs>${defs.join('')}</defs>
 ${out.join('\n')}
