@@ -474,3 +474,20 @@ test('a task not in review has a needs_review toggle but no review buttons', asy
   expect(await ui.find({ key: 'show-changes' })).toBeUndefined()
   await ui.unmount()
 })
+
+test('the Tasks / Scouts tabs sit in the header, above the line, in both views', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [scout('bugs')], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const view of ['tasks', 'scouts'] as const) {
+    if (view === 'scouts') await ui.press({ key: 'tab-scouts' })
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    const tab = texts.findIndex(t => t === '[t] Tasks (1)')
+    const rule = texts.findIndex(t => /^─{50}$/.test(t))
+    const hint = texts.findIndex(t => /^Enter opens/.test(t))
+    expect(tab).toBeGreaterThan(-1)
+    expect(rule).toBeGreaterThan(tab)
+    expect(hint).toBeGreaterThan(rule)
+  }
+  expect(await ui.find({ key: 'scout:bugs' })).toBeDefined()
+  await ui.unmount()
+})

@@ -1818,7 +1818,7 @@ export const register: Register = on => {
       $.ui.toast(N.toast(r))
       tellLead($, `The owner set the board mode to ${switchTo} from the board: ${r}`)
     })
-    /** The banner at the top: the drawing, the board's facts, the board mode, and the rule under them. */
+    /** The banner at the top: the drawing, the board's facts and the board mode. */
     const banner = () => {
       const d = emptyBoard()
       const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
@@ -1838,7 +1838,6 @@ export const register: Register = on => {
           </Text>
           <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
         </Box>,
-        <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>,
       ]
     }
     /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */
@@ -1853,13 +1852,15 @@ export const register: Register = on => {
         )
       }
       return (
-        <Box flexDirection="row">
+        <Box key="tabs" flexDirection="row">
           {one('tasks', `[t] Tasks (${v.tasks.length})`)}
           <Text color={C('subtle')}> │ </Text>
           {one('scouts', `[s] Scouts (${scouts.length})`)}
         </Box>
       )
     }
+    /** The whole header: banner, then the tab row, then the rule under them. */
+    const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>]
     const HINT = 'Enter opens · t tasks · s scouts · Esc closes'
 
     /** Text with task IDs, `code` and file paths picked out in color. */
@@ -2032,8 +2033,7 @@ export const register: Register = on => {
       const everyWidth = Math.max(0, ...scouts.map(x => scoutRow(x, nowMs).every.length))
       return (
         <Box flexDirection="column">
-          {banner()}
-          {tabs()}
+          {header()}
           {scouts.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
           {scouts.length === 0 && scoutHowTo(N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'subtle')}>{line}</Text>)}
           {newBox()}
@@ -2363,8 +2363,7 @@ export const register: Register = on => {
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
     return (
       <Box flexDirection="column">
-        {banner()}
-        {tabs()}
+        {header()}
         {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog folds it` : HINT}</Text>}
         {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {list.map((r, i) => {
