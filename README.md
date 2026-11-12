@@ -47,7 +47,7 @@ Coding agents are now smart, like a team of capable people, so writing code is n
 the hard part. Organizing the work is. Without that, agents step on each other, work
 happens in the wrong order, and you lose track. symcc organizes the work and shows it to
 you on the board: the right worker (role) for each task, started at the right time, in
-the right order (a task can wait for another with `after`).
+the right order (a task can wait for another with `after`). Every step can be traced (who asked, why, what changed) and watched live.
 
 ## What symcc does
 
@@ -102,6 +102,8 @@ The four parts, in known terms:
 | **Approval before merge** | Human-in-the-loop review: see the diff, then approve, or reject with a reason. |
 | **Merge into the target branch** | The task is updated on the latest target branch, tests run again, then it is merged. |
 | **Live status** | The board panel and the status line show every task as it runs. |
+| **Traceability** | Every task records who made it (you, a scout, a worker's report, or the lead), why, and your own words that started it. Each task keeps the history of its tries, and each merge commit starts with the task ID (`T-58: ...`), so you can go from a line of code back to the task and to the request. |
+| **Observability** | The board and status line show what is running, waiting, failed or in review right now. Each try shows its time and tokens, failed tries keep their test output, and workers and scouts post updates in the chat. |
 | **Backlog** | Park ideas and unclear work on the board; they never start until you move them to todo. |
 | **Worker roles** | The lead picks a specialist role for each task (frontend, backend, tests, docs, refactor, security, or your own in `.symcc/roles/`); a role brings its own checklist, skills and model. Bigger features are split into one task per role. Every role has the same safety checks. |
 

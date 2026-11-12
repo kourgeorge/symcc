@@ -196,6 +196,15 @@ You can also do it yourself:
 
 ---
 
+## Tracing a task back
+
+Every task records who made it, why, and your words that started it. Open the board
+with `/symcc`, or one task with `/symcc-task T-3`: the `from:` line says, for example,
+`from: owner — “add a search command…”` or `from: scout bugs`, and the history lists each
+try. Every merge commit starts with the task ID, so `git log --grep "T-3"` finds the work
+for a task, and the ID on a commit takes you back to the task and your request. Tasks made
+before this was kept show `from: unknown`.
+
 ## Scouts
 
 A scout is one Markdown file in `.symcc/scouts/`. The top says how often it runs (and,
