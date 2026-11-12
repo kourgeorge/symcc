@@ -396,3 +396,12 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
 | [`tests/`](../tests/) | `board.test.ts` (the board logic), `pane.test.tsx` (the panel) |
+
+---
+
+## Working on symcc
+
+- **Run the tests:** `claude plugin test .` from the project folder.
+- **Where tests live:** `tests/board.test.ts` tests the board logic; `tests/pane.test.tsx` tests the panel.
+- **Layout:** `hooks/board.ts` holds the logic you can test (plain data, no Claude Code calls). `hooks/register.tsx` does the wiring to Claude Code. Put new logic in `board.ts` when you can, so it is easy to test.
+- **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).
