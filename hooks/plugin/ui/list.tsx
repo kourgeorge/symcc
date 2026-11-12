@@ -4,7 +4,8 @@ import { localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, ba
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
-/** The Tasks view: the status strip, then the tasks by section (needs you, doing, to do, then the folded groups). */
+/** The Tasks view: the status strip, then the tasks (needs you under its label, then doing and to do as one list,
+ *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead. */
 export function listPage($: $, pane: PaneParts) {
   const { Box, Text, Button, v, width, mark, act, C, mode, banner, tabs, keyLines } = pane
   const nowMs = Date.now()
@@ -24,11 +25,11 @@ export function listPage($: $, pane: PaneParts) {
    *  'backlog-more' or an older day of Done); a section label (`head`); a subtle line (`line`); or a blank line. */
   type Row = { task: SymccTask; indent: number } | { day: string; label: string; extra?: string; indent: number } | { head: string } | { line: string } | { blank: true }
   const tasksOf = (ts: SymccTask[], indent: number): Row[] => ts.map(task => ({ task, indent }))
-  // active work first (always open), a blank line between sections; then the folded groups, one row each
+  // active work first (always open): NEEDS YOU under its label, then one untitled list of what runs and what
+  // waits to run (the mark and status column tell them apart), a blank line between; then the folded groups
   const active: Row[][] = [
     parts.needsYou.length ? [{ head: SECTION_LABEL.needsYou }, ...tasksOf(parts.needsYou, 2)] : [],
-    parts.doing.length ? [{ head: SECTION_LABEL.doing }, ...tasksOf(parts.doing, 2)] : [],
-    parts.todo.length ? [{ head: SECTION_LABEL.todo }, ...tasksOf(parts.todo, 2)] : [],
+    tasksOf([...parts.doing, ...parts.todo], 2),
   ].filter(s => s.length)
   const countWidth = Math.max(1, ...[parts.backlog, parts.done, parts.dropped].map(ts => String(ts.length).length))
   const backlogShown = S.backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
@@ -83,7 +84,7 @@ export function listPage($: $, pane: PaneParts) {
         if (!('task' in r)) {
           const top = r.day === 'backlog' || r.day === 'done' || r.day === 'dropped'
           return (
-            <Button key={`day:${r.day}`} autoFocus={i === firstButton ? true : undefined} onPress={pressDay(r.day)}>
+            <Button key={`day:${r.day}`} plain autoFocus={i === firstButton ? true : undefined} onPress={pressDay(r.day)}>
               <Text color={C(top ? 'text' : 'subtle')}>
                 {' '.repeat(r.indent)}
                 {r.label}
@@ -97,7 +98,7 @@ export function listPage($: $, pane: PaneParts) {
         const lead = r.indent + idWidth + 3 + cellWidth + 2
         const fit = fitRow(lead, x.title, rowExtra(x, v.tasks), width)
         return (
-          <Button key={x.id} autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
+          <Button key={x.id} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
             <Text>{' '.repeat(r.indent)}</Text>
             <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
               {x.id.padEnd(idWidth)}

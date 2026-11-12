@@ -168,7 +168,7 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   await ui.unmount()
 })
 
-test('the list goes: NEEDS YOU, DOING, TO DO, then Backlog, Done and Dropped, with blank lines and no rules', async ($, on) => {
+test('the list goes: NEEDS YOU, then doing and to do as one untitled list, then Backlog, Done and Dropped, with blank lines and no rules', async ($, on) => {
   const now = new Date().toISOString()
   stateOf(on, {
     view: {
@@ -199,15 +199,23 @@ test('the list goes: NEEDS YOU, DOING, TO DO, then Backlog, Done and Dropped, wi
   expect(keys).toEqual(['T-6', 'T-5', 'T-10', 'T-4', 'T-9', 'T-3', 'T-8', 'day:backlog', 'day:done', 'day:dropped'])
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const idx = (re: RegExp) => texts.findIndex(t => re.test(t))
-  const heads = [/^NEEDS YOU$/, /^DOING$/, /^TO DO$/, /^  ▸ Backlog  1$/, /^  ▸ Done     1/, /^  ▸ Dropped  1$/].map(idx)
+  // the row's id is its own Text, after the two-space indent
+  const heads = [/^NEEDS YOU$/, /^T-4 $/, /^  ▸ Backlog  1$/, /^  ▸ Done     1/, /^  ▸ Dropped  1$/].map(idx)
   expect(heads.every(i => i > -1)).toBe(true)
   expect([...heads].sort((a, b) => a - b)).toEqual(heads)
-  // a blank line before each section label and before the folded rows, which sit together; no rules, no brackets
-  for (const k of [1, 2, 3]) expect(texts[heads[k]! - 1]).toBe(' ')
+  // no DOING or TO DO titles: the doing row follows one blank line, the to-do rows follow it with no gap
+  expect(texts.some(t => /^DOING$|^TO DO$/.test(t))).toBe(false)
+  expect(texts.slice(heads[1]! - 2, heads[1]! + 1)).toEqual([' ', '  ', 'T-4 '])
+  expect(texts.slice(heads[1]!, heads[2]! - 1).filter(t => t === ' ')).toEqual([])
+  expect(texts.filter(t => /^T-\d+ *$/.test(t))).toEqual(['T-6 ', 'T-5 ', 'T-10', 'T-4 ', 'T-9 ', 'T-3 ', 'T-8 '])
+  // a blank line before the folded rows, which sit together; no rules, no brackets
+  expect(texts[heads[2]! - 1]).toBe(' ')
   expect(texts.some(t => /┄/.test(t))).toBe(false)
   expect(texts.slice(heads[0]!).some(t => /[[\]]/.test(t))).toBe(false)
-  // the always-open labels are bold, not buttons
-  expect((await ui.find({ type: 'Text', text: /^DOING$/ }))?.props.bold).toBe(true)
+  // the rows are plain Buttons, so the terminal draws no "[ … ]" around them
+  for (const b of (await ui.findAll({ type: 'Button' })).filter(b => /^T-\d+$|^day:/.test(String(b.key)))) expect(b.props.plain).toBe(true)
+  // the NEEDS YOU label is bold, not a button
+  expect((await ui.find({ type: 'Text', text: /^NEEDS YOU$/ }))?.props.bold).toBe(true)
   // review and the rest of the rows: the short status word, failed in red
   expect((await ui.find({ type: 'Text', text: /^ ✗ failed\s*$/ }))?.props.color).toBe('error')
   expect((await ui.find({ type: 'Text', text: /^ ‖ paused\s*$/ }))).toBeDefined()
@@ -284,8 +292,8 @@ test('with nothing to do, need or run, two subtle "All clear" lines sit above th
 test('a board with only active work has no folded rows, no All clear lines and no rules', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^TO DO$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^NEEDS YOU$|^DOING$/ })).toBeUndefined()
+  expect(await ui.find({ key: 'T-1' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^NEEDS YOU$|^DOING$|^TO DO$/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /All clear/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /▸/ })).toBeUndefined()
   expect((await ui.findAll({ type: 'Text' })).filter(t => /┄/.test(t.text)).length).toBe(0)
@@ -909,7 +917,7 @@ test('while symcc is off its tools answer that it is off and leave the board alo
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
 
-test('the Tasks view: a status strip on top, NEEDS YOU / DOING / TO DO rows with extras, aligned folded rows, a short hint', async ($, on) => {
+test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
   const now = Date.now()
   const iso = (m: number) => new Date(now + m * 60_000).toISOString()
   const tasks = [

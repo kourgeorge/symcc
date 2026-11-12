@@ -27,8 +27,8 @@ export const backlogMoreLabel = (more: number): string => `… ${more} more (Ent
 /** The two subtle lines shown in the board panel when nothing needs the owner, runs or waits to run. */
 export const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
 
-/** The bold labels over the always-open sections of the board panel. */
-export const SECTION_LABEL = { needsYou: 'NEEDS YOU', doing: 'DOING', todo: 'TO DO' } as const
+/** The bold label over the board panel's NEEDS YOU section; doing and to-do tasks follow as one untitled list. */
+export const SECTION_LABEL = { needsYou: 'NEEDS YOU' } as const
 
 /** What the next scout run is: "secrets in 38m", "secrets now", "running: secrets", or '' when none is planned.
  *  Paused scouts and scouts that run only on demand (every_minutes 0) are skipped. */
