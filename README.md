@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b>Lead a team of coding agents from one chat: organized, supervised, and proactive.</b>
+  <b>A team lead for your coding agents: it listens, takes notes, organizes the work, and nothing slips.</b>
 </p>
 
 <p align="center">
@@ -21,17 +21,46 @@
   <img src="docs/demo.svg" alt="symcc demo" width="860">
 </p>
 
-**An example.** You are building a feature. Meanwhile a scout notices an untested error
-path. The lead puts it on the board, a worker fixes it in its own git worktree, the tests
-pass, and the change comes back to your chat for approval. You never had to notice the
-gap, write a ticket or open another app.
+## The problem
 
-**symcc connects discovery to delivery, inside Claude Code.**
+**Ideas while you wait.** You give your coding agent a task and watch it work. Meanwhile
+you think of more: a bug you noticed, a better name, the next feature. But the agent is
+busy. You either interrupt it, or keep the ideas in your head (or on a sticky note) and
+hope you remember them.
 
-With coding agents you are no longer one developer. You are a team lead, with many tasks
-running at once. symcc keeps that work organized and tested, and it also finds work on its
-own. It is proactive while your Claude Code session is open: work stops when you close it
-and picks up again next time.
+**Work that slips.** You run a big refactor, and a dozen things to fix come out of it. The
+agent suggests starting with a few; you agree, and it works through them one by one. You
+can't see which change belongs to which item, and the lower-priority ones quietly drop out
+of the conversation. A week later nobody remembers them. Neither you nor the agent has a
+clear view of what was asked, what is done and what is still open.
+
+The bottleneck isn't how fast the agent writes code. It's keeping track of the work.
+
+## What symcc does
+
+When you run a team, you need a lead who listens to you, takes notes, and organizes the
+work so no idea slips. symcc gives your Claude Code chat that role:
+
+- **It listens and takes notes.** Say an idea at any time, even while work is running.
+  The lead turns it into a task on the board (or parks it in the backlog if it isn't
+  clear yet) and keeps going.
+- **It organizes the work.** Each request is split into tasks, with an order (which task
+  waits for which) and the files each task may change. Independent tasks run in
+  parallel, each in its own git worktree.
+- **You see everything.** The board shows what happened (done and merged, with the commit
+  in the task's history), what is happening now (which tasks are running) and what comes
+  next (todo and backlog). Each task says what it is for.
+- **Change your mind on the fly.** "T-4 should also handle emails", "do T-6 first",
+  "drop T-2": the board updates and the workers follow.
+- **Nothing is forgotten.** Lower-priority items stay on the board or in the backlog
+  until they are done or you drop them.
+- **It also finds work.** Scouts check the code on a timer and report what they find; the
+  lead puts it on the board too.
+
+The result: faster, and organized. You stay the decision maker, the lead does the
+bookkeeping, workers do the coding, and each change waits for the tests (and for your
+approval in review mode) before it is merged. All of this runs while your Claude Code
+session is open: work stops when you close it and picks up again next time.
 
 The four parts, in known terms:
 
@@ -48,7 +77,7 @@ The four parts, in known terms:
 
 | Feature | What it does |
 |---|---|
-| **Orchestrator agent** | The lead (your Claude Code chat) plans, breaks work into tasks, supervises workers and reports to you. |
+| **Orchestrator agent** | The lead (your Claude Code chat) takes your ideas at any time, plans, breaks work into tasks, supervises workers and reports to you. |
 | **Task board** | One board for requested work (from you) and discovered work (from scouts), with live statuses. |
 | **Parallel agents** | Several tasks run at once (3 by default), each in its own git worktree, so they never collide. |
 | **Isolated worktrees** | Each task gets its own branch (`symcc/T-1`) and copy of the project; your branch is untouched until merge. |
@@ -72,6 +101,7 @@ worker that runs longer than `max_minutes` (45 by default).
 Multi-agent coding with worktrees and task boards exists already, including Claude Code's
 own agent teams. symcc does not claim to invent that. What symcc adds is the combination:
 
+- **A lead that takes notes**: every idea goes on the board, even while work runs.
 - **Scheduled discovery agents** (scouts) that find work on their own.
 - **One task board** for discovered work and requested work.
 - **A scope check** for every task.
@@ -104,22 +134,6 @@ The flow is **discovery → triage → implementation → review → merge**.
 6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests and
    merges. The next tasks start, and the lead tells you each step.
 
-```
-  you / scout ──▶ LEAD (your chat)                     discovery
-                    │ writes tasks                     triage
-                    ▼
-         .symcc/board.json  (T-1, T-2, ...)
-                    │ a task is ready
-                    ▼
-   WORKER builds it in .symcc/worktrees/T-1            implementation
-                    │ done
-                    ▼
-   scope check + test gate ── fail ──▶ automatic retry
-                    │ pass
-                    ▼
-   approval (review mode) ──▶ merge into target branch ──▶ next tasks start
-```
-
 ---
 
 ## Install
@@ -130,13 +144,10 @@ The flow is **discovery → triage → implementation → review → merge**.
   plugin API, and panels). This API is early access and can change between releases.
   symcc is built and tested with Claude Code **2.1.319**; check yours with
   `claude --version`. The one-step install in Option B needs 2.1.275 or later.
-- **git** (the program; workers get their own git worktree and branch). If it is
-  missing, nothing starts and symcc tells you how to install it (macOS:
-  `xcode-select --install`, or https://git-scm.com).
-- **A git repo is set up for you** if the folder has none, or has no commits yet
-  (symcc asks first). It runs `git init` on `main`, writes a `.gitignore` and makes a
-  first commit of your files, leaving out secrets and files over 50 MB. It never
-  pushes or adds a remote.
+- **git**. If it is missing, nothing starts and symcc tells you how to install it
+  (macOS: `xcode-select --install`, or https://git-scm.com).
+- **No git repo yet?** symcc offers to run `git init` on `main`, write a `.gitignore` and
+  make a first commit (no secrets, no files over 50 MB). It never pushes.
 
 There is no build step and nothing to `npm install`: Claude Code loads the plugin's
 `.tsx` code directly.
@@ -172,39 +183,17 @@ Inside a Claude Code session the same works with `/plugin`, e.g.
 `/plugin install symcc --marketplace kourgeorge/symcc`. It installs for you (user
 scope) by default; add `--scope project` to share it with your project.
 
-To update, then restart Claude Code:
+To update (then restart Claude Code), and to uninstall:
 
 ```bash
-claude plugin marketplace update symcc
-claude plugin update symcc@symcc
-```
-
-To uninstall:
-
-```bash
-claude plugin uninstall symcc@symcc
-claude plugin marketplace remove symcc
+claude plugin marketplace update symcc && claude plugin update symcc@symcc
+claude plugin uninstall symcc@symcc && claude plugin marketplace remove symcc
 ```
 
 ### Check it works
 
 Start Claude Code in your project. The board panel opens by itself on a wide enough
 terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ auto`.
-
-### First setup in your project
-
-1. **Keep the board local:** add `.symcc/` to your project's `.gitignore`.
-   ```bash
-   echo ".symcc/" >> .gitignore
-   ```
-2. **Set your tests:** tell the lead "set the test command to `npm test`".
-   Without a test command, changes are merged without running tests.
-3. **Optional, a scout:** copy one from [`examples/scouts/`](examples/scouts/).
-   ```bash
-   mkdir -p .symcc/scouts
-   cp ~/symcc/examples/scouts/deps.md .symcc/scouts/
-   ```
-   (With Option B, copy it from the repo on GitHub, or make one in the panel's Scouts view.)
 
 ### Troubleshooting
 
@@ -222,9 +211,13 @@ terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ 
 
 1. **Install** symcc (see [Install](#install)), e.g.
    `claude plugin install symcc --marketplace kourgeorge/symcc`.
-2. **Keep the board local:** add `.symcc/` to your project's `.gitignore`.
+2. **Keep the board local:** add `.symcc/` to your project's `.gitignore`
+   (`echo ".symcc/" >> .gitignore`).
 3. **Set your tests:** tell the lead "set the test command to `npm test`".
-4. **Ask for something.** "Add a dark mode toggle." Then watch the board.
+   Without a test command, changes are merged without running tests.
+4. **Optional, a scout:** copy one from [`examples/scouts/`](examples/scouts/) into
+   `.symcc/scouts/`, or make one in the panel's Scouts view.
+5. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
 ---
 
@@ -236,22 +229,9 @@ You never have to type a command. Just talk to the lead:
 - "do T-4 first" · "T-6 should wait for T-5"
 - "T-3 should also handle emails"
 - "pause T-5" · "drop T-2" · "stop everything"
-- "set the test command to `npm test`"
-- "give workers 90 minutes"
+- "set the test command to `npm test`" · "give workers 90 minutes"
 - "approve T-5" · "reject T-5: the button should be blue"
 - "stash this idea" · "show the backlog" · "move T-5 to todo"
-
-A short example:
-
-```
-you   add a search command, and make the errors friendlier
-lead  Three tasks: T-1 the search index, T-2 the command (after T-1), T-3 the errors.
-      …a few minutes later…
-lead  T-1 merged. T-3 failed its tests (a message changed); symcc is retrying it
-      with the failing output.
-      …
-lead  T-3 merged. T-2 is running now.
-```
 
 ---
 
@@ -269,8 +249,6 @@ telling the lead.
 - **Approve or reject.** "approve T-5" merges it (after checking again). "reject T-5:
   the button should be blue" sends it back, and a fresh worker redoes it with your reason.
 - **Review one task only.** In `auto`, say "T-5 needs review" and just that task waits.
-- **Pause, resume, drop.** "pause T-5", "resume T-5", "drop T-2". A dropped task stays on
-  the list but never runs.
 
 Safety:
 
@@ -288,19 +266,15 @@ Safety:
 
 ## Reference
 
-The full details are in the **[guide](docs/guide.md)**: a task's life, what happens when a
-worker finishes, review, the panel, scouts, branches, where files live, renaming the
-plugin, and where the code is.
+The full details (a task's life, review, the panel, scouts, branches, where files live)
+are in the **[guide](docs/guide.md)**.
 
 ### Live status: seeing the board
 
-- The panel opens by itself when a session starts (on a wide enough terminal). `/symcc`
-  opens it any time: ↑↓ to move, Enter to open, Esc to close. `t` and `s` switch between
-  the Tasks and Scouts views.
-- Keys: `a` approve, `x` reject or drop, `d` show changes, `p` pause, `u` resume,
-  `r` retry, `m` switch review / auto, `n` needs review for this task, `b` back.
-- The status line starts with the mode, e.g. `⏸ review merge · 1 to review (T-5)`.
-- **Ctrl+T** shows running workers; open one to watch it live.
+`/symcc` opens the board panel (it also opens by itself on a wide enough terminal). Keys:
+`a` approve, `x` reject or drop, `d` show changes, `p` pause, `u` resume, `r` retry, `m`
+switch review / auto. **Ctrl+T** shows running workers. More in the
+[guide](docs/guide.md#live-status-seeing-the-board).
 
 ### Commands
 
@@ -319,8 +293,6 @@ plugin, and where the code is.
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-help [topic]` | The built-in manual |
 
-If you rename the plugin, every command starts with the new name instead.
-
 ### Settings
 
 Change any of these by telling the lead (e.g. "give workers 90 minutes").
@@ -336,30 +308,18 @@ Change any of these by telling the lead (e.g. "give workers 90 minutes").
 | `voice` | on | Say "T-3 done" out loud when a task is merged (Mac) |
 | `mode` | `auto` | `off`, `review` or `auto` (see above) |
 
-### Scouts
+### Scouts and task statuses
 
 A scout is one Markdown file in `.symcc/scouts/`: how often it runs at the top, its
-instructions below. A scout can read the code, run shell commands and search the web. It
-reports what it finds to the lead and never changes files itself. Copy one from
-[`examples/scouts/`](examples/scouts/), or make one in the panel's Scouts view.
-More in the [guide](docs/guide.md#scouts).
-
-### Task statuses
-
-`todo` (ready) · `doing` (a worker is on it) · `waiting` (needs your answer) · `review`
-(waits for your approve) · `paused` · `failed` (the lead decides what next) · `done`
-(merged) · `dropped` (cancelled) · `backlog` (a parked idea; never starts until you move it
-to todo). See [a task's life](docs/guide.md#a-tasks-life).
+instructions below. See [scouts](docs/guide.md#scouts). A task is `todo`, `doing`,
+`waiting` (for your answer), `review`, `paused`, `failed`, `done` (merged), `dropped` or
+`backlog` (parked; never starts until you move it to todo). See
+[a task's life](docs/guide.md#a-tasks-life).
 
 ### Good to know
 
-- Work goes into the branch you had checked out when the board was made; say "merge into
-  `develop`" to change it.
-- A worker's copy has no installed packages (`node_modules/` is not copied). If your tests
-  need them, say so in the task.
-- Big tasks can run out of time; raise `max_minutes` or split the task.
-- Several Claude Code windows on one project: only one drives the board; another takes
-  over if it closes.
+Work goes into the branch you had checked out when the board was made (say "merge into
+`develop`" to change it). More tips are in the [guide](docs/guide.md#good-to-know).
 
 ### For developers
 
