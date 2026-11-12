@@ -107,6 +107,8 @@ import {
   roleMark,
   detailRows,
   detailRowLines,
+  foldDetails,
+  DETAILS_KEY,
   wrapSegs,
   STATUS_BADGE,
   STATUS_MARK,
@@ -269,6 +271,10 @@ let diffOpen: { task: string; file: string } | null = null
 let rejecting: { task: string; reason: string } | null = null
 /** the role pick list on an open task in the board panel: the task and the role names; null when it isn't shown */
 let rolePick: { task: string; options: string[] } | null = null
+/** whether the open task's whole "What to do" text is shown; back to folded each time a task is opened */
+let detailsOpen = false
+/** the task the board panel showed last ('' = the list), to fold the text again when another task opens */
+let shownTask = ''
 
 /**
  * What reached the lead in this session, for a new task's evidence (see evidenceText): the owner's
@@ -2680,6 +2686,10 @@ export const register: Register = on => {
         </Text>
       )
       const rows = detailRows(t, { roles, all: v.tasks, when, nowMs: Date.now() })
+      if (shownTask !== t.id) detailsOpen = false
+      shownTask = t.id
+      const fold = foldDetails(t.details, detailsOpen)
+      const toggleDetails = () => ((detailsOpen = !detailsOpen), $.ui.invalidate('ui.render'))
       return (
         <Box flexDirection="column" gap={1}>
           <Box flexDirection="column">
@@ -2782,7 +2792,12 @@ export const register: Register = on => {
 
           <Box flexDirection="column">
             {heading('What to do')}
-            {t.details.trim() ? paragraphs(t.details) : <Text color={C('subtle')}>(no details)</Text>}
+            {t.details.trim() ? paragraphs(fold.text) : <Text color={C('subtle')}>(no details)</Text>}
+            {t.details.trim() && fold.hint ? (
+              <Button key="details-toggle" hotkey={DETAILS_KEY} onPress={toggleDetails}>
+                <Text color={C('subtle')}>{fold.hint}</Text>
+              </Button>
+            ) : null}
           </Box>
 
           {t.history.length > 0 && (
@@ -2802,11 +2817,12 @@ export const register: Register = on => {
             </Box>
           )}
 
-          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}</Text>
+          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}{fold.hint ? ` · ${DETAILS_KEY} ${detailsOpen ? 'hide what to do' : 'show all of what to do'}` : ''}</Text>
         </Box>
       )
     }
 
+    shownTask = ''
     const nowMs = Date.now()
     const parts = boardSections(v.tasks, nowMs, localOffset(nowMs))
     for (const d of [...openDays]) if (!parts.days.some(g => g.day === d)) openDays.delete(d)

@@ -2025,3 +2025,20 @@ export function detailRowLines(row: DetailRow, width: number): Seg[][] {
   const pad = DETAIL_LABEL_WIDTH
   return wrapSegs(row.segs, Math.max(12, width - pad)).map((l, i) => [{ text: (i === 0 && row.label ? `${row.label}:` : '').padEnd(pad), color: 'text', bold: true }, ...l])
 }
+
+/** How many lines of a task's "What to do" text the task page shows before it is expanded. */
+export const DETAILS_SHOWN = 3
+/** The key that shows or hides the rest of the "What to do" text on the task page ("d" is taken there by Show changes). */
+export const DETAILS_KEY = 'e'
+
+/**
+ * The "What to do" text cut to its first DETAILS_SHOWN lines unless `open`, with the hint line
+ * under it; text of DETAILS_SHOWN lines or fewer is shown whole with no hint ('').
+ */
+export function foldDetails(text: string, open: boolean): { text: string; hint: string } {
+  const all = text.trimEnd().split('\n')
+  const more = all.length - DETAILS_SHOWN
+  if (more <= 0) return { text: all.join('\n'), hint: '' }
+  if (open) return { text: all.join('\n'), hint: `press ${DETAILS_KEY} to hide` }
+  return { text: all.slice(0, DETAILS_SHOWN).join('\n'), hint: `… ${more} more ${more === 1 ? 'line' : 'lines'} · press ${DETAILS_KEY} to show all` }
+}

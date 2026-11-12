@@ -245,6 +245,9 @@ test('an opened task shows its details in full, in clear sections', async ($, on
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /What to do/ })).toBeDefined()
+  // long text starts folded; the toggle shows it in full
+  expect(await ui.find({ type: 'Text', text: /THE END/ })).toBeUndefined()
+  await ui.press({ key: 'details-toggle' })
   expect(await ui.find({ type: 'Text', text: /THE END/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /src\/a\.ts/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^After:\s+T-1 ✓ done · Base work$/ })).toBeDefined()
@@ -728,5 +731,38 @@ test('an old task without an origin still opens, with From: unknown and no Why r
   expect(L.some(l => /^Why:/.test(l))).toBe(false)
   expect(L.some(l => /^Files:\s+anywhere in the project$/.test(l))).toBe(true)
   expect(L.some(l => /^Tries:\s+0 tries$/.test(l))).toBe(true)
+  await ui.unmount()
+})
+
+test('the task page folds long "What to do" text to 3 lines; e shows all and hides it again', async ($, on) => {
+  const details = Array.from({ length: 15 }, (_, i) => `step number ${i + 1}`).join('\n')
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'review', 'Long one', { details })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // folded by default: the first 3 lines, then the hint; d stays Show changes
+  for (const n of [1, 2, 3]) expect(await ui.find({ type: 'Text', text: new RegExp(`^step number ${n}$`) })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^step number 4$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^… 12 more lines · press e to show all$/ })).toBeDefined()
+  expect((await ui.find({ key: 'details-toggle' }))?.props.hotkey).toBe('e')
+  expect((await ui.find({ key: 'show-changes' }))?.props.hotkey).toBe('d')
+  expect(await ui.find({ type: 'Text', text: /· e show all of what to do/ })).toBeDefined()
+  // e shows it all
+  await ui.press({ key: 'details-toggle' })
+  expect(await ui.find({ type: 'Text', text: /^step number 15$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^press e to hide$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /· e hide what to do/ })).toBeDefined()
+  // and folds it again
+  await ui.press({ key: 'details-toggle' })
+  expect(await ui.find({ type: 'Text', text: /^step number 4$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /more lines · press e to show all/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('short "What to do" text is shown whole, with no hint', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Short one', { details: 'one\ntwo\nthree' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const w of ['one', 'two', 'three']) expect(await ui.find({ type: 'Text', text: new RegExp(`^${w}$`) })).toBeDefined()
+  expect(await ui.find({ key: 'details-toggle' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /press e/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /show all of what to do/ })).toBeUndefined()
   await ui.unmount()
 })
