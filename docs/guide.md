@@ -7,13 +7,16 @@ The full details. For the short version, see the [README](../README.md).
 - [What happens when a worker finishes](#what-happens-when-a-worker-finishes)
 - [Approval before merge](#approval-before-merge)
 - [Live status: seeing the board](#live-status-seeing-the-board)
+- [Tracing a task back](#tracing-a-task-back)
 - [Scouts](#scouts)
+- [Worker roles](#worker-roles)
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
 - [Where everything lives](#where-everything-lives)
 - [Good to know](#good-to-know)
 - [Renaming the plugin](#renaming-the-plugin)
 - [For developers](#for-developers-where-the-code-is)
+- [Working on symcc](#working-on-symcc)
 
 ---
 
