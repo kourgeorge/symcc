@@ -66,6 +66,22 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
+/** Names of the temp files takeLock and writeLead leave behind if their session is killed. */
+const LEFTOVER_TMP = /^(?:board\.lock|lead\.json)\.[\w.-]+\.tmp$/
+
+/**
+ * Which files in the data folder are leftover temp files that may be deleted: only
+ * board.lock.<session>.tmp and lead.json.<session>.tmp, and only once they are older than
+ * maxAgeMs (a fresh one may still be in use by another session). A file with no usable
+ * time, or dated in the future, is kept. Anything else (board.json, lead.json, ...) is never chosen.
+ */
+export function leftoverTmpFiles(files: { name: string; mtimeMs?: number }[], nowMs: number, maxAgeMs = LOCK_STALE_MS): string[] {
+  if (!Array.isArray(files) || !Number.isFinite(nowMs)) return []
+  return files
+    .filter(f => typeof f?.name === 'string' && LEFTOVER_TMP.test(f.name))
+    .filter(f => typeof f.mtimeMs === 'number' && Number.isFinite(f.mtimeMs) && f.mtimeMs <= nowMs && nowMs - f.mtimeMs > maxAgeMs)
+    .map(f => f.name)
+}
 /** Open work. Backlog tasks are not open: they never start and block nothing (see BACKLOG_FROM). */
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'review', 'failed']
 

@@ -14,6 +14,7 @@ import type { SymccMode, SymccScout, SymccTask, SymccView } from '../types'
 import { DEFAULT_NAME, cleanName, dataDir, namesFor } from './name'
 import {
   LEAD_BEAT_MS,
+  leftoverTmpFiles,
   workerName,
   workerDescription,
   scoutAgentName,
@@ -1127,9 +1128,36 @@ async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
   return out
 }
 
+/**
+ * Delete the temp files a killed session left in .<name>/ (see leftoverTmpFiles for which).
+ * A file that is gone by the time we get to it is fine; other errors are reported once per
+ * file in a toast, and never stop the check.
+ */
+async function cleanLeftoverTmp($: $) {
+  const dir = path(N.dir)
+  const entries = await $.fs.list(dir).catch(() => [])
+  const files: { name: string; mtimeMs?: number }[] = []
+  for (const f of entries) {
+    if (f.kind !== 'file' || !f.name.endsWith('.tmp')) continue
+    const st = await $.fs.stat(`${dir}/${f.name}`).catch(() => null)
+    if (st) files.push({ name: f.name, mtimeMs: st.mtimeMs })
+  }
+  const failed: string[] = []
+  for (const name of leftoverTmpFiles(files, Date.now())) {
+    const r = await $.process.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
+    if (r.exitCode !== 0) failed.push(`${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`)
+  }
+  // Say it once per file, not every two minutes.
+  const fresh = failed.filter(f => !tmpWarned.has(f.split(':')[0]))
+  fresh.forEach(f => tmpWarned.add(f.split(':')[0]))
+  if (fresh.length) $.ui.toast(N.toast(`couldn't remove leftover temp files in ${N.dir}/: ${fresh.join('; ')}`))
+}
+const tmpWarned = new Set<string>()
+
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
 async function check($: $) {
   if (!driving) return
+  await cleanLeftoverTmp($).catch(() => undefined)
   await stopOrphans($)
   const b = await load($)
   const agents = await $.agent.list().catch(() => undefined)
@@ -1837,6 +1865,7 @@ export const register: Register = on => {
       if (!(await $.fs.exists(path(N.boardFile)))) await publish($, await load($))
       await scheduleScouts($)
       await loadRoles($).catch(() => undefined)
+      await cleanLeftoverTmp($).catch(() => undefined)
       watchdog?.cancel()
       watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))
       // The driver refreshes its heartbeat; the others look whether it went stale and take over.
