@@ -350,7 +350,7 @@ your next message, no restart needed:
 
 - the lead instructions are no longer added to Claude's prompt,
 - running workers and scouts are stopped (their tasks go back to `todo`) and nothing new starts,
-- no "[symcc] Update" messages and no voice,
+- no "[symcc] Board update" messages and no voice,
 - the panel does not open by itself and the status line just says `symcc off · /symcc-on`,
 - the symcc tools answer "symcc is off. The owner can turn it on with /symcc-on." and change nothing.
 
