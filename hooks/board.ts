@@ -119,7 +119,13 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
     .slice(0, 30)
 }
 
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
+/** A task's role as stored: the name, or '' for general (which is the same as no role). */
+const cleanRole = (r: unknown): string => {
+  const s = clean(r, 64)
+  return s.toLowerCase() === 'general' ? '' : s
+}
+
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => find(b, x))
@@ -139,6 +145,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     created_at: now,
     updated_at: now,
     ...(f.needs_review === true ? { needs_review: true } : {}),
+    ...(cleanRole(f.role) ? { role: cleanRole(f.role) } : {}),
   }
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
@@ -153,6 +160,11 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, 8000)
   if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
+  if (patch.role !== undefined) {
+    const role = cleanRole(patch.role)
+    if (role) next.role = role
+    else delete next.role
+  }
   if (patch.needs_review !== undefined) {
     if (patch.needs_review === true) next.needs_review = true
     else delete next.needs_review
@@ -1180,7 +1192,8 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
     const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
-    return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
+    const role = t.role && t.role !== DEFAULT_ROLE ? ` [${t.role}]` : ''
+    return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`
   })
   const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
@@ -1266,6 +1279,98 @@ export function scoutDraftError(d: { every: string; body: string }): string {
   if (everyMinutesOf(d.every) === null) return 'every (minutes) must be a whole number, 1 or more'
   if (!d.body.trim()) return 'write what the scout looks for'
   return ''
+}
+
+// ---------------- worker roles ----------------
+
+/**
+ * A worker role: a file `roles/<name>.md` in the plugin, or `.<plugin name>/roles/<name>.md` in the
+ * project (which overrides a built-in one with the same name). Front matter: description (needed),
+ * model and skills (optional); the body is the role's checklist (may be empty, as for "general").
+ */
+export type RoleDef = { name: string; description: string; model?: string; skills: string[]; prompt: string }
+
+/** The role a task gets when none is set: today's plain worker. */
+export const DEFAULT_ROLE = 'general'
+
+/** A role's name: letters, digits, - and _ only. */
+const ROLE_NAME = /^[A-Za-z0-9_-]{1,64}$/
+
+/** A front matter list: "[a, b]" or "a, b", quotes dropped. */
+function frontMatterList(value: string): string[] {
+  return value
+    .replace(/^\[|\]$/g, '')
+    .split(',')
+    .map(s => s.trim().replace(/^["']|["']$/g, '').trim())
+    .filter(Boolean)
+}
+
+/**
+ * A role file as a RoleDef, or null when it can't be used (no front matter, no description,
+ * or a name with other characters than letters, digits, - and _); the caller skips it with a note.
+ */
+export function parseRole(name: string, text: string): RoleDef | null {
+  const fm = splitFrontMatter(text)
+  if (!fm.lines) return null
+  const meta: Record<string, string> = {}
+  for (const line of fm.lines) {
+    const kv = frontMatterLine(line)
+    if (kv) meta[kv.key] = kv.value.replace(/\s+#.*$/, '')
+  }
+  const unquote = (s: string | undefined) => (s ?? '').trim().replace(/^["']|["']$/g, '').trim()
+  const roleName = unquote(meta.name) || name
+  const description = unquote(meta.description)
+  if (!ROLE_NAME.test(roleName) || !description) return null
+  const model = unquote(meta.model)
+  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), prompt: fm.body.trim() }
+}
+
+/** The built-in roles with the project's added: a project role replaces a built-in one with the same name. Sorted by name, general first. */
+export function mergeRoles(builtIn: RoleDef[], project: RoleDef[]): RoleDef[] {
+  const out = new Map<string, RoleDef>()
+  for (const r of [...builtIn, ...project]) out.set(r.name.toLowerCase(), r)
+  return [...out.values()].sort((a, b) => (a.name === DEFAULT_ROLE ? -1 : b.name === DEFAULT_ROLE ? 1 : a.name.localeCompare(b.name)))
+}
+
+/** A task's role name: its role, or general when none is set. */
+export const roleOf = (t: Pick<SymccTask, 'role'>): string => t.role?.trim() || DEFAULT_ROLE
+
+/** Role `name` from `roles` (any case); general when the name is missing. */
+export function findRole(roles: RoleDef[], name: string | undefined): RoleDef | undefined {
+  const n = (name ?? '').trim().toLowerCase() || DEFAULT_ROLE
+  return roles.find(r => r.name.toLowerCase() === n)
+}
+
+/** The known role name for `name` (spelled as in its file), or throws a clear error listing the roles. */
+export function checkRole(roles: RoleDef[], name: string): string {
+  const r = findRole(roles, name)
+  if (r) return r.name
+  if (name.trim().toLowerCase() === DEFAULT_ROLE) return DEFAULT_ROLE
+  const have = roles.map(x => x.name)
+  if (!have.some(x => x.toLowerCase() === DEFAULT_ROLE)) have.unshift(DEFAULT_ROLE)
+  throw new Error(`unknown role "${name}"; the roles are: ${have.join(', ')}`)
+}
+
+/** "try 2", or "try 2 (role tests)" when the task has a role other than general. */
+export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | string }): string {
+  const role = roleOf(t)
+  return `try ${t.attempts}${role === DEFAULT_ROLE ? '' : ` (role ${role})`}`
+}
+
+/**
+ * The worker prompt's role section: "Your role: <name>", the role's checklist and the skills to use.
+ * Empty for a role with no checklist and no skills (general: today's worker).
+ */
+export function roleSection(r: RoleDef | undefined): string {
+  if (!r || (!r.prompt && !r.skills.length)) return ''
+  const skills = r.skills.length ? `Use these skills if they are available: ${r.skills.join(', ')}.` : ''
+  return `\nYour role: ${r.name}\n${[r.prompt, skills].filter(Boolean).join('\n')}\n`
+}
+
+/** The lead's paragraph about roles: each one with its description, and how to pick. */
+export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): string {
+  const list = roles.length ? roles.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
+  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.`
 }
 
 // ---------------- scouts in the board panel ----------------

@@ -39,6 +39,8 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
+  /** the worker role (a role file's name) the lead picked; missing = "general" */
+  role?: string
   /** wait for the owner's review before merging, even when the board's mode is "auto" */
   needs_review?: boolean
   /** one entry per worker try, oldest first */

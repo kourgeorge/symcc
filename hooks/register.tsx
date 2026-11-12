@@ -90,6 +90,15 @@ import {
   needFilesQuestion,
   parseBoard,
   parseScout,
+  parseRole,
+  mergeRoles,
+  findRole,
+  checkRole,
+  roleOf,
+  tryLabel,
+  roleSection,
+  rolesLeadText,
+  type RoleDef,
   scoutText,
   scoutNameError,
   scoutDraftError,
@@ -178,6 +187,8 @@ type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel'
 // A hot reload starts these over: the board itself is always on disk, and a task
 // whose worker was lost to a reload goes back to "todo" at session.start.
 let root = ''
+/** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
+let roles: RoleDef[] = []
 /** the home folder, to shorten it to "~" where the project's path is shown */
 let home = ''
 type Worker = { task: string; worktree: string; branch: string; since: number }
@@ -740,7 +751,7 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'f
 
 // ---------------- workers ----------------
 
-const WORKER_PROMPT = (t: SymccTask, b: Board, dir: string) => `You are a ${N.name} worker. Do exactly this one task, then stop.
+const WORKER_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${N.name} worker. Do exactly this one task, then stop.
 
 Work ONLY inside this folder, your own copy of the project on branch ${t.branch ?? N.branch(t.id)}:
   ${dir}
@@ -748,7 +759,7 @@ Use absolute paths under that folder for every Read, Edit and Write. Never touch
 
 Task ${t.id}: ${t.title}
 ${t.details}
-
+${roleSection(role)}
 Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; changes anywhere else are thrown away.
 If you find you must change a file outside this list, do NOT change it. Stop at once and answer with just one line:
   NEED FILES: path/a, path/b — <one short reason>
@@ -803,7 +814,8 @@ async function startWorker($: $, id: string) {
     const before = find(b, id)!
     let agentId: string
     try {
-      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir), name: workerName(N.name, t.id), description: workerDescription(t.title), subagentType: N.worker, cwd: dir })
+      const role = findRole(await loadRoles($), roleOf(t))
+      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(N.name, t.id), description: workerDescription(t.title), subagentType: N.worker, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
       if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
@@ -884,14 +896,14 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
   const q = /^\s*QUESTION:\s*(.+)$/im.exec(answer)
   const need = parseNeedFiles(answer)
   if (aborted) {
-    await change($, x => patchTask(x, t.id, { status: 'failed', note: 'the worker was stopped', history: [...t.history, `try ${t.attempts}: stopped before finishing`] }, now()))
+    await change($, x => patchTask(x, t.id, { status: 'failed', note: 'the worker was stopped', history: [...t.history, `${tryLabel(t)}: stopped before finishing`] }, now()))
     tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
   } else if (need) {
     const question = needFilesQuestion(t.id, need)
-    await change($, x => patchTask(x, t.id, { status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...t.history, `try ${t.attempts}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }, now()))
+    await change($, x => patchTask(x, t.id, { status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...t.history, `${tryLabel(t)}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }, now()))
     tellLead($, `${question}\nThe task now waits for the owner. If they agree, ${N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (q) {
-    await change($, x => patchTask(x, t.id, { status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...t.history, `try ${t.attempts}: worker asked: ${q[1]}`] }, now()))
+    await change($, x => patchTask(x, t.id, { status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...t.history, `${tryLabel(t)}: worker asked: ${q[1]}`] }, now()))
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${N.name} ask.`)
   } else {
     await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
@@ -906,7 +918,7 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
  * else "done" (merged) or "failed". `summary` is what the worker (or the owner, on approve) said.
  */
 async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string) {
-  const line = `try ${t.attempts}: ${summary.slice(0, 300)} → ${r.detail}`
+  const line = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${r.detail}`
   if (r.review) {
     await change($, x => patchTask(x, t.id, { status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...t.history, line] }, now()))
     tellLead($, `${t.id} "${t.title}" is ready for review. Worker: ${summary.slice(0, 300)}\nThe change is on branch ${t.branch ?? N.branch(t.id)} (folder ${N.dir}/worktrees/${t.id}). Show the owner what changed; then ${N.name} approve ${t.id} merges it, or ${N.name} reject ${t.id} with a reason sends it back to a fresh worker.`)
@@ -930,7 +942,7 @@ async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: str
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
-  const done = `try ${t.attempts}: ${summary.slice(0, 300)} → ${detail}`
+  const done = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${detail}`
   await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
   if (r.ok) sayDone($, b, t.id)
   if (r.ok) await removeWorktree($, t.id, worktree, agentId)
@@ -1074,7 +1086,7 @@ async function check($: $) {
     if (minutes > b.max_minutes) {
       workers.delete(agentId)
       await halt($, agentId, `it ran longer than ${b.max_minutes} minutes`)
-      await change($, x => patchTask(x, w.task, { status: 'failed', note: `stopped: ran over ${b.max_minutes} min`, history: [...(t?.history ?? []), `try ${t?.attempts ?? '?'}: stopped after ${Math.round(minutes)} min (over the limit)`] }, now()))
+      await change($, x => patchTask(x, w.task, { status: 'failed', note: `stopped: ran over ${b.max_minutes} min`, history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: stopped after ${Math.round(minutes)} min (over the limit)`] }, now()))
       tellLead($, `${w.task} "${t?.title ?? ''}": the worker ran over ${b.max_minutes} minutes, so I stopped it. Retry it (${N.name} retry), split it, or drop it. The limit can be changed with ${N.name} settings max_minutes.`)
       continue
     }
@@ -1082,7 +1094,7 @@ async function check($: $) {
     const lost = minutes > 3 && info !== undefined && ENDED_STATUSES.includes(info.status)
     if (lost) {
       workers.delete(agentId)
-      await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `try ${t?.attempts ?? '?'}: the worker ended without a result`] }, now()))
+      await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`] }, now()))
       tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${N.name} retry), change it, or drop it.`)
     }
   }
@@ -1106,6 +1118,28 @@ async function check($: $) {
   for (const t of late) reminded.set(t.id, t.updated_at)
   if (late.length) tellLead($, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
   await pump($)
+}
+
+// ---------------- worker roles ----------------
+
+/** The role files in folder `dir` (skipped with a note when one can't be used). */
+async function roleFiles($: $, dir: string): Promise<RoleDef[]> {
+  if (!(await $.fs.exists(dir).catch(() => false))) return []
+  const out: RoleDef[] = []
+  for (const f of await $.fs.list(dir).catch(() => [])) {
+    if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
+    const text = await $.fs.read(`${dir}/${f.name}`).catch(() => '')
+    const r = parseRole(f.name.replace(/\.md$/, ''), typeof text === 'string' ? text : '')
+    if (r) out.push(r)
+    else $.ui.log(`${N.name}: skipped role file ${dir}/${f.name}: it needs front matter with a description (and a name of letters, digits, - and _)`, { to: 'debug' })
+  }
+  return out
+}
+
+/** Reads the roles again: the plugin's roles/, then the project's .<name>/roles/ over them. */
+async function loadRoles($: $): Promise<RoleDef[]> {
+  roles = mergeRoles(await roleFiles($, `${$.plugin.root}/roles`), root ? await roleFiles($, path(`${N.dir}/roles`)) : [])
+  return roles
 }
 
 // ---------------- scouts ----------------
@@ -1464,6 +1498,7 @@ The project has a shared task board (${N.dir}/board.json) that you and the owner
 - To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${N.name} add with backlog: true); they never start until moved to todo (${N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
 - ${N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${N.name} settings), and reminds you about failed tasks nobody handled.
+${rolesLeadText(roles, N.name)}
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${N.name} board to see the board.`
 
 const TOOLS = () => [
@@ -1471,12 +1506,12 @@ const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' } } },
+    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list); general when unsure.' } } },
   },
   {
     name: 'change',
     description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: 'The worker role for the task; general when unsure.' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
@@ -1514,13 +1549,15 @@ async function runTool($: $, name: string, a: In): Promise<string> {
     case 'board':
       return boardText(await load($), Date.now(), shortHome(root, home), N.name)
     case 'add': {
-      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true }, now(), N.dir))
+      const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
+      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true, role }, now(), N.dir))
       void pump($)
       return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}`
     }
     case 'change': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
+      const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       const fields = (): Partial<SymccTask> => {
         const p: Partial<SymccTask> = {}
         if (str(a.title)) p.title = str(a.title)
@@ -1529,6 +1566,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         if (list(a.after)) p.after = list(a.after)
         if (typeof a.order === 'number') p.order = a.order
         if (typeof a.needs_review === 'boolean') p.needs_review = a.needs_review
+        if (role) p.role = role
         return p
       }
       if (a.backlog === true) {
@@ -1549,7 +1587,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, fields(), now(), N.dir))
         return `${t.id} updated (still in the backlog)`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
@@ -1563,6 +1601,7 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       if (list(a.after)) patch.after = list(a.after)
       if (typeof a.order === 'number') patch.order = a.order
       if (typeof a.needs_review === 'boolean') patch.needs_review = a.needs_review
+      if (role) patch.role = role
       await change($, x => patchTask(x, t.id, patch, now(), N.dir))
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
@@ -1723,6 +1762,7 @@ export const register: Register = on => {
       await claimLead($, true).catch(() => (driving = false))
       if (!(await $.fs.exists(path(N.boardFile)))) await publish($, await load($))
       await scheduleScouts($)
+      await loadRoles($).catch(() => undefined)
       watchdog?.cancel()
       watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))
       // The driver refreshes its heartbeat; the others look whether it went stale and take over.
@@ -1809,6 +1849,7 @@ export const register: Register = on => {
     useName($)
     const r = await next(e)
     if (String((e as { file_path?: string }).file_path ?? '').includes(`${N.scouts}/`)) void scheduleScouts($)
+    if (String((e as { file_path?: string }).file_path ?? '').includes(`${N.dir}/roles/`)) void loadRoles($).catch(() => undefined)
     return r
   })
 
