@@ -19,6 +19,30 @@ export type SymccRun = {
   cost?: number
 }
 
+/**
+ * Where a task came from, so it can be traced back to the request that started it.
+ * `by`: who asked for it (the owner, a scout's report, a worker's report, or the lead's own idea).
+ * `evidence`: what the plugin itself saw just before the task was added (the last owner prompt,
+ * or the scout or worker report delivered to the lead), so the trail does not rest only on the lead's word.
+ */
+export type SymccOrigin = {
+  by: 'owner' | 'scout' | 'worker' | 'lead'
+  /** the scout's name, when a scout's report led to this task */
+  scout?: string
+  /** the task id whose worker report (or which split) led to this task */
+  task?: string
+  /** "split": part of a bigger task; "follow-up": more work after a task */
+  how?: 'split' | 'follow-up'
+  /** the owner's words, quoted exactly */
+  request?: string
+  /** one line: why this task exists */
+  why: string
+  /** what the plugin saw itself, e.g. the last owner prompt or "scout bugs report at ..." */
+  evidence?: string
+  /** when the task was added (ISO time) */
+  at: string
+}
+
 export type SymccTask = {
   id: string
   title: string
@@ -39,6 +63,8 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
+  /** who made the task, why and from which request; missing on tasks made before it was recorded */
+  origin?: SymccOrigin
   /** the worker role (a role file's name) the lead picked; missing = "general" */
   role?: string
   /** wait for the owner's review before merging, even when the board's mode is "auto" */

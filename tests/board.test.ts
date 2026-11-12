@@ -1,16 +1,19 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
+import { makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
+// every new task needs a reason it exists
+const W = { why: 'a test' }
 
 test('tasks run in order, and a task waits for the ones it is after', async () => {
   let b = emptyBoard()
-  const [b1, a] = addTask(b, { title: 'A', files: ['src/a.js'] }, T)
-  const [b2, c] = addTask(b1, { title: 'C', after: [a.id] }, T)
-  const [b3, d] = addTask(b2, { title: 'D', order: 0 }, T)
+  const [b1, a] = addTask(b, { origin: W, title: 'A', files: ['src/a.js'] }, T)
+  const [b2, c] = addTask(b1, { origin: W, title: 'C', after: [a.id] }, T)
+  const [b3, d] = addTask(b2, { origin: W, title: 'D', order: 0 }, T)
   b = b3
   expect(ready(b).map(t => t.id)).toEqual([d.id, a.id])
   b = patchTask(b, a.id, { status: 'done' }, T)
@@ -20,7 +23,7 @@ test('tasks run in order, and a task waits for the ones it is after', async () =
 })
 
 test('a task can never be allowed to touch the board, Git internals or files outside the project', async () => {
-  const [b] = addTask(emptyBoard(), { title: 'x', files: ['src/', './tests/**', '/etc/passwd', '../x', '.symcc/board.json', '.git/config'] }, T)
+  const [b] = addTask(emptyBoard(), { origin: W, title: 'x', files: ['src/', './tests/**', '/etc/passwd', '../x', '.symcc/board.json', '.git/config'] }, T)
   expect(b.tasks[0]!.files).toEqual(['src/', 'tests/**'])
   expect(outOfScope(['src/a.js', 'docs/x.md'], ['src/'])).toEqual(['docs/x.md'])
   expect(outOfScope(['src/a.js'], ['src'])).toEqual([])
@@ -29,7 +32,7 @@ test('a task can never be allowed to touch the board, Git internals or files out
 })
 
 test('waiting tasks show their question; other statuses drop it', async () => {
-  let [b, t] = addTask(emptyBoard(), { title: 'mode' }, T)
+  let [b, t] = addTask(emptyBoard(), { origin: W, title: 'mode' }, T)
   b = patchTask(b, t.id, { status: 'waiting', question: 'half up or to even?' }, T)
   expect(boardText(b)).toContain('asks: half up or to even?')
   b = patchTask(b, t.id, { status: 'todo' }, T)
@@ -44,15 +47,15 @@ test('a scout file: front matter sets how often, the body is its instructions', 
 })
 
 test('the board lists the newest task at the top and the oldest at the bottom', () => {
-  const [b1] = addTask(emptyBoard(), { title: 'Old' }, '2026-01-01T00:00:00Z')
-  const [b2] = addTask(b1, { title: 'Middle' }, '2026-01-02T00:00:00Z')
-  const [b3] = addTask(b2, { title: 'New' }, '2026-01-03T00:00:00Z')
-  const lines = boardText(b3).split('\n').slice(1)
+  const [b1] = addTask(emptyBoard(), { origin: W, title: 'Old' }, '2026-01-01T00:00:00Z')
+  const [b2] = addTask(b1, { origin: W, title: 'Middle' }, '2026-01-02T00:00:00Z')
+  const [b3] = addTask(b2, { origin: W, title: 'New' }, '2026-01-03T00:00:00Z')
+  const lines = boardText(b3).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
   expect(lines.map(l => l.trim().split(/\s+/).pop())).toEqual(['New', 'Middle', 'Old'])
 })
 
 test('a paused task is not started, and a new board has a time limit for workers', () => {
-  const [b1, t] = addTask(emptyBoard(), { title: 'A' }, '2026-01-01T00:00:00Z')
+  const [b1, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, '2026-01-01T00:00:00Z')
   expect(emptyBoard().max_minutes).toBe(45)
   expect(ready(b1).map(x => x.id)).toEqual([t.id])
   const b2 = patchTask(b1, t.id, { status: 'paused' }, '2026-01-01T00:01:00Z')
@@ -103,7 +106,7 @@ test('only one session drives the board: the first one, until its heartbeat goes
 test('at session start, only "doing" tasks of this session, a dead session or no session go back to "todo"', () => {
   const t0 = 1_800_000_000_000
   let b = emptyBoard()
-  for (const title of ['mine', 'dead', 'old', 'live', 'idle']) b = addTask(b, { title }, T)[0]
+  for (const title of ['mine', 'dead', 'old', 'live', 'idle']) b = addTask(b, { origin: W, title }, T)[0]
   b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
   b = patchTask(b, 'T-2', { status: 'doing', session: 'gone' }, T)
   b = patchTask(b, 'T-3', { status: 'doing' }, T)
@@ -127,7 +130,7 @@ test('at session start, only "doing" tasks of this session, a dead session or no
 })
 
 test('a task forgets its session when it leaves "doing"', () => {
-  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
   expect(b.tasks[0]!.session).toBe('me')
   b = patchTask(b, 'T-1', { note: 'checking and merging' }, T)
@@ -140,7 +143,7 @@ test('a task forgets its session when it leaves "doing"', () => {
 })
 
 test('a conflict with main gets a new try at most twice, then the task fails', () => {
-  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   expect(MAX_CONFLICT_TRIES).toBe(2)
   // a task that never conflicted (an old board has no count) is retried
   expect(onConflict(b.tasks[0]!)).toBe('retry')
@@ -154,7 +157,7 @@ test('a conflict with main gets a new try at most twice, then the task fails', (
 })
 
 test('failing tests get a new try on their own until auto_retries, then the task fails', () => {
-  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   expect(DEFAULT_AUTO_RETRIES).toBe(2)
   expect(emptyBoard().auto_retries).toBe(2)
   // an old board without the setting gets the default
@@ -182,7 +185,7 @@ test('failing tests get a new try on their own until auto_retries, then the task
 })
 
 test('a worker starts on a task only if it is "todo" and no live worker is on it', () => {
-  let [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   const t = () => b.tasks[0]!
   // a "todo" task with no agent around: start
   expect(mayStart(t(), [])).toBe(true)
@@ -220,7 +223,7 @@ test('a worker is found by its name: the task id, or the id with a suffix the ho
 
 test('after a reload, a task whose old worker is still alive stays "doing"', () => {
   let b = emptyBoard()
-  for (const title of ['alive', 'gone']) b = addTask(b, { title }, T)[0]
+  for (const title of ['alive', 'gone']) b = addTask(b, { origin: W, title }, T)[0]
   b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
   b = patchTask(b, 'T-2', { status: 'doing', session: 'me' }, T)
   const after = resetDoing(b, 'me', null, 0, 'restarted', T, ['T-1'])
@@ -228,7 +231,7 @@ test('after a reload, a task whose old worker is still alive stays "doing"', () 
 })
 
 test('time and cost: a try records its start and end, and leaving "doing" ends it', async () => {
-  let [b, t] = addTask(emptyBoard(), { title: 'timed' }, T)
+  let [b, t] = addTask(emptyBoard(), { origin: W, title: 'timed' }, T)
   b = patchTask(b, t.id, { status: 'doing', runs: startRun(undefined, '2026-11-09T10:00:00.000Z') }, T)
   expect(b.tasks[0]!.runs).toEqual([{ started: '2026-11-09T10:00:00.000Z' }])
   const ended = endRun(b.tasks[0]!.runs, '2026-11-09T10:12:00.000Z', { tokens: 1500 })
@@ -253,7 +256,7 @@ test('time and cost: tries add up, and a running try counts up to now', async ()
   expect(sumRuns([])).toEqual({ ms: 0, tries: 0 })
   expect(sumRuns([{ started: 'bad', ended: 'worse' }]).ms).toBe(0)
   expect(fmtRun(runs[2]!, 2, Date.parse('2026-11-09T13:05:00.000Z'))).toBe('try 3: 5m (running)')
-  let [b] = addTask(emptyBoard(), { title: 'a' }, T)
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'a' }, T)
   expect(boardText(b)).not.toContain('total:')
   b = { ...b, tasks: b.tasks.map(t => ({ ...t, runs: runs.slice(0, 2) })) }
   expect(boardTotal(b).tries).toBe(2)
@@ -383,7 +386,7 @@ test('another plugin name changes every path, branch, agent type and text made f
   const n = namesFor('crew')
   const root = '/Users/me/repositories/app'
   const b = { ...emptyBoard(), test_commands: ['npm test'] }
-  const [b1, t] = addTask(b, { title: 'x', files: ['src/', '.crew/board.json', '.symcc/old.json'] }, T, n.dir)
+  const [b1, t] = addTask(b, { origin: W, title: 'x', files: ['src/', '.crew/board.json', '.symcc/old.json'] }, T, n.dir)
   const made = [
     n.dir, n.boardFile, n.lockFile, n.leadFile, n.worktrees, n.scouts,
     n.branch('T-1'), n.author.name, n.author.email, n.worker, n.scout, n.tool('board'), n.pane, n.boardName, n.help, n.toast('stopped 1 old worker'),
@@ -480,7 +483,7 @@ test('day labels: Yesterday, then the date, with the year only for another year'
 
 test('boardText lists open and today in full, and one line per older day', () => {
   const b = { ...emptyBoard(), tasks: [at('T-1', 'done', '2026-11-09T10:00:00Z'), at('T-2', 'todo', '2026-11-01T10:00:00Z'), at('T-3', 'done', '2026-11-11T10:00:00Z'), at('T-4', 'done', '2026-11-10T10:00:00Z')] }
-  const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1)
+  const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
   expect(lines.map(l => l.split(/\s+/)[0])).toEqual(['T-2', 'T-3', '▸', '▸'])
   expect(lines.slice(2)).toEqual(['▸ Yesterday · 1 done', '▸ Mon 9 Nov · 1 done'])
   expect(lines.join('\n')).not.toContain('T-1')
@@ -572,7 +575,7 @@ test('a heartbeat is fresh only within the stale time, in either direction', asy
 })
 
 test('backToTodo sends a task back to "todo" and forgets its session', async () => {
-  const [b] = addTask(emptyBoard(), { title: 'x' }, T)
+  const [b] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const t = { ...b.tasks[0]!, status: 'doing' as const, session: 's1' }
   const back = backToTodo(t, 'restarted', '2026-11-10T00:00:00.000Z')
   expect(back.status).toBe('todo')
@@ -631,7 +634,7 @@ test('a new scout name and every_minutes are checked', async () => {
 
 test('after /clear, this session\'s "doing" tasks move to the new session id', () => {
   let b = emptyBoard()
-  for (const title of ['mine', 'other', 'done', 'none']) b = addTask(b, { title }, T)[0]
+  for (const title of ['mine', 'other', 'done', 'none']) b = addTask(b, { origin: W, title }, T)[0]
   b = patchTask(b, 'T-1', { status: 'doing', session: 'old' }, T)
   b = patchTask(b, 'T-2', { status: 'doing', session: 'other' }, T)
   // a finished task that still names the old session (patchTask would drop it) is left alone
@@ -753,16 +756,16 @@ test('needsReview: mode review (or off) makes every task wait; in auto only a ta
 })
 
 test('add and change set needs_review on a task', () => {
-  const [b1, t] = addTask(emptyBoard(), { title: 'A', needs_review: true }, T)
+  const [b1, t] = addTask(emptyBoard(), { origin: W, title: 'A', needs_review: true }, T)
   expect(b1.tasks[0]!.needs_review).toBe(true)
   const b2 = patchTask(b1, t.id, { needs_review: false }, T)
   expect(b2.tasks[0]!.needs_review).toBe(undefined)
-  const [b3] = addTask(emptyBoard(), { title: 'B' }, T)
+  const [b3] = addTask(emptyBoard(), { origin: W, title: 'B' }, T)
   expect(b3.tasks[0]!.needs_review).toBe(undefined)
 })
 
 test('reject sends a task in review back to "todo" with the reason in its history', () => {
-  let [b, t] = addTask(emptyBoard(), { title: 'A' }, T)
+  let [b, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   b = patchTask(b, t.id, { status: 'review', attempts: 1, test_tries: 1, history: ['try 1: did it → checks passed'] }, T)
   const r = rejectTask(b, 't-1', 'the button should be blue', '2026-11-09T01:00:00.000Z')
   const x = r.tasks[0]!
@@ -777,19 +780,19 @@ test('reject sends a task in review back to "todo" with the reason in its histor
 
 test('approve and reject refuse a task that is not in review', () => {
   for (const status of ['todo', 'doing', 'paused', 'waiting', 'failed', 'done', 'dropped'] as const) {
-    let [b, t] = addTask(emptyBoard(), { title: 'A' }, T)
+    let [b, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
     b = patchTask(b, t.id, { status }, T)
     expect(() => reviewTask(b, t.id, 'approve')).toThrow('not ready for review')
     expect(() => rejectTask(b, t.id, 'no', T)).toThrow('not ready for review')
   }
-  let [b, t] = addTask(emptyBoard(), { title: 'A' }, T)
+  let [b, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   b = patchTask(b, t.id, { status: 'review' }, T)
   expect(reviewTask(b, t.id, 'approve').id).toBe(t.id)
   expect(() => reviewTask(b, 'T-99', 'approve')).toThrow('not on the board')
 })
 
 test('going from review to auto leaves tasks in review as they are', () => {
-  let [b, t] = addTask(setMode(emptyBoard(), 'review'), { title: 'A' }, T)
+  let [b, t] = addTask(setMode(emptyBoard(), 'review'), { origin: W, title: 'A' }, T)
   expect(b.mode).toBe('review')
   b = patchTask(b, t.id, { status: 'review' }, T)
   const a = setMode(b, 'auto')
@@ -810,7 +813,7 @@ test('the status line lists tasks to review by ID, cut after 3', () => {
 })
 
 test('the board text names a task in review', () => {
-  let [b, t] = addTask(emptyBoard(), { title: 'Blue button' }, T)
+  let [b, t] = addTask(emptyBoard(), { origin: W, title: 'Blue button' }, T)
   b = patchTask(b, t.id, { status: 'review' }, T)
   expect(boardText(b)).toMatch(/T-1\s+review\s+Blue button — ready for review/)
   expect(boardText(b)).toContain(modeText('auto'))
@@ -940,7 +943,7 @@ test('agent names start with the plugin name', () => {
   expect(scoutDescription('bugs', '')).toBe('bugs')
   expect(scoutDescription('bugs', 'y'.repeat(100)).length).toBe(AGENT_DESCRIPTION_CHARS)
   // a worker is still found for its task by its new name, with or without a host suffix
-  const [b] = addTask(emptyBoard(), { title: 'A' }, T)
+  const [b] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   const t = b.tasks[0]!
   expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc-T-1', description: 'A' }])).toBe(false)
   expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc-T-1-2', description: 'A' }])).toBe(false)
@@ -969,8 +972,8 @@ test('the waiting question and the failure note for files outside the list', asy
 
 test('a backlog task never starts until it is moved to todo', async () => {
   let b = emptyBoard()
-  const [b1, idea] = addTask(b, { title: 'Idea: requests and triage', backlog: true }, T)
-  const [b2, later] = addTask(b1, { title: 'After the idea', after: [idea.id] }, T)
+  const [b1, idea] = addTask(b, { origin: W, title: 'Idea: requests and triage', backlog: true }, T)
+  const [b2, later] = addTask(b1, { origin: W, title: 'After the idea', after: [idea.id] }, T)
   b = b2
   expect(idea.status).toBe('backlog')
   expect(ready(b).map(t => t.id)).toEqual([])
@@ -990,9 +993,9 @@ test('a backlog task never starts until it is moved to todo', async () => {
 
 test('stash: a todo, paused or failed task goes to the backlog with a history line', async () => {
   let b = emptyBoard()
-  const [b1, a] = addTask(b, { title: 'A' }, T)
-  const [b2, c] = addTask(b1, { title: 'C' }, T)
-  const [b3, d] = addTask(b2, { title: 'D' }, T)
+  const [b1, a] = addTask(b, { origin: W, title: 'A' }, T)
+  const [b2, c] = addTask(b1, { origin: W, title: 'C' }, T)
+  const [b3, d] = addTask(b2, { origin: W, title: 'D' }, T)
   b = patchTask(patchTask(b3, c.id, { status: 'paused' }, T), d.id, { status: 'failed' }, T)
   b = stashTask(b, a.id, T, 'not clear yet')
   const x = b.tasks.find(t => t.id === a.id)!
@@ -1008,9 +1011,9 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
 
 test('the board text lists backlog first, then open tasks, then done ones; the status line stays quiet', async () => {
   let b = emptyBoard()
-  const [b1, done] = addTask(b, { title: 'Finished' }, '2026-11-09T03:00:00.000Z')
-  const [b2, idea] = addTask(b1, { title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
-  const [b3, open] = addTask(b2, { title: 'Open work' }, '2026-11-09T00:30:00.000Z')
+  const [b1, done] = addTask(b, { origin: W, title: 'Finished' }, '2026-11-09T03:00:00.000Z')
+  const [b2, idea] = addTask(b1, { origin: W, title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
+  const [b3, open] = addTask(b2, { origin: W, title: 'Open work' }, '2026-11-09T00:30:00.000Z')
   b = patchTask(b3, done.id, { status: 'done' }, '2026-11-09T03:00:00.000Z')
   for (const text of [boardText(b), boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0)]) {
     const lines = text.split('\n')
@@ -1034,7 +1037,7 @@ test('old boards without backlog still parse', async () => {
   const b = parseBoard(JSON.stringify(old))
   expect(b.tasks.map(t => t.status)).toEqual(['todo', 'done'])
   expect(ready(b).map(t => t.id)).toEqual(['T-1'])
-  const [b2, t] = addTask(b, { title: 'C', backlog: true }, T)
+  const [b2, t] = addTask(b, { origin: W, title: 'C', backlog: true }, T)
   expect(parseBoard(JSON.stringify(b2)).tasks.find(x => x.id === t.id)!.status).toBe('backlog')
 })
 
@@ -1188,7 +1191,7 @@ test('an unknown role is refused with the list of roles; a missing role means ge
   const all = mergeRoles([parseRole('general', '---\ndescription: plain\n---\n')!, parseRole('docs', '---\ndescription: d\n---\nx')!], [])
   expect(() => checkRole(all, 'design')).toThrow('unknown role "design"; the roles are: general, docs')
   expect(checkRole(all, 'DOCS')).toBe('docs')
-  const [b, t] = addTask(emptyBoard(), { title: 'x' }, T)
+  const [b, t] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   expect(roleOf(t)).toBe('general')
   expect(findRole(all, t.role)?.name).toBe('general')
   expect(tryLabel({ ...t, attempts: 2 })).toBe('try 2')
@@ -1230,9 +1233,9 @@ test('the role mark: the role name, nothing for general; the open task\'s role l
   expect(roleChoices(all)).toEqual(['general', 'tests'])
   expect(roleChoices([])).toEqual(['general'])
   // the text board keeps the short mark
-  const [b] = addTask(emptyBoard(), { title: 'Cover the parser errors', role: 'tests' }, T)
+  const [b] = addTask(emptyBoard(), { origin: W, title: 'Cover the parser errors', role: 'tests' }, T)
   expect(boardText(b)).toContain('Cover the parser errors [tests]')
-  const [b2] = addTask(emptyBoard(), { title: 'Plain', role: 'general' }, T)
+  const [b2] = addTask(emptyBoard(), { origin: W, title: 'Plain', role: 'general' }, T)
   expect(boardText(b2)).not.toContain('[general]')
 })
 
@@ -1324,8 +1327,8 @@ test('normId: a bare number, with spaces or leading zeros, becomes T-<n>', () =>
 
 test('addTask: after ["3"] keeps the dependency on T-3; unknown ids are still dropped', () => {
   let b = emptyBoard()
-  for (const title of ['a', 'b', 'c']) b = addTask(b, { title }, '2026-11-12T00:00:00Z', '.symcc')[0]
-  const [, t] = addTask(b, { title: 'd', after: ['3', ' 001 ', '99', 'nope'] }, '2026-11-12T00:00:00Z', '.symcc')
+  for (const title of ['a', 'b', 'c']) b = addTask(b, { origin: W, title }, '2026-11-12T00:00:00Z', '.symcc')[0]
+  const [, t] = addTask(b, { origin: W, title: 'd', after: ['3', ' 001 ', '99', 'nope'] }, '2026-11-12T00:00:00Z', '.symcc')
   expect(t.after).toEqual(['T-3', 'T-1'])
 })
 
@@ -1419,4 +1422,91 @@ test('runMs: bad times or an end before the start give 0', () => {
   expect(runMs({ started: '2026-11-09T00:00:00.000Z', ended: 'bad' })).toBe(0)
   expect(runMs({ started: '2026-11-09T00:00:10.000Z', ended: '2026-11-09T00:00:00.000Z' })).toBe(0)
   expect(runMs({ started: '2026-11-09T00:00:00.000Z' }, NaN)).toBe(0)
+})
+
+test('a new task keeps where it came from, and its first history line says who and why', () => {
+  const [b1, a] = addTask(emptyBoard(), { title: 'Search', origin: { by: 'owner', request: 'add a search command that finds tasks by word', why: 'the owner asked for search' } }, T)
+  expect(a.origin).toEqual({ by: 'owner', request: 'add a search command that finds tasks by word', why: 'the owner asked for search', at: T })
+  expect(a.history[0]).toBe('created by the owner because the owner asked for search')
+  const [b2, s] = addTask(b1, { title: 'Fix crash', origin: { by: 'scout', scout: 'bugs', why: 'the bugs scout found a crash', evidence: 'scout bugs report at 2026-11-09 00:00 UTC' } }, T)
+  expect(s.origin).toMatchObject({ by: 'scout', scout: 'bugs', evidence: 'scout bugs report at 2026-11-09 00:00 UTC' })
+  expect(s.history[0]).toBe('created by scout bugs because the bugs scout found a crash')
+  const [b3, w] = addTask(b2, { title: 'Half of search', origin: { by: 'lead', task: 't1', how: 'split', why: 'search was too big' } }, T)
+  expect(w.origin).toMatchObject({ by: 'lead', task: 'T-1', how: 'split' })
+  // it survives a save and load, and a change keeps it even when a patch tries to replace it
+  const back = parseBoard(JSON.stringify(b3))
+  expect(back.tasks[0]!.origin).toEqual(a.origin)
+  const changed = patchTask(back, a.id, { title: 'Search v2', origin: { by: 'lead', why: 'other', at: T } }, '2026-11-10T00:00:00.000Z')
+  expect(changed.tasks[0]!.origin).toEqual(a.origin)
+  expect(changed.tasks[0]!.history[0]).toBe('created by the owner because the owner asked for search')
+})
+
+test('a task without a why, or with a wrong origin, is refused with a clear error', () => {
+  const b = emptyBoard()
+  expect(() => addTask(b, { title: 'x' }, T)).toThrow('needs a "why"')
+  expect(() => addTask(b, { title: 'x', origin: { why: '   ' } }, T)).toThrow('needs a "why"')
+  expect(() => addTask(b, { title: 'x', origin: { by: 'boss', why: 'y' } }, T)).toThrow('origin_by must be one of owner, scout, worker, lead')
+  expect(() => addTask(b, { title: 'x', origin: { by: 'scout', why: 'y' } }, T)).toThrow('name the scout')
+  expect(() => addTask(b, { title: 'x', origin: { by: 'worker', why: 'y' } }, T)).toThrow('from_task')
+  expect(() => addTask(b, { title: 'x', origin: { by: 'lead', task: 'T-9', why: 'y' } }, T)).toThrow('T-9 is not on the board')
+  expect(() => addTask(b, { title: 'x', origin: { how: 'split', why: 'y' } }, T)).toThrow('needs the task it comes from')
+  expect(b.tasks.length).toBe(0)
+  // without origin_by it is worked out from what was given
+  expect(makeOrigin({ why: 'y' }, T).by).toBe('lead')
+  expect(makeOrigin({ why: 'y', request: 'please' }, T).by).toBe('owner')
+  expect(makeOrigin({ why: 'y', scout: 'docs' }, T).by).toBe('scout')
+})
+
+test('old boards whose tasks have no origin still load, and show "unknown"', () => {
+  const old = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
+    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
+  ] }
+  const b = parseBoard(JSON.stringify(old))
+  expect(b.tasks[0]!.origin).toBeUndefined()
+  expect(fromText(b.tasks[0]!)).toBe('from: unknown')
+  expect(originWho(b.tasks[0]!)).toBe('unknown')
+  expect(fromText({ origin: { by: 'nobody' } })).toBe('from: unknown')
+  expect(boardText(b)).toContain('from: unknown')
+  // a change on an old task does not invent an origin
+  expect(patchTask(b, 'T-1', { title: 'B' }, T).tasks[0]!.origin).toBeUndefined()
+  const [b2, t] = addTask(b, { title: 'C', after: ['T-1'], origin: { from: 'x', why: 'follow up', task: 'T-1', how: 'follow-up' } as never }, T)
+  expect(t.origin?.task).toBe('T-1')
+  expect(b2.tasks.length).toBe(2)
+})
+
+test('the "from:" text is short: the owner\'s words, the scout, or the task it came from', () => {
+  const o = (x: Record<string, unknown>) => ({ origin: makeOrigin(x, T) })
+  expect(fromText(o({ by: 'owner', request: 'add a search command', why: 'w' }))).toBe('from: owner — “add a search command”')
+  expect(fromText(o({ by: 'owner', request: 'add a search command that also looks in the details of every task and the history', why: 'w' }))).toBe('from: owner — “add a search command that also looks in the details of ever…”')
+  expect(fromText(o({ by: 'owner', why: 'w' }))).toBe('from: owner')
+  expect(fromText(o({ by: 'scout', scout: 'bugs', why: 'w' }))).toBe('from: scout bugs')
+  const b = addTask(emptyBoard(), { title: 'big', origin: W }, T)[0]
+  const t = (x: Record<string, unknown>) => ({ origin: makeOrigin(x, T, b) })
+  expect(fromText(t({ by: 'lead', task: 'T-1', how: 'split', why: 'w' }))).toBe('from: T-1 (split)')
+  expect(fromText(t({ by: 'worker', task: 'T-1', why: 'w' }))).toBe('from: T-1 (worker report)')
+  expect(fromText(t({ by: 'worker', task: 'T-1', how: 'follow-up', why: 'w' }))).toBe('from: T-1 (follow-up)')
+  expect(fromText(t({ by: 'lead', task: 'T-1', why: 'w' }))).toBe('from: lead, about T-1')
+  expect(fromText(t({ by: 'lead', why: 'w' }))).toBe('from: lead')
+  expect(createdLine(makeOrigin({ by: 'worker', task: 'T-1', why: 'tests were missing' }, T, b))).toBe('created by the worker of T-1 because tests were missing')
+  const [b2] = addTask(b, { title: 'small', origin: { by: 'scout', scout: 'bugs', why: 'w' } }, T)
+  const lines = boardText(b2).split('\n')
+  expect(lines[lines.findIndex(l => l.startsWith('T-2 ')) + 1]!.trim()).toBe('from: scout bugs')
+})
+
+test('the plugin links a new task to what it saw itself: the owner prompt or the report', () => {
+  const h = emptyHeard()
+  expect(evidenceText({ by: 'owner', request: 'x' }, h)).toBe('no owner prompt was seen by the plugin in this session')
+  expect(evidenceText({ by: 'scout', scout: 'bugs' }, h)).toBe('no report from scout bugs reached the lead in this session')
+  expect(evidenceText({ by: 'worker', task: 'T-3' }, h)).toBe('no worker report from T-3 reached the lead in this session')
+  expect(evidenceText({ by: 'lead' }, h)).toBe('nothing from the owner, a scout or a worker was seen in this session')
+  h.owner = { text: 'Please  add a search\ncommand, thanks', at: '2026-11-12T14:05:09.000Z' }
+  h.scouts.bugs = '2026-11-12T14:00:00.000Z'
+  h.workers['T-3'] = '2026-11-12T13:00:00.000Z'
+  h.last = { what: 'scout bugs report', at: '2026-11-12T14:00:00.000Z' }
+  expect(evidenceText({ by: 'owner', request: 'add a search command' }, h)).toBe('last owner prompt at 2026-11-12 14:05 UTC: “Please add a search command, thanks”')
+  expect(evidenceText({ by: 'owner', request: 'make it blue' }, h)).toContain('(the quoted request is not word for word in it)')
+  expect(evidenceText({ by: 'scout', scout: 'bugs' }, h)).toBe('scout bugs report at 2026-11-12 14:00 UTC')
+  expect(evidenceText({ by: 'worker', task: 't3' }, h)).toBe('T-3 worker report at 2026-11-12 13:00 UTC')
+  expect(evidenceText({ by: 'lead' }, h)).toBe('last owner prompt at 2026-11-12 14:05 UTC: “Please add a search command, thanks”; last report: scout bugs report at 2026-11-12 14:00 UTC')
+  expect(utcTime('soon')).toBe('soon')
 })

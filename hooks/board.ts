@@ -1,6 +1,6 @@
 // The task board: plain data, kept in <project>/.<name>/board.json (see name.ts). Every function
 // here is pure (takes a board, returns a new one) so it can be tested without Claude.
-import type { SymccMode, SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
+import type { SymccMode, SymccOrigin, SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
 import { DEFAULT_NAME, ICON, ICON_ART, dataDir, namesFor } from './name'
 
 export type Board = {
@@ -142,9 +142,129 @@ const cleanRole = (r: unknown): string => {
   return s.toLowerCase() === 'general' ? '' : s
 }
 
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
+/** Who can start a task: the owner, a scout's report, a worker's report, or the lead's own idea. */
+export const ORIGIN_BY = ['owner', 'scout', 'worker', 'lead'] as const
+export const ORIGIN_HOW = ['split', 'follow-up'] as const
+
+/** What the caller says about where a task came from (as the add tool gets it; nothing checked yet). */
+export type OriginInput = { by?: unknown; scout?: unknown; task?: unknown; how?: unknown; request?: unknown; why?: unknown; evidence?: unknown }
+
+/**
+ * Checks and cleans where a task came from. Throws a clear error when `why` is empty, `by` is not
+ * one of ORIGIN_BY, a scout task names no scout, a worker task names no task, or the named task is
+ * not on board `b`. Without `by` it is worked out: a scout named → scout, a task → worker,
+ * the owner's words → owner, else lead.
+ */
+export function makeOrigin(o: OriginInput | undefined, now: string, b?: Board): SymccOrigin {
+  const why = clean(o?.why, 300).replace(/\s+/g, ' ')
+  if (!why) throw new Error('a task needs a "why": one line saying why this task exists')
+  const scout = clean(o?.scout, 64)
+  const task = o?.task === undefined || o?.task === null || String(o.task).trim() === '' ? '' : normId(clean(o.task, 32))
+  const request = clean(o?.request, 1000)
+  const rawBy = clean(o?.by, 16).toLowerCase()
+  if (rawBy && !(ORIGIN_BY as readonly string[]).includes(rawBy)) throw new Error(`origin_by must be one of ${ORIGIN_BY.join(', ')} (got "${rawBy}")`)
+  const by = (rawBy || (scout ? 'scout' : task ? 'worker' : request ? 'owner' : 'lead')) as SymccOrigin['by']
+  if (by === 'scout' && !scout) throw new Error('origin_by is scout: name the scout whose report led to this task (scout)')
+  if (by === 'worker' && !task) throw new Error('origin_by is worker: name the task whose worker report led to this task (from_task)')
+  if (task && b && !find(b, task)) throw new Error(`from_task ${task} is not on the board`)
+  const rawHow = clean(o?.how, 16).toLowerCase()
+  if (rawHow && !(ORIGIN_HOW as readonly string[]).includes(rawHow)) throw new Error(`how must be ${ORIGIN_HOW.join(' or ')} (got "${rawHow}")`)
+  if (rawHow && !task) throw new Error(`a ${rawHow} needs the task it comes from (from_task)`)
+  const evidence = clean(o?.evidence, 600)
+  return {
+    by,
+    ...(scout ? { scout } : {}),
+    ...(task ? { task } : {}),
+    ...(rawHow ? { how: rawHow as SymccOrigin['how'] } : {}),
+    ...(request ? { request } : {}),
+    why,
+    ...(evidence ? { evidence } : {}),
+    at: now,
+  }
+}
+
+/** A task's origin if it has a usable one (old boards have none; a hand-edited one may be broken). */
+const originOf = (t: { origin?: unknown }): SymccOrigin | undefined => {
+  const o = t.origin as SymccOrigin | undefined
+  return o && typeof o === 'object' && (ORIGIN_BY as readonly string[]).includes(o.by) ? o : undefined
+}
+
+/** Who made a task, in words: "the owner", "scout bugs", "the worker of T-3", "the lead"; "unknown" without an origin. */
+export function originWho(t: { origin?: unknown }): string {
+  const o = originOf(t)
+  if (!o) return 'unknown'
+  if (o.by === 'owner') return 'the owner'
+  if (o.by === 'scout') return `scout ${o.scout || '?'}`
+  if (o.by === 'worker') return `the worker of ${o.task || '?'}`
+  return 'the lead'
+}
+
+/** The first history line of a new task. */
+export const createdLine = (o: SymccOrigin) => `created by ${originWho({ origin: o })} because ${o.why}`
+
+/**
+ * The short "from:" text for the board and the task detail, e.g. 'from: owner — “add a search command…”',
+ * 'from: scout bugs', 'from: T-12 (split)'; 'from: unknown' for a task made before origins were kept.
+ */
+export function fromText(t: { origin?: unknown }, quote = 60): string {
+  const o = originOf(t)
+  if (!o) return 'from: unknown'
+  const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
+  const taskPart = o.task ? `${o.task}${how ? ` (${how})` : ''}` : ''
+  if (o.by === 'owner') {
+    const r = (o.request ?? '').replace(/\s+/g, ' ').trim()
+    const q = r ? ` — “${r.length > quote ? `${r.slice(0, quote - 1).trimEnd()}…` : r}”` : ''
+    return `from: owner${q}${taskPart ? `, ${taskPart}` : ''}`
+  }
+  if (o.by === 'scout') return `from: scout ${o.scout || '?'}${taskPart ? `, ${taskPart}` : ''}`
+  if (o.by === 'lead' && o.task && !o.how) return `from: lead, about ${o.task}`
+  if (taskPart) return `from: ${taskPart}`
+  return 'from: lead'
+}
+
+/**
+ * What the plugin itself saw reach the lead in this session (kept in memory, not on the board):
+ * the owner's last typed prompt, and when each scout's and each task's worker report was delivered.
+ */
+export type Heard = { owner?: { text: string; at: string }; scouts: Record<string, string>; workers: Record<string, string>; last?: { what: string; at: string } }
+
+export const emptyHeard = (): Heard => ({ scouts: {}, workers: {} })
+
+/** An ISO time as "2026-11-12 14:05 UTC" (the text itself when it is not a time). */
+export const utcTime = (iso: string) => (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(iso) ? `${iso.slice(0, 16).replace('T', ' ')} UTC` : iso)
+
+const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
+const cutQuote = (s: string, n: number) => (squash(s).length > n ? `${squash(s).slice(0, n - 1).trimEnd()}…` : squash(s))
+
+/**
+ * The plugin's own short link to the evidence for a new task, next to what the lead said:
+ * the last owner prompt (and whether the lead's quote is really in it), "scout <name> report at <time>",
+ * "<task> worker report at <time>", or a plain note that nothing like it was seen in this session.
+ */
+export function evidenceText(o: Pick<SymccOrigin, 'by' | 'scout' | 'task' | 'request'>, h: Heard): string {
+  const ownerLine = h.owner ? `last owner prompt at ${utcTime(h.owner.at)}: “${cutQuote(h.owner.text, 200)}”` : ''
+  if (o.by === 'owner') {
+    if (!h.owner) return 'no owner prompt was seen by the plugin in this session'
+    const off = o.request && !squash(h.owner.text).toLowerCase().includes(squash(o.request).toLowerCase())
+    return `${ownerLine}${off ? ' (the quoted request is not word for word in it)' : ''}`
+  }
+  if (o.by === 'scout') {
+    const at = o.scout ? h.scouts[o.scout] : undefined
+    return at ? `scout ${o.scout} report at ${utcTime(at)}` : `no report from scout ${o.scout ?? '?'} reached the lead in this session`
+  }
+  if (o.by === 'worker') {
+    const id = o.task ? normId(o.task) : ''
+    const at = id ? h.workers[id] : undefined
+    return at ? `${id} worker report at ${utcTime(at)}` : `no worker report from ${id || '?'} reached the lead in this session`
+  }
+  const parts = [ownerLine, h.last ? `last report: ${h.last.what} at ${utcTime(h.last.at)}` : ''].filter(Boolean)
+  return parts.length ? parts.join('; ') : 'nothing from the owner, a scout or a worker was seen in this session'
+}
+
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string; origin?: OriginInput }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
+  const origin = makeOrigin(f.origin, now, b)
   const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => find(b, x))
   const t: SymccTask = {
     id: `T-${b.next_id}`,
@@ -157,7 +277,8 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     order: typeof f.order === 'number' ? f.order : Math.max(0, ...b.tasks.map(x => x.order)) + 1,
     after,
     attempts: 0,
-    history: [],
+    history: [createdLine(origin)],
+    origin,
     branch: null,
     created_at: now,
     updated_at: now,
@@ -174,6 +295,11 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   // Leaving "doing" ends the worker's try, however it ended (finished, stopped, over time, lost).
   if (t.status === 'doing' && next.status !== 'doing' && next.runs?.length && !next.runs[next.runs.length - 1]!.ended) next.runs = endRun(next.runs, now)
   if (next.status !== 'doing' || !next.session) delete next.session
+  // Where a task came from never changes once it is made.
+  if ('origin' in patch) {
+    if (t.origin) next.origin = t.origin
+    else delete next.origin
+  }
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, 8000)
   if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
@@ -1228,7 +1354,7 @@ export const listRule = (width: number) => '┄'.repeat(Math.max(1, Math.floor(w
 /** A banner line as plain text (for tests and plain output). */
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
 
-/** One line per task for the model and for /<name>, then the total time (and cost) of all tries.
+/** One line per task for the model and for /<name> (with a short "from:" line under it, see fromText), then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart.
  *  The backlog comes first, then open tasks, then today's others; finished tasks of older days are one line per
  *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
@@ -1241,8 +1367,8 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
     const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
     const role = roleMark(t) ? ` [${roleMark(t)}]` : ''
-    return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`
-  })
+    return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
+  }).flat()
   const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
   const days = s.days.map(g => groupLabel(g))

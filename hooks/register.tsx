@@ -20,6 +20,11 @@ import {
   scoutAgentName,
   scoutDescription,
   addTask,
+  fromText,
+  evidenceText,
+  makeOrigin,
+  emptyHeard,
+  type Heard,
   boardText,
   boardBrand,
   statusLine,
@@ -258,6 +263,13 @@ let diffOpen: { task: string; file: string } | null = null
 let rejecting: { task: string; reason: string } | null = null
 /** the role pick list on an open task in the board panel: the task and the role names; null when it isn't shown */
 let rolePick: { task: string; options: string[] } | null = null
+
+/**
+ * What reached the lead in this session, for a new task's evidence (see evidenceText): the owner's
+ * last typed prompt (from prompt.submit) and when each scout's and worker's report was sent to the lead.
+ * Kept in memory only: a new session starts empty.
+ */
+const heard: Heard = emptyHeard()
 
 // ---------------- the board on disk ----------------
 
@@ -807,6 +819,9 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'f
 
 // ---------------- workers ----------------
 
+/** A task's history without the "created by ..." line: what earlier tries did. */
+const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith('created by '))
+
 const WORKER_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${N.name} worker. Do exactly this one task, then stop.
 
 Work ONLY inside this folder, your own copy of the project on branch ${t.branch ?? N.branch(t.id)}:
@@ -822,7 +837,7 @@ If you find you must change a file outside this list, do NOT change it. Stop at 
 (You don't need to finish anything else first; what you already changed in your folder is kept for the next try.)` : 'whatever the task needs.'}
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${N.name} commits, tests and merges your work.
-${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${t.history.length ? `\nEarlier tries:\n${t.history.slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
+${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
 
 async function pump($: $) {
@@ -928,6 +943,9 @@ async function workerFinished($: $, agentId: string, answer: string, aborted: bo
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
+  const at = now()
+  heard.workers[w.task] = at
+  heard.last = { what: `${w.task} worker report`, at }
   finishing.add(w.task)
   try {
     // The try ends now (checking and merging is not counted). The turn result gives tokens but
@@ -1285,7 +1303,12 @@ async function scoutFinished($: $, agentId: string, answer: string) {
   }
   await publish($, await load($))
   const msg = scoutLeadMessage(name, answer)
-  if (msg) tellLead($, msg)
+  if (msg) {
+    const at = now()
+    heard.scouts[name] = at
+    heard.last = { what: `scout ${name} report`, at }
+    tellLead($, msg)
+  }
 }
 
 async function scheduleScouts($: $) {
@@ -1418,6 +1441,9 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { m
 function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
+  L.push(fromText(t, 120))
+  if (t.origin?.why) L.push(`why: ${t.origin.why}`)
+  if (t.origin?.evidence) L.push(`seen by ${N.name}: ${t.origin.evidence}`)
   if (t.note) L.push(`now: ${t.note}`)
   if (t.status === 'waiting' && t.question) L.push('', `ASKS: ${t.question}`)
   L.push('', 'What to do:', ...(t.details.trim() ? t.details.split('\n').map(l => (l.trim() ? `  ${l}` : '')) : ['  (no details)']))
@@ -1588,6 +1614,7 @@ This section is for the main conversation only. If you are a subagent (a ${N.nam
 
 The project has a shared task board (${N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
 - Turn what the owner wants into tasks with ${N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes.
+- Every ${N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name; for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${N.name}] Update" message: decide what's next (retry with ${N.name} change / ${N.name} retry, split, ${N.name} ask the owner, or ${N.name} drop).
@@ -1608,7 +1635,7 @@ const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list); general when unsure.' } } },
+    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list); general when unsure.' }, why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: 'string', description: "For a scout finding: the scout's name." }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
   },
   {
     name: 'change',
@@ -1652,7 +1679,13 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       return boardText(await load($), Date.now(), shortHome(root, home), N.name)
     case 'add': {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
-      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true, role }, now(), N.dir))
+      if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')
+      const said = { by: a.origin_by, scout: a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why }
+      const t = await change($, b => {
+        // check what the lead said first, then add the plugin's own evidence next to it
+        const o = makeOrigin(said, now(), b)
+        return addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true, role, origin: { ...said, evidence: evidenceText(o, heard) } }, now(), N.dir)
+      })
       void pump($)
       return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}`
     }
@@ -1913,6 +1946,17 @@ export const register: Register = on => {
     useName($)
     const r = await next(e)
     return { sections: [...r.sections, { id: `${N.name}:lead`, text: leadGuide(), scope: 'session' as const }] }
+  })
+
+  // Keep the owner's last typed prompt (at the terminal or from the phone/web bridge), so a task
+  // added after it can point back to the request. Slash commands, hidden prompts and the plugin's
+  // own "[name] Update" messages are not the owner's request and are left out.
+  on('prompt.submit', async ($, e, next) => {
+    useName($)
+    const r = await next(e)
+    const kind = e.origin?.kind
+    if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string' && r.text.trim()) heard.owner = { text: r.text.trim().slice(0, 2000), at: now() }
+    return r
   })
 
   // Workers and scouts only reach the agents through the plugin itself.
@@ -2634,6 +2678,10 @@ export const register: Register = on => {
               {t.title}
             </Text>
             <Text color={C('subtle')}>{roleLine(t, roles)}</Text>
+            <Text color={C('subtle')}>
+              {fromText(t)}
+              {t.origin?.why ? ` · why: ${t.origin.why}` : ''}
+            </Text>
             {t.note && (
               <Text>
                 <Text color={C(color[t.status]!)}>now: </Text>
