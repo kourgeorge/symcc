@@ -4,10 +4,31 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.3.0 — 2026-11-13
+
 ### Traceability
 - Every task records who made it, why, and the owner's own words.
 - `symcc add` needs a why.
 - The board shows a "from:" line for each task.
+- Every commit of a task is saved, and labelled with the task, its origin and its why.
+- A broken task origin in `board.json` no longer breaks the board.
+
+### Board panel
+- The board list is one list: active work first, with Done, Dropped and Backlog folded. A status strip and richer task rows show more at a glance.
+- The task page has clearer details and better colors.
+- Key options are never hidden on a narrow panel.
+
+### Scouts
+- Stronger built-in rules, so scouts report real, checked issues.
+- Each scout's last run time and last report are kept across restarts.
+- A scout can be paused and resumed. The scouts list shows a state icon for each.
+- `every_minutes: 0` means the scout runs only on demand.
+- New example scout: secrets that could end up in git.
+
+### Control
+- `/symcc-off` and `/symcc-on` turn symcc off and on. Claude goes back to normal while it is off.
+- A worker is stopped when another task's change to symcc itself is merged.
+- Plugin messages to the lead are clearer: "Board update", with an instruction that is not in the owner's voice.
 
 ### Workers and roles
 - The built-in roles are now general, docs, refactor, security and tester (backend and frontend are gone; tests is now tester). Old tasks keep their stored role; when started, tests runs as tester and backend/frontend as general, with a history line.
@@ -16,6 +37,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - The code is split into modules (`hooks/core/`, `hooks/plugin/`, `hooks/plugin/ui/`). No behaviour change.
 
 ### Docs
+- Wording: you are the owner (you direct), Claude is the lead.
 - Guide: a code map and a note on finished workers in Claude Code's agent list.
 - README and guide: new text on traceability and observability.
 - README: a presentation video, with a GIF preview.
