@@ -1170,3 +1170,23 @@ test('an on-demand scout\'s page says "on demand" with no "next in", and a bad v
   expect((await ui.find({ type: 'Text', text: new RegExp(`^${esc(warning)}$`) }))?.props.color).toBe('warning')
   await ui.unmount()
 })
+
+test('a broken board.json is never saved over: a change is refused, a copy is kept, and the owner is told', async ($, on) => {
+  const text = JSON.stringify({ version: 1, next_id: 2, mode: 'review', tasks: [task('T-1', 'todo', 'Write it up')] }).replace(/]}$/, ',]}')
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
+  const written = fakeFiles(on, { ...ROLE_FILES, '/board.json': text, '/board.lock': null })
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'role' })
+  await ui.press({ key: 'role:docs' })
+  // nothing was written to board.json or its temp file
+  expect(Object.keys(written).some(p => /board\.json(\.tmp)?$/.test(p))).toBe(false)
+  // one copy of the file as it was, and the owner is told why
+  const copies = Object.entries(written).filter(([p]) => /board\.json\.broken-/.test(p))
+  expect(copies.length).toBe(1)
+  expect(copies[0]![1]).toBe(text)
+  expect(toasts.some(t => /board\.json can't be read/.test(t))).toBe(true)
+  expect(toasts.some(t => /T-1 role: docs/.test(t))).toBe(false)
+  await ui.unmount()
+})

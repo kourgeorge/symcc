@@ -86,22 +86,98 @@ export function emptyBoard(target_branch = 'main'): Board {
   return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, enabled: true, tasks: [] }
 }
 
-export function parseBoard(text: string | null): Board {
-  if (!text) return emptyBoard()
-  try {
-    const raw = JSON.parse(text) as Record<string, unknown>
-    // only the keys a board has: anything else in the file is dropped
-    const fresh = emptyBoard()
-    const b = Object.fromEntries(Object.entries(raw ?? {}).filter(([k]) => k in fresh)) as Partial<Board>
-    const tasks = (Array.isArray(b.tasks) ? b.tasks : []).map(t => {
-      const { session, ...rest } = cleanCommitFields(t)
-      return typeof session === 'string' && session && t.status === 'doing' ? { ...rest, session } : rest
-    })
-    return { ...emptyBoard(), ...b, mode: modeOf(b), tasks }
-  } catch {
-    return emptyBoard()
-  }
+/** What reading board.json found: the board, and what was wrong with the file (if anything). */
+export type BoardRead = {
+  board: Board
+  /** set when the file can't be read at all (not JSON, or not a board): the reason. Never save over such a file. */
+  broken?: string
+  /** how many task entries were skipped because they were not a task (null, wrong shape, a repeated id) */
+  skipped: number
+  /** the settings whose value was bad and were set to their default */
+  fixed: string[]
 }
+
+const STATUSES: SymccStatus[] = ['backlog', 'todo', 'doing', 'paused', 'waiting', 'review', 'failed', 'done', 'dropped']
+
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
+
+/** Each setting with the test its value must pass; a value that fails is replaced by the default. */
+const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id'>]: (v: unknown) => boolean } = {
+  mode: v => isMode(v),
+  test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
+  target_branch: v => typeof v === 'string' && v.trim() !== '',
+  max_parallel: v => isNum(v) && v >= 0,
+  max_minutes: v => isNum(v) && v >= 0,
+  auto_retries: v => isNum(v) && v >= 0,
+  open_on_start: v => typeof v === 'boolean',
+  voice: v => typeof v === 'boolean',
+  enabled: v => typeof v === 'boolean',
+}
+
+/** A task entry from the file made usable, or null when it is not a task (it is then skipped). */
+function cleanTask(t: unknown): BoardTask | null {
+  if (!isObj(t) || typeof t.id !== 'string' || !t.id.trim() || !STATUSES.includes(t.status as SymccStatus)) return null
+  const x = { ...t } as Record<string, unknown>
+  for (const k of ['title', 'details', 'note']) if (typeof x[k] !== 'string') x[k] = ''
+  for (const k of ['files', 'after', 'history']) if (!Array.isArray(x[k])) x[k] = []
+  if (!isNum(x.order)) x.order = 0
+  if (!isNum(x.attempts)) x.attempts = 0
+  if (x.question !== null && typeof x.question !== 'string') x.question = null
+  if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
+  const { session, ...rest } = cleanCommitFields(x) as BoardTask
+  return (typeof session === 'string' && session && x.status === 'doing' ? { ...rest, session } : rest) as BoardTask
+}
+
+/**
+ * Reads board.json's text. No text (no file) is a new, empty board. Text that is not JSON, or
+ * not a board object, is `broken`: the board returned then is only a stand-in and must never be
+ * saved over the file. Inside a readable file it is forgiving: a bad task entry is skipped (and
+ * counted), a bad setting gets its default (and is named in `fixed`), every good value is kept.
+ */
+export function readBoard(text: string | null): BoardRead {
+  if (text === null || text === undefined || !String(text).trim()) return { board: emptyBoard(), skipped: 0, fixed: [] }
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch (e) {
+    return { board: emptyBoard(), broken: `not valid JSON (${String((e as Error)?.message ?? e).slice(0, 120)})`, skipped: 0, fixed: [] }
+  }
+  if (!isObj(raw)) return { board: emptyBoard(), broken: 'it is not a board (the file holds no JSON object)', skipped: 0, fixed: [] }
+  if ('tasks' in raw && !Array.isArray(raw.tasks)) return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [] }
+  const board = emptyBoard()
+  const fixed: string[] = []
+  for (const k of Object.keys(SETTING_OK) as (keyof typeof SETTING_OK)[]) {
+    if (!(k in raw)) continue // an old board without the setting: the default, nothing to report
+    if (SETTING_OK[k](raw[k])) (board as Record<string, unknown>)[k] = raw[k]
+    else fixed.push(k)
+  }
+  let skipped = 0
+  const seen = new Set<string>()
+  for (const t of (raw.tasks as unknown[] | undefined) ?? []) {
+    const c = cleanTask(t)
+    if (!c || seen.has(c.id)) {
+      skipped++
+      continue
+    }
+    seen.add(c.id)
+    board.tasks.push(c)
+  }
+  // next_id never goes back below a task already on the board (a new task must not reuse an id)
+  const top = Math.max(0, ...board.tasks.map(t => Number(/^T-(\d+)$/.exec(t.id)?.[1] ?? 0)))
+  if ('next_id' in raw && !(isNum(raw.next_id) && Number.isInteger(raw.next_id) && raw.next_id >= 1)) fixed.push('next_id')
+  board.next_id = Math.max(isNum(raw.next_id) && Number.isInteger(raw.next_id) && raw.next_id >= 1 ? raw.next_id : 1, top + 1)
+  return { board, skipped, fixed }
+}
+
+/** The board in board.json's text (see readBoard); a file that can't be read gives an empty stand-in. */
+export function parseBoard(text: string | null): Board {
+  return readBoard(text).board
+}
+
+/** What the owner and the lead are told about a board.json that can't be read. */
+export const brokenBoardText = (file: string, reason: string, copy?: string) =>
+  `${file} can't be read: ${reason}. Nothing is saved, started or merged until it is fixed; fix it${copy ? ` or restore the copy ${copy}` : ''}.`
 
 /** "t3", "T-003", " 3 " and "003" all become "T-3"; anything else is only trimmed. */
 export const normId = (id: string) => {
