@@ -2253,19 +2253,17 @@ export function detailRowLines(row: DetailRow, width: number): Seg[][] {
   return wrapSegs(row.segs, Math.max(12, width - pad)).map((l, i) => [{ text: (i === 0 && row.label ? `${row.label}:` : '').padEnd(pad), color: 'text', bold: true }, ...l])
 }
 
-/** How many lines of a task's "What to do" text the task page shows before it is expanded. */
-export const DETAILS_SHOWN = 3
-/** The key that shows or hides the rest of the "What to do" text on the task page ("d" is taken there by Show changes). */
+/** The key that shows or hides the rows of the "Details" section on the task page ("d" is taken there by Show changes). */
 export const DETAILS_KEY = 'e'
 
 /**
- * The "What to do" text cut to its first DETAILS_SHOWN lines unless `open`, with the hint line
- * under it; text of DETAILS_SHOWN lines or fewer is shown whole with no hint ('').
+ * The one short line the folded "Details" section shows after its heading:
+ * status, role, who it came from and the tries, then how to show the rows.
+ * Open, it is just how to hide them again.
  */
-export function foldDetails(text: string, open: boolean): { text: string; hint: string } {
-  const all = text.trimEnd().split('\n')
-  const more = all.length - DETAILS_SHOWN
-  if (more <= 0) return { text: all.join('\n'), hint: '' }
-  if (open) return { text: all.join('\n'), hint: `press ${DETAILS_KEY} to hide` }
-  return { text: all.slice(0, DETAILS_SHOWN).join('\n'), hint: `… ${more} more ${more === 1 ? 'line' : 'lines'} · press ${DETAILS_KEY} to show all` }
+export function detailsSummary(t: SymccTask, open: boolean): string {
+  if (open) return `press ${DETAILS_KEY} to hide`
+  const o = originOf(t)
+  const from = !o ? 'unknown' : o.by === 'scout' ? `scout ${o.scout || '?'}` : o.by === 'owner' ? 'owner' : o.task && o.by === 'worker' ? o.task : 'lead'
+  return [`${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, roleOf(t), `from ${from}`, `${t.attempts} ${t.attempts === 1 ? 'try' : 'tries'}`, `press ${DETAILS_KEY} to show`].join(' · ')
 }
