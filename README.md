@@ -7,6 +7,10 @@
 </p>
 
 <p align="center">
+  <b>Swarm Harness:</b> Turn a messy swarm of coding agents into an organized team: a lead that plans, workers that build, and you in charge, so the work keeps moving even when you're not pushing it.
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-D97757" alt="Claude Code plugin">
   <a href=".claude-plugin/plugin.json"><img src="https://img.shields.io/github/package-json/v/kourgeorge/symcc?filename=.claude-plugin%2Fplugin.json&color=blue" alt="version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
