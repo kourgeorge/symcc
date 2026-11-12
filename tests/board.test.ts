@@ -1313,8 +1313,27 @@ test('normId: t3, T-003, spaces and lower case all become T-3', () => {
   expect(normId('T-000')).toBe('T-0')
 })
 
-test('normId: a bare number, garbage or empty input is only trimmed, not turned into an id', () => {
-  expect(normId('3')).toBe('3')
+test('normId: a bare number, with spaces or leading zeros, becomes T-<n>', () => {
+  expect(normId('3')).toBe('T-3')
+  expect(normId(' 3 ')).toBe('T-3')
+  expect(normId('003')).toBe('T-3')
+  expect(normId('0')).toBe('T-0')
+  expect(normId('-3')).toBe('-3')
+  expect(normId('3.5')).toBe('3.5')
+})
+
+test('addTask: after ["3"] keeps the dependency on T-3; unknown ids are still dropped', () => {
+  let b = emptyBoard()
+  for (const title of ['a', 'b', 'c']) b = addTask(b, { title }, '2026-11-12T00:00:00Z', '.symcc')[0]
+  const [, t] = addTask(b, { title: 'd', after: ['3', ' 001 ', '99', 'nope'] }, '2026-11-12T00:00:00Z', '.symcc')
+  expect(t.after).toEqual(['T-3', 'T-1'])
+})
+
+test('parseCommand: slash commands still want a T-id, a bare number is not taken', () => {
+  expect(parseCommand('symcc-task', '3')!.kind).toBe('bad')
+})
+
+test('normId: garbage or empty input is only trimmed, not turned into an id', () => {
   expect(normId(' abc ')).toBe('abc')
   expect(normId('T--3')).toBe('T--3')
   expect(normId('T-3a')).toBe('T-3a')

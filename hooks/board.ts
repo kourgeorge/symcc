@@ -116,8 +116,9 @@ export function parseBoard(text: string | null): Board {
   }
 }
 
+/** "t3", "T-003", " 3 " and "003" all become "T-3"; anything else is only trimmed. */
 export const normId = (id: string) => {
-  const m = /^t-?0*(\d+)$/i.exec(String(id ?? '').trim())
+  const m = /^(?:t-?)?0*(\d+)$/i.exec(String(id ?? '').trim())
   return m ? `T-${m[1]}` : String(id ?? '').trim()
 }
 
