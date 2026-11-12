@@ -4,7 +4,7 @@ import type { SymccTask } from '../types'
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -734,8 +734,8 @@ test('the status line keeps the backlog quiet, but says "all done · N in backlo
   expect(statusLine({ tasks: [t('done', 'T-1'), t('backlog', 'T-2'), t('backlog', 'T-3')] }, true)).toBe('⏵ auto · all done · 2 in backlog')
   expect(statusLine({ tasks: [t('backlog', 'T-2')] }, false)).toBe('⏵ auto · all done · 1 in backlog (driven by another session)')
   expect(statusLine({ tasks: [t('todo', 'T-1'), t('backlog', 'T-2')] }, true)).toBe('⏵ auto · 1 to do')
-  expect(backlogLabel(3)).toBe('▸ Backlog · 3')
-  expect(backlogLabel(3, true)).toBe('▾ Backlog · 3')
+  expect(backlogLabel(3)).toBe('▸ Backlog (3)')
+  expect(backlogLabel(3, true)).toBe('▾ Backlog (3)')
 })
 
 test('the status line starts with the board mode: off, review or auto', () => {
@@ -1051,7 +1051,7 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
   expect(() => stashTask(b, a.id, T)).toThrow()
 })
 
-test('the board text lists backlog first, then open tasks, then done ones; the status line stays quiet', async () => {
+test('the board text lists open tasks first, then the backlog, then done ones; the status line stays quiet', async () => {
   let b = emptyBoard()
   const [b1, done] = addTask(b, { origin: W, title: 'Finished' }, '2026-11-09T03:00:00.000Z')
   const [b2, idea] = addTask(b1, { origin: W, title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
@@ -1060,8 +1060,8 @@ test('the board text lists backlog first, then open tasks, then done ones; the s
   for (const text of [boardText(b), boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0)]) {
     const lines = text.split('\n')
     const at = (id: string) => lines.findIndex(l => l.startsWith(id + ' '))
-    expect(at(idea.id)).toBeLessThan(at(open.id))
-    expect(at(open.id)).toBeLessThan(at(done.id))
+    expect(at(open.id)).toBeLessThan(at(idea.id))
+    expect(at(idea.id)).toBeLessThan(at(done.id))
     expect(lines[at(idea.id)]).toBe(`${idea.id}   backlog Idea: requests and triage`)
   }
   const s = boardSections(b.tasks, Date.parse('2026-11-12T12:00:00.000Z'), 0)
@@ -1084,8 +1084,8 @@ test('old boards without backlog still parse', async () => {
 })
 
 test('the backlog header and "… N more" line, and the banner says "N in backlog"', () => {
-  expect(backlogHeader(2)).toBe('▸ Backlog · 2')
-  expect(backlogHeader(2, true)).toBe('▾ Backlog · 2')
+  expect(backlogHeader(2)).toBe('▸ Backlog (2)')
+  expect(backlogHeader(2, true)).toBe('▾ Backlog (2)')
   expect(backlogMoreLabel(3)).toBe('… 3 more (Enter to show all)')
   expect(BACKLOG_SHOWN).toBe(5)
   const b = { ...emptyBoard(), tasks: [{ status: 'backlog' }, { status: 'backlog' }, { status: 'todo' }] } as never
@@ -1768,4 +1768,36 @@ test('after a plugin reload, a worker of this session is adopted, not stopped (T
   expect(orphanMove(w('w1'), { ...b, tasks: undefined as never }, 'me', 'me')).toEqual({ move: 'stop' })
   // no session id known: never adopt
   expect(orphanMove(w('w1'), patchTask(b, 'T-1', { session: '' }, T), '', null)).toEqual({ move: 'stop' })
+})
+
+test('the panel sections: needs you, doing, to do by run order then paused, backlog, done and dropped finished-last first', () => {
+  const tasks = [
+    { ...at('T-1', 'done', '2026-11-10T10:00:00Z'), title: 'Yesterday work' },
+    { ...at('T-2', 'todo', '2026-11-11T10:00:00Z'), order: 5 },
+    { ...at('T-3', 'paused', '2026-11-11T10:00:00Z'), order: 1 },
+    { ...at('T-4', 'todo', '2026-11-11T10:00:00Z'), order: 2 },
+    at('T-5', 'failed', '2026-11-11T10:00:00Z'),
+    at('T-6', 'review', '2026-11-11T09:00:00Z'),
+    at('T-7', 'doing', '2026-11-11T10:00:00Z'),
+    { ...at('T-8', 'done', '2026-11-11T11:00:00Z', '2026-11-01T00:00:00Z'), title: 'Task page: collapse the Details rows' },
+    at('T-9', 'dropped', '2026-11-09T10:00:00Z'),
+    at('T-10', 'dropped', '2026-11-11T10:00:00Z'),
+    at('T-11', 'backlog', '2026-11-11T10:00:00Z'),
+  ]
+  const s = panelSections(tasks, NOW, 0)
+  expect(s.needsYou.map(t => t.id)).toEqual(['T-6', 'T-5'])
+  expect(s.doing.map(t => t.id)).toEqual(['T-7'])
+  expect(s.todo.map(t => t.id)).toEqual(['T-4', 'T-2', 'T-3'])
+  expect(s.backlog.map(t => t.id)).toEqual(['T-11'])
+  expect(s.done.map(t => t.id)).toEqual(['T-8', 'T-1'])
+  expect(s.doneToday.map(t => t.id)).toEqual(['T-8'])
+  expect(s.doneDays.map(g => groupLabel(g))).toEqual(['▸ Yesterday · 1 done'])
+  expect(s.dropped.map(t => t.id)).toEqual(['T-10', 'T-9'])
+  expect(sectionHeader('Done', 42)).toBe('Done (42)')
+  expect(sectionHeader('Done', 42, false)).toBe('▸ Done (42)')
+  expect(sectionHeader('Done', 42, true)).toBe('▾ Done (42)')
+  expect(doneExtra(s.done[0], NOW, 0, '▸ Done (2)')).toBe('last: T-8 Task page: collapse the Details rows · today')
+  expect(doneExtra(s.done[1], NOW, 0, '▸ Done (2)')).toBe('last: T-1 Yesterday work · yesterday')
+  expect(doneExtra(s.done[0], NOW, 0, '▸ Done (2)', 50)).toBe('last: T-8 Task page: collaps… · today')
+  expect(doneExtra(undefined, NOW, 0, '▸ Done (0)')).toBe('')
 })

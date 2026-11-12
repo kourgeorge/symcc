@@ -1128,15 +1128,86 @@ export function groupLabel(g: Pick<DayGroup, 'label' | 'done' | 'dropped'>, open
   return [`${opened ? '▾' : '▸'} ${g.label}`, ...counts].join(' · ')
 }
 
-/** The backlog group's row in the board panel: "▸ Backlog · 3", "▾ Backlog · 3" when opened. */
-export const backlogLabel = (n: number, opened = false): string => `${opened ? '▾' : '▸'} Backlog · ${n}`
+/** A section's header in the board panel: "▸ Done (42)" folded, "▾ Done (42)" open; with `opened` left out (a section
+ *  that is always open, like "Doing") there is no arrow: "Doing (1)". */
+export const sectionHeader = (label: string, n: number, opened?: boolean): string => `${opened === undefined ? '' : opened ? '▾ ' : '▸ '}${label} (${n})`
+
+/** The backlog group's row in the board panel: "▸ Backlog (3)", "▾ Backlog (3)" when opened. */
+export const backlogLabel = (n: number, opened = false): string => sectionHeader('Backlog', n, opened)
 
 /** How many backlog items the board panel lists before a "… N more" line. */
 export const BACKLOG_SHOWN = 5
-/** The backlog section's header in the board panel, folded by default: "▸ Backlog · 3", "▾ Backlog · 3" when opened. */
+/** The backlog section's header in the board panel, folded by default: "▸ Backlog (3)", "▾ Backlog (3)" when opened. */
 export const backlogHeader = (n: number, opened = false): string => backlogLabel(n, opened)
 /** The line under the first BACKLOG_SHOWN backlog items when there are more. */
 export const backlogMoreLabel = (more: number): string => `… ${more} more (Enter to show all)`
+
+/** The line shown in the board panel when nothing needs the owner, runs or waits to run. */
+export const NOTHING_ACTIVE = 'Nothing running. Add a task by talking to the lead.'
+
+/** When a task finished (its updated_at, else created_at), in ms; NaN when neither can be read. */
+const finishedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
+  const u = Date.parse(t.updated_at || '')
+  return Number.isFinite(u) ? u : Date.parse(t.created_at || '')
+}
+/** Finished tasks, the one that finished last first (then the higher number). */
+const finishedFirst = (x: SymccTask, y: SymccTask) => (finishedMs(y) || 0) - (finishedMs(x) || 0) || num(y.id) - num(x.id)
+
+/** The board panel's list, top to bottom: what needs the owner, what runs, what waits to run, the backlog, then
+ *  the finished work. `done` is split into `doneToday` (today's, and any whose day can't be read) and `doneDays`
+ *  (older days, newest day first); `dropped` and the done lists put the task that finished last first. */
+export type PanelSections<T extends SymccTask = SymccTask> = {
+  needsYou: T[]
+  doing: T[]
+  todo: T[]
+  backlog: T[]
+  done: T[]
+  doneToday: T[]
+  doneDays: DayGroup<T>[]
+  dropped: T[]
+}
+
+/** Sorts tasks into the board panel's sections (see PanelSections), seen at `nowMs` in time zone `offsetMin`. */
+export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, offsetMin: number): PanelSections<T> {
+  const s = boardSections(tasks, nowMs, offsetMin)
+  const runOrder = (x: T, y: T) => x.order - y.order || num(x.id) - num(y.id)
+  const today = dayOf(nowMs, offsetMin)
+  const done = tasks.filter(t => t.status === 'done').sort(finishedFirst)
+  const isOld = (t: T) => {
+    const d = taskDay(t, offsetMin)
+    return !!today && !!d && d < today
+  }
+  const byDay = new Map<string, T[]>()
+  for (const t of done.filter(isOld)) {
+    const d = taskDay(t, offsetMin)
+    byDay.set(d, [...(byDay.get(d) ?? []), t])
+  }
+  const doneDays = [...byDay.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([day, ts]) => ({ day, label: dayLabel(day, today), done: ts.length, dropped: 0, tasks: ts }))
+  return {
+    needsYou: needsYouFirst(s.open.filter(t => NEEDS_YOU.includes(t.status))),
+    doing: s.open.filter(t => t.status === 'doing'),
+    todo: [...s.open.filter(t => t.status === 'todo').sort(runOrder), ...s.open.filter(t => t.status === 'paused').sort(runOrder)],
+    backlog: s.backlog,
+    done,
+    doneToday: done.filter(t => !isOld(t)),
+    doneDays,
+    dropped: tasks.filter(t => t.status === 'dropped').sort(finishedFirst),
+  }
+}
+
+/** The subtle text after the Done header: "last: T-88 Task page: collapse the Details rows · today" ("yesterday",
+ *  or the date for older days). The title is cut with "…" so the whole header fits in `width` columns. */
+export function doneExtra(last: SymccTask | undefined, nowMs: number, offsetMin: number, head: string, width = Infinity): string {
+  if (!last) return ''
+  const today = dayOf(nowMs, offsetMin)
+  const day = taskDay(last, offsetMin)
+  const when = !day || !today || day >= today ? 'today' : dayLabel(day, today) === 'Yesterday' ? 'yesterday' : dayLabel(day, today)
+  const room = Math.max(8, width - head.length - ` · last: ${last.id}  · ${when}`.length)
+  const title = last.title.length > room ? `${last.title.slice(0, room - 1).trimEnd()}…` : last.title
+  return `last: ${last.id} ${title} · ${when}`
+}
 
 // ---------------- time and cost of each try ----------------
 
@@ -1505,13 +1576,13 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
 
 /** One line per task for the model and for /<name> (with a short "from:" line under it, see fromText), then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart.
- *  The backlog comes first, then open tasks, then today's others; finished tasks of older days are one line per
+ *  Open tasks come first, then the backlog, then today's others; finished tasks of older days are one line per
  *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
 export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs)): string {
   const top = where ? [`${boardBrand(name)} · ${where}`] : []
   if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
   const s: BoardSections = nowMs === undefined ? boardSections(b.tasks, NaN, offsetMin) : boardSections(b.tasks, nowMs, offsetMin)
-  const rows = [...s.backlog, ...s.open, ...s.today]
+  const rows = [...s.open, ...s.backlog, ...s.today]
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
     const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''

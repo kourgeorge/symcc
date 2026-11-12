@@ -66,7 +66,10 @@ import {
   type BannerTone,
   shortHome,
   newestFirst,
-  boardSections,
+  panelSections,
+  sectionHeader,
+  doneExtra,
+  NOTHING_ACTIVE,
   groupLabel,
   backlogHeader,
   backlogMoreLabel,
@@ -273,6 +276,10 @@ const openDays = new Set<string>()
 let backlogOpen = false
 /** whether the owner asked to see every backlog item (not just the first BACKLOG_SHOWN); reset when the panel closes */
 let backlogAll = false
+/** whether the owner has opened the Done section in the board panel (folded by default); folded again when the panel closes */
+let doneOpen = false
+/** whether the owner has opened the Dropped section in the board panel (folded by default); folded again when the panel closes */
+let droppedOpen = false
 /** the scout being edited in the board panel (its edit mode), or null; `isNew` for one made with "new scout" */
 type ScoutDraft = { scout: string; isNew: boolean; every: string; model: string; body: string; error: string }
 let draft: ScoutDraft | null = null
@@ -2303,6 +2310,8 @@ export const register: Register = on => {
     openDays.clear()
     backlogOpen = false
     backlogAll = false
+    doneOpen = false
+    droppedOpen = false
     draft = null
     naming = null
     diffOpen = null
@@ -2960,56 +2969,88 @@ export const register: Register = on => {
 
     shownTask = ''
     const nowMs = Date.now()
-    const parts = boardSections(v.tasks, nowMs, localOffset(nowMs))
-    for (const d of [...openDays]) if (!parts.days.some(g => g.day === d)) openDays.delete(d)
+    const offset = localOffset(nowMs)
+    const parts = panelSections(v.tasks, nowMs, offset)
+    for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
     const toggleDay = (day: string) => () => {
       if (openDays.has(day)) openDays.delete(day)
       else openDays.add(day)
       $.ui.invalidate('ui.render')
     }
     const toggleBacklog = () => ((backlogOpen = !backlogOpen), $.ui.invalidate('ui.render'))
+    const toggleDone = () => ((doneOpen = !doneOpen), $.ui.invalidate('ui.render'))
+    const toggleDropped = () => ((droppedOpen = !droppedOpen), $.ui.invalidate('ui.render'))
     const showAllBacklog = () => ((backlogAll = true), $.ui.invalidate('ui.render'))
-    type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
+    /** A list row: a task; a header or line one can press (`day`: 'backlog', 'done', 'dropped', 'backlog-more' or an
+     *  older day of Done); a header of a section that is always open (`head`); or a plain subtle line (`line`). */
+    type Row = { task: SymccTask; indent: boolean } | { day: string; label: string; extra?: string; section?: boolean } | { head: string } | { line: string }
+    const tasksOf = (ts: SymccTask[], indent: boolean): Row[] => ts.map(task => ({ task, indent }))
+    // active work first (always open), then the folded groups; each non-empty group is one section
+    const active: Row[][] = [
+      parts.needsYou.length ? [{ head: sectionHeader('Needs you', parts.needsYou.length) }, ...tasksOf(parts.needsYou, false)] : [],
+      parts.doing.length ? [{ head: sectionHeader('Doing', parts.doing.length) }, ...tasksOf(parts.doing, false)] : [],
+      parts.todo.length ? [{ head: sectionHeader('To do', parts.todo.length) }, ...tasksOf(parts.todo, false)] : [],
+    ].filter(s => s.length)
     const backlogShown = backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
     const backlogMore = parts.backlog.length - backlogShown.length
     const backlogRows: Row[] = parts.backlog.length
       ? [
-          { day: 'backlog', label: backlogHeader(parts.backlog.length, backlogOpen) },
-          ...(!backlogOpen ? [] : [...backlogShown.map(task => ({ task, indent: true })), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore) }] : [])]),
+          { day: 'backlog', label: backlogHeader(parts.backlog.length, backlogOpen), section: true },
+          ...(!backlogOpen ? [] : [...tasksOf(backlogShown, true), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore) }] : [])]),
         ]
       : []
-    const rest: Row[] = [
-      ...needsYouFirst(parts.open).map(task => ({ task, indent: false })),
-      ...parts.today.map(task => ({ task, indent: false })),
-      ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
-    ]
-    // the Backlog section comes first; a light dotted rule keeps it apart from the tasks below it
-    const list: Row[] = [...backlogRows, ...rest]
-    const ruleAfter = backlogRows.length && rest.length ? backlogRows.length - 1 : -1
+    const doneHead = parts.done.length ? sectionHeader('Done', parts.done.length, doneOpen) : ''
+    const doneRows: Row[] = parts.done.length
+      ? [
+          { day: 'done', label: doneHead, extra: doneExtra(parts.done[0], nowMs, offset, doneHead, width), section: true },
+          ...(!doneOpen
+            ? []
+            : [
+                ...tasksOf(parts.doneToday, true),
+                ...parts.doneDays.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? tasksOf(g.tasks, true) : [])]),
+              ]),
+        ]
+      : []
+    const droppedRows: Row[] = parts.dropped.length
+      ? [{ day: 'dropped', label: sectionHeader('Dropped', parts.dropped.length, droppedOpen), section: true }, ...(droppedOpen ? tasksOf(parts.dropped, true) : [])]
+      : []
+    const folded = [backlogRows, doneRows, droppedRows].filter(s => s.length)
+    const anyTasks = active.length + folded.length > 0
+    const sections: Row[][] = anyTasks ? [...(active.length ? active : [[{ line: NOTHING_ACTIVE }]]), ...folded] : []
+    // a light dotted rule between sections: `ruleAfter` holds the index of each section's last row (but the last one's)
+    const list: Row[] = sections.flat()
+    const ruleAfter = new Set<number>()
+    sections.slice(0, -1).reduce((at, s) => (ruleAfter.add(at + s.length - 1), at + s.length), 0)
+    const firstButton = list.findIndex(r => 'task' in r || 'day' in r)
     const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
     const idWidth = Math.max(4, ...rows.map(x => x.id.length))
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
-    const backlogRule = <Text key="backlog-rule" wrap="truncate" color={C('subtle')}>{listRule(width)}</Text>
+    const rule = (i: number) => <Text key={`rule-${i}`} wrap="truncate" color={C('subtle')}>{listRule(width)}</Text>
+    const withRule = <E,>(el: E, i: number) => (ruleAfter.has(i) ? [el, rule(i)] : el)
+    const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
     return (
       <Box flexDirection="column">
         {header()}
-        {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
+        {!anyTasks && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {list.map((r, i) => {
+          if ('line' in r) return withRule(<Text key="nothing-active" color={C('subtle')}>{r.line}</Text>, i)
+          if ('head' in r) return <Text key={`head:${r.head}`} bold color={C('text')}>{r.head}</Text>
           if (!('task' in r)) {
             const button = (
-              <Button key={`day:${r.day}`} autoFocus={i === 0 ? true : undefined} onPress={r.day === 'backlog' ? toggleBacklog : r.day === 'backlog-more' ? showAllBacklog : toggleDay(r.day)}>
-                <Text bold={r.day === 'backlog'} color={C(r.day === 'backlog' ? 'planMode' : 'subtle')}>
-                  {r.day === 'backlog-more' ? '  ' : ''}
+              <Button key={`day:${r.day}`} autoFocus={i === firstButton ? true : undefined} onPress={pressDay(r.day)}>
+                <Text bold={r.section} color={C(r.day === 'backlog' ? 'planMode' : r.section ? 'text' : 'subtle')}>
+                  {r.section ? '' : '  '}
                   {r.label}
                 </Text>
+                {r.extra ? <Text color={C('subtle')}>{` · ${r.extra}`}</Text> : null}
               </Button>
             )
-            return i === ruleAfter ? [button, backlogRule] : button
+            return withRule(button, i)
           }
           const x = r.task
           if (x.status === 'backlog') {
             const row = (
-              <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
+              <Button key={x.id} autoFocus={i === firstButton ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
                 <Text>{'  '}</Text>
                 <Text color={C('subtle')}>{x.id.padEnd(idWidth)}</Text>
                 <Text color={C('planMode')}> {mark.backlog}</Text>
@@ -3017,12 +3058,12 @@ export const register: Register = on => {
                 {x.note && x.note !== 'in the backlog' ? <Text color={C('subtle')}> — {x.note}</Text> : null}
               </Button>
             )
-            return i === ruleAfter ? [row, backlogRule] : row
+            return withRule(row, i)
           }
           const closed = x.status === 'done' || x.status === 'dropped'
           const extra = x.status === 'waiting' ? x.question ?? '' : x.note
-          return (
-            <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
+          return withRule(
+            <Button key={x.id} autoFocus={i === firstButton ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
               {r.indent ? <Text>{'  '}</Text> : null}
               <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
                 {x.id.padEnd(idWidth)}
@@ -3034,13 +3075,14 @@ export const register: Register = on => {
               {roleMark(x) ? <Text color={C('subtle')}>{` · ${roleMark(x)}`.padEnd(Math.max(0, wordWidth - word[x.status]!.length))}</Text> : null}
               <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
                 {' '}
-                {x.title.slice(0, Math.max(10, width - idWidth - wordWidth - roleMark(x).length - 11))}
+                {x.title.slice(0, Math.max(10, width - idWidth - wordWidth - roleMark(x).length - 11 - (r.indent ? 2 : 0)))}
               </Text>
               {extra ? <Text color={C(x.status === 'waiting' ? 'warning' : x.status === 'failed' ? 'error' : x.status === 'review' ? color.review! : 'subtle')}> — {extra}</Text> : null}
-            </Button>
+            </Button>,
+            i,
           )
         })}
-        {list.length > 0 && <Text key="list-hint" wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog opens it` : HINT}</Text>}
+        {anyTasks && <Text key="list-hint" wrap="truncate" color={C('subtle')}>{folded.length ? `${HINT} · Enter on a ▸ heading opens it` : HINT}</Text>}
       </Box>
     )
   })

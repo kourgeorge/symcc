@@ -118,16 +118,17 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up'), task('T-2', 'backlog', 'Dark mode', { details: 'Maybe later: a dark theme.' }), task('T-3', 'backlog', 'Export')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const header = await ui.find({ type: 'Text', text: /^▸ Backlog · 2$/ })
+  const header = await ui.find({ type: 'Text', text: /^▸ Backlog \(2\)$/ })
   expect(header).toBeDefined()
   expect(header?.props.color).toBe('planMode')
   expect(header?.props.bold).toBe(true)
-  // the header comes first, then a light dotted rule, then the open tasks (no blank line any more)
+  // the open tasks come first, then a light dotted rule, then the Backlog header (no blank line)
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const at = texts.findIndex(t => /^▸ Backlog · 2$/.test(t))
-  expect(/^┄+$/.test(texts[at + 1] ?? '')).toBe(true)
+  const at = texts.findIndex(t => /^▸ Backlog \(2\)$/.test(t))
+  expect(texts.findIndex(t => /Write it up/.test(t))).toBeLessThan(at)
+  expect(/^┄+$/.test(texts[at - 1] ?? '') || /^┄+$/.test(texts[at - 2] ?? '')).toBe(true)
   expect(texts.indexOf(' ')).toBe(-1)
-  expect(texts.some(t => /Enter on Backlog opens it/.test(t))).toBe(true)
+  expect(texts.some(t => /Enter on a ▸ heading opens it/.test(t))).toBe(true)
   // the dotted rule is subtle, the header rule uses the accent color
   expect((await ui.find({ type: 'Text', text: /^┄+$/ }))?.props.color).toBe('subtle')
   expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.props.color).toBe('ide')
@@ -136,14 +137,14 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   expect((await ui.find({ key: 'T-1' }))).toBeDefined()
   // Enter on the header opens it; again folds it
   await ui.press({ key: 'day:backlog' })
-  expect((await ui.find({ type: 'Text', text: /^▾ Backlog · 2$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^▾ Backlog \(2\)$/ }))).toBeDefined()
   expect((await ui.find({ key: 'T-2' }))).toBeDefined()
   expect((await ui.find({ key: 'T-3' }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /◇/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /2 in backlog/ }))).toBeDefined()
   expect(await ui.find({ key: 'day:backlog-more' })).toBeUndefined()
   await ui.press({ key: 'day:backlog' })
-  expect((await ui.find({ type: 'Text', text: /^▸ Backlog · 2$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^▸ Backlog \(2\)$/ }))).toBeDefined()
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
   await ui.press({ key: 'day:backlog' })
   await ui.press({ key: 'T-2' })
@@ -156,51 +157,125 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   await ui.unmount()
 })
 
-test('the Backlog section comes first, then a separator rule, then open tasks, then done ones', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'backlog', 'Dark mode'), task('T-3', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+test('the list goes: Needs you, Doing, To do, then Backlog, Done and Dropped, with a dotted rule between', async ($, on) => {
+  const now = new Date().toISOString()
+  stateOf(on, {
+    view: {
+      shape: 'view-1',
+      value: {
+        tasks: [
+          task('T-1', 'done', 'Parser', { updated_at: now }),
+          task('T-2', 'backlog', 'Dark mode'),
+          task('T-3', 'todo', 'Write it up', { order: 9 }),
+          task('T-4', 'doing', 'Search command'),
+          task('T-5', 'waiting', 'Search mode', { question: 'Case-sensitive?' }),
+          task('T-6', 'review', 'Blue button'),
+          task('T-7', 'dropped', 'Old idea', { updated_at: now }),
+          task('T-8', 'paused', 'Later work', { order: 1 }),
+          task('T-9', 'todo', 'First up', { order: 2 }),
+          task('T-10', 'failed', 'Broken', { note: 'tests failed' }),
+        ],
+        working: [],
+        scouts: [],
+        mode: 'auto',
+        test_commands: [],
+      },
+    },
+  })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const folded = (await ui.findAll({ type: 'Button' })).map(b => b.key).filter(k => k === 'T-1' || k === 'T-3' || k === 'day:backlog')
-  expect(folded).toEqual(['day:backlog', 'T-3', 'T-1'])
+  const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => /^T-\d+$|^day:/.test(k))
+  // review, waiting, failed (needsYouFirst); then doing; then todo by run order, then paused; then the folded headers
+  expect(keys).toEqual(['T-6', 'T-5', 'T-10', 'T-4', 'T-9', 'T-3', 'T-8', 'day:backlog', 'day:done', 'day:dropped'])
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const header = texts.findIndex(t => /^▸ Backlog · 1$/.test(t))
-  const rule = texts.findIndex((t, i) => i > header && /^┄+$/.test(t))
-  const open = texts.findIndex(t => /Write it up/.test(t))
-  const done = texts.findIndex(t => /Parser/.test(t))
-  expect(header).toBeGreaterThan(-1)
-  expect(rule).toBe(header + 1)
-  expect(open).toBeGreaterThan(rule)
-  expect(done).toBeGreaterThan(open)
-  // opened: the items sit under the header, and the rule comes after the last of them
-  await ui.press({ key: 'day:backlog' })
-  const keys = (await ui.findAll({ type: 'Button' })).map(b => b.key).filter(k => k === 'T-1' || k === 'T-2' || k === 'T-3' || k === 'day:backlog')
-  expect(keys).toEqual(['day:backlog', 'T-2', 'T-3', 'T-1'])
-  const after = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const item = after.findIndex(t => /Dark mode/.test(t))
-  const rule2 = after.findIndex((t, i) => i > item && /^┄+$/.test(t))
-  expect(rule2).toBeGreaterThan(item)
-  expect(rule2).toBeLessThan(after.findIndex(t => /Write it up/.test(t)))
+  const idx = (re: RegExp) => texts.findIndex(t => re.test(t))
+  const heads = [/^Needs you \(3\)$/, /^Doing \(1\)$/, /^To do \(3\)$/, /^▸ Backlog \(1\)$/, /^▸ Done \(1\)/, /^▸ Dropped \(1\)$/].map(idx)
+  expect(heads.every(i => i > -1)).toBe(true)
+  expect([...heads].sort((a, b) => a - b)).toEqual(heads)
+  // one dotted rule between each pair of sections, none after the last
+  for (let k = 1; k < heads.length; k++) expect(texts.slice(heads[k - 1]!, heads[k]!).filter(t => /^┄+$/.test(t)).length).toBe(1)
+  expect(texts.slice(heads.at(-1)!).filter(t => /^┄+$/.test(t)).length).toBe(0)
+  // the always-open headers are bold, not buttons
+  expect((await ui.find({ type: 'Text', text: /^Doing \(1\)$/ }))?.props.bold).toBe(true)
+  // folded by default: no done, dropped or backlog tasks shown
+  for (const k of ['T-1', 'T-2', 'T-7']) expect(await ui.find({ key: k })).toBeUndefined()
+  await ui.press({ key: 'day:done' })
+  expect(await ui.find({ type: 'Text', text: /^▾ Done \(1\)$/ })).toBeDefined()
+  expect(await ui.find({ key: 'T-1' })).toBeDefined()
+  expect(await ui.find({ key: 'T-7' })).toBeUndefined()
+  await ui.press({ key: 'day:dropped' })
+  expect(await ui.find({ type: 'Text', text: /^▾ Dropped \(1\)$/ })).toBeDefined()
+  expect(await ui.find({ key: 'T-7' })).toBeDefined()
+  await ui.press({ key: 'day:done' })
+  expect(await ui.find({ key: 'T-1' })).toBeUndefined()
+  expect(await ui.find({ key: 'T-7' })).toBeDefined()
   await ui.unmount()
 })
 
-test('a backlog with nothing below it has no separator rule', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-2', 'backlog', 'Dark mode')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+test('the Done header shows the count and the task that finished last, with its day', async ($, on) => {
+  const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+  stateOf(on, {
+    view: {
+      shape: 'view-1',
+      value: {
+        tasks: [
+          task('T-1', 'done', 'Older work', { updated_at: day(1) }),
+          task('T-2', 'done', 'Task page: collapse the Details rows', { updated_at: day(0) }),
+          task('T-3', 'done', 'Made first', { updated_at: day(2), created_at: day(0) }),
+          task('T-4', 'todo', 'Next'),
+        ],
+        working: [],
+        scouts: [],
+        mode: 'auto',
+        test_commands: [],
+      },
+    },
+  })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+  const head = await ui.find({ key: 'day:done' })
+  expect(head?.text).toBe('▸ Done (3) · last: T-2 Task page: collapse the Details rows · today')
+  expect((await ui.find({ type: 'Text', text: /^ · last: T-2/ }))?.props.color).toBe('subtle')
+  await ui.unmount()
+  // a narrow panel cuts the title, but keeps the day
+  const narrow = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const cut = (await narrow.find({ key: 'day:done' }))?.text ?? ''
+  expect(cut).toMatch(/^▸ Done \(3\) · last: T-2 .+… · today$/)
+  expect(cut.length).toBeLessThanOrEqual(50)
+  await narrow.unmount()
+})
+
+test('with nothing to do, need or run, one subtle line says so above the folded groups', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser', { updated_at: new Date().toISOString() }), task('T-2', 'backlog', 'Dark mode')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ key: 'day:backlog' })).toBeDefined()
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const header = texts.findIndex(t => /^▸ Backlog · 1$/.test(t))
-  expect(header).toBeGreaterThan(-1)
-  expect(texts.slice(header + 1).some(t => /^┄+$/.test(t))).toBe(false)
+  const line = texts.findIndex(t => t === 'Nothing running. Add a task by talking to the lead.')
+  expect(line).toBeGreaterThan(-1)
+  expect((await ui.find({ type: 'Text', text: /^Nothing running/ }))?.props.color).toBe('subtle')
+  expect(line).toBeLessThan(texts.findIndex(t => /^▸ Backlog \(1\)$/.test(t)))
+  expect(/^┄+$/.test(texts[line + 1] ?? '')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /board is empty/ })).toBeUndefined()
+  // the first button (the Backlog header) gets the focus
+  expect((await ui.findAll({ type: 'Button' })).find(b => b.props.autoFocus)?.key).toBe('day:backlog')
   await ui.unmount()
 })
 
-test('with no open tasks the Backlog section comes first; over 5 items it shows 5 and "… N more"', async ($, on) => {
+test('a board with only active work has no folded groups and no dotted rule after the last section', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^To do \(1\)$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Nothing running/ })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /^┄+$/.test(t.text)).length).toBe(0)
+  expect((await ui.findAll({ type: 'Text' })).some(t => /Enter on a ▸ heading/.test(t.text))).toBe(false)
+  await ui.unmount()
+})
+
+test('over 5 backlog items the opened Backlog shows 5 and "… N more"', async ($, on) => {
   const ideas = [2, 3, 4, 5, 6, 7, 8].map(n => task(`T-${n}`, 'backlog', `Idea ${n}`))
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), ...ideas], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const buttons = (await ui.findAll({ type: 'Button' })).map(b => b.key)
-  const first = buttons.findIndex(k => k === 'day:backlog' || k === 'T-1' || /^T-\d$/.test(String(k)))
+  const first = buttons.findIndex(k => k === 'day:backlog' || k === 'day:done' || /^T-\d$/.test(String(k)))
   expect(buttons[first]).toBe('day:backlog')
-  expect((await ui.find({ type: 'Text', text: /^▸ Backlog · 7$/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^▸ Backlog \(7\)$/ }))).toBeDefined()
   await ui.press({ key: 'day:backlog' })
   const opened = (await ui.findAll({ type: 'Button' })).map(b => b.key)
   expect(opened.filter(k => /^T-[2-8]$/.test(String(k))).length).toBe(5)
@@ -216,10 +291,10 @@ test('an empty backlog shows no Backlog section', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up'), task('T-2', 'done', 'Parser')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'day:backlog' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /Backlog ·/ })).toBeUndefined()
-  // only the strong rule under the header; no dotted separator in the list
+  expect(await ui.find({ type: 'Text', text: /Backlog \(/ })).toBeUndefined()
+  // only the strong rule under the header, and one dotted rule between To do and Done
   expect((await ui.findAll({ type: 'Text' })).filter(t => /^━+$/.test(t.text)).length).toBe(1)
-  expect((await ui.findAll({ type: 'Text' })).filter(t => /^┄+$/.test(t.text)).length).toBe(0)
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /^┄+$/.test(t.text)).length).toBe(1)
   await ui.unmount()
 })
 
@@ -295,7 +370,7 @@ test('the banner shows the counts and the total time and cost of all tries', asy
   await ui.unmount()
 })
 
-test('finished tasks of older days fold into one row per day, which opens on Enter', async ($, on) => {
+test('inside the opened Done, older days fold into one row per day, which opens on Enter', async ($, on) => {
   const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
   const old = new Date(Date.now() - 3 * 86_400_000)
   const oldKey = `day:${new Date(old.getTime() - old.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)}`
@@ -318,15 +393,22 @@ test('finished tasks of older days fold into one row per day, which opens on Ent
   })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'T-3' })).toBeDefined()
+  // Done is folded: no task and no day row until it is opened
+  expect(await ui.find({ key: 'T-4' })).toBeUndefined()
+  expect(await ui.find({ key: oldKey })).toBeUndefined()
+  await ui.press({ key: 'day:done' })
+  // opened: today's done task in full, then one folded row per older day (done only; dropped ones are in Dropped)
   expect(await ui.find({ key: 'T-4' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^▸ \w{3} \d+ \w{3}(?: \d{4})? · 1 done · 1 dropped$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ *▸ \w{3} \d+ \w{3}(?: \d{4})? · 1 done$/ })).toBeDefined()
   expect(await ui.find({ key: 'T-1' })).toBeUndefined()
   await ui.press({ key: oldKey })
-  expect(await ui.find({ type: 'Text', text: /^▾ \w{3} \d+ \w{3}(?: \d{4})? · 1 done · 1 dropped$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ *▾ \w{3} \d+ \w{3}(?: \d{4})? · 1 done$/ })).toBeDefined()
   expect(await ui.find({ key: 'T-1' })).toBeDefined()
-  expect(await ui.find({ key: 'T-2' })).toBeDefined()
+  expect(await ui.find({ key: 'T-2' })).toBeUndefined()
   await ui.press({ key: oldKey })
   expect(await ui.find({ key: 'T-1' })).toBeUndefined()
+  await ui.press({ key: 'day:dropped' })
+  expect(await ui.find({ key: 'T-2' })).toBeDefined()
   await ui.unmount()
 })
 
