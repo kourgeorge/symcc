@@ -1,7 +1,7 @@
 # The team picture (docs/architecture.svg)
 
 `docs/architecture.svg` is the moving picture at the start of "How it works" in the README.
-It shows who does what in symcc: you, the lead agent, the board, the workers and the scouts.
+It shows who does what in symcc: you (the owner), the lead, the board, the workers and the scouts.
 It is one SVG file with SMIL animation only: no JavaScript, no outside fonts or images, so
 GitHub plays it inside an `<img>` tag. It is 900x560, loops every 41 seconds, and uses the
 same colors and rounded dark card as `docs/logo.svg`, so it looks the same in light and dark mode.
@@ -10,8 +10,8 @@ same colors and rounded dark card as `docs/logo.svg`, so it looks the same in li
 
 | Role | Where | How it looks |
 |---|---|---|
-| You, the team lead | top left | a person figure |
-| Lead agent (your Claude Code chat) — plans and supervises | below you | an orange robot |
+| You, the owner | top left | a person figure |
+| The lead (your Claude Code chat) — plans and supervises | below you | an orange robot |
 | The board | middle | a card with task rows T-1 … T-4 and their status: todo, doing, review, done |
 | Worker agents | bottom | three blue robots, each in its own dashed box: "worker 1 · worktree T-1" and so on, so they work apart and don't collide |
 | Scouts | right side | green robots with a clock: "scout: tests · every 30 min" (wakes up) and "scout: docs · every day" (keeps sleeping) |
@@ -27,7 +27,7 @@ same colors and rounded dark card as `docs/logo.svg`, so it looks the same in li
 | 14–18 | 4/6 Every change is checked | In each box: "own files only ✓", "tests pass ✓"; the board says `review` |
 | 18–24 | 5/6 You supervise and approve | The lead tells you "T-1 ready for review"; you press "approve T-1"; the card goes into main (new dot), T-1 is `done`. Then "T-2, T-3 ready too", approved, two more dots |
 | 24–35.8 | 6/6 Scouts look ahead on their own | The tests scout wakes up (its clock rings), looks at `search.ts` through its telescope, and sends the lead a note: "src/search.ts:42 has no tests". The lead adds T-4 to the board; free worker 1 picks it up in "worktree T-4"; checks pass; review; you approve; it is merged (dot T-4) |
-| 35.8–41 | (end card) | "You lead. Agents do the work. Scouts find what's next. Everything on one board." |
+| 35.8–41 | (end card) | "You direct. The lead plans. Workers build. Scouts find what's next. Everything on one board." |
 
 ## How to change it
 
@@ -166,7 +166,7 @@ const SCOUT_WAKE = 24.5
 
 // ---------- build ----------
 const out = []
-out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="How symcc works: you are the team lead. You tell the lead agent what you want; it breaks the work into tasks on the board; worker agents build them in parallel, each in its own worktree; every change is checked and tested; you approve and it is merged into main. Scouts wake up on a timer, find the next job and report it to the lead, which adds a task for a free worker.">`)
+out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="How symcc works: you are the owner. You tell the lead agent what you want; it breaks the work into tasks on the board; worker agents build them in parallel, each in its own worktree; every change is checked and tested; you approve and it is merged into main. Scouts wake up on a timer, find the next job and report it to the lead, which adds a task for a free worker.">`)
 out.push(`<title>How symcc works</title>`)
 out.push(`<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${C.bg1}"/><stop offset="1" stop-color="${C.bg2}"/></linearGradient></defs>`)
 out.push(`<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="24" fill="url(#bg)" stroke="${C.edge}" stroke-width="2"/>`)
@@ -177,9 +177,9 @@ captions.forEach(([a, b, s], i) => out.push(show([[a, b]],
 
 // you and the lead
 out.push(person(90, 92))
-out.push(text(125, 100, `<tspan font-weight="700" fill="${C.peach}">You</tspan> — the team lead`, { size: 16 }))
+out.push(text(125, 100, `<tspan font-weight="700" fill="${C.peach}">You</tspan> — the owner`, { size: 16 }))
 out.push(robot(90, 232, C.orange))
-out.push(text(125, 228, 'Lead agent', { size: 16, bold: true, fill: C.orange }))
+out.push(text(125, 228, 'The lead', { size: 16, bold: true, fill: C.orange }))
 out.push(text(125, 248, 'plans and supervises', { fill: C.dim }))
 
 // board
@@ -311,12 +311,13 @@ out.push(show([[27.5, 30.6]], move([[27.5, 650, 160], [28.5, 40, 270]],
 // end card
 out.push(show([[END, T]],
   `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="24" fill="url(#bg)" stroke="${C.edge}" stroke-width="2"/>` +
-  text(W / 2, 200, `<tspan fill="${C.peach}">You</tspan> lead.`, { size: 36, bold: true, anchor: 'middle' }) +
-  text(W / 2, 252, `<tspan fill="${C.worker}">Agents</tspan> do the work.`, { size: 36, bold: true, anchor: 'middle' }) +
-  text(W / 2, 304, `<tspan fill="${C.scout}">Scouts</tspan> find what’s next.`, { size: 36, bold: true, anchor: 'middle' }) +
-  text(W / 2, 356, `Everything on <tspan fill="${C.orange}">one board</tspan>.`, { size: 36, bold: true, anchor: 'middle' }) +
-  text(W / 2, 420, 'symcc', { size: 28, bold: true, mono: true, fill: C.text, anchor: 'middle' }) +
-  text(W / 2, 452, 'ORGANIZED · SUPERVISED · PROACTIVE', { size: 16, fill: C.orange, anchor: 'middle' }), 0.4))
+  text(W / 2, 170, `<tspan fill="${C.peach}">You</tspan> direct.`, { size: 36, bold: true, anchor: 'middle' }) +
+  text(W / 2, 222, `The <tspan fill="${C.orange}">lead</tspan> plans.`, { size: 36, bold: true, anchor: 'middle' }) +
+  text(W / 2, 274, `<tspan fill="${C.worker}">Workers</tspan> build.`, { size: 36, bold: true, anchor: 'middle' }) +
+  text(W / 2, 326, `<tspan fill="${C.scout}">Scouts</tspan> find what’s next.`, { size: 36, bold: true, anchor: 'middle' }) +
+  text(W / 2, 378, `Everything on <tspan fill="${C.orange}">one board</tspan>.`, { size: 36, bold: true, anchor: 'middle' }) +
+  text(W / 2, 436, 'symcc', { size: 28, bold: true, mono: true, fill: C.text, anchor: 'middle' }) +
+  text(W / 2, 468, 'ORGANIZED · SUPERVISED · PROACTIVE', { size: 16, fill: C.orange, anchor: 'middle' }), 0.4))
 
 out.push('</svg>')
 console.log(out.join('\n'))

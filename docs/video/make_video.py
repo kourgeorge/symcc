@@ -661,7 +661,7 @@ def scene_end(c, t, dur):
     c.group(ramp(t, 2.6, 0.6), lambda cc: cc.text(W / 2, 515, "github.com/kourgeorge/symcc",
                                                   font(26, medium=True), TEXT, "mm"))
     c.group(ramp(t, 3.4, 0.6), lambda cc: cc.text(
-        W / 2, 575, "Lead a team of coding agents from one chat.", font(21), MUTED, "mm"))
+        W / 2, 575, "Run a team of coding agents from one chat.", font(21), MUTED, "mm"))
     c.group(ramp(t, 4.2, 0.6), lambda cc: cc.text(W / 2, 640, "ORGANIZED  ·  SUPERVISED  ·  PROACTIVE",
                                                   font(16), ACCENT, "mm", spacing=3))
 

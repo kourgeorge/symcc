@@ -6,14 +6,14 @@ an `<img>` tag. It loops every 58 seconds and is 900x520.
 
 ## What it shows
 
-The message: with agents, one developer becomes a team lead with many tasks at once. symcc
+The message: with agents, one developer directs a team with many tasks at once. symcc
 keeps that organized and supervised (one board, you see everything, you approve every
 merge), and the agents are proactive (workers build on their own, scouts find the next job).
 
 | Time (s) | Caption | What happens |
 |---|---|---|
-| 0–4 | (opening card) | "You are the team lead now." Many tasks at once, on one board; workers build them, scouts find the next job; you see everything and approve every merge |
-| 4–8.5 | 1/10 You are the lead: just say what you want | You type "add a search command, and make the errors friendlier" |
+| 0–4 | (opening card) | "You direct the team now." Many tasks at once, on one board; workers build them, scouts find the next job; you see everything and approve every merge |
+| 4–8.5 | 1/10 You direct: just say what you want | You type "add a search command, and make the errors friendlier" |
 | 8.5–12.5 | 2/10 The lead plans small tasks on one board | T-1, T-2 (after T-1), T-3 appear on the board as `todo` |
 | 12.5–17.5 | 3/10 Workers run in parallel, each in its own copy | T-1 and T-3 go to `doing`, each with `.symcc/worktrees/T-…` and branch `symcc/T-…` |
 | 17.5–21.5 | 4/10 Every change is checked and tested | T-1: only its own files, tests pass; it moves to `review` |
@@ -116,7 +116,7 @@ push(`<line x1="482" y1="84" x2="482" y2="466" stroke="${C.line}"/>`)
 
 // ---------- scene captions ----------
 const scenes = [
-  [4, 8.5, 'You are the lead: just say what you want'],
+  [4, 8.5, 'You direct: just say what you want'],
   [8.5, 12.5, 'The lead plans small tasks on one board'],
   [12.5, 17.5, 'Workers run in parallel, each in its own copy'],
   [17.5, 21.5, 'Every change is checked and tested'],
@@ -284,7 +284,7 @@ const card = (ws, lines) => show(ws, [
 ].join(''))
 // opening card
 push(card([[0, OPEN_END]], [
-  text(W / 2, 270, 'You are the team lead now.', { size: 30, anchor: 'middle', fill: C.text }),
+  text(W / 2, 270, 'You direct the team now.', { size: 30, anchor: 'middle', fill: C.text }),
   text(W / 2, 315, 'Many tasks at once, on one board.', { size: 17, anchor: 'middle', fill: C.text }),
   text(W / 2, 343, 'Workers build them. Scouts find the next job.', { size: 17, anchor: 'middle', fill: C.text }),
   text(W / 2, 371, 'You see everything and approve every merge.', { size: 17, anchor: 'middle', fill: C.accent }),
@@ -298,7 +298,7 @@ push(card([[PART2_END, T]], [
   text(W / 2, 425, 'claude --plugin-dir /path/to/symcc', { size: 14, anchor: 'middle', fill: C.dim }),
 ]))
 
-process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}" role="img" aria-label="symcc demo: you are the team lead. You talk to the lead, it plans tasks, workers build them in parallel in their own copies, checks and tests run, you see the change and approve it, and it merges. Then a scout wakes up on its timer, finds code without tests and reports it; the lead adds a task, a worker does it, you approve it and it is merged.">
+process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}" role="img" aria-label="symcc demo: you are the owner. You direct to the lead, it plans tasks, workers build them in parallel in their own copies, checks and tests run, you see the change and approve it, and it merges. Then a scout wakes up on its timer, finds code without tests and reports it; the lead adds a task, a worker does it, you approve it and it is merged.">
 <title>symcc demo</title>
 <defs>${defs.join('')}</defs>
 ${out.join('\n')}

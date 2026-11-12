@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220" viewBox="0 0 900 220" role="img" aria-label="symcc: lead a team of coding agents from one chat">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220" viewBox="0 0 900 220" role="img" aria-label="symcc: run a team of coding agents from one chat">
   <title>symcc</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -29,7 +29,7 @@
   <text x="290" y="122" fill="#f5f5f7" font-size="92" font-weight="700" letter-spacing="2"
         font-family="ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace">symcc</text>
   <text x="294" y="168" fill="#b8bccb" font-size="26"
-        font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">Lead a team of coding agents from one chat.</text>
+        font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">Run a team of coding agents from one chat.</text>
   <text x="294" y="198" fill="#d97757" font-size="18" letter-spacing="3"
         font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">ORGANIZED · SUPERVISED · PROACTIVE</text>
 </svg>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="symcc: lead a team of coding agents from one chat" width="760">
+  <img src="docs/logo.svg" alt="symcc: run a team of coding agents from one chat" width="760">
 </p>
 
 <p align="center">
@@ -42,7 +42,7 @@ clear view of what was asked, what is done and what is still open.
 
 The bottleneck isn't how fast the agent writes code. It's keeping track of the work.
 
-**symcc changes how you work: from using one coding agent to leading a swarm of them.**
+**symcc changes how you work: from using one coding agent to running a swarm of them.**
 Coding agents are now smart, like a team of capable people, so writing code is no longer
 the hard part. Organizing the work is. Without that, agents step on each other, work
 happens in the wrong order, and you lose track. symcc organizes the work and shows it to
