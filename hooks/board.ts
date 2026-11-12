@@ -2323,18 +2323,3 @@ export function detailRowLines(row: DetailRow, width: number): Seg[][] {
   const pad = DETAIL_LABEL_WIDTH
   return wrapSegs(row.segs, Math.max(12, width - pad)).map((l, i) => [{ text: (i === 0 && row.label ? `${row.label}:` : '').padEnd(pad), color: 'text', bold: true }, ...l])
 }
-
-/** The key that shows or hides the rows of the "Details" section on the task page ("d" is taken there by Show changes). */
-export const DETAILS_KEY = 'e'
-
-/**
- * The one short line the folded "Details" section shows after its heading:
- * status, role, who it came from and the tries, then how to show the rows.
- * Open, it is just how to hide them again.
- */
-export function detailsSummary(t: SymccTask, open: boolean): string {
-  if (open) return `press ${DETAILS_KEY} to hide`
-  const o = originOf(t)
-  const from = !o ? 'unknown' : o.by === 'scout' ? `scout ${o.scout || '?'}` : o.by === 'owner' ? 'owner' : o.task && o.by === 'worker' ? o.task : 'lead'
-  return [`${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, roleOf(t), `from ${from}`, `${t.attempts} ${t.attempts === 1 ? 'try' : 'tries'}`, `press ${DETAILS_KEY} to show`].join(' · ')
-}

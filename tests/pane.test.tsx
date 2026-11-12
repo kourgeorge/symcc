@@ -320,10 +320,8 @@ test('an opened task shows its details in full, in clear sections', async ($, on
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /What to do/ })).toBeDefined()
-  // long "What to do" text is shown in full; the Details rows open with e
+  // long "What to do" text and the Details rows are both shown in full
   expect(await ui.find({ type: 'Text', text: /THE END/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /src\/a\.ts/ })).toBeUndefined()
-  await ui.press({ key: 'details-toggle' })
   expect(await ui.find({ type: 'Text', text: /src\/a\.ts/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^After:\s+T-1 ✓ done · Base work$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Base work/ })).toBeDefined()
@@ -704,7 +702,6 @@ test('an open task shows its role and model; "Role" (l) opens a pick list of the
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'details-toggle' }) // the Details rows start folded
   expect(await ui.find({ type: 'Text', text: /^Role:\s+tests — writes tests · model sonnet$/ })).toBeDefined()
   const button = await ui.find({ key: 'role' })
   expect(button?.props.hotkey).toBe('l')
@@ -725,7 +722,6 @@ test('a running task shows its role but has no Role button', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   fakeFiles(on, ROLE_FILES)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'details-toggle' }) // the Details rows start folded
   expect(await ui.find({ type: 'Text', text: /^Role:\s+general — a plain worker$/ })).toBeDefined()
   expect(await ui.find({ key: 'role' })).toBeUndefined()
   await ui.unmount()
@@ -759,7 +755,6 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   const origin = { by: 'owner', request, why: 'Scouts mostly find small doc nits and repeat known items', evidence: 'last owner prompt at 2026-11-12 09:00 UTC', at: '' }
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'review', 'Better scouts', { origin, files: ['hooks/a.ts'], after: ['T-1'], branch: 'symcc/T-3', attempts: 2 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'details-toggle' }) // the Details rows start folded
   const L = await lines(ui)
   // the header: id and title in bold, then the status badge in its own color
   const id = await ui.find({ type: 'Text', text: /^T-3$/ })
@@ -794,7 +789,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   expect(L.some(l => /^Tries:\s+2 tries$/.test(l))).toBe(true)
   // the section headings, in order
   const heads = L.filter(l => /^▍/.test(l))
-  expect(heads[0]).toBe('▍Details  press e to hide')
+  expect(heads[0]).toBe('▍Details')
   expect(heads).toContain('▍What to do')
   await ui.unmount()
 })
@@ -802,7 +797,6 @@ test('the task page shows one labelled row per fact, From and Why on their own r
 test('From shows a scout or a split task in its own color', async ($, on) => {
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks: [task('T-4', 'doing', 'Fix it', { origin: { by: 'scout', scout: 'bugs', why: 'it breaks', at: '' } }), task('T-5', 'todo', 'Part', { origin: { by: 'lead', task: 'T-4', how: 'split', why: 'too big', at: '' } })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'details-toggle' }) // the Details rows start folded
   expect((await ui.find({ type: 'Text', text: /^scout bugs$/ }))?.props.color).toBe('suggestion')
   expect((await ui.findAll({ type: 'Text', text: /^\[▶ doing\]$/ })).find(t => t.props.color)?.props.color).toBe('ide')
   expect((await lines(ui)).some(l => /^Request:/.test(l))).toBe(false)
@@ -812,7 +806,6 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
 test('an old task without an origin still opens, with From: unknown and no Why row', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Old one')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'details-toggle' }) // the Details rows start folded
   const L = await lines(ui)
   expect(L.some(l => /^From:\s+unknown/.test(l))).toBe(true)
   expect(L.some(l => /^Why:/.test(l))).toBe(false)
@@ -821,35 +814,19 @@ test('an old task without an origin still opens, with From: unknown and no Why r
   await ui.unmount()
 })
 
-test('the task page folds the Details rows to one summary line; e shows them and hides them again', async ($, on) => {
+test('the task page shows the Details rows in full with no fold and no e key', async ($, on) => {
   const origin = { by: 'owner', request: 'make it so', why: 'asked for it', at: '' }
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'review', 'Folded one', { origin, attempts: 1, branch: 'symcc/T-1' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'review', 'Open one', { origin, attempts: 1, branch: 'symcc/T-1' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  // folded by default: heading plus one summary line, no rows; d stays Show changes
+  // shown without pressing anything, under a plain heading
   expect(await ui.find({ type: 'Text', text: /^▍Details$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ {2}\S+ .+ · \w+ · from owner · 1 try · press e to show$/ })).toBeDefined()
-  let L = await lines(ui)
-  for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Files', 'Branch', 'Tries']) expect(L.some(l => new RegExp(`^${label}:`).test(l))).toBe(false)
-  expect((await ui.find({ key: 'details-toggle' }))?.props.hotkey).toBe('e')
-  expect((await ui.find({ key: 'show-changes' }))?.props.hotkey).toBe('d')
-  expect(await ui.find({ type: 'Text', text: /· e show details/ })).toBeDefined()
-  // e shows all the rows
-  await ui.press({ key: 'details-toggle' })
-  L = await lines(ui)
+  const L = await lines(ui)
   for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Files', 'Branch', 'Tries']) expect(L.some(l => new RegExp(`^${label}:`).test(l))).toBe(true)
-  expect(await ui.find({ type: 'Text', text: /^ {2}press e to hide$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /· e hide details/ })).toBeDefined()
-  // and folds them again
-  await ui.press({ key: 'details-toggle' })
-  expect((await lines(ui)).some(l => /^Tries:/.test(l))).toBe(false)
-  expect(await ui.find({ type: 'Text', text: /press e to show$/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('the Details summary of an old task without an origin says from unknown', async ($, on) => {
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Old one', { attempts: 3 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /from unknown · 3 tries · press e to show$/ })).toBeDefined()
+  // no fold: no toggle, no "press e" hint, no e in the key hints; d stays Show changes
+  expect(await ui.find({ key: 'details-toggle' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /press e|show details|hide details/ })).toBeUndefined()
+  expect(L.some(l => /press e|· e /.test(l))).toBe(false)
+  expect((await ui.find({ key: 'show-changes' }))?.props.hotkey).toBe('d')
   await ui.unmount()
 })
 
@@ -867,7 +844,6 @@ test('the task page shows a Commits row: short ids, newest first, the merged one
   const b = '2'.repeat(40)
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Merged one', { attempts: 1, runs: [{ started: '', ended: '', commits: [a, b] }], merged: b })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'details-toggle' }) // the Details rows start folded
   const L = await lines(ui)
   expect(L.some(l => /^Commits:\s+22222222 \(merged\), 11111111 \(try 1\)$/.test(l))).toBe(true)
   expect((await ui.find({ type: 'Text', text: /^22222222$/ }))?.props.color).toBe('success')

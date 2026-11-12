@@ -117,8 +117,6 @@ import {
   roleMark,
   detailRows,
   detailRowLines,
-  detailsSummary,
-  DETAILS_KEY,
   wrapSegs,
   STATUS_BADGE,
   STATUS_MARK,
@@ -291,10 +289,6 @@ let diffOpen: { task: string; file: string } | null = null
 let rejecting: { task: string; reason: string } | null = null
 /** the role pick list on an open task in the board panel: the task and the role names; null when it isn't shown */
 let rolePick: { task: string; options: string[] } | null = null
-/** whether the open task's "Details" rows are shown; back to folded each time a task is opened */
-let detailsOpen = false
-/** the task the board panel showed last ('' = the list), to fold the text again when another task opens */
-let shownTask = ''
 
 /**
  * What reached the lead in this session, for a new task's evidence (see evidenceText): the owner's
@@ -2832,9 +2826,6 @@ export const register: Register = on => {
         </Text>
       )
       const rows = detailRows(t, { roles, all: v.tasks, when, nowMs: Date.now() })
-      if (shownTask !== t.id) detailsOpen = false
-      shownTask = t.id
-      const toggleDetails = () => ((detailsOpen = !detailsOpen), $.ui.invalidate('ui.render'))
       return (
         <Box flexDirection="column" gap={1}>
           <Box flexDirection="column">
@@ -2887,13 +2878,8 @@ export const register: Register = on => {
           {roleBox}
 
           <Box flexDirection="column">
-            <Button key="details-toggle" hotkey={DETAILS_KEY} onPress={toggleDetails}>
-              <Text>
-                <Text bold color={C('suggestion')}>▍Details</Text>
-                <Text color={C('subtle')}>{`  ${detailsSummary(t, detailsOpen)}`}</Text>
-              </Text>
-            </Button>
-            {detailsOpen ? rows.flatMap((r, i) => detailRowLines(r, width).map((l, j) => segLine(l, `row-${i}-${j}`))) : null}
+            {heading('Details')}
+            {rows.flatMap((r, i) => detailRowLines(r, width).map((l, j) => segLine(l, `row-${i}-${j}`)))}
           </Box>
 
           {changes && (
@@ -2962,12 +2948,11 @@ export const register: Register = on => {
             </Box>
           )}
 
-          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}{` · ${DETAILS_KEY} ${detailsOpen ? 'hide details' : 'show details'}`}</Text>
+          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}</Text>
         </Box>
       )
     }
 
-    shownTask = ''
     const nowMs = Date.now()
     const offset = localOffset(nowMs)
     const parts = panelSections(v.tasks, nowMs, offset)
