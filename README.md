@@ -327,7 +327,8 @@ instructions below. See [scouts](docs/guide.md#scouts). A task is `todo`, `doing
 ### Good to know
 
 Work goes into the branch you had checked out when the board was made (say "merge into
-`develop`" to change it). More tips are in the [guide](docs/guide.md#good-to-know).
+`develop`" to change it). A task's branch and folder are removed after it is merged; a
+dropped task keeps its branch so you can still look at its work. More tips are in the [guide](docs/guide.md#good-to-know).
 
 ### For developers
 

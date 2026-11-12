@@ -37,6 +37,9 @@ import {
   listRule,
   branchWarning,
   missingBranchText,
+  branchesToDelete,
+  worktreesToRemove,
+  cleanupText,
   noBranchText,
   gitStateOf,
   gitNote,
@@ -679,6 +682,49 @@ async function removeWorktree($: $, taskId: string, dir: string, except?: string
   return true
 }
 
+/** whether the lead was told about a bigger cleanup already (once per session) */
+let toldCleanup = false
+/** task ids whose leftover folder was skipped for uncommitted changes (told once each) */
+const keptDirty = new Set<string>()
+
+/**
+ * Part of the regular check: removes leftover worktrees of done and dropped tasks (never with
+ * --force, never while a worker runs there) and deletes the branches of done tasks that git
+ * lists as merged into the target branch. Only the plugin's own branches (N.branch) are touched.
+ */
+async function cleanupMerged($: $, b: Board) {
+  const agents = await agentsNow($)
+  if (!agents) return
+  const busy = new Set([...workers.values()].map(w => w.task))
+  const existing: string[] = []
+  for (const t of b.tasks) if ((t.status === 'done' || t.status === 'dropped') && (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) existing.push(t.id)
+  let dirs = 0
+  for (const id of worktreesToRemove(b.tasks, existing)) {
+    const t = find(b, id)
+    if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, agent: t?.agent }, agents, N.name).length) continue
+    const dir = worktreeDir(id)
+    const st = await git($, ['status', '--porcelain'], dir)
+    if (st.exitCode !== 0) continue
+    if (st.stdout.trim()) {
+      if (!keptDirty.has(id)) tellLead($, `Note: ${id} is ${t?.status ?? 'closed'} but its folder ${N.dir}/worktrees/${id} has uncommitted changes, so I left it. Remove it by hand when it is no longer needed.`)
+      keptDirty.add(id)
+      continue
+    }
+    if ((await git($, ['worktree', 'remove', dir])).exitCode === 0) dirs++
+  }
+  await git($, ['worktree', 'prune'])
+  const merged = await git($, ['branch', '--merged', b.target_branch, '--format=%(refname:short)'])
+  let branches = 0
+  if (merged.exitCode === 0) {
+    for (const br of branchesToDelete(b.tasks, merged.stdout.split('\n'), N.branch(''))) if ((await git($, ['branch', '-d', br])).exitCode === 0) branches++
+  }
+  const text = toldCleanup ? '' : cleanupText(branches, dirs)
+  if (text) {
+    toldCleanup = true
+    tellLead($, text)
+  }
+}
+
 // ---------------- a task's changes, for review ----------------
 
 /** The changes of a task: from where its branch left the target branch (the merge base) to the branch's tip. */
@@ -954,7 +1000,8 @@ async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: str
   const done = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${detail}`
   await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
   if (r.ok) sayDone($, b, t.id)
-  if (r.ok) await removeWorktree($, t.id, worktree, agentId)
+  // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
+  if (r.ok && (await removeWorktree($, t.id, worktree, agentId))) await git($, ['branch', '-d', t.branch ?? N.branch(t.id)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
   tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
 }
@@ -1126,6 +1173,7 @@ async function check($: $) {
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
   for (const t of late) reminded.set(t.id, t.updated_at)
   if (late.length) tellLead($, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
+  if (gitState === 'ok') await cleanupMerged($, await load($)).catch(() => undefined)
   await pump($)
 }
 

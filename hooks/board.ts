@@ -541,6 +541,37 @@ export function noBranchText(name: string, branches: string[]): string {
 /** The note when the branch work merges into doesn't exist. */
 export const missingBranchText = (target: string) => `branch '${target}' doesn't exist; set target_branch`
 
+// ---------------- cleaning up after merged tasks ----------------
+// A done task's branch and worktree are removed (the branch only when git lists it as merged).
+// A dropped task keeps its branch (it may hold work the owner wants to see), but loses its worktree.
+
+/** A task's branch: its own `branch`, else `prefix` + id (prefix is e.g. "symcc/"). */
+const branchOf = (t: Pick<SymccTask, 'id' | 'branch'>, prefix: string) => t.branch ?? `${prefix}${t.id}`
+
+/**
+ * The branches that may be deleted: those of done tasks only, that start with `prefix` (the
+ * plugin's own branches) and that `merged` (from `git branch --merged <target>`) lists.
+ */
+export function branchesToDelete(tasks: Pick<SymccTask, 'id' | 'status' | 'branch'>[], merged: string[], prefix: string): string[] {
+  if (!prefix) return []
+  const ok = new Set(merged.map(x => x.replace(/^[*+]?\s*/, '').trim()).filter(Boolean))
+  const out = tasks.filter(t => t.status === 'done').map(t => branchOf(t, prefix)).filter(x => x.startsWith(prefix) && ok.has(x))
+  return [...new Set(out)]
+}
+
+/** The tasks whose leftover worktree may be removed: done or dropped, with a folder still there (`existing` = task ids with a worktree). */
+export function worktreesToRemove(tasks: Pick<SymccTask, 'id' | 'status'>[], existing: string[]): string[] {
+  const has = new Set(existing)
+  return tasks.filter(t => (t.status === 'done' || t.status === 'dropped') && has.has(t.id)).map(t => t.id)
+}
+
+/** The one line for the lead after a cleanup, or '' when it cleaned only a few (`few` or less). */
+export function cleanupText(branches: number, worktrees: number, few = 3): string {
+  if (branches + worktrees <= few) return ''
+  const parts = [branches ? `${branches} merged task branch${branches === 1 ? '' : 'es'}` : '', worktrees ? `${worktrees} leftover task folder${worktrees === 1 ? '' : 's'}` : ''].filter(Boolean)
+  return `Cleaned up ${parts.join(' and ')}.`
+}
+
 // ---------------- a folder without git ----------------
 // Workers each get a git worktree, so the project must be a git repo with at least one commit.
 // With none, nothing starts; symcc offers to set one up (it asks first: it makes a .git folder

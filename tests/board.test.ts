@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -1241,4 +1241,35 @@ test('the lead is told: one task, one role; split big work by role and link the 
   expect(text).toContain('One task, one role.')
   expect(text).toContain('split it into one task per role and link them with after')
   expect(text).toContain('each extra task costs a worker run, a test run and a merge')
+})
+
+test('after merge: only done tasks lose their branch, and only the plugin\'s merged branches', async () => {
+  const tasks = [
+    { id: 'T-1', status: 'done' as const },
+    { id: 'T-2', status: 'done' as const, branch: 'feature/x' },
+    { id: 'T-3', status: 'dropped' as const },
+    { id: 'T-4', status: 'review' as const },
+    { id: 'T-5', status: 'done' as const },
+    { id: 'T-6', status: 'failed' as const },
+    { id: 'T-7', status: 'todo' as const },
+  ]
+  const merged = ['main', '  symcc/T-1', 'feature/x', 'symcc/T-3', 'symcc/T-4', 'symcc/T-6', 'symcc/T-7', '']
+  // T-5 is done but not listed as merged; T-2's branch lacks the prefix; the rest are not done.
+  expect(branchesToDelete(tasks, merged, 'symcc/')).toEqual(['symcc/T-1'])
+  expect(branchesToDelete(tasks, merged, '')).toEqual([])
+  for (const s of ['todo', 'doing', 'review', 'failed', 'paused', 'backlog', 'waiting', 'dropped'] as const)
+    expect(branchesToDelete([{ id: 'T-9', status: s }], ['symcc/T-9'], 'symcc/')).toEqual([])
+})
+
+test('leftover worktrees of done and dropped tasks may be removed, others are kept', async () => {
+  const tasks = [
+    { id: 'T-1', status: 'done' as const },
+    { id: 'T-2', status: 'dropped' as const },
+    { id: 'T-3', status: 'review' as const },
+    { id: 'T-4', status: 'doing' as const },
+    { id: 'T-5', status: 'done' as const },
+  ]
+  expect(worktreesToRemove(tasks, ['T-1', 'T-2', 'T-3', 'T-4'])).toEqual(['T-1', 'T-2'])
+  expect(cleanupText(57, 2)).toBe('Cleaned up 57 merged task branches and 2 leftover task folders.')
+  expect(cleanupText(1, 1)).toBe('')
 })
