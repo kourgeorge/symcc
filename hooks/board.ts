@@ -912,13 +912,13 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
 
 /** One line per task for the model and for /<name>, then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart.
- *  Open tasks come first, then the backlog, then today's others; finished tasks of older days are one line per
+ *  The backlog comes first, then open tasks, then today's others; finished tasks of older days are one line per
  *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
 export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs)): string {
   const top = where ? [`${boardBrand(name)} · ${where}`] : []
   if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
   const s: BoardSections = nowMs === undefined ? boardSections(b.tasks, NaN, offsetMin) : boardSections(b.tasks, nowMs, offsetMin)
-  const rows = [...s.open, ...s.backlog, ...s.today]
+  const rows = [...s.backlog, ...s.open, ...s.today]
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
     const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''

@@ -122,10 +122,11 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   expect(header).toBeDefined()
   expect(header?.props.color).toBe('planMode')
   expect(header?.props.bold).toBe(true)
-  // a blank line right above the header sets it apart from the open tasks
+  // the header comes first, then a thin rule, then the open tasks (no blank line any more)
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const at = texts.findIndex(t => /^▸ Backlog · 2$/.test(t))
-  expect(texts.slice(0, at).reverse().find(t => t !== '')).toBe(' ')
+  expect(/^─+$/.test(texts[at + 1] ?? '')).toBe(true)
+  expect(texts.indexOf(' ')).toBe(-1)
   expect(texts.some(t => /Enter on Backlog opens it/.test(t))).toBe(true)
   // folded by default: the items are hidden
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
@@ -152,12 +153,40 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   await ui.unmount()
 })
 
-test('the Backlog section sits after open tasks and before done ones', async ($, on) => {
+test('the Backlog section comes first, then a separator rule, then open tasks, then done ones', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'backlog', 'Dark mode'), task('T-3', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const folded = (await ui.findAll({ type: 'Button' })).map(b => b.key).filter(k => k === 'T-1' || k === 'T-3' || k === 'day:backlog')
+  expect(folded).toEqual(['day:backlog', 'T-3', 'T-1'])
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const header = texts.findIndex(t => /^▸ Backlog · 1$/.test(t))
+  const rule = texts.findIndex((t, i) => i > header && /^─+$/.test(t))
+  const open = texts.findIndex(t => /Write it up/.test(t))
+  const done = texts.findIndex(t => /Parser/.test(t))
+  expect(header).toBeGreaterThan(-1)
+  expect(rule).toBe(header + 1)
+  expect(open).toBeGreaterThan(rule)
+  expect(done).toBeGreaterThan(open)
+  // opened: the items sit under the header, and the rule comes after the last of them
   await ui.press({ key: 'day:backlog' })
   const keys = (await ui.findAll({ type: 'Button' })).map(b => b.key).filter(k => k === 'T-1' || k === 'T-2' || k === 'T-3' || k === 'day:backlog')
-  expect(keys).toEqual(['T-3', 'day:backlog', 'T-2', 'T-1'])
+  expect(keys).toEqual(['day:backlog', 'T-2', 'T-3', 'T-1'])
+  const after = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const item = after.findIndex(t => /Dark mode/.test(t))
+  const rule2 = after.findIndex((t, i) => i > item && /^─+$/.test(t))
+  expect(rule2).toBeGreaterThan(item)
+  expect(rule2).toBeLessThan(after.findIndex(t => /Write it up/.test(t)))
+  await ui.unmount()
+})
+
+test('a backlog with nothing below it has no separator rule', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-2', 'backlog', 'Dark mode')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'day:backlog' })).toBeDefined()
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const header = texts.findIndex(t => /^▸ Backlog · 1$/.test(t))
+  expect(header).toBeGreaterThan(-1)
+  expect(texts.slice(header + 1).some(t => /^─+$/.test(t))).toBe(false)
   await ui.unmount()
 })
 
@@ -185,6 +214,8 @@ test('an empty backlog shows no Backlog section', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'day:backlog' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Backlog ·/ })).toBeUndefined()
+  // only the rule under the header; no separator in the list
+  expect((await ui.findAll({ type: 'Text' })).filter(t => /^─+$/.test(t.text)).length).toBe(1)
   await ui.unmount()
 })
 

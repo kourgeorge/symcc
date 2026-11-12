@@ -1005,7 +1005,7 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
   expect(() => stashTask(b, a.id, T)).toThrow()
 })
 
-test('the board text lists backlog after open tasks and before done ones; the status line stays quiet', async () => {
+test('the board text lists backlog first, then open tasks, then done ones; the status line stays quiet', async () => {
   let b = emptyBoard()
   const [b1, done] = addTask(b, { title: 'Finished' }, '2026-11-09T03:00:00.000Z')
   const [b2, idea] = addTask(b1, { title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
@@ -1014,8 +1014,8 @@ test('the board text lists backlog after open tasks and before done ones; the st
   for (const text of [boardText(b), boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0)]) {
     const lines = text.split('\n')
     const at = (id: string) => lines.findIndex(l => l.startsWith(id + ' '))
-    expect(at(open.id)).toBeLessThan(at(idea.id))
-    expect(at(idea.id)).toBeLessThan(at(done.id))
+    expect(at(idea.id)).toBeLessThan(at(open.id))
+    expect(at(open.id)).toBeLessThan(at(done.id))
     expect(lines[at(idea.id)]).toBe(`${idea.id}   backlog Idea: requests and triage`)
   }
   const s = boardSections(b.tasks, Date.parse('2026-11-12T12:00:00.000Z'), 0)

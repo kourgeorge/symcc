@@ -1216,7 +1216,7 @@ const MANUAL = (): Record<string, string> => ({
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
   · k stash to the backlog (a task to do, paused or failed).
 In a backlog task: o move to todo · x drop.
-On the board list, the "▸ Backlog · N" section comes after the open tasks, folded; Enter on it opens it (5 items, then "… N more").
+On the board list, the "▸ Backlog · N" section comes first, above the open tasks, folded; Enter on it opens it (5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 On the board list: m switches the mode between review and auto (never to off).
@@ -2348,20 +2348,24 @@ export const register: Register = on => {
     type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
     const backlogShown = backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
     const backlogMore = parts.backlog.length - backlogShown.length
-    const list: Row[] = [
+    const backlogRows: Row[] = parts.backlog.length
+      ? [
+          { day: 'backlog', label: backlogHeader(parts.backlog.length, backlogOpen) },
+          ...(!backlogOpen ? [] : [...backlogShown.map(task => ({ task, indent: true })), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore) }] : [])]),
+        ]
+      : []
+    const rest: Row[] = [
       ...needsYouFirst(parts.open).map(task => ({ task, indent: false })),
-      ...(parts.backlog.length
-        ? [
-            { day: 'backlog', label: backlogHeader(parts.backlog.length, backlogOpen) },
-            ...(!backlogOpen ? [] : [...backlogShown.map(task => ({ task, indent: true })), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore) }] : [])]),
-          ]
-        : []),
       ...parts.today.map(task => ({ task, indent: false })),
       ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
     ]
+    // the Backlog section comes first; a thin rule keeps it apart from the tasks below it
+    const list: Row[] = [...backlogRows, ...rest]
+    const ruleAfter = backlogRows.length && rest.length ? backlogRows.length - 1 : -1
     const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
     const idWidth = Math.max(4, ...rows.map(x => x.id.length))
     const wordWidth = Math.max(...rows.map(x => word[x.status]!.length), 5)
+    const backlogRule = <Text key="backlog-rule" wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>
     return (
       <Box flexDirection="column">
         {header()}
@@ -2377,12 +2381,11 @@ export const register: Register = on => {
                 </Text>
               </Button>
             )
-            // a blank line above the Backlog section, so it stands apart from the open tasks
-            return r.day === 'backlog' && i > 0 ? [<Text key="backlog-gap"> </Text>, button] : button
+            return i === ruleAfter ? [button, backlogRule] : button
           }
           const x = r.task
-          if (x.status === 'backlog')
-            return (
+          if (x.status === 'backlog') {
+            const row = (
               <Button key={x.id} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, opened, () => x.id))}>
                 <Text>{'  '}</Text>
                 <Text color={C('subtle')}>{x.id.padEnd(idWidth)}</Text>
@@ -2391,6 +2394,8 @@ export const register: Register = on => {
                 {x.note && x.note !== 'in the backlog' ? <Text color={C('subtle')}> — {x.note}</Text> : null}
               </Button>
             )
+            return i === ruleAfter ? [row, backlogRule] : row
+          }
           const closed = x.status === 'done' || x.status === 'dropped'
           const extra = x.status === 'waiting' ? x.question ?? '' : x.note
           return (
