@@ -657,9 +657,8 @@ export const backlogLabel = (n: number, opened = false): string => `${opened ? '
 
 /** How many backlog items the board panel lists before a "… N more" line. */
 export const BACKLOG_SHOWN = 5
-/** The backlog section's header in the board panel; folded, it starts with "▸". */
-export const backlogHeader = (n: number, folded = false): string =>
-  `${folded ? '▸ ' : ''}── Backlog · ${n} ── ideas and unclear work; they start only when you move them to todo (o)`
+/** The backlog section's header in the board panel, folded by default: "▸ Backlog · 3", "▾ Backlog · 3" when opened. */
+export const backlogHeader = (n: number, opened = false): string => backlogLabel(n, opened)
 /** The line under the first BACKLOG_SHOWN backlog items when there are more. */
 export const backlogMoreLabel = (more: number): string => `… ${more} more (Enter to show all)`
 

@@ -114,27 +114,33 @@ test('the board panel is interactive: open a task, see its details, go back', as
   }
 })
 
-test('backlog tasks are a section shown unfolded, with a header; one can move to todo or be dropped, and Enter folds it', async ($, on) => {
+test('backlog tasks are a section folded by default under a short header; Enter opens it; one can move to todo or be dropped', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up'), task('T-2', 'backlog', 'Dark mode', { details: 'Maybe later: a dark theme.' }), task('T-3', 'backlog', 'Export')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const header = await ui.find({ type: 'Text', text: /^── Backlog · 2 ── .*move them to todo \(o\)$/ })
+  const header = await ui.find({ type: 'Text', text: /^▸ Backlog · 2$/ })
   expect(header).toBeDefined()
   expect(header?.props.color).toBe('planMode')
+  expect(header?.props.bold).toBe(true)
   // a blank line right above the header sets it apart from the open tasks
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  const at = texts.findIndex(t => /^── Backlog · 2 ──/.test(t))
+  const at = texts.findIndex(t => /^▸ Backlog · 2$/.test(t))
   expect(texts.slice(0, at).reverse().find(t => t !== '')).toBe(' ')
+  expect(texts.some(t => /Enter on Backlog opens it/.test(t))).toBe(true)
+  // folded by default: the items are hidden
+  expect(await ui.find({ key: 'T-2' })).toBeUndefined()
+  expect((await ui.find({ key: 'T-1' }))).toBeDefined()
+  // Enter on the header opens it; again folds it
+  await ui.press({ key: 'day:backlog' })
+  expect((await ui.find({ type: 'Text', text: /^▾ Backlog · 2$/ }))).toBeDefined()
   expect((await ui.find({ key: 'T-2' }))).toBeDefined()
   expect((await ui.find({ key: 'T-3' }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /◇/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /2 in backlog/ }))).toBeDefined()
   expect(await ui.find({ key: 'day:backlog-more' })).toBeUndefined()
-  // Enter on the header folds it; again unfolds it
   await ui.press({ key: 'day:backlog' })
-  expect((await ui.find({ type: 'Text', text: /^▸ ── Backlog · 2 ──/ }))).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^▸ Backlog · 2$/ }))).toBeDefined()
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
-  expect((await ui.find({ key: 'T-1' }))).toBeDefined()
   await ui.press({ key: 'day:backlog' })
   await ui.press({ key: 'T-2' })
   expect((await ui.find({ type: 'Text', text: /Maybe later: a dark theme/ }))).toBeDefined()
@@ -149,6 +155,7 @@ test('backlog tasks are a section shown unfolded, with a header; one can move to
 test('the Backlog section sits after open tasks and before done ones', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'backlog', 'Dark mode'), task('T-3', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'day:backlog' })
   const keys = (await ui.findAll({ type: 'Button' })).map(b => b.key).filter(k => k === 'T-1' || k === 'T-2' || k === 'T-3' || k === 'day:backlog')
   expect(keys).toEqual(['T-3', 'day:backlog', 'T-2', 'T-1'])
   await ui.unmount()
@@ -161,8 +168,10 @@ test('with no open tasks the Backlog section comes first; over 5 items it shows 
   const buttons = (await ui.findAll({ type: 'Button' })).map(b => b.key)
   const first = buttons.findIndex(k => k === 'day:backlog' || k === 'T-1' || /^T-\d$/.test(String(k)))
   expect(buttons[first]).toBe('day:backlog')
-  expect((await ui.find({ type: 'Text', text: /^── Backlog · 7 ──/ }))).toBeDefined()
-  expect(buttons.filter(k => /^T-[2-8]$/.test(String(k))).length).toBe(5)
+  expect((await ui.find({ type: 'Text', text: /^▸ Backlog · 7$/ }))).toBeDefined()
+  await ui.press({ key: 'day:backlog' })
+  const opened = (await ui.findAll({ type: 'Button' })).map(b => b.key)
+  expect(opened.filter(k => /^T-[2-8]$/.test(String(k))).length).toBe(5)
   expect((await ui.find({ type: 'Text', text: /^ *… 2 more \(Enter to show all\)$/ }))).toBeDefined()
   await ui.press({ key: 'day:backlog-more' })
   const all = (await ui.findAll({ type: 'Button' })).map(b => b.key)

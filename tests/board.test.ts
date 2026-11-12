@@ -1038,8 +1038,8 @@ test('old boards without backlog still parse', async () => {
 })
 
 test('the backlog header and "… N more" line, and the banner says "N in backlog"', () => {
-  expect(backlogHeader(2)).toBe('── Backlog · 2 ── ideas and unclear work; they start only when you move them to todo (o)')
-  expect(backlogHeader(2, true).startsWith('▸ ── Backlog · 2 ──')).toBe(true)
+  expect(backlogHeader(2)).toBe('▸ Backlog · 2')
+  expect(backlogHeader(2, true)).toBe('▾ Backlog · 2')
   expect(backlogMoreLabel(3)).toBe('… 3 more (Enter to show all)')
   expect(BACKLOG_SHOWN).toBe(5)
   const b = { ...emptyBoard(), tasks: [{ status: 'backlog' }, { status: 'backlog' }, { status: 'todo' }] } as never

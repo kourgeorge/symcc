@@ -191,8 +191,8 @@ let startupDone = false
 const notReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 const openDays = new Set<string>()
-/** whether the owner has folded the Backlog section in the board panel; unfolded again when the panel closes */
-let backlogFolded = false
+/** whether the owner has opened the Backlog section in the board panel (folded by default); folded again when the panel closes */
+let backlogOpen = false
 /** whether the owner asked to see every backlog item (not just the first BACKLOG_SHOWN); reset when the panel closes */
 let backlogAll = false
 /** the scout being edited in the board panel (its edit mode), or null; `isNew` for one made with "new scout" */
@@ -1216,7 +1216,8 @@ const MANUAL = (): Record<string, string> => ({
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
   · k stash to the backlog (a task to do, paused or failed).
 In a backlog task: o move to todo · x drop.
-On the board list, the "── Backlog · N ──" section comes after the open tasks, shown open (5 items, then "… N more"); Enter on its header folds it.
+On the board list, the "▸ Backlog · N" section comes after the open tasks, folded; Enter on it opens it (5 items, then "… N more").
+Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 On the board list: m switches the mode between review and auto (never to off).
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
@@ -1779,7 +1780,7 @@ export const register: Register = on => {
       return { value: undefined }
     }
     openDays.clear()
-    backlogFolded = false
+    backlogOpen = false
     backlogAll = false
     draft = null
     naming = null
@@ -2342,7 +2343,7 @@ export const register: Register = on => {
       else openDays.add(day)
       $.ui.invalidate('ui.render')
     }
-    const toggleBacklog = () => ((backlogFolded = !backlogFolded), $.ui.invalidate('ui.render'))
+    const toggleBacklog = () => ((backlogOpen = !backlogOpen), $.ui.invalidate('ui.render'))
     const showAllBacklog = () => ((backlogAll = true), $.ui.invalidate('ui.render'))
     type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
     const backlogShown = backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
@@ -2351,8 +2352,8 @@ export const register: Register = on => {
       ...needsYouFirst(parts.open).map(task => ({ task, indent: false })),
       ...(parts.backlog.length
         ? [
-            { day: 'backlog', label: backlogHeader(parts.backlog.length, backlogFolded) },
-            ...(backlogFolded ? [] : [...backlogShown.map(task => ({ task, indent: true })), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore) }] : [])]),
+            { day: 'backlog', label: backlogHeader(parts.backlog.length, backlogOpen) },
+            ...(!backlogOpen ? [] : [...backlogShown.map(task => ({ task, indent: true })), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore) }] : [])]),
           ]
         : []),
       ...parts.today.map(task => ({ task, indent: false })),
@@ -2364,7 +2365,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {header()}
-        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog folds it` : HINT}</Text>}
+        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog opens it` : HINT}</Text>}
         {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {list.map((r, i) => {
           if (!('task' in r)) {
