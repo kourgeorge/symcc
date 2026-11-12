@@ -36,6 +36,13 @@ clear view of what was asked, what is done and what is still open.
 
 The bottleneck isn't how fast the agent writes code. It's keeping track of the work.
 
+**symcc changes how you work: from using one coding agent to leading a swarm of them.**
+Coding agents are now smart, like a team of capable people, so writing code is no longer
+the hard part. Organizing the work is. Without that, agents step on each other, work
+happens in the wrong order, and you lose track. symcc organizes the work and shows it to
+you on the board: the right worker (role) for each task, started at the right time, in
+the right order (a task can wait for another with `after`).
+
 ## What symcc does
 
 When you run a team, you need a lead who listens to you, takes notes, and organizes the
