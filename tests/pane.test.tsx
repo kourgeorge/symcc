@@ -541,10 +541,12 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   expect(body?.props.value).toBe('Look for crashes.\nAnd leaks.')
   expect(Number(body?.props.rows)).toBeGreaterThan(1)
   expect(await ui.find({ key: 'scout-save' })).toBeDefined()
+  // under the box, a hint that 0 means only on demand
+  expect(await ui.find({ type: 'Text', text: /^0 = only on demand$/ })).toBeDefined()
   // a bad every_minutes is refused with a short error
-  await ui.input({ key: 'scout-every', text: '0' })
+  await ui.input({ key: 'scout-every', text: '-5' })
   await ui.press({ key: 'scout-save' })
-  expect(await ui.find({ type: 'Text', text: /whole number, 1 or more/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^every \(minutes\) must be a whole number: 0 for only on demand, or 1 or more$/ })).toBeDefined()
   expect(await ui.find({ key: 'scout-save' })).toBeDefined()
   await ui.press({ key: 'scout-cancel' })
   expect(await ui.find({ key: 'scout-save' })).toBeUndefined()
@@ -1056,16 +1058,17 @@ for (const width of [50, 90]) {
 }
 
 /** Fake scout files, scouts.json and the board; a write to scouts.json.tmp becomes scouts.json (the mv). */
-function scoutFiles(on: On, memory: string | null) {
+function scoutFiles(on: On, memory: string | null, more: Record<string, string> = {}) {
   const files: Record<string, string | null> = {
     '/scouts/bugs.md': '---\nevery_minutes: 30\n---\nLook for crashes.\n',
+    ...Object.fromEntries(Object.entries(more).map(([n, t]) => [`/scouts/${n}.md`, t])),
     '/scouts.json': memory,
     '/board.json': JSON.stringify({ tasks: [] }),
     '/board.lock': null,
   }
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : e.path.endsWith('/scouts') ? { value: true } : next(e)))
-  on('fs.list', (_, e, next) => (e.path.endsWith('/scouts') ? { value: [{ name: 'bugs.md', kind: 'file' }] } : next(e)))
+  on('fs.list', (_, e, next) => (e.path.endsWith('/scouts') ? { value: ['bugs', ...Object.keys(more)].map(n => ({ name: `${n}.md`, kind: 'file' })) } : next(e)))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
   on('fs.write', (_, e) => {
     if (e.path.endsWith('/scouts.json.tmp')) files['/scouts.json'] = String(e.text)
@@ -1120,4 +1123,42 @@ test('/symcc-scout <name> pause and resume, and run now refused while paused', a
   expect(await run('bugs')).not.toMatch(/paused/)
   expect(await run('nope pause')).toMatch(/^no scout named nope/)
   expect(await run('bugs stop')).toMatch(/^Use: \/symcc-scout <name>/)
+})
+
+test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts with the warning, and run now still works', async ($, on) => {
+  scoutFiles(on, null, { secrets: '---\nevery_minutes: 0\n---\nLook for keys.\n', bad: '---\nevery_minutes: -5\n---\nLook around.\n' })
+  stateOf(on, {})
+  const list = String((await $.command.run({ command: 'symcc-scouts', args: '' })).text)
+  expect(list).toMatch(/^bugs: every 30 min/m)
+  expect(list).toMatch(/^secrets: on demand$/m)
+  expect(list).toMatch(/^bad: on demand \(every_minutes "-5" is not valid: runs only on demand until fixed\)$/m)
+  // only bugs is on the timer: the panel shows its next run, and none for secrets and bad
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
+  await ui.press({ key: 'tab-scouts' })
+  expect(String((await ui.find({ key: 'scout:bugs' }))?.text)).toMatch(/every 30 min\s+next in 30m/)
+  expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran$/)
+  expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran$/)
+  await ui.unmount()
+  // run now is not refused because the scout runs only on demand
+  const run = String((await $.command.run({ command: 'symcc-scout', args: 'secrets' })).text)
+  expect(run).not.toMatch(/no scout named|on demand|paused/)
+})
+
+test('an on-demand scout\'s page says "on demand" with no "next in", and a bad value shows its warning', async ($, on) => {
+  const soon = new Date(Date.now() + 12 * 60_000).toISOString()
+  const warning = 'every_minutes "-5" is not valid: runs only on demand until fixed'
+  stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('secrets', { every_minutes: 0, prompt: 'Look for keys.' }), scout('bad', { every_minutes: 0, warning, prompt: 'Look around.' }), scout('bugs', { next_run: soon })], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 90 }, surface: 'terminal' })
+  expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran$/)
+  expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran$/)
+  expect((await ui.find({ type: 'Text', text: /bad every_minutes/ }))?.props.color).toBe('warning')
+  await ui.press({ key: 'scout:secrets' })
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('\n')
+  expect(texts).toMatch(/on demand/)
+  expect(texts).not.toMatch(/next in/)
+  expect(texts).not.toMatch(/not valid/)
+  await ui.press({ key: 'scout-back' })
+  await ui.press({ key: 'scout:bad' })
+  expect((await ui.find({ type: 'Text', text: new RegExp(`^${esc(warning)}$`) }))?.props.color).toBe('warning')
+  await ui.unmount()
 })

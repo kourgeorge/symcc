@@ -5,6 +5,7 @@ import { emptyBoard } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { roleMark } from './roles'
+import { onDemand } from './scouts'
 import { fmtDuration, runMs } from './runs'
 import { offStatusLine } from './settings'
 import { num } from './text'
@@ -29,12 +30,13 @@ export const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the le
 /** The bold labels over the always-open sections of the board panel. */
 export const SECTION_LABEL = { needsYou: 'NEEDS YOU', doing: 'DOING', todo: 'TO DO' } as const
 
-/** What the next scout run is: "secrets in 38m", "secrets now", "running: secrets", or '' when none is planned. */
-export function nextScoutText(scouts: Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'>[], nowMs: number): string {
+/** What the next scout run is: "secrets in 38m", "secrets now", "running: secrets", or '' when none is planned.
+ *  Paused scouts and scouts that run only on demand (every_minutes 0) are skipped. */
+export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[], nowMs: number): string {
   const running = scouts.find(s => s.running)
   if (running) return `running: ${running.name}`
   const next = scouts
-    .filter(s => !s.paused)
+    .filter(s => !s.paused && !(s.every_minutes !== undefined && onDemand({ every_minutes: s.every_minutes })))
     .map(s => ({ name: s.name, at: Date.parse(s.next_run ?? '') }))
     .filter(s => Number.isFinite(s.at))
     .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name))[0]
@@ -46,7 +48,7 @@ export function nextScoutText(scouts: Pick<SymccScout, 'name' | 'running' | 'nex
  *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
  *  turned off shows "symcc off · /symcc-on". Busy workers are the tasks being worked on. */
 export function statusStrip(
-  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'>[] },
+  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] },
   nowMs: number,
   width = Infinity,
   name: string = DEFAULT_NAME,

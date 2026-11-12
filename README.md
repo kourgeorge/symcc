@@ -363,7 +363,10 @@ directly. A value over its limit is cut to it, and the answer says so (e.g.
 ### Scouts and task statuses
 
 A scout is one Markdown file in `.symcc/scouts/`: how often it runs at the top, its
-instructions below. See [scouts](docs/guide.md#scouts). A task is `todo`, `doing`,
+instructions below. `every_minutes: 0` means it runs only on demand ("run now" on its page,
+or `/symcc-scout <name>`), never on the timer. A value that is not a whole number (like `-5`)
+also means only on demand, and the scout shows a warning until you fix it. See
+[scouts](docs/guide.md#scouts). A task is `todo`, `doing`,
 `waiting` (for your answer), `review`, `paused`, `failed`, `done` (merged), `dropped` or
 `backlog` (parked; never starts until you move it to todo). See
 [a task's life](docs/guide.md#a-tasks-life).

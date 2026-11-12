@@ -49,9 +49,9 @@ export const MANUAL = (): Record<string, string> => ({
     review (or for a task with needs_review) it waits for your approve or reject first.
   • The board has one mode: off (nothing runs), review (work runs; finished work waits for
     you) or auto (work runs; finished work that passes merges on its own; the default).
-  • Scouts are background agents on a timer. Each does what its file asks (reading the
-    project, running shell commands, searching the web) and reports to the lead, which
-    decides what goes on the board.
+  • Scouts are background agents on a timer (every_minutes: 0 means only on demand). Each
+    does what its file asks (reading the project, running shell commands, searching the
+    web) and reports to the lead, which decides what goes on the board.
   Topics: /${S.N.help} commands · tasks · lead · workers · scouts · safety`,
   commands: `Commands
   /${S.N.name} opens everything; /${S.N.name}-WORD does one thing: a plural noun opens a view
@@ -158,6 +158,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   web pages, but must not change the project (no edits, installs or git changes). It sends
   its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
   tells you, or ignores it. Run /${S.N.name}-scouts after adding or deleting a file.
+  every_minutes: 0 means only on demand: it never runs on the timer, only with run now
+  or /${S.N.name}-scout NAME. A value that is not a whole number (like -5) also means only
+  on demand, and the scout shows a warning until the file is fixed.
   Pause one with p on its page or /${S.N.name}-scout NAME pause: it doesn't run (not on its
   timer, not with run now) until you resume it. A run going on finishes first. The pause
   is kept in ${S.N.dir}/scouts.json, so its file is not changed.
@@ -209,6 +212,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change (that sends it back to work).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
+- A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.

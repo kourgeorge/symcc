@@ -245,6 +245,20 @@ scout" asks for a name, and "Edit" on a scout's page lets you change how often i
 model and its instructions. Save writes the file (other front matter keys are kept) and the
 new timing applies at once. `/symcc-scout <name>` runs a scout now.
 
+### Scouts that run only on demand
+
+`every_minutes: 0` (or 0 in the panel's "every (minutes)" box) means the scout runs only
+on demand: never on the timer, only when you press "run now" on its page or run
+`/symcc-scout <name>`. The Scouts list and its page say "on demand" instead of "every N"
+and show no "next in …", for example `◎ secrets  on demand  last: nothing`, and the status
+strip's next scout skips it. If `every_minutes` is left out, the scout runs every hour.
+
+A value that is not a whole number of 0 or more (like `-5`, `1.5` or `ten`) also means
+only on demand, so a typo never makes a scout run more often than you meant. Its row shows
+`bad every_minutes`, and its page and `/symcc-scouts` show a warning such as
+`every_minutes "-5" is not valid: runs only on demand until fixed`. The panel's editor
+refuses such a value.
+
 ### Pausing a scout
 
 To stop one scout for a while without deleting it, press `p` on its page in the panel, or

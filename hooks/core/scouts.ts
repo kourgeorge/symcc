@@ -5,7 +5,15 @@ import { fmtDuration } from './runs'
 import { frontMatterLine, splitFrontMatter } from './text'
 
 /** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
-export type ScoutDef = { name: string; every_minutes: number; model?: string; prompt: string }
+/** `every_minutes` 0 means "only on demand" (never on the timer). A bad value in the file also gives 0, with
+ *  `warning` saying so and `bad_every` holding the value as written. */
+export type ScoutDef = { name: string; every_minutes: number; model?: string; prompt: string; warning?: string; bad_every?: string }
+
+/** The warning for a scout file whose every_minutes can't be used. */
+export const badEveryWarning = (value: string): string => `every_minutes "${value}" is not valid: runs only on demand until fixed`
+
+/** True when a scout runs only on demand ("run now" or /<name>-scout), never on its timer. */
+export const onDemand = (s: { every_minutes: number }): boolean => !(Number.isFinite(s.every_minutes) && s.every_minutes >= 1)
 
 export function parseScout(name: string, text: string): ScoutDef | null {
   const fm = splitFrontMatter(text)
@@ -16,8 +24,13 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   }
   const prompt = fm.body.trim()
   if (!prompt) return null
-  const every = Number(meta.every_minutes ?? meta.every ?? 60)
-  return { name: meta.name || name, every_minutes: Number.isFinite(every) && every >= 1 ? every : 60, model: meta.model || undefined, prompt }
+  const raw = (meta.every_minutes ?? meta.every ?? '').trim()
+  const base = { name: meta.name || name, model: meta.model || undefined, prompt }
+  // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
+  if (!raw) return { ...base, every_minutes: 60 }
+  const every = everyMinutesOf(raw)
+  if (every !== null) return { ...base, every_minutes: every }
+  return { ...base, every_minutes: 0, warning: badEveryWarning(raw), bad_every: raw }
 }
 
 /**
@@ -54,17 +67,17 @@ export function scoutNameError(name: string, existing: string[]): string {
   return ''
 }
 
-/** every_minutes as typed: a whole number of 1 or more, or null. */
+/** every_minutes as typed: a whole number, 0 (only on demand) or more, or null. */
 export function everyMinutesOf(text: string): number | null {
   const s = text.trim()
   if (!/^\d+$/.test(s)) return null
   const n = Number(s)
-  return n >= 1 ? n : null
+  return Number.isSafeInteger(n) ? n : null
 }
 
 /** Why a scout's edit can't be saved ('' when it can). */
 export function scoutDraftError(d: { every: string; body: string }): string {
-  if (everyMinutesOf(d.every) === null) return 'every (minutes) must be a whole number, 1 or more'
+  if (everyMinutesOf(d.every) === null) return 'every (minutes) must be a whole number: 0 for only on demand, or 1 or more'
   if (!d.body.trim()) return 'write what the scout looks for'
   return ''
 }
@@ -125,19 +138,22 @@ export function scoutPausedText(saved: Record<string, ScoutMemory>, name: string
   return scoutMemoryText(Object.entries(all).map(([n, m]) => ({ name: n, ...m })))
 }
 
-/** How often a scout runs: "every 30 min", "every hour", "every 2 hours", "every 90 min". */
+/** How often a scout runs: "every 30 min", "every hour", "every 2 hours", "every 90 min", or "on demand" for 0. */
 export function everyText(minutes: number): string {
-  const m = Math.max(1, Math.round(Number.isFinite(minutes) ? minutes : 60))
+  if (onDemand({ every_minutes: minutes })) return 'on demand'
+  const m = Math.max(1, Math.round(minutes))
   if (m === 60) return 'every hour'
   if (m % 60 === 0) return `every ${m / 60} hours`
   return `every ${m} min`
 }
 
-/** What a scout is doing: "running now…", "paused", "next in 12m", "due now", or '' when no run is planned.
- *  A scout paused while it runs finishes that run, so it still says "running now…". */
-export function scoutStateText(s: Pick<SymccScout, 'running' | 'next_run' | 'paused'>, nowMs: number): string {
+/** What a scout is doing: "running now…", "paused", "next in 12m", "due now", or '' when no run is planned (as
+ *  for a scout that runs only on demand). A scout paused while it runs finishes that run, so it still says
+ *  "running now…". */
+export function scoutStateText(s: Pick<SymccScout, 'running' | 'next_run' | 'paused'> & { every_minutes?: number }, nowMs: number): string {
   if (s.running) return 'running now…'
   if (s.paused) return 'paused'
+  if (s.every_minutes !== undefined && onDemand({ every_minutes: s.every_minutes })) return ''
   const at = Date.parse(s.next_run ?? '')
   if (!Number.isFinite(at)) return ''
   return at <= nowMs ? 'due now' : `next in ${fmtDuration(at - nowMs)}`
@@ -178,7 +194,8 @@ export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driv
 export const scoutPausedAnswer = (scout: string, name: string = DEFAULT_NAME): string =>
   `${scout} is paused; resume it first (p on its page, or /${name}-scout ${scout} resume)`
 
-/** A scout's state icon (one column wide): ◉ running, ○ paused, ◎ waiting for its next run. */
+/** A scout's state icon (one column wide): ◉ running, ○ paused, ◎ waiting for its next run or for "run now" (a
+ *  scout that runs only on demand). */
 export const scoutIcon = (s: Pick<SymccScout, 'running' | 'paused'>): string => (s.running ? '◉' : s.paused ? '○' : '◎')
 
 /** The theme color of a scout's icon and state: running blue (ide), paused subtle, waiting plain text. */
@@ -204,8 +221,12 @@ export function scoutLastText(s: Pick<SymccScout, 'last_run' | 'last_report'>): 
   return { text: n ? `last: found ${n}` : 'last: found something', tone: 'warning' }
 }
 
-/** One row of the Scouts list, its cells already padded so the columns line up. */
-export type ScoutListRow = { icon: string; tone: string; name: string; every: string; state: string; last: string; lastTone: string; model: string }
+/** One row of the Scouts list, its cells already padded so the columns line up. `stateTone` is the state's color
+ *  (the warning color for a scout whose every_minutes is not valid). */
+export type ScoutListRow = { icon: string; tone: string; name: string; every: string; state: string; stateTone: string; last: string; lastTone: string; model: string }
+
+/** The short state shown in the Scouts list for a scout whose every_minutes is not valid. */
+export const BAD_EVERY_STATE = 'bad every_minutes'
 
 /** The cells of the Scouts list at `width` columns (`indent` columns before each row): icon, name, how often, state,
  *  "last:" and model, two spaces between columns. When a row would not fit, the model column goes first, then
@@ -215,7 +236,7 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
   const raw = scouts.map(s => ({
     s,
     every: everyText(s.every_minutes),
-    state: scoutStateText(s, nowMs),
+    state: s.warning && !s.running && !s.paused ? BAD_EVERY_STATE : scoutStateText(s, nowMs),
     last: s.running ? { text: '', tone: 'subtle' } : scoutLastText(s),
     model: s.model ?? '',
   }))
@@ -233,6 +254,7 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
     name: lastCol ? r.s.name.padEnd(cols.name) : r.s.name,
     every: cell('every', r.every),
     state: cell('state', r.state),
+    stateTone: r.s.warning && !r.s.running && !r.s.paused ? 'warning' : scoutTone(r.s),
     last: cell('last', r.last.text),
     lastTone: r.last.tone,
     model: cell('model', r.model),
@@ -336,7 +358,7 @@ export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
     'No scouts yet. A scout runs on a timer, does what its file asks and reports to the lead.',
     `Add one as ${namesFor(name).scouts}/<name>.md:`,
     '  ---',
-    '  every_minutes: 30',
+    '  every_minutes: 30   (0 = only on demand)',
     '  model: sonnet        (optional)',
     '  ---',
     '  What to do, in plain words.',

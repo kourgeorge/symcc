@@ -1,5 +1,5 @@
 import type { SymccScout } from '../../types'
-import { type ScoutDef, parseScout, scoutMayRun, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutPausedAnswer, offAnswer, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf } from '../board'
+import { type ScoutDef, parseScout, scoutMayRun, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutPausedAnswer, offAnswer, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand } from '../board'
 import { publish } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
@@ -95,7 +95,7 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
   st.paused = paused
   await publish($, await load($))
   $.ui.invalidate('ui.render')
-  if (!paused) return `${name} resumed: it runs ${everyText(st.every_minutes)} again`
+  if (!paused) return onDemand(st) ? `${name} resumed: it runs only on demand (run now, or /${S.N.name}-scout ${name})` : `${name} resumed: it runs ${everyText(st.every_minutes)} again`
   return `${name} paused: it doesn't run until you resume it${st.running ? ' (the run going now finishes first)' : ''}`
 }
 
@@ -127,11 +127,16 @@ export async function scheduleScouts($: $) {
   for (const s of defs) {
     const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = scoutState.get(s.name) ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
     const ms = s.every_minutes * 60_000
-    const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt, next_run: new Date(Date.now() + ms).toISOString() }
+    const timed = !onDemand(s)
+    const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt }
+    if (timed) st.next_run = new Date(Date.now() + ms).toISOString()
     if (s.model) st.model = s.model
+    if (s.warning) st.warning = s.warning
     if (old?.last_report !== undefined) st.last_report = old.last_report
     if (old?.paused) st.paused = true
     scoutState.set(s.name, st)
+    // every_minutes 0 (or a bad value): only on demand, so no timer
+    if (!timed) continue
     timers.push(
       $.clock.every(ms, () => {
         st.next_run = new Date(Date.now() + ms).toISOString()
@@ -167,7 +172,7 @@ export async function readScoutFile($: $, scout: string): Promise<string | null>
 export async function editScout($: $, sc: SymccScout) {
   const text = await readScoutFile($, sc.name)
   const def = text === null ? null : parseScout(sc.name, text)
-  S.draft = { scout: sc.name, isNew: false, every: String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
+  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
   $.ui.invalidate('ui.render')
 }
 

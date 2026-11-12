@@ -87,7 +87,11 @@ export type SymccTask = {
 
 export type SymccScout = {
   name: string
+  /** how often it runs on its timer; 0 means only on demand ("run now" or /symcc-scout NAME) */
   every_minutes: number
+  /** set when the file's every_minutes is not valid (the scout then runs only on demand), e.g.
+   *  'every_minutes "-5" is not valid: runs only on demand until fixed' */
+  warning?: string
   last_run: string | null
   running: boolean
   /** the model from the scout file's front matter, if set */

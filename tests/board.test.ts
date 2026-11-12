@@ -4,7 +4,7 @@ import type { SymccScout, SymccTask } from '../types'
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -45,6 +45,46 @@ test('a scout file: front matter sets how often, the body is its instructions', 
   expect(s).toEqual({ name: 'tests', every_minutes: 15, model: 'haiku', prompt: 'Find risky code with no tests.' })
   expect(parseScout('plain', 'Just instructions.')?.every_minutes).toBe(60)
   expect(parseScout('empty', '---\nevery_minutes: 5\n---\n')).toBe(null)
+})
+
+test('a scout file with every_minutes 0 runs only on demand; a bad value too, with a warning', () => {
+  expect(parseScout('s', '---\nevery_minutes: 0\n---\nLook.\n')).toEqual({ name: 's', every_minutes: 0, model: undefined, prompt: 'Look.' })
+  expect(parseScout('s', '---\nevery: 0\n---\nLook.\n')?.every_minutes).toBe(0)
+  for (const bad of ['-5', 'ten', '1.5']) {
+    const s = parseScout('s', `---\nevery_minutes: ${bad}\n---\nLook.\n`)!
+    expect(s.every_minutes).toBe(0)
+    expect(s.warning).toBe(`every_minutes "${bad}" is not valid: runs only on demand until fixed`)
+    expect(s.bad_every).toBe(bad)
+    expect(onDemand(s)).toBe(true)
+  }
+  expect(parseScout('s', '---\nmodel: haiku\n---\nLook.\n')).toEqual({ name: 's', every_minutes: 60, model: 'haiku', prompt: 'Look.' })
+  expect(parseScout('s', '---\nevery_minutes: 30\n---\nLook.\n')?.warning).toBeUndefined()
+  expect(onDemand({ every_minutes: 30 })).toBe(false)
+  // run now still works: being on demand doesn't stop a run
+  expect(scoutMayRun({ running: false }, { driving: true, gitOk: true, mode: 'auto', on: true })).toBe(true)
+  // shown as "on demand", with no "next in …", and skipped as the next scout
+  const at = Date.parse('2026-11-12T10:00:00.000Z')
+  const soon = new Date(at + 5 * 60_000).toISOString()
+  expect(everyText(0)).toBe('on demand')
+  expect(scoutStateText({ every_minutes: 0, running: false, next_run: soon }, at)).toBe('')
+  expect(scoutStateText({ every_minutes: 0, running: true }, at)).toBe('running now…')
+  expect(scoutRow({ name: 'secrets', every_minutes: 0, last_run: null, running: false }, at)).toEqual({ name: 'secrets', every: 'on demand', model: '', state: '', ran: 'never ran' })
+  expect(nextScoutText([{ name: 'a', every_minutes: 0, running: false, next_run: soon }], at)).toBe('')
+  expect(nextScoutText([{ name: 'a', every_minutes: 0, running: false, next_run: soon }, { name: 'b', every_minutes: 30, running: false, next_run: soon }], at)).toBe('next: b in 5m')
+  const rows = scoutListRows(
+    [
+      { name: 'secrets', every_minutes: 0, last_run: '2026-11-12T09:00:00.000Z', running: false, last_report: 'NOTHING' },
+      { name: 'bad', every_minutes: 0, last_run: null, running: false, warning: 'every_minutes "-5" is not valid: runs only on demand until fixed' },
+    ],
+    at,
+    90,
+  )
+  expect(rows.map(r => scoutListText(r))).toEqual(['  ◎ secrets  on demand                     last: nothing', '  ◎ bad      on demand  bad every_minutes  never ran'])
+  expect(rows[1]!.stateTone).toBe('warning')
+  expect(rows[0]!.stateTone).toBe('text')
+  expect(rows.map(r => scoutListText(r)).some(t => /next in/.test(t))).toBe(false)
+  // alone, an on-demand scout's row is just its icon, name, "on demand" and last
+  expect(scoutListText(scoutListRows([{ name: 'secrets', every_minutes: 0, last_run: '2026-11-12T09:00:00.000Z', running: false, last_report: 'NOTHING' }], at, 90)[0]!)).toBe('  ◎ secrets  on demand  last: nothing')
 })
 
 test('the board lists the newest task at the top and the oldest at the bottom', () => {
@@ -666,13 +706,15 @@ test('a new scout name and every_minutes are checked', async () => {
   expect(scoutNameError('Bugs', ['bugs'])).toMatch(/already exists/)
   expect(everyMinutesOf('30')).toBe(30)
   expect(everyMinutesOf(' 1 ')).toBe(1)
-  expect(everyMinutesOf('0')).toBeNull()
+  expect(everyMinutesOf('0')).toBe(0)
   expect(everyMinutesOf('-5')).toBeNull()
   expect(everyMinutesOf('1.5')).toBeNull()
   expect(everyMinutesOf('ten')).toBeNull()
   expect(everyMinutesOf('')).toBeNull()
   expect(scoutDraftError({ every: '30', body: 'Look.' })).toBe('')
-  expect(scoutDraftError({ every: '0', body: 'Look.' })).toMatch(/whole number/)
+  expect(scoutDraftError({ every: '0', body: 'Look.' })).toBe('')
+  expect(scoutDraftError({ every: '-5', body: 'Look.' })).toBe('every (minutes) must be a whole number: 0 for only on demand, or 1 or more')
+  expect(scoutDraftError({ every: '1.5', body: 'Look.' })).toMatch(/0 for only on demand/)
   expect(scoutDraftError({ every: '30', body: '  ' })).toMatch(/looks for/)
 })
 

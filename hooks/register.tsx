@@ -12,7 +12,7 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts, git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, find, STATUS_WORD, statText, cutDiff } from './board'
+import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
 import { dataDir } from './name'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
@@ -221,7 +221,7 @@ export const register: Register = on => {
         const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
         if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, Esc closes.`)
         if (!defs.length) return { text: `No scouts yet. Add one as ${S.N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
-        return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') }
+        return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') }
       }
       case 'scout':
         return { text: await runScoutNow($, cmd.name) }

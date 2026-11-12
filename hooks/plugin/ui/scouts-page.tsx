@@ -33,7 +33,8 @@ export function scoutEditPage($: $, pane: PaneParts) {
 
       <Box flexDirection="column">
         {heading('every (minutes)')}
-        <Input key="scout-every" value={d.every} placeholder="a whole number, 1 or more" autoFocus submitLabel="keep" onInput={value => void (d.every = value)} onSubmit={value => void (d.every = value)} />
+        <Input key="scout-every" value={d.every} placeholder="a whole number: 0, or 1 or more" autoFocus submitLabel="keep" onInput={value => void (d.every = value)} onSubmit={value => void (d.every = value)} />
+        <Text color={C('subtle')}>0 = only on demand</Text>
       </Box>
 
       <Box flexDirection="column">
@@ -79,6 +80,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
           <Text bold color={C('text')}>
             {title}
           </Text>
+          {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
         </Box>
 
         {buttonRows([
@@ -146,7 +148,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             <Text color={C(r.tone)}>{`  ${r.icon} `}</Text>
             <Text bold={!x.paused} color={C(x.paused ? 'subtle' : 'claude')}>{r.name}</Text>
             <Text color={C('subtle')}>{r.every}</Text>
-            <Text color={C(r.tone)}>{r.state}</Text>
+            <Text color={C(r.stateTone)}>{r.state}</Text>
             <Text color={C(r.lastTone)}>{r.last}</Text>
             <Text color={C('subtle')}>{r.model}</Text>
           </Button>
