@@ -96,6 +96,8 @@ import {
   modeOf,
   isMode,
   modeLabel,
+  modeButton,
+  nextMode,
   parseDiffStat,
   statText,
   cutDiff,
@@ -1763,13 +1765,13 @@ export const register: Register = on => {
     const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
     const mode = modeOf(v)
     /** What the m key switches to: review and auto swap; from off it goes to review (m never turns the board off). */
-    const nextMode: SymccMode = mode === 'review' ? 'auto' : 'review'
+    const switchTo: SymccMode = nextMode(mode)
     const target = v.target_branch ?? emptyBoard().target_branch
     /** Switches the board mode between review and auto, the same as /<name>-mode with no word. */
     const switchMode = act(async () => {
-      const r = await setBoardMode($, nextMode, 'you')
+      const r = await setBoardMode($, switchTo, 'you')
       $.ui.toast(N.toast(r))
-      tellLead($, `The owner set the board mode to ${nextMode} from the board: ${r}`)
+      tellLead($, `The owner set the board mode to ${switchTo} from the board: ${r}`)
     })
     /** The banner at the top: the drawing, the board's facts, the board mode, and the rule under them. */
     const banner = () => {
@@ -1787,9 +1789,9 @@ export const register: Register = on => {
         )),
         <Box key="banner-mode" flexDirection="row">
           <Text wrap="truncate">
-            <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeText(mode)}</Text>{' '}
+            <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
           </Text>
-          <Button key="mode" label={`[m] switch to ${nextMode}`} hotkey="m" dimColor onPress={switchMode} />
+          <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
         </Box>,
         <Text wrap="truncate" color={C('subtle')}>{bannerRule(width)}</Text>,
       ]

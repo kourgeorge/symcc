@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -686,22 +686,29 @@ test('the status line lists running and failed task IDs, without the folder or "
 test('the status line starts with the board mode: off, review or auto', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   const tasks = [t('doing', 'T-26'), t('review', 'T-27')]
-  expect(MODE_LABEL).toEqual({ off: '⏹ off', review: '⏸ review', auto: '⏵ auto' })
+  expect(MODE_LABEL).toEqual({ off: '⏹ off', review: '⏸ review merge', auto: '⏵ auto' })
+  expect(MODE_NAME).toEqual({ off: 'off', review: 'review merge', auto: 'auto' })
+  expect(modeButton('auto')).toBe('[m] review merge')
+  expect(modeButton('review')).toBe('[m] auto')
+  expect(modeButton('off')).toBe('[m] review merge')
+  expect(nextMode('off')).toBe('review')
+  expect(nextMode('review')).toBe('auto')
+  expect(nextMode('auto')).toBe('review')
   expect(statusLine({ tasks }, true, '', 'off')).toBe('⏹ off · T-26 doing · 1 to review (T-27)')
-  expect(statusLine({ tasks }, true, '', 'review')).toBe('⏸ review · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks }, true, '', 'review')).toBe('⏸ review merge · T-26 doing · 1 to review (T-27)')
   expect(statusLine({ tasks }, true, '', 'auto')).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
   expect(statusLine({ tasks }, true)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
   // empty board this session drives: off and review show the label; auto stays quiet
   expect(statusLine({ tasks: [] }, true, '', 'off')).toBe('⏹ off')
-  expect(statusLine({ tasks: [] }, true, '', 'review')).toBe('⏸ review')
-  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'review')).toBe('⏸ review · on dev, not main')
+  expect(statusLine({ tasks: [] }, true, '', 'review')).toBe('⏸ review merge')
+  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'review')).toBe('⏸ review merge · on dev, not main')
   expect(statusLine({ tasks: [] }, true, '', 'auto')).toBeUndefined()
   expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'auto')).toBe('on dev, not main')
   // driven by another session: the label shows in every mode
   expect(statusLine({ tasks: [] }, false, '', 'off')).toBe('⏹ off · empty (driven by another session)')
-  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review · empty (driven by another session)')
+  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review merge · empty (driven by another session)')
   expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto · empty (driven by another session)')
-  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review · 1 to do (driven by another session)')
+  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review merge · 1 to do (driven by another session)')
   // a bad mode shows as auto
   expect(statusLine({ tasks }, true, '', 'later' as never)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
   expect(modeLabel('off')).toBe('⏹ off')
@@ -798,7 +805,7 @@ test('the board text names a task in review', () => {
   expect(boardText(b)).toMatch(/T-1\s+review\s+Blue button — ready for review/)
   expect(boardText(b)).toContain(modeText('auto'))
   b = patchTask(setMode(b, 'review'), t.id, { note: 'ready for review: the checks passed' }, T)
-  expect(boardText(b)).toContain('⏸ review: work runs; finished tasks wait for your approve or reject')
+  expect(boardText(b)).toContain('⏸ review merge: work runs; finished tasks wait for your approve or reject')
   expect(boardText(b)).toContain('— ready for review: the checks passed')
 })
 
@@ -907,27 +914,29 @@ test('/symcc-mode: no word switches review and auto (off goes to review), a word
   expect(parseCommand('symcc-mode', '', 'review')).toEqual({ kind: 'mode', mode: 'auto' })
   expect(parseCommand('symcc-mode', '', 'off')).toEqual({ kind: 'mode', mode: 'review' })
   expect(modeText('off')).toBe('⏹ off: no work runs; tasks in review can still be approved or rejected')
-  expect(modeText('review')).toBe('⏸ review: work runs; finished tasks wait for your approve or reject')
+  expect(modeText('review')).toBe('⏸ review merge: work runs; finished tasks wait for your approve or reject')
   expect(modeText('auto')).toBe('⏵ auto: work runs; finished tasks that pass merge on their own')
 })
 
 test('agent names start with the plugin name', () => {
-  expect(workerName('symcc', 'T-33')).toBe('symcc T-33')
-  expect(workerName('other', 'T-1')).toBe('other T-1')
+  expect(workerName('symcc', 'T-33')).toBe('symcc-T-33')
+  expect(workerName('other', 'T-1')).toBe('other-T-1')
   expect(workerDescription('One mode  (off / review / auto)')).toBe('One mode (off / review / auto)')
   expect(workerDescription('x'.repeat(100)).length).toBe(AGENT_DESCRIPTION_CHARS)
-  expect(scoutAgentName('symcc', 'bugs')).toBe('symcc scout bugs')
+  expect(scoutAgentName('symcc', 'bugs')).toBe('symcc-scout-bugs')
+  expect(scoutAgentName('my.plugin', 'odd name!')).toBe('my-plugin-scout-odd-name')
+  for (const n of [workerName('symcc', 'T-33'), scoutAgentName('symcc', 'bugs'), scoutAgentName('x', 'y'.repeat(200))]) expect(n).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)
   expect(scoutDescription('bugs', '\n# Find bugs in the code\nmore')).toBe('Find bugs in the code')
   expect(scoutDescription('bugs', '')).toBe('bugs')
   expect(scoutDescription('bugs', 'y'.repeat(100)).length).toBe(AGENT_DESCRIPTION_CHARS)
   // a worker is still found for its task by its new name, with or without a host suffix
   const [b] = addTask(emptyBoard(), { title: 'A' }, T)
   const t = b.tasks[0]!
-  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-1', description: 'A' }])).toBe(false)
-  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-1-2', description: 'A' }])).toBe(false)
-  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc T-10', description: 'A' }])).toBe(true)
-  expect(mayStart(t, [{ id: 'w', type: 'my:worker', status: 'running', name: 'my T-1', description: 'A' }], 'my')).toBe(false)
-  expect(mayStart(t, [{ id: 's', type: 'symcc:scout', status: 'running', name: 'symcc scout T-1', description: 'T-1' }])).toBe(true)
+  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc-T-1', description: 'A' }])).toBe(false)
+  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc-T-1-2', description: 'A' }])).toBe(false)
+  expect(mayStart(t, [{ id: 'w', type: 'symcc:worker', status: 'running', name: 'symcc-T-10', description: 'A' }])).toBe(true)
+  expect(mayStart(t, [{ id: 'w', type: 'my:worker', status: 'running', name: 'my-T-1', description: 'A' }], 'my')).toBe(false)
+  expect(mayStart(t, [{ id: 's', type: 'symcc:scout', status: 'running', name: 'symcc-scout-T-1', description: 'T-1' }])).toBe(true)
 })
 
 test('a worker asking for more files is read from its answer', async () => {

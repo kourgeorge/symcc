@@ -246,9 +246,19 @@ export function setMode(b: Board, m: SymccMode): Board {
   return { ...b, mode: isMode(m) ? m : 'auto' }
 }
 
-/** The label for a mode, at the start of the status line and in the panel: "⏹ off", "⏸ review", "⏵ auto". */
-export const MODE_LABEL: Record<SymccMode, string> = { off: '⏹ off', review: '⏸ review', auto: '⏵ auto' }
+/** The short name of a mode, as shown at a glance: "off", "review merge", "auto". */
+export const MODE_NAME: Record<SymccMode, string> = { off: 'off', review: 'review merge', auto: 'auto' }
+const MODE_ICON: Record<SymccMode, string> = { off: '⏹', review: '⏸', auto: '⏵' }
+
+/** The label for a mode, in the panel banner and at the start of the status line: "⏹ off", "⏸ review merge", "⏵ auto". */
+export const MODE_LABEL: Record<SymccMode, string> = { off: `${MODE_ICON.off} ${MODE_NAME.off}`, review: `${MODE_ICON.review} ${MODE_NAME.review}`, auto: `${MODE_ICON.auto} ${MODE_NAME.auto}` }
 export const modeLabel = (m: SymccMode): string => MODE_LABEL[isMode(m) ? m : 'auto']
+
+/** The mode the panel's m button switches to: review and auto swap; off goes to review. */
+export const nextMode = (m: SymccMode): SymccMode => (modeOf({ mode: m }) === 'review' ? 'auto' : 'review')
+
+/** The panel's m button: "[m] review merge" in auto (and off), "[m] auto" in review. */
+export const modeButton = (m: SymccMode): string => `[m] ${MODE_NAME[nextMode(m)]}`
 
 /** What a mode means, in a few words. */
 export const MODE_MEANING: Record<SymccMode, string> = {
@@ -749,8 +759,8 @@ function idList(ids: string[]): string {
 }
 
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "⏸ review · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
- * It starts with the board mode (modeLabel: "⏹ off", "⏸ review", "⏵ auto"), so the mode is always in the same spot.
+ * The short status text Claude Code shows after "symcc:", e.g. "⏸ review merge · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
+ * It starts with the board mode (modeLabel: "⏹ off", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note.
  */
@@ -1162,15 +1172,22 @@ export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
 
 // ---------------- agent names ----------------
 // Workers and scouts are named after the plugin, so the agents list shows they are its own:
-// "symcc T-33", "symcc scout bugs". The name already has the task id or scout name, so the
+// "symcc-T-33", "symcc-scout-bugs". Agent names may only have letters, digits, "_" and "-"
+// (and start with a letter or digit, at most 64 long), so anything else becomes "-". The name already has the task id or scout name, so the
 // description doesn't repeat it. Lookups go by agentId; liveWorkersFor also reads these names.
 
 /** How long an agent's description may be in the agents list. */
 export const AGENT_DESCRIPTION_CHARS = 60
 
-/** A worker's agent name: the plugin's name and the task id, e.g. "symcc T-33". */
+/** Makes a string a valid agent name: only letters, digits, "_" and "-", starting with a letter or digit, at most 64 long. */
+export function agentSafeName(raw: string): string {
+  const s = String(raw ?? '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+/, '').slice(0, 64).replace(/-+$/, '')
+  return s || 'agent'
+}
+
+/** A worker's agent name: the plugin's name and the task id, e.g. "symcc-T-33". */
 export function workerName(name: string, id: string): string {
-  return `${name} ${id}`
+  return agentSafeName(`${name}-${id}`)
 }
 
 /** A worker's agent description: the task title only (the name has the id), cut to fit. */
@@ -1178,9 +1195,9 @@ export function workerDescription(title: string): string {
   return String(title ?? '').replace(/\s+/g, ' ').trim().slice(0, AGENT_DESCRIPTION_CHARS)
 }
 
-/** A scout's agent name: the plugin's name, "scout" and the scout's name, e.g. "symcc scout bugs". */
+/** A scout's agent name: the plugin's name, "scout" and the scout's name, e.g. "symcc-scout-bugs". */
 export function scoutAgentName(name: string, scout: string): string {
-  return `${name} scout ${scout}`
+  return agentSafeName(`${name}-scout-${scout}`)
 }
 
 /**
@@ -1200,8 +1217,8 @@ export const ENDED_STATUSES = ['completed', 'failed', 'killed']
 
 /**
  * The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any
- * whose name is workerName (e.g. "symcc T-3") or the bare task id, maybe with a suffix the
- * host added ("symcc T-3-2"), or whose description starts with the task id (older workers).
+ * whose name is workerName (e.g. "symcc-T-3") or the bare task id, maybe with a suffix the
+ * host added ("symcc-T-3-2"), or whose description starts with the task id (older workers).
  */
 export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name: string = DEFAULT_NAME): AgentInfo[] {
   const worker = namesFor(name).worker
