@@ -75,7 +75,7 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number,
   return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
 }
 
-/** The subtle text at the right end of a task row: "frontend · try 1" for a task being worked on, "after T-3" for
+/** The subtle text at the right end of a task row: "tester · try 1" for a task being worked on, "after T-3" for
  *  one waiting on unfinished tasks (else its role), "Enter to review" in review (a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. */

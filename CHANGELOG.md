@@ -9,6 +9,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - `symcc add` needs a why.
 - The board shows a "from:" line for each task.
 
+### Workers and roles
+- The built-in roles are now general, docs, refactor, security and tester (backend and frontend are gone; tests is now tester). Old tasks keep their stored role; when started, tests runs as tester and backend/frontend as general, with a history line.
+
 ### Code
 - The code is split into modules (`hooks/core/`, `hooks/plugin/`, `hooks/plugin/ui/`). No behaviour change.
 

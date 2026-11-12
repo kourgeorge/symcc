@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
 import { loadRoles } from './roles'
@@ -89,7 +89,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · k stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's role shows after its status ("T-12 doing · tests"); general shows nothing.
+On the board list a task's role shows after its status ("T-12 doing · tester"); general shows nothing.
 On the board list, the "▸ Backlog · N" section comes first, above the open tasks, folded; Enter on it opens it (5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -99,8 +99,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   tasks: `Tasks
   Fields: title, details (what to do and how we know it works), files (what the worker
   may change; empty = anywhere), after (tasks that must be done first), order (lower
-  runs first), role (the worker role: general, frontend, backend, tests, docs, refactor,
-  security, or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed.
+  runs first), role (the worker role: ${BUILT_IN_ROLES.join(', ')},
+  or one in .${S.N.name}/roles/; old tasks with role tests start as tester, backend or frontend as general; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed.
   Statuses:
     to do            waiting for a free worker (and for its "after" tasks)
     doing            a worker is on it

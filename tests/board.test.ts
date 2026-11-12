@@ -4,7 +4,7 @@ import type { SymccScout, SymccTask } from '../types'
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -1323,6 +1323,39 @@ test('the role mark: the role name, nothing for general; the open task\'s role l
   expect(boardText(b)).toContain('Cover the parser errors [tests]')
   const [b2] = addTask(emptyBoard(), { origin: W, title: 'Plain', role: 'general' }, T)
   expect(boardText(b2)).not.toContain('[general]')
+})
+
+test('the built-in roles are general, docs, refactor, security and tester', async () => {
+  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'security', 'tester'])
+  for (const old of ['tests', 'backend', 'frontend']) expect(BUILT_IN_ROLES).not.toContain(old)
+  expect(Object.values(OLD_ROLES).every(r => BUILT_IN_ROLES.includes(r))).toBe(true)
+})
+
+test('a task with an old role keeps its name until it starts; then tests runs as tester, backend and frontend as general', async () => {
+  const built = ['general', 'docs', 'refactor', 'security', 'tester'].map(n => parseRole(n, '---\ndescription: d\n---\n')!)
+  expect(OLD_ROLES).toEqual({ tests: 'tester', backend: 'general', frontend: 'general' })
+  expect(roleMark({ role: 'frontend' })).toBe('frontend')
+  expect(roleLine({ role: 'backend' }, built)).toBe('Role: backend')
+  expect(oldRoleSwap({ role: 'tests' }, built)).toEqual({ role: 'tester', line: 'role tests is no longer built in; runs as tester' })
+  expect(oldRoleSwap({ role: 'backend' }, built)).toEqual({ role: 'general', line: 'role backend is no longer built in; runs as general' })
+  expect(oldRoleSwap({ role: 'frontend' }, built)?.role).toBe('general')
+  expect(oldRoleSwap({ role: 'tester' }, built)).toBe(null)
+  expect(oldRoleSwap({}, built)).toBe(null)
+  // A started task gets the new role and a history line; general is stored as no role.
+  const [b0, t] = addTask(emptyBoard(), { origin: W, title: 'Old', role: 'frontend' }, '2026-01-01T00:00:00Z')
+  const swap = oldRoleSwap(t, built)!
+  const b1 = patchTask(b0, t.id, { status: 'doing', role: swap.role, history: [...t.history, swap.line] }, '2026-01-01T00:01:00Z')
+  expect(b1.tasks.find(x => x.id === t.id)?.role).toBeUndefined()
+  expect(b1.tasks.find(x => x.id === t.id)?.history.at(-1)).toBe('role frontend is no longer built in; runs as general')
+})
+
+test('a project role file still adds or overrides a role, also bringing an old one back', async () => {
+  const built = ['general', 'tester'].map(n => parseRole(n, '---\ndescription: built in\n---\n')!)
+  const all = mergeRoles(built, [parseRole('frontend', '---\ndescription: our web pages\n---\nF')!, parseRole('tester', '---\ndescription: our tests\n---\nT')!])
+  expect(all.map(r => r.name)).toEqual(['general', 'frontend', 'tester'])
+  expect(findRole(all, 'tester')?.prompt).toBe('T')
+  expect(oldRoleSwap({ role: 'frontend' }, all)).toBe(null)
+  expect(checkRole(all, 'frontend')).toBe('frontend')
 })
 
 test('the lead is told: one task, one role; split big work by role and link the parts with after', async () => {

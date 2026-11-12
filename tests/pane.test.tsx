@@ -722,14 +722,14 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
 const ROLE_FILES = {
   '/roles/general.md': '---\ndescription: a plain worker\n---\n',
   '/roles/docs.md': '---\ndescription: writes the docs\n---\n- plain words\n',
-  '/roles/tests.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n',
+  '/roles/tester.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n',
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
 test('a running task shows its role and try at the right end in a subtle color; general shows only the try', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tests', attempts: 1 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
-  const mark = await ui.find({ type: 'Text', text: /^ +tests · try 1$/ })
+  const mark = await ui.find({ type: 'Text', text: /^ +tester · try 1$/ })
   expect(mark).toBeDefined()
   expect(mark?.props.color).toBe('subtle')
   expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
@@ -739,19 +739,19 @@ test('a running task shows its role and try at the right end in a subtle color; 
 })
 
 test('an open task shows its role and model; "Role" (l) opens a pick list of the roles, and picking one sets it', async ($, on) => {
-  const board = { tasks: [task('T-1', 'todo', 'Write it up', { role: 'tests' })] }
+  const board = { tasks: [task('T-1', 'todo', 'Write it up', { role: 'tester' })] }
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const written = fakeFiles(on, { ...ROLE_FILES, '/board.json': JSON.stringify(board), '/board.lock': null })
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^Role:\s+tests — writes tests · model sonnet$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Role:\s+tester — writes tests · model sonnet$/ })).toBeDefined()
   const button = await ui.find({ key: 'role' })
   expect(button?.props.hotkey).toBe('l')
   expect(await ui.find({ type: 'Text', text: /l role/ })).toBeDefined()
   await ui.press({ key: 'role' })
-  for (const r of ['general', 'tests', 'security', 'docs']) expect(await ui.find({ key: `role:${r}` })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^● tests$/ })).toBeDefined()
+  for (const r of ['general', 'tester', 'security', 'docs']) expect(await ui.find({ key: `role:${r}` })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^● tester$/ })).toBeDefined()
   await ui.press({ key: 'role:docs' })
   const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => text)
   expect(saved.length).toBe(1)

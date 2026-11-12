@@ -72,6 +72,24 @@ export function mergeRoles(builtIn: RoleDef[], project: RoleDef[]): RoleDef[] {
   return [...out.values()].sort((a, b) => (a.name === DEFAULT_ROLE ? -1 : b.name === DEFAULT_ROLE ? 1 : a.name.localeCompare(b.name)))
 }
 
+/** The roles that come with the plugin (one file each in its roles/ folder). */
+export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refactor', 'security', 'tester']
+
+/** Roles that were built in before and are gone now, and the role a task with one gets when it starts. */
+export const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: DEFAULT_ROLE, frontend: DEFAULT_ROLE }
+
+/**
+ * When a task with an old role (tests, backend, frontend) starts or is retried: the role it runs with
+ * now and a history line saying so. Null when the role is fine as it is, also when the project brings
+ * the old role back with its own roles/<name>.md file.
+ */
+export function oldRoleSwap(t: Pick<SymccTask, 'role'>, roles: RoleDef[]): { role: string; line: string } | null {
+  const was = t.role?.trim() ?? ''
+  const to = OLD_ROLES[was.toLowerCase()]
+  if (!to || findRole(roles, was)) return null
+  return { role: to, line: `role ${was} is no longer built in; runs as ${to}` }
+}
+
 /** A task's role name: its role, or general when none is set. */
 export const roleOf = (t: Pick<SymccTask, 'role'>): string => t.role?.trim() || DEFAULT_ROLE
 
@@ -97,7 +115,7 @@ export function roleMark(t: Pick<SymccTask, 'role'>): string {
   return role.toLowerCase() === DEFAULT_ROLE ? '' : role
 }
 
-/** The open task's role line: "Role: tests — writes tests · model sonnet" (just "Role: tests" when the role is not known). */
+/** The open task's role line: "Role: tester — writes tests · model sonnet" (just "Role: tester" when the role is not known). */
 export function roleLine(t: Pick<SymccTask, 'role'>, roles: RoleDef[]): string {
   const name = roleOf(t)
   const r = findRole(roles, name)
@@ -110,7 +128,7 @@ export function roleChoices(roles: RoleDef[]): string[] {
   return names.some(n => n.toLowerCase() === DEFAULT_ROLE) ? names : [DEFAULT_ROLE, ...names]
 }
 
-/** "try 2", or "try 2 (role tests)" when the task has a role other than general. */
+/** "try 2", or "try 2 (role tester)" when the task has a role other than general. */
 export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | string }): string {
   const role = roleOf(t)
   return `try ${t.attempts}${role === DEFAULT_ROLE ? '' : ` (role ${role})`}`
@@ -130,5 +148,5 @@ export function roleSection(r: RoleDef | undefined): string {
 export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): string {
   const list = roles.length ? roles.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
   return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.
-- One task, one role. When a request needs several kinds of work (e.g. backend, frontend, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (the frontend waits for the backend it uses; tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
+- One task, one role. When a request needs several kinds of work (e.g. code, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
 }

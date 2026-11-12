@@ -288,8 +288,12 @@ skills: [code-review]
 ```
 
 - `description` is required: the lead reads it to choose. `model` and `skills` are optional.
-- The built-in roles live in the plugin's `roles/` folder: `general`, `frontend`, `backend`,
-  `tests`, `docs`, `refactor` and `security`.
+- The built-in roles live in the plugin's `roles/` folder: `general`, `docs`, `refactor`,
+  `security` and `tester`.
+- Tasks made before with the old roles `tests`, `backend` or `frontend` still show that
+  name. When such a task starts or is retried, `tests` runs as `tester` and `backend` or
+  `frontend` as `general`, with a history line saying so. A project file
+  `.symcc/roles/frontend.md` (for example) brings the old role back, and then nothing changes.
 - Your own roles go in `.symcc/roles/<name>.md` in your project. A file with the same name as
   a built-in role replaces it; a new name adds a role. Names use letters, digits, `-` and `_`.
 - The files are read again when a session starts, when a worker starts, when a task's role
@@ -303,19 +307,19 @@ skills: [code-review]
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
 failed or in the backlog. The board list shows a role after the status
-(`T-12 doing · tests`); `general` shows nothing.
+(`T-12 doing · tester`); `general` shows nothing.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big
 enough to stand alone, the lead splits it into one task per role and links them with `after`:
 
 ```
-T-20  backend   Add the /export endpoint
-T-21  frontend  Export button on the report page    (after T-20)
-T-22  tests     Tests for export, errors included   (after T-20)
-T-23  docs      Explain export in the user guide    (after T-21, T-22)
+T-20  general   Add the /export endpoint and the export button
+T-21  security  Check the export for data leaks      (after T-20)
+T-22  tester    Tests for export, errors included    (after T-20)
+T-23  docs      Explain export in the user guide     (after T-20)
 ```
 
-T-21 and T-22 run at the same time, since they change different files. A small request stays
+T-21, T-22 and T-23 run at the same time, since they change different files. A small request stays
 one `general` task: each extra task costs a worker run, a test run and a merge.
 
 ---

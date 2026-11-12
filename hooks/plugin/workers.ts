@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode } from '../../types'
-import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo } from '../board'
+import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo } from '../board'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits } from './review'
@@ -66,18 +66,21 @@ export async function startWorker($: $, id: string) {
     if (!mayStart(t0, agents, S.N.name)) return
     if (!(await targetReady($, b))) return // the branch to merge into is missing: leave the task "todo"
     const { dir, branch } = await prepareWorktree($, t0!, b.target_branch)
+    const roles = await loadRoles($)
     const t = await change($, x => {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]
       const at = now()
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at) }, at)
+      // An old role (tests, backend, frontend) runs as its new one, with a history line saying so.
+      const swap = oldRoleSwap(cur!, roles)
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at), ...(swap ? { role: swap.role, history: [...cur!.history, swap.line] } : {}) }, at)
       return [y, find(y, id)!]
     })
     if (!t) return
     const before = find(b, id)!
     let agentId: string
     try {
-      const role = findRole(await loadRoles($), roleOf(t))
+      const role = findRole(roles, roleOf(t))
       const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), subagentType: S.N.worker, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
       if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')

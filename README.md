@@ -105,7 +105,7 @@ The four parts, in known terms:
 | **Traceability** | Every task records who made it (you, a scout, a worker's report, or the lead), why, and your own words that started it. Each task keeps the history of its tries, and each merge commit starts with the task ID (`T-58: ...`), so you can go from a line of code back to the task and to the request. |
 | **Observability** | The board and status line show what is running, waiting, failed or in review right now. Each try shows its time and tokens, failed tries keep their test output, and workers and scouts post updates in the chat. |
 | **Backlog** | Park ideas and unclear work on the board; they never start until you move them to todo. |
-| **Worker roles** | The lead picks a specialist role for each task (frontend, backend, tests, docs, refactor, security, or your own in `.symcc/roles/`); a role brings its own checklist, skills and model. Bigger features are split into one task per role. Every role has the same safety checks. |
+| **Worker roles** | The lead picks a specialist role for each task (general, docs, refactor, security, tester, or your own in `.symcc/roles/`); a role brings its own checklist, skills and model. Bigger features are split into one task per role. Every role has the same safety checks. |
 
 Every two minutes symcc also checks the board by itself: it starts ready tasks, and stops a
 worker that runs longer than `max_minutes` (45 by default).
