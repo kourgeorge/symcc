@@ -577,6 +577,7 @@ export type Command =
   | { kind: 'reject'; id: string; reason: string }
   | { kind: 'diff'; id: string; file?: string }
   | { kind: 'scout'; name: string }
+  | { kind: 'scout-pause'; name: string; paused: boolean }
   | { kind: 'mode'; mode: SymccMode }
   | { kind: 'off' }
   | { kind: 'on' }
@@ -638,7 +639,9 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return file ? { kind: 'diff', id: normId(id!), file } : { kind: 'diff', id: normId(id!) }
     }
     case 'scout':
-      return words.length === 1 ? { kind: 'scout', name: id! } : use(`/${name}-scout <name>`)
+      if (words.length === 1) return { kind: 'scout', name: id! }
+      if (words.length === 2 && /^(pause|resume)$/i.test(words[1]!)) return { kind: 'scout-pause', name: id!, paused: words[1]!.toLowerCase() === 'pause' }
+      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume`)
     case 'mode':
       return parseModeCommand(s, current, name)
     case 'settings':
@@ -1149,10 +1152,11 @@ export const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the le
 export const SECTION_LABEL = { needsYou: 'NEEDS YOU', doing: 'DOING', todo: 'TO DO' } as const
 
 /** What the next scout run is: "secrets in 38m", "secrets now", "running: secrets", or '' when none is planned. */
-export function nextScoutText(scouts: Pick<SymccScout, 'name' | 'running' | 'next_run'>[], nowMs: number): string {
+export function nextScoutText(scouts: Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'>[], nowMs: number): string {
   const running = scouts.find(s => s.running)
   if (running) return `running: ${running.name}`
   const next = scouts
+    .filter(s => !s.paused)
     .map(s => ({ name: s.name, at: Date.parse(s.next_run ?? '') }))
     .filter(s => Number.isFinite(s.at))
     .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name))[0]
@@ -1164,7 +1168,7 @@ export function nextScoutText(scouts: Pick<SymccScout, 'name' | 'running' | 'nex
  *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
  *  turned off shows "symcc off · /symcc-on". Busy workers are the tasks being worked on. */
 export function statusStrip(
-  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: Pick<SymccScout, 'name' | 'running' | 'next_run'>[] },
+  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'>[] },
   nowMs: number,
   width = Infinity,
   name: string = DEFAULT_NAME,
@@ -1306,10 +1310,18 @@ export const diffKeys = (review: boolean, oneFile: boolean): KeyHint[] => [
   { key: 'b', word: 'back to the task' },
 ]
 
-/** The keys at the bottom of a scout's page. */
-export const scoutKeys = (): KeyHint[] => [
+/** The keys under the Scouts list. */
+export const scoutListKeys = (): KeyHint[] => [
+  { key: 'Enter', word: 'open' },
+  { key: 't s c', word: 'views' },
+  { key: 'Esc', word: 'close' },
+]
+
+/** The keys at the bottom of a scout's page; p pauses it, or resumes it when `paused`. */
+export const scoutKeys = (paused = false): KeyHint[] => [
   { key: 'r', word: 'run now' },
   { key: 'e', word: 'edit' },
+  { key: 'p', word: paused ? 'resume' : 'pause' },
   { key: '↑↓', word: 'scroll' },
   { key: 'b', word: 'back' },
 ]
@@ -1981,8 +1993,8 @@ export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): st
 /** How much of a scout's last answer is kept (SymccScout.last_report). */
 export const SCOUT_REPORT_CHARS = 2000
 
-/** What is kept about one scout between restarts (in <dir>/scouts.json). */
-export type ScoutMemory = { last_run: string | null; last_report?: string }
+/** What is kept about one scout between restarts (in <dir>/scouts.json); `paused` only when the owner paused it. */
+export type ScoutMemory = { last_run: string | null; last_report?: string; paused?: boolean }
 
 /**
  * Reads scouts.json. A missing, empty or broken file means "no scout has run" ({}), never an error;
@@ -2001,27 +2013,35 @@ export function parseScoutMemory(text: string | null | undefined): Record<string
   if (!scouts || typeof scouts !== 'object' || Array.isArray(scouts)) return out
   for (const [name, v] of Object.entries(scouts as Record<string, unknown>)) {
     if (!name || !v || typeof v !== 'object' || Array.isArray(v)) continue
-    const e = v as { last_run?: unknown; last_report?: unknown }
+    const e = v as { last_run?: unknown; last_report?: unknown; paused?: unknown }
     const last_run = typeof e.last_run === 'string' && !Number.isNaN(Date.parse(e.last_run)) ? e.last_run : null
     const m: ScoutMemory = { last_run }
     if (typeof e.last_report === 'string') m.last_report = e.last_report.slice(0, SCOUT_REPORT_CHARS)
-    if (m.last_run === null && m.last_report === undefined) continue
+    if (e.paused === true) m.paused = true
+    if (m.last_run === null && m.last_report === undefined && !m.paused) continue
     out[name] = m
   }
   return out
 }
 
 /** The text of scouts.json for these scouts; only the names in `keep` (if given) are written. */
-export function scoutMemoryText(scouts: Iterable<{ name: string; last_run: string | null; last_report?: string }>, keep?: string[]): string {
+export function scoutMemoryText(scouts: Iterable<{ name: string; last_run: string | null; last_report?: string; paused?: boolean }>, keep?: string[]): string {
   const out: Record<string, ScoutMemory> = {}
   for (const s of scouts) {
     if (keep && !keep.includes(s.name)) continue
-    if (s.last_run === null && s.last_report === undefined) continue
+    if (s.last_run === null && s.last_report === undefined && !s.paused) continue
     const m: ScoutMemory = { last_run: s.last_run }
     if (s.last_report !== undefined) m.last_report = s.last_report.slice(0, SCOUT_REPORT_CHARS)
+    if (s.paused) m.paused = true
     out[s.name] = m
   }
   return JSON.stringify({ scouts: out }, null, 2) + '\n'
+}
+
+/** The text of scouts.json once scout `name` is paused (or resumed), everything else in `saved` kept as it is. */
+export function scoutPausedText(saved: Record<string, ScoutMemory>, name: string, paused: boolean): string {
+  const all = { ...saved, [name]: { ...(saved[name] ?? { last_run: null }), paused } }
+  return scoutMemoryText(Object.entries(all).map(([n, m]) => ({ name: n, ...m })))
 }
 
 /** How often a scout runs: "every 30 min", "every hour", "every 2 hours", "every 90 min". */
@@ -2032,9 +2052,11 @@ export function everyText(minutes: number): string {
   return `every ${m} min`
 }
 
-/** What a scout is doing: "running", "next in 12m", "due now", or '' when no run is planned. */
-export function scoutStateText(s: Pick<SymccScout, 'running' | 'next_run'>, nowMs: number): string {
-  if (s.running) return 'running'
+/** What a scout is doing: "running now…", "paused", "next in 12m", "due now", or '' when no run is planned.
+ *  A scout paused while it runs finishes that run, so it still says "running now…". */
+export function scoutStateText(s: Pick<SymccScout, 'running' | 'next_run' | 'paused'>, nowMs: number): string {
+  if (s.running) return 'running now…'
+  if (s.paused) return 'paused'
   const at = Date.parse(s.next_run ?? '')
   if (!Number.isFinite(at)) return ''
   return at <= nowMs ? 'due now' : `next in ${fmtDuration(at - nowMs)}`
@@ -2051,9 +2073,11 @@ export function scoutRow(s: SymccScout, nowMs: number): { name: string; every: s
   return { name: s.name, every: everyText(s.every_minutes), model: s.model ?? '', state: scoutStateText(s, nowMs), ran: scoutRanText(s, nowMs) }
 }
 
-/** The order of scouts in the panel: running ones first, then the soonest next run (none planned last), then by name. */
-export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run'>, b: Pick<SymccScout, 'name' | 'running' | 'next_run'>): number {
+/** The order of scouts in the panel: running ones first, then the soonest next run (none planned last), paused
+ *  ones after those, then by name. */
+export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'>, b: Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'>): number {
   if (a.running !== b.running) return a.running ? -1 : 1
+  if (!!a.paused !== !!b.paused) return a.paused ? 1 : -1
   const at = (s: { next_run?: string }) => {
     const t = Date.parse(s.next_run ?? '')
     return Number.isFinite(t) ? t : Infinity
@@ -2062,6 +2086,80 @@ export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run'>,
   if (d) return d
   return a.name.localeCompare(b.name)
 }
+
+/** True when scout `s` may start a run now (on its timer, or run now): not running already, not paused, in the
+ *  session that drives the board, with a usable git repo, the board on and not in mode off. */
+export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean }): boolean {
+  return !s.running && !s.paused && o.driving && o.gitOk && o.on && o.mode !== 'off'
+}
+
+/** What "run now" says for a paused scout. */
+export const scoutPausedAnswer = (scout: string, name: string = DEFAULT_NAME): string =>
+  `${scout} is paused; resume it first (p on its page, or /${name}-scout ${scout} resume)`
+
+/** A scout's state icon (one column wide): ◉ running, ○ paused, ◎ waiting for its next run. */
+export const scoutIcon = (s: Pick<SymccScout, 'running' | 'paused'>): string => (s.running ? '◉' : s.paused ? '○' : '◎')
+
+/** The theme color of a scout's icon and state: running blue (ide), paused subtle, waiting plain text. */
+export const scoutTone = (s: Pick<SymccScout, 'running' | 'paused'>): string => (s.running ? 'ide' : s.paused ? 'subtle' : 'text')
+
+/** How many findings a report numbers ("1. …", "**2. …**", "## 3) …" at the start of a line, each number counted
+ *  once); 0 when it numbers none. */
+export function countFindings(report: string | undefined): number {
+  const seen = new Set<string>()
+  for (const line of String(report ?? '').split('\n')) {
+    const m = /^(?:#{1,6}\s*)?(?:\*\*|__)?(?:finding\s*)?(\d{1,2})[.):]\s/i.exec(line)
+    if (m) seen.add(m[1]!)
+  }
+  return seen.size
+}
+
+/** The "last:" column of a scout row: "found 2" (or "found something" when the report numbers nothing) in the
+ *  warning color, "nothing" (subtle) for a NOTHING report, "never ran" when it has no last run. */
+export function scoutLastText(s: Pick<SymccScout, 'last_run' | 'last_report'>): { text: string; tone: string } {
+  if (!s.last_run && s.last_report === undefined) return { text: 'never ran', tone: 'subtle' }
+  if (isNothing(s.last_report)) return { text: 'last: nothing', tone: 'subtle' }
+  const n = countFindings(s.last_report)
+  return { text: n ? `last: found ${n}` : 'last: found something', tone: 'warning' }
+}
+
+/** One row of the Scouts list, its cells already padded so the columns line up. */
+export type ScoutListRow = { icon: string; tone: string; name: string; every: string; state: string; last: string; lastTone: string; model: string }
+
+/** The cells of the Scouts list at `width` columns (`indent` columns before each row): icon, name, how often, state,
+ *  "last:" and model, two spaces between columns. When a row would not fit, the model column goes first, then
+ *  "last:", then the state, then how often; the name is never cut. A running scout shows no "last:" (it is
+ *  making a new one). */
+export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number, indent = 2): ScoutListRow[] {
+  const raw = scouts.map(s => ({
+    s,
+    every: everyText(s.every_minutes),
+    state: scoutStateText(s, nowMs),
+    last: s.running ? { text: '', tone: 'subtle' } : scoutLastText(s),
+    model: s.model ?? '',
+  }))
+  const w = (f: (r: (typeof raw)[number]) => string) => Math.max(0, ...raw.map(r => f(r).length))
+  const cols = { name: w(r => r.s.name), every: w(r => r.every), state: w(r => r.state), last: w(r => r.last.text), model: w(r => r.model) }
+  const shown = { every: cols.every > 0, state: cols.state > 0, last: cols.last > 0, model: cols.model > 0 }
+  const total = () => indent + 2 + cols.name + (['every', 'state', 'last', 'model'] as const).reduce((n, k) => n + (shown[k] ? 2 + cols[k] : 0), 0)
+  for (const k of ['model', 'last', 'state', 'every'] as const) if (total() > width) shown[k] = false
+  // the last shown column is not padded, so a row has no spaces at its end
+  const lastCol = (['model', 'last', 'state', 'every'] as const).find(k => shown[k])
+  const cell = (k: 'every' | 'state' | 'last' | 'model', text: string) => (!shown[k] ? '' : `  ${k === lastCol ? text : text.padEnd(cols[k])}`)
+  return raw.map(r => ({
+    icon: scoutIcon(r.s),
+    tone: scoutTone(r.s),
+    name: lastCol ? r.s.name.padEnd(cols.name) : r.s.name,
+    every: cell('every', r.every),
+    state: cell('state', r.state),
+    last: cell('last', r.last.text),
+    lastTone: r.last.tone,
+    model: cell('model', r.model),
+  }))
+}
+
+/** A Scouts list row as plain text (what the panel draws). */
+export const scoutListText = (r: ScoutListRow, indent = 2): string => `${' '.repeat(indent)}${r.icon} ${r.name}${r.every}${r.state}${r.last}${r.model}`.trimEnd()
 
 /** Sorted for the panel; see scoutOrder. */
 export const sortScouts = <S extends SymccScout>(scouts: S[]): S[] => [...scouts].sort(scoutOrder)
@@ -2144,10 +2242,11 @@ Rules:
 }
 
 /** What the lead is told when a scout finishes: its whole report cut to `n` characters, or null for NOTHING. */
-export function scoutLeadMessage(scout: string, answer: string | undefined, n = SCOUT_REPORT_CHARS): string | null {
+export function scoutLeadMessage(scout: string, answer: string | undefined, n = SCOUT_REPORT_CHARS, paused = false): string | null {
   if (isNothing(answer)) return null
   const report = String(answer).trim().slice(0, n).trimEnd()
-  return `Scout "${scout}" reports:\n${report}\nAdd tasks for anything worth doing, tell the owner what matters, or ignore it.`
+  const note = paused ? `\nThe owner has paused "${scout}": it doesn't run again until the owner resumes it.` : ''
+  return `Scout "${scout}" reports:\n${report}\nAdd tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`
 }
 
 /** The how-to shown when there are no scouts. */

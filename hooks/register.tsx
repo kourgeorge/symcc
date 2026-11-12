@@ -18,6 +18,14 @@ import {
   leftoverTmpFiles,
   parseScoutMemory,
   scoutMemoryText,
+  scoutPausedText,
+  scoutMayRun,
+  scoutPausedAnswer,
+  everyText,
+  scoutIcon,
+  scoutTone,
+  scoutListRows,
+  scoutListKeys,
   workerName,
   workerDescription,
   scoutAgentName,
@@ -1393,9 +1401,11 @@ async function loadScouts($: $): Promise<ScoutDef[]> {
 
 async function runScout($: $, s: ScoutDef) {
   const st = scoutState.get(s.name)
-  if (!st || st.running || !driving || gitState !== 'ok') return
+  if (!st) return
+  // scouts.json is where a pause is kept (any session may pause one): a paused scout doesn't run
+  if (!st.running) await pausedNow($, st)
   const b = await load($)
-  if (modeOf(b) === 'off' || !symccOn(b)) return
+  if (!scoutMayRun(st, { driving, gitOk: gitState === 'ok', mode: modeOf(b), on: symccOn(b) })) return
   const lastRun = st.last_run
   const lastReport = st.last_report
   st.running = true
@@ -1422,13 +1432,51 @@ async function loadScoutMemory($: $) {
   return parseScoutMemory(text)
 }
 
-/** Saves the scouts in scoutState (temp file + rename, like board.json); scouts no longer in scouts/ are dropped. */
-async function saveScoutMemory($: $) {
+/** Writes scouts.json (temp file + rename, like board.json). */
+async function writeScoutMemory($: $, text: string) {
   const file = scoutMemoryFile()
   const tmp = `${file}.tmp`
-  await $.fs.write(tmp, scoutMemoryText(scoutState.values()))
+  await $.process.run(['mkdir', '-p', path(N.dir)])
+  await $.fs.write(tmp, text)
   const r = await $.process.run(['mv', '-f', tmp, file])
   if (r.exitCode !== 0) throw new Error(`couldn't save ${N.dir}/scouts.json: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+}
+
+/** Saves the scouts in scoutState; scouts no longer in scouts/ are dropped. Whether each is paused is taken from
+ *  the file first, since the owner may have paused or resumed one from another session. */
+async function saveScoutMemory($: $) {
+  const saved = await loadScoutMemory($)
+  for (const st of scoutState.values()) st.paused = saved[st.name]?.paused === true
+  await writeScoutMemory($, scoutMemoryText(scoutState.values()))
+}
+
+/** True when scout `st` is paused, as scouts.json says now (st.paused is brought up to date). */
+async function pausedNow($: $, st: SymccScout): Promise<boolean> {
+  const saved = await loadScoutMemory($)
+  st.paused = saved[st.name]?.paused === true
+  return st.paused
+}
+
+/**
+ * Pauses (or resumes) scout `name` for the owner (p on its page, /<name>-scout <scout> pause|resume); says what
+ * happened. Only the pause flag in scouts.json changes, never the scout's file. A run going on now is not
+ * stopped: it finishes and reports, and the next one doesn't start.
+ */
+async function setScoutPaused($: $, name: string, paused: boolean): Promise<string> {
+  const defs = await scheduleScouts($)
+  const st = scoutState.get(name)
+  if (!st || !defs.some(d => d.name === name)) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
+  const saved = await loadScoutMemory($)
+  if ((saved[name]?.paused === true) === paused) {
+    st.paused = paused
+    return paused ? `${name} is already paused; resume it with p on its page or /${N.name}-scout ${name} resume` : `${name} is not paused`
+  }
+  await writeScoutMemory($, scoutPausedText(saved, name, paused))
+  st.paused = paused
+  await publish($, await load($))
+  $.ui.invalidate('ui.render')
+  if (!paused) return `${name} resumed: it runs ${everyText(st.every_minutes)} again`
+  return `${name} paused: it doesn't run until you resume it${st.running ? ' (the run going now finishes first)' : ''}`
 }
 
 async function scoutFinished($: $, agentId: string, answer: string) {
@@ -1441,7 +1489,7 @@ async function scoutFinished($: $, agentId: string, answer: string) {
     await saveScoutMemory($).catch((e: Error) => tellLead($, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
   }
   await publish($, await load($))
-  const msg = scoutLeadMessage(name, answer)
+  const msg = scoutLeadMessage(name, answer, undefined, st?.paused === true)
   if (msg) {
     const at = now()
     heard.scouts[name] = at
@@ -1457,11 +1505,12 @@ async function scheduleScouts($: $) {
   // after a restart the map is empty: take each scout's last run and report from scouts.json
   const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory($) : {}
   for (const s of defs) {
-    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report'> | undefined = scoutState.get(s.name) ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
+    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = scoutState.get(s.name) ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
     const ms = s.every_minutes * 60_000
     const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt, next_run: new Date(Date.now() + ms).toISOString() }
     if (s.model) st.model = s.model
     if (old?.last_report !== undefined) st.last_report = old.last_report
+    if (old?.paused) st.paused = true
     scoutState.set(s.name, st)
     timers.push(
       $.clock.every(ms, () => {
@@ -1478,6 +1527,8 @@ async function runScoutNow($: $, name: string): Promise<string> {
   const defs = await scheduleScouts($)
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
+  const st = scoutState.get(s.name)
+  if (st && (await pausedNow($, st))) return scoutPausedAnswer(s.name, N.name)
   if (!driving) return `scouts run in the session that drives the board; run /${N.name}-scout ${s.name} there`
   const cur = await load($)
   if (!symccOn(cur)) return offAnswer(N.name)
@@ -1634,6 +1685,8 @@ const MANUAL = (): Record<string, string> => ({
   /${N.name}-reject T-5 REASON   send it back to "todo" with the reason
   /${N.name}-diff T-5 [FILE]     the files it changed (+/- lines), or one file's diff
   /${N.name}-scout NAME          run a scout now
+  /${N.name}-scout NAME pause    pause a scout: it doesn't run until you resume it
+  /${N.name}-scout NAME resume   resume a paused scout (p on its page does both)
   /${N.name}-mode [off|review|auto]  set the board mode; no word switches review and auto
                        (from off, no word goes to review)
                        off: stop every worker and scout now, start nothing new
@@ -1724,6 +1777,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   web pages, but must not change the project (no edits, installs or git changes). It sends
   its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
   tells you, or ignores it. Run /${N.name}-scouts after adding or deleting a file.
+  Pause one with p on its page or /${N.name}-scout NAME pause: it doesn't run (not on its
+  timer, not with run now) until you resume it. A run going on finishes first. The pause
+  is kept in ${N.dir}/scouts.json, so its file is not changed.
   Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
   • Changes outside a task's files, or that fail the tests, are never merged.
@@ -1772,6 +1828,7 @@ The project has a shared task board (${N.dir}/board.json) that you and the owner
 - When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${N.name} setup_git. Never do it without asking.
 - Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
+- The owner can pause one scout (p on its page, or /${N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${N.name} add with backlog: true); they never start until moved to todo (${N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
 - ${N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${N.name} settings), and reminds you about failed tasks nobody handled.
@@ -2020,7 +2077,7 @@ async function registerAll($: $) {
     { name: `${N.name}-approve`, description: `Approve a ${N.name} task that is ready for review (merge it): /${N.name}-approve T-5`, argumentHint: '<T-id>' },
     { name: `${N.name}-reject`, description: `Reject a ${N.name} task in review, with the reason: /${N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
     { name: `${N.name}-diff`, description: `Show what a ${N.name} task in review changed, or one file's diff: /${N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
-    { name: `${N.name}-scout`, description: `Run a ${N.name} scout now: /${N.name}-scout <name>`, argumentHint: '<name>' },
+    { name: `${N.name}-scout`, description: `Run a ${N.name} scout now (/${N.name}-scout <name>), or pause or resume it (/${N.name}-scout <name> pause|resume)`, argumentHint: '<name> [pause|resume]' },
     { name: `${N.name}-mode`, description: `Set the ${N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
     { name: `${N.name}-settings`, description: `See and change the ${N.name} settings: /${N.name}-settings opens them; /${N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
     { name: `${N.name}-off`, description: `Turn ${N.name} off for this project: Claude works as normal, nothing runs; the board is kept` },
@@ -2184,10 +2241,12 @@ export const register: Register = on => {
         const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
         if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, Esc closes.`)
         if (!defs.length) return { text: `No scouts yet. Add one as ${N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
-        return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}`).join('\n') }
+        return { text: defs.map(d => `${d.name}: every ${d.every_minutes} min${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') }
       }
       case 'scout':
         return { text: await runScoutNow($, cmd.name) }
+      case 'scout-pause':
+        return say(await setScoutPaused($, cmd.name, cmd.paused))
       case 'settings': {
         settingEdit = null
         settingPick = null
@@ -2617,14 +2676,12 @@ export const register: Register = on => {
             <Box flexDirection="column">
               <Text>
                 <Text bold color={C('claude')}>{sc.name}</Text>{' '}
-                {r.state ? (
-                  <Text bold color={C(sc.running ? 'success' : 'text')}>
-                    {sc.running ? '▶ ' : ''}
-                    {r.state}
-                  </Text>
-                ) : null}
+                <Text bold color={C(scoutTone(sc))}>
+                  {scoutIcon(sc)} {r.state || 'waiting'}
+                  {sc.running && sc.paused ? ', then paused' : ''}
+                </Text>
                 <Text color={C('subtle')}>
-                  {r.state ? ' · ' : ''}
+                  {' · '}
                   {r.every}
                   {r.model ? ` · ${r.model}` : ''} · {r.ran}
                 </Text>
@@ -2638,6 +2695,7 @@ export const register: Register = on => {
               <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => update($, scoutOpen, () => ''))} />,
               <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(N.toast(await runScoutNow($, sc.name))))} />,
               <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout($, sc))} />,
+              <Button key="scout-pause" label={sc.paused ? 'Resume' : 'Pause'} hotkey="p" onPress={act(async () => $.ui.toast(N.toast(await setScoutPaused($, sc.name, !sc.paused))))} />,
             ], 'scout-buttons')}
 
             <Box flexDirection="column">
@@ -2657,7 +2715,7 @@ export const register: Register = on => {
                 <Text color={C('autoAccept')}>{file}</Text>
               </Text>
             </Box>
-            <Box flexDirection="column">{keyLines(scoutKeys(), 'scout-keys')}</Box>
+            <Box flexDirection="column">{keyLines(scoutKeys(sc.paused === true), 'scout-keys')}</Box>
           </Box>
         )
       }
@@ -2679,29 +2737,33 @@ export const register: Register = on => {
             <Text color={C('subtle')}>Enter goes on to its file · Esc cancels</Text>
           </Box>
         ) : (
-          <Button key="scout-new" label="New scout" hotkey="n" autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))} />
+          <Button key="scout-new" label="+ New scout" hotkey="n" autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
+            <Text color={C('text')}>{'  + New scout'}</Text>
+          </Button>
         )
-      const nameWidth = Math.max(4, ...scouts.map(x => x.name.length))
-      const everyWidth = Math.max(0, ...scouts.map(x => scoutRow(x, nowMs).every.length))
+      // the rows: icon, name, how often, state, last report, model; columns that don't fit are left out
+      const rows = scoutListRows(scouts, nowMs, width)
       return (
         <Box flexDirection="column">
           {header()}
           {scouts.length === 0 && scoutHowTo(N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'subtle')}>{line}</Text>)}
           {newBox()}
+          {scouts.length > 0 && <Text key="scouts-blank-top"> </Text>}
           {scouts.map((x, i) => {
-            const r = scoutRow(x, nowMs)
+            const r = rows[i]!
             return (
-              <Button key={`scout:${x.name}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, scoutOpen, () => x.name))}>
-                <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
-                <Text color={C('subtle')}> {r.every.padEnd(everyWidth)}</Text>
-                {r.model ? <Text color={C('subtle')}> · {r.model}</Text> : null}
-                {r.state ? <Text color={C(x.running ? 'success' : 'text')}> · {r.state}</Text> : null}
-                <Text color={C('subtle')}> · {r.ran}</Text>
+              <Button key={`scout:${x.name}`} label={`${x.name}: ${scoutRow(x, nowMs).state || 'waiting'}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => update($, scoutOpen, () => x.name))}>
+                <Text color={C(r.tone)}>{`  ${r.icon} `}</Text>
+                <Text bold={!x.paused} color={C(x.paused ? 'subtle' : 'claude')}>{r.name}</Text>
+                <Text color={C('subtle')}>{r.every}</Text>
+                <Text color={C(r.tone)}>{r.state}</Text>
+                <Text color={C(r.lastTone)}>{r.last}</Text>
+                <Text color={C('subtle')}>{r.model}</Text>
               </Button>
             )
           })}
-          {scouts.length > 0 && <Text color={C('subtle')}>Enter opens a scout · run now / edit on its page · /{N.name}-scout &lt;name&gt;</Text>}
-          {scouts.length > 0 && keyLines(viewKeys(), 'scouts-keys')}
+          <Text key="scouts-blank"> </Text>
+          {keyLines(scoutListKeys(), 'scouts-keys')}
         </Box>
       )
     }

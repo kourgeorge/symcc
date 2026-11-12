@@ -332,6 +332,7 @@ switch review / auto, `t` / `s` / `c` the Tasks, Scouts and Settings tabs. **Ctr
 | `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason |
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
 | `/symcc-scout <name>` | Run a scout now |
+| `/symcc-scout <name> pause` / `resume` | Pause a scout (it doesn't run, on its timer or with run now, until you resume it), or resume it. `p` on the scout's page in the panel does the same |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`, `/symcc-settings test_commands "npm test"` |
 | `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates or voice); the board is kept |

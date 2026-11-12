@@ -98,6 +98,8 @@ export type SymccScout = {
   last_report?: string
   /** when its timer fires next (ISO time) */
   next_run?: string
+  /** paused by the owner: it doesn't run on its timer or with "run now" until resumed (saved in scouts.json) */
+  paused?: boolean
 }
 
 export type SymccView = {

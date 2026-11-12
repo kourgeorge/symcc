@@ -1,10 +1,10 @@
 import { expect, test } from 'claude-code/testing'
-import type { SymccTask } from '../types'
+import type { SymccScout, SymccTask } from '../types'
 
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -497,14 +497,16 @@ test('a scout row says how often it runs, when it runs next and when it last ran
   expect(everyText(60)).toBe('every hour')
   expect(everyText(120)).toBe('every 2 hours')
   expect(everyText(90)).toBe('every 90 min')
-  expect(scoutStateText({ running: true, next_run: iso(5) }, at)).toBe('running')
+  expect(scoutStateText({ running: true, next_run: iso(5) }, at)).toBe('running now…')
+  expect(scoutStateText({ running: false, paused: true, next_run: iso(5) }, at)).toBe('paused')
+  expect(scoutStateText({ running: true, paused: true, next_run: iso(5) }, at)).toBe('running now…')
   expect(scoutStateText({ running: false, next_run: iso(12) }, at)).toBe('next in 12m')
   expect(scoutStateText({ running: false, next_run: iso(-1) }, at)).toBe('due now')
   expect(scoutStateText({ running: false }, at)).toBe('')
   expect(scoutRanText({ last_run: iso(-8) }, at)).toBe('ran 8m ago')
   expect(scoutRanText({ last_run: null }, at)).toBe('never ran')
   expect(scoutRow({ name: 'tests', every_minutes: 30, last_run: null, running: false, model: 'sonnet', next_run: iso(12) }, at)).toEqual({ name: 'tests', every: 'every 30 min', model: 'sonnet', state: 'next in 12m', ran: 'never ran' })
-  expect(scoutRow({ name: 'bugs', every_minutes: 60, last_run: iso(-8), running: true }, at)).toEqual({ name: 'bugs', every: 'every hour', model: '', state: 'running', ran: 'ran 8m ago' })
+  expect(scoutRow({ name: 'bugs', every_minutes: 60, last_run: iso(-8), running: true }, at)).toEqual({ name: 'bugs', every: 'every hour', model: '', state: 'running now…', ran: 'ran 8m ago' })
   expect(scoutFile('bugs')).toBe('.symcc/scouts/bugs.md')
   expect(scoutFile('bugs', 'other')).toBe('.other/scouts/bugs.md')
   expect(scoutReport('')).toBe('nothing found')
@@ -1863,7 +1865,9 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(taskKeys('done'))).toEqual(['↑↓ scroll', 'b back'])
   expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
-  expect(words(scoutKeys())).toEqual(['r run now', 'e edit', '↑↓ scroll', 'b back'])
+  expect(words(scoutKeys())).toEqual(['r run now', 'e edit', 'p pause', '↑↓ scroll', 'b back'])
+  expect(words(scoutKeys(true))).toEqual(['r run now', 'e edit', 'p resume', '↑↓ scroll', 'b back'])
+  expect(words(scoutListKeys())).toEqual(['Enter open', 't s c views', 'Esc close'])
   expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings', 'Esc closes'])
   const all = [taskKeys('review', true), taskKeys('backlog'), taskKeys('todo', true), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
   for (const w of [30, 50, 80])
@@ -1886,4 +1890,121 @@ test('packRows keeps order, fills each row, and gives a too-wide item a row of i
   expect(packRows([4, 7, 6, 12], 20, 1)).toEqual([[0, 1, 2], [3]])
   expect(packRows([4, 25, 3], 20, 1)).toEqual([[0], [1], [2]])
   expect(packRows([], 20, 1)).toEqual([])
+})
+
+test('a paused scout is saved in scouts.json and read back; old files without it are not paused', () => {
+  const text = scoutMemoryText([
+    { name: 'bugs', last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true },
+    { name: 'docs', last_run: null, paused: true },
+    { name: 'tests', last_run: '2026-11-12T09:00:00.000Z' },
+    { name: 'never', last_run: null, paused: false },
+  ])
+  const m = parseScoutMemory(text)
+  expect(m.bugs).toEqual({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true })
+  // a scout that never ran is still kept when it is paused
+  expect(m.docs).toEqual({ last_run: null, paused: true })
+  expect(m.tests).toEqual({ last_run: '2026-11-12T09:00:00.000Z' })
+  expect(m.never).toBeUndefined()
+  // an old file (no paused key) and odd values mean "not paused"
+  expect(parseScoutMemory('{"scouts":{"a":{"last_run":"2026-11-12T08:00:00.000Z"},"b":{"last_run":"2026-11-12T08:00:00.000Z","paused":"yes"}}}')).toEqual({ a: { last_run: '2026-11-12T08:00:00.000Z' }, b: { last_run: '2026-11-12T08:00:00.000Z' } })
+  // pausing and resuming one scout keeps the others as they are
+  const paused = parseScoutMemory(scoutPausedText(m, 'tests', true))
+  expect(paused.tests).toEqual({ last_run: '2026-11-12T09:00:00.000Z', paused: true })
+  expect(paused.bugs).toEqual(m.bugs)
+  expect(parseScoutMemory(scoutPausedText({}, 'new', true))).toEqual({ new: { last_run: null, paused: true } })
+  const resumed = parseScoutMemory(scoutPausedText(paused, 'tests', false))
+  expect(resumed.tests).toEqual({ last_run: '2026-11-12T09:00:00.000Z' })
+  expect(parseScoutMemory(scoutPausedText({ x: { last_run: null, paused: true } }, 'x', false))).toEqual({})
+})
+
+test('a paused scout is not run by its timer or by run now', () => {
+  const ok = { driving: true, gitOk: true, mode: 'auto' as const, on: true }
+  expect(scoutMayRun({ running: false }, ok)).toBe(true)
+  expect(scoutMayRun({ running: false, paused: false }, ok)).toBe(true)
+  expect(scoutMayRun({ running: false, paused: true }, ok)).toBe(false)
+  expect(scoutMayRun({ running: true }, ok)).toBe(false)
+  expect(scoutMayRun({ running: false }, { ...ok, driving: false })).toBe(false)
+  expect(scoutMayRun({ running: false }, { ...ok, gitOk: false })).toBe(false)
+  expect(scoutMayRun({ running: false }, { ...ok, mode: 'off' })).toBe(false)
+  expect(scoutMayRun({ running: false }, { ...ok, on: false })).toBe(false)
+  expect(scoutPausedAnswer('gaps-bot')).toBe('gaps-bot is paused; resume it first (p on its page, or /symcc-scout gaps-bot resume)')
+  // the status strip's next scout skips a paused one
+  const at = Date.parse('2026-11-12T10:00:00.000Z')
+  const iso = (m: number) => new Date(at + m * 60_000).toISOString()
+  expect(nextScoutText([{ name: 'a', running: false, next_run: iso(5), paused: true }, { name: 'b', running: false, next_run: iso(30) }], at)).toBe('next: b in 30m')
+  expect(nextScoutText([{ name: 'a', running: false, next_run: iso(5), paused: true }], at)).toBe('')
+  // the lead hears that a scout paused during its run won't run again
+  expect(scoutLeadMessage('a', '1. bug', undefined, true)).toContain('The owner has paused "a": it doesn\'t run again until the owner resumes it.')
+  expect(scoutLeadMessage('a', '1. bug')).not.toContain('paused')
+})
+
+test('/symcc-scout <name> pause and resume', () => {
+  expect(parseCommand('symcc-scout', 'bugs pause')).toEqual({ kind: 'scout-pause', name: 'bugs', paused: true })
+  expect(parseCommand('symcc-scout', ' bugs  Resume ')).toEqual({ kind: 'scout-pause', name: 'bugs', paused: false })
+  expect(parseCommand('symcc-scout', 'bugs')).toEqual({ kind: 'scout', name: 'bugs' })
+  for (const args of ['bugs stop', 'bugs pause now', 'pause']) {
+    const c = parseCommand('symcc-scout', args)
+    if (args === 'pause') expect(c).toEqual({ kind: 'scout', name: 'pause' })
+    else expect(c).toEqual({ kind: 'bad', message: 'Use: /symcc-scout <name> (run it now), /symcc-scout <name> pause, or /symcc-scout <name> resume' })
+  }
+})
+
+test('scout list: icons, "last:" and the order with paused ones last', () => {
+  expect(scoutIcon({ running: true })).toBe('◉')
+  expect(scoutIcon({ running: true, paused: true })).toBe('◉')
+  expect(scoutIcon({ running: false })).toBe('◎')
+  expect(scoutIcon({ running: false, paused: true })).toBe('○')
+  expect([scoutTone({ running: true }), scoutTone({ running: false }), scoutTone({ running: false, paused: true })]).toEqual(['ide', 'text', 'subtle'])
+  expect(countFindings('**1. Crash in parser**\nmore\n**2. Missing test**\n  1. step one\n## 3) Leak')).toBe(3)
+  expect(countFindings('1. a\n2. b\n1. a again')).toBe(2)
+  expect(countFindings('A crash in src/p.ts:3')).toBe(0)
+  expect(scoutLastText({ last_run: null })).toEqual({ text: 'never ran', tone: 'subtle' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' })).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '' })).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '1. bug at a.ts:3' })).toEqual({ text: 'last: found 1', tone: 'warning' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'a bug at a.ts:3' })).toEqual({ text: 'last: found something', tone: 'warning' })
+  const s = (name: string, extra: Partial<SymccScout> = {}): SymccScout => ({ name, every_minutes: 60, last_run: null, running: false, ...extra })
+  const at = Date.parse('2026-11-12T10:00:00.000Z')
+  const iso = (m: number) => new Date(at + m * 60_000).toISOString()
+  expect(sortScouts([s('z', { paused: true, next_run: iso(1) }), s('b', { next_run: iso(50) }), s('a', { running: true, paused: true })]).map(x => x.name)).toEqual(['a', 'b', 'z'])
+})
+
+/** The example list from the task: one running, three waiting, one paused. */
+function exampleScouts(at: number): SymccScout[] {
+  const iso = (m: number) => new Date(at + m * 60_000).toISOString()
+  return [
+    { name: 'recent-changes', every_minutes: 90, last_run: iso(-1), running: true, next_run: iso(89) },
+    { name: 'gaps-bot', every_minutes: 60, last_run: iso(-30), running: false, next_run: iso(59), last_report: '**1. No test for parse()**' },
+    { name: 'secrets', every_minutes: 240, last_run: iso(-60), running: false, next_run: iso(239), last_report: 'NOTHING' },
+    { name: 'test-gaps', every_minutes: 240, last_run: null, running: false, next_run: iso(239), model: 'sonnet' },
+    { name: 'simplify', every_minutes: 600, last_run: null, running: false, next_run: iso(599), model: 'sonnet', paused: true },
+  ]
+}
+
+test('scout list rows: aligned columns; on a narrow panel the model goes first, then "last:", never the name', () => {
+  const at = Date.parse('2026-11-12T10:00:00.000Z')
+  const text = (w: number) => scoutListRows(sortScouts(exampleScouts(at)), at, w).map(r => scoutListText(r))
+  expect(text(90)).toEqual([
+    '  ◉ recent-changes  every 90 min    running now…',
+    '  ◎ gaps-bot        every hour      next in 59m     last: found 1',
+    '  ◎ secrets         every 4 hours   next in 3h 59m  last: nothing',
+    '  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      sonnet',
+    '  ○ simplify        every 10 hours  paused          never ran      sonnet',
+  ])
+  for (const w of [90, 72, 50, 40, 20]) for (const line of text(w)) if (w >= 50) expect(line.length).toBeLessThanOrEqual(w)
+  // 66 columns: no model column
+  expect(text(66)[3]).toBe('  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran')
+  // 50 columns: no model and no "last:"
+  expect(text(50)).toEqual([
+    '  ◉ recent-changes  every 90 min    running now…',
+    '  ◎ gaps-bot        every hour      next in 59m',
+    '  ◎ secrets         every 4 hours   next in 3h 59m',
+    '  ◎ test-gaps       every 4 hours   next in 3h 59m',
+    '  ○ simplify        every 10 hours  paused',
+  ])
+  // very narrow: the name stays whole
+  for (const line of text(20)) expect(line).toMatch(/^  [◉◎○] [a-z-]+/)
+  expect(text(20)[0]).toBe('  ◉ recent-changes')
+  const long = 'a-very-long-scout-name-that-is-wider-than-the-panel'
+  expect(scoutListText(scoutListRows([{ name: long, every_minutes: 30, last_run: null, running: false }], at, 30)[0]!)).toBe(`  ◎ ${long}`)
 })

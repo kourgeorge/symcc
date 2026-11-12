@@ -178,10 +178,13 @@ You can also do it yourself:
   drop, watch its worker live, and a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
 - The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner.
-  Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout: how often it runs, its
-  model, whether it is running or when it runs next, and when it last ran. Enter opens a
-  scout: its file, its instructions, its last report, and buttons to run it now or see
-  where to edit it. Esc goes back to the list.
+  Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one
+  row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
+  it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
+  `never ran`) and its model. On a narrow panel the model column goes first, then the
+  `last:` one; the name is never cut. Enter opens a scout: its state, its file, its
+  instructions, its last report, and buttons to run it now, edit it, or pause or resume it.
+  Esc goes back to the list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
   `voice` flip on/off; `mode` and `target_branch` open a pick list (off / review / auto,
@@ -241,6 +244,16 @@ You can also make and change scouts right in the board panel: on the Scouts view
 scout" asks for a name, and "Edit" on a scout's page lets you change how often it runs, its
 model and its instructions. Save writes the file (other front matter keys are kept) and the
 new timing applies at once. `/symcc-scout <name>` runs a scout now.
+
+### Pausing a scout
+
+To stop one scout for a while without deleting it, press `p` on its page in the panel, or
+run `/symcc-scout <name> pause`. A paused scout doesn't run: not on its timer, and "run now"
+answers "<name> is paused; resume it first". If it is running when you pause it, that run
+finishes and reports as usual; the next one doesn't start. Press `p` again, or run
+`/symcc-scout <name> resume`, to start it again. The pause is kept in `.symcc/scouts.json`
+(next to each scout's last run), so it survives a restart and your scout file is never
+changed. Only you can pause or resume a scout; the lead is told a paused scout doesn't run.
 
 ---
 
@@ -370,6 +383,7 @@ your-project/
     ├── board.lock        held for a moment while a window saves the board
     ├── lead.json         which window drives the board (with a heartbeat)
     ├── scouts/           your scout files (*.md)
+    ├── scouts.json       each scout's last run and report, and whether it is paused
     ├── roles/            your own worker roles (*.md), see Worker roles
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),

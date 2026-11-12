@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { hintLines, hintLineText, listKeys, taskKeys, type KeyHint } from '../hooks/board'
@@ -475,14 +475,18 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     const keys = rows.map(r => r.props.key).filter(k => String(k).startsWith('scout:'))
     expect(keys).toEqual(['scout:tests', 'scout:bugs'])
     expect(await ui.find({ type: 'Text', text: /every 30 min/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /sonnet/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /next in 12m/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /ran 8m ago/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /never ran/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter opens a scout · run now \/ edit on its page · \/symcc-scout <name>$/ })).toBeDefined()
+    // 50 columns: the model and "last:" columns don't fit, so they are left out
+    expect(await ui.find({ type: 'Text', text: /sonnet/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /last:/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter open · t s c views · Esc close$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Enter opens a scout/ })).toBeUndefined()
     expect(await ui.find({ key: 'scout-new' })).toBeDefined()
-    const running = (await ui.findAll({ type: 'Text', text: /running/ })).find(x => x.props.color === 'success')
+    expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
+    const running = (await ui.findAll({ type: 'Text', text: /running now…/ })).find(x => x.props.color === 'ide')
     expect(running).toBeDefined()
+    expect((await ui.findAll({ type: 'Text', text: /^  ◉ $/ })).find(x => x.props.color === 'ide')).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^  ◎ $/ })).toBeDefined()
     // Enter on a scout opens its detail
     await ui.press({ key: 'scout:bugs' })
     // laid out like an opened task: no tabs, sections with headings
@@ -637,7 +641,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const tab = texts.findIndex(t => t === '[t] Tasks (1)')
     const rule = texts.findIndex(t => /^━{50}$/.test(t))
-    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter opens · t tasks/).test(t))
+    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · t s c views · Esc close$/).test(t))
     const row = texts.findIndex(t => (view === 'tasks' ? /Write it up/ : /^bugs/).test(t))
     expect(tab).toBeGreaterThan(-1)
     expect(rule).toBeGreaterThan(tab)
@@ -993,4 +997,127 @@ test('a task in review on a narrow or wide panel shows every key and every butto
     expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review'])
     await ui.unmount()
   }
+})
+
+/** The Scouts list of the task's example, for the list tests. */
+function listScouts() {
+  const at = Date.now()
+  const iso = (m: number) => new Date(at + m * 60_000 + 20_000).toISOString()
+  return [
+    scout('recent-changes', { every_minutes: 90, running: true, last_run: iso(-1), next_run: iso(89) }),
+    scout('gaps-bot', { every_minutes: 60, last_run: iso(-30), next_run: iso(59), last_report: '**1. No test for parse()**' }),
+    scout('secrets', { every_minutes: 240, last_run: iso(-60), next_run: iso(239), last_report: 'NOTHING' }),
+    scout('test-gaps', { every_minutes: 240, next_run: iso(239), model: 'sonnet' }),
+    scout('simplify', { every_minutes: 600, next_run: iso(599), model: 'sonnet', paused: true }),
+  ]
+}
+
+for (const width of [50, 90]) {
+  test(`the Scouts list at ${width} columns: icons, aligned columns, one hint line`, async ($, on) => {
+    stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: listScouts(), mode: 'auto', test_commands: [] } } })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: width }, surface: 'terminal' })
+    const names = ['recent-changes', 'gaps-bot', 'secrets', 'test-gaps', 'simplify']
+    const rows: string[] = []
+    for (const n of names) rows.push(String((await ui.find({ key: `scout:${n}` }))?.text).trimEnd())
+    console.log(`Scouts list at ${width} columns:\n${rows.join('\n')}`)
+    for (const r of rows) expect(r.length).toBeLessThanOrEqual(width)
+    if (width === 90)
+      expect(rows).toEqual([
+        '  ◉ recent-changes  every 90 min    running now…',
+        '  ◎ gaps-bot        every hour      next in 59m     last: found 1',
+        '  ◎ secrets         every 4 hours   next in 3h 59m  last: nothing',
+        '  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      sonnet',
+        '  ○ simplify        every 10 hours  paused          never ran      sonnet',
+      ])
+    else
+      expect(rows).toEqual([
+        '  ◉ recent-changes  every 90 min    running now…',
+        '  ◎ gaps-bot        every hour      next in 59m',
+        '  ◎ secrets         every 4 hours   next in 3h 59m',
+        '  ◎ test-gaps       every 4 hours   next in 3h 59m',
+        '  ○ simplify        every 10 hours  paused',
+      ])
+    // icon colors: running blue, waiting plain, paused subtle; a finding in the warning color
+    expect((await ui.findAll({ type: 'Text', text: /^  ◉ $/ }))[0]?.props.color).toBe('ide')
+    expect((await ui.findAll({ type: 'Text', text: /^  ◎ $/ }))[0]?.props.color).toBe('text')
+    expect((await ui.findAll({ type: 'Text', text: /^  ○ $/ }))[0]?.props.color).toBe('subtle')
+    if (width === 90) {
+      expect((await ui.find({ type: 'Text', text: /last: found 1/ }))?.props.color).toBe('warning')
+      expect((await ui.find({ type: 'Text', text: /last: nothing/ }))?.props.color).toBe('subtle')
+    }
+    // a name for screen readers, "+ New scout" on top, and one hint line, no old help line
+    expect((await ui.find({ key: 'scout:simplify' }))?.props.label).toBe('simplify: paused')
+    expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · t s c views · Esc close'])
+    expect(texts.some(t => /run now \/ edit on its page/.test(t))).toBe(false)
+    await ui.unmount()
+  })
+}
+
+/** Fake scout files, scouts.json and the board; a write to scouts.json.tmp becomes scouts.json (the mv). */
+function scoutFiles(on: On, memory: string | null) {
+  const files: Record<string, string | null> = {
+    '/scouts/bugs.md': '---\nevery_minutes: 30\n---\nLook for crashes.\n',
+    '/scouts.json': memory,
+    '/board.json': JSON.stringify({ tasks: [] }),
+    '/board.lock': null,
+  }
+  const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
+  on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : e.path.endsWith('/scouts') ? { value: true } : next(e)))
+  on('fs.list', (_, e, next) => (e.path.endsWith('/scouts') ? { value: [{ name: 'bugs.md', kind: 'file' }] } : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
+  on('fs.write', (_, e) => {
+    if (e.path.endsWith('/scouts.json.tmp')) files['/scouts.json'] = String(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  mock.clock(on, { now: Date.now() })
+  return files
+}
+
+test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched), and again resumes it', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.' })], mode: 'auto', test_commands: [] } } })
+  const files = scoutFiles(on, JSON.stringify({ scouts: { bugs: { last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' } } }))
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // waiting: the ◎ icon, and p pause in the key hints
+  expect(await ui.find({ type: 'Text', text: /^◎ waiting$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /p pause/ })).toBeDefined()
+  const button = await ui.find({ key: 'scout-pause' })
+  expect(button?.props.hotkey).toBe('p')
+  expect(button?.props.label).toBe('Pause')
+  await ui.press({ key: 'scout-pause' })
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true })
+  expect(files['/scouts/bugs.md']).toBe('---\nevery_minutes: 30\n---\nLook for crashes.\n')
+  expect(toasts.some(t => /bugs paused: it doesn't run until you resume it/.test(t))).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /^○ paused$/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^○ paused$/ }))?.props.color).toBe('subtle')
+  expect(await ui.find({ type: 'Text', text: /p resume/ })).toBeDefined()
+  expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Resume')
+  // run now is refused while it is paused
+  await ui.press({ key: 'scout-run' })
+  expect(toasts.some(t => /bugs is paused; resume it first/.test(t))).toBe(true)
+  await ui.press({ key: 'scout-pause' })
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs.paused).toBeUndefined()
+  expect(toasts.some(t => /bugs resumed: it runs every 30 min again/.test(t))).toBe(true)
+  expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Pause')
+  await ui.unmount()
+})
+
+test('/symcc-scout <name> pause and resume, and run now refused while paused', async ($, on) => {
+  const files = scoutFiles(on, null)
+  stateOf(on, {})
+  const run = async (args: string) => String((await $.command.run({ command: 'symcc-scout', args })).text)
+  expect(await run('bugs pause')).toMatch(/^bugs paused: it doesn't run until you resume it/)
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: null, paused: true })
+  expect(await run('bugs pause')).toMatch(/^bugs is already paused/)
+  expect(await run('bugs')).toBe('bugs is paused; resume it first (p on its page, or /symcc-scout bugs resume)')
+  expect(await run('bugs resume')).toBe('bugs resumed: it runs every 30 min again')
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toBeUndefined()
+  expect(await run('bugs')).not.toMatch(/paused/)
+  expect(await run('nope pause')).toMatch(/^no scout named nope/)
+  expect(await run('bugs stop')).toMatch(/^Use: \/symcc-scout <name>/)
 })
