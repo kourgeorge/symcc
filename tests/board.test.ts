@@ -2083,3 +2083,73 @@ test('scout list rows: aligned columns; on a narrow panel the model goes first, 
   const long = 'a-very-long-scout-name-that-is-wider-than-the-panel'
   expect(scoutListText(scoutListRows([{ name: long, every_minutes: 30, last_run: null, running: false }], at, 30)[0]!)).toBe(`  ◎ ${long}`)
 })
+
+import { parseStatusZ, mergeBlockers, blockedText, moveTarget, type GitRun } from '../hooks/board'
+
+test('git status -z is read into codes and paths; a rename keeps only its new path', () => {
+  expect(parseStatusZ(' M a.txt\0?? new dir/x.txt\0R  b.txt\0old.txt\0')).toEqual([
+    { code: ' M', path: 'a.txt' },
+    { code: '??', path: 'new dir/x.txt' },
+    { code: 'R ', path: 'b.txt' },
+  ])
+  expect(parseStatusZ('')).toEqual([])
+})
+
+test('a merge waits for uncommitted changes and for untracked files it would overwrite, but not for other untracked files', () => {
+  const st = '?? new.txt\0?? notes.txt\0?? lib\0?? .symcc/board.json\0'
+  const b = mergeBlockers(st, ['a.txt', 'new.txt', 'lib/x.js'], '.symcc')
+  expect(b).toEqual({ dirty: [], untracked: ['new.txt', 'lib'] })
+  expect(blockedText('main', 'T-3', b)).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, then say "retry T-3"')
+  expect(mergeBlockers(' M a.txt\0 M .symcc/x\0', ['b.txt'], '.symcc').dirty).toEqual(['a.txt'])
+  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toContain('uncommitted changes on main')
+  expect(blockedText('main', 'T-3', mergeBlockers('?? other.txt\0', ['a.txt'], '.symcc'))).toBe('')
+})
+
+/** A fake git: answers by the command's first word; records every call. */
+function fakeGit(answers: Record<string, { exitCode: number; stdout?: string; stderr?: string }[]>) {
+  const calls: string[][] = []
+  const run: GitRun = async args => {
+    calls.push(args)
+    const key = args[0] === 'read-tree' && args[1] === '-n' ? 'dry-run' : args[0]!
+    const a = answers[key]?.shift() ?? { exitCode: 0 }
+    return { exitCode: a.exitCode, stdout: a.stdout ?? '', stderr: a.stderr ?? '' }
+  }
+  return { run, calls }
+}
+const MOVE = { target: 'main', id: 'T-3', from: 'aaaa', to: 'bbbb', checkedOut: true, note: 'symcc T-3', skipDir: '.symcc' }
+
+test('an untracked file the task would create blocks the merge before the branch moves', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0new.txt\0' }], status: [{ exitCode: 0, stdout: '?? new.txt\0' }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('new.txt')
+  expect(g.calls.some(c => c[0] === 'update-ref' || c[0] === 'read-tree')).toBe(false)
+})
+
+test('a failed file update after the branch moved puts the branch back and is not merged', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], 'read-tree': [{ exitCode: 128, stderr: "error: Untracked working tree file 'new.txt' would be overwritten by merge." }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('not merged')
+  expect(r.detail).toContain('back where it was')
+  const refs = g.calls.filter(c => c[0] === 'update-ref')
+  expect(refs.map(c => c.slice(-3))).toEqual([['refs/heads/main', 'bbbb', 'aaaa'], ['refs/heads/main', 'aaaa', 'bbbb']])
+})
+
+test('a dry run that fails stops the merge before the branch moves', async () => {
+  const g = fakeGit({ 'dry-run': [{ exitCode: 128, stderr: 'error: something in the way' }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r).toEqual({ ok: false, detail: 'your files on main can\'t be updated (error: something in the way); fix that, then say "retry T-3"' })
+  expect(g.calls.some(c => c[0] === 'update-ref')).toBe(false)
+})
+
+test('the normal merge moves the branch and updates the files; another branch checked out only moves the branch', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0new.txt\0' }], status: [{ exitCode: 0, stdout: '?? other.txt\0' }] })
+  expect(await moveTarget(g.run, MOVE)).toEqual({ ok: true, detail: '' })
+  expect(g.calls.map(c => c[0] + (c[1] === '-n' ? ' -n' : ''))).toEqual(['diff', 'status', 'read-tree -n', 'update-ref', 'read-tree'])
+  const h = fakeGit({})
+  expect((await moveTarget(h.run, { ...MOVE, checkedOut: false })).ok).toBe(true)
+  expect(h.calls.map(c => c[0])).toEqual(['update-ref'])
+  const moved = fakeGit({ 'update-ref': [{ exitCode: 1 }] })
+  expect((await moveTarget(moved.run, { ...MOVE, checkedOut: false })).detail).toBe('main moved during the merge; try again')
+})

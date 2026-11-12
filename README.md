@@ -298,7 +298,7 @@ Safety:
 - In review mode nothing is merged until you approve it; the lead should only approve
   when you say so.
 - Your branch only moves by a merge after the scope check and tests. If you have uncommitted changes on it,
-  symcc waits instead of overwriting them.
+  or untracked files the merge would overwrite, symcc waits instead of overwriting them.
 - Workers can't commit, push or merge. They use Read, Edit, Write, Glob, Grep and Bash,
   with edits accepted automatically, inside your normal Claude Code permission settings.
 - Scouts can't edit or write files. They use Read, Glob, Grep, Bash, WebSearch and

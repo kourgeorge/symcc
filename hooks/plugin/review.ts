@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type DiffFile, parseDiffStat, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits } from '../board'
+import { type DiffFile, parseDiffStat, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget } from '../board'
 import { gitOk, git } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -76,16 +76,11 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     }
   }
   if (mode === 'finish' && needsReview(b, t)) return { ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` }
-  // Move main forward (compare-and-swap). If the person has main checked out, update
-  // their files too, but never over uncommitted changes.
+  // Move main forward (compare-and-swap). If the person has main checked out, update their
+  // files too, but never over uncommitted changes or untracked files the merge would overwrite.
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
-  if (current === target) {
-    const st = (await git($, ['status', '--porcelain', '--untracked-files=no'])).stdout.split('\n').filter(l => l && !l.slice(3).startsWith(`${S.N.dir}/`))
-    if (st.length) return { ok: false, detail: `you have uncommitted changes on ${target}; commit or stash them, then say "retry ${t.id}"` }
-  }
-  const cas = await git($, ['update-ref', '-m', `${S.N.name} ${t.id}`, `refs/heads/${target}`, candidate, main])
-  if (cas.exitCode !== 0) return { ok: false, detail: `${target} moved during the merge; try again` }
-  if (current === target) await git($, ['read-tree', '-m', '-u', main, candidate])
+  const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir })
+  if (!moved.ok) return { ok: false, detail: moved.detail }
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
   return { ok: true, merged: candidate, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
 }

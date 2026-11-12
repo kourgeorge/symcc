@@ -113,7 +113,8 @@ This is where symcc keeps your branch safe. Step by step:
 5. **Approval (optional).** In review mode (see below), the task stops here as
    `review` ("ready for review") and nothing is merged until you say so.
 6. **Merge.** Only now does your branch move forward. If you have that branch checked
-   out with uncommitted changes, symcc waits instead of overwriting them.
+   out with uncommitted changes, or with untracked files the merge would overwrite,
+   symcc waits instead of overwriting them.
 7. **Tell.** The lead gets one line: merged, or why not. On a Mac you also hear
    "T-3 done".
 
