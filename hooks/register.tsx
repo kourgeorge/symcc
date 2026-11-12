@@ -12,6 +12,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { SymccMode, SymccScout, SymccTask, SymccView } from '../types'
 import { DEFAULT_NAME, cleanName, dataDir, namesFor } from './name'
+import type { Seg } from './board'
 import {
   LEAD_BEAT_MS,
   leftoverTmpFiles,
@@ -104,7 +105,11 @@ import {
   roleSkipReason,
   skippedRoleNote,
   roleMark,
-  roleLine,
+  detailRows,
+  detailRowLines,
+  wrapSegs,
+  STATUS_BADGE,
+  STATUS_MARK,
   roleChoices,
   mergeRoles,
   findRole,
@@ -2664,33 +2669,25 @@ export const register: Register = on => {
           </Text>
         )
       }
+      // One line of colored pieces (from detailRowLines / wrapSegs).
+      const segLine = (segs: Seg[], key: string) => (
+        <Text key={key}>
+          {segs.map((g, i) => (
+            <Text key={`${key}-${i}`} bold={g.bold} italic={g.italic} color={C(g.color)}>
+              {g.text}
+            </Text>
+          ))}
+        </Text>
+      )
+      const rows = detailRows(t, { roles, all: v.tasks, when, nowMs: Date.now() })
       return (
         <Box flexDirection="column" gap={1}>
           <Box flexDirection="column">
+            {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
             <Text>
-              <Text bold color={C('claude')}>{t.id}</Text>{' '}
-              <Text color={C(color[t.status]!)} bold>
-                {mark[t.status]} {word[t.status]}
-              </Text>
-              <Text color={C('subtle')}>
-                {' '}· added {when(t.created_at)} · changed {when(t.updated_at)} · tries{' '}
-              </Text>
-              <Text color={C(t.attempts > 2 ? 'warning' : 'subtle')}>{t.attempts}</Text>
+              <Text bold color={C(STATUS_BADGE[t.status])}>{`[${STATUS_MARK[t.status]} ${word[t.status]}]`}</Text>
+              {agentId ? <Text color={C('subtle')}> · a worker is on it now</Text> : null}
             </Text>
-            <Text bold color={C('text')}>
-              {t.title}
-            </Text>
-            <Text color={C('subtle')}>{roleLine(t, roles)}</Text>
-            <Text color={C('subtle')}>
-              {fromText(t)}
-              {t.origin?.why ? ` · why: ${t.origin.why}` : ''}
-            </Text>
-            {t.note && (
-              <Text>
-                <Text color={C(color[t.status]!)}>now: </Text>
-                <Text italic color={C('subtle')}>{t.note}</Text>
-              </Text>
-            )}
           </Box>
 
           <Box flexDirection="row" gap={1}>
@@ -2733,6 +2730,11 @@ export const register: Register = on => {
 
           {rejectBox}
           {roleBox}
+
+          <Box flexDirection="column">
+            {heading('Details')}
+            {rows.flatMap((r, i) => detailRowLines(r, width).map((l, j) => segLine(l, `row-${i}-${j}`)))}
+          </Box>
 
           {changes && (
             <Box flexDirection="column">
@@ -2783,47 +2785,16 @@ export const register: Register = on => {
             {t.details.trim() ? paragraphs(t.details) : <Text color={C('subtle')}>(no details)</Text>}
           </Box>
 
-          <Box flexDirection="column">
-            {heading('May change')}
-            {t.files.length ? (
-              t.files.map(f => (
-                <Text>
-                  {'  '}
-                  <Text color={C('autoAccept')}>{f}</Text>
-                </Text>
-              ))
-            ) : (
-              <Text color={C('subtle')}>  anywhere in the project</Text>
-            )}
-          </Box>
-
-          {t.after.length > 0 && (
-            <Box flexDirection="column">
-              {heading('Waits for')}
-              {t.after.map(id => {
-                const dep = v.tasks.find(x => x.id === id)
-                return (
-                  <Text>
-                    {'  '}
-                    <Text bold color={C('claude')}>{id}</Text>{' '}
-                    <Text color={C(dep ? color[dep.status]! : 'error')}>{dep ? `${mark[dep.status]} ${word[dep.status]}` : 'missing'}</Text>
-                    {dep ? <Text color={C('subtle')}> · {dep.title}</Text> : null}
-                  </Text>
-                )
-              })}
-            </Box>
-          )}
-
           {t.history.length > 0 && (
             <Box flexDirection="column">
-              {heading(`What happened (${t.history.length}, newest first)`)}
+              {heading(`History (${t.history.length}, newest first)`)}
               {[...t.history].reverse().map(historyLine)}
             </Box>
           )}
 
           {(t.runs?.length ?? 0) > 0 && (
             <Box flexDirection="column">
-              {heading('Time and cost')}
+              {heading('Runs (time and cost)')}
               {t.runs!.map((r, i) => (
                 <Text color={C(r.ended ? 'subtle' : 'success')}>{`  ${fmtRun(r, i, Date.now())}`}</Text>
               ))}
@@ -2831,12 +2802,6 @@ export const register: Register = on => {
             </Box>
           )}
 
-          {t.branch && (
-            <Text>
-              <Text color={C('subtle')}>branch: </Text>
-              <Text color={C('ide')}>{t.branch}</Text>
-            </Text>
-          )}
           <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}</Text>
         </Box>
       )

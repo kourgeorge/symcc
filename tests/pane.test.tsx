@@ -247,7 +247,7 @@ test('an opened task shows its details in full, in clear sections', async ($, on
   expect(await ui.find({ type: 'Text', text: /What to do/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /THE END/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /src\/a\.ts/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Waits for/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^After:\s+T-1 ✓ done · Base work$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Base work/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /newest first/ })).toBeDefined()
   await ui.unmount()
@@ -278,7 +278,7 @@ const RUNS = [
 test('an opened task shows the time of each try and the total', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /Time and cost/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Runs \(time and cost\)/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 2: 1h 00m · ~\$0\.42/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens · ~\$0\.42/ })).toBeDefined()
@@ -619,7 +619,7 @@ test('an open task shows its role and model; "Role" (l) opens a pick list of the
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^Role: tests — writes tests · model sonnet$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Role:\s+tests — writes tests · model sonnet$/ })).toBeDefined()
   const button = await ui.find({ key: 'role' })
   expect(button?.props.hotkey).toBe('l')
   expect(await ui.find({ type: 'Text', text: /l role/ })).toBeDefined()
@@ -639,7 +639,7 @@ test('a running task shows its role but has no Role button', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   fakeFiles(on, ROLE_FILES)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^Role: general — a plain worker$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Role:\s+general — a plain worker$/ })).toBeDefined()
   expect(await ui.find({ key: 'role' })).toBeUndefined()
   await ui.unmount()
 })
@@ -656,5 +656,77 @@ test('a role file that is skipped is said once in a toast, with the reason', asy
   expect(await ui.find({ key: 'role:x' })).toBeUndefined()
   expect(await ui.find({ key: 'role:docs' })).toBeDefined()
   expect(toasts.filter(t => t.includes('symcc: skipped roles/x.md: no description')).length).toBe(1)
+  await ui.unmount()
+})
+
+/** The whole lines of the panel, in order (without the colored pieces inside them). */
+const lines = async (ui: { findAll: (q: { type: string }) => Promise<{ text: string }[]> }) => {
+  const out: string[] = []
+  // a colored piece comes right after the line it is part of: skip it
+  for (const { text } of await ui.findAll({ type: 'Text' })) if (!out.length || !out[out.length - 1]!.includes(text)) out.push(text)
+  return out
+}
+
+test('the task page shows one labelled row per fact, From and Why on their own rows, and the full request', async ($, on) => {
+  const request = 'improve the scouts so that they will find real issues and be less noisy about small doc nits that nobody cares about'
+  const origin = { by: 'owner', request, why: 'Scouts mostly find small doc nits and repeat known items', evidence: 'last owner prompt at 2026-11-12 09:00 UTC', at: '' }
+  stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'review', 'Better scouts', { origin, files: ['hooks/a.ts'], after: ['T-1'], branch: 'symcc/T-3', attempts: 2 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  // the header: id and title in bold, then the status badge in its own color
+  const id = await ui.find({ type: 'Text', text: /^T-3$/ })
+  expect(id?.props.bold).toBe(true)
+  const badge = (await ui.findAll({ type: 'Text', text: /^\[◆ ready for review\]$/ })).find(t => t.props.color)
+  expect(badge?.props.color).toBe('warning')
+  expect(badge?.props.bold).toBe(true)
+  for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
+    const row = L.find(l => l.startsWith(`${label}:`))
+    expect(row).toBeDefined()
+    // every value starts in the same column
+    expect(row!.slice(0, 9).trim()).toBe(`${label}:`)
+    expect(row![9]).not.toBe(' ')
+  }
+  expect(L.some(l => /^From:\s+owner$/.test(l))).toBe(true)
+  expect(L.some(l => /^Why:\s+Scouts mostly find/.test(l))).toBe(true)
+  expect(L.some(l => /·\s*why:/.test(l))).toBe(false)
+  // the request in full, in quotes, wrapped within the panel, never cut mid-word
+  const at = L.findIndex(l => l.startsWith('Request:'))
+  const seen = L.findIndex(l => l.startsWith('Seen:'))
+  const wrapped = L.slice(at, seen).map(l => l.slice(9))
+  expect(wrapped.length).toBeGreaterThan(1)
+  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(9)))).toBe(true)
+  expect(wrapped.join(' ')).toBe(`“${request}”`)
+  for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
+  expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
+  const seenPiece = await ui.find({ type: 'Text', text: /^last owner prompt/ })
+  expect(seenPiece?.props.color).toBe('subtle')
+  const who = await ui.find({ type: 'Text', text: /^owner$/ })
+  expect(who?.props.color).toBe('claude')
+  expect(L.some(l => /^Branch:\s+symcc\/T-3$/.test(l))).toBe(true)
+  expect(L.some(l => /^Tries:\s+2 tries$/.test(l))).toBe(true)
+  // the section headings, in order
+  const heads = L.filter(l => /^▍/.test(l))
+  expect(heads[0]).toBe('▍Details')
+  expect(heads).toContain('▍What to do')
+  await ui.unmount()
+})
+
+test('From shows a scout or a split task in its own color', async ($, on) => {
+  stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks: [task('T-4', 'doing', 'Fix it', { origin: { by: 'scout', scout: 'bugs', why: 'it breaks', at: '' } }), task('T-5', 'todo', 'Part', { origin: { by: 'lead', task: 'T-4', how: 'split', why: 'too big', at: '' } })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^scout bugs$/ }))?.props.color).toBe('suggestion')
+  expect((await ui.findAll({ type: 'Text', text: /^\[▶ doing\]$/ })).find(t => t.props.color)?.props.color).toBe('ide')
+  expect((await lines(ui)).some(l => /^Request:/.test(l))).toBe(false)
+  await ui.unmount()
+})
+
+test('an old task without an origin still opens, with From: unknown and no Why row', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Old one')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L.some(l => /^From:\s+unknown/.test(l))).toBe(true)
+  expect(L.some(l => /^Why:/.test(l))).toBe(false)
+  expect(L.some(l => /^Files:\s+anywhere in the project$/.test(l))).toBe(true)
+  expect(L.some(l => /^Tries:\s+0 tries$/.test(l))).toBe(true)
   await ui.unmount()
 })
