@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "symcc",
+  "description": "symcc: lead a team of coding agents from one chat.",
+  "owner": {
+    "name": "George Kour",
+    "url": "https://github.com/kourgeorge"
+  },
+  "plugins": [
+    {
+      "name": "symcc",
+      "source": "./",
+      "description": "A shared task board the main chat (the lead) manages, workers that build tasks in parallel in their own worktrees and merge what passes the tests, and scouts you define that look for issues on a timer.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "homepage": "https://github.com/kourgeorge/symcc"
+    }
+  ]
+}

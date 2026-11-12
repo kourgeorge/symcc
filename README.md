@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="docs/guide.md">Guide</a> · <a href="docs/demo.svg">Demo</a>
+  <a href="#install">Install</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="docs/guide.md">Guide</a> · <a href="docs/demo.svg">Demo</a>
 </p>
 
 <p align="center">
@@ -122,15 +122,104 @@ The flow is **discovery → triage → implementation → review → merge**.
 
 ---
 
+## Install
+
+### Requirements
+
+- **Claude Code** with plugin function hooks (the `$.tool`, `$.agent` and `$.clock`
+  plugin API, and panels). This API is early access and can change between releases.
+  symcc is built and tested with Claude Code **2.1.319**; check yours with
+  `claude --version`. The one-step install in Option B needs 2.1.275 or later.
+- **git**.
+- **Your project in a git repo**, with at least one commit (workers get their own git
+  worktree and branch).
+
+There is no build step and nothing to `npm install`: Claude Code loads the plugin's
+`.tsx` code directly.
+
+### Option A: try it from a clone
+
+```bash
+git clone https://github.com/kourgeorge/symcc ~/symcc
+cd /path/to/your/project
+claude --plugin-dir ~/symcc
+```
+
+`--plugin-dir` loads symcc for that session only, so start Claude Code this way each time.
+To update: `git -C ~/symcc pull`, then start Claude Code again.
+
+### Option B: install as a plugin (stays installed)
+
+This repo is also a plugin marketplace (named `symcc`) with one plugin in it. Install in
+one step:
+
+```bash
+claude plugin install symcc --marketplace kourgeorge/symcc
+```
+
+Or in two steps: add the marketplace, then install the plugin from it:
+
+```bash
+claude plugin marketplace add kourgeorge/symcc
+claude plugin install symcc@symcc
+```
+
+Inside a Claude Code session the same works with `/plugin`, e.g.
+`/plugin install symcc --marketplace kourgeorge/symcc`. It installs for you (user
+scope) by default; add `--scope project` to share it with your project.
+
+To update, then restart Claude Code:
+
+```bash
+claude plugin marketplace update symcc
+claude plugin update symcc@symcc
+```
+
+To uninstall:
+
+```bash
+claude plugin uninstall symcc@symcc
+claude plugin marketplace remove symcc
+```
+
+### Check it works
+
+Start Claude Code in your project. The board panel opens by itself on a wide enough
+terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ auto`.
+
+### First setup in your project
+
+1. **Keep the board local:** add `.symcc/` to your project's `.gitignore`.
+   ```bash
+   echo ".symcc/" >> .gitignore
+   ```
+2. **Set your tests:** tell the lead "set the test command to `npm test`".
+   Without a test command, changes are merged without running tests.
+3. **Optional, a scout:** copy one from [`examples/scouts/`](examples/scouts/).
+   ```bash
+   mkdir -p .symcc/scouts
+   cp ~/symcc/examples/scouts/deps.md .symcc/scouts/
+   ```
+   (With Option B, copy it from the repo on GitHub, or make one in the panel's Scouts view.)
+
+### Troubleshooting
+
+- **The panel doesn't open.** The terminal is too narrow. Make it wider, or run `/symcc`.
+- **"branch doesn't exist".** No work starts, because the branch work merges into
+  (`target_branch`) is gone or was never committed to. Make at least one commit, or tell
+  the lead "merge into `main`" (any branch that exists).
+- **Tests fail in workers' copies because packages are missing.** A worker's copy has no
+  `node_modules/` (it is not copied). Say in the task that the worker should install them
+  first (e.g. `npm ci`), or make the test command do it.
+
+---
+
 ## Quick start
 
-1. **Install:** start Claude Code with the plugin.
-   ```bash
-   claude --plugin-dir /path/to/symcc
-   ```
+1. **Install** symcc (see [Install](#install)), e.g.
+   `claude plugin install symcc --marketplace kourgeorge/symcc`.
 2. **Keep the board local:** add `.symcc/` to your project's `.gitignore`.
 3. **Set your tests:** tell the lead "set the test command to `npm test`".
-   Without a test command, changes are merged without running tests.
 4. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
 ---
