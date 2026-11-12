@@ -20,6 +20,8 @@ export type Board = {
   open_on_start: boolean
   /** say it out loud when a task is merged (true unless turned off) */
   voice: boolean
+  /** the whole plugin on or off (/<name>-on, /<name>-off); off: Claude works as normal, the board is kept. true unless turned off */
+  enabled: boolean
   tasks: BoardTask[]
 }
 
@@ -96,7 +98,7 @@ const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' =
 
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, tasks: [] }
+  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, enabled: true, tasks: [] }
 }
 
 export function parseBoard(text: string | null): Board {
@@ -576,13 +578,15 @@ export type Command =
   | { kind: 'diff'; id: string; file?: string }
   | { kind: 'scout'; name: string }
   | { kind: 'mode'; mode: SymccMode }
+  | { kind: 'off' }
+  | { kind: 'on' }
   | { kind: 'help'; topic: string }
   | { kind: 'settings' }
   | { kind: 'set'; setting: SettingName; input: SettingsInput }
   | { kind: 'bad'; message: string }
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
-export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help'] as const
+export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'off', 'on'] as const
 
 /** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
 export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
@@ -641,6 +645,10 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return parseSettingsCommand(s, name)
     case 'help':
       return { kind: 'help', topic: s }
+    case 'off':
+      return s ? use(`/${name}-off (turn ${name} off; /${name}-on turns it back on)`) : { kind: 'off' }
+    case 'on':
+      return s ? use(`/${name}-on`) : { kind: 'on' }
   }
   return null
 }
@@ -860,6 +868,18 @@ export const openOnStart = (b: Partial<Pick<Board, 'open_on_start'>>) => b.open_
 /** Should a merged task be said out loud? Yes unless the board turned voice off. */
 export const voiceOn = (b: Partial<Pick<Board, 'voice'>>) => b.voice !== false
 
+/** Is the plugin on for this project? Yes unless /<name>-off turned it off (old boards have no `enabled`: on). */
+export const symccOn = (b: Partial<Pick<Board, 'enabled'>>) => b.enabled !== false
+
+/** The board with the plugin turned on or off; nothing else changes (tasks, mode and scouts are kept). */
+export const setEnabled = (b: Board, on: boolean): Board => ({ ...b, enabled: on })
+
+/** What every lead tool answers while the plugin is off. */
+export const offAnswer = (name: string = DEFAULT_NAME) => `${name} is off. The owner can turn it on with /${name}-on.`
+
+/** The status line while the plugin is off. */
+export const offStatusLine = (name: string = DEFAULT_NAME) => `${name} off · /${name}-on`
+
 /** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
 export function spokenDone(ids: string[]): string {
   const xs = [...new Set(ids.map(x => String(x ?? '').trim()).filter(Boolean))]
@@ -874,7 +894,7 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode'] as const
+export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; branch: target_branch; number: a whole number within min-max; onoff: true/false; mode: off/review/auto */
 export type SettingKind = 'commands' | 'branch' | 'number' | 'onoff' | 'mode'
@@ -892,6 +912,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
   { name: 'voice', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'say "T-3 done" out loud when a task is merged' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
+  { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
 ]
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
@@ -908,6 +929,8 @@ export function settingValue(b: Partial<Board>, name: SettingName): string {
       return openOnStart(b) ? 'on' : 'off'
     case 'voice':
       return voiceOn(b) ? 'on' : 'off'
+    case 'enabled':
+      return symccOn(b) ? 'on' : 'off'
     case 'mode':
       return modeOf(b)
     default:
@@ -925,7 +948,7 @@ export type SettingChange = { name: SettingName; value: string; said: string; cu
  * Applies the settings in `a` to the board, with the same limits for the lead and the owner:
  * max_parallel 1-8, max_minutes 5-600, auto_retries 0-10, up to 5 test commands. A value
  * outside its limit is cut to it, and the change says so. target_branch must already be
- * checked to exist; mode is not set here (see setBoardMode).
+ * checked to exist; mode and enabled are not set here (see setBoardMode and setEnabled).
  */
 export function applySettings(b: Board, a: SettingsInput): { board: Board; changes: SettingChange[] } {
   const y = { ...b }

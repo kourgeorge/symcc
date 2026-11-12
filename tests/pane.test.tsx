@@ -555,7 +555,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   const active = (await ui.findAll({ type: 'Text', text: /^\[c\] Settings$/ })).find(x => x.props.bold)
   expect(active?.props.color).toBe('ide')
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode', 'enabled'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -776,4 +776,28 @@ test('the task page shows a Commits row: short ids, newest first, the merged one
   expect(L.some(l => /^Commits:\s+22222222 \(merged\), 11111111 \(try 1\)$/.test(l))).toBe(true)
   expect((await ui.find({ type: 'Text', text: /^22222222$/ }))?.props.color).toBe('success')
   await ui.unmount()
+})
+
+const COMPOSE = { model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as never
+
+test('the lead guide is in the system prompt while symcc is on, and left out once it is off', async ($, on) => {
+  const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks: [] }), '/board.lock': null }
+  fakeFiles(on, files)
+  // the engine's own sections, beneath the plugin
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'You are Claude.', scope: 'shared' as const }] }))
+  const ids = async () => ((await $.prompt.compose(COMPOSE)) as { sections: { id: string }[] }).sections.map(x => x.id)
+  // an old board without "enabled" is on
+  expect(await ids()).toContain('symcc:lead')
+  files['/board.json'] = JSON.stringify({ tasks: [], enabled: false })
+  expect(await ids()).not.toContain('symcc:lead')
+  files['/board.json'] = JSON.stringify({ tasks: [], enabled: true })
+  expect(await ids()).toContain('symcc:lead')
+})
+
+test('while symcc is off its tools answer that it is off and leave the board alone', async ($, on) => {
+  const board = { tasks: [task('T-1', 'todo', 'Build it')], enabled: false }
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  const r = (await $.tool.call({ tool: 'mcp__symcc__add', title: 'More', why: 'test' } as never)) as { result?: unknown }
+  expect(JSON.stringify(r.result)).toContain('symcc is off. The owner can turn it on with /symcc-on.')
+  expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })

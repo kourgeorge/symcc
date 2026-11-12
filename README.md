@@ -332,6 +332,8 @@ switch review / auto, `t` / `s` / `c` the Tasks, Scouts and Settings tabs. **Ctr
 | `/symcc-scout <name>` | Run a scout now |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`, `/symcc-settings test_commands "npm test"` |
+| `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates or voice); the board is kept |
+| `/symcc-on` | Turn symcc back on, in the mode the board had |
 | `/symcc-help [topic]` | The built-in manual |
 
 ### Settings
@@ -353,6 +355,7 @@ directly. A value over its limit is cut to it, and the answer says so (e.g.
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
 | `voice` | on | on / off | Say "T-3 done" out loud when a task is merged (Mac) |
 | `mode` | `auto` | `off` / `review` / `auto` | See above |
+| `enabled` | on | on / off | The whole plugin on or off, same as `/symcc-on` and `/symcc-off` |
 
 ### Scouts and task statuses
 

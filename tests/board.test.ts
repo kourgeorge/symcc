@@ -915,7 +915,7 @@ test('diff lines are colored: added in success, removed in error, headers and hu
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
-  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help'])
+  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-off', 'symcc-on'])
   expect(commandNames('crew')[0]).toBe('crew')
   expect(commandNames('crew')).toContain('crew-help')
   expect(parseCommand('symcc', '')).toEqual({ kind: 'open' })
@@ -1162,7 +1162,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, open_on_start, voice, mode')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, open_on_start, voice, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
   expect(bad('voice maybe')).toBe('voice must be on or off')
@@ -1196,7 +1196,7 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode'])
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode', 'enabled'])
   const b = { ...emptyBoard('main'), test_commands: ['npm test', 'npm run lint'], voice: false }
   expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
   expect(settingValue(b, 'voice')).toBe('off')
@@ -1705,4 +1705,36 @@ test('a task lists its commits newest first with the merged one marked', () => {
   expect(row.segs.find(s => s.text === 'cccccccc')!.color).toBe('success')
   expect(rows.findIndex(r => r.label === 'Commits')).toBe(rows.findIndex(r => r.label === 'Tries') - 1)
   expect(detailRows(base, { roles: [], all: [], when: s => s, nowMs: 0 }).some(r => r.label === 'Commits')).toBe(false)
+})
+
+import { symccOn, setEnabled, offAnswer, offStatusLine } from '../hooks/board'
+
+test('symcc is on for old boards and new ones, and off only when the board says so', () => {
+  expect(symccOn(parseBoard(JSON.stringify({ tasks: [] })))).toBe(true)
+  expect(symccOn(parseBoard(null))).toBe(true)
+  expect(symccOn(emptyBoard())).toBe(true)
+  const off = parseBoard(JSON.stringify({ tasks: [], mode: 'review', enabled: false }))
+  expect(symccOn(off)).toBe(false)
+  // turning it on keeps the mode and the tasks
+  const b = setEnabled({ ...off, tasks: [] }, true)
+  expect(symccOn(b)).toBe(true)
+  expect(b.mode).toBe('review')
+  expect(settingValue(off, 'enabled')).toBe('off')
+  expect(settingValue(b, 'enabled')).toBe('on')
+  expect(offAnswer()).toBe('symcc is off. The owner can turn it on with /symcc-on.')
+  expect(offStatusLine()).toBe('symcc off · /symcc-on')
+})
+
+test('/symcc-off and /symcc-on parse, and take no words', () => {
+  expect(parseCommand('symcc-off', '')).toEqual({ kind: 'off' })
+  expect(parseCommand('/symcc-on', '  ')).toEqual({ kind: 'on' })
+  expect(parseCommand('symcc-off', 'now')?.kind).toBe('bad')
+  expect(parseCommand('symcc-on', 'x')?.kind).toBe('bad')
+  expect(commandNames()).toContain('symcc-off')
+  expect(commandNames()).toContain('symcc-on')
+  expect(parseCommand('other-off', '')).toBe(null)
+})
+
+test('/symcc-settings enabled off reads as the on/off switch', () => {
+  expect(parseCommand('symcc-settings', 'enabled off')).toEqual({ kind: 'set', setting: 'enabled', input: { enabled: false } })
 })

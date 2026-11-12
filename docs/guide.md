@@ -12,6 +12,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Worker roles](#worker-roles)
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
+- [Turning symcc off](#turning-symcc-off)
 - [Where everything lives](#where-everything-lives)
 - [Good to know](#good-to-know)
 - [Renaming the plugin](#renaming-the-plugin)
@@ -338,6 +339,24 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+
+---
+
+## Turning symcc off
+
+The board mode `off` only stops the workers: Claude still acts as the lead. To have Claude
+go back to normal, type `/symcc-off` (or set `enabled` to off in the Settings view). From
+your next message, no restart needed:
+
+- the lead instructions are no longer added to Claude's prompt,
+- running workers and scouts are stopped (their tasks go back to `todo`) and nothing new starts,
+- no "[symcc] Update" messages and no voice,
+- the panel does not open by itself and the status line just says `symcc off · /symcc-on`,
+- the symcc tools answer "symcc is off. The owner can turn it on with /symcc-on." and change nothing.
+
+The board, its tasks, its mode and the scouts are kept. `/symcc-on` turns everything back
+on, in the mode the board had. The switch is kept per project, as `enabled` in
+`.symcc/board.json` (a board without it is on).
 
 ---
 

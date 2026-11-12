@@ -88,6 +88,10 @@ import {
   openOnStart,
   spokenDone,
   voiceOn,
+  symccOn,
+  setEnabled,
+  offAnswer,
+  offStatusLine,
   onTestFail,
   testTail,
   startRun,
@@ -209,12 +213,14 @@ function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'open_on_start' | 'voice'> & { driving: boolean; branch_note: string; git_state: GitState }>
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'open_on_start' | 'voice' | 'enabled'> & { driving: boolean; branch_note: string; git_state: GitState }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
 // whose worker was lost to a reload goes back to "todo" at session.start.
 let root = ''
+/** whether the plugin is on, as the board said when it was last read (see load); for the places that can't wait */
+let enabledNow = true
 /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
 let roles: RoleDef[] = []
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
@@ -297,7 +303,15 @@ const path = (rel: string) => `${root}/${rel}`
 async function load($: $): Promise<Board> {
   const exists = await $.fs.exists(path(N.boardFile))
   // A new board starts on the branch the owner has checked out (existing boards keep theirs).
-  return exists ? parseBoard(await $.fs.read(path(N.boardFile))) : emptyBoard(await firstBranch($))
+  const b = exists ? parseBoard(await $.fs.read(path(N.boardFile))) : emptyBoard(await firstBranch($))
+  enabledNow = symccOn(b)
+  return b
+}
+
+/** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
+async function isOn($: $): Promise<boolean> {
+  const text = await $.fs.read(path(N.boardFile)).catch(() => null)
+  return (enabledNow = symccOn(parseBoard(typeof text === 'string' ? text : null)))
 }
 
 /**
@@ -471,9 +485,9 @@ async function publish($: $, b: Board) {
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   const branch_note = gitNote(gitState) || missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, open_on_start: openOnStart(b), voice: voiceOn(b), driving, branch_note, git_state: gitState }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, open_on_start: openOnStart(b), voice: voiceOn(b), enabled: symccOn(b), driving, branch_note, git_state: gitState }
   await update($, view, () => v)
-  $.ui.status(statusLine(b, driving, branch_note, modeOf(b)))
+  $.ui.status(symccOn(b) ? statusLine(b, driving, branch_note, modeOf(b)) : offStatusLine(N.name))
 }
 
 // ---------------- telling the lead ----------------
@@ -481,12 +495,13 @@ async function publish($: $, b: Board) {
 // reports close together go in one message, sent when the chat is idle.
 
 function tellLead($: $, text: string) {
+  if (!enabledNow) return // the plugin is off: no "[name] Update" messages
   leadQueue.push(text)
   if (leadTimer) return
   leadTimer = $.clock.after(1500, () => {
     leadTimer = null
     const body = leadQueue.splice(0).join('\n\n')
-    if (!body) return
+    if (!body || !enabledNow) return
     void $.prompt.submit({ text: `[${N.name}] Update from the team:\n\n${body}\n\nDecide what happens next on the board (use the ${N.name} tools), then tell me briefly.` }).catch(() => undefined)
   })
 }
@@ -515,7 +530,7 @@ function speakers($: $): Promise<string[][]> {
 
 /** Says "T-3 done" for a merged task, if this session drives the board and voice is on. Never waits, never shows an error. */
 function sayDone($: $, b: Board, id: string) {
-  if (!driving || !voiceOn(b)) return
+  if (!driving || !voiceOn(b) || !symccOn(b)) return
   sayQueue.push(id)
   if (sayTimer || saying) return
   sayTimer = $.clock.after(1500, () => {
@@ -885,7 +900,7 @@ async function pump($: $) {
   if (!startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!driving) return // another session drives the board and starts its work
   const b = await load($)
-  if (modeOf(b) === 'off') return
+  if (modeOf(b) === 'off' || !symccOn(b)) return
   if (!ready(b).length) return
   if (!(await gitReady($, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
   if (!(await targetReady($, b))) return // nothing starts and nothing is marked failed
@@ -1160,6 +1175,39 @@ async function setBoardMode($: $, m: SymccMode, who: string): Promise<string> {
   return [modeText(m), ...extra].join('; ')
 }
 
+/**
+ * Turns the whole plugin on or off (/<name>-on, /<name>-off, the enabled setting). Off: every
+ * worker and scout stops (their tasks go back to "todo"), nothing new starts, the lead is not
+ * told anything and the lead's guide leaves the system prompt from the next message. The board,
+ * its mode, tasks and scouts are kept, so on brings everything back as it was.
+ */
+async function setSymcc($: $, on: boolean): Promise<string> {
+  const before = symccOn(await load($))
+  const b = await change($, x => {
+    const y = setEnabled(x, on)
+    return [y, y] as [Board, Board]
+  })
+  enabledNow = on
+  if (!on) {
+    const ids: string[] = []
+    await haltAll($, `you turned ${N.name} off`, async w => {
+      ids.push(w.task)
+      await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${N.name} was turned off; continues when it is on again` }, now()))
+    })
+    leadQueue.splice(0)
+    leadTimer?.cancel()
+    leadTimer = null
+    sayQueue.splice(0)
+    await publish($, await load($))
+    const stopped = ids.length ? ` Stopped ${ids.join(', ')}.` : ''
+    return `${N.name} is ${before ? 'now ' : ''}off: Claude works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${N.name}-on.`
+  }
+  await publish($, b)
+  void pump($)
+  if (!before) tellLead($, `The owner turned ${N.name} back on with /${N.name}-on. You are the lead again; the board is in mode ${modeOf(b)}.`)
+  return `${N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}`
+}
+
 const LIVE = new Set(['pending', 'running', 'waiting'])
 
 /**
@@ -1223,6 +1271,7 @@ async function check($: $) {
   await cleanLeftoverTmp($).catch(() => undefined)
   await stopOrphans($)
   const b = await load($)
+  if (!symccOn(b)) return
   const agents = await $.agent.list().catch(() => undefined)
   const nowMs = Date.now()
   for (const [agentId, w] of [...workers]) {
@@ -1322,7 +1371,7 @@ async function runScout($: $, s: ScoutDef) {
   const st = scoutState.get(s.name)
   if (!st || st.running || !driving || gitState !== 'ok') return
   const b = await load($)
-  if (modeOf(b) === 'off') return
+  if (modeOf(b) === 'off' || !symccOn(b)) return
   const lastRun = st.last_run
   const lastReport = st.last_report
   st.running = true
@@ -1406,7 +1455,9 @@ async function runScoutNow($: $, name: string): Promise<string> {
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
   if (!driving) return `scouts run in the session that drives the board; run /${N.name}-scout ${s.name} there`
-  if (modeOf(await load($)) === 'off') return `the board is off, so no scout runs; turn it on with /${N.name}-mode review or /${N.name}-mode auto`
+  const cur = await load($)
+  if (!symccOn(cur)) return offAnswer(N.name)
+  if (modeOf(cur) === 'off') return `the board is off, so no scout runs; turn it on with /${N.name}-mode review or /${N.name}-mode auto`
   void runScout($, s)
   return `scout ${s.name} started`
 }
@@ -1569,6 +1620,9 @@ const MANUAL = (): Record<string, string> => ({
                        /${N.name}-settings mode review · /${N.name}-settings test_commands "npm test"
                        (several test commands: join them with " && "; "none" clears them)
                        a value over its limit is cut to it, and the answer says so
+  /${N.name}-off                 turn ${N.name} off for this project: Claude works as normal (no lead
+                       guide, no workers, scouts, updates or voice); the board is kept
+  /${N.name}-on                  turn it back on, in the mode the board had
   /${N.help} [TOPIC]           this manual
 On the board: t tasks · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode and target_branch
@@ -1898,6 +1952,12 @@ async function saveSettings($: $, a: SettingsInput, who: string): Promise<{ erro
 
 /** The owner changes settings (/<name>-settings or the Settings view): the answer to show, e.g. "max_parallel set to 5"; the lead is told too. */
 async function ownerSettings($: $, a: SettingsInput, where: string): Promise<string> {
+  // the on/off switch is the owner's alone and works like /<name>-off and /<name>-on
+  if (typeof a.enabled === 'boolean') {
+    const { enabled, ...rest } = a
+    const said = await setSymcc($, enabled)
+    return Object.keys(rest).length ? `${said}; ${await ownerSettings($, rest, where)}` : said
+  }
   const r = await saveSettings($, a, 'you')
   if (r.error) return r.error
   const parts = r.changes.map(settingSetText)
@@ -1939,6 +1999,8 @@ async function registerAll($: $) {
     { name: `${N.name}-scout`, description: `Run a ${N.name} scout now: /${N.name}-scout <name>`, argumentHint: '<name>' },
     { name: `${N.name}-mode`, description: `Set the ${N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
     { name: `${N.name}-settings`, description: `See and change the ${N.name} settings: /${N.name}-settings opens them; /${N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
+    { name: `${N.name}-off`, description: `Turn ${N.name} off for this project: Claude works as normal, nothing runs; the board is kept` },
+    { name: `${N.name}-on`, description: `Turn ${N.name} back on for this project, in the mode the board had` },
     { name: N.help, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ])
     await ok($.command.register(c))
@@ -1985,7 +2047,7 @@ export const register: Register = on => {
       // Open the board panel by itself (every session, driver or not), without taking the cursor
       // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
       // that is fine: the band above the prompt and /<name> still work.
-      if (openOnStart(b)) await openPane($, { focus: false, quiet: true })
+      if (openOnStart(b) && symccOn(b)) await openPane($, { focus: false, quiet: true })
     } finally {
       startupDone = true
     }
@@ -2015,6 +2077,8 @@ export const register: Register = on => {
   on('prompt.compose', async ($, e, next) => {
     useName($)
     const r = await next(e)
+    // Read on every render (prompt.compose is not cached), so /<name>-off and /<name>-on count from the next message.
+    if (!(await isOn($))) return r
     return { sections: [...r.sections, { id: `${N.name}:lead`, text: leadGuide(), scope: 'session' as const }] }
   })
 
@@ -2045,6 +2109,7 @@ export const register: Register = on => {
     if (e.agentId && stopped.has(e.agentId)) return { deny: `${N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
     const name = toolNames.find(t => e.tool === N.tool(t))
     if (!name) return next(e)
+    if (!(await isOn($))) return { result: offAnswer(N.name) }
     try {
       return { result: await runTool($, name, e as unknown as In) }
     } catch (err) {
@@ -2108,6 +2173,9 @@ export const register: Register = on => {
       }
       case 'set':
         return say(await ownerSettings($, cmd.input, `with /${N.name}-settings`))
+      case 'off':
+      case 'on':
+        return say(await setSymcc($, cmd.kind === 'on'))
       case 'mode': {
         const r = await setBoardMode($, cmd.mode, 'you')
         tellLead($, `The owner set the board mode to ${cmd.mode} with /${N.name}-mode: ${r}`)
@@ -2153,7 +2221,7 @@ export const register: Register = on => {
     if (e.props.hasSurvey || e.props.view.agentId) return next(e)
     const v = await read($, view)
     const tasks = v?.tasks ?? []
-    if (!tasks.length) return next(e)
+    if (!tasks.length || (v as PaneView | undefined)?.enabled === false) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done']).join(' · ')
     const order = ['review', 'waiting', 'failed', 'doing']
