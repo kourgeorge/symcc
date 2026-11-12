@@ -43,6 +43,7 @@ import {
   newestFirst,
   boardSections,
   groupLabel,
+  backlogLabel,
   localOffset,
   emptyBoard,
   find,
@@ -188,6 +189,8 @@ let startupDone = false
 const notReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 const openDays = new Set<string>()
+/** whether the owner has unfolded the "Backlog" group in the board panel; folded again when the panel closes */
+let backlogOpen = false
 /** the scout being edited in the board panel (its edit mode), or null; `isNew` for one made with "new scout" */
 type ScoutDraft = { scout: string; isNew: boolean; every: string; model: string; body: string; error: string }
 let draft: ScoutDraft | null = null
@@ -1206,7 +1209,10 @@ const MANUAL = (): Record<string, string> => ({
                        review: work runs; finished tasks wait for your approve or reject
                        auto: work runs; finished tasks that pass merge on their own
   /${N.help} [TOPIC]           this manual
-In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off.
+In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
+  · k stash to the backlog (a task to do, paused or failed).
+In a backlog task: o move to todo · x drop.
+On the board list, "▸ Backlog · N" is folded; Enter opens it.
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 On the board list: m switches the mode between review and auto (never to off).
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
@@ -1226,6 +1232,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     failed           tests failed, files outside its list changed, or the worker stopped
     done             merged into the target branch
     dropped          given up
+    backlog          an idea or work that is not clear yet; it never starts until you
+                     move it to todo ("stash this idea", "show the backlog", "move T-5 to todo")
   The board lists the newest task at the top.`,
   lead: `The lead (this chat) has these tools:
   board · add · change · retry · ask · drop · pause · resume · settings
@@ -1767,6 +1775,7 @@ export const register: Register = on => {
       return { value: undefined }
     }
     openDays.clear()
+    backlogOpen = false
     draft = null
     naming = null
     diffOpen = null
@@ -2187,6 +2196,12 @@ export const register: Register = on => {
             {(t.status === 'failed' || t.status === 'dropped') && (
               <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'retry', { task: t.id }), tellLead($, `The owner retried ${t.id} from the board.`)))} />
             )}
+            {t.status === 'backlog' && (
+              <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: false }), tellLead($, `The owner moved ${t.id} from the backlog to todo on the board.`)))} />
+            )}
+            {(t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
+              <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: true }), tellLead($, `The owner moved ${t.id} to the backlog on the board.`)))} />
+            )}
             {t.status !== 'done' && t.status !== 'dropped' && (
               <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
             )}
@@ -2309,7 +2324,7 @@ export const register: Register = on => {
               <Text color={C('ide')}>{t.branch}</Text>
             </Text>
           )}
-          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{agentId ? ' · w watch worker' : ''}</Text>
+          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{agentId ? ' · w watch worker' : ''}</Text>
         </Box>
       )
     }
@@ -2322,9 +2337,12 @@ export const register: Register = on => {
       else openDays.add(day)
       $.ui.invalidate('ui.render')
     }
+    const toggleBacklog = () => ((backlogOpen = !backlogOpen), $.ui.invalidate('ui.render'))
     type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
     const list: Row[] = [
-      ...[...needsYouFirst(parts.open), ...parts.backlog, ...parts.today].map(task => ({ task, indent: false })),
+      ...needsYouFirst(parts.open).map(task => ({ task, indent: false })),
+      ...(parts.backlog.length ? [{ day: 'backlog', label: backlogLabel(parts.backlog.length, backlogOpen) }, ...(backlogOpen ? parts.backlog.map(task => ({ task, indent: true })) : [])] : []),
+      ...parts.today.map(task => ({ task, indent: false })),
       ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
     ]
     const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
@@ -2334,12 +2352,12 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {banner()}
         {tabs()}
-        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{HINT}</Text>}
+        {list.length > 0 && <Text wrap="truncate" color={C('subtle')}>{parts.backlog.length ? `${HINT} · Enter on Backlog unfolds it` : HINT}</Text>}
         {list.length === 0 && <Text color={C('subtle')}>The board is empty. Tell the lead what you want.</Text>}
         {list.map((r, i) => {
           if (!('task' in r))
             return (
-              <Button key={`day:${r.day}`} autoFocus={i === 0 ? true : undefined} onPress={toggleDay(r.day)}>
+              <Button key={`day:${r.day}`} autoFocus={i === 0 ? true : undefined} onPress={r.day === 'backlog' ? toggleBacklog : toggleDay(r.day)}>
                 <Text color={C('subtle')}>{r.label}</Text>
               </Button>
             )

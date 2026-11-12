@@ -114,6 +114,33 @@ test('the board panel is interactive: open a task, see its details, go back', as
   }
 })
 
+test('backlog tasks sit in a folded "Backlog · N" group; an open one can move to todo or be dropped', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up'), task('T-2', 'backlog', 'Dark mode', { details: 'Maybe later: a dark theme.' }), task('T-3', 'backlog', 'Export')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^▸ Backlog · 2$/ }))).toBeDefined()
+  expect(await ui.find({ key: 'T-2' })).toBeUndefined()
+  expect((await ui.find({ key: 'T-1' }))).toBeDefined()
+  await ui.press({ key: 'day:backlog' })
+  expect((await ui.find({ type: 'Text', text: /^▾ Backlog · 2$/ }))).toBeDefined()
+  await ui.press({ key: 'T-2' })
+  expect((await ui.find({ type: 'Text', text: /Maybe later: a dark theme/ }))).toBeDefined()
+  const toTodo = await ui.find({ key: 'to-todo' })
+  expect(toTodo?.props.label).toBe('Move to todo (o)')
+  expect(toTodo?.props.hotkey).toBe('o')
+  expect((await ui.find({ key: 'drop' }))).toBeDefined()
+  expect(await ui.find({ key: 'stash' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('an open task to do has a "Stash to backlog" button', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'stash' }))).toBeDefined()
+  expect(await ui.find({ key: 'to-todo' })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('a waiting task opens with a box to answer it', async ($, on) => {
   stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })

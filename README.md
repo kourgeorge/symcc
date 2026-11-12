@@ -61,6 +61,7 @@ The four parts, in known terms:
 | **Approval before merge** | Human-in-the-loop review: see the diff, then approve, or reject with a reason. |
 | **Merge into the target branch** | The task is updated on the latest target branch, tests run again, then it is merged. |
 | **Live status** | The board panel and the status line show every task as it runs. |
+| **Backlog** | Park ideas and unclear work on the board; they never start until you move them to todo. |
 
 Every two minutes symcc also checks the board by itself: it starts ready tasks, and stops a
 worker that runs longer than `max_minutes` (45 by default).
@@ -145,6 +146,7 @@ You never have to type a command. Just talk to the lead:
 - "set the test command to `npm test`"
 - "give workers 90 minutes"
 - "approve T-5" · "reject T-5: the button should be blue"
+- "stash this idea" · "show the backlog" · "move T-5 to todo"
 
 A short example:
 
@@ -253,7 +255,8 @@ More in the [guide](docs/guide.md#scouts).
 
 `todo` (ready) · `doing` (a worker is on it) · `waiting` (needs your answer) · `review`
 (waits for your approve) · `paused` · `failed` (the lead decides what next) · `done`
-(merged) · `dropped` (cancelled). See [a task's life](docs/guide.md#a-tasks-life).
+(merged) · `dropped` (cancelled) · `backlog` (a parked idea; never starts until you move it
+to todo). See [a task's life](docs/guide.md#a-tasks-life).
 
 ### Good to know
 

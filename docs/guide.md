@@ -63,7 +63,10 @@ picks up again next time.
    │            (merge) or reject with a reason (back to todo, fresh worker)
    ├── waiting  the lead asked YOU something; your answer sends it back to work
    ├── paused   stopped on purpose; "resume" sends it back
-   └── dropped  cancelled; stays on the list, never runs
+   ├── dropped  cancelled; stays on the list, never runs
+   └── backlog  a parked idea or unclear work; never starts until you move it
+                to todo ("move T-5 to todo"); "stash" sends a todo, paused or
+                failed task back here
 ```
 
 | Status | Meaning |
@@ -76,6 +79,7 @@ picks up again next time.
 | `failed` | It could not be finished; the lead decides what next |
 | `done` | Merged into your branch |
 | `dropped` | Cancelled |
+| `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog · N" group |
 
 ---
 

@@ -652,6 +652,9 @@ export function groupLabel(g: Pick<DayGroup, 'label' | 'done' | 'dropped'>, open
   return [`${opened ? '▾' : '▸'} ${g.label}`, ...counts].join(' · ')
 }
 
+/** The backlog group's row in the board panel: "▸ Backlog · 3", "▾ Backlog · 3" when opened. */
+export const backlogLabel = (n: number, opened = false): string => `${opened ? '▾' : '▸'} Backlog · ${n}`
+
 // ---------------- time and cost of each try ----------------
 
 /** The runs with a new try started at `now`. */
@@ -806,7 +809,9 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, dri
       ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
       failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
     ].filter((x): x is string => !!x)
-    return join([label, (join(parts) || 'all done') + other, branch_note])
+    // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
+    const parked = ids('backlog').length
+    return join([label, (join(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other, branch_note])
   }
   if (!driving) return join([label, 'empty' + other, branch_note])
   // an empty board in mode auto stays quiet, so a fresh project shows nothing
