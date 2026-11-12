@@ -3,7 +3,8 @@
 /** The board mode: "off" (nothing runs), "review" (finished work waits for the owner), "auto" (finished work that passes merges on its own; the default). */
 export type SymccMode = 'off' | 'review' | 'auto'
 
-export type SymccStatus = 'todo' | 'doing' | 'paused' | 'waiting' | 'review' | 'failed' | 'done' | 'dropped'
+/** "backlog": an idea or not-yet-clear work; it never starts a worker until it is moved to "todo". */
+export type SymccStatus = 'backlog' | 'todo' | 'doing' | 'paused' | 'waiting' | 'review' | 'failed' | 'done' | 'dropped'
 
 /**
  * One worker try on a task: when it started and ended (ISO times), and what it used.

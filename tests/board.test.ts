@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, OPEN } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -955,4 +955,75 @@ test('the waiting question and the failure note for files outside the list', asy
   const note = outOfScopeText(['docs/x.md'], ['src/'])
   expect(note).toContain('docs/x.md')
   expect(note).toContain('add them to files with change, or split the task')
+})
+
+test('a backlog task never starts until it is moved to todo', async () => {
+  let b = emptyBoard()
+  const [b1, idea] = addTask(b, { title: 'Idea: requests and triage', backlog: true }, T)
+  const [b2, later] = addTask(b1, { title: 'After the idea', after: [idea.id] }, T)
+  b = b2
+  expect(idea.status).toBe('backlog')
+  expect(ready(b).map(t => t.id)).toEqual([])
+  expect(mayStart(b.tasks[0], [])).toBe(false)
+  expect(OPEN).not.toContain('backlog')
+  // modes do not change it
+  for (const m of ['off', 'review', 'auto'] as const) expect(ready(setMode(b, m)).map(t => t.id)).toEqual([])
+  // promote: backlog -> todo, with a history line
+  b = promoteTask(b, idea.id, T)
+  const p = b.tasks.find(t => t.id === idea.id)!
+  expect(p.status).toBe('todo')
+  expect(p.history[p.history.length - 1]).toBe('moved from the backlog to todo')
+  expect(ready(b).map(t => t.id)).toEqual([idea.id])
+  expect(ready(b).map(t => t.id)).not.toContain(later.id)
+  expect(() => promoteTask(b, idea.id, T)).toThrow()
+})
+
+test('stash: a todo, paused or failed task goes to the backlog with a history line', async () => {
+  let b = emptyBoard()
+  const [b1, a] = addTask(b, { title: 'A' }, T)
+  const [b2, c] = addTask(b1, { title: 'C' }, T)
+  const [b3, d] = addTask(b2, { title: 'D' }, T)
+  b = patchTask(patchTask(b3, c.id, { status: 'paused' }, T), d.id, { status: 'failed' }, T)
+  b = stashTask(b, a.id, T, 'not clear yet')
+  const x = b.tasks.find(t => t.id === a.id)!
+  expect(x.status).toBe('backlog')
+  expect(x.history[x.history.length - 1]).toBe('moved to the backlog (was todo): not clear yet')
+  expect(ready(b).map(t => t.id)).toEqual([])
+  b = stashTask(stashTask(b, c.id, T), d.id, T)
+  expect(b.tasks.every(t => t.status === 'backlog')).toBe(true)
+  expect(b.tasks.find(t => t.id === d.id)!.history.at(-1)).toBe('moved to the backlog (was failed)')
+  b = patchTask(b, a.id, { status: 'done' }, T)
+  expect(() => stashTask(b, a.id, T)).toThrow()
+})
+
+test('the board text lists backlog after open tasks and before done ones; the status line stays quiet', async () => {
+  let b = emptyBoard()
+  const [b1, done] = addTask(b, { title: 'Finished' }, '2026-11-09T03:00:00.000Z')
+  const [b2, idea] = addTask(b1, { title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
+  const [b3, open] = addTask(b2, { title: 'Open work' }, '2026-11-09T00:30:00.000Z')
+  b = patchTask(b3, done.id, { status: 'done' }, '2026-11-09T03:00:00.000Z')
+  for (const text of [boardText(b), boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0)]) {
+    const lines = text.split('\n')
+    const at = (id: string) => lines.findIndex(l => l.startsWith(id + ' '))
+    expect(at(open.id)).toBeLessThan(at(idea.id))
+    expect(at(idea.id)).toBeLessThan(at(done.id))
+    expect(lines[at(idea.id)]).toBe(`${idea.id}   backlog Idea: requests and triage`)
+  }
+  const s = boardSections(b.tasks, Date.parse('2026-11-12T12:00:00.000Z'), 0)
+  expect(s.backlog.map(t => t.id)).toEqual([idea.id])
+  expect(s.days.flatMap(g => g.tasks).map(t => t.id)).toEqual([done.id])
+  expect(statusLine(b, true)).not.toContain('backlog')
+  expect(STATUS_WORD.backlog).toBe('backlog')
+})
+
+test('old boards without backlog still parse', async () => {
+  const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
+    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
+    { id: 'T-2', title: 'B', details: 'B', files: [], status: 'done', note: '', question: null, order: 2, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T },
+  ] }
+  const b = parseBoard(JSON.stringify(old))
+  expect(b.tasks.map(t => t.status)).toEqual(['todo', 'done'])
+  expect(ready(b).map(t => t.id)).toEqual(['T-1'])
+  const [b2, t] = addTask(b, { title: 'C', backlog: true }, T)
+  expect(parseBoard(JSON.stringify(b2)).tasks.find(x => x.id === t.id)!.status).toBe('backlog')
 })

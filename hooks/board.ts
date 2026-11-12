@@ -66,7 +66,11 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
+/** Open work. Backlog tasks are not open: they never start and block nothing (see BACKLOG_FROM). */
 export const OPEN: SymccStatus[] = ['todo', 'doing', 'paused', 'waiting', 'review', 'failed']
+
+/** The states a task may be stashed into the backlog from ("doing" only after its worker is stopped). */
+export const BACKLOG_FROM: SymccStatus[] = ['todo', 'doing', 'paused', 'failed']
 
 /** How many automatic retries after failing tests a new board allows. */
 export const DEFAULT_AUTO_RETRIES = 2
@@ -115,7 +119,7 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
     .slice(0, 30)
 }
 
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => find(b, x))
@@ -124,7 +128,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     title,
     details: clean(f.details ?? title, 8000),
     files: cleanFiles(f.files, dir),
-    status: 'todo',
+    status: f.backlog === true ? 'backlog' : 'todo',
     note: '',
     question: null,
     order: typeof f.order === 'number' ? f.order : Math.max(0, ...b.tasks.map(x => x.order)) + 1,
@@ -161,11 +165,34 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
 /** A task id's number ("T-12" → 12; 0 when there is none), for ordering. */
 const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
 
-/** Tasks a worker could start now: to do, and everything they wait for is done. */
+/** Tasks a worker could start now: to do (never backlog), and everything they wait for is done. */
 export function ready(b: Board): SymccTask[] {
   return b.tasks
     .filter(t => t.status === 'todo' && t.after.every(a => find(b, a)?.status === 'done'))
     .sort((x, y) => x.order - y.order || num(x.id) - num(y.id))
+}
+
+// ---------------- the backlog ----------------
+
+/**
+ * "Stash": task `id` goes to the backlog, from todo, paused or failed (or doing, once its worker
+ * was stopped). It keeps everything else and never starts until promoted. A history line says so.
+ */
+export function stashTask(b: Board, id: string, now: string, reason = ''): Board {
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (t.status === 'backlog') return b
+  if (!BACKLOG_FROM.includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
+  const why = clean(reason, 280)
+  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', history: [...t.history, `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`] }, now)
+}
+
+/** "Promote": task `id` leaves the backlog for "todo", so a worker may start on it. A history line says so. */
+export function promoteTask(b: Board, id: string, now: string): Board {
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
+  return patchTask(b, t.id, { status: 'todo', note: 'moved from the backlog', history: [...t.history, 'moved from the backlog to todo'] }, now)
 }
 
 /** Changed files outside the task's files (or touching the board / Git). Empty `allowed` = anywhere. */
@@ -590,11 +617,11 @@ export function dayLabel(day: string, today: string): string {
 
 /** One older day's finished tasks, folded into one row. */
 export type DayGroup<T extends SymccTask = SymccTask> = { day: string; label: string; done: number; dropped: number; tasks: T[] }
-export type BoardSections<T extends SymccTask = SymccTask> = { open: T[]; today: T[]; days: DayGroup<T>[] }
+export type BoardSections<T extends SymccTask = SymccTask> = { open: T[]; backlog: T[]; today: T[]; days: DayGroup<T>[] }
 
 /**
  * Sorts tasks for showing the board at `nowMs` in time zone `offsetMin`: `open` (still need
- * something, whatever their day), `today` (today's finished tasks, and any whose day can't be
+ * something, whatever their day), `backlog` (ideas, whatever their day), `today` (today's finished tasks, and any whose day can't be
  * read or lies ahead), and `days` (older finished tasks, one group per day, newest day first).
  * Inside each part, the newest task comes first.
  */
@@ -602,7 +629,8 @@ export function boardSections<T extends SymccTask>(tasks: T[], nowMs: number, of
   const today = dayOf(nowMs, offsetMin)
   const all = [...tasks].sort(newestFirst)
   const open = all.filter(t => OPEN.includes(t.status))
-  const closed = all.filter(t => !OPEN.includes(t.status))
+  const backlog = all.filter(t => t.status === 'backlog')
+  const closed = all.filter(t => !OPEN.includes(t.status) && t.status !== 'backlog')
   const isOld = (t: T) => {
     const d = taskDay(t, offsetMin)
     return !!today && !!d && d < today
@@ -615,7 +643,7 @@ export function boardSections<T extends SymccTask>(tasks: T[], nowMs: number, of
   const days = [...byDay.entries()]
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([day, ts]) => ({ day, label: dayLabel(day, today), done: ts.filter(t => t.status === 'done').length, dropped: ts.filter(t => t.status === 'dropped').length, tasks: ts }))
-  return { open, today: closed.filter(t => !isOld(t)), days }
+  return { open, backlog, today: closed.filter(t => !isOld(t)), days }
 }
 
 /** A day group's row: "▸ Yesterday · 6 done", "▾ Mon 9 Nov · 4 done · 1 dropped" when opened. */
@@ -800,14 +828,14 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
 
 /** The word the owner sees for each status. */
-export const STATUS_WORD: Record<SymccStatus, string> = { review: 'ready for review', waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
+export const STATUS_WORD: Record<SymccStatus, string> = { backlog: 'backlog', review: 'ready for review', waiting: 'waiting for you', failed: 'failed', doing: 'doing', paused: 'paused', todo: 'to do', done: 'done', dropped: 'dropped' }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
   return order.map(st => [tasks.filter(t => t.status === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
 }
 
-const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'done']
+const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'backlog', 'done']
 
 /** Cuts parts so their text fits in `room` columns, ending with "…" when something was cut. */
 function cutParts(parts: BannerPart[], room: number): BannerPart[] {
@@ -872,16 +900,16 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
 
 /** One line per task for the model and for /<name>, then the total time (and cost) of all tries.
  *  With `where` (the project's path), that comes first so you can tell boards apart.
- *  Open tasks come first, then today's others; finished tasks of older days are one line per
+ *  Open tasks come first, then the backlog, then today's others; finished tasks of older days are one line per
  *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
 export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs)): string {
   const top = where ? [`${boardBrand(name)} · ${where}`] : []
   if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
-  const s: BoardSections = nowMs === undefined ? { open: [], today: [...b.tasks].sort(newestFirst), days: [] } : boardSections(b.tasks, nowMs, offsetMin)
-  const rows = [...s.open, ...s.today]
+  const s: BoardSections = nowMs === undefined ? boardSections(b.tasks, NaN, offsetMin) : boardSections(b.tasks, nowMs, offsetMin)
+  const rows = [...s.open, ...s.backlog, ...s.today]
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
-    const after = t.after.length && t.status === 'todo' ? ` (after ${t.after.join(', ')})` : ''
+    const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${after}${extra}`
   })
   const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`

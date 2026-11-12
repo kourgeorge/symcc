@@ -91,6 +91,8 @@ import {
   backToTodo,
   needsReview,
   rejectTask,
+  stashTask,
+  promoteTask,
   reviewTask,
   setMode,
   modeOf,
@@ -1001,7 +1003,7 @@ async function runScout($: $, s: ScoutDef) {
   st.running = true
   st.last_run = now()
   await publish($, b)
-  const open = b.tasks.filter(t => OPEN.includes(t.status)).map(t => `${t.id} ${t.title}`)
+  const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
   const prompt = scoutPrompt({ scout: s.name, root, instructions: s.prompt, open, name: N.name })
   const spawned = await $.agent.spawn({ prompt, name: scoutAgentName(N.name, s.name), description: scoutDescription(s.name, s.prompt), subagentType: N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
   const agentId = 'agentId' in spawned ? spawned.agentId : undefined
@@ -1307,6 +1309,7 @@ The project has a shared task board (${N.dir}/board.json) that you and the owner
 - When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
 - Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
+- Ideas or work that is not clear yet go to the backlog (${N.name} add with backlog: true); they never start until moved to todo (${N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
 - ${N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${N.name} settings), and reminds you about failed tasks nobody handled.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${N.name} board to see the board.`
 
@@ -1315,12 +1318,12 @@ const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' } } },
+    inputSchema: { type: 'object', required: ['title', 'details'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' } } },
   },
   {
     name: 'change',
-    description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work. Changing only needs_review (wait for the owner before merging) just sets that flag.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' } } },
+    description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
@@ -1353,13 +1356,41 @@ async function runTool($: $, name: string, a: In): Promise<string> {
     case 'board':
       return boardText(await load($), Date.now(), shortHome(root, home), N.name)
     case 'add': {
-      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true }, now(), N.dir))
+      const t = await change($, b => addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true }, now(), N.dir))
       void pump($)
-      return `added ${t.id} ${t.title}`
+      return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}`
     }
     case 'change': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
+      const fields = (): Partial<SymccTask> => {
+        const p: Partial<SymccTask> = {}
+        if (str(a.title)) p.title = str(a.title)
+        if (str(a.details)) p.details = str(a.details)
+        if (list(a.files)) p.files = list(a.files)
+        if (list(a.after)) p.after = list(a.after)
+        if (typeof a.order === 'number') p.order = a.order
+        if (typeof a.needs_review === 'boolean') p.needs_review = a.needs_review
+        return p
+      }
+      if (a.backlog === true) {
+        const wasRunning = t.status === 'doing'
+        if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
+        if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
+        await change($, x => stashTask(patchTask(x, t.id, fields(), now(), N.dir), t.id, now()))
+        void pump($)
+        return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
+      }
+      if (a.backlog === false) {
+        if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
+        await change($, x => promoteTask(patchTask(x, t.id, fields(), now(), N.dir), t.id, now()))
+        void pump($)
+        return `${t.id} moved from the backlog to todo`
+      }
+      if (t.status === 'backlog') {
+        await change($, x => patchTask(x, t.id, fields(), now(), N.dir))
+        return `${t.id} updated (still in the backlog)`
+      }
       const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), N.dir))
@@ -1755,9 +1786,9 @@ export const register: Register = on => {
     const open = await read($, opened)
     const width = Math.max(20, e.props.bodyColumns ?? 60)
     // Theme colors, so the board reads well in both light and dark themes.
-    const color: Record<string, string> = { review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
+    const color: Record<string, string> = { backlog: 'subtle', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
     const word: Record<string, string> = STATUS_WORD
-    const mark: Record<string, string> = { review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
+    const mark: Record<string, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
     const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(N.toast(err.message)))
     const onScouts = (await read($, tab)) === 'scouts'
     const t = open && !onScouts ? v.tasks.find(x => x.id === open) : undefined
@@ -2293,7 +2324,7 @@ export const register: Register = on => {
     }
     type Row = { task: SymccTask; indent: boolean } | { day: string; label: string }
     const list: Row[] = [
-      ...[...needsYouFirst(parts.open), ...parts.today].map(task => ({ task, indent: false })),
+      ...[...needsYouFirst(parts.open), ...parts.backlog, ...parts.today].map(task => ({ task, indent: false })),
       ...parts.days.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)) }, ...(openDays.has(g.day) ? g.tasks.map(task => ({ task, indent: true })) : [])]),
     ]
     const rows = list.flatMap(r => ('task' in r ? [r.task] : []))
