@@ -38,6 +38,17 @@ import {
   branchWarning,
   missingBranchText,
   noBranchText,
+  gitStateOf,
+  gitNote,
+  noGitText,
+  setupAskText,
+  gitignoreBase,
+  gitignoreWith,
+  parseLsTree,
+  riskyFiles,
+  ignoreLineFor,
+  setupDoneText,
+  type GitState,
   startBranch,
   type BannerTone,
   shortHome,
@@ -153,7 +164,7 @@ function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean; branch_note: string }>
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean; branch_note: string; git_state: GitState }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
@@ -186,6 +197,12 @@ let beat: { cancel(): void } | null = null
 let missingBranch = ''
 /** the target_branch the lead was last told is missing, so it is told once, not every check */
 let toldMissing = ''
+/** what the last git check found (see probeGit); work starts only when 'ok' */
+let gitState: GitState = 'ok'
+/** the git state the lead was last told about, so it is told once, not every check */
+let toldGit: GitState = 'ok'
+/** set while setupGit runs, so a second press waits */
+let settingUp = false
 /** set at the end of session.start: until then pump starts no work (the worker type may not be registered yet) */
 let startupDone = false
 /** task id → spawns in a row that failed only because the plugin wasn't ready yet (see isNotReady) */
@@ -386,9 +403,9 @@ async function handOver($: $) {
 async function publish($: $, b: Board) {
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
   // Which branch the owner is on is looked at here, once per publish, not on every render.
-  const branch_note = missingBranch || branchWarning(b.target_branch, await currentBranch($))
+  const branch_note = gitNote(gitState) || missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note, git_state: gitState }
   await update($, view, () => v)
   $.ui.status(statusLine(b, driving, branch_note, modeOf(b)))
 }
@@ -513,6 +530,94 @@ async function targetReady($: $, b: Board): Promise<boolean> {
     tellLead($, `No work can start: the ${N.name} board merges into branch '${b.target_branch}', which doesn't exist in this project. Set an existing branch with ${N.name} settings target_branch${some.length ? ` (branches here: ${some.join(', ')})` : ''}.`)
   }
   return ok
+}
+
+/** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
+async function probeGit($: $): Promise<GitState> {
+  if (!root) return 'ok'
+  const run = (args: string[]) => git($, args, root, 15_000).catch(() => null)
+  const v = await run(['--version'])
+  const hasGit = !!v && v.exitCode === 0
+  const inside = hasGit && (await run(['rev-parse', '--is-inside-work-tree']))?.stdout.trim() === 'true'
+  const hasHead = inside && (await run(['rev-parse', '--verify', '-q', 'HEAD']))?.exitCode === 0
+  return gitStateOf({ hasGit, inside, hasHead })
+}
+
+/**
+ * Whether git is ready for work (a repo with a commit). If not, nothing starts or fails: the
+ * banner and status line say so, and the lead (only the driver) is told once per state: how
+ * to install git, or the question whether to set up a repo.
+ */
+async function gitReady($: $, b?: Board): Promise<boolean> {
+  const s = await probeGit($)
+  if (s !== gitState) {
+    gitState = s
+    await publish($, b ?? (await load($)))
+  }
+  if (s === 'ok') toldGit = 'ok'
+  else if (driving && toldGit !== s) {
+    toldGit = s
+    tellLead($, s === 'no-git' ? noGitText(N.name) : setupAskText(s, N.name))
+  }
+  return s === 'ok'
+}
+
+/**
+ * Sets up git in the project, once the owner said yes: git init on main (if there is no repo),
+ * a .gitignore with the data folder and common safe lines, and a first commit of the current
+ * files, leaving out files that look like secrets or are over 50 MB (they go in .gitignore).
+ * Never pushes, never adds a remote. Then target_branch is set to the new branch and work starts.
+ */
+async function setupGit($: $, who: string): Promise<string> {
+  if (settingUp) return 'git is being set up already'
+  const s = await probeGit($)
+  if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
+  if (s === 'no-git') return noGitText(N.name)
+  settingUp = true
+  try {
+    const init = s === 'no-repo'
+    if (init) {
+      const r = await git($, ['init', '-q', '-b', 'main'])
+      if (r.exitCode !== 0) {
+        // an old git has no -b: init, then point HEAD at main
+        await gitOk($, ['init', '-q'])
+        await gitOk($, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+      }
+    }
+    // The branch the first commit lands on: whatever HEAD points at (main after our init).
+    const branch = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim() || 'main'
+    // The repo's top: with an existing repo it may be above this folder.
+    const top = (await gitOk($, ['rev-parse', '--show-toplevel'])) || root
+    const ignoreFile = `${top}/.gitignore`
+    const old = (await $.fs.exists(ignoreFile)) ? await $.fs.read(ignoreFile) : null
+    const rel = top === root ? N.dir : `${root.slice(top.length + 1)}/${N.dir}`
+    let text = gitignoreWith(old, gitignoreBase(rel))
+    if (text !== (old ?? '')) await $.fs.write(ignoreFile, text)
+    // Stage everything, look at what would be committed, and take out the risky files.
+    await gitOk($, ['add', '-A'], top)
+    const tree = await gitOk($, ['write-tree'], top)
+    const left = riskyFiles(parseLsTree((await git($, ['ls-tree', '-r', '-l', '-z', tree], top)).stdout))
+    if (left.length) {
+      text = gitignoreWith(text, left.map(x => ignoreLineFor(x.file)))
+      await $.fs.write(ignoreFile, text)
+      for (let i = 0; i < left.length; i += 100) await gitOk($, ['rm', '-q', '--cached', '--ignore-unmatch', '--', ...left.slice(i, i + 100).map(x => x.file)], top)
+      await gitOk($, ['add', '--', '.gitignore'], top)
+    }
+    const files = (await gitOk($, ['ls-files', '--cached'], top)).split('\n').filter(Boolean).length
+    await gitOk($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'commit', '-q', '--no-verify', '--allow-empty', '-m', `Initial commit (by ${N.name})`], top)
+    await change($, b => ({ ...b, target_branch: branch }))
+    missingBranch = ''
+    toldMissing = ''
+    toldGit = 'ok'
+    gitState = 'ok'
+    await publish($, await load($))
+    const out = setupDoneText({ init, branch, files, left, gitignore: old === null ? 'made' : text === old ? 'kept' : 'added', name: N.name })
+    if (who !== 'the lead') tellLead($, `The owner set up git from the board. ${out}`)
+    void pump($)
+    return out
+  } finally {
+    settingUp = false
+  }
 }
 
 const worktreeDir = (id: string) => `${root}/${N.worktrees}/${id}`
@@ -647,6 +752,7 @@ async function pump($: $) {
   const b = await load($)
   if (modeOf(b) === 'off') return
   if (!ready(b).length) return
+  if (!(await gitReady($, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
   if (!(await targetReady($, b))) return // nothing starts and nothing is marked failed
   for (const t of ready(b)) {
     if (workers.size >= b.max_parallel) break
@@ -828,6 +934,7 @@ async function approve($: $, id: string): Promise<string> {
   const b = await load($)
   const t = reviewTask(b, id, 'approve')
   if (approving.has(t.id)) return `${t.id} is already being merged`
+  if (!(await gitReady($, b))) return `${t.id} stays in review: ${gitNote(gitState)}`
   if (!(await targetReady($, b))) return `${t.id} stays in review: ${missingBranchText(b.target_branch)}`
   approving.add(t.id)
   try {
@@ -1005,7 +1112,7 @@ async function loadScouts($: $): Promise<ScoutDef[]> {
 
 async function runScout($: $, s: ScoutDef) {
   const st = scoutState.get(s.name)
-  if (!st || st.running || !driving) return
+  if (!st || st.running || !driving || gitState !== 'ok') return
   const b = await load($)
   if (modeOf(b) === 'off') return
   st.running = true
@@ -1300,7 +1407,11 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     permission rules, like workers) and search and fetch web pages. They are told not to
     change the project; changes only go through board tasks.
   • Test commands are run by ${N.name} itself, without a permission prompt.
-  • Add ${N.dir}/ to the project's .gitignore.`,
+  • Add ${N.dir}/ to the project's .gitignore.
+  • A folder with no git repo (or no commits yet): nothing starts. ${N.name} asks first, then
+    (press g in the board, or the lead's setup_git) runs git init on main, writes a .gitignore
+    and makes a first commit of your files, leaving out secrets (.env, *.pem, id_rsa) and files
+    over 50 MB. It never pushes or adds a remote. With git not installed nothing starts at all.`,
 })
 
 function manual(arg: string): string {
@@ -1321,6 +1432,7 @@ The project has a shared task board (${N.dir}/board.json) that you and the owner
 - Review before merge (optional): in mode review, or with needs_review on one task (${N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${N.name} approve T-5 (merge it) or ${N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${N.name} change the task with the wider files (it goes back to work); otherwise ${N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
 - When the owner answers a waiting task, put the answer into the task with ${N.name} change (that sends it back to work).
+- If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${N.name} setup_git. Never do it without asking.
 - Set the test command with ${N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - To stop work: ${N.name} pause pauses one task (its worker is stopped; ${N.name} resume continues it later, with a fresh worker). ${N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${N.name} add with backlog: true); they never start until moved to todo (${N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
@@ -1346,6 +1458,11 @@ const TOOLS = () => [
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  {
+    name: 'setup_git',
+    description: `Set up git in a project folder that has no git repo or no commits yet (${N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Sets target_branch to that branch. Never pushes, adds no remote.`,
+    inputSchema: { type: 'object', properties: {} },
+  },
   {
     name: 'settings',
     description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
@@ -1470,6 +1587,8 @@ async function runTool($: $, name: string, a: In): Promise<string> {
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
     }
+    case 'setup_git':
+      return setupGit($, 'the lead')
     case 'settings': {
       const parts: string[] = []
       const target = str(a.target_branch)?.trim()
@@ -1571,6 +1690,8 @@ export const register: Register = on => {
           .catch(() => undefined),
       )
       const b = await load($)
+      // Look at git once now: with no git, no repo or no commit, the lead is told (once) and nothing starts.
+      await gitReady($, b).catch(() => undefined)
       await publish($, b)
       // Open the board panel by itself (every session, driver or not), without taking the cursor
       // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
@@ -1840,6 +1961,14 @@ export const register: Register = on => {
           </Text>
           <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
         </Box>,
+        ...(v.git_state === 'no-repo' || v.git_state === 'no-commits'
+          ? [
+              <Box key="banner-git" flexDirection="row">
+                <Text wrap="truncate" color={C('warning')}>{v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}</Text>
+                <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(N.toast(await setupGit($, 'you'))))} />
+              </Box>,
+            ]
+          : []),
       ]
     }
     /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */

@@ -128,9 +128,13 @@ The flow is **discovery → triage → implementation → review → merge**.
   plugin API, and panels). This API is early access and can change between releases.
   symcc is built and tested with Claude Code **2.1.319**; check yours with
   `claude --version`. The one-step install in Option B needs 2.1.275 or later.
-- **git**.
-- **Your project in a git repo**, with at least one commit (workers get their own git
-  worktree and branch).
+- **git** (the program; workers get their own git worktree and branch). If it is
+  missing, nothing starts and symcc tells you how to install it (macOS:
+  `xcode-select --install`, or https://git-scm.com).
+- **A git repo is set up for you** if the folder has none, or has no commits yet
+  (symcc asks first). It runs `git init` on `main`, writes a `.gitignore` and makes a
+  first commit of your files, leaving out secrets and files over 50 MB. It never
+  pushes or adds a remote.
 
 There is no build step and nothing to `npm install`: Claude Code loads the plugin's
 `.tsx` code directly.

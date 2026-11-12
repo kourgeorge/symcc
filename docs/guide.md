@@ -225,6 +225,26 @@ new timing applies at once. `/symcc-scout <name>` runs a scout now.
 - If the branch doesn't exist, nothing starts and nothing is marked failed; the lead is
   told once.
 
+### A folder without git
+
+symcc needs **git** (the program) and a git repo with at least one commit: each worker
+gets its own git worktree. It checks this when a session starts and before a worker starts.
+
+- **git not installed**: nothing starts; the banner and status line say
+  `git is not installed`, and the lead tells you how to install it (macOS:
+  `xcode-select --install`, or https://git-scm.com).
+- **No git repo, or no commits yet**: a git repo is set up for you, but symcc asks
+  first. The lead asks you; say yes, or press **g** ("Set up git") in the board panel.
+  Nothing starts until it's done. The setup:
+  - runs `git init -b main` (skipped if a repo is already there);
+  - writes a `.gitignore` (or adds to yours, never twice) with `.symcc/`,
+    `node_modules/`, `.env`, `.env.*`, `.DS_Store`, `dist/`, `build/`, `__pycache__/`
+    and `.venv/`;
+  - makes a first commit of the current files, "Initial commit (by symcc)", leaving
+    out (and ignoring) files that look like secrets (`.env`, `*.pem`, `id_rsa`) or
+    are over 50 MB; the result says which;
+  - sets the target branch to `main`. It never pushes and adds no remote.
+
 ---
 
 ## Keeping work moving on its own

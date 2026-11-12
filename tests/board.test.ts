@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -1045,4 +1045,60 @@ test('the backlog header and "… N more" line, and the banner says "N in backlo
   expect(BACKLOG_SHOWN).toBe(5)
   const b = { ...emptyBoard(), tasks: [{ status: 'backlog' }, { status: 'backlog' }, { status: 'todo' }] } as never
   expect(bannerLines(b, '/x/p', '/x', true, 80).map(bannerText).join('\n')).toContain('2 in backlog')
+})
+
+test('a folder without git: the state, the notes and the question asked first', async () => {
+  expect(gitStateOf({ hasGit: false, inside: false, hasHead: false })).toBe('no-git')
+  expect(gitStateOf({ hasGit: true, inside: false, hasHead: false })).toBe('no-repo')
+  expect(gitStateOf({ hasGit: true, inside: true, hasHead: false })).toBe('no-commits')
+  expect(gitStateOf({ hasGit: true, inside: true, hasHead: true })).toBe('ok')
+  expect(gitNote('ok')).toBe('')
+  expect(gitNote('no-git')).toBe('git is not installed')
+  expect(gitNote('no-repo')).toContain('(g)')
+  expect(noGitText()).toContain('xcode-select --install')
+  expect(noGitText()).toContain('https://git-scm.com')
+  const ask = setupAskText('no-repo')
+  expect(ask).toContain('This folder has no git repo. symcc needs one to give each worker its own copy. Set it up? (git init, a .gitignore, a first commit of the current files.)')
+  expect(ask).toContain('symcc setup_git')
+  expect(ask).toContain('only if they say yes')
+  const ask2 = setupAskText('no-commits')
+  expect(ask2).toContain('no commits yet')
+  expect(ask2).not.toContain('git init')
+})
+
+test('setup .gitignore: the safe lines are added once, never twice', async () => {
+  const base = gitignoreBase()
+  expect(base[0]).toBe('.symcc/')
+  for (const l of ['node_modules/', '.env', '.env.*', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/']) expect(base).toContain(l)
+  const fresh = gitignoreWith(null, base)
+  expect(fresh).toBe(base.join('\n') + '\n')
+  expect(gitignoreWith(fresh, base)).toBe(fresh)
+  // lines already there (written a bit differently) are not added again; a missing newline is fixed
+  const old = '/node_modules\n.symcc\n# mine\nlogs/'
+  const out = gitignoreWith(old, base)
+  expect(out.startsWith(old + '\n')).toBe(true)
+  expect(out.split('\n').filter(l => l.includes('node_modules')).length).toBe(1)
+  expect(out.split('\n').filter(l => l.includes('.symcc')).length).toBe(1)
+  expect(out).toContain('.venv/\n')
+  expect(gitignoreWith('', ['a', 'a', ' ', 'a/'])).toBe('a\n')
+})
+
+test('setup leaves secrets and big files out of the first commit', async () => {
+  for (const f of ['.env', 'app/.env.local', 'certs/server.pem', 'k.key', '.ssh/id_rsa', 'id_ed25519']) expect(isSecretName(f)).toBe(true)
+  for (const f of ['env.ts', 'id_rsa.pub', 'README.md', 'src/.envrc', 'keys.ts']) expect(isSecretName(f)).toBe(false)
+  const ls = ['100644 blob aaa 12\tsrc/a.ts', `100644 blob bbb ${BIG_FILE_BYTES + 1}\tdata/big.bin`, '100644 blob ccc 5\t.env', '160000 commit ddd -\tvendor/sub', '100644 blob eee 3\tdir with space/x y.txt'].join('\0') + '\0'
+  const files = parseLsTree(ls)
+  expect(files.map(f => f.file)).toEqual(['src/a.ts', 'data/big.bin', '.env', 'vendor/sub', 'dir with space/x y.txt'])
+  expect(files[3]!.size).toBe(null)
+  const left = riskyFiles(files)
+  expect(left.map(x => x.file)).toEqual(['data/big.bin', '.env'])
+  expect(left[0]!.why).toContain('50 MB')
+  expect(ignoreLineFor('data/big.bin')).toBe('/data/big.bin')
+  expect(ignoreLineFor('a[1]*.txt')).toBe('/a\\[1\\]\\*.txt')
+  const done = setupDoneText({ init: true, branch: 'main', files: 3, left, gitignore: 'made' })
+  expect(done).toContain('made a git repo')
+  expect(done).toContain('Initial commit (by symcc)')
+  expect(done).toContain('data/big.bin')
+  expect(done).toContain('no remote')
+  expect(setupDoneText({ init: false, branch: 'main', files: 1, left: [], gitignore: 'kept' })).not.toContain('Warning')
 })
