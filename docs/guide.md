@@ -2,11 +2,11 @@
 
 The full details. For the short version, see the [README](../README.md).
 
-- [The four parts](#the-four-parts)
+- [The parts and their names](#the-parts-and-their-names)
 - [A task's life](#a-tasks-life)
-- [What happens when a worker finishes](#what-happens-when-a-worker-finishes)
-- [Review before merge](#review-before-merge)
-- [Seeing the board](#seeing-the-board)
+- [The checked merge: what happens when a worker finishes](#the-checked-merge-what-happens-when-a-worker-finishes)
+- [The review gate](#the-review-gate)
+- [The live view: seeing the board](#the-live-view-seeing-the-board)
 - [Scouts](#scouts)
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
@@ -17,17 +17,31 @@ The full details. For the short version, see the [README](../README.md).
 
 ---
 
-## The four parts
+## The parts and their names
 
-| Part | What it is | What it does |
+The same names are used in the [README](../README.md) and in this guide.
+
+| Name | What it is | What it does |
 |---|---|---|
 | **You** (the owner) | The person typing | Say what you want, answer questions, decide |
-| **The lead** | Your normal Claude Code chat | Turns your wishes into tasks, watches the board, decides what to do when something fails |
-| **Workers** | Background helpers (one per task) | Each builds one task in its own copy of the project, then stops |
-| **Scouts** (optional) | Background helpers you define | On a timer, do what their file asks (read the code, run shell commands, search the web) and report to the lead; they never change files |
+| **Lead** | Your normal Claude Code chat | Plans, puts tasks on the board, supervises the workers, decides what to do when something fails, reports to you |
+| **Board** | A plain file at `.symcc/board.json` | One shared task board for requested work (from you) and discovered work (from scouts) |
+| **Workers** | Background agents (one per task) | Each builds one task in its own git worktree, in parallel, then stops |
+| **Scouts** (optional) | Background agents you define | On a timer, investigate (read the code, run shell commands, search the web) and report to the lead; they never change files |
 
-All four share one thing: **the board**, a plain file in your project at
-`.symcc/board.json`.
+And the ideas that tie them together:
+
+| Name | What it means |
+|---|---|
+| **Discovery-to-merge loop** | Scout finding → lead → board task → worker → checks → your approval → merge |
+| **File fence** | Each task lists the files it may change; anything else is not merged; a worker that needs more answers `NEED FILES` |
+| **Self-fixing retries** | Failing tests send the task back to a new worker with the failing output, up to `auto_retries` times (2 by default) |
+| **Checked merge** | Commit, file fence check, bring up to date with your branch, run tests, then merge; your branch only moves this way |
+| **Review gate** | Modes `auto`, `review` or `off`; approve, or reject with a reason; one task can be marked "needs review" |
+| **Live view** | The board panel and the status line |
+
+symcc is proactive while your Claude Code session is open. Work stops when you close it and
+picks up again next time.
 
 ---
 
@@ -44,7 +58,7 @@ All four share one thing: **the board**, a plain file in your project at
    │         ├──▶ worker needs files outside its list ──▶ waiting (NEED FILES)
    │         └──▶ worker has a question ──▶ failed + question to the lead
    │
-   ├── review   (only with the review step) checks passed; waits for YOUR approve
+   ├── review   (only with the review gate) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
    ├── waiting  the lead asked YOU something; your answer sends it back to work
    ├── paused   stopped on purpose; "resume" sends it back
@@ -64,13 +78,13 @@ All four share one thing: **the board**, a plain file in your project at
 
 ---
 
-## What happens when a worker finishes
+## The checked merge: what happens when a worker finishes
 
 This is where symcc keeps your branch safe. Step by step:
 
 1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
-2. **Scope check.** Every task lists the files it may change. If the worker changed
+2. **File fence check.** Every task lists the files it may change (its file fence). If the worker changed
    anything else, nothing is merged (the note says which files; add them to `files` with
    `change`, or split the task). A worker that sees it needs another file should not change
    it: it stops and answers `NEED FILES: path/a, path/b — reason`, and the task waits for
@@ -78,10 +92,10 @@ This is where symcc keeps your branch safe. Step by step:
 3. **Catch up.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).
-4. **Test.** symcc runs your test commands on the combined code. If they fail, the task
-   goes back to `todo` and the next worker is shown the end of the failing output and
+4. **Test.** symcc runs your test commands on the combined code. If they fail, self-fixing
+   retries kick in: the task goes back to `todo` and the next worker is shown the end of the failing output and
    told to fix it (2 times by itself; then it is marked `failed` for the lead).
-5. **Review (optional).** With the review step on (see below), the task stops here as
+5. **Review gate (optional).** With the review gate on (see below), the task stops here as
    `review` ("ready for review") and nothing is merged until you say so.
 6. **Merge.** Only now does your branch move forward. If you have that branch checked
    out with uncommitted changes, symcc waits instead of overwriting them.
@@ -89,11 +103,11 @@ This is where symcc keeps your branch safe. Step by step:
    "T-3 done".
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
-> that passes the scope check is merged. Say "set the test command to …" to the lead.
+> that passes the file fence check is merged. Say "set the test command to …" to the lead.
 
 ---
 
-## Review before merge
+## The review gate
 
 The board has one mode, set with `/symcc-mode` or by telling the lead (the setting `mode`):
 
@@ -139,7 +153,7 @@ You can also do it yourself:
 
 ---
 
-## Seeing the board
+## The live view: seeing the board
 
 - **The panel** opens by itself when a session starts (on a wide enough terminal; turn it
   off with the `open_on_start` setting). It shows a small banner (folder, branch, test
@@ -281,7 +295,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | File | What's in it |
 |---|---|
 | [`hooks/register.tsx`](../hooks/register.tsx) | Everything that talks to Claude Code: the lead's tools, starting and stopping workers, checking and merging, scouts, the panel and status line |
-| [`hooks/board.ts`](../hooks/board.ts) | The board as plain data: adding and changing tasks, which tasks are ready, the scope check, retry rules, who drives, the banner text. No Claude Code calls, so it's easy to test |
+| [`hooks/board.ts`](../hooks/board.ts) | The board as plain data: adding and changing tasks, which tasks are ready, the file fence check, retry rules, who drives, the banner text. No Claude Code calls, so it's easy to test |
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
 | [`tests/`](../tests/) | `board.test.ts` (the board logic), `pane.test.tsx` (the panel) |

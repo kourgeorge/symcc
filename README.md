@@ -23,44 +23,58 @@
   <img src="docs/demo.svg" alt="symcc demo" width="860">
 </p>
 
+**An example.** You are building a feature. Meanwhile a scout notices an untested error
+path. The lead puts it on the board, a worker fixes it in its own worktree, the tests
+pass, and the change comes back to your chat for approval. You never had to notice the
+gap, write a ticket or open another app.
+
+**The idea: symcc closes the loop from discovery to merge, inside Claude Code.**
+
 With coding agents you are no longer one developer. You are a team lead, with many tasks
-running at once. symcc keeps that work organized: every task is on one board, each change
-is checked and tested, and nothing reaches your branch until it passes (and, if you want,
-until you approve it). At the same time the agents work on their own: workers build and
-retry, and scouts look ahead and suggest the next job.
+running at once. symcc keeps that work organized and checked, and it also finds work on its
+own. It is proactive while your Claude Code session is open: work stops when you close it
+and picks up again next time.
 
 ---
 
-## What you get
+## Features
 
-### Organized and under your control
+symcc gives each part a name. The same names are used here and in the
+[guide](docs/guide.md).
 
-- **Just talk.** Say what you want. The lead (your normal chat) splits your wish into
-  several small tasks on one board.
-- **Work happens at the same time.** Up to 3 tasks run at once. Each one has its own copy
-  of your code (a git worktree), so they never step on each other.
-- **Every change is checked.** A change may only touch its own files, and your tests must
-  pass, before it can be merged.
-- **You can see what is happening.** The board panel and the status line show every task
-  live.
-- **You decide.** Look at a finished change (the files, the `+`/`-` lines, the full diff)
-  and approve or reject it.
-- **You set how much freedom there is.** Three modes: `auto`, `review` or `off`. Pause or
-  drop any task at any time.
-- **It stops when you stop.** Work stops when you close Claude Code and picks up again
-  next time.
+| Feature | What it does |
+|---|---|
+| **Lead** | Your normal Claude Code chat. It plans, puts tasks on the board, supervises the workers and reports to you. |
+| **Board** | One shared task board for requested work (from you) and discovered work (from scouts). |
+| **Workers** | Each worker builds one task in its own git worktree and branch, then stops. |
+| **Parallel workers** | Several tasks run at once (3 by default), each in its own worktree, so they never collide. |
+| **Scouts** | Discovery agents on a timer. They read code, run commands and search the web, then report to the lead. They never change files. |
+| **Discovery-to-merge loop** | Scout finding → lead → board task → worker → checks → your approval → merge. |
+| **File fence** | Each task lists the files it may change. Changes to anything else are not merged. A worker that needs more asks with `NEED FILES`. |
+| **Self-fixing retries** | When tests fail, the task goes back to a new worker with the failing output, up to `auto_retries` times (2 by default). |
+| **Checked merge** | Commit, file fence check, bring up to date with your branch, run tests, then merge. Your branch only moves this way. |
+| **Review gate** | Modes `auto`, `review` (shown as "review merge") or `off`. See the diff, then approve, or reject with a reason. Or mark one task "needs review". |
+| **Live view** | The board panel and the status line show every task as it runs. |
 
-### Proactive and autonomous
+Every two minutes symcc also checks the board by itself: it starts ready tasks, and stops a
+worker that runs longer than `max_minutes` (45 by default).
 
-- **Workers run on their own.** A worker builds its task without asking you. If the tests
-  fail, a new worker tries again with the error in front of it.
-- **Scouts look ahead for you.** A scout wakes up on a timer. It can read the code, run
-  shell commands and search the web, for example to find bugs, missing tests or new
-  versions of your dependencies. Then it reports to the lead. Scouts never change files
-  themselves.
-- **Findings become finished work.** The lead turns a scout's findings into tasks, and
-  workers pick them up and finish them. In review mode, nothing is merged until you
-  approve it.
+---
+
+## What symcc adds
+
+Multi-agent coding with worktrees and task boards exists already, including Claude Code's
+own agent teams. symcc does not claim to invent that. What symcc adds is the combination:
+
+- **Scouts on a timer** that find work on their own.
+- **One board** for discovered work and requested work.
+- **A file fence** for every task.
+- **Self-fixing retries** that hand the failing output to the next worker.
+- **A review gate per task**, with the diff in front of you.
+
+All of it runs from your normal Claude Code chat. There is no extra app, no memory layer
+and no issue-tracker link. When two changes clash, symcc does not solve it with special
+AI logic: it starts a new worker to sort out the clash.
 
 ---
 
@@ -71,18 +85,18 @@ retry, and scouts look ahead and suggest the next job.
 1. **You talk.** "Add a search command, and make the errors friendlier."
 2. **The lead writes tasks on the board**, e.g. T-1 the index, T-2 the command (after
    T-1), T-3 the errors.
-3. **Workers start in parallel.** Each task gets its own copy of the code, on its own
-   branch (`symcc/T-1`).
-4. **symcc checks the work.** Only the task's files changed? Your tests pass? If the tests
-   fail, a new worker tries again with the error in front of it.
-5. **Ready for review.** In review mode the task waits for you.
+3. **Workers start in parallel.** Each task gets its own worktree, on its own branch
+   (`symcc/T-1`).
+4. **Checked merge.** Did the change stay inside the file fence? Do your tests pass? If the
+   tests fail, self-fixing retries send it to a new worker with the failing output.
+5. **Review gate.** In review mode the task waits for you.
 6. **You look at the change and approve it** (or reject it with a reason).
 7. **It is merged into your branch, and the next tasks start.** The lead tells you each
    step.
 
-**Work can also start on its own.** A scout wakes up on its timer and finds something
-(say, a missing test). The lead adds a task for it. A worker does the task. You approve it
-(in review mode), and it is merged.
+**The discovery-to-merge loop.** Work can also start on its own. A scout wakes up on its
+timer and finds something (say, a missing test). The lead adds a task for it to the board.
+A worker does the task. You approve it (in review mode), and it is merged.
 
 ```
   you ──"add a search box"──▶ LEAD (your chat)
@@ -94,10 +108,10 @@ retry, and scouts look ahead and suggest the next job.
           WORKER builds it in .symcc/worktrees/T-1
                                 │ done
                                 ▼
-          checks: own files only? tests pass?  ── no ──▶ try again
+          checked merge: inside file fence? tests pass?  ── no ──▶ retry
                                 │ yes
                                 ▼
-          review (if on) ──▶ you approve ──▶ merged ──▶ next tasks start
+          review gate (if on) ──▶ you approve ──▶ merged ──▶ next tasks start
 ```
 
 ---
@@ -141,7 +155,7 @@ lead  T-3 merged. T-2 is running now.
 
 ---
 
-## Staying in control
+## Staying in control: the review gate
 
 The board has three modes. Change it with `/symcc-mode`, the `m` key in the panel, or by
 telling the lead.
@@ -160,7 +174,7 @@ telling the lead.
 
 Safety:
 
-- Changes outside a task's files, or that fail the tests, are never merged.
+- Changes outside a task's file fence, or that fail the tests, are never merged.
 - In review mode nothing is merged until you approve it; the lead should only approve
   when you say so.
 - Your branch only moves through a checked merge. If you have uncommitted changes on it,
@@ -178,7 +192,7 @@ The full details are in the **[guide](docs/guide.md)**: a task's life, what happ
 worker finishes, review, the panel, scouts, branches, where files live, renaming the
 plugin, and where the code is.
 
-### Seeing the board
+### Live view: seeing the board
 
 - The panel opens by itself when a session starts (on a wide enough terminal). `/symcc`
   opens it any time: ↑↓ to move, Enter to open, Esc to close. `t` and `s` switch between
