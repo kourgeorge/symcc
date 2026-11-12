@@ -230,6 +230,55 @@ new timing applies at once. `/symcc-scout <name>` runs a scout now.
 
 ---
 
+## Worker roles
+
+Each task has a role. The lead picks the one that fits; `general` (a plain worker) is the
+default. A role is one Markdown file: the top (front matter) says what the role is for and,
+if you like, which model and skills it uses; the rest is the checklist the worker follows.
+
+```markdown
+---
+description: writing or fixing tests - edge cases, error paths, no flaky tests
+model: sonnet
+skills: [code-review]
+---
+- Cover error paths and edge cases, not only the happy path.
+- No sleeps, real network or random data without a fixed seed.
+```
+
+- `description` is required: the lead reads it to choose. `model` and `skills` are optional.
+- The built-in roles live in the plugin's `roles/` folder: `general`, `frontend`, `backend`,
+  `tests`, `docs`, `refactor` and `security`.
+- Your own roles go in `.symcc/roles/<name>.md` in your project. A file with the same name as
+  a built-in role replaces it; a new name adds a role. Names use letters, digits, `-` and `_`.
+- The files are read again when a session starts, when a worker starts, when a task's role
+  is set, and when Claude Code saves a file in `.symcc/roles/`. An edit counts from the next
+  worker on; no restart needed.
+- A file that can't be used (no front matter, no description, a bad name) is skipped, and
+  you get a note once, for example `symcc: skipped .symcc/roles/x.md: no description`.
+- Every role gets the same safety checks: its own copy of the code, the scope check, the
+  tests and (if set) your review.
+
+You can change a task's role yourself: say "use the security role for T-12", or open the task
+in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
+failed or in the backlog. The board list shows a role after the status
+(`T-12 doing · tests`); `general` shows nothing.
+
+**One task, one role.** When a feature needs several kinds of work and each part is big
+enough to stand alone, the lead splits it into one task per role and links them with `after`:
+
+```
+T-20  backend   Add the /export endpoint
+T-21  frontend  Export button on the report page    (after T-20)
+T-22  tests     Tests for export, errors included   (after T-20)
+T-23  docs      Explain export in the user guide    (after T-21, T-22)
+```
+
+T-21 and T-22 run at the same time, since they change different files. A small request stays
+one `general` task: each extra task costs a worker run, a test run and a merge.
+
+---
+
 ## Which branch work goes into
 
 - A new board merges into **the branch you had checked out** when the board was made.
@@ -289,6 +338,7 @@ your-project/
     ├── board.lock        held for a moment while a window saves the board
     ├── lead.json         which window drives the board (with a heartbeat)
     ├── scouts/           your scout files (*.md)
+    ├── roles/            your own worker roles (*.md), see Worker roles
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged

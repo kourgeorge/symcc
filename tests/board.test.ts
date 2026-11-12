@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -1208,4 +1208,37 @@ test('the worker prompt gets the role section; general adds nothing', async () =
   expect(s).toContain('Use these skills if they are available: code-review.')
   expect(roleSection(parseRole('general', '---\ndescription: plain\n---\n')!)).toBe('')
   expect(roleSection(undefined)).toBe('')
+})
+
+test('a skipped role file says why, in a note for the owner and the lead', async () => {
+  expect(roleSkipReason('x', '---\nmodel: haiku\n---\nbody')).toBe('no description')
+  expect(roleSkipReason('x', 'just text')).toMatch(/^no front matter/)
+  expect(roleSkipReason('bad name', '---\ndescription: d\n---\n')).toMatch(/^bad name "bad name"/)
+  expect(roleSkipReason('ok', '---\ndescription: d\n---\n')).toBe(null)
+  expect(skippedRoleNote('.symcc/roles/x.md', 'no description')).toBe('symcc: skipped .symcc/roles/x.md: no description')
+  expect(skippedRoleNote('.crew/roles/x.md', 'no description', 'crew')).toBe('crew: skipped .crew/roles/x.md: no description')
+})
+
+test('the role mark: the role name, nothing for general; the open task\'s role line has the description and model', async () => {
+  expect(roleMark({})).toBe('')
+  expect(roleMark({ role: 'general' })).toBe('')
+  expect(roleMark({ role: 'tests' })).toBe('tests')
+  const all = mergeRoles([parseRole('general', '---\ndescription: plain\n---\n')!, parseRole('tests', '---\ndescription: writes tests\nmodel: sonnet\n---\n')!], [])
+  expect(roleLine({ role: 'tests' }, all)).toBe('Role: tests — writes tests · model sonnet')
+  expect(roleLine({}, all)).toBe('Role: general — plain')
+  expect(roleLine({ role: 'gone' }, all)).toBe('Role: gone')
+  expect(roleChoices(all)).toEqual(['general', 'tests'])
+  expect(roleChoices([])).toEqual(['general'])
+  // the text board keeps the short mark
+  const [b] = addTask(emptyBoard(), { title: 'Cover the parser errors', role: 'tests' }, T)
+  expect(boardText(b)).toContain('Cover the parser errors [tests]')
+  const [b2] = addTask(emptyBoard(), { title: 'Plain', role: 'general' }, T)
+  expect(boardText(b2)).not.toContain('[general]')
+})
+
+test('the lead is told: one task, one role; split big work by role and link the parts with after', async () => {
+  const text = rolesLeadText([parseRole('general', '---\ndescription: plain\n---\n')!])
+  expect(text).toContain('One task, one role.')
+  expect(text).toContain('split it into one task per role and link them with after')
+  expect(text).toContain('each extra task costs a worker run, a test run and a merge')
 })

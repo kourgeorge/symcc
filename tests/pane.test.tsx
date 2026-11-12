@@ -575,3 +575,86 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ key: 'T-1' })).toBeDefined()
   await ui.unmount()
 })
+
+/**
+ * A small fake of the files: `files` maps the end of a path (e.g. "/roles/docs.md") to its text; folders come
+ * from those paths. Writes go to `written` (path → text). Other paths go on to the test kit.
+ */
+function fakeFiles(on: On, files: Record<string, string | null>) {
+  const written: Record<string, string> = {}
+  const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
+  const dirOf = (p: string) => Object.keys(files).some(f => f.startsWith('/') && p.endsWith(f.slice(0, f.lastIndexOf('/'))))
+  on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : dirOf(e.path) ? { value: true } : next(e)))
+  on('fs.list', (_, e, next) =>
+    dirOf(e.path) ? { value: Object.keys(files).filter(f => e.path.endsWith(f.slice(0, f.lastIndexOf('/'))) && files[f] !== null).map(f => ({ name: f.slice(f.lastIndexOf('/') + 1), kind: 'file' })) } : next(e),
+  )
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] } : next(e)))
+  on('fs.write', (_, e) => ((written[e.path] = String(e.text)), { value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  return written
+}
+
+const ROLE_FILES = {
+  '/roles/general.md': '---\ndescription: a plain worker\n---\n',
+  '/roles/docs.md': '---\ndescription: writes the docs\n---\n- plain words\n',
+  '/roles/tests.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n',
+  '/roles/security.md': '---\ndescription: checks for holes\n---\n',
+}
+
+test('a task shows its role after the status in a subtle color; general shows nothing', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Plain work', { role: 'general' }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tests' })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const mark = await ui.find({ type: 'Text', text: /^ · tests\s*$/ })
+  expect(mark).toBeDefined()
+  expect(mark?.props.color).toBe('subtle')
+  expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('an open task shows its role and model; "Role" (l) opens a pick list of the roles, and picking one sets it', async ($, on) => {
+  const board = { tasks: [task('T-1', 'todo', 'Write it up', { role: 'tests' })] }
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { ...ROLE_FILES, '/board.json': JSON.stringify(board), '/board.lock': null })
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^Role: tests — writes tests · model sonnet$/ })).toBeDefined()
+  const button = await ui.find({ key: 'role' })
+  expect(button?.props.hotkey).toBe('l')
+  expect(await ui.find({ type: 'Text', text: /l role/ })).toBeDefined()
+  await ui.press({ key: 'role' })
+  for (const r of ['general', 'tests', 'security', 'docs']) expect(await ui.find({ key: `role:${r}` })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^● tests$/ })).toBeDefined()
+  await ui.press({ key: 'role:docs' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => text)
+  expect(saved.length).toBe(1)
+  expect(JSON.parse(saved[0]!).tasks[0].role).toBe('docs')
+  expect(toasts.some(t => /T-1 role: docs/.test(t))).toBe(true)
+  expect(await ui.find({ key: 'role:docs' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a running task shows its role but has no Role button', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, ROLE_FILES)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^Role: general — a plain worker$/ })).toBeDefined()
+  expect(await ui.find({ key: 'role' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a role file that is skipped is said once in a toast, with the reason', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, { ...ROLE_FILES, '/roles/x.md': '---\nmodel: haiku\n---\nno description here' })
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(String(e.text ?? JSON.stringify(e))), { value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'role' })
+  await ui.press({ key: 'role-cancel' })
+  await ui.press({ key: 'role' })
+  expect(await ui.find({ key: 'role:x' })).toBeUndefined()
+  expect(await ui.find({ key: 'role:docs' })).toBeDefined()
+  expect(toasts.filter(t => t.includes('symcc: skipped roles/x.md: no description')).length).toBe(1)
+  await ui.unmount()
+})

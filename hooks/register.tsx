@@ -91,6 +91,11 @@ import {
   parseBoard,
   parseScout,
   parseRole,
+  roleSkipReason,
+  skippedRoleNote,
+  roleMark,
+  roleLine,
+  roleChoices,
   mergeRoles,
   findRole,
   checkRole,
@@ -189,6 +194,8 @@ type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel'
 let root = ''
 /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
 let roles: RoleDef[] = []
+/** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
+const skippedRoles = new Map<string, string>()
 /** the home folder, to shorten it to "~" where the project's path is shown */
 let home = ''
 type Worker = { task: string; worktree: string; branch: string; since: number }
@@ -245,6 +252,8 @@ let naming: { name: string; error: string } | null = null
 let diffOpen: { task: string; file: string } | null = null
 /** the reason box for rejecting a task in review from the board panel, or null when it isn't shown */
 let rejecting: { task: string; reason: string } | null = null
+/** the role pick list on an open task in the board panel: the task and the role names; null when it isn't shown */
+let rolePick: { task: string; options: string[] } | null = null
 
 // ---------------- the board on disk ----------------
 
@@ -1122,23 +1131,37 @@ async function check($: $) {
 
 // ---------------- worker roles ----------------
 
-/** The role files in folder `dir` (skipped with a note when one can't be used). */
-async function roleFiles($: $, dir: string): Promise<RoleDef[]> {
+/** The role files in folder `dir`, shown as `shown` (e.g. ".symcc/roles"); a file that can't be used is skipped with a note (see skippedRole). */
+async function roleFiles($: $, dir: string, shown: string): Promise<RoleDef[]> {
   if (!(await $.fs.exists(dir).catch(() => false))) return []
   const out: RoleDef[] = []
   for (const f of await $.fs.list(dir).catch(() => [])) {
     if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
     const text = await $.fs.read(`${dir}/${f.name}`).catch(() => '')
-    const r = parseRole(f.name.replace(/\.md$/, ''), typeof text === 'string' ? text : '')
-    if (r) out.push(r)
-    else $.ui.log(`${N.name}: skipped role file ${dir}/${f.name}: it needs front matter with a description (and a name of letters, digits, - and _)`, { to: 'debug' })
+    const body = typeof text === 'string' ? text : ''
+    const name = f.name.replace(/\.md$/, '')
+    const r = parseRole(name, body)
+    if (r) {
+      out.push(r)
+      skippedRoles.delete(`${shown}/${f.name}`)
+    } else skippedRole($, `${shown}/${f.name}`, roleSkipReason(name, body) ?? 'it can not be used')
   }
   return out
 }
 
+/** Says once (a toast for the owner, a note for the lead) that a role file was skipped and why; again only when the reason changes. */
+function skippedRole($: $, file: string, reason: string) {
+  const note = skippedRoleNote(file, reason, N.name)
+  $.ui.log(note, { to: 'debug' })
+  if (skippedRoles.get(file) === reason) return
+  skippedRoles.set(file, reason)
+  $.ui.toast(N.toast(`skipped ${file}: ${reason}`))
+  tellLead($, `${note}. That role can't be used until the file is fixed (front matter with a description; a name of letters, digits, - and _).`)
+}
+
 /** Reads the roles again: the plugin's roles/, then the project's .<name>/roles/ over them. */
 async function loadRoles($: $): Promise<RoleDef[]> {
-  roles = mergeRoles(await roleFiles($, `${$.plugin.root}/roles`), root ? await roleFiles($, path(`${N.dir}/roles`)) : [])
+  roles = mergeRoles(await roleFiles($, `${$.plugin.root}/roles`, 'roles'), root ? await roleFiles($, path(`${N.dir}/roles`), `${N.dir}/roles`) : [])
   return roles
 }
 
@@ -1379,8 +1402,10 @@ On the board: t tasks · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode and target_branch
   open a pick list, numbers and test_commands an edit box · Esc cancels.
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
-  · k stash to the backlog (a task to do, paused or failed).
-In a backlog task: o move to todo · x drop.
+  · k stash to the backlog (a task to do, paused or failed)
+  · l pick the worker role (a task to do, paused, failed or in the backlog).
+In a backlog task: o move to todo · x drop · l role.
+On the board list a task's role shows after its status ("T-12 doing · tests"); general shows nothing.
 On the board list, the "▸ Backlog · N" section comes first, above the open tasks, folded; Enter on it opens it (5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -1390,7 +1415,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   tasks: `Tasks
   Fields: title, details (what to do and how we know it works), files (what the worker
   may change; empty = anywhere), after (tasks that must be done first), order (lower
-  runs first), plus status, note, question, tries, history, branch, when added/changed.
+  runs first), role (the worker role: general, frontend, backend, tests, docs, refactor,
+  security, or one in .${N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed.
   Statuses:
     to do            waiting for a free worker (and for its "after" tasks)
     doing            a worker is on it
@@ -1978,9 +2004,10 @@ export const register: Register = on => {
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== N.pane) return next(e)
-    // Esc in the reject box cancels it; Esc in a task's changes goes back to the task.
-    if (e.origin.kind === 'person' && (rejecting || diffOpen) && (await read($, tab)) !== 'scouts' && (await read($, opened))) {
-      if (rejecting) rejecting = null
+    // Esc in the reject box or the role pick list cancels it; Esc in a task's changes goes back to the task.
+    if (e.origin.kind === 'person' && (rejecting || diffOpen || rolePick) && (await read($, tab)) !== 'scouts' && (await read($, opened))) {
+      if (rolePick) rolePick = null
+      else if (rejecting) rejecting = null
       else diffOpen = null
       $.ui.invalidate('ui.render')
       return { value: undefined }
@@ -2008,6 +2035,7 @@ export const register: Register = on => {
     naming = null
     diffOpen = null
     rejecting = null
+    rolePick = null
     settingEdit = null
     settingPick = null
     changesCache.clear()
@@ -2368,6 +2396,7 @@ export const register: Register = on => {
       )
     }
     if (t) {
+      if (!roles.length) await loadRoles($).catch(() => undefined)
       const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
       const inReview = t.status === 'review'
       const showDiff = (file: string) => () => ((diffOpen = { task: t.id, file }), $.ui.invalidate('ui.render'))
@@ -2449,6 +2478,40 @@ export const register: Register = on => {
           </Box>
         )
       }
+      // The owner's role override: a pick list of the known roles, set the same way as the lead's change role.
+      const canPickRole = ['todo', 'paused', 'failed', 'backlog'].includes(t.status)
+      if (rolePick && (rolePick.task !== t.id || !canPickRole)) rolePick = null
+      const openRolePick = act(async () => {
+        rolePick = { task: t.id, options: roleChoices(await loadRoles($).catch(() => roles)) }
+        $.ui.invalidate('ui.render')
+      })
+      const pickRole = (name: string) =>
+        act(async () => {
+          rolePick = null
+          $.ui.invalidate('ui.render')
+          const r = await runTool($, 'change', { task: t.id, role: name })
+          $.ui.toast(N.toast(`${t.id} role: ${name}`))
+          tellLead($, `The owner set the role of ${t.id} to ${name} from the board: ${r}`)
+        })
+      const nowRole = roleOf(t).toLowerCase()
+      const roleBox =
+        rolePick?.task === t.id ? (
+          <Box flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+            <Text bold color={C('text')}>Pick a role for {t.id}</Text>
+            {rolePick.options.map(o => {
+              const cur = o.toLowerCase() === nowRole
+              const d = findRole(roles, o)?.description
+              return (
+                <Button key={`role:${o}`} autoFocus={cur ? true : undefined} onPress={pickRole(o)}>
+                  <Text bold={cur} color={C(cur ? 'ide' : 'text')}>{cur ? `● ${o}` : `○ ${o}`}</Text>
+                  {d ? <Text color={C('subtle')}> — {d}</Text> : null}
+                </Button>
+              )
+            })}
+            <Button key="role-cancel" label="Cancel" onPress={() => ((rolePick = null), $.ui.invalidate('ui.render'))} />
+            <Text color={C('subtle')}>Enter picks · Esc cancels</Text>
+          </Box>
+        ) : null
       // A task in review: the files it changed, each opening its diff.
       const changes = inReview
         ? await changedFiles($, target, t).then(
@@ -2493,6 +2556,7 @@ export const register: Register = on => {
             <Text bold color={C('text')}>
               {t.title}
             </Text>
+            <Text color={C('subtle')}>{roleLine(t, roles)}</Text>
             {t.note && (
               <Text>
                 <Text color={C(color[t.status]!)}>now: </Text>
@@ -2521,6 +2585,7 @@ export const register: Register = on => {
             {(t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
               <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: true }), tellLead($, `The owner moved ${t.id} to the backlog on the board.`)))} />
             )}
+            {canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />}
             {t.status !== 'done' && t.status !== 'dropped' && (
               <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
             )}
@@ -2539,6 +2604,7 @@ export const register: Register = on => {
           </Box>
 
           {rejectBox}
+          {roleBox}
 
           {changes && (
             <Box flexDirection="column">
@@ -2643,7 +2709,7 @@ export const register: Register = on => {
               <Text color={C('ide')}>{t.branch}</Text>
             </Text>
           )}
-          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{agentId ? ' · w watch worker' : ''}</Text>
+          <Text color={C('subtle')}>↑↓ scroll · b back{inReview ? ' · a approve · x reject · d show changes' : ''}{t.status === 'backlog' ? ' · o move to todo · x drop' : ''}{t.status === 'todo' || t.status === 'paused' || t.status === 'failed' ? ' · k stash to backlog' : ''}{['todo', 'paused', 'failed', 'backlog'].includes(t.status) ? ' · l role' : ''}{agentId ? ' · w watch worker' : ''}</Text>
         </Box>
       )
     }
@@ -2718,11 +2784,12 @@ export const register: Register = on => {
               </Text>
               <Text color={C(color[x.status]!)}>
                 {' '}
-                {mark[x.status]} {word[x.status]!.padEnd(wordWidth)}
+                {mark[x.status]} {word[x.status]!.padEnd(roleMark(x) ? 0 : wordWidth)}
               </Text>
+              {roleMark(x) ? <Text color={C('subtle')}>{` · ${roleMark(x)}`.padEnd(Math.max(0, wordWidth - word[x.status]!.length))}</Text> : null}
               <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
                 {' '}
-                {x.title.slice(0, Math.max(10, width - idWidth - wordWidth - 8))}
+                {x.title.slice(0, Math.max(10, width - idWidth - wordWidth - roleMark(x).length - 11))}
               </Text>
               {extra ? <Text color={C(x.status === 'waiting' ? 'warning' : x.status === 'failed' ? 'error' : x.status === 'review' ? color.review! : 'subtle')}> — {extra}</Text> : null}
             </Button>

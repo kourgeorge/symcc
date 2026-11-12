@@ -90,6 +90,7 @@ The four parts, in known terms:
 | **Merge into the target branch** | The task is updated on the latest target branch, tests run again, then it is merged. |
 | **Live status** | The board panel and the status line show every task as it runs. |
 | **Backlog** | Park ideas and unclear work on the board; they never start until you move them to todo. |
+| **Worker roles** | The lead picks a specialist role for each task (frontend, backend, tests, docs, refactor, security, or your own in `.symcc/roles/`); a role brings its own checklist, skills and model. Bigger features are split into one task per role. Every role has the same safety checks. |
 
 Every two minutes symcc also checks the board by itself: it starts ready tasks, and stops a
 worker that runs longer than `max_minutes` (45 by default).
@@ -232,6 +233,7 @@ You never have to type a command. Just talk to the lead:
 - "set the test command to `npm test`" · "give workers 90 minutes"
 - "approve T-5" · "reject T-5: the button should be blue"
 - "stash this idea" · "show the backlog" · "move T-5 to todo"
+- "use the security role for T-12"
 
 ---
 

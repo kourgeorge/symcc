@@ -1192,7 +1192,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const lines = rows.map(t => {
     const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
     const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
-    const role = t.role && t.role !== DEFAULT_ROLE ? ` [${t.role}]` : ''
+    const role = roleMark(t) ? ` [${roleMark(t)}]` : ''
     return `${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`
   })
   const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
@@ -1310,8 +1310,25 @@ function frontMatterList(value: string): string[] {
  * or a name with other characters than letters, digits, - and _); the caller skips it with a note.
  */
 export function parseRole(name: string, text: string): RoleDef | null {
+  const r = readRole(name, text)
+  return typeof r === 'string' ? null : r
+}
+
+/** Why a role file can't be used ("no front matter", "no description", "bad name ..."), or null when it can. */
+export function roleSkipReason(name: string, text: string): string | null {
+  const r = readRole(name, text)
+  return typeof r === 'string' ? r : null
+}
+
+/** The note shown (once) when a role file is skipped: "symcc: skipped .symcc/roles/x.md: no description". */
+export function skippedRoleNote(file: string, reason: string, name: string = DEFAULT_NAME): string {
+  return `${name}: skipped ${file}: ${reason}`
+}
+
+/** A role file as a RoleDef, or the reason it can't be used. */
+function readRole(name: string, text: string): RoleDef | string {
   const fm = splitFrontMatter(text)
-  if (!fm.lines) return null
+  if (!fm.lines) return 'no front matter (it starts with a --- line, then description: ..., then ---)'
   const meta: Record<string, string> = {}
   for (const line of fm.lines) {
     const kv = frontMatterLine(line)
@@ -1320,7 +1337,8 @@ export function parseRole(name: string, text: string): RoleDef | null {
   const unquote = (s: string | undefined) => (s ?? '').trim().replace(/^["']|["']$/g, '').trim()
   const roleName = unquote(meta.name) || name
   const description = unquote(meta.description)
-  if (!ROLE_NAME.test(roleName) || !description) return null
+  if (!ROLE_NAME.test(roleName)) return `bad name "${roleName}" (use letters, digits, - and _ only)`
+  if (!description) return 'no description'
   const model = unquote(meta.model)
   return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), prompt: fm.body.trim() }
 }
@@ -1351,6 +1369,25 @@ export function checkRole(roles: RoleDef[], name: string): string {
   throw new Error(`unknown role "${name}"; the roles are: ${have.join(', ')}`)
 }
 
+/** The short role mark for lists: the role name, or '' for general (which shows nothing). */
+export function roleMark(t: Pick<SymccTask, 'role'>): string {
+  const role = roleOf(t)
+  return role.toLowerCase() === DEFAULT_ROLE ? '' : role
+}
+
+/** The open task's role line: "Role: tests — writes tests · model sonnet" (just "Role: tests" when the role is not known). */
+export function roleLine(t: Pick<SymccTask, 'role'>, roles: RoleDef[]): string {
+  const name = roleOf(t)
+  const r = findRole(roles, name)
+  return `Role: ${r?.name ?? name}${r ? ` — ${r.description}` : ''}${r?.model ? ` · model ${r.model}` : ''}`
+}
+
+/** The roles to pick from in the board panel: the known ones, general first (general alone when none are loaded). */
+export function roleChoices(roles: RoleDef[]): string[] {
+  const names = roles.map(r => r.name)
+  return names.some(n => n.toLowerCase() === DEFAULT_ROLE) ? names : [DEFAULT_ROLE, ...names]
+}
+
 /** "try 2", or "try 2 (role tests)" when the task has a role other than general. */
 export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | string }): string {
   const role = roleOf(t)
@@ -1370,7 +1407,8 @@ export function roleSection(r: RoleDef | undefined): string {
 /** The lead's paragraph about roles: each one with its description, and how to pick. */
 export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): string {
   const list = roles.length ? roles.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
-  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.`
+  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.
+- One task, one role. When a request needs several kinds of work (e.g. backend, frontend, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (the frontend waits for the backend it uses; tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
 }
 
 // ---------------- scouts in the board panel ----------------
