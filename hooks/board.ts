@@ -655,6 +655,14 @@ export function groupLabel(g: Pick<DayGroup, 'label' | 'done' | 'dropped'>, open
 /** The backlog group's row in the board panel: "▸ Backlog · 3", "▾ Backlog · 3" when opened. */
 export const backlogLabel = (n: number, opened = false): string => `${opened ? '▾' : '▸'} Backlog · ${n}`
 
+/** How many backlog items the board panel lists before a "… N more" line. */
+export const BACKLOG_SHOWN = 5
+/** The backlog section's header in the board panel; folded, it starts with "▸". */
+export const backlogHeader = (n: number, folded = false): string =>
+  `${folded ? '▸ ' : ''}── Backlog · ${n} ── ideas and unclear work; they start only when you move them to todo (o)`
+/** The line under the first BACKLOG_SHOWN backlog items when there are more. */
+export const backlogMoreLabel = (more: number): string => `… ${more} more (Enter to show all)`
+
 // ---------------- time and cost of each try ----------------
 
 /** The runs with a new try started at `now`. */
@@ -882,7 +890,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   ])
   const texts = [l1, l2, l3]
   if (b.tasks.length) {
-    const counts = statusCounts(b.tasks, BANNER_ORDER)
+    const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog'))
     const t = boardTotal(b, nowMs)
     texts.push(dim([...counts, ...(t.tries ? [fmtTotal(t)] : [])].join(' · ')))
   }

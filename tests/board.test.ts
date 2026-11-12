@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, OPEN } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -1035,4 +1035,13 @@ test('old boards without backlog still parse', async () => {
   expect(ready(b).map(t => t.id)).toEqual(['T-1'])
   const [b2, t] = addTask(b, { title: 'C', backlog: true }, T)
   expect(parseBoard(JSON.stringify(b2)).tasks.find(x => x.id === t.id)!.status).toBe('backlog')
+})
+
+test('the backlog header and "… N more" line, and the banner says "N in backlog"', () => {
+  expect(backlogHeader(2)).toBe('── Backlog · 2 ── ideas and unclear work; they start only when you move them to todo (o)')
+  expect(backlogHeader(2, true).startsWith('▸ ── Backlog · 2 ──')).toBe(true)
+  expect(backlogMoreLabel(3)).toBe('… 3 more (Enter to show all)')
+  expect(BACKLOG_SHOWN).toBe(5)
+  const b = { ...emptyBoard(), tasks: [{ status: 'backlog' }, { status: 'backlog' }, { status: 'todo' }] } as never
+  expect(bannerLines(b, '/x/p', '/x', true, 80).map(bannerText).join('\n')).toContain('2 in backlog')
 })
