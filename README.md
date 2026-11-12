@@ -22,7 +22,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/demo.svg" alt="symcc demo" width="860">
+  <a href="docs/video/symcc.mp4"><img src="docs/video/symcc.gif" alt="symcc video preview: you talk to the lead, it puts tasks on the board, and workers move them from todo to running to done" width="800"></a>
+  <br>
+  <a href="docs/video/symcc.mp4"><b>▶ Watch the full video</b></a> (78 seconds, no sound)
 </p>
 
 ## The problem
@@ -129,6 +131,10 @@ solving: it starts a new worker to sort out the clash.
 ## How it works
 
 ![How symcc works: you, the lead, workers and scouts](docs/architecture.svg)
+
+<p align="center">
+  <img src="docs/demo.svg" alt="symcc demo" width="860">
+</p>
 
 The flow is **discovery → triage → implementation → review → merge**.
 
