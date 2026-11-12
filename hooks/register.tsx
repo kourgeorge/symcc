@@ -72,7 +72,6 @@ import {
   onConflict,
   MAX_CONFLICT_TRIES,
   DEFAULT_AUTO_RETRIES,
-  clampRetries,
   openOnStart,
   spokenDone,
   voiceOn,
@@ -132,6 +131,15 @@ import {
   statusCounts,
   type Board,
   type ScoutDef,
+  SETTINGS,
+  applySettings,
+  parseSettingValue,
+  settingSetText,
+  settingValue,
+  settingsText,
+  type SettingChange,
+  type SettingName,
+  type SettingsInput,
 } from './board'
 
 type $ = EngineInterface
@@ -164,7 +172,7 @@ function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { driving: boolean; branch_note: string; git_state: GitState }>
+type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'open_on_start' | 'voice'> & { driving: boolean; branch_note: string; git_state: GitState }>
 
 // ---------------- what this module holds while it is loaded ----------------
 // A hot reload starts these over: the board itself is always on disk, and a task
@@ -193,6 +201,10 @@ let writing: Promise<unknown> = Promise.resolve()
 let me = ''
 let driving = false
 let beat: { cancel(): void } | null = null
+/** the Settings view's edit box (numbers, test_commands): which setting, what is typed, the last error */
+let settingEdit: { name: SettingName; value: string; error: string } | null = null
+/** the Settings view's pick list (mode, target_branch): which setting and its choices */
+let settingPick: { name: SettingName; options: string[] } | null = null
 /** set by pump when target_branch doesn't exist (no work starts then); '' when it does */
 let missingBranch = ''
 /** the target_branch the lead was last told is missing, so it is told once, not every check */
@@ -405,7 +417,7 @@ async function publish($: $, b: Board) {
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   const branch_note = gitNote(gitState) || missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, driving, branch_note, git_state: gitState }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, open_on_start: openOnStart(b), voice: voiceOn(b), driving, branch_note, git_state: gitState }
   await update($, view, () => v)
   $.ui.status(statusLine(b, driving, branch_note, modeOf(b)))
 }
@@ -1239,11 +1251,14 @@ function cancelScoutEdit($: $) {
   $.ui.invalidate('ui.render')
 }
 
+/** The board panel's views: its tabs. */
+type PaneTab = 'tasks' | 'scouts' | 'settings'
+
 /**
  * Sets what the board panel shows: task `task` opened ('' = the list). With `which`, it also
- * switches to that view ('tasks' or 'scouts') with no scout opened; without, the view stays.
+ * switches to that view ('tasks', 'scouts' or 'settings') with no scout opened; without, the view stays.
  */
-async function resetPane($: $, which?: 'tasks' | 'scouts', task = '') {
+async function resetPane($: $, which?: PaneTab, task = '') {
   await update($, opened, () => task)
   if (!which) return
   await update($, scoutOpen, () => '')
@@ -1254,7 +1269,7 @@ async function resetPane($: $, which?: 'tasks' | 'scouts', task = '') {
  * Opens the board panel (see resetPane for `tab` and `task`). `focus` (default on) moves the
  * cursor into it and lets Esc close it; `quiet` ignores errors (the panel then just isn't shown).
  */
-async function openPane($: $, o: { tab?: 'tasks' | 'scouts'; task?: string; focus?: boolean; quiet?: boolean } = {}) {
+async function openPane($: $, o: { tab?: PaneTab; task?: string; focus?: boolean; quiet?: boolean } = {}) {
   const go = async () => {
     await resetPane($, o.tab, o.task)
     return $.ui.open({ id: N.pane, title: boardTitle(root, N.name), ...(o.focus !== false ? { focus: true as const, closeOnEscape: true as const } : {}) })
@@ -1305,9 +1320,9 @@ const MANUAL = (): Record<string, string> => ({
   commands: `Commands
   /${N.name} opens everything; /${N.name}-WORD does one thing: a plural noun opens a view
   (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
-  (approve, reject, diff), and mode sets the board mode. The "board" is the whole panel:
-  tasks and scouts.
-  /${N.name}                     open the board panel (↑↓ move, Enter opens, t / s switch views, Esc closes)
+  (approve, reject, diff), and mode and settings change how the board works. The "board" is
+  the whole panel: tasks, scouts and settings.
+  /${N.name}                     open the board panel (↑↓ move, Enter opens, t / s / c switch views, Esc closes)
   /${N.name}-tasks               open the panel on the tasks view
   /${N.name}-scouts              open the panel on the scouts view and reload the scout files
   /${N.name}-task T-3            open one task
@@ -1320,7 +1335,15 @@ const MANUAL = (): Record<string, string> => ({
                        off: stop every worker and scout now, start nothing new
                        review: work runs; finished tasks wait for your approve or reject
                        auto: work runs; finished tasks that pass merge on their own
+  /${N.name}-settings [NAME VALUE]  open the settings view, or set one setting, e.g.
+                       /${N.name}-settings max_parallel 5 · /${N.name}-settings voice off
+                       /${N.name}-settings mode review · /${N.name}-settings test_commands "npm test"
+                       (several test commands: join them with " && "; "none" clears them)
+                       a value over its limit is cut to it, and the answer says so
   /${N.help} [TOPIC]           this manual
+On the board: t tasks · s scouts · c settings · m switch review / auto.
+In the settings view: Enter on a row changes it: on/off flips, mode and target_branch
+  open a pick list, numbers and test_commands an edit box · Esc cancels.
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
   · k stash to the backlog (a task to do, paused or failed).
 In a backlog task: o move to todo · x drop.
@@ -1360,6 +1383,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   only the session driving the board speaks; on by default), mode (off stops every
   worker and scout and starts nothing new; review makes every finished task wait for
   your approve or reject; auto, the default, merges a finished task that passes at once).
+  You can also change every setting yourself with /${N.name}-settings (or the c tab in the
+  board). A value over its limit is cut to it, and the answer says so.
   add and change also take needs_review: that one task waits for review even in mode auto.
   Going from review to auto does not merge tasks already in review; approve or reject them.
   Tasks in review can be approved or rejected in every mode, also off.
@@ -1592,35 +1617,50 @@ async function runTool($: $, name: string, a: In): Promise<string> {
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {
-      const parts: string[] = []
-      const target = str(a.target_branch)?.trim()
-      if (a.mode !== undefined && !isMode(a.mode)) return `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`
-      if (a.target_branch !== undefined && !(target && (await branchExists($, target)))) {
-        return noBranchText(target ?? String(a.target_branch), await branchList($))
-      }
-      await change($, b => {
-        const y = { ...b }
-        if (target) ((y.target_branch = target), parts.push(`work merges into ${target}`))
-        if (list(a.test_commands)) ((y.test_commands = list(a.test_commands)!.map(x => x.trim()).filter(Boolean).slice(0, 5)), parts.push(`tests: ${y.test_commands.join(' && ') || 'none'}`))
-        if (typeof a.max_parallel === 'number') ((y.max_parallel = Math.max(1, Math.min(8, Math.round(a.max_parallel)))), parts.push(`up to ${y.max_parallel} at once`))
-        if (typeof a.max_minutes === 'number') ((y.max_minutes = Math.max(5, Math.min(600, Math.round(a.max_minutes)))), parts.push(`a worker may run ${y.max_minutes} min`))
-        if (typeof a.auto_retries === 'number') ((y.auto_retries = clampRetries(a.auto_retries)), parts.push(`${y.auto_retries} automatic ${y.auto_retries === 1 ? 'retry' : 'retries'} after failing tests`))
-        if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), parts.push(a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
-        if (typeof a.voice === 'boolean') ((y.voice = a.voice), parts.push(a.voice ? 'merged tasks are said out loud' : 'merged tasks are no longer said out loud'))
-        return y
-      })
-      if (target && missingBranch) {
-        missingBranch = ''
-        toldMissing = ''
-        await publish($, await load($))
-      }
-      const mode = a.mode
-      if (isMode(mode)) parts.push(await setBoardMode($, mode, 'the lead'))
-      void pump($)
+      const r = await saveSettings($, a, 'the lead')
+      if (r.error) return r.error
+      const parts = r.changes.map(c => c.said + c.cut)
+      if (r.mode) parts.push(r.mode)
       return parts.join('; ') || 'nothing changed'
     }
   }
   throw new Error(`unknown tool ${name}`)
+}
+
+/**
+ * Saves settings for the lead's settings tool and for the owner (/<name>-settings, the Settings
+ * view): the same checks and limits (see applySettings). `error` when nothing changed because
+ * mode or target_branch is wrong; `mode` is setBoardMode's answer when the mode was set.
+ */
+async function saveSettings($: $, a: SettingsInput, who: string): Promise<{ error?: string; changes: SettingChange[]; mode?: string }> {
+  const target = str(a.target_branch)?.trim()
+  if (a.mode !== undefined && !isMode(a.mode)) return { error: `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`, changes: [] }
+  if (a.target_branch !== undefined && !(target && (await branchExists($, target)))) {
+    return { error: noBranchText(target ?? String(a.target_branch), await branchList($)), changes: [] }
+  }
+  const changes = await change($, b => {
+    const r = applySettings(b, a)
+    return [r.board, r.changes] as [Board, SettingChange[]]
+  })
+  if (target && missingBranch) {
+    missingBranch = ''
+    toldMissing = ''
+    await publish($, await load($))
+  }
+  const mode = isMode(a.mode) ? await setBoardMode($, a.mode, who) : undefined
+  void pump($)
+  return { changes, mode }
+}
+
+/** The owner changes settings (/<name>-settings or the Settings view): the answer to show, e.g. "max_parallel set to 5"; the lead is told too. */
+async function ownerSettings($: $, a: SettingsInput, where: string): Promise<string> {
+  const r = await saveSettings($, a, 'you')
+  if (r.error) return r.error
+  const parts = r.changes.map(settingSetText)
+  if (r.mode) parts.push(`mode set to ${a.mode}: ${r.mode}`)
+  const text = parts.join('; ') || 'nothing changed'
+  if (parts.length) tellLead($, `The owner changed the ${N.name} settings ${where}: ${text}`)
+  return text
 }
 
 // ---------------- registration ----------------
@@ -1654,6 +1694,7 @@ async function registerAll($: $) {
     { name: `${N.name}-diff`, description: `Show what a ${N.name} task in review changed, or one file's diff: /${N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
     { name: `${N.name}-scout`, description: `Run a ${N.name} scout now: /${N.name}-scout <name>`, argumentHint: '<name>' },
     { name: `${N.name}-mode`, description: `Set the ${N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
+    { name: `${N.name}-settings`, description: `See and change the ${N.name} settings: /${N.name}-settings opens them; /${N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
     { name: N.help, description: `Show the ${N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ])
     await ok($.command.register(c))
@@ -1788,7 +1829,7 @@ export const register: Register = on => {
       case 'open':
       case 'tasks':
         await openPane($, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
-        return say(`Board opened: ↑↓ to move, Enter to open, t tasks, s scouts, Esc to close. (ctrl+x tab goes back to it.)`)
+        return say(`Board opened: ↑↓ to move, Enter to open, t tasks, s scouts, c settings, Esc to close. (ctrl+x tab goes back to it.)`)
       case 'scouts': {
         const defs = await scheduleScouts($)
         await publish($, await load($))
@@ -1800,6 +1841,15 @@ export const register: Register = on => {
       }
       case 'scout':
         return { text: await runScoutNow($, cmd.name) }
+      case 'settings': {
+        settingEdit = null
+        settingPick = null
+        const placed = await openPane($, { tab: 'settings' }).then(r => r.isPlaced).catch(() => false)
+        if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, Esc closes.`)
+        return say(settingsText(b, N.name))
+      }
+      case 'set':
+        return say(await ownerSettings($, cmd.input, `with /${N.name}-settings`))
       case 'mode': {
         const r = await setBoardMode($, cmd.mode, 'you')
         tellLead($, `The owner set the board mode to ${cmd.mode} with /${N.name}-mode: ${r}`)
@@ -1894,6 +1944,13 @@ export const register: Register = on => {
       $.ui.invalidate('ui.render')
       return { value: undefined }
     }
+    // Esc in a setting's edit box or pick list cancels it.
+    if (e.origin.kind === 'person' && (settingEdit || settingPick) && (await read($, tab)) === 'settings') {
+      settingEdit = null
+      settingPick = null
+      $.ui.invalidate('ui.render')
+      return { value: undefined }
+    }
     // Esc in a scout's edit mode (or the new scout name box) cancels it.
     if (e.origin.kind === 'person' && (draft || naming) && (await read($, tab)) === 'scouts') {
       cancelScoutEdit($)
@@ -1910,6 +1967,8 @@ export const register: Register = on => {
     naming = null
     diffOpen = null
     rejecting = null
+    settingEdit = null
+    settingPick = null
     changesCache.clear()
     await update($, tab, () => '').catch(() => undefined)
     await update($, scoutOpen, () => '').catch(() => undefined)
@@ -1929,8 +1988,10 @@ export const register: Register = on => {
     const word: Record<string, string> = STATUS_WORD
     const mark: Record<string, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
     const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(N.toast(err.message)))
-    const onScouts = (await read($, tab)) === 'scouts'
-    const t = open && !onScouts ? v.tasks.find(x => x.id === open) : undefined
+    const tabNow = await read($, tab)
+    const onScouts = tabNow === 'scouts'
+    const onSettings = tabNow === 'settings'
+    const t = open && !onScouts && !onSettings ? v.tasks.find(x => x.id === open) : undefined
     const C = (c: string) => c as never
     const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
     const mode = modeOf(v)
@@ -1973,13 +2034,13 @@ export const register: Register = on => {
           : []),
       ]
     }
-    /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3)", the active one bold in the accent color. "t" and "s" switch. */
+    /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3) │ [c] Settings", the active one bold in the accent color. "t", "s" and "c" switch. */
     const tabs = () => {
-      const go = (which: 'tasks' | 'scouts') => act(async () => ((draft = null), (naming = null), (diffOpen = null), (rejecting = null), await resetPane($, which)))
-      const one = (which: 'tasks' | 'scouts', label: string) => {
-        const active = which === 'scouts' ? onScouts : !onScouts
+      const go = (which: PaneTab) => act(async () => ((draft = null), (naming = null), (diffOpen = null), (rejecting = null), (settingEdit = null), (settingPick = null), await resetPane($, which)))
+      const one = (which: PaneTab, label: string) => {
+        const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
         return (
-          <Button key={`tab-${which}`} hotkey={which[0]} onPress={go(which)}>
+          <Button key={`tab-${which}`} hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
             <Text bold={active} color={C(active ? 'ide' : 'subtle')}>{label}</Text>
           </Button>
         )
@@ -1989,12 +2050,14 @@ export const register: Register = on => {
           {one('tasks', `[t] Tasks (${v.tasks.length})`)}
           <Text color={C('subtle')}> │ </Text>
           {one('scouts', `[s] Scouts (${scouts.length})`)}
+          <Text color={C('subtle')}> │ </Text>
+          {one('settings', '[c] Settings')}
         </Box>
       )
     }
     /** The whole header: banner, then the tab row, then the rule under them. */
     const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
-    const HINT = 'Enter opens · t tasks · s scouts · Esc closes'
+    const HINT = 'Enter opens · t tasks · s scouts · c settings · Esc closes'
 
     /** Text with task IDs, `code` and file paths picked out in color. */
     const rich = (text: string, base = 'text') => {
@@ -2042,6 +2105,83 @@ export const register: Register = on => {
           )
         return <Text>{rich(line)}</Text>
       })
+    if (onSettings) {
+      const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
+      const saveIt = (input: SettingsInput) => act(async () => {
+        const r = await ownerSettings($, input, 'from the board')
+        settingEdit = null
+        settingPick = null
+        $.ui.toast(N.toast(r))
+        $.ui.invalidate('ui.render')
+      })
+      /** Enter on a row: on/off flips, mode and target_branch open a pick list, the rest an edit box. */
+      const pressRow = (name: SettingName) => act(async () => {
+        const info = SETTINGS.find(x => x.name === name)!
+        const now = settingValue(v, name)
+        if (info.kind === 'onoff') return saveIt({ [name]: now !== 'on' })()
+        settingEdit = null
+        settingPick = null
+        if (info.kind === 'mode') settingPick = { name, options: ['off', 'review', 'auto'] }
+        else if (info.kind === 'branch') settingPick = { name, options: await branchList($) }
+        else settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
+        $.ui.invalidate('ui.render')
+      })
+      const editBox = (name: SettingName) => {
+        if (settingEdit?.name !== name) return null
+        const ed = settingEdit
+        const info = SETTINGS.find(x => x.name === name)!
+        return (
+          <Box key={`setting-box-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+            <Input
+              key="setting-edit"
+              label={`${name}: `}
+              value={ed.value}
+              placeholder={info.kind === 'commands' ? 'e.g. npm test && npm run lint (empty: none)' : `a whole number, ${info.range}`}
+              autoFocus
+              onInput={value => void (ed.value = value)}
+              onSubmit={value => {
+                const r = parseSettingValue(name, info.kind === 'commands' && !value.trim() ? 'none' : value)
+                if (!r.ok) return void ((ed.error = r.message), $.ui.invalidate('ui.render'))
+                saveIt(r.input)()
+              }}
+            />
+            {ed.error ? <Text color={C('error')}>{ed.error}</Text> : null}
+            <Text color={C('subtle')}>{info.kind === 'commands' ? 'join commands with " && " · ' : ''}Enter saves · Esc cancels</Text>
+          </Box>
+        )
+      }
+      const pickBox = (name: SettingName) => {
+        if (settingPick?.name !== name) return null
+        const now = settingValue(v, name)
+        return (
+          <Box key={`setting-pick-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+            {settingPick.options.length ? null : <Text color={C('warning')}>No local branches found.</Text>}
+            {settingPick.options.map(o => (
+              <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
+                <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${o}` : `○ ${o}`}</Text>
+              </Button>
+            ))}
+            <Button key="setting-cancel" label="Cancel" onPress={() => ((settingPick = null), $.ui.invalidate('ui.render'))} />
+            <Text color={C('subtle')}>Enter picks · Esc cancels</Text>
+          </Box>
+        )
+      }
+      return (
+        <Box flexDirection="column">
+          {header()}
+          {SETTINGS.flatMap((x, i) => [
+            <Button key={`setting:${x.name}`} autoFocus={i === 0 && !settingEdit && !settingPick ? true : undefined} onPress={pressRow(x.name)}>
+              <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
+              <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
+              <Text color={C('subtle')}> · default {x.default} · {x.range} · {x.meaning}</Text>
+            </Button>,
+            ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
+          ])}
+          <Text wrap="truncate" color={C('subtle')}>Enter changes a setting (on/off flips) · /{N.name}-settings NAME VALUE · or tell the lead</Text>
+          <Text wrap="truncate" color={C('subtle')}>{HINT.replace('Enter opens · ', '')}</Text>
+        </Box>
+      )
+    }
     if (onScouts && draft) {
       // A scout's edit mode: the same header as its page, then a box per part of its file.
       const d = draft

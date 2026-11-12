@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 
@@ -870,7 +870,7 @@ test('diff lines are colored: added in success, removed in error, headers and hu
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
-  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-help'])
+  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help'])
   expect(commandNames('crew')[0]).toBe('crew')
   expect(commandNames('crew')).toContain('crew-help')
   expect(parseCommand('symcc', '')).toEqual({ kind: 'open' })
@@ -1101,4 +1101,65 @@ test('setup leaves secrets and big files out of the first commit', async () => {
   expect(done).toContain('data/big.bin')
   expect(done).toContain('no remote')
   expect(setupDoneText({ init: false, branch: 'main', files: 1, left: [], gitignore: 'kept' })).not.toContain('Warning')
+})
+
+test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad names and values say why', () => {
+  expect(parseCommand('symcc-settings', '')).toEqual({ kind: 'settings' })
+  expect(parseCommand('symcc-settings', 'max_parallel 5')).toEqual({ kind: 'set', setting: 'max_parallel', input: { max_parallel: 5 } })
+  expect(parseCommand('symcc-settings', 'voice off')).toEqual({ kind: 'set', setting: 'voice', input: { voice: false } })
+  expect(parseCommand('symcc-settings', 'open_on_start on')).toEqual({ kind: 'set', setting: 'open_on_start', input: { open_on_start: true } })
+  expect(parseCommand('symcc-settings', 'mode review')).toEqual({ kind: 'set', setting: 'mode', input: { mode: 'review' } })
+  expect(parseCommand('symcc-settings', 'target_branch dev')).toEqual({ kind: 'set', setting: 'target_branch', input: { target_branch: 'dev' } })
+  expect(parseCommand('symcc-settings', 'test_commands "npm test"')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test'] } })
+  expect(parseCommand('symcc-settings', 'test_commands npm test && npm run lint')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test', 'npm run lint'] } })
+  expect(parseCommand('symcc-settings', 'test_commands none')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: [] } })
+  const bad = (args: string) => {
+    const c = parseCommand('symcc-settings', args)
+    return c?.kind === 'bad' ? c.message : ''
+  }
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, open_on_start, voice, mode')
+  expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
+  expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
+  expect(bad('voice maybe')).toBe('voice must be on or off')
+  expect(bad('mode later')).toBe('mode must be off, review or auto')
+  expect(bad('target_branch two words')).toContain('target_branch must be one')
+  expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
+})
+
+test('settings keep their limits, and a value cut to its limit says so', () => {
+  const b = emptyBoard()
+  const r = applySettings(b, { max_parallel: 12, max_minutes: 2, auto_retries: 4, voice: false, test_commands: [' npm test ', ''] })
+  expect(r.board.max_parallel).toBe(8)
+  expect(r.board.max_minutes).toBe(5)
+  expect(r.board.auto_retries).toBe(4)
+  expect(r.board.voice).toBe(false)
+  expect(r.board.test_commands).toEqual(['npm test'])
+  expect(b.max_parallel).toBe(3)
+  const by = Object.fromEntries(r.changes.map(c => [c.name, c]))
+  expect(settingSetText(by.max_parallel!)).toBe('max_parallel set to 8 (cut from 12 to the limit: max_parallel must be 1-8)')
+  expect(settingSetText(by.max_minutes!)).toBe('max_minutes set to 5 (cut from 2 to the limit: max_minutes must be 5-600)')
+  expect(settingSetText(by.auto_retries!)).toBe('auto_retries set to 4')
+  expect(settingSetText(by.voice!)).toBe('voice set to off')
+  expect(settingSetText(by.test_commands!)).toBe('test_commands set to npm test')
+  // the lead's wording keeps its text and gets the same note
+  expect(by.max_parallel!.said + by.max_parallel!.cut).toBe('up to 8 at once (cut from 12 to the limit: max_parallel must be 1-8)')
+  expect(applySettings(b, { auto_retries: -3 }).changes[0]!.cut).toContain('auto_retries must be 0-10')
+  expect(applySettings(b, { max_parallel: 5 }).changes[0]!.cut).toBe('')
+  expect(applySettings(b, { test_commands: ['a', 'b', 'c', 'd', 'e', 'f'] }).changes[0]!.cut).toContain('only the first 5 kept')
+  // wrong types are left alone
+  expect(applySettings(b, { max_parallel: 'x', voice: 'no' }).changes).toEqual([])
+})
+
+test('every setting has a row: value, default, range and meaning', () => {
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode'])
+  const b = { ...emptyBoard('main'), test_commands: ['npm test', 'npm run lint'], voice: false }
+  expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
+  expect(settingValue(b, 'voice')).toBe('off')
+  expect(settingValue(b, 'open_on_start')).toBe('on')
+  expect(settingValue(b, 'mode')).toBe('auto')
+  expect(settingValue({}, 'max_parallel')).toBe('3')
+  const text = settingsText(b, 'crew')
+  expect(text).toContain('max_parallel')
+  expect(text).toMatch(/max_parallel\s+3  \(default 3 · 1-8\) how many workers run at once/)
+  expect(text).toContain('/crew-settings max_parallel 5')
 })

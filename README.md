@@ -273,7 +273,7 @@ are in the **[guide](docs/guide.md)**.
 
 `/symcc` opens the board panel (it also opens by itself on a wide enough terminal). Keys:
 `a` approve, `x` reject or drop, `d` show changes, `p` pause, `u` resume, `r` retry, `m`
-switch review / auto. **Ctrl+T** shows running workers. More in the
+switch review / auto, `t` / `s` / `c` the Tasks, Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 [guide](docs/guide.md#live-status-seeing-the-board).
 
 ### Commands
@@ -282,7 +282,7 @@ switch review / auto. **Ctrl+T** shows running workers. More in the
 
 | Command | What it does |
 |---|---|
-| `/symcc` | Open the board panel (tasks and scouts) |
+| `/symcc` | Open the board panel (tasks, scouts and settings) |
 | `/symcc-tasks` | Open the panel on the tasks view |
 | `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-task T-3` | Open one task |
@@ -291,22 +291,28 @@ switch review / auto. **Ctrl+T** shows running workers. More in the
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
 | `/symcc-scout <name>` | Run a scout now |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
+| `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`, `/symcc-settings test_commands "npm test"` |
 | `/symcc-help [topic]` | The built-in manual |
 
 ### Settings
 
-Change any of these by telling the lead (e.g. "give workers 90 minutes").
+Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
+`/symcc-settings` opens the Settings tab (`c` in the panel): one row per setting; Enter
+on a row flips an on/off setting, opens a pick list for `mode` and `target_branch`, or an
+edit box for numbers and `test_commands`. `/symcc-settings max_parallel 5` sets one
+directly. A value over its limit is cut to it, and the answer says so (e.g.
+`max_parallel set to 8 (cut from 12 to the limit: max_parallel must be 1-8)`).
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `test_commands` | none | Shell commands that must pass before anything is merged |
-| `target_branch` | your branch | Where finished work is merged |
-| `max_parallel` | 3 | How many workers at once |
-| `max_minutes` | 45 | A worker running longer is stopped |
-| `auto_retries` | 2 | New tries after failing tests before a task is marked failed (0–10) |
-| `open_on_start` | on | Open the board panel when a session starts |
-| `voice` | on | Say "T-3 done" out loud when a task is merged (Mac) |
-| `mode` | `auto` | `off`, `review` or `auto` (see above) |
+| Setting | Default | Allowed | Meaning |
+|---|---|---|---|
+| `test_commands` | none | up to 5, joined with ` && ` | Shell commands that must pass before anything is merged |
+| `target_branch` | your branch | an existing local branch | Where finished work is merged |
+| `max_parallel` | 3 | 1–8 | How many workers at once |
+| `max_minutes` | 45 | 5–600 | A worker running longer is stopped |
+| `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
+| `open_on_start` | on | on / off | Open the board panel when a session starts |
+| `voice` | on | on / off | Say "T-3 done" out loud when a task is merged (Mac) |
+| `mode` | `auto` | `off` / `review` / `auto` | See above |
 
 ### Scouts and task statuses
 

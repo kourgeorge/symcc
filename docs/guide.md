@@ -120,7 +120,7 @@ This is where symcc keeps your branch safe. Step by step:
 
 ## Approval before merge
 
-The board has one mode, set with `/symcc-mode` or by telling the lead (the setting `mode`):
+The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by telling the lead (the setting `mode`):
 
 - **`off`**: every running worker and scout stops at once and nothing new starts. Tasks
   already in review can still be approved or rejected.
@@ -173,13 +173,23 @@ You can also do it yourself:
   close. An open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
-- The panel has two views, Tasks and Scouts, shown as tabs under the banner. Press `t` or
-  `s` (or click a tab) to switch. The Scouts view lists each scout: how often it runs, its
+- The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner.
+  Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout: how often it runs, its
   model, whether it is running or when it runs next, and when it last ran. Enter opens a
   scout: its file, its instructions, its last report, and buttons to run it now or see
   where to edit it. Esc goes back to the list.
+- The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
+  default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
+  `voice` flip on/off; `mode` and `target_branch` open a pick list (off / review / auto,
+  or your local branches); numbers and `test_commands` open an edit box (several test
+  commands are joined with ` && `). Esc cancels. Saving uses the same checks and limits as
+  telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
+  over its limit is cut to it and the toast says so.
+- Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`,
+  `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
+  or value says why, e.g. `max_parallel must be a whole number, 1-8`.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
-  `r` retry, `m` switch review / auto, `n` needs review, `t` / `s` switch views, `b` back.
+  `r` retry, `m` switch review / auto, `n` needs review, `t` / `s` / `c` switch views, `b` back.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a
   total, e.g. `total: 1h 12m · 1.2M tokens over 4 tries`.
