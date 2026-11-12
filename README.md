@@ -36,6 +36,13 @@ clear view of what was asked, what is done and what is still open.
 
 The bottleneck isn't how fast the agent writes code. It's keeping track of the work.
 
+**symcc changes how you work: from using one coding agent to leading a swarm of them.**
+Coding agents are now smart, like a team of capable people, so writing code is no longer
+the hard part. Organizing the work is. Without that, agents step on each other, work
+happens in the wrong order, and you lose track. symcc organizes the work and shows it to
+you on the board: the right worker (role) for each task, started at the right time, in
+the right order (a task can wait for another with `after`).
+
 ## What symcc does
 
 When you run a team, you need a lead who listens to you, takes notes, and organizes the
@@ -124,8 +131,9 @@ The flow is **discovery → triage → implementation → review → merge**.
 1. **Discovery.** You ask for something ("add a search command, and make the errors
    friendlier"), or a scout finds something on its timer (say, a missing test).
 2. **Triage.** The lead turns it into tasks on the board, e.g. T-1 the index, T-2 the
-   command (after T-1), T-3 the errors. It also sets the order (which tasks wait for
-   which) and the files each task may change, so work running in parallel doesn't collide.
+   command (after T-1), T-3 the errors. It decides the dependencies: which tasks must wait
+   for others, and which can run in parallel. It also sets the files each task may change,
+   so work running in parallel doesn't collide.
 3. **Implementation.** Workers start in parallel. Each task gets its own worktree, on its
    own branch (`symcc/T-1`).
 4. **Checks.** symcc runs the scope check and the test gate. If the tests fail, automatic
@@ -134,6 +142,24 @@ The flow is **discovery → triage → implementation → review → merge**.
    reject it with a reason.
 6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests and
    merges. The next tasks start, and the lead tells you each step.
+
+Here is what triage looks like in the chat:
+
+```
+you   add a search command, and make the errors friendlier
+
+lead  Three tasks:
+      T-1  the search index
+      T-2  the search command          after T-1 (it uses the index)
+      T-3  friendlier error messages   (different files, runs now)
+      T-1 and T-3 start now, in parallel. T-2 waits for T-1.
+```
+
+The lead decides this order itself. It sees which task needs another one first (T-2 uses
+T-1's index), and which tasks change different files and can run at the same time (T-1 and
+T-3). Tasks that would change the same files are put one after another, so they don't
+clash. A task starts only when every task in its `after` list is done (merged). You can
+change the order any time: "do T-3 first", "T-2 should wait for T-3".
 
 ---
 
