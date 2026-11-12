@@ -120,6 +120,10 @@ import {
   checkRole,
   roleOf,
   tryLabel,
+  commitMessage,
+  addCommits,
+  taskCommits,
+  commitText,
   roleSection,
   rolesLeadText,
   type RoleDef,
@@ -780,7 +784,7 @@ async function changedFiles($: $, target: string, t: SymccTask): Promise<DiffFil
 const changesText = ($: $, target: string, t: SymccTask, file = '') => gitDiff($, target, t, [], file)
 
 /** What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner. */
-type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean }
+type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string }
 
 /**
  * Commit the worker's changes, check scope, bring in the latest main, test, then move main forward.
@@ -788,12 +792,16 @@ type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput
  * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
  * review): the same checked merge, but the tests run again only if main had to be merged in.
  */
-async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish'): Promise<CheckResult> {
+async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = []): Promise<CheckResult> {
   const target = b.target_branch
   await git($, ['add', '-A', '--', '.'], dir)
-  await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'commit', '-q', '--no-verify', '-m', `${t.id}: ${t.title}`], dir)
+  const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
+  // The message ends with trailers (task, origin, why, try); see commitMessage.
+  const c = await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: N.name })], dir)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
+  // Nothing to commit is fine (exit 1, HEAD unchanged); only a new HEAD counts as a commit of this try.
+  if (c.exitCode === 0 && head !== before) made.push(head)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
   const changed = (await gitOk($, ['diff', '--name-only', '--no-renames', `${base}..${head}`])).split('\n').filter(Boolean)
   if (!changed.length) return { ok: false, detail: 'the worker made no change' }
@@ -801,12 +809,13 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'f
   if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
   let candidate = head
   if ((await git($, ['merge-base', '--is-ancestor', main, head])).exitCode !== 0) {
-    const m = await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'merge', '--no-edit', '-m', `${t.id}: bring up to date with ${target}`, main], dir)
+    const m = await git($, ['-c', `user.name=${N.author.name}`, '-c', `user.email=${N.author.email}`, 'merge', '--no-edit', '-m', commitMessage(t, { name: N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       return { ok: false, detail: `conflicts with the latest ${target}`, conflict: true }
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
+    made.push(candidate)
   }
   const testsRun = mode === 'finish' || candidate !== head
   for (const cmd of testsRun ? b.test_commands : []) {
@@ -828,7 +837,25 @@ async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'f
   if (cas.exitCode !== 0) return { ok: false, detail: `${target} moved during the merge; try again` }
   if (current === target) await git($, ['read-tree', '-m', '-u', main, candidate])
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
-  return { ok: true, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+  return { ok: true, merged: candidate, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+}
+
+/**
+ * Saves on the board the commits a try made (on its last run) and, once merged, the commit that
+ * landed on the target branch (`merged`). Read fresh inside the change, so no other write is lost.
+ * A failure to save is told to the lead, never hidden; the merge itself already happened.
+ */
+async function recordCommits($: $, id: string, made: readonly string[], merged?: string) {
+  if (!made.length && !merged) return
+  try {
+    await change($, x => {
+      const cur = find(x, id)
+      if (!cur) return x
+      return patchTask(x, id, { runs: addCommits(cur.runs, made), ...(merged ? { merged } : {}) }, now())
+    })
+  } catch (e) {
+    tellLead($, `${id}: could not save its commits on the board (${(e as Error).message.slice(0, 200)}). Commits: ${[...made, ...(merged ? [merged] : [])].join(', ')}`)
+  }
 }
 
 // ---------------- workers ----------------
@@ -995,7 +1022,9 @@ async function finishWork($: $, agentId: string, w: { task: string; worktree: st
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${N.name} ask.`)
   } else {
     await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
-    const r: CheckResult = await checkAndMerge($, t, w.worktree, b).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const made: string[] = []
+    const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    await recordCommits($, t.id, made, r.merged)
     await settle($, t, b, r, summary, w.worktree, agentId)
   }
 }
@@ -1054,7 +1083,9 @@ async function approve($: $, id: string): Promise<string> {
     const dir = worktreeDir(t.id)
     if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, b.target_branch)
     await change($, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: 'approved; checking and merging' }, now()) : x))
-    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve').catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const made: string[] = []
+    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
     if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing more done`
     if (!r.ok && !r.conflict && r.testOutput === undefined) {
@@ -1494,6 +1525,8 @@ function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string
   }
   if (t.history.length) L.push('', `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map(line => `  • ${line}`))
   if (t.runs?.length) L.push('', 'Time and cost:', ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`)
+  const commits = taskCommits(t)
+  if (commits.length) L.push('', 'Commits (newest first):', ...commits.map(c => `  ${commitText(c)}`))
   if (t.branch) L.push('', `branch: ${t.branch}`)
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
   return L.join('\n')

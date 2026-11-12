@@ -766,3 +766,14 @@ test('short "What to do" text is shown whole, with no hint', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /show all of what to do/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('the task page shows a Commits row: short ids, newest first, the merged one marked', async ($, on) => {
+  const a = '1'.repeat(40)
+  const b = '2'.repeat(40)
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Merged one', { attempts: 1, runs: [{ started: '', ended: '', commits: [a, b] }], merged: b })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L.some(l => /^Commits:\s+22222222 \(merged\), 11111111 \(try 1\)$/.test(l))).toBe(true)
+  expect((await ui.find({ type: 'Text', text: /^22222222$/ }))?.props.color).toBe('success')
+  await ui.unmount()
+})

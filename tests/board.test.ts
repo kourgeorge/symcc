@@ -1606,3 +1606,103 @@ test('a hand-broken task origin does not break the board or the task page', () =
   expect(fromText(ok)).toContain('add search')
   expect(fromText({ origin: { by: 'scout', scout: 9, why: 'w' } })).toBe('from: scout ?')
 })
+
+// ---------------- the commits of a task (T-85) ----------------
+import { commitMessage, originTag, trailerPrefix, oneLine, isSha, addCommits, cleanCommitFields, taskCommits, find, commitText, shortSha, WHY_TRAILER_CHARS } from '../hooks/board'
+
+const SHA1 = 'a'.repeat(40)
+const SHA2 = 'b'.repeat(40)
+const SHA3 = 'c'.repeat(40)
+
+test('a commit message keeps "T-x: title" first, then a blank line and the Symcc trailers', () => {
+  const [, t] = addTask(emptyBoard(), { title: 'Add search', origin: { by: 'owner', why: 'people cannot find things', request: 'add search' } }, T)
+  const msg = commitMessage({ ...t, attempts: 2 })
+  expect(msg).toBe('T-1: Add search\n\nSymcc-Task: T-1\nSymcc-From: owner\nSymcc-Why: people cannot find things\nSymcc-Try: 2\n')
+  const merge = commitMessage({ ...t, attempts: 2 }, { subject: 'T-1: bring up to date with main' })
+  expect(merge.split('\n')[0]).toBe('T-1: bring up to date with main')
+  expect(merge).toContain('Symcc-Try: 2')
+})
+
+test('commit message trailers survive odd characters: line breaks, control characters, long why', () => {
+  const t = { id: 'T-7', title: 'Fix\nthe\r\nthing\u0000 now', attempts: 1, origin: { by: 'lead', why: `line one\nSymcc-Task: T-999\n\n${'x'.repeat(500)}`, at: T } }
+  const msg = commitMessage(t)
+  const lines = msg.trimEnd().split('\n')
+  expect(lines[0]).toBe('T-7: Fix the thing now')
+  expect(lines[1]).toBe('')
+  // exactly four trailer lines, each "Key: value", none injected from the why
+  expect(lines.slice(2).length).toBe(4)
+  for (const l of lines.slice(2)) expect(l).toMatch(/^Symcc-(Task|From|Why|Try): \S/)
+  const why = lines.find(l => l.startsWith('Symcc-Why: '))!.slice('Symcc-Why: '.length)
+  expect(why.length).toBeLessThanOrEqual(WHY_TRAILER_CHARS)
+  expect(why.startsWith('line one Symcc-Task: T-999 xxx')).toBe(true)
+  expect(why.endsWith('…')).toBe(true)
+  expect(oneLine('a b\tc', 10)).toBe('a b c')
+})
+
+test('a commit message for a task with no (or a broken) origin says unknown and leaves out Why', () => {
+  for (const origin of [undefined, null, 'x', { by: 'alien', why: 'w' }]) {
+    const msg = commitMessage({ id: 'T-2', title: 'Old', attempts: 0, origin } as never)
+    expect(msg).toContain('Symcc-From: unknown')
+    expect(msg).not.toContain('Symcc-Why')
+    expect(msg).not.toContain('Symcc-Try') // no try number known
+  }
+})
+
+test('Symcc-From names the owner, a scout, a split, a worker report or the lead', () => {
+  expect(originTag({ origin: { by: 'owner', why: 'w' } })).toBe('owner')
+  expect(originTag({ origin: { by: 'scout', scout: 'bugs\nmore', why: 'w' } })).toBe('scout bugs more')
+  expect(originTag({ origin: { by: 'lead', task: 'T-12', how: 'split', why: 'w' } })).toBe('T-12 (split)')
+  expect(originTag({ origin: { by: 'worker', task: 'T-3', why: 'w' } })).toBe('T-3 (worker report)')
+  expect(originTag({ origin: { by: 'lead', why: 'w' } })).toBe('lead')
+  expect(originTag({})).toBe('unknown')
+  expect(trailerPrefix('symcc')).toBe('Symcc')
+  expect(trailerPrefix('my team!')).toBe('Myteam')
+  expect(trailerPrefix('')).toBe('Symcc')
+})
+
+test('run.commits and merged are saved on the task and kept through a board save and load', () => {
+  let [b, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
+  b = patchTask(b, t.id, { status: 'doing', attempts: 1, runs: startRun(undefined, T) }, T)
+  b = patchTask(b, t.id, { runs: addCommits(find(b, t.id)!.runs, [SHA1, SHA2, SHA1, 'not-a-sha']) }, T)
+  b = patchTask(b, t.id, { status: 'done', merged: SHA2 }, T)
+  const back = parseBoard(JSON.stringify(b)).tasks[0]!
+  expect(back.runs![0]!.commits).toEqual([SHA1, SHA2])
+  expect(back.merged).toBe(SHA2)
+  // a second try adds to its own run only
+  const runs = addCommits(startRun(back.runs, T), [SHA3])
+  expect(runs.map(r => r.commits)).toEqual([[SHA1, SHA2], [SHA3]])
+  expect(addCommits(undefined, [SHA1])).toEqual([])
+  expect(addCommits(back.runs, [])).toEqual(back.runs!)
+})
+
+test('old boards without commits still load, and broken commit fields are dropped, not fatal', () => {
+  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', question: null, order: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
+  const t = parseBoard(JSON.stringify(old)).tasks[0]!
+  expect(t.runs).toEqual([{ started: T, ended: T }])
+  expect('merged' in t).toBe(false)
+  expect(taskCommits(t)).toEqual([])
+  const broken = { ...old, tasks: [{ ...old.tasks[0], merged: 42, runs: [{ started: T, commits: 'abc' }, { started: T, commits: [SHA1, 7, 'zz'] }, null] }] }
+  const bt = parseBoard(JSON.stringify(broken)).tasks[0]!
+  expect('merged' in bt).toBe(false)
+  expect(bt.runs).toEqual([{ started: T }, { started: T, commits: [SHA1] }])
+  expect(() => detailRows(bt, { roles: [], all: [bt], when: s => s, nowMs: 0 })).not.toThrow()
+  expect(cleanCommitFields({ merged: SHA1 })).toEqual({ merged: SHA1 })
+  expect(isSha(SHA1)).toBe(true)
+  expect(isSha('A'.repeat(40))).toBe(false)
+  expect(isSha('a'.repeat(64))).toBe(true)
+})
+
+test('a task lists its commits newest first with the merged one marked', () => {
+  const t = { runs: [{ started: T, commits: [SHA1] }, { started: T, commits: [SHA2, SHA3] }], merged: SHA3 }
+  expect(taskCommits(t).map(commitText)).toEqual(['cccccccc (try 2, merged)', 'bbbbbbbb (try 2)', 'aaaaaaaa (try 1)'])
+  // merged but no try recorded it (e.g. a task from before tries were kept)
+  expect(taskCommits({ merged: SHA1 }).map(commitText)).toEqual(['aaaaaaaa (merged)'])
+  expect(shortSha(SHA1)).toBe('aaaaaaaa')
+  const [, base] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
+  const rows = detailRows({ ...base, ...t }, { roles: [], all: [], when: s => s, nowMs: 0 })
+  const row = rows.find(r => r.label === 'Commits')!
+  expect(row.segs.map(s => s.text).join('')).toBe('cccccccc (merged), bbbbbbbb (try 2), aaaaaaaa (try 1)')
+  expect(row.segs.find(s => s.text === 'cccccccc')!.color).toBe('success')
+  expect(rows.findIndex(r => r.label === 'Commits')).toBe(rows.findIndex(r => r.label === 'Tries') - 1)
+  expect(detailRows(base, { roles: [], all: [], when: s => s, nowMs: 0 }).some(r => r.label === 'Commits')).toBe(false)
+})

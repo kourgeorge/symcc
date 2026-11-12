@@ -17,6 +17,11 @@ export type SymccRun = {
   ended?: string
   tokens?: number
   cost?: number
+  /**
+   * The full SHAs of the commits symcc made for this try, oldest first: the task's own commit
+   * and, if main had moved, the "bring up to date with main" merge commit. Missing on old boards.
+   */
+  commits?: string[]
 }
 
 /**
@@ -71,6 +76,8 @@ export type SymccTask = {
   needs_review?: boolean
   /** one entry per worker try, oldest first */
   runs?: SymccRun[]
+  /** the full SHA that landed on the target branch when the task was merged; missing until then (and on old boards) */
+  merged?: string
   branch: string | null
   /** the agent id of the last worker started on this task */
   agent?: string
