@@ -232,9 +232,10 @@ When it is done, its whole report (up to 2000 characters) goes to the lead, whic
 tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message. The
 last report shows on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
 has examples to copy: [`bugs.md`](../examples/scouts/bugs.md),
-[`test-gaps.md`](../examples/scouts/test-gaps.md) and
+[`test-gaps.md`](../examples/scouts/test-gaps.md),
 [`deps.md`](../examples/scouts/deps.md), which checks the web for new versions and
-security notices.
+security notices, and [`secrets.md`](../examples/scouts/secrets.md), which looks for keys,
+tokens and passwords that are in git or could end up there.
 
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page lets you change how often it runs, its

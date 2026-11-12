@@ -255,7 +255,9 @@ terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ 
 3. **Set your tests:** tell the lead "set the test command to `npm test`".
    Without a test command, changes are merged without running tests.
 4. **Optional, a scout:** copy one from [`examples/scouts/`](examples/scouts/) into
-   `.symcc/scouts/`, or make one in the panel's Scouts view.
+   `.symcc/scouts/` ([`bugs.md`](examples/scouts/bugs.md),
+   [`test-gaps.md`](examples/scouts/test-gaps.md), [`deps.md`](examples/scouts/deps.md),
+   [`secrets.md`](examples/scouts/secrets.md)), or make one in the panel's Scouts view.
 5. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
 ---
