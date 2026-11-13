@@ -27,7 +27,7 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   }
   const prompt = fm.body.trim()
   if (!prompt) return null
-  const raw = (meta.every_minutes ?? meta.every ?? '').trim()
+  const raw = (meta.every_minutes ?? '').trim()
   const base = { name: meta.name || name, model: meta.model || undefined, prompt }
   // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
   if (!raw) return { ...base, every_minutes: 60 }
@@ -39,7 +39,7 @@ export function parseScout(name: string, text: string): ScoutDef | null {
 /**
  * A scout file's text from its front matter and body, as the panel's edit mode saves it.
  * `old` is the file as it was (or null for a new scout): every front matter line it has is kept
- * as it was, except every_minutes (an old "every" is replaced by it) and model (dropped when empty).
+ * as it was, except every_minutes and model (dropped when empty).
  */
 export function scoutText(old: string | null, set: { every_minutes: number; model?: string }, body: string): string {
   const lines: string[] = []
@@ -48,7 +48,7 @@ export function scoutText(old: string | null, set: { every_minutes: number; mode
   const model = (set.model ?? '').trim()
   for (const line of (old ? splitFrontMatter(old).lines : null) ?? []) {
     const key = frontMatterLine(line)?.key
-    if (key === 'every_minutes' || key === 'every') {
+    if (key === 'every_minutes') {
       if (!everyDone) lines.push(`every_minutes: ${set.every_minutes}`)
       everyDone = true
     } else if (key === 'model') {

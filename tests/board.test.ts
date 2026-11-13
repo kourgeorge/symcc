@@ -5,7 +5,7 @@ import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/boa
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -50,7 +50,6 @@ test('a scout file: front matter sets how often, the body is its instructions', 
 
 test('a scout file with every_minutes 0 runs only on demand; a bad value too, with a warning', () => {
   expect(parseScout('s', '---\nevery_minutes: 0\n---\nLook.\n')).toEqual({ name: 's', every_minutes: 0, model: undefined, prompt: 'Look.' })
-  expect(parseScout('s', '---\nevery: 0\n---\nLook.\n')?.every_minutes).toBe(0)
   for (const bad of ['-5', 'ten', '1.5']) {
     const s = parseScout('s', `---\nevery_minutes: ${bad}\n---\nLook.\n`)!
     expect(s.every_minutes).toBe(0)
@@ -353,16 +352,6 @@ test('a merged task is said out loud, several are joined into one line, and noti
   expect(notifyOf(parseBoard(JSON.stringify({ ...b, notify: 'off' })))).toBe('off')
   // a bad value is set back to the default (none saved)
   expect(parseBoard(JSON.stringify({ ...b, notify: 'loud' })).notify).toBeUndefined()
-})
-
-test('the old on/off voice setting becomes notify once, and is dropped', () => {
-  const old = (voice: boolean) => JSON.stringify({ version: 1, next_id: 1, tasks: [], voice })
-  expect(parseBoard(old(true)).notify).toBe('voice')
-  expect(parseBoard(old(false)).notify).toBe('off')
-  expect('voice' in parseBoard(old(true))).toBe(false)
-  expect(JSON.stringify(parseBoard(old(false)))).not.toContain('"voice"')
-  // a board that already has notify keeps it
-  expect(parseBoard(JSON.stringify({ version: 1, tasks: [], voice: true, notify: 'sound' })).notify).toBe('sound')
 })
 
 test("a notify choice this machine can't play is refused with the reason, and a saved one is told once", () => {
@@ -719,7 +708,7 @@ test('statusCounts names only statuses that have tasks, in the order given', asy
 })
 
 test('a scout file is written from its front matter and body, keeping the other keys', async () => {
-  const old = '---\nname: Bugs finder\nevery: 30\nmodel: sonnet\ncolor: "blue"\n---\nOld text.\n'
+  const old = '---\nname: Bugs finder\nevery_minutes: 30\nmodel: sonnet\ncolor: "blue"\n---\nOld text.\n'
   const text = scoutText(old, { every_minutes: 15, model: 'opus' }, '  Look for crashes.\nAnd leaks.\n')
   expect(text).toBe('---\nname: Bugs finder\nevery_minutes: 15\nmodel: opus\ncolor: "blue"\n---\n\nLook for crashes.\nAnd leaks.\n')
   // round-trips through the scout parser
@@ -1162,18 +1151,6 @@ test('the board text lists open tasks first, then the backlog, then done ones; t
   expect(STATUS_WORD.backlog).toBe('backlog')
 })
 
-test('old boards without backlog still parse', async () => {
-  const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
-    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
-    { id: 'T-2', title: 'B', details: 'B', files: [], status: 'done', note: '', question: null, order: 2, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T },
-  ] }
-  const b = parseBoard(JSON.stringify(old))
-  expect(b.tasks.map(t => t.status)).toEqual(['todo', 'done'])
-  expect(ready(b).map(t => t.id)).toEqual(['T-1'])
-  const [b2, t] = addTask(b, { origin: W, title: 'C', backlog: true }, T)
-  expect(parseBoard(JSON.stringify(b2)).tasks.find(x => x.id === t.id)!.status).toBe('backlog')
-})
-
 test('the backlog header and "… N more" line, and the banner says "N in backlog"', () => {
   expect(backlogHeader(2)).toBe('▸ Backlog (2)')
   expect(backlogHeader(2, true)).toBe('▾ Backlog (2)')
@@ -1377,7 +1354,6 @@ test('the role mark: the role name, nothing for general; the open task\'s role l
 test('the built-in roles are general, docs, refactor, researcher, security and tester', async () => {
   expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'researcher', 'security', 'tester'])
   for (const old of ['tests', 'backend', 'frontend']) expect(BUILT_IN_ROLES).not.toContain(old)
-  expect(Object.values(OLD_ROLES).every(r => BUILT_IN_ROLES.includes(r))).toBe(true)
 })
 
 /** A copy of roles/researcher.md (tests can't read the plugin's files); keep the two the same. */
@@ -1442,30 +1418,20 @@ test('the worker prompt for a role with web tools has the web safety line; other
   expect(roleSection(parseRole('tester', '---\ndescription: tests\n---\nT')!)).not.toContain(WEB_SAFETY_LINE)
 })
 
-test('a task with an old role keeps its name until it starts; then tests runs as tester, backend and frontend as general', async () => {
-  const built = ['general', 'docs', 'refactor', 'security', 'tester'].map(n => parseRole(n, '---\ndescription: d\n---\n')!)
-  expect(OLD_ROLES).toEqual({ tests: 'tester', backend: 'general', frontend: 'general' })
-  expect(roleMark({ role: 'frontend' })).toBe('frontend')
-  expect(roleLine({ role: 'backend' }, built)).toBe('Role: backend')
-  expect(oldRoleSwap({ role: 'tests' }, built)).toEqual({ role: 'tester', line: 'role tests is no longer built in; runs as tester' })
-  expect(oldRoleSwap({ role: 'backend' }, built)).toEqual({ role: 'general', line: 'role backend is no longer built in; runs as general' })
-  expect(oldRoleSwap({ role: 'frontend' }, built)?.role).toBe('general')
-  expect(oldRoleSwap({ role: 'tester' }, built)).toBe(null)
-  expect(oldRoleSwap({}, built)).toBe(null)
-  // A started task gets the new role and a history line; general is stored as no role.
-  const [b0, t] = addTask(emptyBoard(), { origin: W, title: 'Old', role: 'frontend' }, '2026-01-01T00:00:00Z')
-  const swap = oldRoleSwap(t, built)!
-  const b1 = patchTask(b0, t.id, { status: 'doing', role: swap.role, history: [...t.history, swap.line] }, '2026-01-01T00:01:00Z')
-  expect(b1.tasks.find(x => x.id === t.id)?.role).toBeUndefined()
-  expect(b1.tasks.find(x => x.id === t.id)?.history.at(-1)).toBe('role frontend is no longer built in; runs as general')
+test('a board with old roles is migrated once: tests becomes tester, backend and frontend general', () => {
+  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
+  const r = readBoard(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
+  expect(r.board.tasks.map(t => t.role)).toEqual(['tester', 'general', 'general', 'docs', undefined])
+  expect(r.migrated).toBe(3)
+  // saved and read again, nothing more changes
+  expect(readBoard(boardText(r.board)).migrated).toBe(0)
 })
 
-test('a project role file still adds or overrides a role, also bringing an old one back', async () => {
+test('a project role file still adds or overrides a role', async () => {
   const built = ['general', 'tester'].map(n => parseRole(n, '---\ndescription: built in\n---\n')!)
   const all = mergeRoles(built, [parseRole('frontend', '---\ndescription: our web pages\n---\nF')!, parseRole('tester', '---\ndescription: our tests\n---\nT')!])
   expect(all.map(r => r.name)).toEqual(['general', 'frontend', 'tester'])
   expect(findRole(all, 'tester')?.prompt).toBe('T')
-  expect(oldRoleSwap({ role: 'frontend' }, all)).toBe(null)
   expect(checkRole(all, 'frontend')).toBe('frontend')
 })
 
@@ -1699,21 +1665,18 @@ test('a task without a why, or with a wrong origin, is refused with a clear erro
   expect(makeOrigin({ why: 'y', scout: 'docs' }, T).by).toBe('scout')
 })
 
-test('old boards whose tasks have no origin still load, and show "unknown"', () => {
+test('a board whose tasks have no origin is migrated once: the lead made them before origins were kept', () => {
   const old = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
     { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
   ] }
-  const b = parseBoard(JSON.stringify(old))
-  expect(b.tasks[0]!.origin).toBeUndefined()
-  expect(fromText(b.tasks[0]!)).toBe('from: unknown')
-  expect(originWho(b.tasks[0]!)).toBe('unknown')
+  const r = readBoard(JSON.stringify(old))
+  expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
+  expect(r.migrated).toBe(1)
+  expect(fromText(r.board.tasks[0]!)).toBe('from: lead')
+  expect(readBoard(boardText(r.board)).migrated).toBe(0)
+  // a broken (hand-edited) origin is not usable: "unknown", and nothing breaks
   expect(fromText({ origin: { by: 'nobody' } })).toBe('from: unknown')
-  expect(boardText(b)).toContain('from: unknown')
-  // a change on an old task does not invent an origin
-  expect(patchTask(b, 'T-1', { title: 'B' }, T).tasks[0]!.origin).toBeUndefined()
-  const [b2, t] = addTask(b, { title: 'C', after: ['T-1'], origin: { from: 'x', why: 'follow up', task: 'T-1', how: 'follow-up' } as never }, T)
-  expect(t.origin?.task).toBe('T-1')
-  expect(b2.tasks.length).toBe(2)
+  expect(originWho({ origin: null })).toBe('unknown')
 })
 
 test('the "from:" text is short: the owner\'s words, the scout, or the task it came from', () => {
@@ -1875,16 +1838,16 @@ test('run.commits and merged are saved on the task and kept through a board save
   expect(addCommits(back.runs, [])).toEqual(back.runs!)
 })
 
-test('old boards without commits still load, and broken commit fields are dropped, not fatal', () => {
+test('broken commit fields are dropped, not fatal', () => {
   const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', question: null, order: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
   const t = parseBoard(JSON.stringify(old)).tasks[0]!
   expect(t.runs).toEqual([{ started: T, ended: T }])
   expect('merged' in t).toBe(false)
   expect(taskCommits(t)).toEqual([])
-  const broken = { ...old, tasks: [{ ...old.tasks[0], merged: 42, runs: [{ started: T, commits: 'abc' }, { started: T, commits: [SHA1, 7, 'zz'] }, null] }] }
+  const broken = { ...old, tasks: [{ ...old.tasks[0], merged: 42, runs: [{ started: T, ended: T, commits: 'abc' }, { started: T, ended: T, commits: [SHA1, 7, 'zz'] }, null] }] }
   const bt = parseBoard(JSON.stringify(broken)).tasks[0]!
   expect('merged' in bt).toBe(false)
-  expect(bt.runs).toEqual([{ started: T }, { started: T, commits: [SHA1] }])
+  expect(bt.runs).toEqual([{ started: T, ended: T }, { started: T, ended: T, commits: [SHA1] }])
   expect(() => detailRows(bt, { roles: [], all: [bt], when: s => s, nowMs: 0 })).not.toThrow()
   expect(cleanCommitFields({ merged: SHA1 })).toEqual({ merged: SHA1 })
   expect(isSha(SHA1)).toBe(true)
@@ -1909,7 +1872,7 @@ test('a task lists its commits newest first with the merged one marked', () => {
 
 import { symccOn, setEnabled, offAnswer, offStatusLine } from '../hooks/board'
 
-test('symcc is on for old boards and new ones, and off only when the board says so', () => {
+test('symcc is on for a board without the setting and new ones, and off only when the board says so', () => {
   expect(symccOn(parseBoard(JSON.stringify({ tasks: [] })))).toBe(true)
   expect(symccOn(parseBoard(null))).toBe(true)
   expect(symccOn(emptyBoard())).toBe(true)

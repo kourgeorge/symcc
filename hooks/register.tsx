@@ -13,7 +13,6 @@
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
 import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, isWorkerType } from './board'
-import { dataDir } from './name'
 import { findArchived } from './plugin/archive'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
@@ -21,7 +20,7 @@ import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
 import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScoutEdit } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
-import { path, load, isOn, now } from './plugin/store'
+import { path, load, isOn, now, saveMigrated } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
 import { noteForLead, brief } from './plugin/tell'
 import { playable } from './plugin/voice'
@@ -87,11 +86,10 @@ export const register: Register = on => {
     // Even if a later step throws, pump must not stay blocked for the whole session.
     try {
       S.root = (await $.session.repo())?.root ?? (await $.session.root())
-      // After a rename the old board stays in the old folder: say so once, never move it.
-      if (S.N.dir !== dataDir() && !(await $.fs.exists(path(S.N.dir))) && (await $.fs.exists(path(dataDir()))))
-        $.ui.toast(S.N.toast(`the old board is in ${dataDir()}/; move it to ${S.N.dir}/ to keep it`))
       S.home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
       S.me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
+      // An older board is saved once in the current shape (before anything else saves it), with a copy as it was.
+      await saveMigrated($).catch(() => undefined)
       // Become the driver if nobody drives the board. As the driver, old workers still running
       // from before a reload are stopped first and their tasks go back to "todo".
       await claimLead($, true).catch(() => (S.driving = false))

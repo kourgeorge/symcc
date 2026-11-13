@@ -44,7 +44,7 @@ export function makeOrigin(o: OriginInput | undefined, now: string, b?: Board): 
   }
 }
 
-/** A task's origin if it has a usable one (old boards have none; a hand-edited one may be broken). */
+/** A task's origin if it has a usable one (a hand-edited one may be broken or missing). */
 export const originOf = (t: { origin?: unknown }): SymccOrigin | undefined => {
   const o = t.origin as Record<string, unknown> | null | undefined
   if (!o || typeof o !== 'object' || Array.isArray(o) || !(ORIGIN_BY as readonly unknown[]).includes(o.by)) return undefined
@@ -62,7 +62,7 @@ export const originOf = (t: { origin?: unknown }): SymccOrigin | undefined => {
   }
 }
 
-/** Who made a task, in words: "the owner", "scout bugs", "the worker of T-3", "the lead"; "unknown" without an origin. */
+/** Who made a task, in words: "the owner", "scout bugs", "the worker of T-3", "the lead"; "unknown" without a usable origin. */
 export function originWho(t: { origin?: unknown }): string {
   const o = originOf(t)
   if (!o) return 'unknown'
@@ -77,7 +77,7 @@ export const createdLine = (o: SymccOrigin) => `created by ${originWho({ origin:
 
 /**
  * The short "from:" text for the board and the task detail, e.g. 'from: owner — “add a search command…”',
- * 'from: scout bugs', 'from: T-12 (split)'; 'from: unknown' for a task made before origins were kept.
+ * 'from: scout bugs', 'from: T-12 (split)'; 'from: unknown' when its origin is missing or broken (hand-edited).
  */
 export function fromText(t: { origin?: unknown }, quote = 60): string {
   const o = originOf(t)

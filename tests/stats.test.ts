@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, failReason, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures } from '../hooks/board'
+import { addScoutRun, failReason, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
@@ -97,13 +97,20 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(text).toContain("time waiting for you can't be read reliably")
 })
 
-test('stats: a try left with no end time counts up to the next try, or the task last change, not up to now', () => {
+test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
   const t = task('T-1', { updated_at: iso(50), runs: [{ started: iso(60) }, { started: iso(58), ended: iso(55), tokens: 10 }, { started: iso(54) }] })
+  const read = (x: typeof t) => readBoard(JSON.stringify({ version: 1, tasks: [x] }))
+  const r = read(t)
+  expect(r.migrated).toBe(1)
   // 2m (to the next try) + 3m + 4m (to the last change), not 54 minutes up to now
-  expect(taskFigures(t, NOW).ms).toBe(9 * 60_000)
-  expect(statsReport({ tasks: [t], nowMs: NOW })).toContain('2 tries with no end time')
-  // a running task's last try counts up to now
-  expect(taskFigures({ ...t, status: 'doing' }, NOW).ms).toBe((2 + 3 + 54) * 60_000)
+  expect(r.board.tasks[0]!.runs!.map(x => x.ended)).toEqual([iso(58), iso(55), iso(50)])
+  expect(taskFigures(r.board.tasks[0]!, NOW).ms).toBe(9 * 60_000)
+  expect(boardTotal(r.board, NOW).ms).toBe(9 * 60_000)
+  expect(statsReport({ tasks: r.board.tasks, nowMs: NOW })).not.toContain('no end time')
+  // a running task's last try is left open and counts up to now
+  const doing = read({ ...t, status: 'doing' }).board.tasks[0]!
+  expect(doing.runs!.at(-1)!.ended).toBeUndefined()
+  expect(taskFigures(doing, NOW).ms).toBe((2 + 3 + 54) * 60_000)
 })
 
 /** One assistant line of a Claude Code session log, with only what leadCalls reads (plus a content block it must ignore). */

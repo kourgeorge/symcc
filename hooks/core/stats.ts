@@ -1,7 +1,7 @@
 // /<name>-stats and the lead's stats tool: time and token figures built only from what the board
 // already keeps (tasks, their tries in runs[], their history), plus the archived tasks.
 // Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in.
-import type { SymccRun, SymccStatus, SymccTask } from '../../types'
+import type { SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
@@ -67,31 +67,11 @@ export function median(xs: number[]): number | undefined {
 
 // ---------------- one task ----------------
 
-/**
- * A task's tries with an end time each. Older boards have tries that never got one (left open by a
- * reload); counting those up to now would add hours. Such a try ends where the next try started,
- * or, for the last try, at `nowMs` while the task is "doing", else at the task's last change.
- * `open` counts how many were filled in.
- */
-export function endedRuns(t: Pick<SymccTask, 'runs'> & Partial<Pick<SymccTask, 'status' | 'updated_at'>>, nowMs?: number): { runs: SymccRun[]; open: number } {
-  const rs = t.runs ?? []
-  let open = 0
-  const runs = rs.map((r, i) => {
-    if (r.ended) return r
-    const next = rs[i + 1]?.started
-    const end = next ?? (t.status === 'doing' && nowMs !== undefined ? new Date(nowMs).toISOString() : t.updated_at)
-    if (!next && t.status === 'doing') return { ...r, ...(end ? { ended: end } : {}) }
-    open++
-    return end && Date.parse(end) >= Date.parse(r.started) ? { ...r, ended: end } : { ...r, ended: r.started }
-  })
-  return { runs, open }
-}
-
 /** One task's figures: worker time (ms), tokens (when any try reports them), tries, and whether it has try data at all. */
 export type TaskFigures = { ms: number; tokens?: number; tries: number; hasData: boolean }
 
-export function taskFigures(t: Pick<SymccTask, 'runs'> & Partial<Pick<SymccTask, 'status' | 'updated_at'>>, nowMs?: number): TaskFigures {
-  const runs = endedRuns(t, nowMs).runs
+export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFigures {
+  const runs = t.runs ?? []
   const tok = runs.filter(r => typeof r.tokens === 'number')
   return { ms: runs.reduce((s, r) => s + runMs(r, nowMs), 0), tries: runs.length, hasData: runs.length > 0, ...(tok.length ? { tokens: tok.reduce((s, r) => s + r.tokens!, 0) } : {}) }
 }
@@ -120,7 +100,7 @@ export function mergedHow(t: Pick<SymccTask, 'history'>): 'own' | 'approved' | n
   return merged.some(l => /approved by the owner/.test(l)) ? 'approved' : 'own'
 }
 
-/** Who a task came from, as one word: "owner", "scout bugs", "worker", "lead", or "unknown" (made before it was kept). */
+/** Who a task came from, as one word: "owner", "scout bugs", "worker", "lead", or "unknown" (no usable origin). */
 export function originKey(t: Pick<SymccTask, 'origin'>): string {
   const o = t.origin
   if (!o?.by) return 'unknown'
@@ -176,9 +156,7 @@ export function statsReport(input: StatsInput): string {
   const F = (t: SymccTask) => fig.get(t.id)!
   const withData = all.filter(t => F(t).hasData)
   const noData = all.length - withData.length
-  if (noData) out.push(`${plural(noData, 'task')} with no try data (older tasks) ${noData === 1 ? 'is' : 'are'} left out of averages.`)
-  const open = withData.reduce((s, t) => s + endedRuns(t, nowMs).open, 0)
-  if (open) out.push(`${plural(open, 'try', 'tries')} with no end time (older boards) count up to the next try, or the task's last change.`)
+  if (noData) out.push(`${plural(noData, 'task')} with no try data ${noData === 1 ? 'is' : 'are'} left out of averages.`)
 
   // 1. Totals
   const counts = STATUS_ORDER.map(s => [s, all.filter(t => t.status === s).length] as const).filter(([, n]) => n)
@@ -220,7 +198,7 @@ export function statsReport(input: StatsInput): string {
   } else out.push('  no done tasks with data')
 
   // 3. Per try
-  const runs = withData.flatMap(t => endedRuns(t, nowMs).runs)
+  const runs = withData.flatMap(t => t.runs ?? [])
   const runTok = runs.filter(r => typeof r.tokens === 'number').map(r => r.tokens!)
   const first = done.filter(t => F(t).tries === 1).length
   out.push('', `3. Per try (${plural(runs.length, 'try', 'tries')})`)

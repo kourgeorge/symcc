@@ -119,7 +119,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   Fields: title, details (what to do and how we know it works), files (what the worker
   may change; empty = anywhere), after (tasks that must be done first), order (lower
   runs first), role (the worker role: ${BUILT_IN_ROLES.join(', ')},
-  or one in .${S.N.name}/roles/; old tasks with role tests start as tester, backend or frontend as general; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed.
+  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed.
   Statuses:
     to do            waiting for a free worker (and for its "after" tasks)
     doing            a worker is on it
