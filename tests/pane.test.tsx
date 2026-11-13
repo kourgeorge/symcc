@@ -999,9 +999,9 @@ test('a task in review on a narrow or wide panel shows every key and every butto
     expect(lines.join(' · ')).toBe('a approve · x reject · d show changes · ↑↓ scroll · b back')
     if (w === 30) expect(lines).toEqual(['a approve · x reject', 'd show changes · ↑↓ scroll', 'b back'])
     if (w === 80) expect(lines).toEqual(['a approve · x reject · d show changes · ↑↓ scroll · b back'])
-    // the keys are bold, the words subtle
+    // the keys are bold, the words in the inactive color
     expect((await ui.find({ type: 'Text', text: /^a$/ }))?.props.bold).toBe(true)
-    expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('subtle')
+    expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('inactive')
     // every action button is there, in the same order as before
     const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key))
     expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review'])
