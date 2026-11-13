@@ -169,6 +169,42 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
 /** Tasks dropped, paused or sent to the owner while their work was being checked: task id → what happened. */
 export const stopAsked = new Map<string, string>()
 
+/** Tasks whose check was stopped because symcc or the board was turned off: task id → why (e.g. "symcc was turned off"). */
+export const offAsked = new Map<string, string>()
+
+/**
+ * Symcc or the board was turned off (`why`): every check and merge running now stops before the
+ * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
+ * stays in review. Tasks already stopped another way are left alone. Returns the ids of both kinds.
+ */
+export async function stopChecks($: $, why: string): Promise<{ back: string[]; review: string[] }> {
+  const back: string[] = []
+  const review: string[] = []
+  for (const id of [...finishing, ...approving]) {
+    if (stopAsked.has(id) || back.includes(id) || review.includes(id)) continue
+    const kind = await change($, x => {
+      const cur = find(x, id)
+      if (cur?.status === 'review' && approving.has(id)) return [x, 'review'] as [Board, string]
+      if (cur?.status !== 'doing' || !finishing.has(id)) return [x, null] as [Board, null]
+      const y = patchTask(x, id, { status: 'todo', note: `stopped: ${why} while its work was being checked; nothing merged, continues when it is on again`, history: [...cur.history, stoppedLine(cur, `${why} while its work was being checked; nothing merged, its files are kept`)] }, now())
+      return [y, 'back'] as [Board, string]
+    })
+    if (!kind) continue
+    stopAsked.set(id, `stopped because ${why}`)
+    offAsked.set(id, why)
+    ;(kind === 'back' ? back : review).push(id)
+  }
+  return { back, review }
+}
+
+/** The part of an off reply that names the checks it stopped (empty when there were none). */
+export function stoppedChecksText(s: { back: string[]; review: string[] }): string {
+  const out: string[] = []
+  if (s.back.length) out.push(`${s.back.join(', ')} ${s.back.length === 1 ? 'was' : 'were'} being tested and merged and went back to todo`)
+  if (s.review.length) out.push(`${s.review.join(', ')} ${s.review.length === 1 ? 'was' : 'were'} already merging and stayed in review`)
+  return out.length ? `${out.join('; ')} (if a merge had already happened, that task is done)` : ''
+}
+
 /** Whether task `id`'s finished work is being checked and merged right now. */
 export const checkingNow = (id: string) => finishing.has(id) || approving.has(id)
 
@@ -183,6 +219,7 @@ export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a momen
 
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
 export async function endCheck($: $, id: string) {
+  offAsked.delete(id)
   if (!stopAsked.has(id)) return
   stopAsked.delete(id)
   try {
@@ -213,17 +250,25 @@ async function writeIfSame($: $, t: SymccTask, patch: (cur: SymccTask) => Partia
  */
 async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
   const merged = r.ok && !r.review && !!r.merged
+  const off = offAsked.get(t.id)
   const was = await change($, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, null] as [Board, null]
+    const late = off ? `${off} while it was being merged, too late` : `it was ${cur.status} while being merged, too late`
     const y = merged
-      ? patchTask(x, t.id, { status: 'done', note: `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, ...(r.notes?.length ? { research_notes: r.notes } : {}), history: [...cur.history, line, `${tryLabel(t)}: it was ${cur.status} while being merged, too late: the work was already merged, so it stays done`] }, now())
-      : patchTask(x, t.id, { history: [...cur.history, `${line} (not used: the task was ${cur.status} meanwhile)`] }, now())
+      ? patchTask(x, t.id, { status: 'done', note: off ? `merged; ${off} too late to stop it` : `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, ...(r.notes?.length ? { research_notes: r.notes } : {}), history: [...cur.history, line, `${tryLabel(t)}: ${late}: the work was already merged, so it stays done`] }, now())
+      : patchTask(x, t.id, { history: [...cur.history, `${line} (not used: ${off ?? `the task was ${cur.status} meanwhile`})`] }, now())
     return [y, cur.status] as [Board, string]
   })
   if (!was) return
   if (!merged) {
-    tellLead($, `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
+    tellLead($, off ? `${t.id} "${t.title}" was stopped while its work was being checked (${off}); nothing was merged and it is ${was} again, its files kept.` : `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
+    return
+  }
+  if (off) {
+    sayDone($, b, t.id)
+    if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+    tellLead($, `✓ ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`)
     return
   }
   sayDone($, b, t.id)
@@ -378,9 +423,25 @@ export async function approve($: $, id: string): Promise<string> {
         return `${t.id} was merged into ${b.target_branch} (${sha}), but it is no longer on the board`
       }
       await settle($, t, b, r, 'approved by the owner', dir)
+      const off = offAsked.get(t.id)
+      if (off && cur.status === 'review') {
+        await change($, x => {
+          const c = find(x, t.id)
+          return c?.status === 'done' ? patchTask(x, t.id, { history: [...c.history, `${tryLabel(t)}: ${off} while it was being merged, too late: the work was already merged, so it stays done`] }, now()) : x
+        })
+        return `${t.id} was merged into ${b.target_branch} (${sha}) before ${off}; it is done`
+      }
       return cur.status === 'review' ? `${t.id} approved and merged: ${r.detail}` : `${t.id} was merged into ${b.target_branch} (${sha}) before it was ${cur.status}; it is done`
     }
     if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing was merged`
+    const off = offAsked.get(t.id)
+    if (off) {
+      await change($, x => {
+        const c = find(x, t.id)
+        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${off} first; approve it again`, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged: ${off} while it was being merged; it stays in review`] }, now()) : x
+      })
+      return `${t.id} was not merged and stays in review: ${off} while it was being merged. Approve it again.`
+    }
     if (retest && r.testOutput !== undefined) {
       // The owner's edits fail the tests: it stays in review with the output, not sent to a worker.
       const folder = `${S.N.dir}/worktrees/${t.id}`
@@ -457,6 +518,8 @@ export async function setBoardMode($: $, m: SymccMode, who: string): Promise<str
       })
     })
     if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
+    const checks = stoppedChecksText(await stopChecks($, 'the board was turned off'))
+    if (checks) extra.push(checks)
     await publish($, await load($))
   } else {
     const inReview = b.tasks.filter(t => t.status === 'review').length
@@ -486,12 +549,13 @@ export async function setSymcc($: $, on: boolean): Promise<string> {
       ids.push(w.task)
       await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was turned off; continues when it is on again` }, now()))
     })
+    const checks = stoppedChecksText(await stopChecks($, `${S.N.name} was turned off`))
     leadQueue.splice(0)
     S.leadTimer?.cancel()
     S.leadTimer = null
     sayQueue.splice(0)
     await publish($, await load($))
-    const stopped = ids.length ? ` Stopped ${ids.join(', ')}.` : ''
+    const stopped = `${ids.length ? ` Stopped ${ids.join(', ')}.` : ''}${checks ? ` ${checks[0]!.toUpperCase()}${checks.slice(1)}.` : ''}`
     return `${S.N.name} is ${before ? 'now ' : ''}off: Claude works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${S.N.name}-on.`
   }
   await publish($, b)

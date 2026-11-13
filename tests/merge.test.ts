@@ -5,7 +5,7 @@ import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue } from '../hooks/plugin/state'
 import { saidNeedsYou } from '../hooks/plugin/voice'
-import { workerFinished } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 
@@ -774,6 +774,69 @@ test('a drop seen only after the merge keeps the task done, with a line saying t
   expect(t.status).toBe('done')
   expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
   expect(t.history.at(-1)).toBe('try 1: it was dropped while being merged, too late: the work was already merged, so it stays done')
+})
+
+// ---------------- symcc or the board turned off while a task is being checked ----------------
+
+/** Turns symcc off and gives back its reply; symcc is on again for the next test. */
+async function turnOff(w: ReturnType<typeof world>) {
+  try {
+    return await setSymcc(w.$, false)
+  } finally {
+    S.enabledNow = true
+  }
+}
+
+test('symcc turned off while a finished task\'s tests run: not merged, back to todo, files kept', async () => {
+  const { w, said, t } = await finishing(turnOff)
+  expect(String(said[0])).toMatch(/T-1 was being tested and merged and went back to todo/)
+  expect(movedMain(w)).toBe(false)
+  expect(w.git.main).toBe(M1)
+  expect(t.status).toBe('todo')
+  expect(t.note).toMatch(/symcc was turned off/)
+  expect(t.history).toContain('try 1: stopped: symcc was turned off while its work was being checked; nothing merged, its files are kept')
+  expect(t.history.at(-1)).toMatch(/\(not used: symcc was turned off\)$/)
+  expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
+})
+
+test('the board turned off while a finished task\'s tests run: not merged, back to todo', async () => {
+  const { w, said, t } = await finishing(w => setBoardMode(w.$, 'off', 'you'))
+  expect(String(said[0])).toMatch(/T-1 was being tested and merged and went back to todo/)
+  expect(w.git.main).toBe(M1)
+  expect(t.status).toBe('todo')
+  expect(t.history).toContain('try 1: stopped: the board was turned off while its work was being checked; nothing merged, its files are kept')
+})
+
+test('symcc turned off during an approve: not merged, stays in review', async () => {
+  const { w, out, said, t } = await approving(turnOff, /git merge-base/)
+  expect(String(said[0])).toMatch(/T-1 was already merging and stayed in review/)
+  expect(movedMain(w)).toBe(false)
+  expect(w.git.main).toBe(M1)
+  expect(out).toBe('T-1 was not merged and stays in review: symcc was turned off while it was being merged. Approve it again.')
+  expect(t.status).toBe('review')
+  expect(t.history.at(-1)).toBe('try 1: approved by the owner → not merged: symcc was turned off while it was being merged; it stays in review')
+})
+
+test('the board turned off during an approve: not merged, stays in review', async () => {
+  const { w, said, t } = await approving(w => setBoardMode(w.$, 'off', 'you'), /git merge-base/)
+  expect(String(said[0])).toMatch(/T-1 was already merging and stayed in review/)
+  expect(w.git.main).toBe(M1)
+  expect(t.status).toBe('review')
+})
+
+test('symcc turned off only after the merge keeps the task done, with a line saying the off came too late', async () => {
+  const { w, t } = await finishing(turnOff, {}, /git update-ref/)
+  expect(w.git.main).toBe(H1)
+  expect(t.status).toBe('done')
+  expect(t.history.at(-1)).toBe('try 1: symcc was turned off while it was being merged, too late: the work was already merged, so it stays done')
+})
+
+test('the board turned off only after an approve\'s merge keeps the task done, with a "too late" line', async () => {
+  const { w, out, t } = await approving(w => setBoardMode(w.$, 'off', 'you'))
+  expect(w.git.main).toBe(H1)
+  expect(out).toBe(`T-1 was merged into main (${H1.slice(0, 8)}) before the board was turned off; it is done`)
+  expect(t.status).toBe('done')
+  expect(t.history.at(-1)).toBe('try 1: the board was turned off while it was being merged, too late: the work was already merged, so it stays done')
 })
 
 // ---------------- retry and ask on dropped, done and clashed tasks ----------------
