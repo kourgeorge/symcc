@@ -1464,3 +1464,26 @@ for (const [name, seed, press, hints] of NO_MODE_PAGES)
     expect(await ui.find({ type: 'Text', text: /review merge/ })).toBeUndefined()
     await ui.unmount()
   })
+
+test('the banner text is in the unselected tabs\' color, not bold; warnings keep the warning color', async ($, on) => {
+  const tasks = [task('T-1', 'doing', 'One'), task('T-2', 'todo', 'Two')]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'review', max_parallel: 3, test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const re of [/^this session drives$|^driven by another session$/, /^3 at once$/, /^1 doing$/, /workers · \d+ scouts?/]) {
+    const t = await ui.find({ type: 'Text', text: re })
+    expect(t?.props.color).toBe('inactive')
+    expect(t?.props.bold).toBeFalsy()
+  }
+  // the tabs that aren't selected use the same color
+  expect((await ui.find({ type: 'Text', text: /^\[s\] Scouts/ }))?.props.color).toBe('inactive')
+  expect((await ui.find({ type: 'Text', text: /^no test command$/ }))?.props.color).toBe('warning')
+  await ui.unmount()
+})
+
+test('with the board mode off, the status strip is in the warning color', async ($, on) => {
+  const tasks = [task('T-1', 'doing', 'One'), task('T-2', 'todo', 'Two')]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'off', max_parallel: 3, test_commands: ['x'] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /workers · \d+ scouts?/ }))?.props.color).toBe('warning')
+  await ui.unmount()
+})

@@ -120,16 +120,16 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
  * The separator under it is `bannerRule(width)`.
  */
 export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME): BannerLine[] {
-  // Facts are drawn in the normal text color so they read well on light and dark themes;
-  // the folder, branch and counts are bold, and only the " · " separators are dim.
+  // Facts are plain (the panel draws them in the same color as the tabs that aren't selected,
+  // which reads well on light and dark themes), not bold; only the " · " separators are dim.
   const sep: BannerPart = { text: ' · ', tone: 'dim' }
   const join = (groups: BannerPart[][]) => groups.flatMap((g, i) => (i ? [sep, ...g] : g))
-  const fact = (text: string, bold?: boolean): BannerPart[] => [bold ? { text, tone: 'plain', bold } : { text, tone: 'plain' }]
+  const fact = (text: string): BannerPart[] => [{ text, tone: 'plain' }]
   const folder = folderName(root)
   const l1: BannerPart[] = [{ text: namesFor(name).boardName, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
   const l2 = join([
-    ...(root ? [fact(shortHome(root, home), true)] : []),
-    b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : fact(b.target_branch, true),
+    ...(root ? [fact(shortHome(root, home))] : []),
+    b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : fact(b.target_branch),
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
@@ -144,7 +144,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog').replace(/^(\d+) done$/, `$1 done${gone ? ` ${archivedNote(gone)}` : ''}`))
     if (gone && !b.tasks.some(t => t.status === 'done')) counts.push(`${gone} done (archived)`)
     const t = boardTotal(b, nowMs)
-    texts.push(join([...counts.map(c => fact(c, true)), ...(t.tries ? [fact(fmtTotal(t, 'tokens'))] : [])]))
+    texts.push(join([...counts.map(c => fact(c)), ...(t.tries ? [fact(fmtTotal(t, 'tokens'))] : [])]))
   }
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW

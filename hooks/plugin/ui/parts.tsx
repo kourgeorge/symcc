@@ -42,7 +42,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const banner = () => {
     const d = emptyBoard()
     const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
-    const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'subtle', warning: 'warning' }
+    // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
+    const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
       ...bannerLines(facts, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
@@ -53,7 +54,7 @@ export async function paneParts($: $, e: PaneEvent) {
         </Text>
       )),
       // the status strip, right under the counts line: workers and scouts (the banner shows the name and mode)
-      <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
+      <Text key="status-strip" wrap="truncate" color={C(v.enabled === false || mode === 'off' ? 'warning' : 'inactive')}>
         {bannerStrip({ ...v, mode }, Date.now(), width, S.N.name)}
       </Text>,
       ...(v.git_state === 'no-repo' || v.git_state === 'no-commits'
