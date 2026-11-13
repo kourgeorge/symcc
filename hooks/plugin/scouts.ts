@@ -1,5 +1,5 @@
 import type { SymccScout } from '../../types'
-import { type ScoutDef, parseScout, scoutMayRun, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS } from '../board'
 import { publish } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
@@ -19,28 +19,58 @@ export async function loadScouts($: $): Promise<ScoutDef[]> {
   return out
 }
 
-export async function runScout($: $, s: ScoutDef) {
+/** agent id of a scout run going now → the scout's last_run before it started (put back if the run is stopped) */
+const runBefore = new Map<string, string | null>()
+/** scouts whose failed start the owner was already told about (cleared once one starts) */
+const startWarned = new Set<string>()
+
+/**
+ * Starts a run of scout `s`. Returns '' when it started, else why not. last_run is only set once the spawn
+ * worked, so a failed try doesn't hide the commits since the last real run. When the scout type isn't ready yet
+ * (just after a reload) it tries again shortly (`misses` such tries so far); other failures are told to the owner.
+ */
+export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
   const st = scoutState.get(s.name)
-  if (!st) return
+  if (!st) return `no scout named ${s.name}`
   // scouts.json is where a pause is kept (any session may pause one): a paused scout doesn't run
   if (!st.running) await pausedNow($, st)
   const b = await load($)
-  if (!scoutMayRun(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b) })) return
+  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b) }, S.N.name)
+  if (why) return why
   const lastRun = st.last_run
   const lastReport = st.last_report
   st.running = true
-  st.last_run = now()
   await publish($, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
   const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name })
-  const spawned = await $.agent.spawn({ prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), subagentType: S.N.scout, ...(s.model ? { model: s.model } : {}) }).catch((e: Error) => ({ deny: e.message }))
-  const agentId = 'agentId' in spawned ? spawned.agentId : undefined
-  if (!agentId) {
+  let agentId: string
+  try {
+    const spawned = await $.agent.spawn({ prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), subagentType: S.N.scout, ...(s.model ? { model: s.model } : {}) })
+    if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
+    if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the scout did not start')
+    agentId = spawned.agentId
+  } catch (err) {
+    const msg = (err as Error)?.message ?? String(err)
     st.running = false
-    await publish($, await load($))
-    return
+    st.last_run = lastRun
+    await publish($, await load($)).catch(() => undefined)
+    if (scoutNotReady(msg, S.N.name) && onNotReady(misses) === 'retry') {
+      timers.push($.clock.after(SCOUT_RETRY_MS, () => void runScout($, s, misses + 1)))
+      return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`
+    }
+    const text = `scout ${s.name} didn't start: ${msg}`
+    if (!startWarned.has(s.name)) {
+      startWarned.add(s.name)
+      $.ui.toast(S.N.toast(text))
+    }
+    return text
   }
+  startWarned.delete(s.name)
+  st.last_run = now()
+  runBefore.set(agentId, lastRun)
   scoutRuns.set(agentId, s.name)
+  await publish($, await load($)).catch(() => undefined)
+  return ''
 }
 
 /** <dir>/scouts.json: each scout's last run time and last report, so a restart doesn't make it "first run" again. */
@@ -99,10 +129,22 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
   return `${name} paused: it doesn't run until you resume it${st.running ? ' (the run going now finishes first)' : ''}`
 }
 
-export async function scoutFinished($: $, agentId: string, answer: string) {
+export async function scoutFinished($: $, agentId: string, answer: string, isAborted = false) {
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
+  const before = runBefore.get(agentId) ?? null
+  runBefore.delete(agentId)
   const st = scoutState.get(name)
+  if (isAborted) {
+    // Stopped from the agent controls: what it said so far is not a report. Keep the last real run and report.
+    if (st) {
+      st.running = false
+      st.last_run = before
+    }
+    await publish($, await load($))
+    $.ui.toast(S.N.toast(`scout ${name} was stopped; nothing reported`))
+    return
+  }
   if (st) {
     st.running = false
     st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
@@ -157,8 +199,7 @@ export async function runScoutNow($: $, name: string): Promise<string> {
   const cur = await load($)
   const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur) }, S.N.name)
   if (why) return why
-  void runScout($, s)
-  return `scout ${s.name} started`
+  return (await runScout($, s)) || `scout ${s.name} started`
 }
 
 /** A scout file's text, or null when there is none (or it can't be read). */

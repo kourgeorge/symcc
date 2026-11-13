@@ -183,7 +183,7 @@ export const register: Register = on => {
     useName($)
     const r = await next(e)
     if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
-    else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer)
+    else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted)
     return r
   })
 

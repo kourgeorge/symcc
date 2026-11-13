@@ -108,7 +108,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             <Text color={C('autoAccept')}>{file}</Text>
           </Text>
         </Box>
-        <Box flexDirection="column">{keyLines(scoutKeys(sc.paused === true), 'scout-keys')}</Box>
+        <Box flexDirection="column">{keyLines(scoutKeys(sc.paused === true, sc.running === true), 'scout-keys')}</Box>
       </Box>
     )
   }
