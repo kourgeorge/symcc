@@ -1,9 +1,10 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine } from '../hooks/board'
 import { checkAndMerge } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
-import { S, leadQueue, workers } from '../hooks/plugin/state'
+import { S, leadQueue, workers, sayQueue } from '../hooks/plugin/state'
+import { saidNeedsYou } from '../hooks/plugin/voice'
 import { workerFinished } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
@@ -762,4 +763,71 @@ test('retry after a failure that was not a clash resets the merge-main tries but
   const t = find(await load(w.$), 'T-1')!
   expect(t.conflict_tries).toBe(0)
   expect(t.merge_main ?? false).toBe(false)
+})
+
+// ---------------- a worker asks the owner ----------------
+
+/** T-1 is "doing" with worker ag1, which then answers `answer`; voice and driving as given. */
+async function workerAnswers(answer: string, o: { voice?: boolean; driving?: boolean } = {}) {
+  const w = world()
+  const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'] })
+  await saveBoard(w.$, { ...b0, voice: o.voice ?? true })
+  w.put(`${WT}/.git`, 'gitdir: x')
+  S.driving = o.driving ?? true
+  sayQueue.splice(0)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', answer, false)
+  S.driving = false
+  return { w, t: find(await load(w.$), 'T-1')! }
+}
+
+test('a worker QUESTION makes the task wait for the owner with the question, not fail', async () => {
+  saidNeedsYou.clear()
+  const { w, t } = await workerAnswers('I looked around.\nQUESTION: Should the button be red or blue?')
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe('Should the button be red or blue?')
+  expect(t.note).toBe('waiting for you')
+  expect(t.history.at(-1)).toBe('try 1: worker asked: Should the button be red or blue?')
+  expect(leadQueue.join('\n')).toContain('T-1 is waiting for the owner: Should the button be red or blue? If you can answer it from what you know, answer with symcc change T-1 (put the answer in the details); otherwise leave it for the owner.')
+  expect(movedMain(w)).toBe(false)
+  expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
+})
+
+test('a worker QUESTION is cut to 1000 characters on the task', async () => {
+  const { t } = await workerAnswers(`QUESTION: ${'x'.repeat(1500)}`, { voice: false })
+  expect(t.status).toBe('waiting')
+  expect(t.question!.length).toBe(1000)
+})
+
+test('NEED FILES still makes the task wait with its question', async () => {
+  saidNeedsYou.clear()
+  const { t } = await workerAnswers('NEED FILES: README.md — the docs mention it')
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe('T-1 needs to change files outside its list: README.md — the docs mention it. Allow them?')
+  expect(t.note).toBe('waiting for you')
+  expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md — the docs mention it')
+  expect(leadQueue.join('\n')).toContain('The task now waits for the owner.')
+  expect(sayQueue).toEqual(['?T-1'])
+})
+
+test('"T-1 needs you" is queued once per waiting question with voice on, and not with voice off or in another session', async () => {
+  saidNeedsYou.clear()
+  await workerAnswers('QUESTION: which colour?')
+  expect(sayQueue).toEqual(['?T-1'])
+  expect(spokenLine(sayQueue)).toBe('T-1 needs you')
+  // the same question again (same try): not said twice
+  await workerAnswers('QUESTION: which colour?')
+  expect(sayQueue).toEqual([])
+  saidNeedsYou.clear()
+  await workerAnswers('QUESTION: which colour?', { voice: false })
+  expect(sayQueue).toEqual([])
+  await workerAnswers('QUESTION: which colour?', { driving: false })
+  expect(sayQueue).toEqual([])
+})
+
+test('the spoken line joins merged tasks and tasks that need the owner', () => {
+  expect(spokenLine(['T-3'])).toBe('T-3 done')
+  expect(spokenLine(['?T-5'])).toBe('T-5 needs you')
+  expect(spokenLine(['T-3', '?T-5', '?T-6'])).toBe('T-3 done. T-5 and T-6 need you')
+  expect(spokenLine([])).toBe('')
 })

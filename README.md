@@ -356,7 +356,7 @@ directly. A value over its limit is cut to it, and the answer says so (e.g.
 | `max_minutes` | 45 | 5–600 | A worker running longer is stopped |
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
-| `voice` | on | on / off | Say "T-3 done" out loud when a task is merged (Mac) |
+| `voice` | on | on / off | Say "T-3 done" out loud when a task is merged, and "T-5 needs you" when a worker asks you something (Mac) |
 | `mode` | `auto` | `off` / `review` / `auto` | See above |
 | `enabled` | on | on / off | The whole plugin on or off, same as `/symcc-on` and `/symcc-off` |
 
@@ -367,7 +367,7 @@ instructions below. `every_minutes: 0` means it runs only on demand ("run now" o
 or `/symcc-scout <name>`), never on the timer. A value that is not a whole number (like `-5`)
 also means only on demand, and the scout shows a warning until you fix it. See
 [scouts](docs/guide.md#scouts). A task is `todo`, `doing`,
-`waiting` (for your answer), `review`, `paused`, `failed`, `done` (merged, final), `dropped`
+`waiting` (for your answer: a worker that needs a decision asks, and you hear "T-5 needs you"), `review`, `paused`, `failed`, `done` (merged, final), `dropped`
 (never runs on its own; Retry brings it back to todo on purpose) or
 `backlog` (parked; never starts until you move it to todo). See
 [a task's life](docs/guide.md#a-tasks-life).

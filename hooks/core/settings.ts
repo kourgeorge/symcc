@@ -52,6 +52,24 @@ export function spokenDone(ids: string[]): string {
   return `${list} done`
 }
 
+/** The mark a queued item starts with when it is a task that waits for the owner ("T-5 needs you"), not a merged one. */
+export const NEEDS_YOU_MARK = '?'
+
+/** The spoken line for tasks waiting for the owner: "T-5 needs you", "T-5 and T-6 need you". '' for none. */
+export function spokenNeedsYou(ids: string[]): string {
+  const xs = [...new Set(ids.map(x => String(x ?? '').trim()).filter(Boolean))]
+  if (!xs.length) return ''
+  const list = xs.length === 1 ? xs[0]! : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
+  return `${list} ${xs.length === 1 ? 'needs' : 'need'} you`
+}
+
+/** The one spoken line for the voice queue: merged ids ("T-3 done") and ids marked with NEEDS_YOU_MARK ("T-5 needs you"). */
+export function spokenLine(items: string[]): string {
+  const needs = items.filter(x => String(x ?? '').startsWith(NEEDS_YOU_MARK)).map(x => x.slice(NEEDS_YOU_MARK.length))
+  const done = items.filter(x => !String(x ?? '').startsWith(NEEDS_YOU_MARK))
+  return [spokenDone(done), spokenNeedsYou(needs)].filter(Boolean).join('. ')
+}
+
 /** A settings value for auto_retries: a whole number from 0 to 10. */
 export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(Number.isFinite(n) ? n : DEFAULT_AUTO_RETRIES)))
 
@@ -74,7 +92,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer is stopped' },
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
-  { name: 'voice', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'say "T-3 done" out loud when a task is merged' },
+  { name: 'voice', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'say "T-3 done" out loud when a task is merged, and "T-5 needs you" when a worker asks you something' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
 ]
