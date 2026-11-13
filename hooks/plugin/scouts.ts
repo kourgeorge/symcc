@@ -1,5 +1,5 @@
 import type { SymccScout, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME } from '../board'
 import { publish, refreshStatus } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now, oneAtATime, safeWrite } from './store'
@@ -132,6 +132,7 @@ export async function pausedNow($: $, st: SymccScout): Promise<boolean> {
  * stopped: it finishes and reports, and the next one doesn't start.
  */
 export async function setScoutPaused($: $, name: string, paused: boolean): Promise<string> {
+  if (!SCOUT_FILE_NAME.test(name)) return `"${name}" is not a scout name: use only letters, digits, - and _`
   const defs = await scheduleScouts($)
   const st = scoutState.get(name)
   if (!st || !defs.some(d => d.name === name)) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
@@ -270,6 +271,7 @@ export async function scheduleScouts($: $) {
 
 /** Runs scout `name` now (/<name>-scout <scout>, or "run now" in the panel); says what happened. */
 export async function runScoutNow($: $, name: string): Promise<string> {
+  if (!SCOUT_FILE_NAME.test(name)) return `"${name}" is not a scout name: use only letters, digits, - and _`
   const defs = await scheduleScouts($)
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
@@ -283,7 +285,9 @@ export async function runScoutNow($: $, name: string): Promise<string> {
 
 /** A scout file's text, or null when there is none (or it can't be read). */
 export async function readScoutFile($: $, scout: string): Promise<string | null> {
-  const file = path(scoutFile(scout, S.N.name))
+  const rel = safeScoutFile(scout, S.N.name)
+  if (rel === null) return null
+  const file = path(rel)
   return (await $.fs.exists(file).catch(() => false)) ? await $.fs.read(file).catch(() => null) : null
 }
 
@@ -320,6 +324,12 @@ export async function saveScout($: $) {
     $.ui.invalidate('ui.render')
     return
   }
+  const rel = safeScoutFile(d.scout, S.N.name)
+  if (rel === null) {
+    d.error = `"${d.scout}" is not a scout name: use only letters, digits, - and _`
+    $.ui.invalidate('ui.render')
+    return
+  }
   const old = await readScoutFile($, d.scout)
   if (d.isNew && old !== null) {
     d.error = `a scout named ${d.scout} already exists`
@@ -328,7 +338,7 @@ export async function saveScout($: $) {
   }
   const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model }, d.body)
   await $.process.run(['mkdir', '-p', path(S.N.scouts)])
-  await $.fs.write(path(scoutFile(d.scout, S.N.name)), text)
+  await $.fs.write(path(rel), text)
   S.draft = null
   // The same path as a Write to a scout file: reschedule, so the new timing applies now.
   await scheduleScouts($)
@@ -336,6 +346,72 @@ export async function saveScout($: $) {
   await updateScoutOpen($, () => d.scout)
   $.ui.toast(S.N.toast(`saved ${scoutFile(d.scout, S.N.name)}`))
   $.ui.invalidate('ui.render')
+}
+
+/** What the lead's scouts tool gets: action (list by default), name, every_minutes, model, prompt. */
+export type LeadScoutInput = { action?: unknown; name?: unknown; every_minutes?: unknown; model?: unknown; prompt?: unknown }
+
+/** every_minutes as the lead gave it (a whole number, 0 or more), or null. */
+const leadEvery = (v: unknown): number | null => (typeof v === 'number' ? (Number.isSafeInteger(v) && v >= 0 ? v : null) : typeof v === 'string' ? everyMinutesOf(v) : null)
+
+/**
+ * The lead's scouts tool: list (default; with name, one scout in full), add, edit, remove, run.
+ * add and edit write .<name>/scouts/<scout>.md like the panel's editor; add, edit and remove reschedule the
+ * scouts so the board shows the change at once. run is the owner's "run now". Pause and resume are refused:
+ * only the owner does those.
+ */
+export async function leadScouts($: $, a: LeadScoutInput): Promise<string> {
+  const action = typeof a.action === 'string' && a.action.trim() ? a.action.trim().toLowerCase() : 'list'
+  const name = typeof a.name === 'string' ? a.name.trim() : ''
+  if (action === 'pause' || action === 'resume') return 'only the owner pauses or resumes scouts'
+  // Every action that takes a name checks it before any file is touched: the name goes into a file path.
+  if (name || (action !== 'list' && action !== 'run')) {
+    const bad = leadScoutNameError(name)
+    if (bad) return action === 'add' || name ? bad : `say which scout to ${action} (name)`
+  }
+  const defs = await scheduleScouts($)
+  const have = () => `have: ${defs.map(d => d.name).join(', ') || 'none'}`
+  const known = defs.some(d => d.name === name)
+  if (action === 'list') {
+    if (!name) return leadScoutsText([...scoutState.values()], Date.now(), S.N.scouts)
+    const st = scoutState.get(name)
+    if (!st || !known) return `no scout named ${name} (${have()})`
+    await pausedNow($, st).catch(() => undefined)
+    return leadScoutText(st, Date.now(), true)
+  }
+  if (action === 'run') {
+    if (!name) return 'say which scout to run (name)'
+    return runScoutNow($, name)
+  }
+  if (action !== 'add' && action !== 'edit' && action !== 'remove') return `unknown action "${action}": use list, add, edit, remove or run`
+  const file = safeScoutFile(name, S.N.name)
+  if (file === null) return leadScoutNameError(name) || `"${name}" is not a valid scout name`
+  const old = await readScoutFile($, name)
+  if (action === 'remove') {
+    if (old === null && !known) return `no scout named ${name} (${have()})`
+    // An argument list (no shell), with "--" so the path can never be read as an option.
+    const r = await $.process.run(['rm', '-f', '--', path(file)])
+    if (r.exitCode !== 0) return `could not remove ${file}: ${r.stderr || r.stdout || `exit ${r.exitCode}`}`
+    await scheduleScouts($)
+    await publish($, await load($))
+    $.ui.invalidate('ui.render')
+    return `removed scout ${name} (${file})`
+  }
+  if (action === 'add' && (old !== null || known)) return `a scout named ${name} already exists; use action "edit" to change it`
+  if (action === 'edit' && old === null) return `no scout named ${name} (${have()})`
+  const def = old === null ? null : parseScout(name, old)
+  const everyGiven = a.every_minutes !== undefined && a.every_minutes !== null && a.every_minutes !== ''
+  const every = everyGiven ? leadEvery(a.every_minutes) : (def && !def.bad_every ? def.every_minutes : null)
+  if (every === null) return everyGiven || action === 'add' ? 'every_minutes must be a whole number: 0 for only on demand, or 1 or more' : `${name}'s every_minutes in its file is not valid; give every_minutes`
+  const prompt = typeof a.prompt === 'string' && a.prompt.trim() ? a.prompt : (def?.prompt ?? '')
+  if (!prompt.trim()) return 'prompt is missing: say in plain words what the scout looks for'
+  const model = typeof a.model === 'string' ? a.model.trim() : (def?.model ?? '')
+  await $.process.run(['mkdir', '-p', path(S.N.scouts)])
+  await $.fs.write(path(file), scoutText(old, { every_minutes: every, model }, prompt))
+  await scheduleScouts($)
+  await publish($, await load($))
+  $.ui.invalidate('ui.render')
+  return `${action === 'add' ? 'added' : 'saved'} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ''}`
 }
 
 /** Leaves the edit mode (and the new scout name box) without saving. */

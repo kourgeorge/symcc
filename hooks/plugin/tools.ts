@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput } from '../board'
-import { scoutMemoryFile } from './scouts'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
+import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
 import { loadRoles } from './roles'
@@ -194,6 +194,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   web pages, but must not change the project (no edits, installs or git changes). It sends
   its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
   tells you, or ignores it. Run /${S.N.name}-scouts after adding or deleting a file.
+  You can also ask the lead to list, add, change, remove or run a scout for you.
   every_minutes: 0 means only on demand: it never runs on the timer, only with run now
   or /${S.N.name}-scout NAME. A value that is not a whole number (like -5) also means only
   on demand, and the scout shows a warning until the file is fixed.
@@ -256,6 +257,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
+- Manage scouts with ${S.N.name} scouts, never by writing ${S.N.dir}/scouts/ files by hand: action list (the default) shows each scout (how often, paused, running, next and last run, the start of its last report), list with name shows one in full; add / edit with name (lowercase letters, digits, dashes), every_minutes (0 = only on demand), optional model and prompt; remove deletes one (ask the owner first); run runs one now, like the owner's "run now".
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
@@ -287,6 +289,11 @@ export const TOOLS = () => [
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  {
+    name: 'scouts',
+    description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt and whole last report). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (refused with the reason when it is paused, already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'remove', 'run'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The scout, e.g. docs-check (lowercase letters, digits and dashes).' }, every_minutes: { type: 'number', description: 'For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand.' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, prompt: { type: 'string', description: 'For add / edit: what the scout looks for, in plain words.' } } },
+  },
   { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
   {
     name: 'setup_git',
@@ -295,7 +302,7 @@ export const TOOLS = () => [
   },
   {
     name: 'settings',
-    description: 'Change how the team works (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "T-3 done" / "T-5 needs you" out loud; only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line (notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "T-3 done" / "T-5 needs you" out loud; only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
     inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
@@ -575,11 +582,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
     }
+    case 'scouts':
+      return leadScouts($, a)
     case 'stats':
       return statsText($, str(a.range) ?? '')
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {
+      if (!SETTING_NAMES.some(k => a[k] !== undefined)) return leadSettingsText(await load($), await playable($))
       const r = await saveSettings($, a, 'the lead')
       if (r.error) return r.error
       const parts = r.changes.map(c => c.said + c.cut)
