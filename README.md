@@ -178,6 +178,11 @@ Change the mode with `/symcc-mode`, the `m` key in the panel, or by telling the 
 | `review` | `⏸ review merge` | Every finished task waits for you to approve or reject it. |
 | `off` | `⏹ off` | Every worker and scout stops at once. Nothing new starts. |
 
+Claude Code's own **plan mode** (Shift+Tab) also counts: while the main chat is in it, new tasks go
+to the backlog and no new worker or scout starts (running workers keep going); the band shows
+`plan mode: nothing starts`. When it ends, the lead lists those backlog tasks and asks you which to
+move to todo. See [Plan mode](docs/guide.md#plan-mode) in the guide.
+
 In `auto`, say "T-5 needs review" and just that task waits. Workers can't commit, push or
 merge, and scouts can't edit files. See [approval before merge](docs/guide.md#approval-before-merge).
 

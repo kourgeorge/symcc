@@ -212,6 +212,29 @@ You can also do it yourself:
   tasks to review by ID, e.g. `⏸ review merge · 1 to review (T-5)`. With an empty board it
   shows nothing in `auto`, so a fresh project stays quiet.
 
+### Plan mode
+
+Claude Code's own plan mode (Shift+Tab) is for planning only, so symcc starts nothing while
+the main chat is in it:
+
+- Every task the lead adds goes to the backlog, and the answer says so:
+  `plan mode: T-7 Search added to the backlog; nothing starts`.
+- No new worker or scout starts (not the regular check, not a scout's timer, not "run now").
+  Workers already running keep going: plan mode doesn't reach them, and stopping them would
+  lose work. The band above the prompt says so, e.g.
+  `plan mode: nothing starts (1 worker keeps going)`.
+- The band, the status line and the status strip show `plan mode: nothing starts`.
+
+When plan mode ends, the lead is told once which tasks went to the backlog during it, and asks
+you which ones to move to todo. symcc never moves them by itself.
+
+Claude Code has no call for the mode and no event when it changes, so symcc reads it from what
+comes with some events of the main chat: the permission mode on the prompt you send and on the
+end of each turn, the mode passed to a new agent, and the "plan mode" reminders Claude Code
+adds to each request. So a switch is noticed at the next prompt, request or end of turn. Until
+symcc has seen the mode at all, it works as before. Each session tracks its own mode; only the
+session that drives the board starts work. (Background: `docs/research/plan-mode.md`.)
+
 ---
 
 ## Live status: seeing the board

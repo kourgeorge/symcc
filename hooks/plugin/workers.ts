@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode } from '../../types'
-import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText } from '../board'
+import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, inPlan } from '../board'
 import { archiveOld } from './archive'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
@@ -36,6 +36,7 @@ When you are done, answer in one or two plain sentences: what you changed. If yo
 export async function pump($: $) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!S.driving) return // another session drives the board and starts its work
+  if (inPlan(S.plan)) return // plan mode: nothing starts; workers already running keep going
   const b = await load($)
   if (modeOf(b) === 'off' || !symccOn(b)) return
   if (!ready(b).length) return

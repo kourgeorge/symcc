@@ -3,7 +3,7 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout } from '../../types'
-import { type RoleDef, type SettingName, type GitState, type Board, type Heard, emptyHeard } from '../board'
+import { type RoleDef, type SettingName, type GitState, type Board, type Heard, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 
 export type $ = EngineInterface
@@ -118,6 +118,12 @@ export const S = {
   archiveBroken: '',
   /** whether the lead was told about a bigger cleanup already (once per session) */
   toldCleanup: false,
+  /**
+   * Whether this session (the main chat, not a worker or scout) is in plan mode, as last seen on an event, and the
+   * tasks added to the backlog during it (see core/plan.ts and plugin/plan.ts). Per session: each session's plugin
+   * keeps its own; only the driving session's counts for starting work. on null = not seen yet: behave as before.
+   */
+  plan: emptyPlan() as PlanState,
 }
 
 /** Takes the plugin's name from plugin.json (via $.plugin.name), once; DEFAULT_NAME if it has none. */
@@ -130,7 +136,7 @@ export function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'voice' | 'enabled'> & { driving: boolean; branch_note: string; git_state: GitState }>
+export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'voice' | 'enabled'> & { driving: boolean; branch_note: string; git_state: GitState; plan_mode: boolean }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

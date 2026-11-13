@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, inPlan, planBacklog, planAdded, planAddText } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
@@ -236,6 +236,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
+- Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
 - ${S.N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board.`
@@ -331,8 +332,13 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const t = await change($, b => {
         // check what the lead said first, then add the plugin's own evidence next to it
         const o = makeOrigin(said, now(), b)
-        return addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true, role, origin: { ...said, evidence: evidenceText(o, heard) } }, now(), S.N.dir)
+        return addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) } }, now(), S.N.dir)
       })
+      // plan mode: it went to the backlog; noted, so the lead hears the list when plan mode ends
+      if (inPlan(S.plan) && t.status === 'backlog') {
+        S.plan = planAdded(S.plan, t.id)
+        return planAddText(t.id, t.title)
+      }
       void pump($)
       return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}`
     }

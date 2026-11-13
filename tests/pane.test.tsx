@@ -1282,3 +1282,47 @@ test('/symcc-task shows the latest report, or its first 40 lines and where the f
   expect(text).toContain(`… (20 more lines) full report: ${R2}`)
   expect(text).toContain('Research: docs/research/market.md')
 })
+
+test('plan mode: add puts the task in the backlog and says so; leaving plan mode tells the lead once with the list', async ($, on) => {
+  const clock = mock.clock(on, { now: Date.now() })
+  const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks: [task('T-1', 'done', 'Old')] }), '/board.lock': null }
+  // the plugin writes board.json to a temp file, then moves it in place with mv: keep the fake board in step
+  const temp: Record<string, string> = {}
+  const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
+  on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] } : next(e)))
+  on('fs.write', (_, e) => ((temp[e.path] = String(e.text)), { value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', (_, e) => {
+    const argv = (e as { argv?: string[] }).argv ?? []
+    if (argv[0] === 'mv' && /board\.json$/.test(argv[3] ?? '') && temp[argv[2]!] !== undefined) files['/board.json'] = temp[argv[2]!]!
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  // nothing beneath answers the classic events in a test: answer them empty
+  on('classic.UserPromptSubmit', () => ({}) as never)
+  on('classic.Stop', () => ({}) as never)
+  const told: string[] = []
+  on('prompt.submit', (_, e) => (told.push(String((e as { text?: string }).text ?? '')), { text: '' } as never))
+  const add = async (title: string) => JSON.stringify(((await $.tool.call({ tool: 'mcp__symcc__add', title, details: 'd', why: 'test', origin_by: 'owner' } as never)) as { result?: unknown }).result)
+  // no signal yet: behaves as today
+  expect(await add('Before')).toContain('added T-2 Before')
+  expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-2').status).toBe('todo')
+  await $.classic.UserPromptSubmit({ prompt: 'plan it', permission_mode: 'plan' } as never)
+  await clock.advance(10)
+  expect(await add('Planned')).toContain('plan mode: T-3 Planned added to the backlog; nothing starts')
+  expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-3').status).toBe('backlog')
+  // a worker's event (agent_id) does not count for the main session
+  await $.classic.Stop({ permission_mode: 'acceptEdits', agent_id: 'w1' } as never)
+  await clock.advance(10)
+  expect(await add('Also planned')).toContain('plan mode: T-4')
+  await $.classic.Stop({ permission_mode: 'default' } as never)
+  await $.classic.Stop({ permission_mode: 'default' } as never)
+  await clock.advance(5000)
+  const ends = told.filter(t => t.includes('Plan mode is off'))
+  expect(ends.length).toBe(1)
+  expect(ends[0]).toContain('- T-3 Planned')
+  expect(ends[0]).toContain('- T-4 Also planned')
+  // not moved by itself
+  expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-3').status).toBe('backlog')
+  expect(await add('After')).toContain('added T-5 After')
+})

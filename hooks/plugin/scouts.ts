@@ -1,5 +1,5 @@
 import type { SymccScout } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan } from '../board'
 import { publish } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
@@ -35,7 +35,7 @@ export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
   // scouts.json is where a pause is kept (any session may pause one): a paused scout doesn't run
   if (!st.running) await pausedNow($, st)
   const b = await load($)
-  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b) }, S.N.name)
+  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
   const lastRun = st.last_run
   const lastReport = st.last_report
@@ -197,7 +197,7 @@ export async function runScoutNow($: $, name: string): Promise<string> {
   const st = scoutState.get(s.name)
   if (st) await pausedNow($, st)
   const cur = await load($)
-  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur) }, S.N.name)
+  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
   return (await runScout($, s)) || `scout ${s.name} started`
 }
