@@ -41,8 +41,14 @@ export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; tes
  * `mode` 'finish' (a worker just finished): when the task needs review (see needsReview), stop
  * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
  * review): the same checked merge, but the tests run again only if main had to be merged in.
+ * `stop` is asked after each test and just before the merge: when it returns a reason (the task
+ * was dropped or paused meanwhile), nothing is merged and that reason is returned.
  */
-export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = []): Promise<CheckResult> {
+export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined): Promise<CheckResult> {
+  const stopped = (): CheckResult | undefined => {
+    const why = stop()
+    return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
+  }
   const target = b.target_branch
   await git($, ['add', '-A', '--', '.'], dir)
   const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
@@ -53,7 +59,10 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   // Nothing to commit is fine (exit 1, HEAD unchanged); only a new HEAD counts as a commit of this try.
   if (c.exitCode === 0 && head !== before) made.push(head)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
-  const changed = (await gitOk($, ['diff', '--name-only', '--no-renames', `${base}..${head}`])).split('\n').filter(Boolean)
+  // -z: names come through as they are (without it git quotes and escapes unusual ones, e.g. "caf\303\251.md").
+  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
+  if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
+  const changed = d.stdout.split('\0').filter(Boolean)
   if (!changed.length) return { ok: false, detail: 'the worker made no change' }
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
@@ -72,12 +81,16 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: 600_000 }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
       const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-      return { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
+      return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
     }
+    const s = stopped()
+    if (s) return s
   }
   if (mode === 'finish' && needsReview(b, t)) return { ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` }
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over uncommitted changes or untracked or ignored files the merge would overwrite.
+  const s = stopped()
+  if (s) return s
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir })
   if (!moved.ok) return { ok: false, detail: moved.detail }

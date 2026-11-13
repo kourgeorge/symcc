@@ -2,7 +2,8 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find } from '../hooks/board'
 import { checkAndMerge } from '../hooks/plugin/review'
-import { S, leadQueue } from '../hooks/plugin/state'
+import { S, leadQueue, workers } from '../hooks/plugin/state'
+import { workerFinished } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 
@@ -18,6 +19,18 @@ const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
 // commit ids for the fake git: main (M1, M2), the worker's branch (H0 before its commit, H1 after, H2 after a merge of main), an older base (B0)
 const [M1, M2, H0, H1, H2, B0] = ['a1', 'a2', 'b0', 'b1', 'b2', 'c0'].map(x => x.repeat(20)) as [string, string, string, string, string, string]
+
+/** A path as git shows it without -z: names with a quote, backslash, control or non-ASCII character are quoted and escaped. */
+function quoted(p: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (!/["\\\u0000-\u001f\u007f-\uffff]/.test(p)) return p
+  let out = ''
+  for (const byte of new TextEncoder().encode(p)) {
+    const c = String.fromCharCode(byte)
+    out += c === '"' || c === '\\' ? '\\' + c : byte < 0x20 || byte >= 0x7f ? '\\' + byte.toString(8).padStart(3, '0') : c
+  }
+  return `"${out}"`
+}
 
 type Res = { exitCode: number; stdout: string; stderr: string }
 const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
@@ -56,6 +69,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   let clock = T0
   const sleeps: number[] = []
   let afterSleep = () => {}
+  // runs after each command (its text, as in `calls`), before its answer is given back
+  let afterRun: (cmd: string) => Promise<void> = async () => {}
   const state = new Map<string, unknown>()
   const put = (p: string, text: string) => (files.set(p, text), mtime.set(p, clock))
 
@@ -74,7 +89,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     if (s === `rev-parse refs/heads/main`) return ok(git.main)
     if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return git.upToDate ? ok() : fail()
     if (a[0] === 'merge-base') return ok(git.upToDate ? git.main : B0)
-    if (a[0] === 'diff' && a.includes('--name-only')) return ok(git.changed.join(a.includes('-z') ? '\0' : '\n'))
+    // without -z, git quotes unusual names the way it does by default (core.quotePath): "docs/caf\303\251.md"
+    if (a[0] === 'diff' && a.includes('--name-only')) return ok(a.includes('-z') ? git.changed.join('\0') : git.changed.map(quoted).join('\n'))
     if (s === 'merge --abort') return ok()
     if (a[0] === 'merge') {
       if (git.conflict) return { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' }
@@ -98,35 +114,41 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     return ok()
   }
 
+  async function answerRun(argv: string[], o: { cwd?: string }): Promise<Res> {
+    const cwd = o.cwd ?? ROOT
+    const [cmd, ...rest] = argv
+    if (cmd === 'git') {
+      calls.push(`${cwd === WT ? 'wt' : cwd === ROOT ? 'root' : cwd}: git ${rest.join(' ')}`)
+      return runGit(rest, cwd)
+    }
+    calls.push(argv.join(' '))
+    if (cmd === '/bin/sh') return tests[rest[1]!] ?? ok()
+    if (cmd === 'ln') {
+      // ln fails when the target exists: only one session can take the lock
+      if (files.has(rest[1]!)) return fail('File exists')
+      put(rest[1]!, files.get(rest[0]!)!)
+      return ok()
+    }
+    if (cmd === 'mv') {
+      const [, from, to] = rest
+      if (!files.has(from!)) return fail('No such file')
+      put(to!, files.get(from!)!)
+      files.delete(from!)
+      return ok()
+    }
+    if (cmd === 'rm') {
+      for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
+      return ok()
+    }
+    return ok()
+  }
+
   const $ = {
     process: {
       run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
-        const cwd = o.cwd ?? ROOT
-        const [cmd, ...rest] = argv
-        if (cmd === 'git') {
-          calls.push(`${cwd === WT ? 'wt' : cwd === ROOT ? 'root' : cwd}: git ${rest.join(' ')}`)
-          return runGit(rest, cwd)
-        }
-        calls.push(argv.join(' '))
-        if (cmd === '/bin/sh') return tests[rest[1]!] ?? ok()
-        if (cmd === 'ln') {
-          // ln fails when the target exists: only one session can take the lock
-          if (files.has(rest[1]!)) return fail('File exists')
-          put(rest[1]!, files.get(rest[0]!)!)
-          return ok()
-        }
-        if (cmd === 'mv') {
-          const [, from, to] = rest
-          if (!files.has(from!)) return fail('No such file')
-          put(to!, files.get(from!)!)
-          files.delete(from!)
-          return ok()
-        }
-        if (cmd === 'rm') {
-          for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
-          return ok()
-        }
-        return ok()
+        const r = await answerRun(argv, o)
+        await afterRun(calls.at(-1)!)
+        return r
       },
     },
     fs: {
@@ -172,7 +194,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   S.startupDone = false
   S.enabledNow = true
   leadQueue.splice(0)
-  return { $: $ as never, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f) }
+  return { $: $ as never, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
 }
 
 /** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
@@ -294,6 +316,24 @@ test('checkAndMerge with no change at all merges nothing', async () => {
   expect(await checkAndMerge(w.$, t, WT, b, 'finish', made)).toEqual({ ok: false, detail: 'the worker made no change' })
   expect(made).toEqual([])
   expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge lets unusual file names inside the task pass the scope check', async () => {
+  const w = world({ changed: ['docs/café.md', 'docs/a"b.md'] })
+  const [b, t] = boardWith('auto', [], { files: ['docs/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.detail).not.toContain('outside the task')
+  expect(w.calls.some(c => c.includes('diff --name-only') && c.includes('-z'))).toBe(true)
+})
+
+test('checkAndMerge still refuses an unusual file name outside the task, and shows it readably', async () => {
+  const w = world({ changed: ['docs/café.md', 'src/b\u001b[31m"x.ts'] })
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('changed files outside the task (src/b?[31m"x.ts); allowed: docs/')
+  expect(r.detail).not.toContain('café')
+  expect(ranTests(w)).toEqual([])
 })
 
 test('checkAndMerge refuses a change to a file outside the task, before testing or merging', async () => {
@@ -509,4 +549,79 @@ test('reject with no reason is refused and the task stays in review', async () =
   const err = await runTool(w.$, 'reject', { task: 'T-1', reason: '  ' }).then(() => null, (e: Error) => e.message)
   expect(err).toBe('give a reason for rejecting, so the next worker knows what to fix')
   expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+})
+
+// ---------------- a task dropped, paused or changed while its work is checked ----------------
+
+/**
+ * A world where T-1's worker (agent ag1) has just finished, with `test_commands`; `during` runs once,
+ * right after the first command that matches `when` (by default: the first test command).
+ */
+async function finishing(during: (w: ReturnType<typeof world>) => Promise<unknown>, tests: Record<string, Res> = {}, when: RegExp = /^\/bin\/sh -c /) {
+  const w = world({}, tests)
+  const [b] = boardWith('auto', ['npm test'], { history: ['created by the lead', 'try 1: an earlier line'] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  let done = false
+  const said: unknown[] = []
+  w.onRun(async cmd => {
+    if (done || !when.test(cmd)) return
+    done = true
+    said.push(await during(w).catch((e: Error) => `error: ${e.message}`))
+  })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change', false)
+  return { w, said, t: find(await load(w.$), 'T-1')! }
+}
+
+test('a task dropped while its tests run is not merged, stays dropped, and its folder goes only after the check', async () => {
+  let removedDuring = false
+  const { w, said, t } = await finishing(async w => {
+    const out = await runTool(w.$, 'drop', { task: 'T-1', reason: 'not needed' })
+    removedDuring = w.calls.some(c => c.includes('worktree remove'))
+    return out
+  })
+  expect(said[0]).toBe('T-1 dropped; T-1 is being tested and merged, so that stops before the merge (if the merge already happened, it stays done)')
+  expect(removedDuring).toBe(false)
+  expect(movedMain(w)).toBe(false)
+  expect(w.git.main).toBe(M1)
+  expect(t.status).toBe('dropped')
+  expect(t.note).toBe('not needed')
+  expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
+  expect(t.history.at(-1)).toMatch(/\(not used: the task was dropped meanwhile\)$/)
+  expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
+})
+
+test('a task dropped while its tests fail does not go back to "todo" for a new try', async () => {
+  const { w, t } = await finishing(w => runTool(w.$, 'drop', { task: 'T-1' }), { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  expect(t.status).toBe('dropped')
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(w.git.main).toBe(M1)
+  expect(leadQueue.join('\n')).not.toMatch(/retrying/)
+})
+
+test('a task paused while its tests run is not merged and stays paused, its folder kept', async () => {
+  const { w, said, t } = await finishing(w => runTool(w.$, 'pause', { task: 'T-1' }))
+  expect(String(said[0])).toMatch(/^T-1 paused; T-1 is being tested and merged/)
+  expect(t.status).toBe('paused')
+  expect(w.git.main).toBe(M1)
+  expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
+  expect(t.history.at(-1)).toMatch(/\(not used: the task was paused meanwhile\)$/)
+})
+
+test('a change while the task is being checked is refused, and the check goes on', async () => {
+  const { w, said, t } = await finishing(w => runTool(w.$, 'change', { task: 'T-1', title: 'Something else' }))
+  expect(said[0]).toBe('error: T-1 is being tested and merged; try again in a moment')
+  expect(t.title).toBe('Do it')
+  expect(t.status).toBe('done')
+  expect(w.git.main).toBe(H1)
+  expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
+})
+
+test('a drop seen only after the merge keeps the task done, with a line saying the drop came too late', async () => {
+  const { w, t } = await finishing(w => runTool(w.$, 'drop', { task: 'T-1' }), {}, /git update-ref/)
+  expect(w.git.main).toBe(H1)
+  expect(t.status).toBe('done')
+  expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
+  expect(t.history.at(-1)).toBe('try 1: it was dropped while being merged, too late: the work was already merged, so it stays done')
 })
