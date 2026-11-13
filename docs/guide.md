@@ -413,6 +413,15 @@ scout" asks for a name, and "Edit" on a scout's page lets you change how often i
 model and its instructions. Save writes the file (other front matter keys are kept) and the
 new timing applies at once. `/symcc-scout <name>` runs a scout now.
 
+Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
+like "every 2 days" or "on demand", whether it is paused or running, its next and last run
+and the first lines of its last report), show one in full (its instructions and whole last
+report), add or change one (name of lowercase letters, digits and dashes, every_minutes with
+0 for only on demand, an optional model, and the instructions), remove one (it checks with
+you first) and run one now, just like "run now" (refused, with the reason, when the scout is
+paused, already running, or git isn't set up). Every change shows on the board at once. Only
+you pause or resume scouts; the lead can't.
+
 ### Scouts that run only on demand
 
 `every_minutes: 0` (or 0 in the panel's "every (minutes)" box) means the scout runs only
