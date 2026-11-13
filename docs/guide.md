@@ -556,13 +556,29 @@ its read-only `stats` tool.
 
 - **Range:** `/symcc-stats` covers every task; `/symcc-stats 7d` the tasks changed in the last
   7 days; `/symcc-stats T-100..T-130` an id range.
+- **Whole team:** the tokens of the lead (the main Claude Code chat), the workers and the
+  scouts, their total, and the tokens per merged task, for the chosen range. Workers are
+  counted by task (their tries); the lead and the scouts by time: for `7d` the last 7 days,
+  for an id range the time those tasks span (from the first one made to the last change).
+  - *Lead:* Claude Code's plugin API gives no token counts per session (only this session's
+    dollar total), so symcc reads Claude Code's own session logs in
+    `~/.claude/projects/<this project's folder>/<session>.jsonl` (or under
+    `CLAUDE_CONFIG_DIR`). It only reads, only this project's folder, and only the usage
+    numbers of the main chat's answers (each answer once). Every main session in this
+    project counts, also ones where you worked without symcc. When there are no logs, the
+    report says the lead is not counted.
+  - *Scouts:* each scout run (also a stopped one) adds its tokens and time to a running
+    total per scout, kept in `.symcc/scouts.json` under `usage` (also per day, for ranges).
+    Runs from before this was added are not counted.
+  - *Dollars:* not shown, since symcc doesn't know the model prices. Where Claude Code
+    reports one, the report adds this session's total so far, as `/cost` says.
 - **Parts:** totals (tasks by status, worker time, tokens); per task (average and median time
   and tokens of done tasks, tries per task, the 5 biggest by tokens and by time); per try
   (average time and tokens, share of tasks done on the first try); flow (time from made to
   done); outcomes (merged on its own or approved by you, failed tries by reason: tests,
   clash with main, scope, stopped, rejected); by role and by origin; the last 7 days with activity.
 - **What is left out:** older tasks with no tries recorded are left out of the averages (the
-  report says how many). Scout runs aren't counted. Time waiting for you is not shown: history
+  report says how many). Time waiting for you is not shown: history
   lines have no times. A try from an older board with no end time counts up to the next try,
   or the task's last change.
 

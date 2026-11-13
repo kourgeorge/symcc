@@ -1,5 +1,5 @@
 import type { SymccScout } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage } from '../board'
 import { publish } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
@@ -21,6 +21,8 @@ export async function loadScouts($: $): Promise<ScoutDef[]> {
 
 /** agent id of a scout run going now → the scout's last_run before it started (put back if the run is stopped) */
 const runBefore = new Map<string, string | null>()
+/** agent id of a scout run going now → when it started (ms), for the run's time in scouts.json's usage */
+const runStarted = new Map<string, number>()
 /** scouts whose failed start the owner was already told about (cleared once one starts) */
 const startWarned = new Set<string>()
 
@@ -68,6 +70,7 @@ export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
   startWarned.delete(s.name)
   st.last_run = now()
   runBefore.set(agentId, lastRun)
+  runStarted.set(agentId, Date.now())
   scoutRuns.set(agentId, s.name)
   await publish($, await load($)).catch(() => undefined)
   return ''
@@ -82,10 +85,12 @@ export async function loadScoutMemory($: $) {
   return parseScoutMemory(text)
 }
 
-/** Writes scouts.json (temp file + rename, like board.json). */
+/** Writes scouts.json (temp file + rename, like board.json). The scouts' token and time totals ("usage") already in
+ *  the file are kept when `text` carries none. */
 export async function writeScoutMemory($: $, text: string) {
   const file = scoutMemoryFile()
   const tmp = `${file}.tmp`
+  text = keepScoutUsage(text, await $.fs.read(file).catch(() => null))
   await $.process.run(['mkdir', '-p', path(S.N.dir)])
   await $.fs.write(tmp, text)
   const r = await $.process.run(['mv', '-f', tmp, file])
@@ -129,9 +134,20 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
   return `${name} paused: it doesn't run until you resume it${st.running ? ' (the run going now finishes first)' : ''}`
 }
 
-export async function scoutFinished($: $, agentId: string, answer: string, isAborted = false) {
+/** Adds one run of scout `name` (its tokens and time) to the running totals in scouts.json, for /<name>-stats. */
+export async function recordScoutRun($: $, name: string, run: { endMs: number; ms: number; tokens?: number }) {
+  const old = await $.fs.read(scoutMemoryFile()).catch(() => null)
+  await writeScoutMemory($, addScoutRun(old, name, run))
+}
+
+export async function scoutFinished($: $, agentId: string, answer: string, isAborted = false, tokens?: number) {
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
+  const started = runStarted.get(agentId)
+  runStarted.delete(agentId)
+  // A stopped run still used tokens: count it too.
+  const endMs = Date.now()
+  await recordScoutRun($, name, { endMs, ms: started === undefined ? 0 : endMs - started, ...(tokens !== undefined ? { tokens } : {}) }).catch(() => undefined)
   const before = runBefore.get(agentId) ?? null
   runBefore.delete(agentId)
   const st = scoutState.get(name)
