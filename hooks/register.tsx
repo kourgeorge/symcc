@@ -18,15 +18,16 @@ import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
-import { saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScoutEdit } from './plugin/scouts'
-import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
+import { saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
+import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
 import { noteForLead, brief } from './plugin/tell'
 import { playable } from './plugin/voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
-import { openPane } from './plugin/ui/open'
+import { openPane, takeKeysBack } from './plugin/ui/open'
+import { escBack } from './plugin/ui/esc'
 import { renderPane } from './plugin/ui/pane'
 import { cleanLeftoverTmp, check, pump, workerFinished, setSymcc, setBoardMode } from './plugin/workers'
 
@@ -229,7 +230,7 @@ export const register: Register = on => {
         await publish($, await load($))
         // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
         const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
-        if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, Esc closes.`)
+        if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, Esc goes back to the tasks.`)
         if (!defs.length) return { text: `No scouts yet. Add one as ${S.N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
         return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') }
       }
@@ -241,7 +242,7 @@ export const register: Register = on => {
         S.settingEdit = null
         S.settingPick = null
         const placed = await openPane($, { tab: 'settings' }).then(r => r.isPlaced).catch(() => false)
-        if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, Esc closes.`)
+        if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, Esc goes back to the tasks.`)
         return say(settingsText({ ...b, notify: notifyOf(b, await playable($)) }, S.N.name))
       }
       case 'set':
@@ -329,39 +330,15 @@ export const register: Register = on => {
     return renderAbovePrompt($, e, next)
   })
 
-  // Esc in an opened scout goes back to the Scouts list (the panel stays open).
-  // Esc with a search on the Tasks list clears it. Opened days, the search and the active view are forgotten when the board panel closes.
+  // Esc in the board panel goes one step back (see escBack: leaves a text box, or goes back a page) and
+  // keeps the panel open, then asks for the keyboard back, which Claude Code gave to its prompt on Esc.
+  // Esc on the board list with no search closes it. Opened days, the search and the active view are
+  // forgotten when the board panel closes.
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== S.N.pane) return next(e)
-    // Esc in the reject box or the role pick list cancels it; Esc in a task's changes goes back to the task.
-    if (e.origin.kind === 'person' && (S.rejecting || S.diffOpen || S.rolePick) && (await readTab($)) !== 'scouts' && (await readOpened($))) {
-      if (S.rolePick) S.rolePick = null
-      else if (S.rejecting) S.rejecting = null
-      else S.diffOpen = null
-      $.ui.invalidate('ui.render')
-      return { value: undefined }
-    }
-    // Esc on the Tasks list with a search on (typing or kept) clears it and shows every task again.
-    if (e.origin.kind === 'person' && S.search && !['scouts', 'settings'].includes(await readTab($)) && !(await readOpened($))) {
-      S.search = null
-      $.ui.invalidate('ui.render')
-      return { value: undefined }
-    }
-    // Esc in a setting's edit box or pick list cancels it.
-    if (e.origin.kind === 'person' && (S.settingEdit || S.settingPick) && (await readTab($)) === 'settings') {
-      S.settingEdit = null
-      S.settingPick = null
-      $.ui.invalidate('ui.render')
-      return { value: undefined }
-    }
-    // Esc in a scout's edit mode (or the new scout name box) cancels it.
-    if (e.origin.kind === 'person' && (S.draft || S.naming) && (await readTab($)) === 'scouts') {
-      cancelScoutEdit($)
-      return { value: undefined }
-    }
-    if (e.origin.kind === 'person' && (await readTab($)) === 'scouts' && (await readScoutOpen($))) {
-      await updateScoutOpen($, () => '')
+    if (e.origin.kind === 'person' && (await escBack($))) {
+      takeKeysBack($)
       return { value: undefined }
     }
     openDays.clear()
@@ -375,6 +352,7 @@ export const register: Register = on => {
     S.diffOpen = null
     S.rejecting = null
     S.rolePick = null
+    S.answering = null
     S.settingEdit = null
     S.settingPick = null
     changesCache.clear()

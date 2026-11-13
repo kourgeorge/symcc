@@ -3,6 +3,7 @@ import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scou
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
 import { type $, S, readScoutOpen, updateScoutOpen } from '../state'
 import type { PaneParts } from './parts'
+import { escGoesBack } from './esc'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file. */
 export function scoutEditPage($: $, pane: PaneParts) {
@@ -156,7 +157,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
         )
       })}
       <Text key="scouts-blank"> </Text>
-      {footer(scoutListKeys(), 'scouts-keys')}
+      {footer(escGoesBack(scoutListKeys()), 'scouts-keys')}
     </Box>
   )
 }

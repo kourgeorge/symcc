@@ -4,6 +4,7 @@ import { branchList } from '../git'
 import { type $, S } from '../state'
 import { ownerSettings } from '../tools'
 import type { PaneParts } from './parts'
+import { escGoesBack } from './esc'
 
 /** The Settings view: one row per setting; Enter changes it. */
 export async function settingsPage($: $, pane: PaneParts) {
@@ -83,7 +84,7 @@ export async function settingsPage($: $, pane: PaneParts) {
         ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
       ])}
       <Text color={C('subtle')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
-      {footer(settingsKeys(), 'settings-keys')}
+      {footer(escGoesBack(settingsKeys()), 'settings-keys')}
     </Box>
   )
 }

@@ -522,7 +522,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     // 50 columns: the model and "last:" columns don't fit, so they are left out
     expect(await ui.find({ type: 'Text', text: /sonnet/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /last:/ })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter open · t s c views · Esc close$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter open · t s c views · Esc back$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Enter opens a scout/ })).toBeUndefined()
     expect(await ui.find({ key: 'scout-new' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
@@ -689,7 +689,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const tab = texts.findIndex(t => t === '[t] Tasks (1)')
     const rule = texts.findIndex(t => /^━{50}$/.test(t))
-    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · t s c views · Esc close$/).test(t))
+    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · t s c views · Esc back$/).test(t))
     const row = texts.findIndex(t => (view === 'tasks' ? /Write it up/ : /^bugs/).test(t))
     expect(tab).toBeGreaterThan(-1)
     expect(rule).toBeGreaterThan(tab)
@@ -1110,7 +1110,7 @@ for (const width of [50, 90]) {
     expect((await ui.find({ key: 'scout:simplify' }))?.props.label).toBe('simplify: paused')
     expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · t s c views · Esc close'])
+    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · t s c views · Esc back'])
     expect(texts.some(t => /run now \/ edit on its page/.test(t))).toBe(false)
     await ui.unmount()
   })
@@ -1445,10 +1445,10 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
 const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
   ['task page', { opened: 'T-5' }, null, taskKeys('review')],
   ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
-  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'close' }]],
+  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'back' }]],
   ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
   ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Esc', word: 'cancel' }]],
-  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'close' }]],
+  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'back' }]],
 ]
 for (const [name, seed, press, hints] of NO_MODE_PAGES)
   test(`the ${name} ends with a footer of its own key hints and has no mode line`, async ($, on) => {

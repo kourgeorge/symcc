@@ -9,9 +9,6 @@ import { noteForLead, brief } from '../tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
 import type { PaneParts } from './parts'
 
-/** The waiting task whose "Answer…" button was pressed (its text box is open), if any. */
-let answering: string | null = null
-
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const { Box, Text, Button, Input, v, width, color, word, mark, act, C, target, footer, buttonRows, heading, paragraphs } = pane
@@ -182,17 +179,17 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
   const asked = t as BoardTask
   const choices = t.status === 'waiting' ? answerChoices(asked.asked_files, asked.options) : []
-  if (answering !== null && answering !== t.id) answering = null
-  const typing = !choices.length || answering === t.id
+  if (S.answering !== null && S.answering !== t.id) S.answering = null
+  const typing = !choices.length || S.answering === t.id
   const sendAnswer = (text: string) =>
     act(async () => {
       if (!text.trim()) return
-      answering = null
+      S.answering = null
       await runTool($, 'change', { task: t.id, answer: text.trim() })
       noteForLead(`The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
     })
   const choicePress = (i: number) => {
-    if (i === choices.length - 1) return () => ((answering = t.id), $.ui.invalidate('ui.render'))
+    if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
     if (asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles($, t.id) : await refuseAskedFiles($, t.id))))
     return sendAnswer(choices[i]!)
   }

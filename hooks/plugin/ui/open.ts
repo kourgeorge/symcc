@@ -23,7 +23,22 @@ export async function resetPane($: $, which?: PaneTab, task = '') {
 export async function openPane($: $, o: { tab?: PaneTab; task?: string; focus?: boolean; quiet?: boolean } = {}) {
   const go = async () => {
     await resetPane($, o.tab, o.task)
-    return $.ui.open({ id: S.N.pane, title: boardTitle(S.root, S.N.name), ...(o.focus !== false ? { focus: true as const, closeOnEscape: true as const } : {}) })
+    return $.ui.open(paneArgs(o.focus !== false))
   }
   return o.quiet ? go().catch(() => undefined) : go()
+}
+
+/** What $.ui.open gets for the board panel; `focus` asks for the keyboard and lets Esc reach ui.close. */
+const paneArgs = (focus: boolean) => ({ id: S.N.pane, title: boardTitle(S.root, S.N.name), ...(focus ? { focus: true as const, closeOnEscape: true as const } : {}) })
+
+/**
+ * Asks for the keyboard back after an Esc the panel kept open. Claude Code always hands the keys to its
+ * prompt on Esc (from a text box, a button or a pick list) before the panel hears of it, and a plugin
+ * can't stop that; so the panel asks for them again, at once and once more a moment later in case the
+ * prompt took them after. Claude Code says no while the prompt holds text: the keys then stay there.
+ */
+export function takeKeysBack($: $) {
+  const ask = () => void $.ui.open(paneArgs(true)).catch(() => undefined)
+  ask()
+  $.clock.after(50, ask)
 }

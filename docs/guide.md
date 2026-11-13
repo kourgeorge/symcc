@@ -259,6 +259,14 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   close. An open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
+- **Esc goes one step back**, everywhere in the panel. In a text box (the search, "Your
+  answer", the reject reason, a new scout's name, a setting's value) or a pick list it
+  leaves it and cancels it; in a task's changes it goes back to the task; on a task page,
+  the Scouts list or Settings it goes back to the board list; on a scout's page, back to the
+  Scouts list. Only on the board list with no search does Esc close the panel. Claude Code
+  always gives the keys to its prompt on Esc, so after a step back the panel asks for them
+  again at once; if you had text in the prompt, Claude Code keeps the keys there (ctrl+x tab
+  or a click goes back to the panel).
 - **Search the tasks**: on the Tasks view press `f` (or the `[f] search` button in the footer)
   and type. The list shrinks as you type to the tasks that match every word you typed, in
   any case, looking at the task's id (`T-12`, or just `12`), title, details, role, status,
@@ -276,12 +284,12 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   `never ran`) and its model. On a narrow panel the model column goes first, then the
   `last:` one; the name is never cut. Enter opens a scout: its state, its file, its
   instructions, its last report, and buttons to run it now, edit it, or pause or resume it.
-  Esc goes back to the list.
+  Esc goes back to the Scouts list, and from there to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
   `enabled` flip on/off; `mode`, `notify` and `target_branch` open a pick list (off / review
   / auto; only the notify choices this computer can play; or your local branches); numbers and `test_commands` open an edit box (several test
-  commands are joined with ` && `). Esc cancels. Saving uses the same checks and limits as
+  commands are joined with ` && `). Esc cancels; Esc again goes back to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
 - Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`,
