@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -75,9 +75,7 @@ export async function startWorker($: $, id: string) {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]
       const at = now()
-      // An old role (tests, backend, frontend) runs as its new one, with a history line saying so.
-      const swap = oldRoleSwap(cur!, roles)
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at, !!cur!.merge_main), ...(swap ? { role: swap.role, history: [...cur!.history, swap.line] } : {}) }, at)
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
       return [y, find(y, id)!]
     })
     if (!t) return

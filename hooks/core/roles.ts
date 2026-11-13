@@ -120,21 +120,6 @@ export function mergeRoles(builtIn: RoleDef[], project: RoleDef[]): RoleDef[] {
 /** The roles that come with the plugin (one file each in its roles/ folder). */
 export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refactor', 'researcher', 'security', 'tester']
 
-/** Roles that were built in before and are gone now, and the role a task with one gets when it starts. */
-export const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: DEFAULT_ROLE, frontend: DEFAULT_ROLE }
-
-/**
- * When a task with an old role (tests, backend, frontend) starts or is retried: the role it runs with
- * now and a history line saying so. Null when the role is fine as it is, also when the project brings
- * the old role back with its own roles/<name>.md file.
- */
-export function oldRoleSwap(t: Pick<SymccTask, 'role'>, roles: RoleDef[]): { role: string; line: string } | null {
-  const was = t.role?.trim() ?? ''
-  const to = OLD_ROLES[was.toLowerCase()]
-  if (!to || findRole(roles, was)) return null
-  return { role: to, line: `role ${was} is no longer built in; runs as ${to}` }
-}
-
 /** A task's role name: its role, or general when none is set. */
 export const roleOf = (t: Pick<SymccTask, 'role'>): string => t.role?.trim() || DEFAULT_ROLE
 

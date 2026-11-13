@@ -82,7 +82,7 @@ export type SymccTask = {
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
   history: string[]
-  /** who made the task, why and from which request; missing on tasks made before it was recorded */
+  /** who made the task, why and from which request (a task from before origins were kept was given one by the lead, why "made before origins were kept") */
   origin?: SymccOrigin
   /** the worker role (a role file's name) the lead picked; missing = "general" */
   role?: string
@@ -97,6 +97,10 @@ export type SymccTask = {
   branch: string | null
   /** the agent id of the last worker started on this task */
   agent?: string
+  /** the files a worker asked for with NEED FILES while the task waits (the owner can allow them from the board); only while waiting */
+  asked_files?: string[]
+  /** the choices a worker gave with its QUESTION (OPTIONS: a | b), shown as buttons; only while waiting */
+  options?: string[]
   created_at: string
   updated_at: string
 }

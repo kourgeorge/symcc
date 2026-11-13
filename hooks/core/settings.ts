@@ -78,7 +78,7 @@ export function unplayableNote(n: Notify, can: Playable): string {
   return `notify is '${n}' but no ${n === 'voice' ? 'speech program' : 'sound player'} was found here; nothing will play`
 }
 
-/** Is the plugin on for this project? Yes unless /<name>-off turned it off (old boards have no `enabled`: on). */
+/** Is the plugin on for this project? Yes unless /<name>-off turned it off (a board without `enabled`, or no board: on). */
 export const symccOn = (b: Partial<Pick<Board, 'enabled'>>) => b.enabled !== false
 
 /** The board with the plugin turned on or off; nothing else changes (tasks, mode and scouts are kept). */

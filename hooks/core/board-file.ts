@@ -46,9 +46,7 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
  * worker owns it; `agent` is the agent id of the last worker started on it.
  */
-/** `asked_files`: the files a worker asked for with NEED FILES while the task waits (the owner can allow them from the board);
- *  `options`: the choices a worker gave with its QUESTION (OPTIONS: a | b), shown as buttons. Both only while waiting. */
-export type BoardTask = SymccTask & { session?: string; agent?: string; asked_files?: string[]; options?: string[] }
+export type BoardTask = SymccTask & { session?: string }
 
 /** The data folder for the default name; the paths below are for it too. For another name use namesFor(name). */
 export const DATA_DIR = dataDir()
@@ -117,6 +115,8 @@ export type BoardRead = {
   skipped: number
   /** the settings whose value was bad and were set to their default */
   fixed: string[]
+  /** how many tasks were brought to the current shape (see migrateTask); the board should then be saved once */
+  migrated: number
 }
 
 const STATUSES: SymccStatus[] = ['backlog', 'todo', 'doing', 'paused', 'waiting', 'review', 'failed', 'done', 'dropped']
@@ -163,6 +163,37 @@ function cleanTask(t: unknown): BoardTask | null {
   return (typeof session === 'string' && session && x.status === 'doing' ? { ...rest, session } : rest) as BoardTask
 }
 
+/** Roles that were built in before and are gone now, and the role a task with one gets. */
+const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general', frontend: 'general' }
+
+/**
+ * A task from an older board brought to the current shape, or null when it already has it. Run on
+ * every read, but it only changes old data, so once the board is saved it never changes anything again:
+ * - no origin: origin { by: 'lead', why: 'made before origins were kept' }, dated when the task was made;
+ * - role tests, backend or frontend (no longer built in): tester, general, general;
+ * - a try with no end time (left open by a reload) ends where the next try started, or at the task's
+ *   last change; the last try of a task that is "doing" is running now and stays open.
+ */
+export function migrateTask(t: BoardTask): BoardTask | null {
+  let out = t
+  if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
+  const role = typeof t.role === 'string' ? OLD_ROLES[t.role.trim().toLowerCase()] : undefined
+  if (role) out = { ...out, role }
+  const rs = Array.isArray(t.runs) ? t.runs : []
+  const open = (r: SymccRun, i: number) => typeof r.started === 'string' && !r.ended && !(i === rs.length - 1 && t.status === 'doing')
+  if (rs.some(open)) {
+    out = {
+      ...out,
+      runs: rs.map((r, i) => {
+        if (!open(r, i)) return r
+        const end = rs[i + 1]?.started ?? t.updated_at
+        return { ...r, ended: end && Date.parse(end) >= Date.parse(r.started) ? end : r.started }
+      }),
+    }
+  }
+  return out === t ? null : out
+}
+
 /**
  * Reads board.json's text. No text (no file) is a new, empty board. Text that is not JSON, or
  * not a board object, is `broken`: the board returned then is only a stand-in and must never be
@@ -170,30 +201,29 @@ function cleanTask(t: unknown): BoardTask | null {
  * counted), a bad setting gets its default (and is named in `fixed`), every good value is kept.
  */
 export function readBoard(text: string | null): BoardRead {
-  if (text === null || text === undefined || !String(text).trim()) return { board: emptyBoard(), skipped: 0, fixed: [] }
+  if (text === null || text === undefined || !String(text).trim()) return { board: emptyBoard(), skipped: 0, fixed: [], migrated: 0 }
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch (e) {
-    return { board: emptyBoard(), broken: `not valid JSON (${String((e as Error)?.message ?? e).slice(0, 120)})`, skipped: 0, fixed: [] }
+    return { board: emptyBoard(), broken: `not valid JSON (${String((e as Error)?.message ?? e).slice(0, 120)})`, skipped: 0, fixed: [], migrated: 0 }
   }
-  if (!isObj(raw)) return { board: emptyBoard(), broken: 'it is not a board (the file holds no JSON object)', skipped: 0, fixed: [] }
-  if ('tasks' in raw && !Array.isArray(raw.tasks)) return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [] }
+  if (!isObj(raw)) return { board: emptyBoard(), broken: 'it is not a board (the file holds no JSON object)', skipped: 0, fixed: [], migrated: 0 }
+  if ('tasks' in raw && !Array.isArray(raw.tasks)) return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [], migrated: 0 }
   const board = emptyBoard()
   const fixed: string[] = []
   for (const k of Object.keys(SETTING_OK) as (keyof typeof SETTING_OK)[]) {
-    if (!(k in raw)) continue // an old board without the setting: the default, nothing to report
+    if (!(k in raw)) continue // a setting not in the file: the default, nothing to report
     if (SETTING_OK[k](raw[k])) (board as Record<string, unknown>)[k] = raw[k]
     else fixed.push(k)
   }
-  // the old on/off `voice` setting becomes notify once (voice or off); the board is saved without it
-  if (!('notify' in raw) && typeof raw.voice === 'boolean') board.notify = raw.voice ? 'voice' : 'off'
   const archived = cleanArchived(raw.archived)
   if (archived) board.archived = archived
   else if ('archived' in raw) fixed.push('archived')
   if (Array.isArray(raw.archived_done)) board.archived_done = [...new Set(raw.archived_done.filter((x): x is string => typeof x === 'string').map(normId))]
   else if ('archived_done' in raw) fixed.push('archived_done')
   let skipped = 0
+  let migrated = 0
   const seen = new Set<string>()
   for (const t of (raw.tasks as unknown[] | undefined) ?? []) {
     const c = cleanTask(t)
@@ -202,14 +232,16 @@ export function readBoard(text: string | null): BoardRead {
       continue
     }
     seen.add(c.id)
-    board.tasks.push(c)
+    const m = migrateTask(c)
+    if (m) migrated++
+    board.tasks.push(m ?? c)
   }
   // next_id never goes back below a task already on the board (a new task must not reuse an id)
   // (nor an archived one: archived done ids count too)
   const top = Math.max(0, ...[...board.tasks.map(t => t.id), ...(board.archived_done ?? [])].map(id => Number(/^T-(\d+)$/.exec(id)?.[1] ?? 0)))
   if ('next_id' in raw && !(isNum(raw.next_id) && Number.isInteger(raw.next_id) && raw.next_id >= 1)) fixed.push('next_id')
   board.next_id = Math.max(isNum(raw.next_id) && Number.isInteger(raw.next_id) && raw.next_id >= 1 ? raw.next_id : 1, top + 1)
-  return { board, skipped, fixed }
+  return { board, skipped, fixed, migrated }
 }
 
 /** The board in board.json's text (see readBoard); a file that can't be read gives an empty stand-in. */
@@ -251,8 +283,7 @@ export const isSha = (x: unknown): x is string => typeof x === 'string' && /^(?:
 /**
  * A task from board.json with its commit fields made safe: `runs[].commits` keeps only full
  * commit ids (a broken list is dropped), a run that is not an object is dropped, and a `merged`
- * that is not a full commit id is dropped. Old boards
- * without these fields load as they are.
+ * that is not a full commit id is dropped (only full ids ever reach git).
  */
 export function cleanCommitFields<T extends { runs?: unknown; merged?: unknown }>(t: T): T {
   if (!t || typeof t !== 'object') return t

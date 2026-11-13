@@ -16,10 +16,10 @@ export type DetailRow = { label: string; segs: Seg[] }
 export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'subtle', todo: 'subtle', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'subtle' }
 export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
 
-/** Who a task came from, with its own color: the owner, scout NAME, T-x (split), the lead; "unknown" for old tasks. */
+/** Who a task came from, with its own color: the owner, scout NAME, T-x (split), the lead; "unknown" when its origin is missing or broken (hand-edited). */
 export function originSegs(t: { origin?: unknown }): Seg[] {
   const o = originOf(t)
-  if (!o) return [{ text: 'unknown', color: 'subtle' }, { text: ' (made before origins were kept)', color: 'subtle' }]
+  if (!o) return [{ text: 'unknown', color: 'subtle' }]
   const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
   const taskPart: Seg[] = o.task ? [{ text: o.task, color: 'claude', bold: true }, ...(how ? [{ text: ` (${how})`, color: 'subtle' }] : [])] : []
   const then = (who: Seg[]) => (taskPart.length ? [...who, { text: ', ', color: 'subtle' }, ...taskPart] : who)

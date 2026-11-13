@@ -52,6 +52,19 @@ export async function load($: $): Promise<Board> {
   return r.board
 }
 
+/**
+ * Saves board.json once in the current shape when reading it brought old tasks up to date (see
+ * migrateTask), keeping a copy of the file as it was. Nothing happens for a board already current.
+ */
+export async function saveMigrated($: $): Promise<void> {
+  const text = await $.fs.read(path(S.N.boardFile)).catch(() => null)
+  if (typeof text !== 'string') return
+  const r = readBoard(text)
+  if (r.broken || !r.migrated) return
+  await keepCopy($, text, 'before-migrate', c => `${S.N.boardFile}: ${r.migrated} older task${r.migrated > 1 ? 's were' : ' was'} brought to the current shape${c ? `. The file as it was is kept in ${c}` : ''}.`)
+  await change($, b => b)
+}
+
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
 export async function isOn($: $): Promise<boolean> {
   const text = await $.fs.read(path(S.N.boardFile)).catch(() => null)
