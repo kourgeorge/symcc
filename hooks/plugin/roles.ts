@@ -1,4 +1,4 @@
-import { type RoleDef, parseRole, roleSkipReason, skippedRoleNote, mergeRoles } from '../board'
+import { type RoleDef, parseRole, roleSkipReason, skippedRoleNote, mergeRoles, EXTRA_TOOLS } from '../board'
 import { type $, skippedRoles, S } from './state'
 import { path } from './store'
 import { tellLead } from './tell'
@@ -30,7 +30,7 @@ export function skippedRole($: $, file: string, reason: string) {
   if (skippedRoles.get(file) === reason) return
   skippedRoles.set(file, reason)
   $.ui.toast(S.N.toast(`skipped ${file}: ${reason}`))
-  tellLead($, `${note}. That role can't be used until the file is fixed (front matter with a description; a name of letters, digits, - and _).`)
+  tellLead($, `${note}. That role can't be used until the file is fixed (front matter with a description; a name of letters, digits, - and _; tools only from ${EXTRA_TOOLS.join(', ')}).`)
 }
 
 /** Reads the roles again: the plugin's roles/, then the project's .<name>/roles/ over them. */
