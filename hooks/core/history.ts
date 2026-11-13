@@ -15,9 +15,21 @@ export function changedFields(t: Partial<SymccTask>, patch: Partial<SymccTask>):
   return CHANGE_FIELDS.filter(k => patch[k] !== undefined && !same(patch[k], t[k]))
 }
 
+/** "restarted: the task was changed (details, files)": why a running worker was stopped by a change. */
+export const changeRestartWhy = (fields: readonly string[]): string => `restarted: the task was changed${fields.length ? ` (${fields.join(', ')})` : ''}`
+
 /** "try 2: restarted: the task was changed (details, files)": a running worker was stopped by a change. */
 export function changeRestartLine(t: Pick<SymccTask, 'role' | 'attempts'>, fields: readonly string[]): string {
-  return `${tryLabel(t)}: restarted: the task was changed${fields.length ? ` (${fields.join(', ')})` : ''}`
+  return `${tryLabel(t)}: ${changeRestartWhy(fields)}`
+}
+
+/**
+ * The try's end reason for a stop worded `why` as in stoppedLine: "restarted: X" is restarted
+ * (note X), anything else is stopped (note `why`).
+ */
+export function stopEnd(why: string): [by: 'restarted' | 'stopped', note: string] {
+  const m = /^restarted\b:?\s*(.*)$/.exec(why)
+  return m ? ['restarted', m[1]!] : ['stopped', why]
 }
 
 /** "files widened: + a, + b": files the change adds to the task's list; null when it adds none. */

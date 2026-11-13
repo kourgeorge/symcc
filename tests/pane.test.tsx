@@ -1268,6 +1268,37 @@ test('a research task shows its note as a row in Details', async ($, on) => {
   await ui.unmount()
 })
 
+const ENDED_RUNS = [
+  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:00:24.000Z', ended_by: 'restarted', ended_note: 'the task was changed (after, details)' },
+  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', tokens: 5_600_000, ended_by: 'finished', ended_note: 'clash with main' },
+  { started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', tokens: 232_500, merge_main: true, ended_by: 'finished', ended_note: 'merged' },
+  { started: '2026-11-09T13:00:00.000Z', ended: '2026-11-09T13:01:00.000Z' },
+]
+
+test('the Runs rows say how each try ended; a run with no reason shows none', async ($, on) => {
+  const t = task('T-1', 'done', 'Ended', { attempts: 4, runs: ENDED_RUNS })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /try 1: 24s · restarted: the task was changed \(after, details\)/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 2: 17m · 5\.6M tokens · finished: clash with main/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 3: 3m · 232\.5k tokens · merged main in \(clash with main\) · finished: merged/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ {2}try 4: 1m$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('/symcc-task says how each try ended next to its time and tokens', async ($, on) => {
+  const t = task('T-1', 'done', 'Ended', { attempts: 4, runs: ENDED_RUNS })
+  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [t] }
+  fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  stateOf(on, {})
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: undefined }))
+  const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
+  expect(text).toContain('  try 1: 24s · restarted: the task was changed (after, details)\n')
+  expect(text).toContain('  try 3: 3m · 232.5k tokens · merged main in (clash with main) · finished: merged\n')
+  expect(text).toContain('  try 4: 1m\n')
+})
+
 test('/symcc-task shows the latest report, or its first 40 lines and where the full one is', async ($, on) => {
   const many = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
   const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })] }

@@ -27,7 +27,16 @@ export type SymccRun = {
    * relative to the project, e.g. ".symcc/reports/T-3-try-2.md". Missing on old boards and when it could not be saved.
    */
   report?: string
+  /** how this try ended (see ended_note for the details); missing while it runs and on old boards */
+  ended_by?: SymccRunEnd
+  /** a short note on how it ended, worded like the task's history lines, e.g. "merged" or "the task was changed (details)" */
+  ended_note?: string
+  /** set when this try first had to merge main into the branch, after a clash with main */
+  merge_main?: true
 }
+
+/** How a try ended: its work was checked, it was stopped and sent back to work, stopped, ran too long, or the worker asked something. */
+export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | 'asked'
 
 /**
  * Where a task came from, so it can be traced back to the request that started it.

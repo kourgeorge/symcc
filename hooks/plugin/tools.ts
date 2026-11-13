@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
@@ -358,7 +358,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const wasRunning = t.status === 'doing'
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
-        await change($, x => stashTask(patchTask(x, t.id, fields(), now(), S.N.dir), t.id, now()))
+        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
       }
@@ -393,7 +393,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       await change($, x => {
         const cur = find(x, t.id) ?? t
         const lines = changeLines(t, patch, wasDoing, answer)
-        return patchTask(x, t.id, lines.length ? { ...patch, history: [...cur.history, ...lines] } : patch, now(), S.N.dir)
+        const end = wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
+        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
       })
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
@@ -422,7 +423,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
@@ -433,7 +434,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
-      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped' }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
       void pump($)
       return checking ? `${t.id} dropped; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it stays done)` : `${t.id} dropped`
@@ -444,12 +445,12 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) {
         stopAsked.set(t.id, 'paused')
-        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}` }, now()))
+        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
         return `${t.id} paused; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it is done); ${S.N.name} resume ${t.id} continues it`
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
