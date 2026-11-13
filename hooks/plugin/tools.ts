@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
@@ -90,6 +90,8 @@ export const MANUAL = (): Record<string, string> => ({
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
                        (several test commands: join them with " && "; "none" clears them)
                        a value over its limit is cut to it, and the answer says so
+  /${S.N.name}-stats [7d|T-1..T-9]  time and token stats: totals, averages per task and per try,
+                       outcomes, by role, origin and day (all tasks, the last N days, or an id range)
   /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
                        guide, no workers, scouts, updates or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
@@ -257,6 +259,7 @@ export const TOOLS = () => [
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
   {
     name: 'setup_git',
     description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Sets target_branch to that branch. Never pushes, adds no remote.`,
@@ -268,6 +271,21 @@ export const TOOLS = () => [
     inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
+
+/**
+ * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
+ * tasks and the archived ones. Read-only. A bad range gives the usage line.
+ */
+export async function statsText($: $, args: string): Promise<string> {
+  const range = parseStatsRange(args, S.N.name)
+  if (range.kind === 'bad') return range.message
+  const b = await load($)
+  const file = path(S.N.archiveFile)
+  const text = (await $.fs.exists(file).catch(() => false)) ? await $.fs.read(file).catch(() => null) : null
+  const r = readArchive(text)
+  const archiveProblem = r.broken ? `${S.N.archiveFile} can't be read (${r.broken})` : !r.archive.tasks.length && archivedCount(b) ? `${archivedCount(b)} archived tasks, but ${S.N.archiveFile} holds none` : undefined
+  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs: Date.now(), offsetMin: localOffset(), name: S.N.name })
+}
 
 export type In = Record<string, unknown>
 export const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
@@ -452,6 +470,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
     }
+    case 'stats':
+      return statsText($, str(a.range) ?? '')
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {

@@ -23,7 +23,7 @@ import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScout
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now } from './plugin/store'
 import { noteForLead, brief } from './plugin/tell'
-import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport } from './plugin/tools'
+import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane } from './plugin/ui/open'
 import { renderPane } from './plugin/ui/pane'
@@ -61,6 +61,7 @@ export async function registerAll($: $) {
     { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), or pause or resume it (/${S.N.name}-scout <name> pause|resume)`, argumentHint: '<name> [pause|resume]' },
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
+    { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: totals, averages per task and per try, outcomes, by role, origin and day: /${S.N.name}-stats [7d|T-100..T-130]`, argumentHint: '[7d|T-1..T-9]' },
     { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: Claude works as normal, nothing runs; the board is kept` },
     { name: `${S.N.name}-on`, description: `Turn ${S.N.name} back on for this project, in the mode the board had` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
@@ -201,6 +202,8 @@ export const register: Register = on => {
   // panel, /<name>-<word> does one thing. Registered under the plugin's name, so matched here.
   on('command.run', async ($, e, next) => {
     useName($)
+    // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
+    if (e.command === `${S.N.name}-stats`) return { text: await statsText($, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
     if (!commandNames(S.N.name).includes(e.command)) return next(e)
     const b = await load($)
     const cmd = parseCommand(e.command, e.args, modeOf(b), S.N.name)

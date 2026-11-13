@@ -12,6 +12,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Worker roles](#worker-roles)
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
+- [Stats: time and tokens](#stats-time-and-tokens)
 - [Turning symcc off](#turning-symcc-off)
 - [Where everything lives](#where-everything-lives)
 - [Good to know](#good-to-know)
@@ -461,6 +462,27 @@ So `board.json` stays small, done and dropped tasks that have not changed for
   it up with its `board` tool). Archived tasks are read-only: change, ask, approve and so on
   answer "T-12 is archived". Retrying an archived *dropped* task brings it back to the
   board as `todo`, with a history line.
+
+---
+
+## Stats: time and tokens
+
+`/symcc-stats` prints a plain text report built only from what the board already keeps (each
+task's tries with their start, end and tokens, its tries count and its history), archived
+tasks included. You can also ask the lead, e.g. "how much did we spend this week?": it uses
+its read-only `stats` tool.
+
+- **Range:** `/symcc-stats` covers every task; `/symcc-stats 7d` the tasks changed in the last
+  7 days; `/symcc-stats T-100..T-130` an id range.
+- **Parts:** totals (tasks by status, worker time, tokens); per task (average and median time
+  and tokens of done tasks, tries per task, the 5 biggest by tokens and by time); per try
+  (average time and tokens, share of tasks done on the first try); flow (time from made to
+  done); outcomes (merged on its own or approved by you, failed tries by reason: tests,
+  clash with main, scope, stopped, rejected); by role and by origin; the last 7 days with activity.
+- **What is left out:** older tasks with no tries recorded are left out of the averages (the
+  report says how many). Scout runs aren't counted. Time waiting for you is not shown: history
+  lines have no times. A try from an older board with no end time counts up to the next try,
+  or the task's last change.
 
 ---
 
