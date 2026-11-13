@@ -8,6 +8,7 @@ import { modeLabel, modeText } from './review'
 import { roleMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
+import { PLAN_NOTE } from './plan'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
 export function folderName(path: string): string {
@@ -51,8 +52,10 @@ function idList(ids: string[]): string {
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note.
  */
-export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto'): string | undefined {
-  const join = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
+export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false): string | undefined {
+  const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
+  // in plan mode the line says so first (see core/plan.ts)
+  const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
   const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
   const m = modeOf({ mode })
@@ -67,12 +70,12 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, dri
     ].filter((x): x is string => !!x)
     // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
     const parked = ids('backlog').length
-    return join([label, (join(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other, branch_note])
+    return join([label, (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other, branch_note])
   }
   if (!driving) return join([label, 'empty' + other, branch_note])
   // an empty board in mode auto stays quiet, so a fresh project shows nothing
   if (m !== 'auto') return join([label, branch_note])
-  return branch_note || undefined
+  return join([branch_note]) || undefined
 }
 
 // ---------------- the banner at the top of the board panel ----------------

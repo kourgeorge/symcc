@@ -6,6 +6,7 @@ import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { roleMark } from './roles'
 import { onDemand } from './scouts'
+import { PLAN_NOTE } from './plan'
 import { fmtDuration, runMs } from './runs'
 import { offStatusLine } from './settings'
 import { num } from './text'
@@ -44,7 +45,7 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
   return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
 }
 
-type StripBoard = { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+type StripBoard = { mode: SymccMode; enabled?: boolean; plan_mode?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
 /** The one-line status strip: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
  *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
@@ -62,6 +63,7 @@ export function bannerStrip(v: StripBoard, nowMs: number, width = Infinity, name
   const busy = v.tasks.filter(t => t.status === 'doing').length
   const n = v.scouts.length
   const base = [`${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
+  if (v.plan_mode) return lead + `${base} · ${PLAN_NOTE}` // no scout starts in plan mode, so no "next"
   const next = v.mode === 'off' ? '' : nextScoutText(v.scouts, nowMs)
   const full = next ? `${base} (${next})` : base
   return lead + (full.length <= width ? full : base)
