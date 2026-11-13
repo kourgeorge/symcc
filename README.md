@@ -205,6 +205,7 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-scout <name> pause` / `resume` | Pause a scout (it doesn't run, on its timer or with run now, until you resume it), or resume it. `p` on the scout's page in the panel does the same |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`, `/symcc-settings test_commands "npm test"` |
+| `/symcc-stats [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too): totals, averages and medians per task and per try, outcomes, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range |
 | `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates or voice); the board is kept |
 | `/symcc-on` | Turn symcc back on, in the mode the board had |
 | `/symcc-help [topic]` | The built-in manual |
