@@ -435,7 +435,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
-    '2 doing · 1 to do · 1 done · 8m · 643.7k tokens in all',
+    '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
   expect(more[4]!.parts.filter(p => p.bold).map(p => p.text)).toEqual(['2 doing', '1 to do', '1 done'])

@@ -144,7 +144,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog').replace(/^(\d+) done$/, `$1 done${gone ? ` ${archivedNote(gone)}` : ''}`))
     if (gone && !b.tasks.some(t => t.status === 'done')) counts.push(`${gone} done (archived)`)
     const t = boardTotal(b, nowMs)
-    texts.push(join([...counts.map(c => fact(c, true)), ...(t.tries ? [fact(fmtTotal(t))] : [])]))
+    texts.push(join([...counts.map(c => fact(c, true)), ...(t.tries ? [fact(fmtTotal(t, 'tokens'))] : [])]))
   }
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW

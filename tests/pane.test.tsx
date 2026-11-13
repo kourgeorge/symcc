@@ -429,9 +429,9 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
 
 test('the banner shows the counts and the total time and cost of all tries', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
-  // wide enough for the whole line (the tokens figure says it is every kind added up: "in all")
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens in all · ~\$0\.42$/ })).toBeDefined()
+  // the whole line fits in 50 columns (the banner says just "tokens"; the task page says "tokens in all")
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 50 }, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens · ~\$0\.42$/ })).toBeDefined()
   await ui.unmount()
 })
 

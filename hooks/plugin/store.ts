@@ -61,7 +61,7 @@ export async function saveMigrated($: $): Promise<void> {
   if (typeof text !== 'string') return
   const r = readBoard(text)
   if (r.broken || !r.migrated) return
-  await keepCopy($, text, 'before-migrate', c => `${S.N.boardFile}: ${r.migrated} older entr${r.migrated > 1 ? 'ies were' : 'y was'} (tasks or archived totals) brought to the current shape${c ? `. The file as it was is kept in ${c}` : ''}.`)
+  await keepCopy($, text, 'before-migrate', c => `${S.N.boardFile}: ${r.migrated} older entr${r.migrated > 1 ? 'ies' : 'y'} (tasks or archived totals) ${r.migrated > 1 ? 'were' : 'was'} brought to the current shape${c ? `. The file as it was is kept in ${c}` : ''}.`)
   await change($, b => b)
 }
 
