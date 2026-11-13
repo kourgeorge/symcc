@@ -2349,3 +2349,26 @@ test('a scout run stopped from the agent controls is not saved as a report and n
   expect(w.files.has('/repo/.symcc/scouts.json')).toBe(false)
   expect(w.toasts.some(t => t.includes('scout gaps was stopped; nothing reported'))).toBe(true)
 })
+
+// ---------------- history lines for restarts and answers ----------------
+
+import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppedLine, ANSWER_LINE_CHARS } from '../hooks/board'
+
+test('changeLines names the changed fields of a restart, the widened files and the owner answer', async () => {
+  const t = { attempts: 2, role: 'general', files: ['hooks/'], details: 'old', after: [] as string[] }
+  expect(changedFields(t, { details: 'old', files: ['hooks/', 'tests/'], after: [] })).toEqual(['files'])
+  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)'])
+  expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual(['files widened: + a.ts, + b.ts'])
+  expect(changeLines(t, {}, false, ' yes, go ')).toEqual(['the owner answered: “yes, go”'])
+  expect(changeLines(t, { files: ['hooks/'] }, false)).toEqual([])
+  expect(filesWidenedLine(['a'], undefined)).toBe(null)
+  expect(ownerAnsweredLine('x'.repeat(1000)).length).toBeLessThan(ANSWER_LINE_CHARS + 30)
+  expect(stoppedLine({ attempts: 3, role: 'tester' }, 'paused')).toBe('try 3 (role tester): stopped: paused')
+})
+
+test('backToTodo of a running task says in its history why it restarts', async () => {
+  const [b] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
+  const t = { ...b.tasks[0]!, status: 'doing' as const, attempts: 1 }
+  expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(backToTodo({ ...t, status: 'failed' }, 'x', T).history).toEqual(t.history)
+})

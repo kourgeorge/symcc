@@ -918,3 +918,36 @@ test('the spoken line joins merged tasks and tasks that need the owner', () => {
   expect(spokenLine(['T-3', '?T-5', '?T-6'])).toBe('T-3 done. T-5 and T-6 need you')
   expect(spokenLine([])).toBe('')
 })
+
+// ---------------- history lines of a change ----------------
+
+test('change on a running task adds a restart line naming the fields that changed, and a line for widened files', async () => {
+  const w = world()
+  const [b] = boardWith('review')
+  await saveBoard(w.$, b)
+  await runTool(w.$, 'change', { task: 'T-1', details: 'new plan', files: ['src/', 'docs/a.md', 'tests/'] })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history).toContain('try 1: restarted: the task was changed (details, files)')
+  expect(t.history).toContain('files widened: + docs/a.md, + tests/')
+})
+
+test("the owner's answer to a waiting task goes into its details and its history", async () => {
+  const w = world()
+  const [b] = boardWith('review')
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'NEED FILES: docs/a.md', note: 'waiting for you' }, ISO))
+  await runTool(w.$, 'change', { task: 'T-1', answer: 'ok' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.at(-1)).toBe('the owner answered: “ok”')
+  expect(t.details).toContain('Owner\'s answer to "NEED FILES: docs/a.md": ok')
+  expect(t.history.some(l => l.includes('restarted'))).toBe(false)
+})
+
+test('pause of a running task and resume both leave a history line', async () => {
+  const w = world()
+  const [b] = boardWith('review')
+  await saveBoard(w.$, b)
+  await runTool(w.$, 'pause', { task: 'T-1' })
+  await runTool(w.$, 'resume', { task: 'T-1' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.slice(-2)).toEqual(['try 1: stopped: paused', 'resumed after a pause'])
+})

@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode } from '../../types'
-import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo } from '../board'
+import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine } from '../board'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
@@ -416,7 +416,10 @@ export async function setBoardMode($: $, m: SymccMode, who: string): Promise<str
     const ids: string[] = []
     await haltAll($, `${who} turned the board off`, async w => {
       ids.push(w.task)
-      await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again` }, now()))
+      await change($, x => {
+        const cur = find(x, w.task)
+        return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again`, ...(cur ? { history: [...cur.history, stoppedLine(cur, `${who} turned the board off`)] } : {}) }, now())
+      })
     })
     if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
     await publish($, await load($))

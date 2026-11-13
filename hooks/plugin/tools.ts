@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
 import { loadRoles } from './roles'
@@ -211,7 +211,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
 - A worker that needs the owner to decide something stops and answers "QUESTION: ..."; the task then waits for the owner (NEEDS YOU) with that question, and with voice on the owner hears "T-5 needs you". You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
-- When the owner answers a waiting task, put the answer into the task with ${S.N.name} change (that sends it back to work; what the worker already changed is kept).
+- When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
@@ -232,7 +232,7 @@ export const TOOLS = () => [
   {
     name: 'change',
     description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
@@ -317,7 +317,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, fields(), now(), S.N.dir))
         return `${t.id} updated (still in the backlog)`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role', 'answer'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
@@ -332,7 +332,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (typeof a.order === 'number') patch.order = a.order
       if (typeof a.needs_review === 'boolean') patch.needs_review = a.needs_review
       if (role) patch.role = role
-      await change($, x => patchTask(x, t.id, patch, now(), S.N.dir))
+      // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
+      const answer = str(a.answer)?.trim()
+      if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
+      await change($, x => {
+        const cur = find(x, t.id) ?? t
+        const lines = changeLines(t, patch, wasDoing, answer)
+        return patchTask(x, t.id, lines.length ? { ...patch, history: [...cur.history, ...lines] } : patch, now(), S.N.dir)
+      })
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
     }
@@ -359,7 +366,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you' }, now()))
+      const asked = t.status === 'doing' && !checkingNow(t.id)
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}) }, now()))
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
@@ -386,14 +394,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}` }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
     case 'resume': {
       const t = await taskOrThrow($, id)
       if (t.status !== 'paused') return `${t.id} is not paused (it is ${t.status})`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed' }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed', history: [...(find(x, t.id) ?? t).history, 'resumed after a pause'] }, now()))
       void pump($)
       return `${t.id} resumed`
     }

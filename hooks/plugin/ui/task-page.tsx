@@ -261,7 +261,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             onSubmit={value =>
               act(async () => {
                 if (!value.trim()) return
-                await runTool($, 'change', { task: t.id, details: `${t.details}\n\nOwner's answer to "${t.question ?? ''}": ${value.trim()}` })
+                await runTool($, 'change', { task: t.id, answer: value.trim() })
                 tellLead($, `The owner answered ${t.id} on the board: "${value.trim()}". I put it into the task and sent it back to work.`)
               })()
             }
