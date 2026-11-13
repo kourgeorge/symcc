@@ -1280,5 +1280,5 @@ test('/symcc-task shows the latest report, or its first 40 lines and where the f
   expect(text).toContain('  line 40')
   expect(text).not.toContain('line 41\n')
   expect(text).toContain(`… (20 more lines) full report: ${R2}`)
-  expect(text).toContain('Note: docs/research/market.md')
+  expect(text).toContain('Research: docs/research/market.md')
 })

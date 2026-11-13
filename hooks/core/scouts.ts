@@ -371,12 +371,16 @@ Rules:
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
 
-/** What the lead is told when a scout finishes: its whole report cut to `n` characters, or null for NOTHING. */
-export function scoutLeadMessage(scout: string, answer: string | undefined, n = SCOUT_REPORT_CHARS, paused = false): string | null {
+/**
+ * What the lead is told when a scout finishes, or null for a NOTHING report. Only the outcome: the
+ * report itself already reached the lead as the scout's hand-back, so it is not repeated here.
+ */
+export function scoutLeadMessage(scout: string, answer: string | undefined, paused = false): string | null {
   if (isNothing(answer)) return null
-  const report = String(answer).trim().slice(0, n).trimEnd()
+  const n = countFindings(answer)
+  const found = n ? `found ${n} thing${n > 1 ? 's' : ''}` : 'found something'
   const note = paused ? `\nThe owner has paused "${scout}": it doesn't run again until the owner resumes it.` : ''
-  return `Scout "${scout}" reports:\n${report}\nAdd tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`
+  return `Scout "${scout}" ${found} (its report is the scout's own message to you). Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`
 }
 
 /** The how-to shown when there are no scouts. */

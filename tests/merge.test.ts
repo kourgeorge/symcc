@@ -3,11 +3,12 @@ import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
-import { S, leadQueue, workers, sayQueue } from '../hooks/plugin/state'
+import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
+import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou } from '../hooks/plugin/voice'
 import { workerFinished, setSymcc, setBoardMode } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
-import { runTool } from '../hooks/plugin/tools'
+import { runTool, ownerSettings } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
 
 // The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
@@ -201,6 +202,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   S.startupDone = false
   S.enabledNow = true
   leadQueue.splice(0)
+  meanwhile.splice(0)
   return { $: $ as never, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
 }
 
@@ -1184,4 +1186,70 @@ test('merged work that adds a file under docs/research/ keeps it as a research n
   expect(t.research_notes).toEqual(['docs/research/market.md'])
   const { t: plain } = await finishes('Done.')
   expect(plain.research_notes).toBeUndefined()
+})
+
+// ---------------- what reaches the lead ----------------
+
+/** A `$` whose timer runs at once and whose prompts are kept in `sent`. */
+function leadWorld() {
+  const sent: string[] = []
+  const $ = { clock: { after: (_ms: number, f: () => void) => (f(), { cancel() {} }) }, prompt: { submit: async (p: { text: string }) => void sent.push(p.text) } }
+  S.leadTimer = null
+  S.enabledNow = true
+  leadQueue.splice(0)
+  meanwhile.splice(0)
+  return { $: $ as never, sent }
+}
+
+test("the owner's own actions are queued, not sent; the next real board update starts with them", () => {
+  const { $, sent } = leadWorld()
+  noteForLead('The owner approved T-127: merged.')
+  noteForLead('The owner changed the settings: voice set to off')
+  expect(sent).toEqual([])
+  expect(S.leadTimer).toBe(null)
+  tellLead($, 'T-3 "x" is ready for review.')
+  expect(sent.length).toBe(1)
+  const text = sent[0]!
+  expect(text).toContain('Meanwhile the owner (nothing to answer):\n- The owner approved T-127: merged.\n- The owner changed the settings: voice set to off\n\nT-3 "x" is ready for review.')
+  expect(text.indexOf('Meanwhile')).toBeLessThan(text.indexOf('T-3'))
+  expect(meanwhile.length).toBe(0)
+  // the next update has no Meanwhile block
+  S.leadTimer = null
+  tellLead($, 'T-4 failed.')
+  expect(sent[1]).not.toContain('Meanwhile')
+})
+
+test('the Meanwhile block shows at most 10 lines, then "+N more"', () => {
+  expect(meanwhileText([])).toBe('')
+  const text = meanwhileText(Array.from({ length: 13 }, (_, i) => `line ${i + 1}`))
+  expect(text).toContain('- line 10')
+  expect(text).not.toContain('line 11')
+  expect(text.endsWith('- +3 more')).toBe(true)
+})
+
+test('owner settings changes are queued for the lead, not sent', async () => {
+  const w = world()
+  await saveBoard(w.$, emptyBoard('main'))
+  const out = await ownerSettings(w.$, { max_parallel: 5 }, 'from the board')
+  expect(out).toContain('max_parallel')
+  expect(leadQueue).toEqual([])
+  expect(meanwhile.length).toBe(1)
+  expect(meanwhile[0]).toContain('The owner changed the settings: ')
+})
+
+test('a merge the owner approved sends no board update; it joins the Meanwhile lines', async () => {
+  const w = await inReview()
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(leadQueue).toEqual([])
+  expect(meanwhile).toEqual([`✓ T-1 "Do it" merged into main (${H1.slice(0, 8)}); approved by the owner.`])
+})
+
+test("a worker's result still reaches the lead, as the outcome only (its report came as the hand-back)", async () => {
+  const { t } = await finishes('I changed src/a.ts and added a very particular sentence.')
+  expect(t.status).toBe('done')
+  const msg = leadQueue.join('\n')
+  expect(msg).toMatch(/^✓ T-1 "Do it" merged into main \([0-9a-f]{8}\)/)
+  expect(msg).not.toContain('very particular sentence')
+  expect(meanwhile).toEqual([])
 })

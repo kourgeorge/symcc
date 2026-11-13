@@ -4,7 +4,7 @@ import type { SymccMode } from '../../../types'
 import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, bannerStrip, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
-import { tellLead } from '../tell'
+import { noteForLead, brief } from '../tell'
 import { setBoardMode } from '../workers'
 import { type PaneTab, resetPane } from './open'
 
@@ -36,7 +36,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const switchMode = act(async () => {
     const r = await setBoardMode($, switchTo, 'you')
     $.ui.toast(S.N.toast(r))
-    tellLead($, `The owner set the board mode to ${switchTo} from the board: ${r}`)
+    noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
   /** The banner at the top: the drawing, the board's facts and the board mode. */
   const banner = () => {

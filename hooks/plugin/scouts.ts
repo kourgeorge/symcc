@@ -151,7 +151,7 @@ export async function scoutFinished($: $, agentId: string, answer: string, isAbo
     await saveScoutMemory($).catch((e: Error) => tellLead($, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
   }
   await publish($, await load($))
-  const msg = scoutLeadMessage(name, answer, undefined, st?.paused === true)
+  const msg = scoutLeadMessage(name, answer, st?.paused === true)
   if (msg) {
     const at = now()
     heard.scouts[name] = at

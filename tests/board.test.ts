@@ -624,14 +624,14 @@ test('recent closed tasks: done and dropped only, newest first, capped', () => {
   expect(r[0]).toBe('T-29 title T-29 (done)')
 })
 
-test('scout lead message: the whole report, trimmed; NOTHING gives none', () => {
+test('scout lead message: the outcome only (the report came as the hand-back); NOTHING gives none', () => {
   const report = 'line one\nline two\n- a\n- b\n- c\n- d'
   const m = scoutLeadMessage('deps', `  ${report}  `)!
-  expect(m).toContain('Scout "deps" reports:')
-  expect(m).toContain(report)
+  expect(m).toContain('Scout "deps" found something')
+  expect(m).not.toContain('line one')
   expect(m).toContain('Add tasks for anything worth doing')
-  expect(scoutLeadMessage('deps', 'x'.repeat(SCOUT_REPORT_CHARS + 500))).toContain('x'.repeat(SCOUT_REPORT_CHARS))
-  expect(scoutLeadMessage('deps', 'x'.repeat(SCOUT_REPORT_CHARS + 500))).not.toContain('x'.repeat(SCOUT_REPORT_CHARS + 1))
+  expect(scoutLeadMessage('deps', '1. bug A\n2. bug B')).toContain('Scout "deps" found 2 things')
+  expect(scoutLeadMessage('deps', '1. bug A')).toContain('found 1 thing ')
   expect(scoutLeadMessage('deps', 'NOTHING')).toBeNull()
   expect(scoutLeadMessage('deps', ' NOTHING \n')).toBeNull()
   expect(scoutLeadMessage('deps', '')).toBeNull()
@@ -2058,7 +2058,7 @@ test('a paused scout is not run by its timer or by run now', () => {
   expect(nextScoutText([{ name: 'a', running: false, next_run: iso(5), paused: true }, { name: 'b', running: false, next_run: iso(30) }], at)).toBe('next: b in 30m')
   expect(nextScoutText([{ name: 'a', running: false, next_run: iso(5), paused: true }], at)).toBe('')
   // the lead hears that a scout paused during its run won't run again
-  expect(scoutLeadMessage('a', '1. bug', undefined, true)).toContain('The owner has paused "a": it doesn\'t run again until the owner resumes it.')
+  expect(scoutLeadMessage('a', '1. bug', true)).toContain('The owner has paused "a": it doesn\'t run again until the owner resumes it.')
   expect(scoutLeadMessage('a', '1. bug')).not.toContain('paused')
 })
 
@@ -2558,4 +2558,17 @@ test("taskKeys shows the try number keys for reports only when more than one try
   expect(words(taskKeys('done', false, [1]))).toEqual(['↑↓ scroll', 'b back'])
   expect(words(taskKeys('done', false, [1, 2, 3]))).toEqual(["1-3 a try's report", '↑↓ scroll', 'b back'])
   expect(words(taskKeys('done', false, [9, 10]))).toEqual(["9 a try's report", '↑↓ scroll', 'b back'])
+})
+
+test('a scout answer that starts with a NOTHING line, then what it checked, is saved but not sent to the lead', async () => {
+  const w = scoutWorld(async () => ({ agentId: 'a3' }))
+  await runScoutNow(w.$, 'gaps') // first, so the scout is known
+  scoutState.get('gaps')!.running = false
+  expect(await runScoutNow(w.$, 'gaps')).toBe('scout gaps started')
+  const st = scoutState.get('gaps')!
+  scoutLeadQueue.splice(0)
+  await scoutFinished(w.$, 'a3', 'NOTHING\n\nWhat I checked: .env files, keys in src/, the git history.')
+  expect(st.last_report).toBe('NOTHING\n\nWhat I checked: .env files, keys in src/, the git history.')
+  expect(scoutLeadQueue.length).toBe(0)
+  expect(scoutLastText(st).text).toBe('last: nothing')
 })

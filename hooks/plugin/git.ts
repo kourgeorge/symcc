@@ -3,7 +3,7 @@ import { emptyBoard, startBranch, type Board, missingBranchText, type GitState, 
 import { publish } from './lead'
 import { type $, S, workers, starting, finishing, approving, keptDirty } from './state'
 import { load, change } from './store'
-import { tellLead } from './tell'
+import { tellLead, noteForLead, brief } from './tell'
 import { pump, agentsNow } from './workers'
 
 // ---------------- git ----------------
@@ -142,7 +142,7 @@ export async function setupGit($: $, who: string): Promise<string> {
     S.gitState = 'ok'
     await publish($, await load($))
     const out = setupDoneText({ init, branch, files, left, gitignore: old === null ? 'made' : text === old ? 'kept' : 'added', name: S.N.name })
-    if (who !== 'the lead') tellLead($, `The owner set up git from the board. ${out}`)
+    if (who !== 'the lead') noteForLead(`The owner set up git: ${brief(out)}`)
     void pump($)
     return out
   } finally {

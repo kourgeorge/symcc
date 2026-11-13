@@ -6,7 +6,7 @@ import { publish } from './lead'
 import { loadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
-import { tellLead } from './tell'
+import { noteForLead, brief } from './tell'
 import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
 // ---------------- the lead's tools ----------------
@@ -44,7 +44,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   const commits = taskCommits(t)
   if (commits.length) L.push('', 'Commits (newest first):', ...commits.map(c => `  ${commitText(c)}`))
   if (t.branch) L.push('', `branch: ${t.branch}`)
-  if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Note: ${f}`))
+  if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Research: ${f}`))
   if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
   if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
@@ -221,7 +221,8 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name; for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop).
+- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
+- The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
@@ -502,6 +503,6 @@ export async function ownerSettings($: $, a: SettingsInput, where: string): Prom
   const parts = r.changes.map(settingSetText)
   if (r.mode) parts.push(`mode set to ${a.mode}: ${r.mode}`)
   const text = parts.join('; ') || 'nothing changed'
-  if (parts.length) tellLead($, `The owner changed the ${S.N.name} settings ${where}: ${text}`)
+  if (parts.length) noteForLead(`The owner changed the settings: ${brief(text)}`)
   return text
 }

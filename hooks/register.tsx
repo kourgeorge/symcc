@@ -22,7 +22,7 @@ import { loadRoles } from './plugin/roles'
 import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScoutEdit } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now } from './plugin/store'
-import { tellLead } from './plugin/tell'
+import { noteForLead, brief } from './plugin/tell'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane } from './plugin/ui/open'
@@ -242,7 +242,7 @@ export const register: Register = on => {
         return say(await setSymcc($, cmd.kind === 'on'))
       case 'mode': {
         const r = await setBoardMode($, cmd.mode, 'you')
-        tellLead($, `The owner set the board mode to ${cmd.mode} with /${S.N.name}-mode: ${r}`)
+        noteForLead(`The owner set the board mode to ${cmd.mode}: ${brief(r)}`)
         return say(r)
       }
       case 'show': {
@@ -262,7 +262,7 @@ export const register: Register = on => {
         if (!t) return say((await findArchived($, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}).`)
         const r = await runTool($, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
-        tellLead($, cmd.kind === 'approve' ? `The owner approved ${t.id} with /${S.N.name}-approve: ${r}` : `The owner rejected ${t.id} with /${S.N.name}-reject ("${cmd.reason}"): ${r}`)
+        noteForLead(cmd.kind === 'approve' ? `The owner approved ${t.id}: ${brief(r)}` : `The owner rejected ${t.id} ("${brief(cmd.reason)}"): ${brief(r)}`)
         return say(r)
       }
       case 'diff': {

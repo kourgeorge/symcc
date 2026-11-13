@@ -5,9 +5,9 @@ import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDi
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
 import { loadRoles } from './roles'
-import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, sayQueue, tmpWarned, reminded } from './state'
+import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path } from './store'
-import { tellLead } from './tell'
+import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 
 // ---------------- workers ----------------
@@ -350,8 +350,10 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
  * What happens to task `t` after its work was checked (`r`): back to "todo" for a new try after
  * a conflict or failing tests (while it has tries left), "review" when it waits for the owner,
  * else "done" (merged) or "failed". `summary` is what the worker (or the owner, on approve) said.
+ * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
+ * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
-export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string) {
+export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false) {
   const line = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   const write = async (patch: (cur: SymccTask) => Partial<SymccTask>) => {
@@ -361,7 +363,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   }
   if (r.review) {
     if (!(await write(cur => ({ status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" is ready for review. Worker: ${cutLine(summary, 300)}\nThe change is on branch ${t.branch ?? S.N.branch(t.id)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
+    tellLead($, `${t.id} "${t.title}" is ready for review. The change is on branch ${t.branch ?? S.N.branch(t.id)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
   const tries = t.conflict_tries ?? 0
@@ -388,7 +390,8 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
   if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
-  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${cutLine(summary, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${cutLine(summary, 300)}${gaveUp}`)
+  if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
+  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
 /** The owner approved task `id` (in "review"): the same checked merge as for a finished worker. */
@@ -423,7 +426,7 @@ export async function approve($: $, id: string): Promise<string> {
         tellLead($, `${t.id} "${t.title}" was merged into ${b.target_branch} (${sha}), but it is no longer on the board.`)
         return `${t.id} was merged into ${b.target_branch} (${sha}), but it is no longer on the board`
       }
-      await settle($, t, b, r, 'approved by the owner', dir)
+      await settle($, t, b, r, 'approved by the owner', dir, undefined, true)
       const off = offAsked.get(t.id)
       if (off && cur.status === 'review') {
         await change($, x => {
@@ -552,6 +555,7 @@ export async function setSymcc($: $, on: boolean): Promise<string> {
     })
     const checks = stoppedChecksText(await stopChecks($, `${S.N.name} was turned off`))
     leadQueue.splice(0)
+    meanwhile.splice(0)
     S.leadTimer?.cancel()
     S.leadTimer = null
     sayQueue.splice(0)

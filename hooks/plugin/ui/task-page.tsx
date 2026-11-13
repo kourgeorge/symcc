@@ -5,7 +5,7 @@ import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
 import { path } from '../store'
-import { tellLead } from '../tell'
+import { noteForLead, brief } from '../tell'
 import { runTool, when } from '../tools'
 import type { PaneParts } from './parts'
 
@@ -21,7 +21,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     S.diffOpen = null
     S.rejecting = null
     $.ui.toast(S.N.toast(r))
-    tellLead($, `The owner approved ${t.id} from the board: ${r}`)
+    noteForLead(`The owner approved ${t.id}: ${brief(r)}`)
   })
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
   const reviewButtons = inReview
@@ -46,7 +46,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               S.rejecting = null
               S.diffOpen = null
               $.ui.toast(S.N.toast(r))
-              tellLead($, `The owner rejected ${t.id} from the board: "${why}". ${r}`)
+              noteForLead(`The owner rejected ${t.id} ("${brief(why)}"): ${brief(r)}`)
             })()
           }
         />
@@ -108,7 +108,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       $.ui.invalidate('ui.render')
       const r = await runTool($, 'change', { task: t.id, role: name })
       $.ui.toast(S.N.toast(`${t.id} role: ${name}`))
-      tellLead($, `The owner set the role of ${t.id} to ${name} from the board: ${r}`)
+      noteForLead(`The owner set the role of ${t.id} to ${name}: ${brief(r)}`)
     })
   const nowRole = roleOf(t).toLowerCase()
   const roleBox =
@@ -192,23 +192,23 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         inReview && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
         agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />,
         (t.status === 'doing' || t.status === 'todo') && (
-          <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool($, 'pause', { task: t.id, reason: 'paused by the owner' }), tellLead($, `The owner paused ${t.id} from the board.`)))} />
+          <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool($, 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))} />
         ),
         t.status === 'paused' && (
-          <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool($, 'resume', { task: t.id }), tellLead($, `The owner resumed ${t.id} from the board.`)))} />
+          <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool($, 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))} />
         ),
         (t.status === 'failed' || t.status === 'dropped') && (
-          <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'retry', { task: t.id }), tellLead($, `The owner retried ${t.id} from the board.`)))} />
+          <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))} />
         ),
         t.status === 'backlog' && (
-          <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: false }), tellLead($, `The owner moved ${t.id} from the backlog to todo on the board.`)))} />
+          <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))} />
         ),
         (t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
-          <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: true }), tellLead($, `The owner moved ${t.id} to the backlog on the board.`)))} />
+          <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))} />
         ),
         canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />,
         t.status !== 'done' && t.status !== 'dropped' && (
-          <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), tellLead($, `The owner dropped ${t.id} from the board.`)))} />
+          <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))} />
         ),
         t.status !== 'done' && t.status !== 'dropped' && (
           <Button
@@ -218,7 +218,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             onPress={act(async () => {
               const r = await runTool($, 'change', { task: t.id, needs_review: !t.needs_review })
               $.ui.toast(S.N.toast(r))
-              tellLead($, `The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id} from the board.`)
+              noteForLead(`The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id}.`)
             })}
           />
         ),
@@ -271,7 +271,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               act(async () => {
                 if (!value.trim()) return
                 await runTool($, 'change', { task: t.id, answer: value.trim() })
-                tellLead($, `The owner answered ${t.id} on the board: "${value.trim()}". I put it into the task and sent it back to work.`)
+                noteForLead(`The owner answered ${t.id} ("${brief(value.trim())}"); it went back to work.`)
               })()
             }
           />

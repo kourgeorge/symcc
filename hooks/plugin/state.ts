@@ -148,6 +148,8 @@ export const reminded = new Map<string, string>()
 export const scoutState = new Map<string, SymccScout>()
 export const timers: { cancel(): void }[] = []
 export const leadQueue: string[] = []
+/** the owner's own actions since the last board update: short lines put at the top of the next one (see noteForLead) */
+export const meanwhile: string[] = []
 /** task id → spawns in a row that failed only because the plugin wasn't ready yet (see isNotReady) */
 export const notReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */

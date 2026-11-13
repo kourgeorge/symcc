@@ -130,11 +130,25 @@ This is where symcc keeps your branch safe. Step by step:
 6. **Merge.** Only now does your branch move forward. If you have that branch checked
    out with uncommitted changes, or with untracked files the merge would overwrite,
    symcc waits instead of overwriting them.
-7. **Tell.** The lead gets one line: merged, or why not. On a Mac you also hear
+7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
    "T-3 done" (and "T-5 needs you" when a task waits for your answer).
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
+
+### What reaches the lead
+
+The lead (the main chat) gets a "[symcc] Board update" message only when something needs it:
+a worker finished, failed or is ready for review, a task waits for you (a question or
+`NEED FILES`), a scout found something, a conflict or failing tests need a decision, or the
+board file is broken. The worker's or scout's own report already reaches the chat as that
+agent's message, so the board update gives just the outcome ("T-3 merged into main (abc12345);
+tests passed") and doesn't repeat it. A scout that answers `NOTHING` sends nothing.
+
+What you do yourself on the board (approve, reject, drop, move to todo, stash, mode and
+settings changes, answering a task) and merges you approved don't wake the lead. They are
+kept as short lines ("The owner approved T-5: …") and put under "Meanwhile the owner:" at the
+top of the next board update (at most 10, then "+N more"). They are still in each task's history.
 
 ---
 
