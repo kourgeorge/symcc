@@ -44,9 +44,11 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
 
 /**
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
- * worker owns it; `agent` is the agent id of the last worker started on it.
+ * worker owns it; `agent` is the agent id of the last worker started on it. `finishing`: while
+ * its finished work is being tested and merged, when that copy of the plugin last said it is
+ * still at it (an ISO time, refreshed often), so a reloaded copy doesn't send the task back meanwhile.
  */
-export type BoardTask = SymccTask & { session?: string }
+export type BoardTask = SymccTask & { session?: string; finishing?: string }
 
 /** The data folder for the default name; the paths below are for it too. For another name use namesFor(name). */
 export const DATA_DIR = dataDir()
@@ -187,8 +189,9 @@ function cleanTask(t: unknown): BoardTask | null {
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
   for (const k of ['asked_files', 'options']) if (k in x && !(Array.isArray(x[k]) && (x[k] as unknown[]).every(v => typeof v === 'string'))) delete x[k]
-  const { session, ...rest } = cleanCommitFields(x) as BoardTask
-  return (typeof session === 'string' && session && x.status === 'doing' ? { ...rest, session } : rest) as BoardTask
+  const { session, finishing, ...rest } = cleanCommitFields(x) as BoardTask
+  const doing = x.status === 'doing'
+  return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}) } as BoardTask
 }
 
 /** The branch a task merges into (see SymccTask.merge_into); "main" for a task that has none (made by hand or in a test). */

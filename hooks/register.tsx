@@ -29,7 +29,7 @@ import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane, takeKeysBack } from './plugin/ui/open'
 import { escBack } from './plugin/ui/esc'
 import { renderPane } from './plugin/ui/pane'
-import { cleanLeftoverTmp, check, pump, workerFinished, setSymcc, setBoardMode } from './plugin/workers'
+import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, setSymcc, setBoardMode } from './plugin/workers'
 
 // ---------------- registration ----------------
 
@@ -215,6 +215,8 @@ export const register: Register = on => {
     const r = await next(e)
     if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
+    // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
+    else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, e.isAborted, usageTokens(e.usage)) : undefined)).catch(() => undefined)
     return r
   })
 

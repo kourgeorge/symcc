@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf } from '../board'
+import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit } from '../board'
 import { gitOk, git, worktreeDir } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -110,7 +110,12 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
   if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
   const changed = d.stdout.split('\0').filter(Boolean)
-  if (!changed.length) return { ok: false, detail: 'the worker made no change' }
+  if (!changed.length) {
+    // Nothing new, but this task's own work is already on the target branch (an earlier try merged
+    // it and a reload sent the task back): it is done, not failed.
+    if (await onTarget($, t.id, head, target)) return { ok: true, merged: head, detail: `already merged into ${target} (${head.slice(0, 8)}) by an earlier try; nothing new to merge` }
+    return { ok: false, detail: 'the worker made no change' }
+  }
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
   let candidate = head
@@ -149,6 +154,25 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
   return { ok: true, merged: candidate, ...(notes.length ? { notes } : {}), detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+}
+
+/** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */
+async function onTarget($: $, id: string, sha: string, target: string, tryNo?: number): Promise<boolean> {
+  if (!sha) return false
+  const msg = await git($, ['log', '-1', '--format=%B', sha])
+  if (msg.exitCode !== 0 || !isTaskCommit(msg.stdout, id, S.N.name, tryNo)) return false
+  return (await git($, ['merge-base', '--is-ancestor', sha, `refs/heads/${target}`])).exitCode === 0
+}
+
+/**
+ * The commit of task `t`'s current try that is already on the branch it merges into (the tip of its
+ * work branch, when that tip was made by this try and is on that branch); null when this try's
+ * work isn't merged. A task like that is done: a reload must not send it back for another try.
+ */
+export async function alreadyMerged($: $, t: Pick<SymccTask, 'id' | 'branch' | 'merge_into' | 'attempts'>): Promise<string | null> {
+  if (!(t.attempts > 0)) return null
+  const tip = (await git($, ['rev-parse', '-q', '--verify', `refs/heads/${t.branch ?? S.N.branch(t.id)}`])).stdout.trim()
+  return tip && (await onTarget($, t.id, tip, intoOf(t), t.attempts)) ? tip : null
 }
 
 /**

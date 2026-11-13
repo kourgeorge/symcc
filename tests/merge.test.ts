@@ -1,12 +1,14 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
-import { workerFinished, setSymcc, setBoardMode, check } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack } from '../hooks/plugin/workers'
+import { claimLead } from '../hooks/plugin/lead'
+import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
@@ -1577,4 +1579,139 @@ test("the lead's board tool with a task shows its latest report and lists the ol
   expect(await runTool(w.$, 'board', { status: ['done'] })).toContain('No tasks match (status: done).')
   expect(await runTool(w.$, 'board', { search: 'do it' })).toContain('Do it')
   await expect(runTool(w.$, 'board', { status: ['nope'] })).rejects.toThrow('unknown status')
+})
+
+// ---------------- a plugin reload while a task's work is tested and merged (T-169) ----------------
+
+const LEAD = `${ROOT}/.symcc/lead.json`
+/** T-1's try-`n` commit message, with its trailers (see commitMessage). */
+const t1Commit = (n = 1) => commitMessage({ id: 'T-1', title: 'Do it', attempts: n, origin: { by: 'lead', why: 'a test', at: ISO } })
+/** A fake reload of the plugin: this copy's memory of what it is checking is gone; the old finish still runs. */
+const forget = () => finishingSet.clear()
+
+test('a reload while a task is being tested and merged leaves it "doing"; it merges once and is done, with no restart or "too late" line', async () => {
+  S.me = 'me'
+  let during: SymccTask | undefined
+  let spawned = 0
+  const { w, t } = await finishing(async w => {
+    ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+    w.put(LEAD, leadText('me', Date.now()))
+    forget()
+    await claimLead(w.$, true)
+    during = find(await load(w.$), 'T-1')
+    // nothing new starts for it meanwhile
+    await startWorker(w.$, 'T-1')
+  })
+  expect(during!.status).toBe('doing')
+  expect(during!.finishing).toBeDefined()
+  expect(spawned).toBe(0)
+  expect(t.status).toBe('done')
+  expect(t.finishing).toBeUndefined()
+  expect(w.calls.filter(c => / git update-ref .*refs\/heads\/main/.test(c)).length).toBe(1)
+  expect(t.history.join('\n')).not.toMatch(/restarted|too late/)
+  expect(t.attempts).toBe(1)
+})
+
+test('a reload with the old worker really gone and no merge going on sends the task back to "todo" as before', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b] = boardWith('auto', [], { session: 'me', history: [], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(LEAD, leadText('me', Date.now()))
+  await claimLead(w.$, true)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+})
+
+test('resetDoing keeps a task with a fresh finishing mark, sends back one with a stale mark, and marks a try that merged done', () => {
+  const nowMs = Date.parse(ISO)
+  const [b0] = boardWith('auto', [], { session: 'me', history: [] })
+  let b = patchTask(b0, 'T-1', { finishing: ISO }, ISO)
+  expect(resetDoing(b, 'me', null, nowMs + 60_000, 'restarted: x', ISO).tasks[0]!.status).toBe('doing')
+  expect(resetDoing(b, 'me', null, nowMs + 10 * 60_000, 'restarted: x', ISO).tasks[0]!.status).toBe('todo')
+  b = patchTask(b0, 'T-1', { merged: H1, runs: [{ started: ISO, commits: [H1] }] }, ISO)
+  const done = resetDoing(b, 'me', null, nowMs, 'restarted: x', ISO).tasks[0]!
+  expect(done.status).toBe('done')
+  expect(done.history.at(-1)).toBe(`try 1: its work was already merged into main (${H1.slice(0, 8)}) when it was about to be sent back to todo, so it is done`)
+  expect(done.runs![0]!.ended_note).toBe('merged')
+})
+
+test('the regular check: a finishing mark no longer refreshed (its copy is gone) is recovered: done when its work is merged, else back to "todo"', async () => {
+  S.me = 'me'
+  const old = new Date(Date.now() - 10 * 60_000).toISOString()
+  for (const merged of [true, false]) {
+    const w = world({ answer: (args) => {
+      if (args.join(' ') === 'rev-parse -q --verify refs/heads/symcc/T-1') return ok(H1)
+      if (args[0] === 'log' && args.at(-1) === H1) return ok(t1Commit(1))
+      if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return merged ? ok() : fail()
+      return undefined
+    } })
+    const [b] = boardWith('auto', [], { session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }], finishing: old })
+    await saveBoard(w.$, b)
+    S.driving = true
+    await check(w.$)
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe(merged ? 'done' : 'todo')
+    expect(t.finishing).toBeUndefined()
+    if (merged) expect(t.merged).toBe(H1)
+    else expect(t.history.at(-1)).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
+  }
+  S.driving = false
+})
+
+test('the regular check leaves a task alone while its finishing mark is fresh', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b] = boardWith('auto', [], { session: 'me', history: [], runs: [{ started: ISO }], finishing: new Date().toISOString() })
+  await saveBoard(w.$, b)
+  S.driving = true
+  await check(w.$)
+  S.driving = false
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+})
+
+test('a task sent back after its try already merged is done, not started again (T-162)', async () => {
+  S.me = 'me'
+  let spawned = 0
+  const w = world({ answer: (args) => {
+    if (args.join(' ') === 'rev-parse -q --verify refs/heads/symcc/T-1') return ok(H1)
+    if (args[0] === 'log' && args.at(-1) === H1) return ok(t1Commit(1))
+    if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return ok()
+    return undefined
+  } })
+  ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+  const [b0] = boardWith('auto', [], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  const b = { ...b0, tasks: [backToTodo(b0.tasks[0]!, 'restarted: the plugin reloaded and the old worker was gone', ISO)] }
+  await saveBoard(w.$, b)
+  await startWorker(w.$, 'T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(spawned).toBe(0)
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.runs!.at(-1)!.ended_note).toBe('merged')
+})
+
+test('a try that finds no change while its own earlier work is already on main is done, not failed', async () => {
+  const w = world({ dirty: false, head: H1, changed: [], answer: (args) => (args[0] === 'log' && args.at(-1) === H1 ? ok(t1Commit(1)) : undefined) })
+  const [b, t] = boardWith('auto', [], { attempts: 2 })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(true)
+  expect(r.merged).toBe(H1)
+  expect(r.detail).toMatch(/^already merged into main/)
+  expect(finishedNote(r)).toBe('merged')
+  // a commit that isn't this task's is still "no change"
+  const w2 = world({ dirty: false, head: H1, changed: [] })
+  expect((await checkAndMerge(w2.$, t, WT, b)).detail).toBe('the worker made no change')
+})
+
+test("a late report from a worker this copy lost in a reload is still taken when its task is doing for it", async () => {
+  S.me = 'me'
+  const w = world()
+  const [b] = boardWith('auto', [], { session: 'me', agent: 'ag9', history: [] })
+  await saveBoard(w.$, b)
+  expect(await lateHandBack(w.$, 'ag9')).toBe(true)
+  expect(workers.get('ag9')?.task).toBe('T-1')
+  workers.delete('ag9')
+  expect(await lateHandBack(w.$, 'someone-else')).toBe(false)
 })

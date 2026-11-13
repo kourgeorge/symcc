@@ -54,6 +54,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   // Leaving "doing" ends the worker's try, however it ended (finished, stopped, over time, lost).
   if (t.status === 'doing' && next.status !== 'doing' && next.runs?.length && !next.runs[next.runs.length - 1]!.ended) next.runs = endRun(next.runs, now)
   if (next.status !== 'doing' || !next.session) delete next.session
+  // the "being tested and merged" mark only means something while the task is "doing"
+  if (next.status !== 'doing' || !next.finishing) delete next.finishing
   // Where a task came from never changes once it is made.
   if ('origin' in patch) {
     if (t.origin) next.origin = t.origin

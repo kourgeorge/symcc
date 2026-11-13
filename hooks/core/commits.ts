@@ -82,6 +82,16 @@ export function commitMessage(t: Pick<SymccTask, 'id' | 'title' | 'attempts'> & 
   return `${subject}\n\n${trailers.join('\n')}\n`
 }
 
+/**
+ * Whether a commit message (`message`) is one of task `id`'s commits: it has the "<Name>-Task: <id>"
+ * trailer (see commitMessage), and, when `tryNo` is given, the "<Name>-Try: <tryNo>" trailer too.
+ */
+export function isTaskCommit(message: string, id: string, name: string = DEFAULT_NAME, tryNo?: number): boolean {
+  const k = trailerPrefix(name)
+  const lines = String(message ?? '').split('\n').map(l => l.trim())
+  return lines.includes(`${k}-Task: ${oneLine(id, 40)}`) && (tryNo === undefined || lines.includes(`${k}-Try: ${tryNo}`))
+}
+
 /** One commit of a task as shown: its full id, the try that made it, and whether it is the one that landed on the target branch. */
 export type TaskCommit = { sha: string; try?: number; merged: boolean }
 

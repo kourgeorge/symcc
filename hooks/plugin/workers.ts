@@ -1,10 +1,10 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, FINISH_BEAT_MS } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
-import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
+import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path, safeWrite } from './store'
@@ -67,6 +67,8 @@ export async function startWorker($: $, id: string) {
     const b = await load($)
     const t0 = find(b, id)
     if (!mayStart(t0, agents, S.N.name)) return
+    // A reload sent it back after its try had already merged: it is done, not tried again.
+    if (await mergedBeforeRestart($, t0!)) return
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone($, b, t0!, 'start')) return
     const { dir, branch } = await prepareWorktree($, t0!, intoOf(t0!))
@@ -111,6 +113,23 @@ export async function startWorker($: $, id: string) {
   } finally {
     starting.delete(id)
   }
+}
+
+/**
+ * Whether todo task `t`'s last try was ended by a restart (a reload) after its work had already
+ * merged (see alreadyMerged): then it is marked done here, and the lead is told, instead of a new try.
+ */
+async function mergedBeforeRestart($: $, t: BoardTask): Promise<boolean> {
+  if (t.runs?.[t.runs.length - 1]?.ended_by !== 'restarted') return false
+  const sha = mergedThisTry(t) ?? (await alreadyMerged($, t).catch(() => null))
+  if (!sha) return false
+  const done = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== 'todo' || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
+    return [{ ...x, tasks: x.tasks.map(y => (y.id === t.id ? mergedDone(cur, sha, 'tried again', now()) : y)) }, true] as [Board, boolean]
+  })
+  if (done) tellLead($, `✓ ${t.id} "${t.title}" is done: its work was already merged (${sha.slice(0, 8)}) before the restart, so no new try starts.`)
+  return done
 }
 
 /**
@@ -172,20 +191,64 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
   heard.workers[w.task] = at
   heard.last = { what: `${w.task} worker report`, at }
   finishing.add(w.task)
+  let beat: { cancel(): void } | null = null
+  let tryNo: number | undefined
   try {
     // The try ends now (checking and merging is not counted). The turn result gives tokens but
     // no dollar cost, so `cost` stays empty until Claude Code reports one.
+    // The task is marked as being tested and merged (refreshed while that runs), so a reloaded
+    // copy of the plugin sees it and doesn't send the task back to "todo" meanwhile.
     const ended = now()
-    await change($, x => {
+    tryNo = await change($, x => {
       const t = find(x, w.task)
-      return t?.status === 'doing' && t.runs?.length ? patchTask(x, w.task, { runs: endRun(t.runs, ended, { tokens }) }, ended) : x
+      if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
+      return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens }) } : {}) }, ended), t.attempts] as [Board, number]
     })
+    if (tryNo !== undefined) beat = everyMs($, FINISH_BEAT_MS, () => void markFinishing($, w.task, tryNo!).catch(() => undefined))
     await finishWork($, agentId, w, answer, aborted)
   } finally {
+    beat?.cancel()
+    if (tryNo !== undefined) await markFinishing($, w.task, tryNo, false).catch(() => undefined)
     finishing.delete(w.task)
     await endCheck($, w.task)
   }
   await pump($)
+}
+
+/** A repeating timer, if this Claude Code has one ($.clock.every); null when it has none. */
+function everyMs($: $, ms: number, f: () => void): { cancel(): void } | null {
+  try {
+    return $.clock.every(ms, f)
+  } catch {
+    return null
+  }
+}
+
+/** Refreshes (`on`) or removes task `id`'s "being tested and merged" mark, only while it is still "doing" with try `tryNo`. */
+async function markFinishing($: $, id: string, tryNo: number, on = true) {
+  // nothing to remove (the task already left "doing", which drops the mark): don't write the board
+  if (!on && !find(await load($), id)?.finishing) return
+  await change($, x => {
+    const t = find(x, id)
+    if (t?.status !== 'doing' || t.attempts !== tryNo || (!on && !t.finishing)) return x
+    return patchTask(x, id, { finishing: on ? now() : undefined }, t.updated_at)
+  })
+}
+
+/**
+ * A worker's report arrived but this copy of the plugin doesn't track the agent (it reloaded and
+ * hadn't found the worker again yet): when the board still has the agent's task "doing" for this
+ * session, the report is taken as that worker's, so its work is still checked and merged.
+ */
+export async function lateHandBack($: $, agentId: string): Promise<boolean> {
+  if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId)) return false
+  const b = await load($).catch(() => null)
+  const t = b?.tasks.find(x => x.agent === agentId)
+  if (!t || t.status !== 'doing' || t.session !== S.me || finishing.has(t.id) || starting.has(t.id) || finishingNow(t, Date.now())) return false
+  if ([...workers.values()].some(w => w.task === t.id)) return false
+  const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
+  workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: t.branch ?? S.N.branch(t.id), since: Number.isFinite(started) ? started : Date.now() })
+  return true
 }
 
 // ---------------- a task changed while its work is checked ----------------
@@ -637,7 +700,22 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
     if (LIVE.has(a.status)) await halt($, a.id, `${S.N.name} was reloaded and a new worker took over this task`)
     out.push(a.id)
   }
+  // Just loaded (called from claimLead, with lead.json as it was): a "doing" task of this session
+  // with no live worker and no merge mark may be one whose worker has only just handed back to the
+  // old copy, which is about to mark it. Wait a moment and look again, so it is not sent back for nothing.
+  if (leadNow !== undefined && (await waitingOnOld($, agents))) await $.clock.sleep(RELOAD_SETTLE_MS)
   return out
+}
+
+/** How long a fresh copy of the plugin waits before deciding a "doing" task's old worker is gone. */
+export const RELOAD_SETTLE_MS = 2_000
+
+/** Whether a "doing" task of this session has no live worker (in `agents`), no merge mark and nothing in this copy working on it. */
+async function waitingOnOld($: $, agents: AgentInfo[]): Promise<boolean> {
+  if (!(await $.fs.exists(path(S.N.boardFile)).catch(() => false))) return false
+  const b = await load($).catch(() => emptyBoard())
+  const mine = new Set([...workers.values()].map(w => w.task))
+  return b.tasks.some(t => t.status === 'doing' && t.session === S.me && !t.finishing && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !liveWorkersFor(t, agents, S.N.name).length)
 }
 
 /**
@@ -694,20 +772,32 @@ export async function check($: $) {
       tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
     }
   }
-  // A task kept "doing" after a reload because its old worker was still alive: once no live
-  // agent works on it any more, it goes back to "todo" for a fresh worker.
+  // A task kept "doing" after a reload because its old worker was still alive, or because its work
+  // was being tested and merged by the old copy of the plugin: once no live agent works on it any
+  // more and no merge is going on for it (its finishing mark is no longer refreshed), it goes back
+  // to "todo" for a fresh worker; or it is done, when its work already reached the target branch.
   if (agents) {
     const mine = new Set([...workers.values()].map(w => w.task))
     const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
-    const idle = (await load($)).tasks.filter(t => t.status === 'doing' && t.session === S.me && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && ownedHere(t, S.me, live) && !liveWorkersFor(t, agents as AgentInfo[], S.N.name).length).map(t => t.id)
-    if (idle.length)
+    const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !finishingNow(t, Date.now())
+    const idle = (await load($)).tasks.filter(t => free(t) && (t.session === S.me || finishingStale(t, Date.now())) && ownedHere(t, S.me, live) && !liveWorkersFor(t, agents as AgentInfo[], S.N.name).length)
+    const merged = new Map<string, string>()
+    for (const t of idle) {
+      const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
+      if (sha) merged.set(t.id, sha)
+    }
+    const ids = idle.map(t => t.id)
+    if (ids.length)
       await change($, x => ({
         ...x,
         tasks: x.tasks.map(t => {
-          if (!idle.includes(t.id) || t.status !== 'doing' || [...workers.values()].some(w => w.task === t.id) || starting.has(t.id) || finishing.has(t.id)) return t
-          return backToTodo(t, 'restarted: the old worker has ended', now())
+          if (!ids.includes(t.id) || !free(t) || [...workers.values()].some(w => w.task === t.id)) return t
+          const sha = merged.get(t.id)
+          if (sha) return mergedDone(t, sha, 'sent back to todo', now())
+          return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
         }),
       }))
+    for (const id of merged.keys()) tellLead($, `✓ ${id} is done: its work was already merged (${merged.get(id)!.slice(0, 8)}) when the plugin reloaded.`)
   }
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
