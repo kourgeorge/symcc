@@ -103,7 +103,10 @@ export const MANUAL = (): Record<string, string> => ({
   /${S.N.help} [TOPIC]           this manual
 On the board: t tasks · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify and target_branch
-  open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box · Esc cancels.
+  open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box
+  · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
+In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
+  search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
   · k stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).

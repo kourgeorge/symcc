@@ -1,7 +1,8 @@
-// Esc in the board panel: one step back, the innermost first. Claude Code sends every Esc pressed in
-// the panel (in a text box, on a button or in a pick list) to `ui.close`, origin person; register.tsx
-// calls escBack there and keeps the panel open when it went back.
-import type { KeyHint } from '../../board'
+// Esc in the board panel: one step back, the innermost first, when Claude Code sends the Esc to `ui.close`
+// (origin person); register.tsx calls escBack there and keeps the panel open when it went back. Claude Code
+// only does that for a panel opened with closeOnEscape, and the owner saw no step from the search box (see
+// docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
+// (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
 import { cancelScoutEdit } from '../scouts'
 import { type $, S, readOpened, readScoutOpen, readTab } from '../state'
 import { resetPane } from './open'
@@ -54,6 +55,3 @@ export async function escBack($: $): Promise<boolean> {
   }
   return true
 }
-
-/** The Scouts list and Settings keys with Esc saying "back" (the board's key lists say "close"): Esc there goes back to the board list. */
-export const escGoesBack = (keys: KeyHint[]): KeyHint[] => keys.map(k => (k.key === 'Esc' ? { ...k, word: 'back' } : k))

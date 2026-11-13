@@ -1,11 +1,12 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys } from '../../board'
+import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
 import { type $, S, readScoutOpen, updateScoutOpen } from '../state'
 import type { PaneParts } from './parts'
-import { escGoesBack } from './esc'
+import { resetPane } from './open'
 
-/** A scout's edit mode: the same header as its page, then a box per part of its file. */
+/** A scout's edit mode: the same header as its page, then a box per part of its file. Its Cancel button leaves it
+ *  without saving (its boxes take every letter, and Esc doesn't reach the panel from a text box). */
 export function scoutEditPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, scouts, heading, footer } = pane
   // A scout's edit mode: the same header as its page, then a box per part of its file.
@@ -27,7 +28,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
 
       <Box flexDirection="row" gap={1}>
         <Button key="scout-save" label="Save" onPress={act(() => saveScout($))} />
-        <Button key="scout-cancel" label="Cancel" onPress={() => cancelScoutEdit($)} />
+        <Button key="scout-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit($)} />
       </Box>
 
       {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
@@ -113,7 +114,8 @@ export async function scoutsPage($: $, pane: PaneParts) {
       </Box>
     )
   }
-  /** "New scout": a button, or (once pressed) the box that asks for its name. */
+  /** "New scout": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel
+   *  button (x), leaves it. */
   const newBox = () =>
     S.naming ? (
       <Box flexDirection="column">
@@ -125,10 +127,11 @@ export async function scoutsPage($: $, pane: PaneParts) {
           autoFocus
           submitLabel="next"
           onInput={value => void (S.naming && (S.naming.name = value))}
-          onSubmit={value => act(() => newScout($, value, scouts.map(x => x.name)))()}
+          onSubmit={value => (value.trim() ? act(() => newScout($, value, scouts.map(x => x.name)))() : cancelScoutEdit($))}
         />
         {S.naming.error ? <Text color={C('error')}>{S.naming.error}</Text> : null}
-        <Text color={C('subtle')}>Enter goes on to its file · Esc cancels</Text>
+        <Button key="scout-new-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit($)} />
+        <Text color={C('subtle')}>{boxHint('Enter goes on')}</Text>
       </Box>
     ) : (
       <Button key="scout-new" label="+ New scout" hotkey="n" autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((S.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
@@ -157,7 +160,8 @@ export async function scoutsPage($: $, pane: PaneParts) {
         )
       })}
       <Text key="scouts-blank"> </Text>
-      {footer(escGoesBack(scoutListKeys()), 'scouts-keys')}
+      <Button key="scouts-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
+      {footer(scoutListKeys(), 'scouts-keys')}
     </Box>
   )
 }

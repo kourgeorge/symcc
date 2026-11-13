@@ -2023,7 +2023,7 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(scoutKeys(true))).toEqual(['r run now', 'e edit', 'p resume', '↑↓ scroll', 'b back'])
   // while the scout runs there is no "r run now" (like the button)
   expect(words(scoutKeys(false, true))).toEqual(['e edit', 'p pause', '↑↓ scroll', 'b back'])
-  expect(words(scoutListKeys())).toEqual(['Enter open', 't s c views', 'Esc close'])
+  expect(words(scoutListKeys())).toEqual(['Enter open', 't s c views', 'b back'])
   expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings', 'Esc closes'])
   const all = [taskKeys('review', true), taskKeys('backlog'), taskKeys('todo', true), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
   for (const w of [30, 50, 80])

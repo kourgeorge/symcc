@@ -2,10 +2,9 @@
 // Claude Code turns the person's Esc into `ui.close` with origin person, which a test can't raise (the test's
 // `$` has no ui.close, and a hook's `$` is the test's own, not the plugin's). So these check escStep, what the
 // ui.close hook decides from the page and the open boxes; escBack applying it, and takeKeysBack asking for
-// the keyboard back, need a real panel.
+// the keyboard back, need a real panel. Since T-154 nothing needs Esc: tests/way-out.test.tsx checks the other ways out.
 import { expect, test } from 'claude-code/testing'
-import { escStep, escGoesBack, type EscStep, type PanePlace } from '../hooks/plugin/ui/esc'
-import { scoutListKeys, settingsKeys } from '../hooks/board'
+import { escStep, type EscStep, type PanePlace } from '../hooks/plugin/ui/esc'
 
 type Boxes = Parameters<typeof escStep>[1]
 const NONE: Boxes = { settingEdit: null, settingPick: null, draft: null, naming: null, rolePick: null, rejecting: null, diffOpen: null, answering: null, search: null }
@@ -42,8 +41,3 @@ for (const [name, place, boxes, step] of CASES)
   test(`Esc on the ${name}: ${step ?? 'closes the panel'}`, () => {
     expect(escStep(place, { ...NONE, ...boxes })).toBe(step)
   })
-
-test('the Scouts list and Settings say "Esc back"; their other keys are kept', () => {
-  expect(escGoesBack(scoutListKeys()).map(k => `${k.key} ${k.word}`)).toEqual(['Enter open', 't s c views', 'Esc back'])
-  expect(escGoesBack(settingsKeys()).map(k => `${k.key} ${k.word}`)).toEqual(['Enter change', '↑↓ move', 't s c views', 'Esc back'])
-})

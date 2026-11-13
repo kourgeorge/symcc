@@ -1,13 +1,15 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
 /** The Tasks view: the status strip, then the tasks (needs you under its label, then doing and to do as one list,
  *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead.
  *  With a search on (f, see S.search and taskMatches) only the matching tasks are listed, in every group (Backlog,
- *  Done and Dropped too), groups with a match open and groups without one hidden; a line under the header says so. */
+ *  Done and Dropped too), groups with a match open and groups without one hidden; a line under the header says so.
+ *  No way out needs Esc (it doesn't reach the panel from a text box): Enter on an empty box clears the search, and
+ *  while a filter is on (not typing) [x] clear search, next to [f] change search, takes it off. */
 export function listPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, width, mark, act, C, banner, tabs, footer } = pane
   const nowMs = Date.now()
@@ -87,6 +89,7 @@ export function listPage($: $, pane: PaneParts) {
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
   const redraw = () => $.ui.invalidate('ui.render')
   const openSearch = () => ((S.search = { text: S.search?.text ?? '', typing: true }), redraw())
+  const clearSearch = () => ((S.search = null), redraw())
   const count = filtering ? (matching.length ? `${matching.length} of ${v.tasks.length} tasks` : 'no tasks match') : 'type to filter the tasks'
   // the search line under the header: the box while typing (with the count under it), else the filter in use
   const searchRows = typing
@@ -101,17 +104,28 @@ export function listPage($: $, pane: PaneParts) {
           onInput={value => void ((S.search = { text: value, typing: true }), redraw())}
           onSubmit={value => void ((S.search = value.trim() ? { text: value.trim(), typing: false } : null), redraw())}
         />,
-        <Text key="search-count" wrap="truncate" color={C('subtle')}>{`${count} · Esc clears`}</Text>,
+        <Text key="search-count" wrap="truncate" color={C('subtle')}>{searchBoxHint(count)}</Text>,
       ]
     : filtering
       ? [<Text key="search-line" wrap="truncate" bold color={C('warning')}>{searchLine(query, matching.length, v.tasks.length)}</Text>]
       : []
-  const searchButton = typing ? null : [<Text key="search-gap">  </Text>, <Button key="search-open" label={filtering ? '[f] change search' : '[f] search'} hotkey="f" dimColor onPress={openSearch} />]
+  // with a filter on, [f] change search and [x] clear search sit under the search line (the footer's mode row has
+  // no room for both); with none, [f] search sits in the footer
+  const searchButtons = filtering && !typing
+    ? [
+        <Box key="search-buttons" flexDirection="row" gap={2}>
+          <Button key="search-open" label="[f] change search" hotkey="f" dimColor onPress={openSearch} />
+          <Button key="search-clear" label="[x] clear search" hotkey="x" dimColor onPress={clearSearch} />
+        </Box>,
+      ]
+    : []
+  const searchButton = typing || filtering ? null : [<Text key="search-gap">  </Text>, <Button key="search-open" label="[f] search" hotkey="f" dimColor onPress={openSearch} />]
   return (
     <Box flexDirection="column">
       {[...banner(), tabs()]}
       <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>
       {searchRows}
+      {searchButtons}
       {list.map((r, i) => {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>
         if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('subtle')}>{`  ${r.line}`}</Text>

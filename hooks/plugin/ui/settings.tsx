@@ -1,15 +1,19 @@
 // The board panel's Settings view.
-import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys } from '../../board'
+import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint } from '../../board'
 import { branchList } from '../git'
 import { type $, S } from '../state'
+import { resetPane } from './open'
 import { ownerSettings } from '../tools'
 import type { PaneParts } from './parts'
-import { escGoesBack } from './esc'
 
-/** The Settings view: one row per setting; Enter changes it. */
+/** The Settings view: one row per setting; Enter changes it. Every box and pick list has a Cancel button (x), and
+ *  Enter on an empty edit box cancels it too; Back (b) goes to the board list. None of it needs Esc, which
+ *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, act, C, header, footer } = pane
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
+  const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
+  const cancelButton = <Button key="setting-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
   const saveIt = (input: SettingsInput) => act(async () => {
     const r = await ownerSettings($, input, 'from the board')
     S.settingEdit = null
@@ -41,17 +45,20 @@ export async function settingsPage($: $, pane: PaneParts) {
           key="setting-edit"
           label={name}
           value={ed.value}
-          placeholder={info.kind === 'commands' ? 'e.g. npm test && npm run lint (empty: none)' : `a whole number, ${info.range}`}
+          placeholder={info.kind === 'commands' ? 'e.g. npm test && npm run lint, or none' : `a whole number, ${info.range}`}
           autoFocus
           onInput={value => void (ed.value = value)}
           onSubmit={value => {
-            const r = parseSettingValue(name, info.kind === 'commands' && !value.trim() ? 'none' : value)
+            if (!value.trim()) return cancel()
+            const r = parseSettingValue(name, value)
             if (!r.ok) return void ((ed.error = r.message), $.ui.invalidate('ui.render'))
             saveIt(r.input)()
           }}
         />
         {ed.error ? <Text color={C('error')}>{ed.error}</Text> : null}
-        <Text color={C('subtle')}>{info.kind === 'commands' ? 'join commands with " && " · ' : ''}Enter saves · Esc cancels</Text>
+        {cancelButton}
+        {info.kind === 'commands' ? <Text color={C('subtle')}>join commands with " && " · none clears them</Text> : null}
+        <Text color={C('subtle')}>{boxHint('Enter saves')}</Text>
       </Box>
     )
   }
@@ -66,8 +73,8 @@ export async function settingsPage($: $, pane: PaneParts) {
             <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${o}` : `○ ${o}`}</Text>
           </Button>
         ))}
-        <Button key="setting-cancel" label="Cancel" onPress={() => ((S.settingPick = null), $.ui.invalidate('ui.render'))} />
-        <Text color={C('subtle')}>Enter picks · Esc cancels</Text>
+        {cancelButton}
+        <Text color={C('subtle')}>{pickHint('x')}</Text>
       </Box>
     )
   }
@@ -84,7 +91,8 @@ export async function settingsPage($: $, pane: PaneParts) {
         ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
       ])}
       <Text color={C('subtle')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
-      {footer(escGoesBack(settingsKeys()), 'settings-keys')}
+      <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
+      {footer(settingsKeys(), 'settings-keys')}
     </Box>
   )
 }

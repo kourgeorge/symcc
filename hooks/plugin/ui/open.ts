@@ -28,7 +28,9 @@ export async function openPane($: $, o: { tab?: PaneTab; task?: string; focus?: 
   return o.quiet ? go().catch(() => undefined) : go()
 }
 
-/** What $.ui.open gets for the board panel; `focus` asks for the keyboard and lets Esc reach ui.close. */
+/** What $.ui.open gets for the board panel; `focus` asks for the keyboard and lets Esc reach ui.close. A panel
+ *  opened without it (the one that opens by itself at the start) has no closeOnEscape, so Esc there never
+ *  reaches ui.close: it only gives the keys to the prompt (docs/research/esc-in-panels.md). */
 const paneArgs = (focus: boolean) => ({ id: S.N.pane, title: boardTitle(S.root, S.N.name), ...(focus ? { focus: true as const, closeOnEscape: true as const } : {}) })
 
 /**

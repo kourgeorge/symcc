@@ -230,7 +230,7 @@ export const register: Register = on => {
         await publish($, await load($))
         // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
         const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
-        if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, Esc goes back to the tasks.`)
+        if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, b goes back to the tasks.`)
         if (!defs.length) return { text: `No scouts yet. Add one as ${S.N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
         return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') }
       }
@@ -242,7 +242,7 @@ export const register: Register = on => {
         S.settingEdit = null
         S.settingPick = null
         const placed = await openPane($, { tab: 'settings' }).then(r => r.isPlaced).catch(() => false)
-        if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, Esc goes back to the tasks.`)
+        if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, b goes back to the tasks.`)
         return say(settingsText({ ...b, notify: notifyOf(b, await playable($)) }, S.N.name))
       }
       case 'set':
@@ -333,11 +333,14 @@ export const register: Register = on => {
   // Esc in the board panel goes one step back (see escBack: leaves a text box, or goes back a page) and
   // keeps the panel open, then asks for the keyboard back, which Claude Code gave to its prompt on Esc.
   // Esc on the board list with no search closes it. Opened days, the search and the active view are
-  // forgotten when the board panel closes.
+  // forgotten when the board panel closes. Each close is written to the debug log (claude --debug), to see
+  // whether an Esc reached the panel at all (docs/research/esc-in-panels.md).
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== S.N.pane) return next(e)
-    if (e.origin.kind === 'person' && (await escBack($))) {
+    const back = e.origin.kind === 'person' && (await escBack($))
+    $.ui.log(`${S.N.name} board: ui.close from ${e.origin.kind}${back ? ', went one step back' : ''}`, { to: 'debug' })
+    if (back) {
       takeKeysBack($)
       return { value: undefined }
     }

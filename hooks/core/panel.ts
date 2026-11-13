@@ -178,10 +178,21 @@ export function taskMatches(t: SymccTask, query: string): boolean {
   })
 }
 
-/** The line over the board list while a search filter is on: "search: notify · 3 of 144 tasks · Esc clears",
- *  or "search: notify · no tasks match · Esc clears". */
+/** The line over the board list while a search filter is on: "search: notify · 3 of 144 tasks", or
+ *  "search: notify · no tasks match". The [x] clear search button under it takes the filter off. */
 export const searchLine = (query: string, shown: number, all: number): string =>
-  `search: ${query.trim()} · ${shown ? `${shown} of ${all} tasks` : 'no tasks match'} · Esc clears`
+  `search: ${query.trim()} · ${shown ? `${shown} of ${all} tasks` : 'no tasks match'}`
+
+/** The line under the open search box: how many match, and how to leave the box (Esc doesn't reach the panel
+ *  from a text box). `count` is "3 of 144 tasks", "no tasks match" or "type to filter the tasks". */
+export const searchBoxHint = (count: string): string => `${count} · Enter on empty clears`
+
+/** The hint under a text box that Enter on empty cancels: what Enter does, then "Enter on empty cancels"
+ *  ("goes back" when there is nothing to cancel back to but the page). Kept within 50 columns. */
+export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels'): string => `${enter} · Enter on empty ${empty}`
+
+/** The hint under a pick list: Enter picks, `key` (its Cancel button's hotkey) cancels. */
+export const pickHint = (key: string): string => `Enter picks · ${key} cancels`
 
 /** The keys under the board list: only keys that work in the list (a and x work only on a task's own page). */
 export const listKeys = (): KeyHint[] => [
@@ -249,20 +260,20 @@ export const settingsKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'change' },
   { key: '↑↓', word: 'move' },
   { key: 't s c', word: 'views' },
-  { key: 'Esc', word: 'close' },
+  { key: 'b', word: 'back' },
 ]
 
-/** The keys at the bottom of a scout's edit page. */
+/** The keys at the bottom of a scout's edit page: its boxes take every letter, so the way out is its Cancel button. */
 export const scoutEditKeys = (): KeyHint[] => [
   { key: '↑↓', word: 'move between boxes' },
-  { key: 'Esc', word: 'cancel' },
+  { key: 'Cancel', word: 'leaves without saving' },
 ]
 
 /** The keys under the Scouts list. */
 export const scoutListKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
   { key: 't s c', word: 'views' },
-  { key: 'Esc', word: 'close' },
+  { key: 'b', word: 'back' },
 ]
 
 /** The keys at the bottom of a scout's page; p pauses it, or resumes it when `paused`. No "r run now" while

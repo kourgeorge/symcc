@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { SymccTask } from '../types'
-import { taskMatches, searchLine } from '../hooks/board'
+import { taskMatches, searchLine, searchBoxHint } from '../hooks/board'
 
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) =>
   ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...extra }) as unknown as SymccTask
@@ -46,9 +46,15 @@ test('taskMatches: status (and its word), role and origin with its request', () 
   expect(taskMatches(followUp, 'worker')).toBe(true)
 })
 
+test('the search box says how to leave it without Esc, within 50 columns', () => {
+  expect(searchBoxHint('3 of 144 tasks')).toBe('3 of 144 tasks · Enter on empty clears')
+  expect(searchBoxHint('type to filter the tasks')).toBe('type to filter the tasks · Enter on empty clears')
+  expect(searchBoxHint('type to filter the tasks').length).toBeLessThanOrEqual(50)
+})
+
 test('searchLine says what the filter is and how many match', () => {
-  expect(searchLine(' notify ', 3, 144)).toBe('search: notify · 3 of 144 tasks · Esc clears')
-  expect(searchLine('zzz', 0, 144)).toBe('search: zzz · no tasks match · Esc clears')
+  expect(searchLine(' notify ', 3, 144)).toBe('search: notify · 3 of 144 tasks')
+  expect(searchLine('zzz', 0, 144)).toBe('search: zzz · no tasks match')
 })
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
@@ -91,22 +97,22 @@ test('f opens the search; typing shows only matching tasks in every group, with 
   expect((await ui.find({ key: 'day:backlog' }))?.text).toMatch(/^  ▾ Backlog/)
   // archived tasks are not searched, so the Done row has no "(+50 archived)"
   expect((await ui.find({ key: 'day:done' }))?.text).not.toMatch(/archived/)
-  expect(await ui.find({ type: 'Text', text: /^3 of 5 tasks · Esc clears$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^3 of 5 tasks · Enter on empty clears$/ })).toBeDefined()
   // Enter keeps the filter and closes the box
   await ui.input({ key: 'search', text: 'notify' })
   expect(await ui.find({ key: 'search' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^search: notify · 3 of 5 tasks · Esc clears$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^search: notify · 3 of 5 tasks$/ })).toBeDefined()
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
   // two words: both must match
   await ui.press({ key: 'search-open' })
   await ui.input({ key: 'search', text: 'notify linux' })
-  expect(await ui.find({ type: 'Text', text: /^search: notify linux · 1 of 5 tasks · Esc clears$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^search: notify linux · 1 of 5 tasks$/ })).toBeDefined()
   expect(await ui.find({ key: 'T-3' })).toBeDefined()
   expect(await ui.find({ key: 'T-1' })).toBeUndefined()
   // nothing matches
   await ui.press({ key: 'search-open' })
   await ui.input({ key: 'search', text: 'zzz' })
-  expect(await ui.find({ type: 'Text', text: /^search: zzz · no tasks match · Esc clears$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^search: zzz · no tasks match$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /All clear/ })).toBeUndefined()
   for (const id of ['T-1', 'T-2', 'T-3', 'T-4', 'T-5']) expect(await ui.find({ key: id })).toBeUndefined()
   // an empty search submitted clears it: everything is back
@@ -115,5 +121,41 @@ test('f opens the search; typing shows only matching tasks in every group, with 
   expect(await ui.find({ type: 'Text', text: /^search: / })).toBeUndefined()
   expect(await ui.find({ key: 'T-2' })).toBeDefined()
   expect(await ui.find({ key: 'T-3' })).toBeUndefined() // the backlog is folded again
+  await ui.unmount()
+})
+
+test('with a filter on, [x] clear search sits next to [f] change search and takes the filter off; Enter on an empty box clears it too', async ($, on) => {
+  const tasks = [task('T-1', 'todo', 'Voice notify'), task('T-2', 'todo', 'Parser')]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // no filter: only [f] search, in the footer
+  expect((await ui.find({ key: 'search-open' }))?.props.label).toBe('[f] search')
+  expect(await ui.find({ key: 'search-clear' })).toBeUndefined()
+  await ui.press({ key: 'search-open' })
+  // while typing there is no [x] button (the box takes every letter); its hint says how to leave
+  expect(await ui.find({ key: 'search-clear' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^type to filter the tasks · Enter on empty clears$/ })).toBeDefined()
+  await ui.input({ key: 'search', text: 'notify' })
+  // the filter kept: [f] change search and [x] clear search side by side
+  const open = await ui.find({ key: 'search-open' })
+  const clear = await ui.find({ key: 'search-clear' })
+  expect(open?.props.label).toBe('[f] change search')
+  expect(clear?.props.label).toBe('[x] clear search')
+  expect(clear?.props.hotkey).toBe('x')
+  expect((await ui.find({ key: 'search-buttons' }))?.text).toMatch(/\[f\] change search.*\[x\] clear search/)
+  expect(await ui.find({ key: 'T-2' })).toBeUndefined()
+  await ui.press({ key: 'search-clear' })
+  expect(await ui.find({ type: 'Text', text: /^search: / })).toBeUndefined()
+  expect(await ui.find({ key: 'search-clear' })).toBeUndefined()
+  expect(await ui.find({ key: 'T-2' })).toBeDefined()
+  expect((await ui.find({ key: 'search-open' }))?.props.label).toBe('[f] search')
+  // Enter on the empty box (after typing, then deleting it) clears the search and gives the list back
+  await ui.press({ key: 'search-open' })
+  await ui.input({ key: 'search', text: 'notify', kind: 'change' })
+  expect(await ui.find({ key: 'T-2' })).toBeUndefined()
+  await ui.input({ key: 'search', text: '' })
+  expect(await ui.find({ key: 'search' })).toBeUndefined()
+  expect(await ui.find({ key: 'T-2' })).toBeDefined()
+  expect(await ui.find({ key: 'T-1' })).toBeDefined()
   await ui.unmount()
 })

@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, taskReports, answerChoices, answerKeys, type BoardTask } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
@@ -24,10 +24,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     noteForLead(`The owner approved ${t.id}: ${brief(r)}`)
   })
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
+  const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
   const reviewButtons = inReview
     ? [<Button key="approve" label="Approve" hotkey="a" onPress={approveIt} />, <Button key="reject" label="Reject" hotkey="x" onPress={askReason} />]
     : []
-  /** The box that asks why, once Reject was pressed. */
+  /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button (c), leaves it: Esc
+   *  doesn't reach the panel from a text box. */
   const rejectBox =
     inReview && S.rejecting?.task === t.id ? (
       <Box flexDirection="column" borderStyle="round" borderColor={C('error')} paddingX={1}>
@@ -41,7 +43,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           onSubmit={value =>
             act(async () => {
               const why = value.trim()
-              if (!why) return void $.ui.toast(S.N.toast('give a short reason, so the next worker knows what to fix'))
+              if (!why) return cancelReject()
               const r = await runTool($, 'reject', { task: t.id, reason: why })
               S.rejecting = null
               S.diffOpen = null
@@ -50,7 +52,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             })()
           }
         />
-        <Text color={C('subtle')}>Enter sends it back to "todo" with the reason · Esc cancels</Text>
+        <Button key="reject-cancel" label="Cancel (c)" hotkey="c" onPress={cancelReject} />
+        <Text color={C('subtle')}>{boxHint('Enter sends it to todo')}</Text>
       </Box>
     ) : null
   if (inReview && S.diffOpen?.task === t.id) {
@@ -125,8 +128,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Button>
           )
         })}
-        <Button key="role-cancel" label="Cancel" onPress={() => ((S.rolePick = null), $.ui.invalidate('ui.render'))} />
-        <Text color={C('subtle')}>Enter picks · Esc cancels</Text>
+        <Button key="role-cancel" label="Cancel (c)" hotkey="c" onPress={() => ((S.rolePick = null), $.ui.invalidate('ui.render'))} />
+        <Text color={C('subtle')}>{pickHint('c')}</Text>
       </Box>
     ) : null
   // A task in review: the files it changed, each opening its diff.
@@ -181,9 +184,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const choices = t.status === 'waiting' ? answerChoices(asked.asked_files, asked.options) : []
   if (S.answering !== null && S.answering !== t.id) S.answering = null
   const typing = !choices.length || S.answering === t.id
+  const cancelAnswer = () => ((S.answering = null), $.ui.invalidate('ui.render'))
+  // Enter on the empty "Your answer" box leaves it: back to the answer buttons when Answer… opened it, else (a
+  // plain question: the box is all there is) back to the board list
+  const leaveAnswer = act(async () => (choices.length ? cancelAnswer() : await updateOpened($, () => '')))
   const sendAnswer = (text: string) =>
     act(async () => {
-      if (!text.trim()) return
+      if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool($, 'change', { task: t.id, answer: text.trim() })
       noteForLead(`The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
@@ -285,6 +292,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               'answer-buttons',
             )}
           {typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => sendAnswer(value)()} />}
+          {typing && choices.length > 0 && <Button key="answer-cancel" label="Cancel (c)" hotkey="c" onPress={cancelAnswer} />}
+          {typing && <Text color={C('subtle')}>{boxHint('Enter sends', choices.length ? 'cancels' : 'goes back')}</Text>}
         </Box>
       )}
 

@@ -98,7 +98,7 @@ export const S = {
   doneOpen: false,
   /** whether the owner has opened the Dropped section in the board panel (folded by default); folded again when the panel closes */
   droppedOpen: false,
-  /** the search on the board panel's Tasks list (f): its text, and `typing` while its box is open; null = no search. Cleared by Esc and when the panel closes */
+  /** the search on the board panel's Tasks list (f): its text, and `typing` while its box is open; null = no search. Cleared by Enter on the empty box, by [x] clear search, by Esc (when it reaches the panel) and when the panel closes */
   search: null as { text: string; typing: boolean } | null,
   draft: null as ScoutDraft | null,
   /** the "new scout" name box on the Scouts view, or null when it isn't shown */
