@@ -164,7 +164,7 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   expect(texts.findIndex(t => /Write it up/.test(t))).toBeLessThan(at)
   expect(texts[at - 1]).toBe(' ')
   expect(texts.some(t => /┄/.test(t))).toBe(false)
-  expect(texts.some(t => /^Enter open · ↑↓ move · t s c views · Esc close$/.test(t))).toBe(true)
+  expect(texts.some(t => /^Enter open · ↑↓ move · t s c views$/.test(t))).toBe(true)
   expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.props.color).toBe('ide')
   // folded by default: the items are hidden
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
@@ -243,7 +243,7 @@ test('the list goes: NEEDS YOU, then doing and to do as one untitled list, then 
   expect((await ui.find({ type: 'Text', text: /^ ✗ failed\s*$/ }))?.props.color).toBe('error')
   expect((await ui.find({ type: 'Text', text: /^ ‖ paused\s*$/ }))).toBeDefined()
   // even with a task in review the hint offers only keys that work in the list: no a or x
-  expect(texts.some(t => /^Enter open · ↑↓ move · t s c views · Esc close$/.test(t))).toBe(true)
+  expect(texts.some(t => /^Enter open · ↑↓ move · t s c views$/.test(t))).toBe(true)
   expect(texts.some(t => /a\/x|a approve|x reject/.test(t))).toBe(false)
   // folded by default: no done, dropped or backlog tasks shown
   for (const k of ['T-1', 'T-2', 'T-7']) expect(await ui.find({ key: k })).toBeUndefined()
@@ -530,7 +530,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(await ui.find({ type: 'Text', text: /\[[tsc]\]/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /^Tasks \(1\)$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^Scouts \(2\)$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t s c views · Esc close$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t s c views$/ })).toBeDefined()
     expect(await ui.find({ key: 'T-1' })).toBeDefined()
     // the Tasks view no longer lists the scouts at the bottom (they have their own view)
     expect(await ui.find({ type: 'Text', text: /^scouts: / })).toBeUndefined()
@@ -1023,7 +1023,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
     for (const l of hint) expect(l.length).toBeLessThanOrEqual(w)
-    expect(hint.join(' · ')).toBe('Enter open · ↑↓ move · t s c views · Esc close')
+    expect(hint.join(' · ')).toBe('Enter open · ↑↓ move · t s c views')
     expect(texts.some(t => /a\/x|a approve|x reject/.test(t))).toBe(false)
     // folded rows: no brackets, counts lined up
     const backlog = (await ui.find({ key: 'day:backlog' }))!.text
@@ -1461,7 +1461,7 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const foot = await footerOf(ui, listKeys())
-  expect(foot).toBe('⏸ review merge [m] auto  [f] search' + 'Enter open · ↑↓ move · t s c views · Esc close')
+  expect(foot).toBe('⏸ review merge [m] auto  [f] search' + 'Enter open · ↑↓ move · t s c views')
   expect((await ui.findAll({ type: 'Text', text: /^⏸ review merge $/ })).length).toBe(1)
   expect((await ui.findAll({ key: 'mode' })).length).toBe(1)
   // the mode line comes after the list, not under the banner
