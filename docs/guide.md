@@ -192,7 +192,11 @@ So there are three ways to change a task in review before it is merged:
 
 1. **Reject it with a reason**: a fresh worker redoes it (see above).
 2. **Ask the lead to change the task** ("T-5: also update the README"): the lead changes
-   what the task asks for, and it goes back to work.
+   what the task asks for, and it goes back to work. For a small addition the lead uses
+   `change` with `add_details`: the note is added at the end of the details as
+   `Note (lead, <date>): ...`, the old text stays, and the task's history gets a line
+   `the lead added a note: "..."`. `details` rewrites the whole text; giving both at once
+   is refused.
 3. **Edit the files yourself** in its folder, `.symcc/worktrees/T-5`, then approve. Your
    edits are committed as part of the task (same commit message) and its history gets a
    line like `owner edited files before approving: a.ts, b.md`. The tests always run

@@ -2626,6 +2626,17 @@ test('changeLines names the changed fields of a restart, the widened files and t
   expect(filesWidenedLine(['a'], undefined)).toBe(null)
   expect(ownerAnsweredLine('x'.repeat(1000)).length).toBeLessThan(ANSWER_LINE_CHARS + 30)
   expect(stoppedLine({ attempts: 3, role: 'tester' }, 'paused')).toBe('try 3 (role tester): stopped: paused')
+  expect(changeLines(t, {}, false, undefined, ' check docs ')).toEqual(['the lead added a note: “check docs”'])
+})
+
+import { addDetailsText, detailsBothRefusal } from '../hooks/board'
+
+test('addDetailsText keeps the old details and adds the note as a new paragraph; both params are refused', () => {
+  expect(addDetailsText('Do x.\nDone when y.\n', ' also z ', '2026-11-13')).toBe('Do x.\nDone when y.\n\nNote (lead, 2026-11-13): also z')
+  expect(addDetailsText('', 'z', '2026-11-13')).toBe('Note (lead, 2026-11-13): z')
+  expect(detailsBothRefusal({ details: 'a', add_details: 'b' })).toMatch(/not both/)
+  expect(detailsBothRefusal({ add_details: 'b' })).toBe(null)
+  expect(detailsBothRefusal({ details: 'a' })).toBe(null)
 })
 
 test('backToTodo of a running task says in its history why it restarts', async () => {
