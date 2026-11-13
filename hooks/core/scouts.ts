@@ -2,6 +2,7 @@
 import type { SymccMode, SymccScout, SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { fmtDuration } from './runs'
+import { offAnswer } from './settings'
 import { frontMatterLine, splitFrontMatter } from './text'
 
 /** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
@@ -187,7 +188,18 @@ export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run' |
 /** True when scout `s` may start a run now (on its timer, or run now): not running already, not paused, in the
  *  session that drives the board, with a usable git repo, the board on and not in mode off. */
 export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean }): boolean {
-  return !s.running && !s.paused && o.driving && o.gitOk && o.on && o.mode !== 'off'
+  return scoutWhyNot({ name: '', ...s }, o) === ''
+}
+
+/** Why scout `s` can't start a run now ('' when it can): one clear message for each thing scoutMayRun checks. */
+export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean }, name: string = DEFAULT_NAME): string {
+  if (s.running) return `${s.name} is already running`
+  if (s.paused) return scoutPausedAnswer(s.name, name)
+  if (!o.driving) return `scouts run in the session that drives the board; run /${name}-scout ${s.name} there`
+  if (!o.gitOk) return "git isn't set up in this folder yet (no repo or no commit); nothing runs until it is"
+  if (!o.on) return offAnswer(name)
+  if (o.mode === 'off') return `the board is off, so no scout runs; turn it on with /${name}-mode review or /${name}-mode auto`
+  return ''
 }
 
 /** What "run now" says for a paused scout. */

@@ -1,5 +1,5 @@
 import type { SymccScout } from '../../types'
-import { type ScoutDef, parseScout, scoutMayRun, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutPausedAnswer, offAnswer, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand } from '../board'
+import { type ScoutDef, parseScout, scoutMayRun, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand } from '../board'
 import { publish } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
@@ -153,11 +153,10 @@ export async function runScoutNow($: $, name: string): Promise<string> {
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
   const st = scoutState.get(s.name)
-  if (st && (await pausedNow($, st))) return scoutPausedAnswer(s.name, S.N.name)
-  if (!S.driving) return `scouts run in the session that drives the board; run /${S.N.name}-scout ${s.name} there`
+  if (st) await pausedNow($, st)
   const cur = await load($)
-  if (!symccOn(cur)) return offAnswer(S.N.name)
-  if (modeOf(cur) === 'off') return `the board is off, so no scout runs; turn it on with /${S.N.name}-mode review or /${S.N.name}-mode auto`
+  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur) }, S.N.name)
+  if (why) return why
   void runScout($, s)
   return `scout ${s.name} started`
 }
