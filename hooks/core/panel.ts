@@ -259,16 +259,3 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
   }
 }
 
-/** The subtle text after the folded Done row: "last today: T-88 Task page: collapse the Details rows" ("yesterday",
- *  or the date for older days). The title is cut with "…" so `head`, three spaces and this fit in `width` columns;
- *  '' when even a short title does not fit. */
-export function doneExtra(last: SymccTask | undefined, nowMs: number, offsetMin: number, head: string, width = Infinity): string {
-  if (!last) return ''
-  const today = dayOf(nowMs, offsetMin)
-  const day = taskDay(last, offsetMin)
-  const when = !day || !today || day >= today ? 'today' : dayLabel(day, today) === 'Yesterday' ? 'yesterday' : dayLabel(day, today)
-  const lead = `last ${when}: ${last.id} `
-  const room = width - head.length - 3 - lead.length
-  if (room < Math.min(8, last.title.length)) return ''
-  return `${lead}${cutTo(last.title, room)}`
-}

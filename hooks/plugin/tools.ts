@@ -90,7 +90,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · l pick the worker role (a task to do, paused, failed or in the backlog).
 In a backlog task: o move to todo · x drop · l role.
 On the board list a task's role shows at the right end of its row, with the try number ("tester · try 2"); general shows nothing. A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review".
-The board list goes top to bottom: the status strip; NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N  last today: …" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
+The board list goes top to bottom: the status strip; NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 On the board list: m switches the mode between review and auto (never to off).

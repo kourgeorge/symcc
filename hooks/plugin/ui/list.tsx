@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, doneExtra, groupLabel, ALL_CLEAR, statusCell, statusStrip, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
+import { localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, statusStrip, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
@@ -40,10 +40,9 @@ export function listPage($: $, pane: PaneParts) {
         ...(!S.backlogOpen ? [] : [...tasksOf(backlogShown, 4), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore), indent: 4 }] : [])]),
       ]
     : []
-  const doneHead = parts.done.length ? foldedRow('Done', parts.done.length, S.doneOpen, countWidth) : ''
   const doneRows: Row[] = parts.done.length
     ? [
-        { day: 'done', label: doneHead, extra: doneExtra(parts.done[0], nowMs, offset, doneHead, width - 2), indent: 2 },
+        { day: 'done', label: foldedRow('Done', parts.done.length, S.doneOpen, countWidth), indent: 2 },
         ...(!S.doneOpen
           ? []
           : [
