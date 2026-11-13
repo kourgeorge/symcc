@@ -1,0 +1,5 @@
+session,arm,run,agent,model,status,requests_sent,input_tokens,output_tokens,cache_write_tokens,cache_read_tokens,billed_equiv_tokens_est,api_calls,subagent_calls,wall_min,last_commit_min,owner_interventions,scripted_answers,hidden_passed,hidden_total,hidden_pass_rate,regressions,forgotten,visible_tests_ok,lint_errors,type_errors,billed_equiv_per_passed_request_est
+inventory,plain,1,fake-noop,,ok,10,248,3506,18157,161409,56615,10,0,0.06,,0,0,0,10,0.0,0,10,True,0,0,
+inventory,symcc,1,fake-noop,,ok,10,557,6978,39578,414949,126414,22,11,0.06,,0,0,0,10,0.0,0,10,True,0,0,
+inventory,plain,2,fake-noop,,ok,10,198,3324,16294,155181,52704,10,0,0.06,,0,0,0,10,0.0,0,10,True,0,0,
+inventory,symcc,2,fake-noop,,ok,10,628,8092,40659,381819,130094,22,11,0.06,,0,0,0,10,0.0,0,10,True,0,0,

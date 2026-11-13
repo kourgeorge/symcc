@@ -1,0 +1,4 @@
+.symcc/
+__pycache__/
+*.pyc
+inventory.json
