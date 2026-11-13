@@ -7,7 +7,7 @@ import { loadRoles } from './roles'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path } from './store'
 import { tellLead } from './tell'
-import { sayDone } from './voice'
+import { sayDone, sayNeedsYou } from './voice'
 
 // ---------------- workers ----------------
 
@@ -30,7 +30,7 @@ If you find you must change a file outside this list, do NOT change it. Stop at 
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${S.N.name} commits, tests and merges your work.
 ${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
-When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
+When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question; the task will wait for the owner's answer and a new try continues with it.`
 
 export async function pump($: $) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
@@ -231,6 +231,10 @@ async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, li
   tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
+/** What the lead is told when a worker stopped with a QUESTION and its task now waits for the owner. */
+export const workerQuestionText = (id: string, question: string) =>
+  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'} If you can answer it from what you know, answer with ${S.N.name} change ${id} (put the answer in the details); otherwise leave it for the owner.`
+
 export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean) {
   const b = await load($)
   const t = find(b, w.task)
@@ -244,10 +248,14 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
   } else if (need) {
     const question = needFilesQuestion(t.id, need)
     if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }))) return
+    sayNeedsYou($, b, t, question)
     tellLead($, `${question}\nThe task now waits for the owner. If they agree, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (q) {
-    if (await writeIfSame($, t, cur => ({ status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...cur.history, `${tryLabel(t)}: worker asked: ${q[1]}`] }))) return
-    tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${S.N.name} ask.`)
+    // Straight to the owner, like NEED FILES: the task waits with the question; their answer sends it back to work.
+    const question = q[1]!.trim()
+    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`] }))) return
+    sayNeedsYou($, b, t, question)
+    tellLead($, workerQuestionText(t.id, question))
   } else {
     await change($, x => (find(x, t.id)?.status === 'doing' ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []

@@ -61,11 +61,12 @@ picks up again next time.
    │         │    failing output (up to 2 times by itself)  │
    │         ├──▶ still failing / out of time ──▶ failed ───┘
    │         ├──▶ worker needs files outside its list ──▶ waiting (NEED FILES)
-   │         └──▶ worker has a question ──▶ failed + question to the lead
+   │         └──▶ worker has a question ──▶ waiting (QUESTION), "T-5 needs you"
    │
    ├── review   (only in review mode) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
-   ├── waiting  the lead asked YOU something; your answer sends it back to work
+   ├── waiting  the lead or a worker asked YOU something; your answer sends it
+   │            back to work
    ├── paused   stopped on purpose; "resume" sends it back
    ├── dropped  cancelled; stays on the list and never runs on its own;
    │            retry (r on its page, or ask the lead) brings it back to todo
@@ -78,7 +79,7 @@ picks up again next time.
 |---|---|
 | `todo` | Ready to be picked up (once the tasks it waits for are done) |
 | `doing` | A worker is on it right now |
-| `waiting` | It needs an answer from you |
+| `waiting` | It needs an answer from you (shown under NEEDS YOU) |
 | `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
 | `paused` | Stopped on purpose, until resumed |
 | `failed` | It could not be finished; the lead decides what next |
@@ -91,6 +92,19 @@ finished first: it starts only when every one of them is `done` (merged). Any ot
 keeps it waiting, also `dropped` or `failed`; then the lead changes or clears its `after`.
 Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
 lower task number).
+
+---
+
+### When a worker needs you
+
+A worker that can't go on without a decision from you stops and answers
+`QUESTION: …`. (A worker that needs files outside its list answers `NEED FILES: …`; see
+the scope check below.) The task does not fail: it goes straight to `waiting` with the
+question, shows under NEEDS YOU on the board, and with voice on you hear "T-5 needs you"
+(once per question, only in the session that drives the board). The lead is told too and
+answers it itself when it can. Otherwise answer it on the board or tell the lead: the answer
+goes into the task and sends it back to work, and a new try continues with it. What the
+worker already changed is kept.
 
 ---
 
@@ -117,7 +131,7 @@ This is where symcc keeps your branch safe. Step by step:
    out with uncommitted changes, or with untracked files the merge would overwrite,
    symcc waits instead of overwriting them.
 7. **Tell.** The lead gets one line: merged, or why not. On a Mac you also hear
-   "T-3 done".
+   "T-3 done" (and "T-5 needs you" when a task waits for your answer).
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
