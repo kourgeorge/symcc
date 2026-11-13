@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, inPlan, planBacklog, planAdded, planAddText } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
@@ -223,6 +223,8 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name; for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
+- Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use order for priority (lower runs first), not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
+- ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / order, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
@@ -364,7 +366,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const wasRunning = t.status === 'doing'
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
-        await change($, x => stashTask(patchTask(x, t.id, fields(), now(), S.N.dir), t.id, now()))
+        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
       }
@@ -399,7 +401,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       await change($, x => {
         const cur = find(x, t.id) ?? t
         const lines = changeLines(t, patch, wasDoing, answer)
-        return patchTask(x, t.id, lines.length ? { ...patch, history: [...cur.history, ...lines] } : patch, now(), S.N.dir)
+        const end = wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
+        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
       })
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
@@ -428,7 +431,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
@@ -439,7 +442,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
-      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped' }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
       void pump($)
       return checking ? `${t.id} dropped; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it stays done)` : `${t.id} dropped`
@@ -450,12 +453,12 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) {
         stopAsked.set(t.id, 'paused')
-        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}` }, now()))
+        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
         return `${t.id} paused; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it is done); ${S.N.name} resume ${t.id} continues it`
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }

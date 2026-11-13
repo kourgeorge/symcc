@@ -1,10 +1,50 @@
 // Time and cost of each try.
-import type { SymccRun, SymccTask } from '../../types'
+import type { SymccRun, SymccRunEnd, SymccTask } from '../../types'
 
 // ---------------- time and cost of each try ----------------
 
-/** The runs with a new try started at `now`. */
-export const startRun = (runs: SymccRun[] | undefined, now: string): SymccRun[] => [...(runs ?? []), { started: now }]
+/** The runs with a new try started at `now`; `mergeMain` marks a try that first merges main in after a clash. */
+export const startRun = (runs: SymccRun[] | undefined, now: string, mergeMain = false): SymccRun[] => [...(runs ?? []), { started: now, ...(mergeMain ? { merge_main: true as const } : {}) }]
+
+/**
+ * The runs with the last try's end reason set to `by` (and `note`). The first reason wins: a try
+ * that already has one keeps it, unless `overwrite` (e.g. the work was merged after all).
+ */
+export function withEnd(runs: SymccRun[] | undefined, by: SymccRunEnd, note?: string, overwrite = false): SymccRun[] {
+  const out = [...(runs ?? [])]
+  const last = out[out.length - 1]
+  if (!last || (last.ended_by && !overwrite)) return out
+  const { ended_note: _old, ...rest } = last
+  out[out.length - 1] = { ...rest, ended_by: by, ...(note ? { ended_note: note } : {}) }
+  return out
+}
+
+/**
+ * The patch that ends task `t`'s running try at `now` with reason `by` (and `note`); empty when
+ * `t` is not "doing" (no try of its own is running or being checked) or has no try.
+ */
+export function endedBy(t: Pick<SymccTask, 'status' | 'runs'> | undefined, now: string, by: SymccRunEnd, note?: string): { runs?: SymccRun[] } {
+  if (t?.status !== 'doing' || !t.runs?.length) return {}
+  return { runs: withEnd(endRun(t.runs, now), by, note) }
+}
+
+/** The short outcome of a finished try's check: "merged", "ready for review", "tests failed", "clash with main", "out of scope", ... */
+export function finishedNote(r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean }): string {
+  if (r.review) return 'ready for review'
+  if (r.ok) return 'merged'
+  if (r.conflict) return 'clash with main'
+  if (r.testOutput !== undefined) return 'tests failed'
+  if (/^changed files outside the task/.test(r.detail)) return 'out of scope'
+  if (/^checking failed/.test(r.detail)) return 'checking failed'
+  if (/^the worker made no change/.test(r.detail)) return 'no change'
+  return 'not merged'
+}
+
+/** How a try ended, in words: "merged main in (clash with main) · finished: merged"; '' when not known. */
+export function runEndText(r: SymccRun): string {
+  const end = r.ended_by ? `${r.ended_by}${r.ended_note ? `: ${r.ended_note}` : ''}` : ''
+  return [r.merge_main && 'merged main in (clash with main)', end].filter(Boolean).join(' · ')
+}
 
 /**
  * The runs with the last try ended at `now`, adding what it used if known. A try already
@@ -97,9 +137,10 @@ export function fmtTotal(t: RunTotal): string {
   return [fmtDuration(t.ms), t.tokens !== undefined && `${fmtTokens(t.tokens)} tokens`, t.cost !== undefined && `~${fmtCost(t.cost)}`].filter(Boolean).join(' · ')
 }
 
-/** One try in words: "try 2: 12m · 40k tokens", with "(running)" while it has not ended. */
+/** One try in words: "try 2: 12m · 40k tokens · finished: merged", with "(running)" while it has not ended. */
 export function fmtRun(r: SymccRun, i: number, nowMs?: number): string {
-  return `try ${i + 1}: ${fmtTotal(sumRuns([r], nowMs))}${r.ended ? '' : ' (running)'}`
+  const end = runEndText(r)
+  return `try ${i + 1}: ${fmtTotal(sumRuns([r], nowMs))}${end ? ` · ${end}` : ''}${r.ended ? '' : ' (running)'}`
 }
 
 /** The board's total line, e.g. "total: 1h 12m · ~$3.40 over 4 tries"; '' when no try has run. */
