@@ -42,6 +42,7 @@ behind it: you keep talking, and the work keeps moving.
 
 ## Why symcc
 
+- **A leap toward organized autonomous agents.** Work keeps moving when you step away: scouts (helpers that look for bugs, missing tests and outdated parts on their own timers) send what they find to the lead, who puts it on the board. Workers build, test and merge it, and ask you only when a decision is really yours.
 - **See everything.** A live board shows what is running, what is waiting and what needs you.
 - **Know why.** Every task and commit records who asked for it and why, so you can go from a line of code back to the request.
 - **Order handled for you.** The lead decides which tasks wait for others and which run in parallel. You think about the next question while the team works on the next task.
