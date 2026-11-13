@@ -237,7 +237,7 @@ test('the list goes: NEEDS YOU, then doing and to do as one untitled list, then 
   await ui.unmount()
 })
 
-test('the Done row shows the count and, when it fits, the task that finished last, with its day', async ($, on) => {
+test('the Done row shows just the count, at any width', async ($, on) => {
   const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
   stateOf(on, {
     view: {
@@ -256,21 +256,12 @@ test('the Done row shows the count and, when it fits, the task that finished las
       },
     },
   })
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
-  const head = await ui.find({ key: 'day:done' })
-  expect(head?.text).toBe('  ▸ Done     3   last today: T-2 Task page: collapse the Details rows')
-  expect((await ui.find({ type: 'Text', text: /^   last today: T-2/ }))?.props.color).toBe('subtle')
-  await ui.unmount()
-  // a narrow panel cuts the title
-  const narrow = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const cut = (await narrow.find({ key: 'day:done' }))?.text ?? ''
-  expect(cut).toMatch(/^  ▸ Done     3   last today: T-2 .+…$/)
-  expect(cut.length).toBeLessThanOrEqual(50)
-  await narrow.unmount()
-  // too narrow for a title: just the count
-  const tiny = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
-  expect((await tiny.find({ key: 'day:done' }))?.text).toBe('  ▸ Done     3')
-  await tiny.unmount()
+  for (const cols of [80, 50, 30]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: cols }, surface: 'terminal' })
+    expect((await ui.find({ key: 'day:done' }))?.text).toBe('  ▸ Done     3')
+    expect(await ui.find({ type: 'Text', text: /last today/ })).toBeUndefined()
+    await ui.unmount()
+  }
 })
 
 test('with nothing to do, need or run, two subtle "All clear" lines sit above the folded groups', async ($, on) => {
@@ -949,8 +940,7 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
     const backlog = (await ui.find({ key: 'day:backlog' }))!.text
     const done = (await ui.find({ key: 'day:done' }))!.text
     expect(backlog).toBe('  ▸ Backlog   3')
-    expect(done.startsWith('  ▸ Done     12')).toBe(true)
-    if (w >= 60) expect(done).toMatch(/^  ▸ Done     12   last today: T-10 Work 0$/)
+    expect(done).toBe('  ▸ Done     12')
     expect(await ui.find({ key: 'day:dropped' })).toBeUndefined()
     await ui.unmount()
   }
