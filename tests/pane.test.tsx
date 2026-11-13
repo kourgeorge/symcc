@@ -800,8 +800,8 @@ test('the task page shows one labelled row per fact, From and Why on their own r
     const row = L.find(l => l.startsWith(`${label}:`))
     expect(row).toBeDefined()
     // every value starts in the same column
-    expect(row!.slice(0, 9).trim()).toBe(`${label}:`)
-    expect(row![9]).not.toBe(' ')
+    expect(row!.slice(0, 10).trim()).toBe(`${label}:`)
+    expect(row![10]).not.toBe(' ')
   }
   expect(L.some(l => /^From:\s+owner$/.test(l))).toBe(true)
   expect(L.some(l => /^Why:\s+Scouts mostly find/.test(l))).toBe(true)
@@ -809,9 +809,9 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   // the request in full, in quotes, wrapped within the panel, never cut mid-word
   const at = L.findIndex(l => l.startsWith('Request:'))
   const seen = L.findIndex(l => l.startsWith('Seen:'))
-  const wrapped = L.slice(at, seen).map(l => l.slice(9))
+  const wrapped = L.slice(at, seen).map(l => l.slice(10))
   expect(wrapped.length).toBeGreaterThan(1)
-  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(9)))).toBe(true)
+  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(10)))).toBe(true)
   expect(wrapped.join(' ')).toBe(`“${request}”`)
   for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
   expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
@@ -1246,7 +1246,7 @@ test('a research task shows its note as a row in Details', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-2.md': 'Wrote it.\n', '/reports/T-1-try-1.md': 'Tried.\n' })
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await lines(ui)).some(l => /^Note:\s+docs\/research\/market\.md \(research note\)$/.test(l))).toBe(true)
+  expect((await lines(ui)).some(l => /^Research:\s+docs\/research\/market\.md$/.test(l))).toBe(true)
   await ui.unmount()
 })
 
