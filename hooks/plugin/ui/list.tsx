@@ -1,17 +1,29 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
 /** The Tasks view: the status strip, then the tasks (needs you under its label, then doing and to do as one list,
- *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead. */
+ *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead.
+ *  With a search on (f, see S.search and taskMatches) only the matching tasks are listed, in every group (Backlog,
+ *  Done and Dropped too), groups with a match open and groups without one hidden; a line under the header says so. */
 export function listPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, v, width, mark, act, C, banner, tabs, footer } = pane
+  const { Box, Text, Button, Input, v, width, mark, act, C, banner, tabs, footer } = pane
   const nowMs = Date.now()
   const offset = localOffset(nowMs)
-  const parts = panelSections(v.tasks, nowMs, offset)
-  for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
+  const search = S.search
+  const query = search?.text.trim() ?? ''
+  const filtering = query !== ''
+  const typing = !!search?.typing
+  const matching = filtering ? v.tasks.filter(t => taskMatches(t, query)) : v.tasks
+  const parts = panelSections(matching, nowMs, offset)
+  if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
+  // while filtering, every group with a match is open (and the backlog shows all its matches)
+  const backlogOpen = filtering || S.backlogOpen
+  const doneOpen = filtering || S.doneOpen
+  const droppedOpen = filtering || S.droppedOpen
+  const dayOpen = (day: string) => filtering || openDays.has(day)
   const toggleDay = (day: string) => () => {
     if (openDays.has(day)) openDays.delete(day)
     else openDays.add(day)
@@ -32,38 +44,39 @@ export function listPage($: $, pane: PaneParts) {
     tasksOf([...parts.doing, ...parts.todo], 2),
   ].filter(s => s.length)
   const countWidth = Math.max(1, ...[parts.backlog, parts.done, parts.dropped].map(ts => String(ts.length).length))
-  const backlogShown = S.backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
+  const backlogShown = S.backlogAll || filtering ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
   const backlogMore = parts.backlog.length - backlogShown.length
   const backlogRows: Row[] = parts.backlog.length
     ? [
-        { day: 'backlog', label: foldedRow('Backlog', parts.backlog.length, S.backlogOpen, countWidth), indent: 2 },
-        ...(!S.backlogOpen ? [] : [...tasksOf(backlogShown, 4), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore), indent: 4 }] : [])]),
+        { day: 'backlog', label: foldedRow('Backlog', parts.backlog.length, backlogOpen, countWidth), indent: 2 },
+        ...(!backlogOpen ? [] : [...tasksOf(backlogShown, 4), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore), indent: 4 }] : [])]),
       ]
     : []
-  // tasks moved to archive.json are not listed, only counted: "▸ Done  12 (+96 archived)"
-  const gone = archivedOf(v).done
-  const doneHead = parts.done.length || gone ? [foldedRow('Done', parts.done.length, S.doneOpen, countWidth), archivedNote(gone)].filter(Boolean).join(' ') : ''
+  // tasks moved to archive.json are not listed, only counted: "▸ Done  12 (+96 archived)"; a search leaves them out
+  const gone = filtering ? 0 : archivedOf(v).done
+  const doneHead = parts.done.length || gone ? [foldedRow('Done', parts.done.length, doneOpen, countWidth), archivedNote(gone)].filter(Boolean).join(' ') : ''
   const doneRows: Row[] = doneHead
     ? [
         { day: 'done', label: doneHead, indent: 2 },
-        ...(!S.doneOpen
+        ...(!doneOpen
           ? []
           : [
               ...tasksOf(parts.doneToday, 4),
-              ...parts.doneDays.flatMap(g => [{ day: g.day, label: groupLabel(g, openDays.has(g.day)), indent: 4 }, ...(openDays.has(g.day) ? tasksOf(g.tasks, 6) : [])]),
+              ...parts.doneDays.flatMap(g => [{ day: g.day, label: groupLabel(g, dayOpen(g.day)), indent: 4 }, ...(dayOpen(g.day) ? tasksOf(g.tasks, 6) : [])]),
             ]),
       ]
     : []
   const droppedRows: Row[] = parts.dropped.length
-    ? [{ day: 'dropped', label: foldedRow('Dropped', parts.dropped.length, S.droppedOpen, countWidth), indent: 2 }, ...(S.droppedOpen ? tasksOf(parts.dropped, 4) : [])]
+    ? [{ day: 'dropped', label: foldedRow('Dropped', parts.dropped.length, droppedOpen, countWidth), indent: 2 }, ...(droppedOpen ? tasksOf(parts.dropped, 4) : [])]
     : []
   const folded = [...backlogRows, ...doneRows, ...droppedRows]
   const blank: Row = { blank: true }
   const list: Row[] = [
-    ...(active.length ? active.flatMap((s, k) => (k ? [blank, ...s] : s)) : ALL_CLEAR.map(line => ({ line }))),
-    ...(folded.length ? [blank, ...folded] : []),
+    ...(active.length ? active.flatMap((s, k) => (k ? [blank, ...s] : s)) : filtering ? [] : ALL_CLEAR.map(line => ({ line }))),
+    ...(folded.length ? [...(active.length || !filtering ? [blank] : []), ...folded] : []),
   ]
-  const firstButton = list.findIndex(r => 'task' in r || 'day' in r)
+  // while the search box is open it has the focus, not a row
+  const firstButton = typing ? -1 : list.findIndex(r => 'task' in r || 'day' in r)
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const cells = new Map(shown.map(x => [x.id, statusCell(x, nowMs, since(x.id))]))
@@ -72,10 +85,32 @@ export function listPage($: $, pane: PaneParts) {
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
   const tone: Record<string, string> = { backlog: 'subtle', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
+  const redraw = () => $.ui.invalidate('ui.render')
+  const openSearch = () => ((S.search = { text: S.search?.text ?? '', typing: true }), redraw())
+  const count = filtering ? (matching.length ? `${matching.length} of ${v.tasks.length} tasks` : 'no tasks match') : 'type to filter the tasks'
+  // the search line under the header: the box while typing (with the count under it), else the filter in use
+  const searchRows = typing
+    ? [
+        <Input
+          key="search"
+          label="search: "
+          placeholder="words to look for"
+          value={search!.text}
+          autoFocus
+          onInput={value => void ((S.search = { text: value, typing: true }), redraw())}
+          onSubmit={value => void ((S.search = value.trim() ? { text: value.trim(), typing: false } : null), redraw())}
+        />,
+        <Text key="search-count" wrap="truncate" color={C('subtle')}>{`${count} · Enter keeps it · Esc clears`}</Text>,
+      ]
+    : filtering
+      ? [<Text key="search-line" wrap="truncate" bold color={C('warning')}>{searchLine(query, matching.length, v.tasks.length)}</Text>]
+      : []
+  const searchButton = typing ? null : [<Text key="search-gap">  </Text>, <Button key="search-open" label={filtering ? '[f] change search' : '[f] search'} hotkey="f" dimColor onPress={openSearch} />]
   return (
     <Box flexDirection="column">
       {[...banner(), tabs()]}
       <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>
+      {searchRows}
       {list.map((r, i) => {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>
         if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('subtle')}>{`  ${r.line}`}</Text>
@@ -111,7 +146,7 @@ export function listPage($: $, pane: PaneParts) {
         )
       })}
       <Text key="list-blank"> </Text>
-      {footer(listKeys(), 'list-hint', true)}
+      {footer(listKeys(), 'list-hint', true, searchButton)}
     </Box>
   )
 }

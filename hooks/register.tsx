@@ -223,7 +223,7 @@ export const register: Register = on => {
       case 'open':
       case 'tasks':
         await openPane($, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
-        return say(`Board opened: ↑↓ to move, Enter to open, t tasks, s scouts, c settings, Esc to close. (ctrl+x tab goes back to it.)`)
+        return say(`Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings, Esc to close. (ctrl+x tab goes back to it.)`)
       case 'scouts': {
         const defs = await scheduleScouts($)
         await publish($, await load($))
@@ -330,7 +330,7 @@ export const register: Register = on => {
   })
 
   // Esc in an opened scout goes back to the Scouts list (the panel stays open).
-  // Opened days and the active view are forgotten when the board panel closes.
+  // Esc with a search on the Tasks list clears it. Opened days, the search and the active view are forgotten when the board panel closes.
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== S.N.pane) return next(e)
@@ -339,6 +339,12 @@ export const register: Register = on => {
       if (S.rolePick) S.rolePick = null
       else if (S.rejecting) S.rejecting = null
       else S.diffOpen = null
+      $.ui.invalidate('ui.render')
+      return { value: undefined }
+    }
+    // Esc on the Tasks list with a search on (typing or kept) clears it and shows every task again.
+    if (e.origin.kind === 'person' && S.search && !['scouts', 'settings'].includes(await readTab($)) && !(await readOpened($))) {
+      S.search = null
       $.ui.invalidate('ui.render')
       return { value: undefined }
     }
@@ -363,6 +369,7 @@ export const register: Register = on => {
     S.backlogAll = false
     S.doneOpen = false
     S.droppedOpen = false
+    S.search = null
     S.draft = null
     S.naming = null
     S.diffOpen = null

@@ -103,9 +103,9 @@ export async function paneParts($: $, e: PaneEvent) {
       </Text>
     ))
   /** The footer at the bottom of a page: a light rule, then (Tasks page only, `withMode`) the board-mode line with
-   *  its [m] button, then the page's key hints. It comes right after the page's content. Off the Tasks page there is
+   *  its [m] button (and `extra`, the Tasks page's [f] search button), then the page's key hints. It comes right after the page's content. Off the Tasks page there is
    *  no [m] button, so m does nothing there. */
-  const footer = (hints: KeyHint[], name: string, withMode = false) => (
+  const footer = (hints: KeyHint[], name: string, withMode = false, extra: unknown = null) => (
     <Box key={`${name}-footer`} flexDirection="column">
       <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {withMode ? (
@@ -114,6 +114,7 @@ export async function paneParts($: $, e: PaneEvent) {
             <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
           </Text>
           <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
+          {extra as never}
         </Box>
       ) : null}
       {keyLines(hints, name)}

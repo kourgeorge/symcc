@@ -1,10 +1,11 @@
 // The Tasks view of the board panel: sections, rows, the status strip and key hints.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { emptyBoard } from './board-file'
+import { emptyBoard, STATUS_WORD } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
-import { roleMark } from './roles'
+import { originOf } from './origin'
+import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
 import { PLAN_NOTE } from './plan'
 import { fmtDuration, runMs } from './runs'
@@ -158,6 +159,29 @@ export function packRows(widths: number[], width: number, gap: number): number[]
   })
   return rows
 }
+
+/** Whether task `t` matches the board panel's search `query`: case-insensitive, every word must match (AND). A word
+ *  shaped like a task id ("T-12", "t12" or just "12") matches that task's id exactly (not T-120), or the word in its
+ *  text; any other
+ *  word matches part of the id, title, details, role, status (its word too, e.g. "waiting for you"), origin (owner,
+ *  scout or worker, the scout's name, the task it came from) or the owner's request. An empty query matches every task. */
+export function taskMatches(t: SymccTask, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const o = originOf(t)
+  const text = [t.title, t.details, roleOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? ''].join('\n').toLowerCase()
+  const id = num(t.id)
+  return words.every(w => {
+    const asId = /^(?:t-?)?(\d+)$/.exec(w)
+    if (asId) return Number(asId[1]) === id || text.includes(w)
+    return t.id.toLowerCase().includes(w) || text.includes(w)
+  })
+}
+
+/** The line over the board list while a search filter is on: "search: notify · 3 of 144 tasks · Esc clears",
+ *  or "search: notify · no tasks match · Esc clears". */
+export const searchLine = (query: string, shown: number, all: number): string =>
+  `search: ${query.trim()} · ${shown ? `${shown} of ${all} tasks` : 'no tasks match'} · Esc clears`
 
 /** The keys under the board list: only keys that work in the list (a and x work only on a task's own page). */
 export const listKeys = (): KeyHint[] => [

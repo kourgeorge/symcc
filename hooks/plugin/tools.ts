@@ -74,7 +74,7 @@ export const MANUAL = (): Record<string, string> => ({
   (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
   (approve, reject, diff), and mode and settings change how the board works. The "board" is
   the whole panel: tasks, scouts and settings.
-  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, t / s / c switch views, Esc closes)
+  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / s / c switch views, Esc closes)
   /${S.N.name}-tasks               open the panel on the tasks view
   /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files
   /${S.N.name}-task T-3            open one task

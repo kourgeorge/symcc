@@ -259,6 +259,16 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   close. An open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
+- **Search the tasks**: on the Tasks view press `f` (or the `[f] search` button in the footer)
+  and type. The list shrinks as you type to the tasks that match every word you typed, in
+  any case, looking at the task's id (`T-12`, or just `12`), title, details, role, status,
+  where it came from (owner, scout name, the task it came from) and your request. It looks in
+  every group, Backlog, Done and Dropped too: groups with a match open, the others are
+  hidden. Archived tasks are not searched. Enter keeps the filter and gives you the list
+  back (↑↓ and Enter work as usual); a line says what is on, e.g. `search: notify · 3 of 144
+  tasks · Esc clears` (or `no tasks match`). Esc clears the search and shows everything; a
+  second Esc closes the panel. (Claude Code only lets panel keys be a letter or a digit, so
+  the key is `f`, not `/`.)
 - The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner.
   Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one
   row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
@@ -289,7 +299,7 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   board was set on another one), you are told once and nothing plays; the setting is kept.
   Task text is always passed to these programs as a plain argument, never as shell code.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
-  `r` retry, `m` switch review / auto, `n` needs review, `1`-`9` a try's report on the task
+  `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
   page, `t` / `s` / `c` switch views, `b` back.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a

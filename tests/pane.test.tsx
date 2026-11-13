@@ -1430,7 +1430,7 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const foot = await footerOf(ui, listKeys())
-  expect(foot).toBe('⏸ review merge [m] auto' + 'Enter open · ↑↓ move · t s c views · Esc close')
+  expect(foot).toBe('⏸ review merge [m] auto  [f] search' + 'Enter open · ↑↓ move · t s c views · Esc close')
   expect((await ui.findAll({ type: 'Text', text: /^⏸ review merge $/ })).length).toBe(1)
   expect((await ui.findAll({ key: 'mode' })).length).toBe(1)
   // the mode line comes after the list, not under the banner
