@@ -1,6 +1,7 @@
 // Scout files, and scouts in the board panel.
 import type { SymccMode, SymccScout, SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
+import { isNotReady } from './agents'
 import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
 import { frontMatterLine, splitFrontMatter } from './text'
@@ -201,6 +202,17 @@ export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, 
   if (o.mode === 'off') return `the board is off, so no scout runs; turn it on with /${name}-mode review or /${name}-mode auto`
   return ''
 }
+
+/** Whether a scout spawn error only means the plugin isn't ready yet (its scout type isn't there, e.g. just after
+ *  a reload): then the run is tried again shortly, like a worker's. */
+export function scoutNotReady(message: string, name: string = DEFAULT_NAME): boolean {
+  const low = String(message ?? '').toLowerCase()
+  if (/agent type .* not found/.test(low) && low.includes(namesFor(name).scout.toLowerCase())) return true
+  return isNotReady(message, name)
+}
+
+/** How long to wait before trying a scout again whose type wasn't ready yet. */
+export const SCOUT_RETRY_MS = 5_000
 
 /** What "run now" says for a paused scout. */
 export const scoutPausedAnswer = (scout: string, name: string = DEFAULT_NAME): string =>

@@ -1946,6 +1946,8 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
   expect(words(scoutKeys())).toEqual(['r run now', 'e edit', 'p pause', '↑↓ scroll', 'b back'])
   expect(words(scoutKeys(true))).toEqual(['r run now', 'e edit', 'p resume', '↑↓ scroll', 'b back'])
+  // while the scout runs there is no "r run now" (like the button)
+  expect(words(scoutKeys(false, true))).toEqual(['e edit', 'p pause', '↑↓ scroll', 'b back'])
   expect(words(scoutListKeys())).toEqual(['Enter open', 't s c views', 'Esc close'])
   expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings', 'Esc closes'])
   const all = [taskKeys('review', true), taskKeys('backlog'), taskKeys('todo', true), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
@@ -2204,4 +2206,128 @@ test('inside a readable board.json, a bad task entry is skipped and counted; the
   const t = readBoard(JSON.stringify({ tasks: [{ id: 'T-4', status: 'todo', title: 'x' }] })).board
   expect(t.tasks[0]!.history).toEqual([])
   expect(t.next_id).toBe(5)
+})
+
+// ---------------- a scout run that fails to start, or is stopped ----------------
+import { runScout, runScoutNow, scoutFinished } from '../hooks/plugin/scouts'
+import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as scoutLeadQueue } from '../hooks/plugin/state'
+
+/** A small fake `$` for the scout code: in-memory files, a board in auto mode, one scout "gaps", and a spawn
+ *  that answers with `spawn` (a function so a test can change it between calls). */
+function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
+  const ROOT = '/repo'
+  const files = new Map<string, string>()
+  files.set(`${ROOT}/.symcc/board.json`, JSON.stringify({ ...emptyBoard('main'), mode: 'auto' }))
+  files.set(`${ROOT}/.symcc/scouts/gaps.md`, '---\nevery_minutes: 0\n---\nLook for gaps.\n')
+  const toasts: string[] = []
+  const later: { ms: number; f: () => void }[] = []
+  const prompts: string[] = []
+  const state = new Map<string, { value: unknown; version: number }>()
+  const $ = {
+    fs: {
+      exists: async (p: string) => files.has(p) || [...files.keys()].some(k => k.startsWith(`${p}/`)),
+      read: async (p: string) => {
+        if (!files.has(p)) throw new Error(`no file ${p}`)
+        return files.get(p)!
+      },
+      write: async (p: string, t: string) => void files.set(p, t),
+      list: async (d: string) => [...files.keys()].filter(k => k.startsWith(`${d}/`)).map(k => ({ kind: 'file', name: k.slice(d.length + 1) })),
+    },
+    process: {
+      run: async (argv: string[]) => {
+        if (argv[0] === 'mv') {
+          files.set(argv[3]!, files.get(argv[2]!)!)
+          files.delete(argv[2]!)
+        }
+        return { exitCode: 0, stdout: argv[0] === 'git' ? 'main' : '', stderr: '' }
+      },
+    },
+    agent: {
+      spawn: async (o: { prompt: string }) => {
+        prompts.push(o.prompt)
+        return spawn()
+      },
+      list: async () => [],
+    },
+    ui: { toast: (t: unknown) => void toasts.push(String(t)), status: () => undefined, invalidate: () => undefined },
+    clock: {
+      after: (ms: number, f: () => void) => (later.push({ ms, f }), { cancel() {} }),
+      every: () => ({ cancel() {} }),
+    },
+    prompt: { submit: async () => undefined },
+    session: { id: async () => 'me', send: async () => undefined },
+    state: {
+      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
+      set: async (e: { key: string; value: unknown }) => {
+        const version = (state.get(e.key)?.version ?? 0) + 1
+        state.set(e.key, { value: e.value, version })
+        return { isSet: true, version }
+      },
+    },
+  }
+  PS.root = ROOT
+  PS.driving = true
+  PS.gitState = 'ok'
+  PS.enabledNow = true
+  PS.leadTimer = null
+  scoutState.clear()
+  scoutRuns.clear()
+  scoutTimers.splice(0)
+  scoutLeadQueue.splice(0)
+  return { $: $ as never, files, toasts, later, prompts }
+}
+
+const OLD_RUN = '2026-11-01T10:00:00.000Z'
+
+test('a scout whose start fails keeps its old last_run, and "run now" says why instead of "started"', async () => {
+  const w = scoutWorld(async () => ({ deny: 'no agents allowed here' }))
+  expect(await runScoutNow(w.$, 'gaps')).toBe("scout gaps didn't start: no agents allowed here")
+  const st = scoutState.get('gaps')!
+  st.last_run = OLD_RUN
+  const why = await runScout(w.$, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' })
+  expect(why).toContain('no agents allowed here')
+  expect(st.last_run).toBe(OLD_RUN)
+  expect(st.running).toBe(false)
+  // the owner is told once, not on every failed try
+  expect(w.toasts.filter(t => t.includes("didn't start")).length).toBe(1)
+  expect(w.later.length).toBe(0)
+})
+
+test('a scout whose type is not ready yet is tried again shortly, then starts with the old last_run in its prompt', async () => {
+  let ready = false
+  const w = scoutWorld(async () => (ready ? { agentId: 'a1' } : { deny: "Agent type 'symcc:scout' not found" }))
+  await runScoutNow(w.$, 'gaps')
+  const st = scoutState.get('gaps')!
+  st.last_run = OLD_RUN
+  const why = await runScout(w.$, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' })
+  expect(why).toContain('trying again')
+  expect(st.last_run).toBe(OLD_RUN)
+  expect(w.toasts.length).toBe(0)
+  expect(w.later.length).toBe(2)
+  ready = true
+  w.later.at(-1)!.f()
+  for (let i = 0; i < 20 && !scoutRuns.has('a1'); i++) await new Promise(r => setTimeout(r, 0))
+  expect(scoutRuns.get('a1')).toBe('gaps')
+  expect(st.running).toBe(true)
+  expect(st.last_run).not.toBe(OLD_RUN)
+  expect(w.prompts.at(-1)).toContain(OLD_RUN)
+})
+
+test('a scout run stopped from the agent controls is not saved as a report and not sent to the lead', async () => {
+  const w = scoutWorld(async () => ({ agentId: 'a2' }))
+  await runScoutNow(w.$, 'gaps') // first, so the scout is known
+  const st0 = scoutState.get('gaps')!
+  st0.running = false
+  st0.last_run = OLD_RUN
+  st0.last_report = 'the real report'
+  expect(await runScoutNow(w.$, 'gaps')).toBe('scout gaps started')
+  const st = scoutState.get('gaps')! // "run now" schedules the scouts again, which makes a new state object
+  expect(st.last_run).not.toBe(OLD_RUN)
+  await scoutFinished(w.$, 'a2', 'I was halfway through check', true)
+  expect(st.running).toBe(false)
+  expect(st.last_run).toBe(OLD_RUN)
+  expect(st.last_report).toBe('the real report')
+  expect(scoutLeadQueue.length).toBe(0)
+  expect(w.files.has('/repo/.symcc/scouts.json')).toBe(false)
+  expect(w.toasts.some(t => t.includes('scout gaps was stopped; nothing reported'))).toBe(true)
 })
