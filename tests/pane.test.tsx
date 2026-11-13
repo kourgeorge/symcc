@@ -1118,6 +1118,16 @@ test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched
   await ui.unmount()
 })
 
+test('a running scout\'s page has no Run now button', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.', running: true })], mode: 'auto', test_commands: [] } } })
+  scoutFiles(on, null)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /running now…/ })).toBeDefined()
+  expect(await ui.find({ key: 'scout-edit' })).toBeDefined()
+  expect(await ui.find({ key: 'scout-run' })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('/symcc-scout <name> pause and resume, and run now refused while paused', async ($, on) => {
   const files = scoutFiles(on, null)
   stateOf(on, {})
@@ -1129,6 +1139,8 @@ test('/symcc-scout <name> pause and resume, and run now refused while paused', a
   expect(await run('bugs resume')).toBe('bugs resumed: it runs every 30 min again')
   expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toBeUndefined()
   expect(await run('bugs')).not.toMatch(/paused/)
+  // this session doesn't drive the board, so run now says why and never "started"
+  expect(await run('bugs')).toBe('scouts run in the session that drives the board; run /symcc-scout bugs there')
   expect(await run('nope pause')).toMatch(/^no scout named nope/)
   expect(await run('bugs stop')).toMatch(/^Use: \/symcc-scout <name>/)
 })

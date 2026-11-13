@@ -85,7 +85,8 @@ export async function scoutsPage($: $, pane: PaneParts) {
 
         {buttonRows([
           <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => updateScoutOpen($, () => ''))} />,
-          <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow($, sc.name))))} />,
+          // no Run now while it runs: it couldn't start again until this run ends
+          !sc.running && <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow($, sc.name))))} />,
           <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout($, sc))} />,
           <Button key="scout-pause" label={sc.paused ? 'Resume' : 'Pause'} hotkey="p" onPress={act(async () => $.ui.toast(S.N.toast(await setScoutPaused($, sc.name, !sc.paused))))} />,
         ], 'scout-buttons')}
