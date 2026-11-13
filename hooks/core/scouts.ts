@@ -297,14 +297,17 @@ export const scoutFile = (scout: string, name: string = DEFAULT_NAME) => `${name
 /** A scout's last report for the panel: "nothing found" when empty (or NOTHING), else its text cut to `n` characters. */
 export function scoutReport(text: string | undefined, n = 800): string {
   const s = String(text ?? '').trim()
-  if (isNothing(s)) return 'nothing found'
+  if (!s || /^NOTHING[.:]?$/i.test(s)) return 'nothing found'
   return s.length > n ? s.slice(0, n).trimEnd() + '…' : s
 }
 
-/** True when a scout's answer means "nothing to report": empty, or exactly NOTHING. */
+/**
+ * True when a scout's answer means "nothing to report": empty, or its first non-empty line
+ * is just NOTHING (any case, with an optional "." or ":"), whatever follows (e.g. what it checked).
+ */
 export const isNothing = (answer: string | undefined): boolean => {
-  const s = String(answer ?? '').trim()
-  return !s || /^NOTHING\.?$/i.test(s)
+  const first = String(answer ?? '').split('\n').map(l => l.trim()).find(l => l) ?? ''
+  return !first || /^NOTHING[.:]?$/i.test(first)
 }
 
 /** How many recently finished or dropped tasks a scout is shown. */

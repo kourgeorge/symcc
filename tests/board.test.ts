@@ -1528,6 +1528,18 @@ test('isNothing: empty, missing or NOTHING (any case, with an optional dot) mean
   expect(isNothing('  \n ')).toBe(true)
   expect(isNothing('NOTHING')).toBe(true)
   expect(isNothing(' nothing. ')).toBe(true)
+  expect(isNothing('NOTHING.')).toBe(true)
+  expect(isNothing('NOTHING:')).toBe(true)
+})
+
+test('isNothing: a first line of just NOTHING counts as nothing, whatever follows', () => {
+  expect(isNothing('NOTHING\n\nWhat I checked: a, b')).toBe(true)
+  expect(isNothing('\n nothing \n- checked x')).toBe(true)
+  expect(isNothing('1. Found X')).toBe(false)
+  expect(isNothing('Nothing serious, but X\nmore')).toBe(false)
+  expect(scoutLeadMessage('secrets', 'NOTHING\n\nWhat I checked')).toBe(null)
+  expect(scoutLastText({ last_report: 'NOTHING\n\nWhat I checked' } as any)).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutReport('NOTHING\n\nWhat I checked')).toBe('NOTHING\n\nWhat I checked')
 })
 
 test('isNothing: any real text, even with NOTHING in it, is something', () => {
