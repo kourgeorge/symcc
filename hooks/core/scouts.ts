@@ -85,6 +85,55 @@ export function scoutDraftError(d: { every: string; body: string }): string {
   return ''
 }
 
+// ---------------- the lead's scouts tool ----------------
+
+/** Why the lead's scouts tool can't use a scout name ('' when it can): lowercase letters, digits and dashes. */
+export function leadScoutNameError(name: string): string {
+  const s = name.trim()
+  if (!s) return 'give the scout a name'
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(s) || s.length > 64) return `"${s}" is not a valid scout name: use only lowercase letters, digits and dashes (like docs-check)`
+  return ''
+}
+
+/** How many lines of a scout's last report the lead's scouts list shows. */
+export const SCOUT_LIST_REPORT_LINES = 3
+
+/** When: "in 38m", "now", or "8m ago". */
+const fromNow = (iso: string | null | undefined, nowMs: number): string => {
+  const at = Date.parse(iso ?? '')
+  if (!Number.isFinite(at)) return ''
+  if (at > nowMs) return `in ${fmtDuration(at - nowMs)}`
+  return nowMs - at < 1000 ? 'now' : `${fmtDuration(nowMs - at)} ago`
+}
+
+/** A scout for the lead's scouts tool: name, how often, paused, running, next run, last run, and its last report
+ *  (the first SCOUT_LIST_REPORT_LINES lines, or all of it with `full`, which also shows its model and prompt). */
+export function leadScoutText(s: SymccScout, nowMs: number, full = false): string {
+  const parts = [everyText(s.every_minutes), s.paused ? 'paused' : 'not paused', s.running ? 'running now' : 'not running']
+  const next = onDemand(s) ? 'only when run' : s.paused ? 'none while paused' : fromNow(s.next_run, nowMs) || 'not planned'
+  parts.push(`next run: ${next}`, `last run: ${fromNow(s.last_run, nowMs) || 'never'}`)
+  if (s.model) parts.push(`model: ${s.model}`)
+  const lines = [`${s.name}: ${parts.join(' · ')}`]
+  if (s.warning) lines.push(`  warning: ${s.warning}`)
+  const report = String(s.last_report ?? '').trim()
+  if (full) {
+    lines.push('prompt:', s.prompt?.trim() || '(none)', 'last report:', report || '(none yet)')
+    return lines.join('\n')
+  }
+  if (report) {
+    const all = report.split('\n').filter(l => l.trim())
+    for (const l of all.slice(0, SCOUT_LIST_REPORT_LINES)) lines.push(`  | ${l}`)
+    if (all.length > SCOUT_LIST_REPORT_LINES) lines.push('  | …')
+  }
+  return lines.join('\n')
+}
+
+/** The lead's scouts list: every scout (see leadScoutText), by name. */
+export function leadScoutsText(scouts: SymccScout[], nowMs: number, scoutsDir: string): string {
+  if (!scouts.length) return `no scouts yet (add one with action "add"; they live in ${scoutsDir}/)`
+  return [...scouts].sort((a, b) => a.name.localeCompare(b.name)).map(s => leadScoutText(s, nowMs)).join('\n')
+}
+
 // ---------------- scouts in the board panel ----------------
 
 /** How much of a scout's last answer is kept (SymccScout.last_report). */
@@ -145,6 +194,8 @@ export function scoutPausedText(saved: Record<string, ScoutMemory>, name: string
 export function everyText(minutes: number): string {
   if (onDemand({ every_minutes: minutes })) return 'on demand'
   const m = Math.max(1, Math.round(minutes))
+  if (m === 1440) return 'every day'
+  if (m % 1440 === 0) return `every ${m / 1440} days`
   if (m === 60) return 'every hour'
   if (m % 60 === 0) return `every ${m / 60} hours`
   return `every ${m} min`

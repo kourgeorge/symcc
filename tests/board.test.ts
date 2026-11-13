@@ -1,11 +1,11 @@
 import { expect, test } from 'claude-code/testing'
-import type { SymccScout, SymccTask } from '../types'
+import type { SymccScout, SymccStatus, SymccTask } from '../types'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -607,12 +607,12 @@ test('day labels: Yesterday, then the date, with the year only for another year'
   expect(dayLabel('2025-12-30', '2026-01-02')).toBe('Tue 30 Dec 2025')
 })
 
-test('boardText lists open and today in full, and one line per older day', () => {
+test('boardText lists the open tasks in full and the done ones as a count; status: done lists them newest first', () => {
   const b = { ...emptyBoard(), tasks: [at('T-1', 'done', '2026-11-09T10:00:00Z'), at('T-2', 'todo', '2026-11-01T10:00:00Z'), at('T-3', 'done', '2026-11-11T10:00:00Z'), at('T-4', 'done', '2026-11-10T10:00:00Z')] }
   const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
-  expect(lines.map(l => l.split(/\s+/)[0])).toEqual(['T-2', 'T-3', '▸', '▸'])
-  expect(lines.slice(2)).toEqual(['▸ Yesterday · 1 done', '▸ Mon 9 Nov · 1 done'])
-  expect(lines.join('\n')).not.toContain('T-1')
+  expect(lines).toEqual([expect.stringMatching(/^T-2 /), '3 done; ask with status: done to see them'])
+  const done = boardText(b, NOW, undefined, DEFAULT_NAME, 0, { status: ['done'] }).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
+  expect(done.map(l => l.split(/\s+/)[0])).toEqual(['T-3', 'T-4', 'T-1', '3'])
 })
 
 test('a scout row says how often it runs, when it runs next and when it last ran', async () => {
@@ -1186,17 +1186,19 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
   expect(() => stashTask(b, a.id, T)).toThrow()
 })
 
-test('the board text lists open tasks first, then the backlog, then done ones; the status line stays quiet', async () => {
+test('the board text lists open tasks first, then the backlog (done ones only as a count, or last when asked); the status line stays quiet', async () => {
   let b = emptyBoard()
   const [b1, done] = addTask(b, { origin: W, title: 'Finished' }, '2026-11-09T03:00:00.000Z')
   const [b2, idea] = addTask(b1, { origin: W, title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
   const [b3, open] = addTask(b2, { origin: W, title: 'Open work' }, '2026-11-09T00:30:00.000Z')
   b = patchTask(b3, done.id, { status: 'done' }, '2026-11-09T03:00:00.000Z')
-  for (const text of [boardText(b), boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0)]) {
+  const every = { status: ['todo', 'backlog', 'done'] as SymccStatus[] }
+  for (const [text, shown] of [[boardText(b), false], [boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0), false], [boardText(b, undefined, undefined, DEFAULT_NAME, 0, every), true], [boardText(b, Date.parse('2026-11-12T12:00:00.000Z'), undefined, DEFAULT_NAME, 0, every), true]] as const) {
     const lines = text.split('\n')
     const at = (id: string) => lines.findIndex(l => l.startsWith(id + ' '))
     expect(at(open.id)).toBeLessThan(at(idea.id))
-    expect(at(idea.id)).toBeLessThan(at(done.id))
+    if (shown) expect(at(idea.id)).toBeLessThan(at(done.id))
+    else expect(at(done.id)).toBe(-1)
     expect(lines[at(idea.id)]).toBe(`${idea.id}   backlog Idea: requests and triage`)
   }
   const s = boardSections(b.tasks, Date.parse('2026-11-12T12:00:00.000Z'), 0)
@@ -1535,6 +1537,17 @@ test('leftover temp files: old ones that match are chosen', () => {
     { name: 'board.lock.abc-123_x9.tmp', mtimeMs: old },
     { name: 'lead.json.session-1.tmp', mtimeMs: old },
   ], now)).toEqual(['board.lock.abc-123_x9.tmp', 'lead.json.session-1.tmp'])
+})
+
+test('leftover temp files: the names tmpName makes for every saved file match; other names do not', () => {
+  const now = 1_000_000_000
+  const old = now - LOCK_STALE_MS - 1
+  const made = ['board.json', 'scouts.json', 'archive.json', 'lead.json', 'board.lock'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
+  expect(made[0]).toBe('board.json.sess_1_x.7-ab12cd.tmp')
+  expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: old })), now)).toEqual(made)
+  expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: now - 1_000 })), now)).toEqual([])
+  expect(new Set(['1-a', '2-a', '1-b'].map(n => tmpName('scouts.json', 's', n))).size).toBe(3)
+  expect(leftoverTmpFiles(['scouts.json.tmp', 'archive.json.tmp', 'stats.json.s.1.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
 })
 
 test('leftover temp files: fresh ones, or ones with no or future time, are kept', () => {
@@ -2613,6 +2626,17 @@ test('changeLines names the changed fields of a restart, the widened files and t
   expect(filesWidenedLine(['a'], undefined)).toBe(null)
   expect(ownerAnsweredLine('x'.repeat(1000)).length).toBeLessThan(ANSWER_LINE_CHARS + 30)
   expect(stoppedLine({ attempts: 3, role: 'tester' }, 'paused')).toBe('try 3 (role tester): stopped: paused')
+  expect(changeLines(t, {}, false, undefined, ' check docs ')).toEqual(['the lead added a note: “check docs”'])
+})
+
+import { addDetailsText, detailsBothRefusal } from '../hooks/board'
+
+test('addDetailsText keeps the old details and adds the note as a new paragraph; both params are refused', () => {
+  expect(addDetailsText('Do x.\nDone when y.\n', ' also z ', '2026-11-13')).toBe('Do x.\nDone when y.\n\nNote (lead, 2026-11-13): also z')
+  expect(addDetailsText('', 'z', '2026-11-13')).toBe('Note (lead, 2026-11-13): z')
+  expect(detailsBothRefusal({ details: 'a', add_details: 'b' })).toMatch(/not both/)
+  expect(detailsBothRefusal({ add_details: 'b' })).toBe(null)
+  expect(detailsBothRefusal({ details: 'a' })).toBe(null)
 })
 
 test('backToTodo of a running task says in its history why it restarts', async () => {

@@ -41,13 +41,33 @@ test('health: starving after 3 changes of its after list, or 2+ hours while newe
   expect(reasons(board([task('T-1', { history: h, after: ['T-4'], files: ['a/'] }), task('T-4', { status: 'doing', files: ['a/'] })]))).toEqual(['starving:T-1'])
   // waiting on an older task is fair
   expect(reasons(board([task('T-1', { status: 'doing' }), task('T-2', { history: h, after: ['T-1'] })]))).toEqual([])
-  // ready for 3 hours while two newer tasks started
-  const old = task('T-1', { created_at: iso(180) })
-  expect(reasons(board([old, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' })]))).toEqual(['starving:T-1'])
-  expect(boardHealth(board([old, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' })]), NOW)[0]!.text).toContain('3+ hours while 2 newer tasks already started')
+  // ready for 3 hours while two newer tasks started (and took the only slot)
+  const old = task('T-1', { created_at: iso(180), updated_at: iso(180) })
+  const full = { max_parallel: 1 }
+  expect(reasons(board([old, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' })], full))).toEqual(['starving:T-1'])
+  expect(boardHealth(board([old, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' })], full), NOW)[0]!.text).toContain('3+ hours while 2 newer tasks already started')
   // only one newer started, or not old enough: fine
-  expect(reasons(board([old, task('T-2', { status: 'doing' }), task('T-3')]))).toEqual([])
-  expect(reasons(board([task('T-1', { created_at: iso(60) }), task('T-2', { status: 'doing' }), task('T-3', { status: 'done' })]))).toEqual([])
+  expect(reasons(board([old, task('T-2', { status: 'doing' }), task('T-3')], full))).toEqual([])
+  expect(reasons(board([task('T-1', { created_at: iso(60), updated_at: iso(60) }), task('T-2', { status: 'doing' }), task('T-3', { status: 'done' })], full))).toEqual([])
+  // a free slot: the pump starts it next, so it is not pushed back
+  expect(reasons(board([old, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' })], { max_parallel: 2 }))).toEqual([])
+})
+
+test('health: a task whose after task merged just now is not pushed back', () => {
+  const full = { max_parallel: 1 }
+  // made 5 hours ago, waited on T-2 (older work kept it fair), T-2 merged in this very board update
+  const waiting = task('T-1', { created_at: iso(300), updated_at: iso(300), after: ['T-2'] })
+  const merged = task('T-2', { status: 'done', updated_at: iso(0) })
+  const newer = [task('T-3', { status: 'doing' }), task('T-4', { status: 'done' })]
+  expect(reasons(board([waiting, merged, ...newer], full))).toEqual([])
+  // merged an hour ago: it has been ready only an hour, still fine
+  expect(reasons(board([waiting, { ...merged, updated_at: iso(60) }, ...newer], full))).toEqual([])
+  // merged 3 hours ago and it still has not started while newer ones did: told
+  const told = boardHealth(board([waiting, { ...merged, updated_at: iso(180) }, ...newer], full), NOW)
+  expect(told.map(f => `${f.reason}:${f.tasks.join(',')}`)).toEqual(['starving:T-1'])
+  expect(told[0]!.text).toContain('could start but has not, and it has waited 3+ hours')
+  // changed (or moved back to todo) a minute ago: ready again only now
+  expect(reasons(board([{ ...task('T-1', { created_at: iso(300), updated_at: iso(1) }) }, ...newer], full))).toEqual([])
 })
 
 test('health: too serial: a chain of 3+ todo tasks that share no files', () => {

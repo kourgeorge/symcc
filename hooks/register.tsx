@@ -34,6 +34,9 @@ import { cleanLeftoverTmp, check, pump, workerFinished, setSymcc, setBoardMode }
 // ---------------- registration ----------------
 
 /** Registers the worker agent types (base, and one per set of extra role tools), the scout agent type, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */
+/** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
+export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings. (ctrl+x tab goes back to it.)'
+
 export async function registerAll($: $) {
   const ok = (p: Promise<unknown>) => p.catch(() => undefined)
   // One worker type for the base tools, and one more per set of extra tools a role can ask for
@@ -234,7 +237,7 @@ export const register: Register = on => {
       case 'open':
       case 'tasks':
         await openPane($, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
-        return say(`Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings, Esc to close. (ctrl+x tab goes back to it.)`)
+        return say(BOARD_OPENED)
       case 'scouts': {
         const defs = await scheduleScouts($)
         await publish($, await load($))

@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, type LeadCall, type StatsRange, type TeamInput } from '../board'
-import { scoutMemoryFile } from './scouts'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput } from '../board'
+import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
 import { loadRoles } from './roles'
@@ -52,6 +52,8 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Research: ${f}`))
   if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
   if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
+  const older = taskReports(t).filter(r => r.try !== report?.try)
+  if (report && older.length) L.push('', 'Older tries\' reports:', ...older.map(r => `  try ${r.try}: ${r.file}`))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
   return L.join('\n')
 }
@@ -147,6 +149,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   lead: `The lead (this chat) has these tools:
   board · add · change · retry · ask · drop · pause · resume · settings
   approve · reject (only for a task ready for review)
+  board lists the open tasks and the backlog (done / dropped only as counts); it takes status
+  and search to narrow the list, and task to see one task with its latest report.
   Each task merges into the branch you were on when it was made (there is no branch
   setting); change merge_into moves one task to another existing branch.
   settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
@@ -190,6 +194,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   web pages, but must not change the project (no edits, installs or git changes). It sends
   its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
   tells you, or ignores it. Run /${S.N.name}-scouts after adding or deleting a file.
+  You can also ask the lead to list, add, change, remove or run a scout for you.
   every_minutes: 0 means only on demand: it never runs on the timer, only with run now
   or /${S.N.name}-scout NAME. A value that is not a whole number (like -5) also means only
   on demand, and the scout shows a warning until the file is fixed.
@@ -246,21 +251,27 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you only hear of it in a "Meanwhile" line) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
-- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
+- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too: if you can answer it from what you know, ${S.N.name} change the task with add_details: the answer; otherwise leave it for the owner.
+- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
+- Manage scouts with ${S.N.name} scouts, never by writing ${S.N.dir}/scouts/ files by hand: action list (the default) shows each scout (how often, paused, running, next and last run, the start of its last report), list with name shows one in full; add / edit with name (lowercase letters, digits, dashes), every_minutes (0 = only on demand), optional model and prompt; remove deletes one (ask the owner first); run runs one now, like the owner's "run now".
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
 - Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
 - ${S.N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
-- Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board.`
+- Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search) narrow it, e.g. status: ["done"], search: "notify"; with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).`
 
 export const TOOLS = () => [
-  { name: 'board', description: `Show the ${S.N.name} task board; with task, show that one task in full (also an archived one).`, inputSchema: { type: 'object', properties: { task: { type: 'string', description: 'A task id, e.g. T-12, to see in full.' } } } },
+  {
+    name: 'board',
+    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports.`,
+    inputSchema: { type: 'object', properties: { task: { type: 'string', description: 'A task id, e.g. T-12, to see in full with its latest report.' }, status: { type: 'array', items: { type: 'string', enum: [...BOARD_STATUSES, 'open'] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: 'string', description: 'Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel\'s search.' } } },
+  },
   {
     name: 'add',
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
@@ -268,8 +279,8 @@ export const TOOLS = () => [
   },
   {
     name: 'change',
-    description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
+    description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
@@ -278,6 +289,11 @@ export const TOOLS = () => [
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  {
+    name: 'scouts',
+    description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt and whole last report). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (refused with the reason when it is paused, already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'remove', 'run'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The scout, e.g. docs-check (lowercase letters, digits and dashes).' }, every_minutes: { type: 'number', description: 'For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand.' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, prompt: { type: 'string', description: 'For add / edit: what the scout looks for, in plain words.' } } },
+  },
   { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
   {
     name: 'setup_git',
@@ -385,11 +401,11 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
   switch (name) {
     case 'board': {
       const b = await load($)
-      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name)
+      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search) })
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
-      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, undefined, b.archived_done)}`
+      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done)}`
     }
     case 'add': {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -426,12 +442,19 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const some = (await branchList($)).slice(0, 8)
         throw new Error(`Nothing changed: '${into ?? String(a.merge_into)}' is not a branch in this project. merge_into must be an existing branch${some.length ? `, e.g. ${some.join(', ')}` : ''}.`)
       }
+      const both = detailsBothRefusal(a)
+      if (both) throw new Error(both)
+      // A note from the lead added to the details; the old text stays.
+      const note = str(a.add_details)?.trim()
+      const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
+      const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: [...(find(x, t.id) ?? t).history, noteAddedLine(note)] } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? t.question : null)
       if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
       const fields = (): Partial<SymccTask> => {
         const p: Partial<SymccTask> = {}
         if (str(a.title)) p.title = str(a.title)
         if (str(a.details)) p.details = str(a.details)
+        if (noted) p.details = noted
         if (list(a.files)) p.files = list(a.files)
         if (list(a.after)) p.after = list(a.after)
         if (typeof a.order === 'number') p.order = a.order
@@ -444,21 +467,21 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const wasRunning = t.status === 'doing'
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
-        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
+        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
       }
       if (a.backlog === false) {
         if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
-        await change($, x => promoteTask(patchTask(x, t.id, fields(), now(), S.N.dir), t.id, now()))
+        await change($, x => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} moved from the backlog to todo`
       }
       if (t.status === 'backlog') {
-        await change($, x => patchTask(x, t.id, fields(), now(), S.N.dir))
-        return `${t.id} updated (still in the backlog)`
+        await change($, x => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir))
+        return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role', 'answer', 'merge_into'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'add_details', 'files', 'after', 'order', 'role', 'answer', 'merge_into'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
@@ -468,6 +491,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const patch: Partial<SymccTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed' }
       if (str(a.title)) patch.title = str(a.title)
       if (str(a.details)) patch.details = str(a.details)
+      if (noted) patch.details = noted
       if (list(a.files)) patch.files = list(a.files)
       if (list(a.after)) patch.after = list(a.after)
       if (typeof a.order === 'number') patch.order = a.order
@@ -479,12 +503,12 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
       await change($, x => {
         const cur = find(x, t.id) ?? t
-        const lines = changeLines(t, patch, wasDoing, answer)
+        const lines = changeLines(t, patch, wasDoing, answer, note)
         const end = wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
         return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
       })
       void pump($)
-      return `${t.id} updated${wasDoing ? ' (restarting)' : ''}${into ? `; it now merges into ${into}` : ''}`
+      return `${t.id} ${note ? 'note added' : 'updated'}${wasDoing ? ` (restarting${note ? ' with the note' : ''})` : ''}${into ? `; it now merges into ${into}` : ''}`
     }
     case 'retry': {
       const t = await taskOrThrow($, id)
@@ -558,6 +582,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
     }
+    case 'scouts':
+      return leadScouts($, a)
     case 'stats':
       return statsText($, str(a.range) ?? '')
     case 'setup_git':

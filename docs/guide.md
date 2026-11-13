@@ -192,7 +192,11 @@ So there are three ways to change a task in review before it is merged:
 
 1. **Reject it with a reason**: a fresh worker redoes it (see above).
 2. **Ask the lead to change the task** ("T-5: also update the README"): the lead changes
-   what the task asks for, and it goes back to work.
+   what the task asks for, and it goes back to work. For a small addition the lead uses
+   `change` with `add_details`: the note is added at the end of the details as
+   `Note (lead, <date>): ...`, the old text stays, and the task's history gets a line
+   `the lead added a note: "..."`. `details` rewrites the whole text; giving both at once
+   is refused.
 3. **Edit the files yourself** in its folder, `.symcc/worktrees/T-5`, then approve. Your
    edits are committed as part of the task (same commit message) and its history gets a
    line like `owner edited files before approving: a.ts, b.md`. The tests always run
@@ -312,8 +316,8 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
-  `enabled` flip on/off; `mode`, `notify` and `target_branch` open a pick list (off / review
-  / auto; only the notify choices this computer can play; or your local branches); numbers and `test_commands` open an edit box (several test
+  `enabled` flip on/off; `mode` and `notify` open a pick list (off / review
+  / auto; only the notify choices this computer can play); numbers and `test_commands` open an edit box (several test
   commands are joined with ` && `; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
@@ -360,7 +364,14 @@ before this was kept show `from: unknown`.
   **Commits** lists the commits each try made and the one that was merged, and **Report**
   shows the worker's full final report for the latest try. When more than one try has a
   report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
-  shows the first 40 lines and says where the full report is.
+  shows the first 40 lines (at most 4,000 characters) and says where the full report is.
+- **Asking the lead.** The lead's `board` tool shows the same: with `task: T-3` it gives the
+  task in full with its latest report (cut like `/symcc-task`) and the files of older tries'
+  reports. With nothing it lists the open tasks and the backlog, and the done and dropped
+  ones only as counts ("143 done, 3 dropped; ask with status: done to see them"). `status`
+  (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or `open` for
+  everything not done, dropped or backlog) and `search` (words, matched the same way as the
+  board panel's `f` search) narrow the list.
 - **The report files.** Every try's full final answer (its report, or its NEED FILES or
   QUESTION text) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
   Tasks from before this was kept say "no saved report".
@@ -401,6 +412,15 @@ You can also make and change scouts right in the board panel: on the Scouts view
 scout" asks for a name, and "Edit" on a scout's page lets you change how often it runs, its
 model and its instructions. Save writes the file (other front matter keys are kept) and the
 new timing applies at once. `/symcc-scout <name>` runs a scout now.
+
+Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
+like "every 2 days" or "on demand", whether it is paused or running, its next and last run
+and the first lines of its last report), show one in full (its instructions and whole last
+report), add or change one (name of lowercase letters, digits and dashes, every_minutes with
+0 for only on demand, an optional model, and the instructions), remove one (it checks with
+you first) and run one now, just like "run now" (refused, with the reason, when the scout is
+paused, already running, or git isn't set up). Every change shows on the board at once. Only
+you pause or resume scouts; the lead can't.
 
 ### Scouts that run only on demand
 
@@ -493,14 +513,12 @@ one `general` task: each extra task costs a worker run, a test run and a merge.
 
 ## Which branch work goes into
 
-- A new board merges into **the branch you had checked out** when the board was made.
-  (On a detached checkout it uses the repo's main branch: `main` or `master`.)
-- Change it by telling the lead, e.g. "merge into `develop`" (the `target_branch`
-  setting). Only a branch that exists is accepted.
-- If you switch to another branch, the board warns you:
-  `merging into main · you're on my-feature`.
-- If the branch doesn't exist, nothing starts and nothing is marked failed; the lead is
-  told once.
+- Each task merges into **the branch you were on** when the task was made. There is no
+  branch setting. (On a detached checkout it uses the repo's main branch: `main` or `master`.)
+- To move one task to another branch, tell the lead, e.g. "merge T-3 into `develop`"
+  (it changes the task's `merge_into`). Only a branch that exists is accepted.
+- If a task's branch was deleted, the task waits and asks you whether to merge into another
+  branch instead. Nothing is marked failed.
 
 ### A folder without git
 
@@ -520,7 +538,7 @@ gets its own git worktree. It checks this when a session starts and before a wor
   - makes a first commit of the current files, "Initial commit (by symcc)", leaving
     out (and ignoring) files that look like secrets (`.env`, `*.pem`, `id_rsa`) or
     are over 50 MB; the result says which;
-  - sets the target branch to `main`. It never pushes and adds no remote.
+  - names the branch `main`. It never pushes and adds no remote.
 
 ---
 

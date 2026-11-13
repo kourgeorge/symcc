@@ -1,7 +1,7 @@
 import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, archiveText, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, symccOn, toArchive } from '../board'
 import { publish } from './lead'
 import { S, type $ } from './state'
-import { load, locked, now, path, saveBoard } from './store'
+import { load, locked, now, path, safeWrite, saveBoard } from './store'
 import { tellLead } from './tell'
 
 // ---------------- old tasks: archive.json ----------------
@@ -29,11 +29,7 @@ async function reportBroken($: $, text: string, reason: string) {
 
 /** Writes archive.json through a temp file and a rename, like board.json, so a crash never leaves half a file. */
 export async function saveArchive($: $, a: Archive) {
-  const file = path(S.N.archiveFile)
-  const tmp = `${file}.tmp`
-  await $.fs.write(tmp, archiveText(a))
-  const r = await $.process.run(['mv', '-f', tmp, file])
-  if (r.exitCode !== 0) throw new Error(`couldn't save the archive: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+  await safeWrite($, path(S.N.archiveFile), archiveText(a), 'the archive')
 }
 
 /** Saves archive.json once in the current shape when reading it brought old tasks up to date (see readArchive's `migrated`). */
