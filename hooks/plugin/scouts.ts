@@ -290,3 +290,25 @@ export function cancelScoutEdit($: $) {
   S.naming = null
   $.ui.invalidate('ui.render')
 }
+
+/**
+ * Which of the plugin's folders a tool call writes, edits or deletes in: the scouts folder
+ * (`scouts`, e.g. ".symcc/scouts") and/or the roles folder (`roles`, e.g. ".symcc/roles").
+ * The tool's arguments sit beside `tool` in the call (`e.file_path` for Write, Edit and MultiEdit,
+ * `e.command` for Bash). For Bash only commands that can change files count (rm, mv, cp, a redirect, ...),
+ * so reading a scout file with cat doesn't start the timers over.
+ */
+export function fileToolHits(e: Record<string, unknown>, scouts: string, roles: string): { scouts: boolean; roles: boolean } {
+  const tool = String(e.tool ?? '')
+  const inDir = (text: string, dir: string, needSlash: boolean) => text.replace(/\\/g, '/').includes(needSlash ? `${dir}/` : dir)
+  if (tool === 'Write' || tool === 'Edit' || tool === 'MultiEdit') {
+    const p = String(e.file_path ?? '')
+    return { scouts: inDir(p, scouts, true), roles: inDir(p, roles, true) }
+  }
+  if (tool === 'Bash') {
+    const c = String(e.command ?? '')
+    if (!/(^|[\s;&|(])(rm|mv|cp|unlink|touch|tee|sed\s+-i|git\s+(rm|mv|checkout|restore))\b|>/.test(c)) return { scouts: false, roles: false }
+    return { scouts: inDir(c, scouts, false), roles: inDir(c, roles, false) }
+  }
+  return { scouts: false, roles: false }
+}

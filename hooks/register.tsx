@@ -18,7 +18,7 @@ import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
-import { saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
+import { fileToolHits, saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
@@ -72,6 +72,20 @@ export async function registerAll($: $) {
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ])
     await ok($.command.register(c))
+}
+
+/**
+ * After a tool call changed scout or role files: reschedules the scouts and/or reloads the roles, then
+ * publishes the view again, so the board shows the change right away (scheduleScouts and loadRoles only
+ * change what the plugin holds; the panel draws from the published view). Runs in the background.
+ */
+function filesChanged($: $, hit: { scouts: boolean; roles: boolean }) {
+  if (!hit.scouts && !hit.roles) return
+  void (async () => {
+    if (hit.scouts) await scheduleScouts($)
+    if (hit.roles) await loadRoles($).catch(() => undefined)
+    await publish($, await load($))
+  })().catch(() => undefined)
 }
 
 export const register: Register = on => {
@@ -172,13 +186,18 @@ export const register: Register = on => {
 
   // One tool.call hook for every tool (the name is only known once a hook runs):
   // a worker or scout the plugin stopped can't do anything more, so every tool it tries is
-  // refused; and the lead's own tools, mcp__<name>__<tool>, run here.
+  // refused; the lead's own tools, mcp__<name>__<tool>, run here; and writing, editing or deleting
+  // a scout file (Write, Edit, MultiEdit, or rm and the like in Bash) reschedules the scouts, a role file reloads the roles.
   const toolNames = TOOLS().map(t => t.name)
   on('tool.call', async ($, e, next) => {
     useName($)
     if (e.agentId && stopped.has(e.agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
     const name = toolNames.find(t => e.tool === S.N.tool(t))
-    if (!name) return next(e)
+    if (!name) {
+      const r = await next(e)
+      filesChanged($, fileToolHits(e as unknown as Record<string, unknown>, S.N.scouts, `${S.N.dir}/roles`))
+      return r
+    }
     if (!(await isOn($))) return { result: offAnswer(S.N.name) }
     try {
       return { result: await runTool($, name, e as unknown as In) }
@@ -193,15 +212,6 @@ export const register: Register = on => {
     const r = await next(e)
     if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
-    return r
-  })
-
-  // Editing a scout file reschedules the scouts.
-  on('tool.call', { tool: 'Write' }, async ($, e, next) => {
-    useName($)
-    const r = await next(e)
-    if (String((e as { file_path?: string }).file_path ?? '').includes(`${S.N.scouts}/`)) void scheduleScouts($)
-    if (String((e as { file_path?: string }).file_path ?? '').includes(`${S.N.dir}/roles/`)) void loadRoles($).catch(() => undefined)
     return r
   })
 
