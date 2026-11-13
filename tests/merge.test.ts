@@ -1534,3 +1534,19 @@ test('the outcome of a check in a few words', () => {
   expect(finishedNote({ ok: false, detail: 'the worker made no change' })).toBe('no change')
   expect(finishedNote({ ok: false, detail: 'main is checked out with uncommitted changes' })).toBe('not merged')
 })
+
+test("the lead's board tool with a task shows its latest report and lists the older tries' reports", async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { attempts: 2, runs: [{ started: ISO, report: '.symcc/reports/T-1-try-1.md' }, { started: ISO, report: '.symcc/reports/T-1-try-2.md' }] })
+  await saveBoard(w.$, b)
+  w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'first try\n')
+  w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'I changed src/a.ts and the tests pass.\n')
+  const out = await runTool(w.$, 'board', { task: 'T-1' })
+  expect(out).toContain('Report (try 2, .symcc/reports/T-1-try-2.md):\n  I changed src/a.ts and the tests pass.')
+  expect(out).toContain("Older tries' reports:\n  try 1: .symcc/reports/T-1-try-1.md")
+  expect(out).not.toContain('first try')
+  // and the list view takes status and search
+  expect(await runTool(w.$, 'board', { status: ['done'] })).toContain('No tasks match (status: done).')
+  expect(await runTool(w.$, 'board', { search: 'do it' })).toContain('Do it')
+  await expect(runTool(w.$, 'board', { status: ['nope'] })).rejects.toThrow('unknown status')
+})

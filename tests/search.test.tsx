@@ -159,3 +159,76 @@ test('with a filter on, [x] clear search sits next to [f] change search and take
   expect(await ui.find({ key: 'T-1' })).toBeDefined()
   await ui.unmount()
 })
+
+// ---------------- the lead's board tool: status, search, done hidden by default ----------------
+
+import { addTask, boardText, emptyBoard, patchTask, parseStatusFilter, hiddenLine, reportPreview, type Board } from '../hooks/board'
+
+function bigBoard(): Board {
+  let b = emptyBoard()
+  const add = (title: string, status: string, details = '') => {
+    const [y, t] = addTask(b, { origin: { why: 'test' }, title, details }, '2026-11-01T00:00:00Z')
+    b = status === 'todo' ? y : patchTask(y, t.id, { status: status as never }, '2026-11-01T00:00:00Z')
+  }
+  add('Voice notify', 'done', 'say it out loud')
+  add('Old parser', 'done')
+  add('Bad idea', 'dropped')
+  add('Fix search', 'todo')
+  add('Notify sound', 'doing')
+  add('Maybe later', 'backlog')
+  return b
+}
+
+test('board tool: by default the open tasks and backlog are listed, done and dropped only as counts', () => {
+  const out = boardText(bigBoard(), 0, '~/p')
+  expect(out).toContain('Fix search')
+  expect(out).toContain('Notify sound')
+  expect(out).toContain('Maybe later')
+  expect(out).not.toContain('Voice notify')
+  expect(out).not.toContain('Bad idea')
+  expect(out).toContain('2 done, 1 dropped; ask with status: done to see them')
+  expect(out.split('\n')[1]).toMatch(/tests: none set/)
+  expect(hiddenLine(0, 0)).toBe('')
+  expect(hiddenLine(0, 3)).toBe('3 dropped; ask with status: dropped to see them')
+})
+
+test('board tool: the status filter, "open" and unknown words', () => {
+  expect(parseStatusFilter(undefined)).toBeUndefined()
+  expect(parseStatusFilter([])).toBeUndefined()
+  expect(parseStatusFilter('done, dropped')).toEqual(['done', 'dropped'])
+  expect(parseStatusFilter(['open'])).toEqual(['todo', 'doing', 'paused', 'waiting', 'review', 'failed'])
+  expect(() => parseStatusFilter(['finished'])).toThrow('unknown status "finished"')
+  const done = boardText(bigBoard(), 0, undefined, 'symcc', 0, { status: ['done'] })
+  expect(done).toContain('Voice notify')
+  expect(done).toContain('Old parser')
+  expect(done).not.toContain('Fix search')
+  expect(done).toContain('2 of 6 tasks (status: done)')
+  expect(done).not.toContain('ask with status')
+  const open = boardText(bigBoard(), 0, undefined, 'symcc', 0, { status: parseStatusFilter('open') })
+  expect(open).toContain('Fix search')
+  expect(open).not.toContain('Maybe later')
+})
+
+test('board tool: search matches like the panel, also among done tasks, with status too', () => {
+  const b = bigBoard()
+  const hit = boardText(b, 0, undefined, 'symcc', 0, { search: 'notify' })
+  expect(hit).toContain('Voice notify')
+  expect(hit).toContain('Notify sound')
+  expect(hit).not.toContain('Fix search')
+  expect(hit).toContain('2 of 6 tasks (search: notify)')
+  const both = boardText(b, 0, undefined, 'symcc', 0, { status: ['doing'], search: 'notify' })
+  expect(both).toContain('Notify sound')
+  expect(both).not.toContain('Voice notify')
+  expect(boardText(b, 0, undefined, 'symcc', 0, { search: 'nothing here' })).toContain('No tasks match (search: nothing here).')
+})
+
+test('reportPreview: a long report is cut to a sensible length, with a note naming the file', () => {
+  const lines = Array.from({ length: 30 }, (_, i) => `line ${i} ${'x'.repeat(300)}`).join('\n')
+  const p = reportPreview(lines, 'r.md')
+  expect(p.join('\n').length).toBeLessThan(4200)
+  expect(p.at(-1)).toMatch(/^… \(\d+ more lines\) full report: r\.md$/)
+  const one = reportPreview(`word `.repeat(2000), 'r.md')
+  expect(one.length).toBe(2)
+  expect(one[0]!.length).toBeLessThanOrEqual(4000)
+  expect(one[1]).toBe('… (cut) full report: r.md')
+})

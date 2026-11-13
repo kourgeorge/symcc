@@ -49,12 +49,28 @@ export function taskReports(t: Pick<SymccTask, 'runs'>): { try: number; file: st
 /** The research notes among changed files: those under docs/research/. */
 export const researchNotes = (files: readonly string[]): string[] => [...new Set(files.filter(f => /^docs\/research\/[^/].*/.test(f)))].sort()
 
+/** How many characters of the latest report /<name>-task and the lead's board tool show before pointing to the file. */
+export const REPORT_PREVIEW_CHARS = 4000
+
 /**
- * The report as /<name>-task shows it: its first REPORT_PREVIEW_LINES lines, and when there are
- * more, a line naming the file with the full report.
+ * The report as /<name>-task (and the lead's board tool with a task) shows it: its first REPORT_PREVIEW_LINES lines,
+ * at most REPORT_PREVIEW_CHARS characters, and when there is more, a line naming the file with the full report.
  */
-export function reportPreview(text: string, file: string, lines = REPORT_PREVIEW_LINES): string[] {
+export function reportPreview(text: string, file: string, lines = REPORT_PREVIEW_LINES, chars = REPORT_PREVIEW_CHARS): string[] {
   const all = text.trimEnd().split('\n')
-  if (all.length <= lines) return all
-  return [...all.slice(0, lines), `… (${all.length - lines} more lines) full report: ${file}`]
+  const kept: string[] = []
+  let used = 0
+  for (const l of all) {
+    if (kept.length >= lines) break
+    if (used + l.length > chars) {
+      // a long line is cut between words, so the preview still shows something
+      if (used < chars * 0.8) kept.push(cutLine(l, chars - used))
+      break
+    }
+    kept.push(l)
+    used += l.length + 1
+  }
+  if (kept.length === all.length && kept.at(-1) === all.at(-1)) return all
+  const left = all.length - kept.length
+  return [...kept, `… (${left ? `${left} more line${left === 1 ? '' : 's'}` : 'cut'}) full report: ${file}`]
 }

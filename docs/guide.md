@@ -360,7 +360,14 @@ before this was kept show `from: unknown`.
   **Commits** lists the commits each try made and the one that was merged, and **Report**
   shows the worker's full final report for the latest try. When more than one try has a
   report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
-  shows the first 40 lines and says where the full report is.
+  shows the first 40 lines (at most 4,000 characters) and says where the full report is.
+- **Asking the lead.** The lead's `board` tool shows the same: with `task: T-3` it gives the
+  task in full with its latest report (cut like `/symcc-task`) and the files of older tries'
+  reports. With nothing it lists the open tasks and the backlog, and the done and dropped
+  ones only as counts ("143 done, 3 dropped; ask with status: done to see them"). `status`
+  (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or `open` for
+  everything not done, dropped or backlog) and `search` (words, matched the same way as the
+  board panel's `f` search) narrow the list.
 - **The report files.** Every try's full final answer (its report, or its NEED FILES or
   QUESTION text) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
   Tasks from before this was kept say "no saved report".
