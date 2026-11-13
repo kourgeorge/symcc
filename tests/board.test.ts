@@ -2489,7 +2489,7 @@ import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppe
 test('changeLines names the changed fields of a restart, the widened files and the owner answer', async () => {
   const t = { attempts: 2, role: 'general', files: ['hooks/'], details: 'old', after: [] as string[] }
   expect(changedFields(t, { details: 'old', files: ['hooks/', 'tests/'], after: [] })).toEqual(['files'])
-  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)'])
+  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)', 'waits on changed: nothing → T-1'])
   expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual(['files widened: + a.ts, + b.ts'])
   expect(changeLines(t, {}, false, ' yes, go ')).toEqual(['the owner answered: “yes, go”'])
   expect(changeLines(t, { files: ['hooks/'] }, false)).toEqual([])

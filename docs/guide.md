@@ -435,6 +435,7 @@ Every two minutes symcc checks the board by itself. It:
 - stops a worker that runs too long (`max_minutes`, 45 by default) and marks the task failed,
 - notices a worker that ended without reporting back,
 - reminds the lead about a failed task nobody has dealt with for 10 minutes,
+- runs the board health check (see "How the lead keeps the board in order" below),
 - once an hour, archives old finished tasks (see below).
 
 A stopped worker can't do anything more: symcc refuses every tool it tries to use.
@@ -442,6 +443,30 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+
+### How the lead keeps the board in order
+
+The lead sorts the board by a few plain rules: older tasks go first unless you say a task is
+urgent; bugs and safety fixes go before features; `order` sets the priority (lower runs
+first). Tasks wait on each other (`after`) only when they really change the same files, and a
+new task that shares files with an older waiting one goes behind it. No task is left waiting
+forever.
+
+To help, symcc checks the board after every change and every two minutes (only in the
+window that drives the board). It looks for:
+
+- **Stuck:** a task waits on a task that was dropped, failed or is gone ("T-7 waits on T-5,
+  which was dropped — it will never start"), or tasks wait on each other in a loop.
+- **Starving:** an older task that could start, or waits only on newer tasks, keeps getting
+  pushed back: its `after` list was changed 3 or more times, or it has waited over 2 hours
+  while 2 or more newer tasks already started.
+- **Too serial:** 3 or more to-do tasks wait on each other in a chain, but each shares no
+  files with the one before it, so they could run side by side.
+- **Needs you too long:** a task waits for your answer or your review, untouched for over an hour.
+
+When it finds something new, the lead gets one "Triage needed" board update listing the
+problems and what to consider. The same problem is never told twice; it is told again only
+after one of its tasks changes. A healthy board sends nothing.
 
 ### Old tasks are archived
 

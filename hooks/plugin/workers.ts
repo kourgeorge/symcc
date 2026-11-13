@@ -1,6 +1,7 @@
 import type { SymccTask, SymccMode } from '../../types'
 import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText } from '../board'
 import { archiveOld } from './archive'
+import { checkHealth } from './health'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
@@ -688,5 +689,7 @@ export async function check($: $) {
   if (S.gitState === 'ok') await cleanupMerged($, await load($)).catch(() => undefined)
   // old done and dropped tasks move to archive.json (at most once an hour)
   await archiveOld($).catch(() => undefined)
+  // stuck, starving or too-serial tasks, or ones waiting on the owner too long: told once each
+  checkHealth($, await load($))
   await pump($)
 }

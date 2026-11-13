@@ -145,6 +145,8 @@ export const scoutRuns = new Map<string, string>() // agentId → scout name
 export const stopped = new Set<string>()
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */
 export const reminded = new Map<string, string>()
+/** the board health findings already told to the lead (their keys; see newFindings) */
+export const healthTold = new Set<string>()
 export const scoutState = new Map<string, SymccScout>()
 export const timers: { cancel(): void }[] = []
 export const leadQueue: string[] = []
