@@ -10,9 +10,9 @@
 //
 // This file only wires up the hooks. The code lives in plugin/: state.ts (what the plugin holds
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
-// roles.ts, scouts.ts, tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
+// roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
+import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
 import { dataDir } from './name'
 import { findArchived } from './plugin/archive'
 import { gitReady } from './plugin/git'
@@ -22,6 +22,7 @@ import { loadRoles } from './plugin/roles'
 import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScoutEdit } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now } from './plugin/store'
+import { seePlan, seeMainMode } from './plugin/plan'
 import { noteForLead, brief } from './plugin/tell'
 import { playable } from './plugin/voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
@@ -285,6 +286,36 @@ export const register: Register = on => {
         }
       }
     }
+    return next(e)
+  })
+
+  // Plan mode (see core/plan.ts): Claude Code has no call for the mode and no event when it changes, so it is
+  // read from these events of the main session (never a worker's or scout's). Each passes the event on unchanged.
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    useName($)
+    seeMainMode($, e)
+    return next(e)
+  })
+  on('classic.Stop', async ($, e, next) => {
+    useName($)
+    seeMainMode($, e)
+    return next(e)
+  })
+  on('classic.SessionStart', async ($, e, next) => {
+    useName($)
+    seeMainMode($, e)
+    return next(e)
+  })
+  // a spawn from the main chat carries the main chat's mode
+  on('agent.spawn', async ($, e, next) => {
+    useName($)
+    if (!e.parentAgentId) void seePlan($, planFromMode(e.permissionMode)).catch(() => undefined)
+    return next(e)
+  })
+  // plan_mode / plan_mode_reentry: the reminder sent while plan mode is on; plan_mode_exit: it has ended
+  on('prompt.attachment', async ($, e, next) => {
+    useName($)
+    if (!e.agentId) void seePlan($, planFromAttachment(e.type)).catch(() => undefined)
     return next(e)
   })
 

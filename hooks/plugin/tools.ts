@@ -1,12 +1,12 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset } from '../board'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
 import { loadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
-import { noteForLead, brief } from './tell'
+import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
 import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
@@ -31,6 +31,8 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.origin?.evidence) L.push(`seen by ${S.N.name}: ${t.origin.evidence}`)
   if (t.note) L.push(`now: ${t.note}`)
   if (t.status === 'waiting' && t.question) L.push('', `ASKS: ${t.question}`)
+  const bt = t as BoardTask
+  if (t.status === 'waiting' && bt.options?.length) L.push(`OPTIONS: ${bt.options.join(' | ')}`)
   L.push('', 'What to do:', ...(t.details.trim() ? t.details.split('\n').map(l => (l.trim() ? `  ${l}` : '')) : ['  (no details)']))
   L.push('', 'May change:', ...(t.files.length ? t.files.map(f => `  ${f}`) : ['  anywhere in the project']))
   if (t.after.length) {
@@ -161,8 +163,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     It can't see the board or this chat, and must not commit, push or merge.
   • A resumed or retried task starts over with a fresh worker.
   • A worker that must change a file outside its list doesn't; it stops and answers
-    "NEED FILES: a, b — reason". The task then waits for you: allow the files (change)
-    or drop it. A worker that changes such files anyway fails its try.
+    "NEED FILES: a, b — reason". The task then waits for you: on its page press Allow
+    (the files are added and it goes back to work) or Don't allow (the lead drops or
+    narrows it). A worker that changes such files anyway fails its try.
   • Every two minutes ${S.N.name} checks by itself: starts ready tasks, stops a worker running
     longer than max_minutes (45 by default), notices a worker that ended without a result,
     reminds the lead about failed tasks nobody handled, and stops old workers left over
@@ -226,12 +229,14 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name; for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
+- Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use order for priority (lower runs first), not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
+- ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / order, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
-- A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
-- A worker that needs the owner to decide something stops and answers "QUESTION: ..."; the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
+- A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you only hear of it in a "Meanwhile" line) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
+- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
@@ -239,6 +244,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
+- Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
 - ${S.N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board.`
@@ -301,6 +307,21 @@ export async function taskOrThrow($: $, id: string) {
   return t
 }
 
+/** The owner pressed Allow on a waiting task's file request: its files grow and it goes back to work, in one change; the lead hears of it later ("Meanwhile"). */
+export async function allowAskedFiles($: $, id: string): Promise<string> {
+  const files = await change($, x => [allowFiles(x, id, now(), S.N.dir), (find(x, id) as BoardTask | undefined)?.asked_files ?? []] as [Board, string[]])
+  void pump($)
+  noteForLead(`The owner allowed ${files.join(', ')} for ${id}; it went back to work.`)
+  return `${id}: files allowed (${files.join(', ')}); back to work`
+}
+
+/** The owner pressed Don't allow on a waiting task's file request: it keeps waiting, and the lead is told now (drop it or narrow the plan). */
+export async function refuseAskedFiles($: $, id: string): Promise<string> {
+  const files = await change($, x => [refuseFiles(x, id, now()), (find(x, id) as BoardTask | undefined)?.asked_files ?? []] as [Board, string[]])
+  tellLead($, filesRefusedText(id, files))
+  return `${id}: files not allowed; the lead will drop it or narrow the plan`
+}
+
 /** The lead's tools that act on one task. */
 const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'pause', 'resume']
 
@@ -334,8 +355,13 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const t = await change($, b => {
         // check what the lead said first, then add the plugin's own evidence next to it
         const o = makeOrigin(said, now(), b)
-        return addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: a.backlog === true, role, origin: { ...said, evidence: evidenceText(o, heard) } }, now(), S.N.dir)
+        return addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) } }, now(), S.N.dir)
       })
+      // plan mode: it went to the backlog; noted, so the lead hears the list when plan mode ends
+      if (inPlan(S.plan) && t.status === 'backlog') {
+        S.plan = planAdded(S.plan, t.id)
+        return planAddText(t.id, t.title)
+      }
       void pump($)
       return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}`
     }
@@ -361,7 +387,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const wasRunning = t.status === 'doing'
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
-        await change($, x => stashTask(patchTask(x, t.id, fields(), now(), S.N.dir), t.id, now()))
+        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
       }
@@ -396,7 +422,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       await change($, x => {
         const cur = find(x, t.id) ?? t
         const lines = changeLines(t, patch, wasDoing, answer)
-        return patchTask(x, t.id, lines.length ? { ...patch, history: [...cur.history, ...lines] } : patch, now(), S.N.dir)
+        const end = wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
+        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
       })
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
@@ -425,7 +452,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
@@ -436,7 +463,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
-      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped' }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
       void pump($)
       return checking ? `${t.id} dropped; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it stays done)` : `${t.id} dropped`
@@ -447,12 +474,12 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) {
         stopAsked.set(t.id, 'paused')
-        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}` }, now()))
+        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
         return `${t.id} paused; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it is done); ${S.N.name} resume ${t.id} continues it`
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }

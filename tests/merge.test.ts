@@ -1,14 +1,14 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
-import { workerFinished, setSymcc, setBoardMode } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode, check } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
-import { runTool, ownerSettings } from '../hooks/plugin/tools'
+import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
 
 // The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
@@ -1055,8 +1055,62 @@ test('NEED FILES still makes the task wait with its question', async () => {
   expect(t.question).toBe('T-1 needs to change files outside its list: README.md — the docs mention it. Allow them?')
   expect(t.note).toBe('waiting for you')
   expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md — the docs mention it')
-  expect(leadQueue.join('\n')).toContain('The task now waits for the owner.')
+  expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md'])
   expect(sayQueue).toEqual(['?T-1'])
+})
+
+test('a worker QUESTION with an OPTIONS line saves the options; without one, or with too few or too many, none', async () => {
+  const { t } = await workerAnswers('QUESTION: Which colour?\nOPTIONS: red | blue | green', { notify: 'off' })
+  expect(t.question).toBe('Which colour?')
+  expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
+  expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
+  for (const bad of ['QUESTION: Which colour?', 'QUESTION: Which?\nOPTIONS: red', `QUESTION: Which?\nOPTIONS: ${'a b c d e f g'.split(' ').join(' | ')}`])
+    expect((await workerAnswers(bad, { notify: 'off' })).t).not.toHaveProperty('options')
+})
+
+/** A board where T-1 (files src/) waits after its worker asked for `files` with NEED FILES. */
+async function askedForFiles(files: string[]) {
+  const w = world()
+  const [b] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: `T-1 needs to change files outside its list: ${files.join(', ')}. Allow them?`, asked_files: files, note: 'waiting for you' } as Partial<SymccTask>, ISO))
+  let saves = 0
+  const fs = (w.$ as { fs: { write: (p: string, t: string) => Promise<void> } }).fs
+  const write = fs.write
+  fs.write = async (p, text) => ((saves += p === `${BOARD}.tmp` ? 1 : 0), write(p, text))
+  return { w, saves: () => saves }
+}
+
+test('Allow on a file request widens the files and sends the task back to work in one change; the lead gets a Meanwhile line', async () => {
+  const { w, saves } = await askedForFiles(['README.md', 'docs/a.md'])
+  await allowAskedFiles(w.$, 'T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(saves()).toBe(1)
+  expect(t.status).toBe('todo')
+  expect(t.files).toEqual(['src/', 'README.md', 'docs/a.md'])
+  expect(t.history.at(-1)).toBe('the owner allowed files: + README.md, + docs/a.md')
+  expect(t.question).toBeNull()
+  expect(t).not.toHaveProperty('asked_files')
+  expect(leadQueue).toEqual([])
+  expect(meanwhile.join('\n')).toContain('The owner allowed README.md, docs/a.md for T-1')
+})
+
+test("Don't allow keeps the task waiting with a note and tells the lead at once", async () => {
+  const { w } = await askedForFiles(['README.md'])
+  await refuseAskedFiles(w.$, 'T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('waiting')
+  expect(t.note).toBe('files not allowed')
+  expect(t.files).toEqual(['src/'])
+  expect(leadQueue.join('\n')).toContain("The owner didn't allow README.md for T-1: drop it or narrow the plan")
+})
+
+test('Allow or Don\'t allow on a task that does not wait for files is refused', async () => {
+  const w = world()
+  const [b] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'Which colour?' }, ISO))
+  await expect(allowAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
+  await expect(refuseAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
 })
 
 test('"T-1 needs you" is queued once per waiting question with notify on, and not with notify off or in another session', async () => {
@@ -1380,4 +1434,103 @@ test("notify can't be set to a choice this machine can't play: the owner and the
   expect(await ownerSettings(m.$, { notify: 'loud' }, 'from the board')).toContain('notify must be "off", "sound" or "voice"')
   expect(await ownerSettings(m.$, { notify: 'sound' }, 'from the board')).toBe('notify set to sound')
   expect((await load(m.$)).notify).toBe('sound')
+})
+
+// ---------------- how each try ended ----------------
+
+/** T-1 is "doing" (try 1, one open run) with worker ag1; `then` ends it. Gives back the run as saved. */
+async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, o: { g?: Partial<Git>; tests?: Record<string, Res>; extra?: Partial<SymccTask> } = {}) {
+  const w = world(o.g, o.tests)
+  const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...o.extra })
+  await saveBoard(w.$, b0)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await then(w)
+  workers.delete('ag1')
+  const t = find(await load(w.$), 'T-1')!
+  const r = t.runs!.at(-1)!
+  return { t, r, end: [r.ended_by, r.ended_note] }
+}
+const answers = (answer: string, aborted = false) => (w: ReturnType<typeof world>) => workerFinished(w.$, 'ag1', answer, aborted)
+
+test('a finished try ends with the outcome of its check', async () => {
+  const merged = await tryEnds(answers('made the change'))
+  expect(merged.end).toEqual(['finished', 'merged'])
+  expect(merged.r.ended).toBeDefined()
+  expect((await tryEnds(answers('made the change'), { extra: { needs_review: true } })).end).toEqual(['finished', 'ready for review'])
+  expect((await tryEnds(answers('made the change'), { tests: { 'npm test': { exitCode: 1, stdout: 'FAIL', stderr: '' } } })).end).toEqual(['finished', 'tests failed'])
+  expect((await tryEnds(answers('made the change'), { g: { upToDate: false, conflict: true } })).end).toEqual(['finished', 'clash with main'])
+  expect((await tryEnds(answers('made the change'), { g: { changed: ['README.md'] } })).end).toEqual(['finished', 'out of scope'])
+})
+
+test('a try that asks ends as asked: QUESTION or NEED FILES; one stopped from Claude Code as stopped', async () => {
+  expect((await tryEnds(answers('QUESTION: red or blue?'))).end).toEqual(['asked', 'QUESTION'])
+  expect((await tryEnds(answers('NEED FILES: README.md — docs'))).end).toEqual(['asked', 'NEED FILES'])
+  expect((await tryEnds(answers('', true))).end).toEqual(['stopped', 'stopped from Claude Code'])
+})
+
+test('a try stopped by the lead says why: changed (which fields), paused, dropped, asked, backlog', async () => {
+  const changed = await tryEnds(w => runTool(w.$, 'change', { task: 'T-1', details: 'new plan', after: [] }))
+  expect(changed.end).toEqual(['restarted', 'the task was changed (details)'])
+  expect(changed.r.ended).toBeDefined()
+  expect((await tryEnds(w => runTool(w.$, 'pause', { task: 'T-1', reason: 'later' }))).end).toEqual(['stopped', 'paused: later'])
+  expect((await tryEnds(w => runTool(w.$, 'drop', { task: 'T-1' }))).end).toEqual(['stopped', 'dropped'])
+  expect((await tryEnds(w => runTool(w.$, 'ask', { task: 'T-1', question: 'which?' }))).end).toEqual(['stopped', 'the lead asked the owner a question'])
+  expect((await tryEnds(w => runTool(w.$, 'change', { task: 'T-1', backlog: true }))).end).toEqual(['stopped', 'moved to the backlog'])
+})
+
+test('a try stopped by turning symcc or the board off says so, and so does a stop during its check', async () => {
+  expect((await tryEnds(turnOff)).end).toEqual(['stopped', 'symcc was turned off'])
+  expect((await tryEnds(w => setBoardMode(w.$, 'off', 'you'))).end).toEqual(['stopped', 'you turned the board off'])
+  // paused while its tests run: the pause is the reason, not the check's "not merged"
+  const paused = await tryEnds(async w => {
+    let done = false
+    w.onRun(async cmd => {
+      if (done || !/^\/bin\/sh -c /.test(cmd)) return
+      done = true
+      await runTool(w.$, 'pause', { task: 'T-1' })
+    })
+    await workerFinished(w.$, 'ag1', 'made the change', false)
+  })
+  expect(paused.t.status).toBe('paused')
+  expect(paused.end).toEqual(['stopped', 'paused'])
+})
+
+test('a try that ran over max_minutes ends as timed out', async () => {
+  try {
+    const over = await tryEnds(async w => {
+      S.driving = true // world() sets it to false
+      workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: -1e13 })
+      await check(w.$)
+    })
+    expect(over.t.status).toBe('failed')
+    expect(over.end[0]).toBe('timed out')
+    expect(over.end[1]).toMatch(/^ran over \d+ min$/)
+  } finally {
+    S.driving = false
+  }
+})
+
+test('the merge-main-in try is marked when it starts, and the first end reason is kept', async () => {
+  const runs = startRun([], ISO, true)
+  expect(runs[0]!.merge_main).toBe(true)
+  expect(startRun([], ISO)[0]!.merge_main).toBeUndefined()
+  const once = withEnd(runs, 'stopped', 'paused')
+  expect(withEnd(once, 'finished', 'merged')[0]).toEqual(once[0])
+  expect(withEnd(once, 'finished', 'merged', true)[0]!.ended_note).toBe('merged')
+  expect(fmtRun({ ...once[0]!, ended: ISO }, 2)).toBe('try 3: 0s · merged main in (clash with main) · stopped: paused')
+})
+
+test('a try sent back to todo after a reload ends as restarted, worded like its history line', () => {
+  const [, t] = boardWith('auto', [], { history: [], runs: [{ started: ISO }] })
+  const back = backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', '2026-11-13T00:05:00.000Z')
+  expect(back.history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(back.runs![0]).toEqual({ started: ISO, ended: '2026-11-13T00:05:00.000Z', ended_by: 'restarted', ended_note: 'the plugin reloaded and the old worker was gone' })
+  expect(backToTodo({ ...t, status: 'todo' }, 'restarted: x', ISO).runs).toEqual([{ started: ISO }])
+})
+
+test('the outcome of a check in a few words', () => {
+  expect(finishedNote({ ok: false, detail: 'checking failed: boom' })).toBe('checking failed')
+  expect(finishedNote({ ok: false, detail: 'the worker made no change' })).toBe('no change')
+  expect(finishedNote({ ok: false, detail: 'main is checked out with uncommitted changes' })).toBe('not merged')
 })

@@ -1,7 +1,7 @@
 // What every page of the board panel shares: the view it shows, the banner, the tabs, key hints and text styles.
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, bannerStrip, type KeyHint, hintLines, packRows } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, bannerStrip, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
 import { noteForLead, brief } from '../tell'
@@ -38,7 +38,7 @@ export async function paneParts($: $, e: PaneEvent) {
     $.ui.toast(S.N.toast(r))
     noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
-  /** The banner at the top: the drawing, the board's facts and the board mode. */
+  /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
     const d = emptyBoard()
     const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
@@ -56,12 +56,6 @@ export async function paneParts($: $, e: PaneEvent) {
       <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
         {bannerStrip({ ...v, mode }, Date.now(), width, S.N.name)}
       </Text>,
-      <Box key="banner-mode" flexDirection="row">
-        <Text wrap="truncate">
-          <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
-        </Text>
-        <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
-      </Box>,
       ...(v.git_state === 'no-repo' || v.git_state === 'no-commits'
         ? [
             <Box key="banner-git" flexDirection="row">
@@ -108,6 +102,23 @@ export async function paneParts($: $, e: PaneEvent) {
         ))}
       </Text>
     ))
+  /** The footer at the bottom of a page: a light rule, then (Tasks page only, `withMode`) the board-mode line with
+   *  its [m] button, then the page's key hints. It comes right after the page's content. Off the Tasks page there is
+   *  no [m] button, so m does nothing there. */
+  const footer = (hints: KeyHint[], name: string, withMode = false) => (
+    <Box key={`${name}-footer`} flexDirection="column">
+      <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
+      {withMode ? (
+        <Box key="footer-mode" flexDirection="row">
+          <Text wrap="truncate">
+            <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
+          </Text>
+          <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
+        </Box>
+      ) : null}
+      {keyLines(hints, name)}
+    </Box>
+  )
   /** A row of buttons that goes on to more rows when it does not fit, never cutting a button. */
   const buttonRows = (buttons: unknown[], name: string) => {
     const shown = buttons.filter(b => b && typeof b === 'object') as { props: { label?: string } }[]
@@ -168,6 +179,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, target, banner, tabs, header, keyLines, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, target, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>

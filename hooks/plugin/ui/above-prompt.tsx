@@ -1,6 +1,6 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf } from '../../board'
+import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf, planBandText } from '../../board'
 import { type $, readView, type PaneView, S } from '../state'
 import { openPane } from './open'
 
@@ -20,6 +20,8 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const color: Record<string, string> = { review: 'cyan', waiting: 'yellow', failed: 'red', doing: 'green' }
   const word: Record<string, string> = STATUS_WORD
   const running = (v?.scouts ?? []).filter(s => s.running).map(s => s.name)
+  // plan mode: nothing new starts; workers already running keep going (said so)
+  const plan = (v as PaneView | undefined)?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -29,6 +31,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
           {boardWhere(S.root)}{' '}
           {summary}
           {` · ${modeLabel(modeOf(v))}`}
+          {plan ? ` · ${plan}` : ''}
           {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
         </Text>
         </Text>

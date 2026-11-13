@@ -338,6 +338,49 @@ test('a waiting task opens with a box to answer it', async ($, on) => {
   await ui.unmount()
 })
 
+test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on keys 1-3; Allow widens the files and sends it back', async ($, on) => {
+  const board = { tasks: [task('T-2', 'waiting', 'Search mode', { files: ['src/'], question: 'T-2 needs to change files outside its list: README.md. Allow them?', asked_files: ['README.md'] })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const [n, label] of [[1, '1 Allow'], [2, "2 Don't allow"], [3, '3 Answer…']] as const) {
+    const b = await ui.find({ key: `choice-${n}` })
+    expect(b?.props.label).toBe(label)
+    expect(b?.props.hotkey).toBe(String(n))
+  }
+  expect(await ui.find({ type: 'Text', text: /1 allow · 2 don't allow · 3 answer/ })).toBeDefined()
+  expect(await ui.find({ key: 'answer' })).toBeUndefined()
+  await ui.press({ key: 'choice-3' })
+  expect(await ui.find({ key: 'answer' })).toBeDefined()
+  await ui.press({ key: 'choice-1' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved.length).toBe(1)
+  expect(saved[0].tasks[0]).toMatchObject({ status: 'todo', files: ['src/', 'README.md'] })
+  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner allowed files: + README.md')
+  await ui.unmount()
+})
+
+test('a question with options shows one button per option plus Answer…; picking one is the answer', async ($, on) => {
+  const board = { tasks: [task('T-2', 'waiting', 'Search mode', { question: 'Which colour?', options: ['red', 'blue'] })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('1 red')
+  expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('2 blue')
+  expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('3 Answer…')
+  expect(await ui.find({ type: 'Text', text: /1-2 pick · 3 answer/ })).toBeDefined()
+  expect(await ui.find({ key: 'answer' })).toBeUndefined()
+  await ui.press({ key: 'choice-2' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved.length).toBe(1)
+  expect(saved[0].tasks[0].status).toBe('todo')
+  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “blue”')
+  expect(saved[0].tasks[0]).not.toHaveProperty('options')
+  await ui.unmount()
+})
+
 test('an opened task shows its details in full, in clear sections', async ($, on) => {
   const long = 'First line of the plan.\n\nSecond paragraph that is long. '.repeat(20)
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
@@ -938,8 +981,9 @@ test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one
     expect(counts).toBeGreaterThan(-1)
     expect(counts).toBeLessThan(strip)
     for (const t of texts.slice(counts + 1, strip)) expect(texts[counts]).toContain(t)
-    expect(texts[strip + 1]).toMatch(/review/)
     expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(strip)
+    // the mode line is in the footer, after the list, not under the banner
+    expect(texts.findIndex(t => /^⏸ review merge $/.test(t))).toBeGreaterThan(texts.findIndex(t => /^━+$/.test(t)))
     expect(texts.filter(t => /workers · \d+ scout/.test(t)).length).toBe(1)
     expect(texts[strip]!.length).toBeLessThanOrEqual(w)
     expect(texts[strip]).toBe(w >= 60 ? '2/3 workers · 2 scouts (next: secrets in 38m)' : '2/3 workers · 2 scouts')
@@ -1274,6 +1318,37 @@ test('a research task shows its note as a row in Details', async ($, on) => {
   await ui.unmount()
 })
 
+const ENDED_RUNS = [
+  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:00:24.000Z', ended_by: 'restarted', ended_note: 'the task was changed (after, details)' },
+  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', tokens: 5_600_000, ended_by: 'finished', ended_note: 'clash with main' },
+  { started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', tokens: 232_500, merge_main: true, ended_by: 'finished', ended_note: 'merged' },
+  { started: '2026-11-09T13:00:00.000Z', ended: '2026-11-09T13:01:00.000Z' },
+]
+
+test('the Runs rows say how each try ended; a run with no reason shows none', async ($, on) => {
+  const t = task('T-1', 'done', 'Ended', { attempts: 4, runs: ENDED_RUNS })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /try 1: 24s · restarted: the task was changed \(after, details\)/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 2: 17m · 5\.6M tokens · finished: clash with main/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 3: 3m · 232\.5k tokens · merged main in \(clash with main\) · finished: merged/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ {2}try 4: 1m$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('/symcc-task says how each try ended next to its time and tokens', async ($, on) => {
+  const t = task('T-1', 'done', 'Ended', { attempts: 4, runs: ENDED_RUNS })
+  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [t] }
+  fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  stateOf(on, {})
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: undefined }))
+  const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
+  expect(text).toContain('  try 1: 24s · restarted: the task was changed (after, details)\n')
+  expect(text).toContain('  try 3: 3m · 232.5k tokens · merged main in (clash with main) · finished: merged\n')
+  expect(text).toContain('  try 4: 1m\n')
+})
+
 test('/symcc-task shows the latest report, or its first 40 lines and where the full one is', async ($, on) => {
   const many = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
   const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })] }
@@ -1288,3 +1363,97 @@ test('/symcc-task shows the latest report, or its first 40 lines and where the f
   expect(text).toContain(`… (20 more lines) full report: ${R2}`)
   expect(text).toContain('Research: docs/research/market.md')
 })
+
+test('plan mode: add puts the task in the backlog and says so; leaving plan mode tells the lead once with the list', async ($, on) => {
+  const clock = mock.clock(on, { now: Date.now() })
+  const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks: [task('T-1', 'done', 'Old')] }), '/board.lock': null }
+  // the plugin writes board.json to a temp file, then moves it in place with mv: keep the fake board in step
+  const temp: Record<string, string> = {}
+  const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
+  on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] } : next(e)))
+  on('fs.write', (_, e) => ((temp[e.path] = String(e.text)), { value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', (_, e) => {
+    const argv = (e as { argv?: string[] }).argv ?? []
+    if (argv[0] === 'mv' && /board\.json$/.test(argv[3] ?? '') && temp[argv[2]!] !== undefined) files['/board.json'] = temp[argv[2]!]!
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  // nothing beneath answers the classic events in a test: answer them empty
+  on('classic.UserPromptSubmit', () => ({}) as never)
+  on('classic.Stop', () => ({}) as never)
+  const told: string[] = []
+  on('prompt.submit', (_, e) => (told.push(String((e as { text?: string }).text ?? '')), { text: '' } as never))
+  const add = async (title: string) => JSON.stringify(((await $.tool.call({ tool: 'mcp__symcc__add', title, details: 'd', why: 'test', origin_by: 'owner' } as never)) as { result?: unknown }).result)
+  // no signal yet: behaves as today
+  expect(await add('Before')).toContain('added T-2 Before')
+  expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-2').status).toBe('todo')
+  await $.classic.UserPromptSubmit({ prompt: 'plan it', permission_mode: 'plan' } as never)
+  await clock.advance(10)
+  expect(await add('Planned')).toContain('plan mode: T-3 Planned added to the backlog; nothing starts')
+  expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-3').status).toBe('backlog')
+  // a worker's event (agent_id) does not count for the main session
+  await $.classic.Stop({ permission_mode: 'acceptEdits', agent_id: 'w1' } as never)
+  await clock.advance(10)
+  expect(await add('Also planned')).toContain('plan mode: T-4')
+  await $.classic.Stop({ permission_mode: 'default' } as never)
+  await $.classic.Stop({ permission_mode: 'default' } as never)
+  await clock.advance(5000)
+  const ends = told.filter(t => t.includes('Plan mode is off'))
+  expect(ends.length).toBe(1)
+  expect(ends[0]).toContain('- T-3 Planned')
+  expect(ends[0]).toContain('- T-4 Also planned')
+  // not moved by itself
+  expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-3').status).toBe('backlog')
+  expect(await add('After')).toContain('added T-5 After')
+})
+
+type Mounted = Awaited<ReturnType<Parameters<Parameters<typeof test>[1]>[0]['ui']['mount']>>
+/** The page's footer: there is exactly one, it is the last thing on the page, it starts with the light rule, and
+ *  the page's key hints are in it and nowhere else. Returns its text without the rule. */
+async function footerOf(ui: Mounted, hints: KeyHint[], width = 50): Promise<string> {
+  const boxes = await ui.findAll({ type: 'Box' })
+  const feet = boxes.filter(b => String(b.key).endsWith('-footer'))
+  expect(feet.length).toBe(1)
+  const foot = feet[0]!.text
+  expect(boxes[0]!.text.endsWith(foot)).toBe(true)
+  expect(foot.startsWith('─'.repeat(width))).toBe(true)
+  const lines = hintLines(hints, width).map(hintLineText)
+  expect(foot.endsWith(lines.join(''))).toBe(true)
+  // each hint line is drawn once on the page
+  for (const l of lines) expect(boxes[0]!.text.split(l).length - 1).toBe(1)
+  return foot.slice(width)
+}
+
+test('the Tasks page ends with a footer: the light rule, the mode line with [m], then its key hints; the header has no mode line', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const foot = await footerOf(ui, listKeys())
+  expect(foot).toBe('⏸ review merge [m] auto' + 'Enter open · ↑↓ move · t s c views · Esc close')
+  expect((await ui.findAll({ type: 'Text', text: /^⏸ review merge $/ })).length).toBe(1)
+  expect((await ui.findAll({ key: 'mode' })).length).toBe(1)
+  // the mode line comes after the list, not under the banner
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(texts.indexOf('⏸ review merge ')).toBeGreaterThan(texts.findIndex(t => /^\s*Enter to review$/.test(t)))
+  await ui.unmount()
+})
+
+const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
+  ['task page', { opened: 'T-5' }, null, taskKeys('review')],
+  ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
+  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'close' }]],
+  ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
+  ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Esc', word: 'cancel' }]],
+  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'close' }]],
+]
+for (const [name, seed, press, hints] of NO_MODE_PAGES)
+  test(`the ${name} ends with a footer of its own key hints and has no mode line`, async ($, on) => {
+    stateOf(on, { ...seed, view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })], working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.' })], mode: 'review', test_commands: [] } } })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    if (press) await ui.press({ key: press })
+    expect(await footerOf(ui, hints)).toBe(hintLines(hints, 50).map(hintLineText).join(''))
+    expect(await ui.find({ key: 'mode' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /review merge/ })).toBeUndefined()
+    await ui.unmount()
+  })

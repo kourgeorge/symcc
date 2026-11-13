@@ -1,17 +1,20 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, taskReports } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, taskReports, answerChoices, answerKeys, type BoardTask } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
 import { path } from '../store'
 import { noteForLead, brief } from '../tell'
-import { runTool, when } from '../tools'
+import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
 import type { PaneParts } from './parts'
+
+/** The waiting task whose "Answer…" button was pressed (its text box is open), if any. */
+let answering: string | null = null
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
-  const { Box, Text, Button, Input, v, width, color, word, mark, act, C, target, keyLines, buttonRows, heading, paragraphs } = pane
+  const { Box, Text, Button, Input, v, width, color, word, mark, act, C, target, footer, buttonRows, heading, paragraphs } = pane
   if (!S.roles.length) await loadRoles($).catch(() => undefined)
   const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
   const inReview = t.status === 'review'
@@ -91,7 +94,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Text>
           ))}
         </Box>
-        <Box flexDirection="column">{keyLines(diffKeys(inReview, !!d.file), 'diff-keys')}</Box>
+        {footer(diffKeys(inReview, !!d.file), 'diff-keys')}
       </Box>
     )
   }
@@ -176,6 +179,23 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const shown = reports[at]
   const reportBody = shown ? await $.fs.read(path(shown.file)).then(x => String(x), () => null) : null
   const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
+  // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
+  const asked = t as BoardTask
+  const choices = t.status === 'waiting' ? answerChoices(asked.asked_files, asked.options) : []
+  if (answering !== null && answering !== t.id) answering = null
+  const typing = !choices.length || answering === t.id
+  const sendAnswer = (text: string) =>
+    act(async () => {
+      if (!text.trim()) return
+      answering = null
+      await runTool($, 'change', { task: t.id, answer: text.trim() })
+      noteForLead(`The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
+    })
+  const choicePress = (i: number) => {
+    if (i === choices.length - 1) return () => ((answering = t.id), $.ui.invalidate('ui.render'))
+    if (asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles($, t.id) : await refuseAskedFiles($, t.id))))
+    return sendAnswer(choices[i]!)
+  }
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
@@ -262,19 +282,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             <Text bold color={C('warning')}>asks: </Text>
             <Text color={C('text')}>{t.question ?? '(no question)'}</Text>
           </Text>
-          <Input
-            key="answer"
-            label="Your answer: "
-            placeholder="type and press Enter"
-            autoFocus
-            onSubmit={value =>
-              act(async () => {
-                if (!value.trim()) return
-                await runTool($, 'change', { task: t.id, answer: value.trim() })
-                noteForLead(`The owner answered ${t.id} ("${brief(value.trim())}"); it went back to work.`)
-              })()
-            }
-          />
+          {choices.length > 0 &&
+            buttonRows(
+              choices.map((c, i) => <Button key={`choice-${i + 1}`} label={`${i + 1} ${c}`} hotkey={i < 9 ? String(i + 1) : undefined} autoFocus={i === 0 && !typing ? true : undefined} onPress={choicePress(i)} />),
+              'answer-buttons',
+            )}
+          {typing && <Input key="answer" label="Your answer: " placeholder="type and press Enter" autoFocus onSubmit={value => sendAnswer(value)()} />}
         </Box>
       )}
 
@@ -304,7 +317,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             : null}
           {reports.length > 1
             ? buttonRows(
-                reports.map((r, i) => <Button key={`report-try-${r.try}`} label={`${i === at ? '● ' : ''}Try ${r.try}${r.try <= 9 ? ` (${r.try})` : ''}`} hotkey={r.try <= 9 ? String(r.try) : undefined} onPress={pickReport(r.try)} />),
+                reports.map((r, i) => <Button key={`report-try-${r.try}`} label={`${i === at ? '● ' : ''}Try ${r.try}${r.try <= 9 && !choices.length ? ` (${r.try})` : ''}`} hotkey={r.try <= 9 && !choices.length ? String(r.try) : undefined} onPress={pickReport(r.try)} />),
                 'report-buttons',
               )
             : null}
@@ -321,7 +334,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      <Box flexDirection="column">{keyLines(taskKeys(t.status, !!agentId, reports.map(r => r.try)), 'task-keys')}</Box>
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), t.status === 'waiting' ? answerKeys(asked.asked_files, asked.options) : []), 'task-keys')}
     </Box>
   )
 }

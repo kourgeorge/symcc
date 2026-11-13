@@ -1096,6 +1096,8 @@ test('a worker asking for more files is read from its answer', async () => {
 test('the waiting question and the failure note for files outside the list', async () => {
   expect(needFilesQuestion('T-7', { files: ['README.md', 'tests/x.test.ts'], reason: 'docs' })).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts — docs. Allow them?')
   expect(needFilesQuestion('T-7', { files: ['a.js'], reason: '' })).toBe('T-7 needs to change files outside its list: a.js. Allow them?')
+  // a reason that already ends with a period gets no second one
+  expect(needFilesQuestion('T-7', { files: ['a.js'], reason: 'use b.js instead.' })).toBe('T-7 needs to change files outside its list: a.js — use b.js instead. Allow them?')
   const note = outOfScopeText(['docs/x.md'], ['src/'])
   expect(note).toContain('docs/x.md')
   expect(note).toContain('add them to files with change, or split the task')
@@ -2520,7 +2522,7 @@ import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppe
 test('changeLines names the changed fields of a restart, the widened files and the owner answer', async () => {
   const t = { attempts: 2, role: 'general', files: ['hooks/'], details: 'old', after: [] as string[] }
   expect(changedFields(t, { details: 'old', files: ['hooks/', 'tests/'], after: [] })).toEqual(['files'])
-  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)'])
+  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)', 'waits on changed: nothing → T-1'])
   expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual(['files widened: + a.ts, + b.ts'])
   expect(changeLines(t, {}, false, ' yes, go ')).toEqual(['the owner answered: “yes, go”'])
   expect(changeLines(t, { files: ['hooks/'] }, false)).toEqual([])

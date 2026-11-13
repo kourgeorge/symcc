@@ -68,6 +68,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   }
   if (patch.after !== undefined) next.after = patch.after.map(normId).filter(x => x !== t.id && knownDep(b, x))
   if (next.status !== 'waiting') next.question = null
+  // The worker's file request and choices belong to the question they came with.
+  for (const k of ['asked_files', 'options'] as const) if (next.status !== 'waiting' || (patch.question !== undefined && !(k in patch)) || !next[k]?.length) delete next[k]
   return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
 }
 
@@ -147,7 +149,50 @@ export function parseNeedFiles(answer: string): { files: string[]; reason: strin
 
 /** The question a task waits with after its worker asked for more files. */
 export function needFilesQuestion(id: string, need: { files: string[]; reason: string }): string {
-  return `${id} needs to change files outside its list: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}. Allow them?`
+  const reason = need.reason.trim()
+  return `${id} needs to change files outside its list: ${need.files.join(', ')}${reason ? ` — ${reason}` : ''}${/[.?!]$/.test(reason) ? '' : '.'} Allow them?`
+}
+
+/** How many choices a worker's OPTIONS line may give. */
+export const OPTIONS_MIN = 2
+export const OPTIONS_MAX = 6
+
+/**
+ * The choices on a worker's `OPTIONS: a | b | c` line (given after its QUESTION line), or
+ * undefined when there is none or it gives fewer than 2 or more than 6.
+ */
+export function parseOptions(answer: string): string[] | undefined {
+  const m = /^[\s`*]*OPTIONS\s*:\s*(.*)$/im.exec(answer)
+  if (!m) return undefined
+  const opts = [...new Set(m[1]!.split('|').map(o => o.replace(/[`*]+$/, '').trim().slice(0, 200)).filter(Boolean))]
+  return opts.length >= OPTIONS_MIN && opts.length <= OPTIONS_MAX ? opts : undefined
+}
+
+/** 'the owner allowed files: + a, + b': the history line when the owner allows a file request. */
+export const filesAllowedLine = (files: readonly string[]) => `the owner allowed files: ${files.map(f => `+ ${f}`).join(', ')}`
+
+/** What the lead is told when the owner does not allow a waiting task's file request. */
+export const filesRefusedText = (id: string, files: readonly string[]) => `The owner didn't allow ${files.join(', ')} for ${id}: drop it or narrow the plan.`
+
+/** Task `id` waits with a file request (NEED FILES); throws otherwise. */
+function askedFilesOf(b: Board, id: string): [BoardTask, string[]] {
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (t.status !== 'waiting' || !t.asked_files?.length) throw new Error(`${t.id} is not waiting for files to be allowed`)
+  return [t, t.asked_files]
+}
+
+/** The owner allows a waiting task's file request: its files grow by them and it goes back to work, in one change. */
+export function allowFiles(b: Board, id: string, now: string, dir: string = DATA_DIR): Board {
+  const [t, asked] = askedFilesOf(b, id)
+  const added = asked.filter(f => !t.files.includes(f))
+  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], history: [...t.history, filesAllowedLine(added.length ? added : asked)] }, now, dir)
+}
+
+/** The owner does not allow a waiting task's file request: it keeps waiting (for the lead to drop or narrow it). */
+export function refuseFiles(b: Board, id: string, now: string): Board {
+  const [t, asked] = askedFilesOf(b, id)
+  return patchTask(b, t.id, { note: 'files not allowed', history: [...t.history, `the owner didn't allow files: ${asked.join(', ')}`] }, now)
 }
 
 /** Why a try failed when the worker changed files outside its list without asking. */

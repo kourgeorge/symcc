@@ -107,6 +107,19 @@ answers it itself when it can. Otherwise answer it on the board or tell the lead
 goes into the task and sends it back to work, and a new try continues with it. What the
 worker already changed is kept.
 
+**Answering a waiting task on the board.** Open the task (Enter on it under NEEDS YOU):
+
+- **A file request (`NEED FILES`)** shows three buttons, also on the number keys:
+  **1 Allow** adds the files to the task and sends it back to work in one step (its history
+  says "the owner allowed files: + a, + b"; the lead hears of it later, it is not woken up).
+  **2 Don't allow** keeps the task waiting with the note "files not allowed" and tells the
+  lead at once, so it drops the task or narrows the plan. **3 Answer…** opens a text box.
+- **A question with choices.** A worker may add a line `OPTIONS: a | b | c` (2 to 6 choices)
+  after its `QUESTION:` line. Each choice is a button with its number key, plus **Answer…**
+  for your own words. Picking one is your answer (history: the owner answered: “b”) and
+  sends the task back to work.
+- **Any other question** has a text box: type the answer and press Enter.
+
 ---
 
 ## What happens when a worker finishes
@@ -119,7 +132,7 @@ This is where symcc keeps your branch safe. Step by step:
    anything else, nothing is merged (the note says which files; add them to `files` with
    `change`, or split the task). A worker that sees it needs another file should not change
    it: it stops and answers `NEED FILES: path/a, path/b — reason`, and the task waits for
-   you to allow those files (the lead does that with `change`) or drop it.
+   you to allow those files (press Allow on its page, or tell the lead, who uses `change`) or drop it.
 3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).
@@ -212,6 +225,29 @@ You can also do it yourself:
   tasks to review by ID, e.g. `⏸ review merge · 1 to review (T-5)`. With an empty board it
   shows nothing in `auto`, so a fresh project stays quiet.
 
+### Plan mode
+
+Claude Code's own plan mode (Shift+Tab) is for planning only, so symcc starts nothing while
+the main chat is in it:
+
+- Every task the lead adds goes to the backlog, and the answer says so:
+  `plan mode: T-7 Search added to the backlog; nothing starts`.
+- No new worker or scout starts (not the regular check, not a scout's timer, not "run now").
+  Workers already running keep going: plan mode doesn't reach them, and stopping them would
+  lose work. The band above the prompt says so, e.g.
+  `plan mode: nothing starts (1 worker keeps going)`.
+- The band, the status line and the status strip show `plan mode: nothing starts`.
+
+When plan mode ends, the lead is told once which tasks went to the backlog during it, and asks
+you which ones to move to todo. symcc never moves them by itself.
+
+Claude Code has no call for the mode and no event when it changes, so symcc reads it from what
+comes with some events of the main chat: the permission mode on the prompt you send and on the
+end of each turn, the mode passed to a new agent, and the "plan mode" reminders Claude Code
+adds to each request. So a switch is noticed at the next prompt, request or end of turn. Until
+symcc has seen the mode at all, it works as before. Each session tracks its own mode; only the
+session that drives the board starts work. (Background: `docs/research/plan-mode.md`.)
+
 ---
 
 ## Live status: seeing the board
@@ -221,7 +257,7 @@ You can also do it yourself:
   command, limits, counts) and the task list.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task, Esc to
   close. An open task shows everything about it, with buttons to pause, resume, retry,
-  drop, watch its worker live, and a box to answer it when it waits for you.
+  drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
 - The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner.
   Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one
@@ -446,6 +482,7 @@ Every two minutes symcc checks the board by itself. It:
 - stops a worker that runs too long (`max_minutes`, 45 by default) and marks the task failed,
 - notices a worker that ended without reporting back,
 - reminds the lead about a failed task nobody has dealt with for 10 minutes,
+- runs the board health check (see "How the lead keeps the board in order" below),
 - once an hour, archives old finished tasks (see below).
 
 A stopped worker can't do anything more: symcc refuses every tool it tries to use.
@@ -453,6 +490,30 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+
+### How the lead keeps the board in order
+
+The lead sorts the board by a few plain rules: older tasks go first unless you say a task is
+urgent; bugs and safety fixes go before features; `order` sets the priority (lower runs
+first). Tasks wait on each other (`after`) only when they really change the same files, and a
+new task that shares files with an older waiting one goes behind it. No task is left waiting
+forever.
+
+To help, symcc checks the board after every change and every two minutes (only in the
+window that drives the board). It looks for:
+
+- **Stuck:** a task waits on a task that was dropped, failed or is gone ("T-7 waits on T-5,
+  which was dropped — it will never start"), or tasks wait on each other in a loop.
+- **Starving:** an older task that could start, or waits only on newer tasks, keeps getting
+  pushed back: its `after` list was changed 3 or more times, or it has waited over 2 hours
+  while 2 or more newer tasks already started.
+- **Too serial:** 3 or more to-do tasks wait on each other in a chain, but each shares no
+  files with the one before it, so they could run side by side.
+- **Needs you too long:** a task waits for your answer or your review, untouched for over an hour.
+
+When it finds something new, the lead gets one "Triage needed" board update listing the
+problems and what to consider. The same problem is never told twice; it is told again only
+after one of its tasks changes. A healthy board sends nothing.
 
 ### Old tasks are archived
 

@@ -1,5 +1,6 @@
 import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale } from '../board'
 import { firstBranch } from './git'
+import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
 import { S, type $ } from './state'
@@ -116,6 +117,7 @@ export function change<T>($: $, fn: (b: Board) => [Board, T] | Board): Promise<T
     return [after, value] as const
   }).then(async ([after, value]) => {
     await publish($, after)
+    checkHealth($, after)
     return value
   })
 }

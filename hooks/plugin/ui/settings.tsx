@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, viewKeys } from '../../board'
+import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys } from '../../board'
 import { branchList } from '../git'
 import { type $, S } from '../state'
 import { ownerSettings } from '../tools'
@@ -7,7 +7,7 @@ import type { PaneParts } from './parts'
 
 /** The Settings view: one row per setting; Enter changes it. */
 export async function settingsPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, v, act, C, header, keyLines } = pane
+  const { Box, Text, Button, Input, v, act, C, header, footer } = pane
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const saveIt = (input: SettingsInput) => act(async () => {
     const r = await ownerSettings($, input, 'from the board')
@@ -83,7 +83,7 @@ export async function settingsPage($: $, pane: PaneParts) {
         ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
       ])}
       <Text color={C('subtle')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
-      {keyLines(viewKeys(false), 'settings-keys')}
+      {footer(settingsKeys(), 'settings-keys')}
     </Box>
   )
 }

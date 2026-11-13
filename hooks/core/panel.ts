@@ -6,6 +6,7 @@ import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { roleMark } from './roles'
 import { onDemand } from './scouts'
+import { PLAN_NOTE } from './plan'
 import { fmtDuration, runMs } from './runs'
 import { offStatusLine } from './settings'
 import { num } from './text'
@@ -44,7 +45,7 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
   return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
 }
 
-type StripBoard = { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+type StripBoard = { mode: SymccMode; enabled?: boolean; plan_mode?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
 /** The one-line status strip: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
  *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
@@ -62,6 +63,7 @@ export function bannerStrip(v: StripBoard, nowMs: number, width = Infinity, name
   const busy = v.tasks.filter(t => t.status === 'doing').length
   const n = v.scouts.length
   const base = [`${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
+  if (v.plan_mode) return lead + `${base} · ${PLAN_NOTE}` // no scout starts in plan mode, so no "next"
   const next = v.mode === 'off' ? '' : nextScoutText(v.scouts, nowMs)
   const full = next ? `${base} (${next})` : base
   return lead + (full.length <= width ? full : base)
@@ -176,8 +178,9 @@ export const viewKeys = (enter = true): KeyHint[] => [
 
 /** The keys at the bottom of a task's page, the ones that matter most for its state first; "↑↓ scroll" and
  *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
- *  with a saved report; with more than one, their numbers (1-9) show that try's report. */
-export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = []): KeyHint[] {
+ *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answer`: the keys of a
+ *  waiting task's answer buttons (answerKeys); they then take the number keys instead of the reports. */
+export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answer: readonly KeyHint[] = []): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = []
   if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
@@ -185,9 +188,28 @@ export function taskKeys(status: SymccStatus, worker = false, reports: readonly 
   if (worker) keys.push(k('w', 'watch worker'))
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
   if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
-  const keyed = reports.filter(n => n >= 1 && n <= 9)
+  // A waiting task's answer buttons (Allow, Don't allow, Answer… or the worker's options) take the number keys.
+  const answering = status === 'waiting' && answer.length > 0
+  if (answering) keys.push(...answer)
+  const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
   return [...keys, k('↑↓', 'scroll'), k('b', 'back')]
+}
+
+/** The answer buttons of a waiting task, keyed 1, 2, 3...: Allow / Don't allow / Answer… for a file
+ *  request (`files`), else the worker's `options` and Answer…; none (the text box) for a plain question. */
+export function answerChoices(files: readonly string[] | undefined, options: readonly string[] | undefined): string[] {
+  if (files?.length) return ['Allow', "Don't allow", 'Answer…']
+  if (options?.length) return [...options.slice(0, 8), 'Answer…']
+  return []
+}
+
+/** The key hints for answerChoices: "1 allow · 2 don't allow · 3 answer", or "1-3 pick · 4 answer". */
+export function answerKeys(files: readonly string[] | undefined, options: readonly string[] | undefined): KeyHint[] {
+  const n = answerChoices(files, options).length
+  if (!n) return []
+  if (files?.length) return [{ key: '1', word: 'allow' }, { key: '2', word: "don't allow" }, { key: '3', word: 'answer' }]
+  return [{ key: n - 1 > 1 ? `1-${n - 1}` : '1', word: 'pick' }, { key: String(n), word: 'answer' }]
 }
 
 /** The keys at the bottom of a task's diff view: a and x while it is in review, d when one file is shown. */
@@ -196,6 +218,20 @@ export const diffKeys = (review: boolean, oneFile: boolean): KeyHint[] => [
   ...(oneFile ? [{ key: 'd', word: 'all files' }] : []),
   { key: '↑↓', word: 'scroll' },
   { key: 'b', word: 'back to the task' },
+]
+
+/** The keys at the bottom of the Settings page. */
+export const settingsKeys = (): KeyHint[] => [
+  { key: 'Enter', word: 'change' },
+  { key: '↑↓', word: 'move' },
+  { key: 't s c', word: 'views' },
+  { key: 'Esc', word: 'close' },
+]
+
+/** The keys at the bottom of a scout's edit page. */
+export const scoutEditKeys = (): KeyHint[] => [
+  { key: '↑↓', word: 'move between boxes' },
+  { key: 'Esc', word: 'cancel' },
 ]
 
 /** The keys under the Scouts list. */
