@@ -42,7 +42,7 @@ export async function pump($: $) {
   if (!(await targetReady($, b))) return // nothing starts and nothing is marked failed
   for (const t of ready(b)) {
     if (workers.size >= b.max_parallel) break
-    if (starting.has(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
+    if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
     await startWorker($, t.id).catch(async (err: Error) => {
       await change($, x => patchTask(x, t.id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}` }, now()))
       tellLead($, `${t.id} couldn't start: ${err.message.slice(0, 300)}`)
@@ -55,7 +55,8 @@ export async function pump($: $) {
  * (see mayStart). The claim happens inside change(), so two starts can't both win.
  */
 export async function startWorker($: $, id: string) {
-  if (starting.has(id) || [...workers.values()].some(w => w.task === id)) return
+  // Not while its last try is still being checked (it was resumed or retried meanwhile): it starts when the check ends.
+  if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return
   starting.add(id)
   try {
     const listed = await agentsNow($)
@@ -153,8 +154,75 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
     await finishWork($, agentId, w, answer, aborted)
   } finally {
     finishing.delete(w.task)
+    await endCheck($, w.task)
   }
   await pump($)
+}
+
+// ---------------- a task changed while its work is checked ----------------
+// After a worker finishes, its task stays "doing" while the scope check, the tests and the merge
+// run (finishWork; for approve, the task stays "review"). The lead can drop, pause or ask about it
+// meanwhile: those write the new status at once, mark the task here, and leave its folder alone
+// until the check ends (endCheck). The check then stops before the merge (gated), and settle
+// keeps the new status. A change of the task during the check is refused (see tools.ts).
+
+/** Tasks dropped, paused or sent to the owner while their work was being checked: task id → what happened. */
+export const stopAsked = new Map<string, string>()
+
+/** Whether task `id`'s finished work is being checked and merged right now. */
+export const checkingNow = (id: string) => finishing.has(id) || approving.has(id)
+
+/** The words the lead's tools use when a task they stop is being checked. */
+export const CHECKING_TEXT = (id: string) => `${id} is being tested and merged`
+
+/** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
+export async function endCheck($: $, id: string) {
+  if (!stopAsked.has(id)) return
+  stopAsked.delete(id)
+  try {
+    if (find(await load($), id)?.status === 'dropped') await removeWorktree($, id, worktreeDir(id))
+  } catch {
+    // the regular check removes leftover folders of dropped tasks (cleanupMerged)
+  }
+}
+
+/**
+ * Patches task `t` (read fresh, inside the change) only if it is still the same try: the same
+ * status and try number as when its check began. Returns null when written, else the task as the
+ * board has it now ('gone' when it is not on the board any more), and nothing is written.
+ */
+async function writeIfSame($: $, t: SymccTask, patch: (cur: SymccTask) => Partial<SymccTask>): Promise<SymccTask | 'gone' | null> {
+  return change($, x => {
+    const cur = find(x, t.id)
+    if (!cur) return [x, 'gone'] as [Board, 'gone']
+    if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur] as [Board, SymccTask]
+    return [patchTask(x, t.id, patch(cur), now()), null] as [Board, null]
+  })
+}
+
+/**
+ * Task `t` was dropped, paused or sent to the owner while its work was checked (result `r`).
+ * Its new status and history are kept and `line` is added to them; but when the merge already
+ * happened, it is done, with a line saying the stop came too late.
+ */
+async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
+  const merged = r.ok && !r.review && !!r.merged
+  const was = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur) return [x, null] as [Board, null]
+    const y = merged
+      ? patchTask(x, t.id, { status: 'done', note: `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, history: [...cur.history, line, `${tryLabel(t)}: it was ${cur.status} while being merged, too late: the work was already merged, so it stays done`] }, now())
+      : patchTask(x, t.id, { history: [...cur.history, `${line} (not used: the task was ${cur.status} meanwhile)`] }, now())
+    return [y, cur.status] as [Board, string]
+  })
+  if (!was) return
+  if (!merged) {
+    tellLead($, `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
+    return
+  }
+  sayDone($, b, t.id)
+  if (await removeWorktree($, t.id, worktree, agentId).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
 export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean) {
@@ -165,19 +233,19 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
   const q = /^\s*QUESTION:\s*(.+)$/im.exec(answer)
   const need = parseNeedFiles(answer)
   if (aborted) {
-    await change($, x => patchTask(x, t.id, { status: 'failed', note: 'the worker was stopped', history: [...t.history, `${tryLabel(t)}: stopped before finishing`] }, now()))
+    if (await writeIfSame($, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`] }))) return
     tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
   } else if (need) {
     const question = needFilesQuestion(t.id, need)
-    await change($, x => patchTask(x, t.id, { status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...t.history, `${tryLabel(t)}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }, now()))
+    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }))) return
     tellLead($, `${question}\nThe task now waits for the owner. If they agree, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (q) {
-    await change($, x => patchTask(x, t.id, { status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...t.history, `${tryLabel(t)}: worker asked: ${q[1]}`] }, now()))
+    if (await writeIfSame($, t, cur => ({ status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...cur.history, `${tryLabel(t)}: worker asked: ${q[1]}`] }))) return
     tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${S.N.name} ask.`)
   } else {
-    await change($, x => patchTask(x, t.id, { note: 'checking and merging' }, now()))
+    await change($, x => (find(x, t.id)?.status === 'doing' ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
-    const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, () => stopAsked.get(t.id)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     await recordCommits($, t.id, made, r.merged)
     await settle($, t, b, r, summary, w.worktree, agentId)
   }
@@ -190,8 +258,14 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
  */
 export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string) {
   const line = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${r.detail}`
+  // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
+  const write = async (patch: (cur: SymccTask) => Partial<SymccTask>) => {
+    const moved = await writeIfSame($, t, patch)
+    if (moved && moved !== 'gone') await changedMeanwhile($, t, b, r, line, worktree, agentId)
+    return !moved
+  }
   if (r.review) {
-    await change($, x => patchTask(x, t.id, { status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...t.history, line] }, now()))
+    if (!(await write(cur => ({ status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
     tellLead($, `${t.id} "${t.title}" is ready for review. Worker: ${summary.slice(0, 300)}\nThe change is on branch ${t.branch ?? S.N.branch(t.id)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker.`)
     return
   }
@@ -199,7 +273,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (r.conflict && onConflict(t) === 'retry') {
     // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
     const note = `conflicts with the latest ${b.target_branch}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
-    await change($, x => patchTask(x, t.id, { status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...t.history, line] }, now()))
+    if (!(await write(cur => ({ status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...cur.history, line] })))) return
     tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
     return
   }
@@ -208,13 +282,13 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
     // Don't fail yet: a new worker gets the failing test output and fixes it.
     const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
-    await change($, x => patchTask(x, t.id, { status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...t.history, line] }, now()))
+    if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...cur.history, line] })))) return
     tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
   const done = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${detail}`
-  await change($, x => patchTask(x, t.id, { status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...t.history, done] }, now()))
+  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done] })))) return
   if (r.ok) sayDone($, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
   if (r.ok && (await removeWorktree($, t.id, worktree, agentId))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
@@ -235,20 +309,28 @@ export async function approve($: $, id: string): Promise<string> {
     if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, b.target_branch)
     await change($, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: 'approved; checking and merging' }, now()) : x))
     const made: string[] = []
-    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, () => stopAsked.get(t.id)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
-    if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing more done`
+    if (cur?.status !== 'review') {
+      // Merged before the change was seen: settle marks it done, with a line saying so.
+      if (cur && r.ok && r.merged) {
+        await settle($, t, b, r, 'approved by the owner', dir)
+        return `${t.id} was merged before it was ${cur.status}; it is done`
+      }
+      return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing more done`
+    }
     if (!r.ok && !r.conflict && r.testOutput === undefined) {
       // Not the work's fault (e.g. uncommitted changes on the target branch): it stays in review.
       await change($, x => patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}` }, now()))
       return `${t.id} was not merged and stays in review: ${r.detail}. Fix that, then approve it again.`
     }
     await settle($, cur, b, r, 'approved by the owner', dir)
-    void pump($)
     return r.ok ? `${t.id} approved and merged: ${r.detail}` : `${t.id} approved, but not merged: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
   } finally {
     approving.delete(t.id)
+    await endCheck($, t.id)
+    void pump($) // after the check: a task sent back to "todo" (or resumed meanwhile) starts again
   }
 }
 
