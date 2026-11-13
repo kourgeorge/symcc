@@ -7,7 +7,7 @@ import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
 import { loadRoles } from './roles'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
-import { load, change, now, path } from './store'
+import { load, change, now, path, safeWrite } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 
@@ -321,12 +321,8 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
   if (!answer.trim()) return
   const rel = reportFile(S.N.dir, t.id, t.attempts)
   try {
-    const file = path(rel)
-    const tmp = `${file}.tmp`
     await $.process.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
-    await $.fs.write(tmp, reportText(answer))
-    const r = await $.process.run(['mv', '-f', tmp, file])
-    if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().slice(0, 200) || `mv exit ${r.exitCode}`)
+    await safeWrite($, path(rel), reportText(answer), 'the report')
     await change($, x => {
       const cur = find(x, t.id)
       if (!cur?.runs?.length || cur.attempts !== t.attempts) return x

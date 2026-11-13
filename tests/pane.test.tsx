@@ -377,7 +377,7 @@ test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on key
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
   await ui.press({ key: 'choice-1' })
-  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
   expect(saved.length).toBe(1)
   expect(saved[0].tasks[0]).toMatchObject({ status: 'todo', files: ['src/', 'README.md'] })
   expect(saved[0].tasks[0].history.at(-1)).toBe('the owner allowed files: + README.md')
@@ -396,7 +396,7 @@ test('a question with options shows one button per option plus Answer…; pickin
   expect(await ui.find({ type: 'Text', text: /1-2 pick · 3 answer/ })).toBeDefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-2' })
-  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
   expect(saved.length).toBe(1)
   expect(saved[0].tasks[0].status).toBe('todo')
   expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “blue”')
@@ -832,7 +832,7 @@ test('an open task shows its role and model; "Role" (l) opens a pick list of the
   for (const r of ['general', 'tester', 'security', 'docs']) expect(await ui.find({ key: `role:${r}` })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^● tester$/ })).toBeDefined()
   await ui.press({ key: 'role:docs' })
-  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => text)
+  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => text)
   expect(saved.length).toBe(1)
   expect(JSON.parse(saved[0]!).tasks[0].role).toBe('docs')
   expect(toasts.some(t => /T-1 role: docs/.test(t))).toBe(true)
@@ -1144,7 +1144,7 @@ for (const width of [50, 90]) {
   })
 }
 
-/** Fake scout files, scouts.json and the board; a write to scouts.json.tmp becomes scouts.json (the mv). */
+/** Fake scout files, scouts.json and the board; a write to a scouts.json temp file becomes scouts.json (the mv). */
 function scoutFiles(on: On, memory: string | null, more: Record<string, string> = {}) {
   const files: Record<string, string | null> = {
     '/scouts/bugs.md': '---\nevery_minutes: 30\n---\nLook for crashes.\n',
@@ -1158,7 +1158,7 @@ function scoutFiles(on: On, memory: string | null, more: Record<string, string> 
   on('fs.list', (_, e, next) => (e.path.endsWith('/scouts') ? { value: ['bugs', ...Object.keys(more)].map(n => ({ name: `${n}.md`, kind: 'file' })) } : next(e)))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
   on('fs.write', (_, e) => {
-    if (e.path.endsWith('/scouts.json.tmp')) files['/scouts.json'] = String(e.text)
+    if (/\/scouts\.json\..*\.tmp$/.test(e.path)) files['/scouts.json'] = String(e.text)
     return { value: undefined }
   })
   on('ui.status', () => ({ value: undefined }))
@@ -1272,7 +1272,7 @@ test('a broken board.json is never saved over: a change is refused, a copy is ke
   await ui.press({ key: 'role' })
   await ui.press({ key: 'role:docs' })
   // nothing was written to board.json or its temp file
-  expect(Object.keys(written).some(p => /board\.json(\.tmp)?$/.test(p))).toBe(false)
+  expect(Object.keys(written).some(p => /board\.json(\..*\.tmp)?$/.test(p))).toBe(false)
   // one copy of the file as it was, and the owner is told why
   const copies = Object.entries(written).filter(([p]) => /board\.json\.broken-/.test(p))
   expect(copies.length).toBe(1)

@@ -11,6 +11,12 @@ import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/sto
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
 
+/** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
+const tmpMove = (call: string, file: string) => {
+  const [mv, f, from, to] = call.split(' ')
+  return mv === 'mv' && f === '-f' && to === file && !!from && from.startsWith(`${file}.`) && from.endsWith('.tmp') && from !== `${file}.tmp`
+}
+
 // The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
 // process globals, and nothing below the plugin answers $.fs or $.process.run. So these tests run the
 // real merge, approve and board code against a scripted fake git and in-memory files (see world()).
@@ -219,8 +225,8 @@ test('saveBoard then load gives back the same board, written through a temp file
   const w = world()
   const [b] = boardWith('auto', ['npm test'])
   await saveBoard(w.$, b)
-  expect(w.files.has(`${BOARD}.tmp`)).toBe(false)
-  expect(w.calls).toContain(`mv -f ${BOARD}.tmp ${BOARD}`)
+  expect([...w.files.keys()].filter(p => p.startsWith(`${BOARD}.`) && p.endsWith('.tmp'))).toEqual([])
+  expect(w.calls.some(c => tmpMove(c, BOARD))).toBe(true)
   expect(await load(w.$)).toEqual(parseBoard(JSON.stringify(b)))
   expect((await load(w.$)).tasks[0]!.title).toBe('Do it')
 })
@@ -283,7 +289,7 @@ test('change() on a board.json that cannot be read refuses, keeps a copy, and ne
   expect(err).toMatch(/board\.json can't be read/)
   expect(ran).toBe(false)
   expect(w.files.get(BOARD)).toBe(text)
-  expect(w.files.has(`${BOARD}.tmp`)).toBe(false)
+  expect([...w.files.keys()].filter(p => p.startsWith(`${BOARD}.`) && p.endsWith('.tmp'))).toEqual([])
   const copies = [...w.files.entries()].filter(([p]) => p.startsWith(`${BOARD}.broken-`))
   expect(copies.map(([, t]) => t)).toEqual([text])
   expect(w.toasts.some(t => /board\.json can't be read/.test(t))).toBe(true)
@@ -943,7 +949,8 @@ test('archiving moves old done and dropped tasks to archive.json, written first,
   const { w, b } = await archiveWorld()
   expect(await archiveOld(w.$, T0)).toEqual(['T-1', 'T-2'])
   const moves = w.calls.filter(c => c.startsWith('mv '))
-  expect(moves).toEqual([`mv -f ${ARCHIVE}.tmp ${ARCHIVE}`, `mv -f ${BOARD}.tmp ${BOARD}`])
+  expect(moves.length).toBe(2)
+  expect(tmpMove(moves[0]!, ARCHIVE) && tmpMove(moves[1]!, BOARD)).toBe(true)
   const after = await load(w.$)
   expect(after.tasks.map(t => t.id)).toEqual(['T-3', 'T-4'])
   expect(after.next_id).toBe(b.next_id)
@@ -1077,7 +1084,7 @@ async function askedForFiles(files: string[]) {
   let saves = 0
   const fs = (w.$ as { fs: { write: (p: string, t: string) => Promise<void> } }).fs
   const write = fs.write
-  fs.write = async (p, text) => ((saves += p === `${BOARD}.tmp` ? 1 : 0), write(p, text))
+  fs.write = async (p, text) => ((saves += p.startsWith(`${BOARD}.`) && p.endsWith('.tmp') ? 1 : 0), write(p, text))
   return { w, saves: () => saves }
 }
 
@@ -1190,8 +1197,8 @@ test("a try's full report is saved to .symcc/reports through a temp file, with i
   expect(t.runs![0]!.report).toBe('.symcc/reports/T-1-try-1.md')
   // kept in full, not cut to the old 600 characters
   expect(w.files.get(REPORT1)).toBe(`${long.trim()}\n`)
-  expect(w.files.has(`${REPORT1}.tmp`)).toBe(false)
-  expect(w.calls).toContain(`mv -f ${REPORT1}.tmp ${REPORT1}`)
+  expect([...w.files.keys()].filter(p => p.startsWith(`${REPORT1}.`) && p.endsWith('.tmp'))).toEqual([])
+  expect(w.calls.some(c => tmpMove(c, REPORT1))).toBe(true)
   // the history line stays short and ends cleanly, never inside a word
   const line = t.history.find(l => l.startsWith('try 1: '))!
   const said = line.slice('try 1: '.length, line.indexOf(' → '))

@@ -1,7 +1,7 @@
 import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
 import { homeBranch } from './git'
 import { type $, S, workers, type PaneView, scoutState, updateView } from './state'
-import { path, locked, change, now, load } from './store'
+import { path, locked, change, now, load, safeWrite } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
 import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers } from './workers'
@@ -11,11 +11,7 @@ import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers } from './
 // It keeps .<name>/lead.json fresh; the others read and change the board but start nothing.
 
 export async function writeLead($: $, text: string) {
-  const file = path(S.N.leadFile)
-  const tmp = `${file}.${S.me.replace(/[^\w.-]/g, '_')}.tmp`
-  await $.fs.write(tmp, text)
-  const r = await $.process.run(['mv', '-f', tmp, file])
-  if (r.exitCode !== 0) throw new Error(`couldn't write ${S.N.leadFile}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+  await safeWrite($, path(S.N.leadFile), text, S.N.leadFile)
 }
 
 /**
