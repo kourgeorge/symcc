@@ -20,6 +20,18 @@ const ISO = '2026-11-13T00:00:00.000Z'
 // commit ids for the fake git: main (M1, M2), the worker's branch (H0 before its commit, H1 after, H2 after a merge of main), an older base (B0)
 const [M1, M2, H0, H1, H2, B0] = ['a1', 'a2', 'b0', 'b1', 'b2', 'c0'].map(x => x.repeat(20)) as [string, string, string, string, string, string]
 
+/** A path as git shows it without -z: names with a quote, backslash, control or non-ASCII character are quoted and escaped. */
+function quoted(p: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (!/["\\\u0000-\u001f\u007f-\uffff]/.test(p)) return p
+  let out = ''
+  for (const byte of new TextEncoder().encode(p)) {
+    const c = String.fromCharCode(byte)
+    out += c === '"' || c === '\\' ? '\\' + c : byte < 0x20 || byte >= 0x7f ? '\\' + byte.toString(8).padStart(3, '0') : c
+  }
+  return `"${out}"`
+}
+
 type Res = { exitCode: number; stdout: string; stderr: string }
 const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
 const fail = (stderr = '', exitCode = 1): Res => ({ exitCode, stdout: '', stderr })
@@ -77,7 +89,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     if (s === `rev-parse refs/heads/main`) return ok(git.main)
     if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return git.upToDate ? ok() : fail()
     if (a[0] === 'merge-base') return ok(git.upToDate ? git.main : B0)
-    if (a[0] === 'diff' && a.includes('--name-only')) return ok(git.changed.join(a.includes('-z') ? '\0' : '\n'))
+    // without -z, git quotes unusual names the way it does by default (core.quotePath): "docs/caf\303\251.md"
+    if (a[0] === 'diff' && a.includes('--name-only')) return ok(a.includes('-z') ? git.changed.join('\0') : git.changed.map(quoted).join('\n'))
     if (s === 'merge --abort') return ok()
     if (a[0] === 'merge') {
       if (git.conflict) return { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' }
@@ -303,6 +316,24 @@ test('checkAndMerge with no change at all merges nothing', async () => {
   expect(await checkAndMerge(w.$, t, WT, b, 'finish', made)).toEqual({ ok: false, detail: 'the worker made no change' })
   expect(made).toEqual([])
   expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge lets unusual file names inside the task pass the scope check', async () => {
+  const w = world({ changed: ['docs/café.md', 'docs/a"b.md'] })
+  const [b, t] = boardWith('auto', [], { files: ['docs/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.detail).not.toContain('outside the task')
+  expect(w.calls.some(c => c.includes('diff --name-only') && c.includes('-z'))).toBe(true)
+})
+
+test('checkAndMerge still refuses an unusual file name outside the task, and shows it readably', async () => {
+  const w = world({ changed: ['docs/café.md', 'src/b\u001b[31m"x.ts'] })
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('changed files outside the task (src/b?[31m"x.ts); allowed: docs/')
+  expect(r.detail).not.toContain('café')
+  expect(ranTests(w)).toEqual([])
 })
 
 test('checkAndMerge refuses a change to a file outside the task, before testing or merging', async () => {

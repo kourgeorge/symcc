@@ -59,7 +59,10 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   // Nothing to commit is fine (exit 1, HEAD unchanged); only a new HEAD counts as a commit of this try.
   if (c.exitCode === 0 && head !== before) made.push(head)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
-  const changed = (await gitOk($, ['diff', '--name-only', '--no-renames', `${base}..${head}`])).split('\n').filter(Boolean)
+  // -z: names come through as they are (without it git quotes and escapes unusual ones, e.g. "caf\303\251.md").
+  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
+  if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
+  const changed = d.stdout.split('\0').filter(Boolean)
   if (!changed.length) return { ok: false, detail: 'the worker made no change' }
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
