@@ -144,7 +144,6 @@ a wide enough terminal; if not, run `/symcc`. The status line starts with the mo
 **Troubleshooting**
 
 - **The panel doesn't open.** The terminal is too narrow. Make it wider, or run `/symcc`.
-- **"branch doesn't exist".** The branch work merges into (`target_branch`) is gone or has no commit. Make a commit, or tell the lead "merge into `main`".
 - **Tests fail in a worker's copy because packages are missing.** `node_modules/` is not copied. Say in the task to install them first (e.g. `npm ci`), or make the test command do it.
 
 ## Quick start
@@ -224,13 +223,12 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 
 Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
 The Settings tab (`c` in the panel) has one row per setting; Enter flips an on/off
-setting, opens a pick list for `mode`, `notify` and `target_branch`, or an edit box for numbers and
+setting, opens a pick list for `mode` and `notify`, or an edit box for numbers and
 `test_commands`. A value over its limit is cut to it, and the answer says so.
 
 | Setting | Default | Allowed | Meaning |
 |---|---|---|---|
 | `test_commands` | none | up to 5, joined with ` && ` | Shell commands that must pass before anything is merged |
-| `target_branch` | your branch | an existing local branch | Where finished work is merged |
 | `max_parallel` | 3 | 1–8 | How many workers at once |
 | `max_minutes` | 45 | 5–600 | A worker running longer is stopped |
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
@@ -263,8 +261,8 @@ runs only on demand. See [scouts](docs/guide.md#scouts). A task is `todo`, `doin
 `backlog` (parked until you move it to todo). See
 [a task's life](docs/guide.md#a-tasks-life).
 
-Work goes into the branch you had checked out when the board was made (say "merge into
-`develop`" to change it). More tips: [good to know](docs/guide.md#good-to-know).
+Each task merges into the branch you were on when you asked for it (tell the lead "merge T-3
+into `develop`" to move one task). More tips: [good to know](docs/guide.md#good-to-know).
 
 ### For developers
 

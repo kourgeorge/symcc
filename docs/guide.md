@@ -312,8 +312,8 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
-  `enabled` flip on/off; `mode`, `notify` and `target_branch` open a pick list (off / review
-  / auto; only the notify choices this computer can play; or your local branches); numbers and `test_commands` open an edit box (several test
+  `enabled` flip on/off; `mode` and `notify` open a pick list (off / review
+  / auto; only the notify choices this computer can play); numbers and `test_commands` open an edit box (several test
   commands are joined with ` && `; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
@@ -500,14 +500,12 @@ one `general` task: each extra task costs a worker run, a test run and a merge.
 
 ## Which branch work goes into
 
-- A new board merges into **the branch you had checked out** when the board was made.
-  (On a detached checkout it uses the repo's main branch: `main` or `master`.)
-- Change it by telling the lead, e.g. "merge into `develop`" (the `target_branch`
-  setting). Only a branch that exists is accepted.
-- If you switch to another branch, the board warns you:
-  `merging into main · you're on my-feature`.
-- If the branch doesn't exist, nothing starts and nothing is marked failed; the lead is
-  told once.
+- Each task merges into **the branch you were on** when the task was made. There is no
+  branch setting. (On a detached checkout it uses the repo's main branch: `main` or `master`.)
+- To move one task to another branch, tell the lead, e.g. "merge T-3 into `develop`"
+  (it changes the task's `merge_into`). Only a branch that exists is accepted.
+- If a task's branch was deleted, the task waits and asks you whether to merge into another
+  branch instead. Nothing is marked failed.
 
 ### A folder without git
 
@@ -527,7 +525,7 @@ gets its own git worktree. It checks this when a session starts and before a wor
   - makes a first commit of the current files, "Initial commit (by symcc)", leaving
     out (and ignoring) files that look like secrets (`.env`, `*.pem`, `id_rsa`) or
     are over 50 MB; the result says which;
-  - sets the target branch to `main`. It never pushes and adds no remote.
+  - names the branch `main`. It never pushes and adds no remote.
 
 ---
 
