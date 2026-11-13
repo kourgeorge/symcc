@@ -1,5 +1,5 @@
 import type { SymccScout, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME } from '../board'
 import { publish, refreshStatus } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now, oneAtATime, safeWrite } from './store'
@@ -132,6 +132,7 @@ export async function pausedNow($: $, st: SymccScout): Promise<boolean> {
  * stopped: it finishes and reports, and the next one doesn't start.
  */
 export async function setScoutPaused($: $, name: string, paused: boolean): Promise<string> {
+  if (!SCOUT_FILE_NAME.test(name)) return `"${name}" is not a scout name: use only letters, digits, - and _`
   const defs = await scheduleScouts($)
   const st = scoutState.get(name)
   if (!st || !defs.some(d => d.name === name)) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
@@ -270,6 +271,7 @@ export async function scheduleScouts($: $) {
 
 /** Runs scout `name` now (/<name>-scout <scout>, or "run now" in the panel); says what happened. */
 export async function runScoutNow($: $, name: string): Promise<string> {
+  if (!SCOUT_FILE_NAME.test(name)) return `"${name}" is not a scout name: use only letters, digits, - and _`
   const defs = await scheduleScouts($)
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
@@ -283,7 +285,9 @@ export async function runScoutNow($: $, name: string): Promise<string> {
 
 /** A scout file's text, or null when there is none (or it can't be read). */
 export async function readScoutFile($: $, scout: string): Promise<string | null> {
-  const file = path(scoutFile(scout, S.N.name))
+  const rel = safeScoutFile(scout, S.N.name)
+  if (rel === null) return null
+  const file = path(rel)
   return (await $.fs.exists(file).catch(() => false)) ? await $.fs.read(file).catch(() => null) : null
 }
 
@@ -320,6 +324,12 @@ export async function saveScout($: $) {
     $.ui.invalidate('ui.render')
     return
   }
+  const rel = safeScoutFile(d.scout, S.N.name)
+  if (rel === null) {
+    d.error = `"${d.scout}" is not a scout name: use only letters, digits, - and _`
+    $.ui.invalidate('ui.render')
+    return
+  }
   const old = await readScoutFile($, d.scout)
   if (d.isNew && old !== null) {
     d.error = `a scout named ${d.scout} already exists`
@@ -328,7 +338,7 @@ export async function saveScout($: $) {
   }
   const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model }, d.body)
   await $.process.run(['mkdir', '-p', path(S.N.scouts)])
-  await $.fs.write(path(scoutFile(d.scout, S.N.name)), text)
+  await $.fs.write(path(rel), text)
   S.draft = null
   // The same path as a Write to a scout file: reschedule, so the new timing applies now.
   await scheduleScouts($)
@@ -354,6 +364,11 @@ export async function leadScouts($: $, a: LeadScoutInput): Promise<string> {
   const action = typeof a.action === 'string' && a.action.trim() ? a.action.trim().toLowerCase() : 'list'
   const name = typeof a.name === 'string' ? a.name.trim() : ''
   if (action === 'pause' || action === 'resume') return 'only the owner pauses or resumes scouts'
+  // Every action that takes a name checks it before any file is touched: the name goes into a file path.
+  if (name || (action !== 'list' && action !== 'run')) {
+    const bad = leadScoutNameError(name)
+    if (bad) return action === 'add' || name ? bad : `say which scout to ${action} (name)`
+  }
   const defs = await scheduleScouts($)
   const have = () => `have: ${defs.map(d => d.name).join(', ') || 'none'}`
   const known = defs.some(d => d.name === name)
@@ -369,15 +384,13 @@ export async function leadScouts($: $, a: LeadScoutInput): Promise<string> {
     return runScoutNow($, name)
   }
   if (action !== 'add' && action !== 'edit' && action !== 'remove') return `unknown action "${action}": use list, add, edit, remove or run`
-  if (action === 'add') {
-    const bad = leadScoutNameError(name)
-    if (bad) return bad
-  } else if (!name) return `say which scout to ${action} (name)`
-  const file = scoutFile(name, S.N.name)
+  const file = safeScoutFile(name, S.N.name)
+  if (file === null) return leadScoutNameError(name) || `"${name}" is not a valid scout name`
   const old = await readScoutFile($, name)
   if (action === 'remove') {
     if (old === null && !known) return `no scout named ${name} (${have()})`
-    const r = await $.process.run(['rm', '-f', path(file)])
+    // An argument list (no shell), with "--" so the path can never be read as an option.
+    const r = await $.process.run(['rm', '-f', '--', path(file)])
     if (r.exitCode !== 0) return `could not remove ${file}: ${r.stderr || r.stdout || `exit ${r.exitCode}`}`
     await scheduleScouts($)
     await publish($, await load($))

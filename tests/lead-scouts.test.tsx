@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { parseScout } from '../hooks/board'
+import { parseScout, safeScoutFile, resolveRel } from '../hooks/board'
+import { runScoutNow, setScoutPaused } from '../hooks/plugin/scouts'
 
 /**
  * Fake scouts folder, scouts.json and board: `files` maps the end of a path to its text (null = no file).
@@ -8,6 +9,8 @@ import { parseScout } from '../hooks/board'
  */
 function setup(on: On, files: Record<string, string | null>) {
   const views: string[] = []
+  /** every path written or deleted, wherever it is */
+  const touched: string[] = []
   const key = (p: string) => p.slice(p.indexOf('/.symcc/') >= 0 && p.includes('/scouts/') ? p.indexOf('/.symcc/') : p.lastIndexOf('/'))
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : /\/scouts$/.test(e.path) ? { value: true } : next(e)))
@@ -16,6 +19,7 @@ function setup(on: On, files: Record<string, string | null>) {
   )
   on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
   on('fs.write', (_, e) => {
+    if (!e.path.endsWith('.tmp') && !/\/(scouts\.json|board\.json|board\.lock)$/.test(e.path)) touched.push(e.path)
     if (e.path.includes('/.symcc/scouts/')) files[key(e.path)] = String(e.text)
     return { value: undefined }
   })
@@ -26,11 +30,15 @@ function setup(on: On, files: Record<string, string | null>) {
   on('ui.status', () => ({ value: undefined }))
   on('process.run', (_, e) => {
     const argv = (e as { argv?: string[] }).argv ?? []
-    if (argv[0] === 'rm' && argv[2]?.includes('/.symcc/scouts/')) files[key(argv[2])] = null
+    if (argv[0] === 'rm') {
+      const p = argv[argv.length - 1]!
+      touched.push(p)
+      if (p.includes('/.symcc/scouts/')) files[key(p)] = null
+    }
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   mock.clock(on, { now: Date.now() })
-  return { views }
+  return { views, touched }
 }
 
 const call = async ($: { tool: { call(a: never): Promise<unknown> } }, args: Record<string, unknown>) => {
@@ -96,4 +104,40 @@ test('scouts run is refused for a paused scout; pause and resume are for the own
   expect(await call($, {})).toContain('bugs: every 30 min · paused')
   expect(await call($, { action: 'pause', name: 'bugs' })).toBe('only the owner pauses or resumes scouts')
   expect(await call($, { action: 'resume', name: 'bugs' })).toBe('only the owner pauses or resumes scouts')
+})
+
+test('scouts edit, remove, run and list refuse a name that could reach outside the scouts folder', async ($, on) => {
+  const readme = '# the project\n'
+  const files = { ...base(), '/README.md': readme, '/x.md': 'outside\n' }
+  const { touched } = setup(on, files)
+  for (const bad of ['../x', '../../README', 'a/b', '..', '../../.symcc/scouts/bugs', '/etc/passwd', 'a\\b', '.'])
+    for (const action of ['edit', 'remove', 'run', 'list']) {
+      const out = await call($, { action, name: bad, every_minutes: 5, prompt: 'Overwrite.' })
+      expect(out).toContain('not a valid scout name')
+    }
+  expect(files['/README.md']).toBe(readme)
+  expect(files['/x.md']).toBe('outside\n')
+  expect(files['/.symcc/scouts/bugs.md']).toContain('Look for crashes.')
+  expect(touched).toEqual([])
+  // valid names still work
+  expect(await call($, { action: 'list', name: 'bugs' })).toContain('Look for crashes.')
+  expect(await call($, { action: 'edit', name: 'bugs', prompt: 'Look for hangs.' })).toContain('saved scout bugs')
+  expect(await call($, { action: 'remove', name: 'bugs' })).toContain('removed scout bugs')
+  expect(touched.every(p => p.includes('/.symcc/scouts/bugs.md'))).toBe(true)
+  expect(touched.length).toBe(2)
+  expect(files['/README.md']).toBe(readme)
+})
+
+test('the scout file path is refused unless it is directly inside the scouts folder', () => {
+  expect(safeScoutFile('bugs')).toBe('.symcc/scouts/bugs.md')
+  expect(safeScoutFile('My_Scout-2')).toBe('.symcc/scouts/My_Scout-2.md')
+  for (const bad of ['../x', '../../README', 'a/b', '..', '.', '', 'a\\b', '/etc/passwd', 'a b', 'x'.repeat(65)]) expect(safeScoutFile(bad)).toBeNull()
+  expect(resolveRel('.symcc/scouts/../../README.md')).toBe('README.md')
+  expect(resolveRel('a\\..\\..\\b')).toBe('../b')
+})
+
+test("the owner's /symcc-scout refuses a name that is not a scout name", async ($, on) => {
+  setup(on, base())
+  expect(await runScoutNow($ as never, '../../README')).toContain('is not a scout name')
+  expect(await setScoutPaused($ as never, 'a/b', true)).toContain('is not a scout name')
 })

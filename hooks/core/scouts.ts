@@ -347,6 +347,33 @@ export const sortScouts = <S extends SymccScout>(scouts: S[]): S[] => [...scouts
 /** A scout's file in the project: ".<plugin name>/scouts/<scout>.md". */
 export const scoutFile = (scout: string, name: string = DEFAULT_NAME) => `${namesFor(name).scouts}/${scout}.md`
 
+/** A scout name that is safe to put in a file path: letters, digits, - and _ only (no dots, slashes or spaces), 1 to 64 long. */
+export const SCOUT_FILE_NAME = /^[A-Za-z0-9_-]{1,64}$/
+
+/** `rel` with "." and ".." parts worked out and doubled or backward slashes made single forward ones. ".." above the start stays as "..". */
+export function resolveRel(rel: string): string {
+  const out: string[] = []
+  for (const part of rel.replace(/\\/g, '/').split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..' && out.length && out[out.length - 1] !== '..') out.pop()
+    else out.push(part)
+  }
+  return `${rel.startsWith('/') ? '/' : ''}${out.join('/')}`
+}
+
+/**
+ * The scout's file (as scoutFile), or null when it would not be a file directly inside the scouts folder:
+ * a bad name ("..", "a/b", "../../README", ...) or a path that, once resolved, lands anywhere else.
+ * Use this, not scoutFile, before reading, writing or deleting a scout file.
+ */
+export function safeScoutFile(scout: string, name: string = DEFAULT_NAME): string | null {
+  if (typeof scout !== 'string' || !SCOUT_FILE_NAME.test(scout)) return null
+  const dir = resolveRel(namesFor(name).scouts)
+  const file = resolveRel(scoutFile(scout, name))
+  if (!file.startsWith(`${dir}/`) || file.slice(dir.length + 1).includes('/')) return null
+  return file
+}
+
 /** A scout's last report for the panel: "nothing found" when empty (or NOTHING), else its text cut to `n` characters. */
 export function scoutReport(text: string | undefined, n = 800): string {
   const s = String(text ?? '').trim()
