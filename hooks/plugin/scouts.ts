@@ -235,7 +235,9 @@ export async function scheduleScouts($: $) {
   // after a restart the map is empty: take each scout's last run and report from scouts.json
   const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory($) : {}
   let soonCount = 0
-  const soon = () => Date.now() + SCOUT_SOON_MS + SCOUT_SPREAD_MS * soonCount++
+  // one start time for all of them, so the spacing between scouts is exactly SPREAD_MS
+  const startedAt = Date.now()
+  const soon = () => startedAt + SCOUT_SOON_MS + SCOUT_SPREAD_MS * soonCount++
   for (const s of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
     const known = scoutState.get(s.name)
     const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = known ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
