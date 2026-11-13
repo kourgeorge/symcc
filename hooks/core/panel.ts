@@ -204,7 +204,6 @@ export const listKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
   { key: '↑↓', word: 'move' },
   { key: 't s c', word: 'views' },
-  { key: 'Esc', word: 'close' },
 ]
 
 /** The view keys under the scouts and settings pages; `enter` adds "Enter opens" first. */
@@ -213,7 +212,6 @@ export const viewKeys = (enter = true): KeyHint[] => [
   { key: 't', word: 'tasks' },
   { key: 's', word: 'scouts' },
   { key: 'c', word: 'settings' },
-  { key: 'Esc', word: 'closes' },
 ]
 
 /** The keys at the bottom of a task's page, the ones that matter most for its state first; "↑↓ scroll" and

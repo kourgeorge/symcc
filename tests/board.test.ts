@@ -2095,7 +2095,7 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   // while the scout runs there is no "r run now" (like the button)
   expect(words(scoutKeys(false, true))).toEqual(['e edit', 'p pause', '↑↓ scroll', 'b back'])
   expect(words(scoutListKeys())).toEqual(['Enter open', 't s c views', 'b back'])
-  expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings', 'Esc closes'])
+  expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings'])
   const all = [taskKeys('review', true), taskKeys('backlog'), taskKeys('todo', true), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
   for (const w of [30, 50, 80])
     for (const hs of all) {
@@ -2109,7 +2109,7 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(hintLines(taskKeys('review', true), 80).map(hintLineText)).toEqual(['a approve · x reject · d show changes · w watch worker · ↑↓ scroll · b back'])
   expect(hintLines(taskKeys('review', true), 30).map(hintLineText)).toEqual(['a approve · x reject', 'd show changes', 'w watch worker · ↑↓ scroll', 'b back'])
   // the list only offers keys that work there: never a or x
-  expect(words(listKeys())).toEqual(['Enter open', '↑↓ move', 't s c views', 'Esc close'])
+  expect(words(listKeys())).toEqual(['Enter open', '↑↓ move', 't s c views'])
   expect(listKeys().some(h => h.key === 'a' || h.key === 'x')).toBe(false)
 })
 

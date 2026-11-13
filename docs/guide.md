@@ -270,8 +270,8 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   e.g. `⏵ auto · 1/3 workers · 1 doing · 1 to do · 2 scouts (next: gaps-bot in 38m)`, and under
   it the tasks that need you or are running. When narrow, the `(next: …)` part goes first,
   then the scouts.
-- **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task, Esc to
-  close. An open task shows everything about it, with buttons to pause, resume, retry,
+- **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task. An
+  open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
 - **Nothing in the panel needs Esc.** Esc in a text box or a pick list usually just gives
