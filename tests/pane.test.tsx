@@ -908,7 +908,7 @@ test('while symcc is off its tools answer that it is off and leave the board alo
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
 
-test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
+test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
   const now = Date.now()
   const iso = (m: number) => new Date(now + m * 60_000).toISOString()
   const tasks = [
@@ -924,12 +924,19 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
   for (const w of [40, 60, 100]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    // the strip sits right above the strong rule; the next scout only when it fits
-    const strip = texts.findIndex(t => /^symcc · review · 2\/3 workers · 2 scouts/.test(t))
+    // the strip is the line right under the banner's counts line, above the mode line and the rule; it leaves
+    // out the name and mode (the banner shows them) and the next scout goes first when it does not fit
+    const strip = texts.findIndex(t => /^2\/3 workers · 2 scouts/.test(t))
     expect(strip).toBeGreaterThan(-1)
-    expect(/^━+$/.test(texts[strip + 1] ?? '')).toBe(true)
+    const counts = texts.findIndex(t => /^2 doing · /.test(t))
+    expect(counts).toBeGreaterThan(-1)
+    expect(counts).toBeLessThan(strip)
+    for (const t of texts.slice(counts + 1, strip)) expect(texts[counts]).toContain(t)
+    expect(texts[strip + 1]).toMatch(/review/)
+    expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(strip)
+    expect(texts.filter(t => /workers · \d+ scout/.test(t)).length).toBe(1)
     expect(texts[strip]!.length).toBeLessThanOrEqual(w)
-    if (w >= 100) expect(texts[strip]).toBe('symcc · review · 2/3 workers · 2 scouts (next: secrets in 38m)')
+    expect(texts[strip]).toBe(w >= 60 ? '2/3 workers · 2 scouts (next: secrets in 38m)' : '2/3 workers · 2 scouts')
     // every task row fits the panel; the hint is whole and fits too
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
@@ -966,7 +973,7 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
 
 const STRIP_CASES = [
   ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
-  ['the board is in mode off', { mode: 'off' }, /^symcc · off · 0\/3 workers · 1 scout$/],
+  ['the board is in mode off', { mode: 'off' }, /^0\/3 workers · 1 scout$/],
 ] as const
 for (const [when, extra, want] of STRIP_CASES)
   test(`the status strip when ${when}: a warning, and no next scout`, async ($, on) => {

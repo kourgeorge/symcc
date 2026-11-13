@@ -1,7 +1,7 @@
 // What every page of the board panel shares: the view it shows, the banner, the tabs, key hints and text styles.
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, type KeyHint, hintLines, packRows } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, bannerStrip, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
 import { tellLead } from '../tell'
@@ -52,6 +52,10 @@ export async function paneParts($: $, e: PaneEvent) {
           ))}
         </Text>
       )),
+      // the status strip, right under the counts line: workers and scouts (the banner shows the name and mode)
+      <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
+        {bannerStrip({ ...v, mode }, Date.now(), width, S.N.name)}
+      </Text>,
       <Box key="banner-mode" flexDirection="row">
         <Text wrap="truncate">
           <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}

@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, statusStrip, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
+import { localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
@@ -72,9 +72,6 @@ export function listPage($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column">
       {[...banner(), tabs()]}
-      <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
-        {statusStrip({ ...v, mode }, nowMs, width, S.N.name)}
-      </Text>
       <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>
       {list.map((r, i) => {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>
