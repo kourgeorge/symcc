@@ -38,7 +38,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       <Box key={`setting-box-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
         <Input
           key="setting-edit"
-          label={`${name}: `}
+          label={name}
           value={ed.value}
           placeholder={info.kind === 'commands' ? 'e.g. npm test && npm run lint (empty: none)' : `a whole number, ${info.range}`}
           autoFocus

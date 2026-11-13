@@ -79,7 +79,10 @@ test('f opens the search; typing shows only matching tasks in every group, with 
   expect((await ui.find({ key: 'search-open' }))?.props.hotkey).toBe('f')
   expect(await ui.find({ key: 'search' })).toBeUndefined()
   await ui.press({ key: 'search-open' })
-  expect(await ui.find({ key: 'search' })).toBeDefined()
+  // the terminal draws "label: text" and "⏎ <submitLabel>": one colon ("search: notify"), and one Enter hint
+  const box = await ui.find({ key: 'search' })
+  expect(`${box?.props.label}: notify`).toBe('search: notify')
+  expect(box?.props.submitLabel).toBe('keep')
   await ui.input({ key: 'search', text: 'notify', kind: 'change' })
   // matches from to do, the folded Backlog and an old Done day, all shown open; the rest hidden
   for (const id of ['T-1', 'T-3', 'T-4']) expect(await ui.find({ key: id })).toBeDefined()
@@ -88,7 +91,7 @@ test('f opens the search; typing shows only matching tasks in every group, with 
   expect((await ui.find({ key: 'day:backlog' }))?.text).toMatch(/^  ▾ Backlog/)
   // archived tasks are not searched, so the Done row has no "(+50 archived)"
   expect((await ui.find({ key: 'day:done' }))?.text).not.toMatch(/archived/)
-  expect(await ui.find({ type: 'Text', text: /^3 of 5 tasks · Enter keeps it · Esc clears$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^3 of 5 tasks · Esc clears$/ })).toBeDefined()
   // Enter keeps the filter and closes the box
   await ui.input({ key: 'search', text: 'notify' })
   expect(await ui.find({ key: 'search' })).toBeUndefined()

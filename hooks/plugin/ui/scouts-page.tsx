@@ -118,7 +118,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
       <Box flexDirection="column">
         <Input
           key="scout-new-name"
-          label="New scout's name: "
+          label="New scout's name"
           placeholder="letters, digits, - and _"
           value={S.naming.name}
           autoFocus

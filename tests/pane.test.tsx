@@ -602,6 +602,9 @@ test('"New scout" asks for a name, refuses a bad or taken one, then opens the ed
   stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs')], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'scout-new' })
+  // the terminal draws "label: text", so the label itself has no separator: one colon on screen
+  const box = await ui.find({ key: 'scout-new-name' })
+  expect(`${box?.props.label}: docs`).toBe("New scout's name: docs")
   await ui.input({ key: 'scout-new-name', text: 'bugs' })
   expect(await ui.find({ type: 'Text', text: /already exists/ })).toBeDefined()
   await ui.input({ key: 'scout-new-name', text: 'bad name' })

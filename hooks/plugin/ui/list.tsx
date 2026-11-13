@@ -93,14 +93,15 @@ export function listPage($: $, pane: PaneParts) {
     ? [
         <Input
           key="search"
-          label="search: "
+          label="search"
+          submitLabel="keep"
           placeholder="words to look for"
           value={search!.text}
           autoFocus
           onInput={value => void ((S.search = { text: value, typing: true }), redraw())}
           onSubmit={value => void ((S.search = value.trim() ? { text: value.trim(), typing: false } : null), redraw())}
         />,
-        <Text key="search-count" wrap="truncate" color={C('subtle')}>{`${count} · Enter keeps it · Esc clears`}</Text>,
+        <Text key="search-count" wrap="truncate" color={C('subtle')}>{`${count} · Esc clears`}</Text>,
       ]
     : filtering
       ? [<Text key="search-line" wrap="truncate" bold color={C('warning')}>{searchLine(query, matching.length, v.tasks.length)}</Text>]

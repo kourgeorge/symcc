@@ -36,7 +36,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       <Box flexDirection="column" borderStyle="round" borderColor={C('error')} paddingX={1}>
         <Input
           key="reject-reason"
-          label="Why reject it? "
+          label="Reason to reject"
           placeholder="what to change, for the next worker; Enter sends it back"
           value={S.rejecting.reason}
           autoFocus
@@ -287,7 +287,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               choices.map((c, i) => <Button key={`choice-${i + 1}`} label={`${i + 1} ${c}`} hotkey={i < 9 ? String(i + 1) : undefined} autoFocus={i === 0 && !typing ? true : undefined} onPress={choicePress(i)} />),
               'answer-buttons',
             )}
-          {typing && <Input key="answer" label="Your answer: " placeholder="type and press Enter" autoFocus onSubmit={value => sendAnswer(value)()} />}
+          {typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => sendAnswer(value)()} />}
         </Box>
       )}
 
