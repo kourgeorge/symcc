@@ -64,9 +64,9 @@ export function stoppedLine(t: Pick<SymccTask, 'role' | 'attempts'>, why: string
 /**
  * The history lines of a change to task `t` (as it was) with `patch`: the restart line when its
  * worker was stopped (`wasDoing`), "files widened" when files were added, "waits on changed"
- * when its after list changed, and the owner's answer.
+ * when its after list changed, the owner's answer and the lead's added note.
  */
-export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string): string[] {
+export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string, note?: string): string[] {
   const lines: string[] = []
   if (wasDoing) lines.push(changeRestartLine(t, changedFields(t, patch)))
   const widened = filesWidenedLine(t.files ?? [], patch.files)
@@ -74,6 +74,25 @@ export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & 
   const waits = afterChangedLine(t.after ?? [], patch.after)
   if (waits) lines.push(waits)
   if (answer?.trim()) lines.push(ownerAnsweredLine(answer))
+  if (note?.trim()) lines.push(noteAddedLine(note))
   if (patch.merge_into !== undefined && patch.merge_into !== (t.merge_into ?? 'main')) lines.push(`now merges into ${patch.merge_into} (was ${t.merge_into ?? 'main'})`)
   return lines
+}
+
+/** "Note (lead, 2026-11-13): <note>" added to `details` as a new paragraph; the old text stays as it was. */
+export function addDetailsText(details: string, note: string, day: string): string {
+  const para = `Note (lead${day ? `, ${day}` : ''}): ${note.trim()}`
+  return details.trim() ? `${details.trimEnd()}\n\n${para}` : para
+}
+
+/** 'the lead added a note: “...”', cut to ANSWER_LINE_CHARS. */
+export function noteAddedLine(note: string): string {
+  const a = note.trim().replace(/\s+/g, ' ')
+  return `the lead added a note: “${a.length > ANSWER_LINE_CHARS ? `${a.slice(0, ANSWER_LINE_CHARS - 1)}…` : a}”`
+}
+
+/** Why a change that gives both `details` (a full rewrite) and `add_details` (a note added) is refused; null when it is fine. */
+export function detailsBothRefusal(a: { details?: unknown; add_details?: unknown }): string | null {
+  const given = (v: unknown) => typeof v === 'string' && v.trim() !== ''
+  return given(a.details) && given(a.add_details) ? 'Nothing changed: give either details (rewrites the whole text) or add_details (adds a note to it), not both. To rewrite and add a note, put the note at the end of the new details.' : null
 }

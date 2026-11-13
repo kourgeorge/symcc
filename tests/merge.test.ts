@@ -1165,6 +1165,27 @@ test("the owner's answer to a waiting task goes into its details and its history
   expect(t.history.some(l => l.includes('restarted'))).toBe(false)
 })
 
+test('change add_details adds a note to the details, keeps the old text and writes a history line', async () => {
+  const w = world()
+  const [b] = boardWith('review')
+  await saveBoard(w.$, b)
+  const before = find(b, 'T-1')!
+  const said = await runTool(w.$, 'change', { task: 'T-1', add_details: 'also update the README' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.details.startsWith(before.details.trimEnd())).toBe(true)
+  expect(t.details).toMatch(/\n\nNote \(lead, \d{4}-\d\d-\d\d\): also update the README$/)
+  expect(t.history).toContain('the lead added a note: “also update the README”')
+  if (before.status === 'doing') expect(String(said)).toMatch(/restarting/)
+})
+
+test('change with both details and add_details is refused and changes nothing', async () => {
+  const w = world()
+  const [b] = boardWith('review')
+  await saveBoard(w.$, b)
+  await expect(runTool(w.$, 'change', { task: 'T-1', details: 'new', add_details: 'note' })).rejects.toThrow(/either details .* or add_details/)
+  expect(find(await load(w.$), 'T-1')!.details).toBe(find(b, 'T-1')!.details)
+})
+
 test('pause of a running task and resume both leave a history line', async () => {
   const w = world()
   const [b] = boardWith('review')

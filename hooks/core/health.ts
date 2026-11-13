@@ -9,8 +9,11 @@
 //    other in a loop (T-1 after T-2 after T-1).
 // 2. Starving: a todo task that could start, or waits only on tasks added after it, and either
 //    its after list was changed STARVE_AFTER_CHANGES or more times (history lines "waits on
-//    changed: ..."), or it was made more than STARVE_MS ago and STARVE_NEWER or more tasks made
-//    after it have already started.
+//    changed: ..."), or it has waited more than STARVE_MS and STARVE_NEWER or more tasks made
+//    after it have already started. A task that could start counts its wait from when it became
+//    ready (its last after task finished, or it was added or changed, whichever is later), and is
+//    not told about if it became ready within the last CHECK_MS or the pump is about to start it
+//    (it is among the first ready tasks that fit in the free worker slots).
 // 3. Too serial: a chain of SERIAL_CHAIN or more todo tasks, each waiting on the one before it,
 //    where neighbours share no files (by their files lists), so they could run side by side.
 //    A task with no files list may change anything, so it shares files with every task.
@@ -23,10 +26,13 @@ import type { Board, BoardTask } from './board-file'
 import { find } from './board-file'
 import { AFTER_CHANGED } from './history'
 import { num } from './text'
+import { ready } from './task'
 
 export const STARVE_AFTER_CHANGES = 3
 export const STARVE_MS = 2 * 60 * 60_000
 export const STARVE_NEWER = 2
+/** how often the regular check runs: a task that became ready within this time is not told about yet */
+export const CHECK_MS = 2 * 60_000
 export const SERIAL_CHAIN = 3
 export const OWNER_IDLE_MS = 60 * 60_000
 
@@ -115,17 +121,33 @@ function loops(b: Board): HealthFinding[] {
   return out
 }
 
+/** When todo task `t` became ready: the latest of when it was added or last changed and when its after tasks finished. */
+function readyAt(b: Board, t: BoardTask): number {
+  const times = [t.created_at, t.updated_at, ...t.after.map(a => find(b, a)?.updated_at)].map(x => Date.parse(x || '')).filter(Number.isFinite)
+  return times.length ? Math.max(...times) : NaN
+}
+
+/** The ready tasks the pump starts next: the first ones (by its order) that fit in the free worker slots. */
+function aboutToStart(b: Board): Set<string> {
+  const free = Math.max(0, (b.max_parallel ?? 0) - b.tasks.filter(t => t.status === 'doing').length)
+  return new Set(ready(b).slice(0, free).map(t => t.id))
+}
+
 const started = (t: BoardTask) => !!t.runs?.length || ['doing', 'review', 'done'].includes(t.status)
 
 function starving(b: Board, nowMs: number): HealthFinding[] {
   const out: HealthFinding[] = []
+  const next = aboutToStart(b)
   for (const t of b.tasks.filter(x => x.status === 'todo').sort(byId)) {
     const blockers = t.after.map(a => find(b, a)).filter((d): d is BoardTask => !!d && d.status !== 'done')
     if (t.after.some(a => !find(b, a) && !(b.archived_done ?? []).includes(a))) continue // that is "stuck"
     if (!blockers.every(d => num(d.id) > num(t.id))) continue // it waits on an older task: fair
     const changes = afterChanges(t)
     const newer = b.tasks.filter(x => num(x.id) > num(t.id) && started(x)).length
-    const age = nowMs - Date.parse(t.created_at || '')
+    // could start: its wait counts from when it became ready; just ready, or about to start, is fine
+    const since = blockers.length ? Date.parse(t.created_at || '') : readyAt(b, t)
+    if (!blockers.length && (nowMs - since < CHECK_MS || next.has(t.id))) continue
+    const age = nowMs - since
     const why = changes >= STARVE_AFTER_CHANGES ? `its after list was changed ${changes} times` : age > STARVE_MS && newer >= STARVE_NEWER ? `it has waited ${Math.floor(age / 3_600_000)}+ hours while ${newer} newer tasks already started` : ''
     if (!why) continue
     const on = blockers.length ? `waits only on newer tasks (${blockers.map(d => d.id).join(', ')})` : 'could start but has not'
