@@ -1,15 +1,12 @@
-// The Tasks view of the board panel: sections, rows, the status strip and key hints.
+// The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { DEFAULT_NAME } from '../name'
 import { emptyBoard, STATUS_WORD } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { originOf } from './origin'
 import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
-import { PLAN_NOTE } from './plan'
 import { fmtDuration, runMs } from './runs'
-import { offStatusLine } from './settings'
 import { num } from './text'
 
 /** A section's header in the board panel: "▸ Done (42)" folded, "▾ Done (42)" open; with `opened` left out (a section
@@ -46,28 +43,28 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
   return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
 }
 
-type StripBoard = { mode: SymccMode; enabled?: boolean; plan_mode?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+/** What the workers and scouts part of the line above the prompt needs. Busy workers are the tasks being worked on. */
+export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
-/** The one-line status strip: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
- *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
- *  turned off shows "symcc off · /symcc-on". Busy workers are the tasks being worked on. */
-export function statusStrip(v: StripBoard, nowMs: number, width = Infinity, name: string = DEFAULT_NAME): string {
-  if (v.enabled === false) return offStatusLine(name)
-  return bannerStrip(v, nowMs, width - `${name} · ${v.mode} · `.length, name, `${name} · ${v.mode} · `)
+/** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers" (left out while none run:
+ *  "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
+ *  "running: gaps-bot" (no "next" in plan mode or board mode off, as no scout starts then). */
+export function crewParts(c: CrewBoard, nowMs: number): { workers: string; scouts: string; next: string } {
+  const busy = c.tasks.filter(t => t.status === 'doing').length
+  const n = c.scouts.length
+  const running = c.scouts.find(s => s.running)
+  const next = !n ? '' : running ? `running: ${running.name}` : c.plan_mode || c.mode === 'off' ? '' : nextScoutText(c.scouts, nowMs)
+  return { workers: busy ? `${busy}/${c.max_parallel ?? emptyBoard().max_parallel} workers` : '', scouts: !n ? '' : n === 1 ? '1 scout' : `${n} scouts`, next }
 }
 
-/** The status strip as the board panel's banner shows it, right under the counts line: the name and mode are left
- *  out (the banner already shows them), so "1/3 workers · 4 scouts (next: secrets in 38m)". The next scout goes
- *  first when it does not fit in `width`; a plugin that is turned off shows "symcc off · /symcc-on". */
-export function bannerStrip(v: StripBoard, nowMs: number, width = Infinity, name: string = DEFAULT_NAME, lead = ''): string {
-  if (v.enabled === false) return offStatusLine(name)
-  const busy = v.tasks.filter(t => t.status === 'doing').length
-  const n = v.scouts.length
-  const base = [`${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
-  if (v.plan_mode) return lead + `${base} · ${PLAN_NOTE}` // no scout starts in plan mode, so no "next"
-  const next = v.mode === 'off' ? '' : nextScoutText(v.scouts, nowMs)
-  const full = next ? `${base} (${next})` : base
-  return lead + (full.length <= width ? full : base)
+/** Builds a line with the workers and scouts in it (`build` gets the workers text and the scouts text) so it fits in
+ *  `width` columns: the full line, else without the "(next: …)" part, else without the scouts. When even that is
+ *  too long it is given back as it is (Claude Code cuts it). No `crew`: the line without them. */
+export function withCrew(build: (workers: string, scouts: string) => string, crew: CrewBoard | undefined, nowMs: number, width = Infinity): string {
+  if (!crew) return build('', '')
+  const p = crewParts(crew, nowMs)
+  const tries = [build(p.workers, p.next ? `${p.scouts} (${p.next})` : p.scouts), build(p.workers, p.scouts), build(p.workers, '')]
+  return tries.find(t => t.length <= width) ?? tries[tries.length - 1]!
 }
 
 /** The short status column of a task row in the board list: the time of the running try ("4m") for a task being

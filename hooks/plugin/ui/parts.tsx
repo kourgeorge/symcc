@@ -1,7 +1,7 @@
 // What every page of the board panel shares: the view it shows, the banner, the tabs, key hints and text styles.
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, bannerStrip, type KeyHint, hintLines, packRows } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
 import { noteForLead, brief } from '../tell'
@@ -45,7 +45,7 @@ export async function paneParts($: $, e: PaneEvent) {
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
-      ...bannerLines(facts, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name).map((l, i) => (
+      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
           {l.art ? <Text color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
           {l.parts.map(p => (
@@ -53,10 +53,6 @@ export async function paneParts($: $, e: PaneEvent) {
           ))}
         </Text>
       )),
-      // the status strip, right under the counts line: workers and scouts (the banner shows the name and mode)
-      <Text key="status-strip" wrap="truncate" color={C(v.enabled === false || mode === 'off' ? 'warning' : 'inactive')}>
-        {bannerStrip({ ...v, mode }, Date.now(), width, S.N.name)}
-      </Text>,
       ...(v.git_state === 'no-repo' || v.git_state === 'no-commits'
         ? [
             <Box key="banner-git" flexDirection="row">

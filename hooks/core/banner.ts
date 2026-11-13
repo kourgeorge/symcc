@@ -9,6 +9,8 @@ import { roleMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
+import { type CrewBoard, withCrew } from './panel'
+import { offStatusLine } from './settings'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
 export function folderName(path: string): string {
@@ -32,11 +34,6 @@ export const boardTitle = (root: string, name: string = DEFAULT_NAME) => `${boar
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
-/**
- * The status line text. Claude Code already puts the plugin name in front, so this starts with
- * just the folder: "app · 1 doing · 2 to do", "app (driven by another session) · empty".
- * undefined when there is nothing to say (the status is cleared).
- */
 /** At most this many task IDs are listed for one state in the status line; the rest show as "+N". */
 export const STATUS_IDS = 3
 
@@ -46,13 +43,21 @@ function idList(ids: string[]): string {
   return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
 }
 
+/** About how wide the line above the prompt may be: Claude Code puts "<name>: " (and its own mark) in front. */
+export const STATUS_WIDTH = 80
+/** The room the status text has in STATUS_WIDTH after Claude Code's "⚠ <name>: " in front of it. */
+export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ ${name}: `.length
+
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "⏸ review merge · T-26, T-27 doing · 1 to review (T-5) · 2 to do".
+ * The short status text Claude Code shows after "symcc:", e.g. "⏵ auto · 1/3 workers · T-26 doing · 1 to do · 5 scouts (next: gaps-bot in 1h 00m)".
  * It starts with the board mode (modeLabel: "⏹ off", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
+ * With `crew` (see withCrew): the busy workers right after the mode (left out while none run) and the scouts after the
+ * counts; when the text is wider than `width`, the "(next: …)" part goes first, then the scouts.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
- * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note.
+ * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏹ off").
+ * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
  */
-export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false): string | undefined {
+export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
   const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   // in plan mode the line says so first (see core/plan.ts)
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
@@ -60,6 +65,7 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, dri
   const other = driving ? '' : ' (driven by another session)'
   const m = modeOf({ mode })
   const label = modeLabel(m)
+  const c = crew && { ...crew, mode: m, plan_mode: plan }
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
     const parts = [
@@ -70,12 +76,13 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, dri
     ].filter((x): x is string => !!x)
     // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
     const parked = ids('backlog').length
-    return join([label, (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other, branch_note])
+    const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
+    return withCrew((w, s) => join([label, w, counts, s, branch_note]), c, nowMs, width)
   }
-  if (!driving) return join([label, 'empty' + other, branch_note])
-  // an empty board in mode auto stays quiet, so a fresh project shows nothing
-  if (m !== 'auto') return join([label, branch_note])
-  return join([branch_note]) || undefined
+  if (!driving) return withCrew((w, s) => join([label, w, 'empty' + other, s, branch_note]), c, nowMs, width)
+  // an empty board in mode auto stays quiet (unless there are scouts), so a fresh project shows nothing
+  if (m !== 'auto') return withCrew((w, s) => join([label, w, s, branch_note]), c, nowMs, width)
+  return withCrew((w, s) => join([s && label, w, s, branch_note]), c, nowMs, width) || undefined
 }
 
 // ---------------- the banner at the top of the board panel ----------------
@@ -88,8 +95,9 @@ export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
 /** One banner line: the drawing part on the left ('' or spaces when none) and the text beside it. */
 export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
-/** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
+/** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name.
+ *  `enabled` false (symcc turned off) or `mode` 'off' puts a warning on the first line, after the name. */
+export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
@@ -114,7 +122,7 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
 }
 
 /**
- * The banner lines for the board panel: the name and folder, where and who drives, the
+ * The banner lines for the board panel: the name and folder (and a warning when nothing starts), where and who drives, the
  * settings, and (when there are tasks) the counts and total. With `width` of at least
  * BANNER_NARROW the drawing sits on the left; narrower, only the text, cut to fit.
  * The separator under it is `bannerRule(width)`.
@@ -126,7 +134,13 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const join = (groups: BannerPart[][]) => groups.flatMap((g, i) => (i ? [sep, ...g] : g))
   const fact = (text: string): BannerPart[] => [{ text, tone: 'plain' }]
   const folder = folderName(root)
-  const l1: BannerPart[] = [{ text: namesFor(name).boardName, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
+  // nothing starts while symcc is turned off or the board is in mode off: say so on the first line, in the warning color
+  const off = b.enabled === false ? offStatusLine(name) : b.mode && modeOf({ mode: b.mode }) === 'off' ? `${modeLabel('off')}: nothing starts` : ''
+  const l1: BannerPart[] = [
+    { text: namesFor(name).boardName, tone: 'accent', bold: true },
+    ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : []),
+    ...(off ? [sep, { text: off, tone: 'warning' as const }] : []),
+  ]
   const l2 = join([
     ...(root ? [fact(shortHome(root, home))] : []),
     b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : fact(b.target_branch),

@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { addTask, emptyBoard, ready, scoutWhyNot, statusLine, statusStrip, bannerStrip, emptyPlan, inPlan, notePlan, planAdded, planAddText, planBacklog, planBandText, planEndText, planFromAttachment, planFromMode, PLAN_NOTE, type PlanState } from '../hooks/board'
+import { addTask, emptyBoard, ready, scoutWhyNot, statusLine, emptyPlan, inPlan, notePlan, planAdded, planAddText, planBacklog, planBandText, planEndText, planFromAttachment, planFromMode, PLAN_NOTE, type PlanState } from '../hooks/board'
 
 const T = '2026-11-13T00:00:00.000Z'
 const W = { why: 'a test' }
@@ -39,7 +39,7 @@ test('unknown mode behaves as today: add is not moved to the backlog, scouts may
   expect(notePlan(p, null)).toEqual({ plan: p, left: null, changed: false })
   const tasks = [{ id: 'T-1', status: 'doing' as const }]
   expect(statusLine({ tasks }, true, '', 'auto', inPlan(p))).not.toContain(PLAN_NOTE)
-  expect(statusStrip({ mode: 'auto', plan_mode: inPlan(p), tasks, scouts: [] }, 0)).not.toContain(PLAN_NOTE)
+  expect(statusLine({ tasks }, true, '', 'auto', inPlan(p), { max_parallel: 3, tasks, scouts: [] }, 0)).not.toContain(PLAN_NOTE)
 })
 
 test('scouts skip in plan mode (timer and run now go through scoutWhyNot); the other reasons still come first', () => {
@@ -48,7 +48,7 @@ test('scouts skip in plan mode (timer and run now go through scoutWhyNot); the o
   expect(scoutWhyNot({ name: 's', running: false }, { ...GO, plan: false })).toBe('')
 })
 
-test('the band, the status line and the status strip say "plan mode: nothing starts"; running workers keep going', () => {
+test('the band and the status line say "plan mode: nothing starts"; running workers keep going', () => {
   expect(planBandText(0)).toBe('plan mode: nothing starts')
   expect(planBandText(1)).toBe('plan mode: nothing starts (1 worker keeps going)')
   expect(planBandText(3)).toBe('plan mode: nothing starts (3 workers keep going)')
@@ -56,8 +56,9 @@ test('the band, the status line and the status strip say "plan mode: nothing sta
   expect(statusLine({ tasks }, true, '', 'auto', true)).toBe('plan mode: nothing starts · ⏵ auto · T-1 doing')
   expect(statusLine({ tasks: [] }, true, '', 'auto', true)).toBe('plan mode: nothing starts')
   expect(statusLine({ tasks: [] }, true, '', 'auto', false)).toBe(undefined)
-  expect(statusStrip({ mode: 'auto', plan_mode: true, max_parallel: 3, tasks, scouts: [] }, 0)).toBe('symcc · auto · 1/3 workers · 0 scouts · plan mode: nothing starts')
-  expect(bannerStrip({ mode: 'auto', plan_mode: true, max_parallel: 3, tasks, scouts: [] }, 0)).toBe('1/3 workers · 0 scouts · plan mode: nothing starts')
+  // with scouts, no "next" in plan mode, as no scout starts
+  const scouts = [{ name: 'bugs', running: false, next_run: '1970-01-01T00:10:00Z' }]
+  expect(statusLine({ tasks }, true, '', 'auto', true, { max_parallel: 3, tasks, scouts }, 0)).toBe('plan mode: nothing starts · ⏵ auto · 1/3 workers · T-1 doing · 1 scout')
 })
 
 test('leaving plan mode tells the lead once, with the backlog tasks added during it; nothing is moved', () => {

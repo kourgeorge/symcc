@@ -1,4 +1,4 @@
-import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, branchWarning, modeOf, notifyOf, notifyChoices, symccOn, statusLine, offStatusLine, inPlan } from '../board'
+import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, branchWarning, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
 import { currentBranch } from './git'
 import { type $, S, workers, type PaneView, scoutState, updateView } from './state'
 import { path, locked, change, now, load } from './store'
@@ -103,5 +103,18 @@ export async function publish($: $, b: Board) {
   const can = await playable($)
   const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
   await updateView($, () => v)
-  $.ui.status(symccOn(b) ? statusLine(b, S.driving, branch_note, modeOf(b), inPlan(S.plan)) : offStatusLine(S.N.name))
+  // the line above the prompt, with the workers and scouts (redrawn every minute while scouts are timed, see refreshStatus)
+  const crew = { max_parallel: b.max_parallel, tasks: b.tasks, scouts: v.scouts }
+  showStatus($, () => (symccOn(b) ? statusLine(b, S.driving, branch_note, modeOf(b), inPlan(S.plan), crew, Date.now(), statusRoom(S.N.name)) : offStatusLine(S.N.name)))
+}
+
+let statusText: (() => string | undefined) | undefined
+/** Shows `text()` as the line above the prompt; refreshStatus draws it again later. */
+function showStatus($: $, text: () => string | undefined) {
+  statusText = text
+  $.ui.status(text())
+}
+/** Draws the line above the prompt again, so "next: x in 38m" counts down (scouts.ts calls it every minute). */
+export function refreshStatus($: $) {
+  if (statusText) $.ui.status(statusText())
 }

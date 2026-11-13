@@ -221,9 +221,17 @@ You can also do it yourself:
   `/symcc-diff T-5` (the changed files with `+`/`-` counts) or `/symcc-diff T-5 <file>`
   (that file's full diff), and `/symcc-mode [off|review|auto]` (with no word it switches
   between `review` and `auto`; from `off` it goes to `review`).
-- The status line starts with the mode, `⏹ off`, `⏸ review merge` or `⏵ auto`, and counts
-  tasks to review by ID, e.g. `⏸ review merge · 1 to review (T-5)`. With an empty board it
-  shows nothing in `auto`, so a fresh project stays quiet.
+- The status line (the `symcc:` line by the prompt) starts with the mode, `⏹ off`,
+  `⏸ review merge` or `⏵ auto`, then the busy workers, the task counts (tasks to review by
+  ID) and the scouts, e.g.
+  `⏵ auto · 1/3 workers · T-26 doing · 1 to review (T-5) · 5 scouts (next: gaps-bot in 1h 00m)`.
+  Workers are left out while none run (`all done` or the counts already say so). It is kept
+  to about 80 columns: when it is too long, the `(next: …)` part goes first, then the scouts.
+  The "next" time is redrawn every minute. With an empty board and no scouts it shows nothing
+  in `auto`, so a fresh project stays quiet.
+- symcc's own text never has a `⚠`: what needs you is said in words (`1 failed (T-7)`,
+  `1 waiting for you`, `⏹ off`, `symcc off · /symcc-on`). A `⚠` in front of `symcc:` is drawn
+  by Claude Code itself for a plugin's status line, and plugins can't change it.
 
 ### Plan mode
 
@@ -236,7 +244,7 @@ the main chat is in it:
   Workers already running keep going: plan mode doesn't reach them, and stopping them would
   lose work. The band above the prompt says so, e.g.
   `plan mode: nothing starts (1 worker keeps going)`.
-- The band, the status line and the status strip show `plan mode: nothing starts`.
+- The band and the status line show `plan mode: nothing starts` (and no next scout).
 
 When plan mode ends, the lead is told once which tasks went to the backlog during it, and asks
 you which ones to move to todo. symcc never moves them by itself.
@@ -254,7 +262,14 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
 
 - **The panel** opens by itself when a session starts (on a wide enough terminal; turn it
   off with the `open_on_start` setting). It shows a small banner (folder, branch, test
-  command, limits, counts) and the task list.
+  command, limits, counts) and the task list. The workers and scouts are not in the banner;
+  they are in the status line and the band above the prompt. When nothing starts, the
+  banner's first line says so in the warning color: `⏹ off: nothing starts` (board mode off)
+  or `symcc off · /symcc-on` (symcc turned off).
+- **The band above the prompt** shows the mode, the busy workers, the counts and the scouts,
+  e.g. `⏵ auto · 1/3 workers · 1 doing · 1 to do · 2 scouts (next: gaps-bot in 38m)`, and under
+  it the tasks that need you or are running. When narrow, the `(next: …)` part goes first,
+  then the scouts.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task, Esc to
   close. An open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
@@ -393,7 +408,7 @@ new timing applies at once. `/symcc-scout <name>` runs a scout now.
 on demand: never on the timer, only when you press "run now" on its page or run
 `/symcc-scout <name>`. The Scouts list and its page say "on demand" instead of "every N"
 and show no "next in …", for example `◎ secrets  on demand  last: nothing`, and the status
-strip's next scout skips it. If `every_minutes` is left out, the scout runs every hour.
+line's next scout skips it. If `every_minutes` is left out, the scout runs every hour.
 
 A value that is not a whole number of 0 or more (like `-5`, `1.5` or `ten`) also means
 only on demand, so a typo never makes a scout run more often than you meant. Its row shows

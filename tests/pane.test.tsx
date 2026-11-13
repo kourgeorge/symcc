@@ -105,6 +105,29 @@ test('the band above the prompt sums up the board and lists what needs you or is
   }
 })
 
+test('the band above the prompt shows the busy workers and the scouts; when narrow the "(next: …)" part goes first', async ($, on) => {
+  const soon = new Date(Date.now() + 38.2 * 60_000).toISOString()
+  on('state.get', () => ({
+    value: {
+      value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command'), task('T-4', 'todo', 'Docs')], working: [], scouts: [scout('gaps-bot', { next_run: soon }), scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [] } },
+      version: 1,
+    },
+  }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const wide = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  expect(await wide.find({ type: 'Text', text: /⏵ auto · 1\/3 workers · 1 doing · 1 to do · 2 scouts \(next: gaps-bot in 38m\)/ })).toBeDefined()
+  await wide.unmount()
+  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 90 }, surface: 'terminal' })
+  const t = await narrow.find({ type: 'Text', text: /1\/3 workers · 1 doing · 1 to do · 2 scouts $/ })
+  expect(t).toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: /next:/ })).toBeUndefined()
+  await narrow.unmount()
+  // narrower still, the scouts go too; the workers stay
+  const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 70 }, surface: 'terminal' })
+  expect(await tight.find({ type: 'Text', text: /1\/3 workers · 1 doing · 1 to do $/ })).toBeDefined()
+  await tight.unmount()
+})
+
 test('with an empty board the band shows nothing of its own', async ($, on) => {
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
@@ -973,7 +996,7 @@ test('while symcc is off its tools answer that it is off and leave the board alo
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
 
-test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
+test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
   const now = Date.now()
   const iso = (m: number) => new Date(now + m * 60_000).toISOString()
   const tasks = [
@@ -989,20 +1012,13 @@ test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one
   for (const w of [40, 60, 100]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    // the strip is the line right under the banner's counts line, above the mode line and the rule; it leaves
-    // out the name and mode (the banner shows them) and the next scout goes first when it does not fit
-    const strip = texts.findIndex(t => /^2\/3 workers · 2 scouts/.test(t))
-    expect(strip).toBeGreaterThan(-1)
+    // no status strip in the banner (the workers and scouts are in the line above the prompt)
+    expect(texts.some(t => /workers|\d+ scouts?\b/.test(t))).toBe(false)
     const counts = texts.findIndex(t => /^2 doing · /.test(t))
     expect(counts).toBeGreaterThan(-1)
-    expect(counts).toBeLessThan(strip)
-    for (const t of texts.slice(counts + 1, strip)) expect(texts[counts]).toContain(t)
-    expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(strip)
+    expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(counts)
     // the mode line is in the footer, after the list, not under the banner
     expect(texts.findIndex(t => /^⏸ review merge $/.test(t))).toBeGreaterThan(texts.findIndex(t => /^━+$/.test(t)))
-    expect(texts.filter(t => /workers · \d+ scout/.test(t)).length).toBe(1)
-    expect(texts[strip]!.length).toBeLessThanOrEqual(w)
-    expect(texts[strip]).toBe(w >= 60 ? '2/3 workers · 2 scouts (next: secrets in 38m)' : '2/3 workers · 2 scouts')
     // every task row fits the panel; the hint is whole and fits too
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
@@ -1037,18 +1053,18 @@ test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one
   await narrow.unmount()
 })
 
-const STRIP_CASES = [
+const OFF_CASES = [
   ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
-  ['the board is in mode off', { mode: 'off' }, /^0\/3 workers · 1 scout$/],
+  ['the board is in mode off', { mode: 'off' }, /^⏹ off: nothing starts$/],
 ] as const
-for (const [when, extra, want] of STRIP_CASES)
-  test(`the status strip when ${when}: a warning, and no next scout`, async ($, on) => {
-    const soon = new Date(Date.now() + 10 * 60_000).toISOString()
-    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [scout('bugs', { next_run: soon })], mode: 'auto', test_commands: [], ...extra } } })
+for (const [when, extra, want] of OFF_CASES)
+  test(`the banner's first line warns when ${when}`, async ($, on) => {
+    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [scout('bugs')], mode: 'auto', test_commands: [], ...extra } } })
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
-    const strip = await ui.find({ type: 'Text', text: want })
-    expect(strip).toBeDefined()
-    expect(strip?.props.color).toBe('warning')
+    const t = await ui.find({ type: 'Text', text: want })
+    expect(t).toBeDefined()
+    expect(t?.props.color).toBe('warning')
+    expect(await ui.find({ type: 'Text', text: /workers · \d+ scouts?/ })).toBeUndefined()
     await ui.unmount()
   })
 
@@ -1478,7 +1494,7 @@ test('the banner text is in the unselected tabs\' color, not bold; warnings keep
   const tasks = [task('T-1', 'doing', 'One'), task('T-2', 'todo', 'Two')]
   stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'review', max_parallel: 3, test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  for (const re of [/^this session drives$|^driven by another session$/, /^3 at once$/, /^1 doing$/, /workers · \d+ scouts?/]) {
+  for (const re of [/^this session drives$|^driven by another session$/, /^3 at once$/, /^1 doing$/]) {
     const t = await ui.find({ type: 'Text', text: re })
     expect(t?.props.color).toBe('inactive')
     expect(t?.props.bold).toBeFalsy()
@@ -1486,13 +1502,5 @@ test('the banner text is in the unselected tabs\' color, not bold; warnings keep
   // the tabs that aren't selected use the same color
   expect((await ui.find({ type: 'Text', text: /^Scouts \(/ }))?.props.color).toBe('inactive')
   expect((await ui.find({ type: 'Text', text: /^no test command$/ }))?.props.color).toBe('warning')
-  await ui.unmount()
-})
-
-test('with the board mode off, the status strip is in the warning color', async ($, on) => {
-  const tasks = [task('T-1', 'doing', 'One'), task('T-2', 'todo', 'Two')]
-  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'off', max_parallel: 3, test_commands: ['x'] } } })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /workers · \d+ scouts?/ }))?.props.color).toBe('warning')
   await ui.unmount()
 })

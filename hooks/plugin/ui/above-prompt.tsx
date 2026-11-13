@@ -1,6 +1,6 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf, planBandText } from '../../board'
+import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew } from '../../board'
 import { type $, readView, type PaneView, S } from '../state'
 import { openPane } from './open'
 
@@ -16,28 +16,27 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done']).join(' · ')
   const order = ['review', 'waiting', 'failed', 'doing']
   const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
-  const room = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
+  const rows = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
   const color: Record<string, string> = { review: 'cyan', waiting: 'yellow', failed: 'red', doing: 'green' }
   const word: Record<string, string> = STATUS_WORD
-  const running = (v?.scouts ?? []).filter(s => s.running).map(s => s.name)
   // plan mode: nothing new starts; workers already running keep going (said so)
   const plan = (v as PaneView | undefined)?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
+  // the mode, the busy workers, the counts and the scouts, fitted beside the name and the "open board" button:
+  // "(next: …)" goes first when short of room, then the scouts (see withCrew)
+  const brand = boardBrand(S.N.name)
+  const room = (e.props.bodyColumns ?? 80) - brand.length - ' open board'.length - 2
+  const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: (v as PaneView | undefined)?.max_parallel, tasks, scouts: v?.scouts ?? [] }
+  const facts = withCrew((w, s) => `${boardWhere(S.root)} ${[modeLabel(modeOf(v)), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, Date.now(), room)
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
         <Text wrap="truncate">
-        <Text bold color={'ide' as never}>{boardBrand(S.N.name)}</Text>
-        <Text dimColor>
-          {boardWhere(S.root)}{' '}
-          {summary}
-          {` · ${modeLabel(modeOf(v))}`}
-          {plan ? ` · ${plan}` : ''}
-          {running.length ? ` · scouting: ${running.join(', ')}` : ''}{' '}
-        </Text>
+          <Text bold color={'ide' as never}>{brand}</Text>
+          <Text dimColor>{facts}</Text>
         </Text>
         <Button key="open-board" label="open board" dimColor onPress={() => void openPane($)} />
       </Box>
-      {live.slice(0, room).map(t => (
+      {live.slice(0, rows).map(t => (
         <Text wrap="truncate">
           <Text color={color[t.status] as never}>
             {t.id} {word[t.status]}
@@ -46,7 +45,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
           <Text dimColor>{t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
         </Text>
       ))}
-      {live.length > room && <Text dimColor>+{live.length - room} more · /{S.N.name}</Text>}
+      {live.length > rows && <Text dimColor>+{live.length - rows} more · /{S.N.name}</Text>}
     </Box>
   )
 }

@@ -1,6 +1,6 @@
 import type { SymccScout, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage } from '../board'
-import { publish } from './lead'
+import { publish, refreshStatus } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
 import { tellLead } from './tell'
@@ -209,6 +209,8 @@ export async function scheduleScouts($: $) {
       }),
     )
   }
+  // the line above the prompt says when the next scout runs ("in 38m"): draw it again every minute so it counts down
+  if (defs.some(d => !onDemand(d))) timers.push($.clock.every(60_000, () => refreshStatus($)))
   return defs
 }
 

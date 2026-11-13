@@ -4,7 +4,7 @@ import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BA
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
-/** The Tasks view: the status strip, then the tasks (needs you under its label, then doing and to do as one list,
+/** The Tasks view: the tasks (needs you under its label, then doing and to do as one list,
  *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead.
  *  With a search on (f, see S.search and taskMatches) only the matching tasks are listed, in every group (Backlog,
  *  Done and Dropped too), groups with a match open and groups without one hidden; a line under the header says so.

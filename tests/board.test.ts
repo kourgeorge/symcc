@@ -5,7 +5,7 @@ import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/boa
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -430,14 +430,18 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
   const more = bannerLines({ ...emptyBoard(), mode: 'off', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
+  // mode off: a warning on the first line, as nothing starts (the workers/scouts strip is gone from the banner)
   expect(more.map(bannerText)).toEqual([
-    `${a0}symcc board · symcc`,
+    `${a0}symcc board · symcc · ⏹ off: nothing starts`,
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
     '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
+  expect(more[0]!.parts.at(-1)).toEqual({ text: '⏹ off: nothing starts', tone: 'warning' })
+  expect(bannerLines({ ...b, enabled: false }, '', '', true, 80)[0]!.parts.at(-1)).toEqual({ text: 'symcc off · /symcc-on', tone: 'warning' })
+  expect(more.some(l => /workers|scouts?\b/.test(bannerText(l)))).toBe(false)
   expect(more[4]!.parts.some(p => p.bold)).toBe(false)
   expect(more[4]!.parts.some(p => p.tone === 'dim' && p.text !== ' · ')).toBe(false)
 })
@@ -1971,19 +1975,35 @@ test('folded rows line up their counts; no brackets', () => {
   expect(rows.some(r => /[()[\]]/.test(r))).toBe(false)
 })
 
-test('the status strip: name, mode, busy/max workers, scouts and the next scout when it fits; off when disabled', () => {
+test('the line above the prompt: mode, busy workers, counts, scouts and the next scout when it fits; no ⚠ of its own', () => {
   const now = Date.parse('2026-11-11T12:00:00Z')
   const scouts = [
     { name: 'tests', running: false, next_run: '2026-11-11T13:00:00Z' },
     { name: 'secrets', running: false, next_run: '2026-11-11T12:38:00Z' },
     { name: 'docs', running: false, next_run: null },
   ]
-  const tasks = [{ status: 'doing' as const }, { status: 'todo' as const }]
-  expect(statusStrip({ mode: 'auto', max_parallel: 3, tasks, scouts }, now)).toBe('symcc · auto · 1/3 workers · 3 scouts (next: secrets in 38m)')
-  expect(statusStrip({ mode: 'review', max_parallel: 3, tasks, scouts }, now, 40)).toBe('symcc · review · 1/3 workers · 3 scouts')
-  expect(statusStrip({ mode: 'off', max_parallel: 3, tasks, scouts }, now)).toBe('symcc · off · 1/3 workers · 3 scouts')
-  expect(statusStrip({ mode: 'auto', tasks: [], scouts: [scouts[0]!] }, now)).toBe('symcc · auto · 0/3 workers · 1 scout (next: tests in 1h 00m)')
-  expect(statusStrip({ mode: 'auto', enabled: false, tasks, scouts }, now)).toBe('symcc off · /symcc-on')
+  const tasks = [{ id: 'T-1', status: 'doing' as const }, { id: 'T-2', status: 'todo' as const }, { id: 'T-3', status: 'backlog' as const }]
+  const crew = { max_parallel: 3, tasks, scouts }
+  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now)).toBe('⏵ auto · 1/3 workers · T-1 doing · 1 to do · 3 scouts (next: secrets in 38m)')
+  // short of room: "(next: …)" goes first, then the scouts
+  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now, 55)).toBe('⏵ auto · 1/3 workers · T-1 doing · 1 to do · 3 scouts')
+  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now, 45)).toBe('⏵ auto · 1/3 workers · T-1 doing · 1 to do')
+  // the room left at 80 columns after Claude Code's "⚠ symcc: "
+  expect(statusRoom('symcc')).toBe(STATUS_WIDTH - '⚠ symcc: '.length)
+  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now, statusRoom())!.length).toBeLessThanOrEqual(statusRoom())
+  // no workers running: they are left out ("all done" already says it); the scouts stay
+  const done = [{ id: 'T-1', status: 'done' as const }, { id: 'T-2', status: 'backlog' as const }, { id: 'T-3', status: 'backlog' as const }]
+  expect(statusLine({ tasks: done }, true, '', 'auto', false, { max_parallel: 3, tasks: done, scouts: [scouts[0]!] }, now)).toBe('⏵ auto · all done · 2 in backlog · 1 scout (next: tests in 1h 00m)')
+  // mode off: no next scout; a running scout is always named
+  expect(statusLine({ tasks }, true, '', 'off', false, crew, now)).toBe('⏹ off · 1/3 workers · T-1 doing · 1 to do · 3 scouts')
+  expect(statusLine({ tasks }, true, '', 'off', false, { ...crew, scouts: [{ ...scouts[0]!, running: true }] }, now)).toBe('⏹ off · 1/3 workers · T-1 doing · 1 to do · 1 scout (running: tests)')
+  // an empty board with scouts says so; without scouts it stays quiet
+  expect(statusLine({ tasks: [] }, true, '', 'auto', false, { tasks: [], scouts }, now)).toBe('⏵ auto · 3 scouts (next: secrets in 38m)')
+  expect(statusLine({ tasks: [] }, true, '', 'auto', false, { tasks: [], scouts: [] }, now)).toBeUndefined()
+  // the text never brings its own ⚠: what needs attention is said in words
+  for (const st of ['done', 'failed', 'waiting', 'review', 'doing'] as const) expect(statusLine({ tasks: [{ id: 'T-1', status: st }] }, true, '', 'auto', false, crew, now)).not.toContain('⚠')
+  expect(crewParts({ tasks: [], scouts: [] }, now)).toEqual({ workers: '', scouts: '', next: '' })
+  expect(withCrew((w, s) => [w, s].join('|'), undefined, now)).toBe('|')
   expect(nextScoutText([{ name: 'bugs', running: true, next_run: null }, ...scouts], now)).toBe('running: bugs')
   expect(nextScoutText([], now)).toBe('')
 })

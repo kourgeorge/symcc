@@ -15,7 +15,7 @@ export type PlanState = { on: boolean | null; added: string[] }
 
 export const emptyPlan = (): PlanState => ({ on: null, added: [] })
 
-/** The words shown on the band and the status strip while in plan mode. */
+/** The words shown on the band and the status line while in plan mode. */
 export const PLAN_NOTE = 'plan mode: nothing starts'
 
 /** A permission mode name read from an event → plan mode on (true), off (false), or not known (null). */
