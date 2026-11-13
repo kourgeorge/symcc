@@ -4,6 +4,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+- New built-in worker role `researcher`: it looks into a question and writes a short note (usually `docs/research/<topic>.md`) instead of changing code. The lead uses it for "find out whether / how ..." tasks.
+
 ## 0.3.0 — 2026-11-13
 
 ### Traceability

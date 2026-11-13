@@ -320,7 +320,11 @@ skills: [code-review]
 
 - `description` is required: the lead reads it to choose. `model` and `skills` are optional.
 - The built-in roles live in the plugin's `roles/` folder: `general`, `docs`, `refactor`,
-  `security` and `tester`.
+  `researcher`, `security` and `tester`.
+- `researcher` is for "find out whether / how ..." tasks. The worker reads the project, the
+  installed tools and the web, but changes no code. It writes a short note, usually
+  `docs/research/<topic>.md`: the short answer first, what exists (with file:line, URL or
+  version), what doesn't exist or couldn't be checked, and a next step.
 - Tasks made before with the old roles `tests`, `backend` or `frontend` still show that
   name. When such a task starts or is retried, `tests` runs as `tester` and `backend` or
   `frontend` as `general`, with a history line saying so. A project file

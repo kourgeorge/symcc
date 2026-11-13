@@ -1340,10 +1340,25 @@ test('the role mark: the role name, nothing for general; the open task\'s role l
   expect(boardText(b2)).not.toContain('[general]')
 })
 
-test('the built-in roles are general, docs, refactor, security and tester', async () => {
-  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'security', 'tester'])
+test('the built-in roles are general, docs, refactor, researcher, security and tester', async () => {
+  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'researcher', 'security', 'tester'])
   for (const old of ['tests', 'backend', 'frontend']) expect(BUILT_IN_ROLES).not.toContain(old)
   expect(Object.values(OLD_ROLES).every(r => BUILT_IN_ROLES.includes(r))).toBe(true)
+})
+
+/** A copy of roles/researcher.md (tests can't read the plugin's files); keep the two the same. */
+const RESEARCHER_MD = "---\ndescription: finding things out - investigates a question and writes a short note, no code changes\n---\n- Don't change the project's code, tests or settings; your only output is the note in the task's files (usually docs/research/<topic>.md).\n- Read the project, the installed tools and their type files and docs, and the web if needed.\n- Run read-only commands only. Throwaway experiments go outside the project (e.g. /tmp) and are cleaned up after.\n- Start the note with the short answer, in a sentence or two.\n- Then say what exists, with exact names and where you found each one (file:line, URL, version).\n- Say plainly what doesn't exist or what you couldn't check.\n- End with a recommended next step for the project.\n- No guessing presented as fact: mark anything you didn't confirm as a guess, or leave it out.\n"
+
+test('the researcher role file parses like the others: a description, a checklist, no model or skills', async () => {
+  expect(roleSkipReason('researcher', RESEARCHER_MD)).toBe(null)
+  const r = parseRole('researcher', RESEARCHER_MD)!
+  expect(r).toMatchObject({ name: 'researcher', skills: [] })
+  expect(r.model).toBeUndefined()
+  expect(r.description).toContain('no code changes')
+  expect(r.prompt).toContain('docs/research/<topic>.md')
+  expect(r.prompt).toContain('No guessing presented as fact')
+  expect(roleSection(r)).toContain('Your role: researcher')
+  expect(rolesLeadText([r])).toContain('Use researcher for "find out whether / how ..." tasks')
 })
 
 test('a task with an old role keeps its name until it starts; then tests runs as tester, backend and frontend as general', async () => {
