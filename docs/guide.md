@@ -462,6 +462,10 @@ start with `symcc/` are never touched.
 - **Big tasks can run out of time.** A task that touches a lot of code may need more than
   45 minutes; raise `max_minutes` or split the task.
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
+- **What workers and scouts can use.** Workers can't commit, push or merge. They use
+  Read, Edit, Write, Glob, Grep and Bash, with edits accepted automatically, inside your
+  normal Claude Code permission settings. Scouts can't edit or write files: they use Read,
+  Glob, Grep, Bash, WebSearch and WebFetch, and their shell commands follow the same rules.
 - **A dropped task never runs on its own.** There is no delete; a dropped task stays on
   the list, and nothing automatic (retries after failed tests, a finishing check) starts
   it again. To bring it back on purpose, press `r` (Retry) on its page or ask the lead to
