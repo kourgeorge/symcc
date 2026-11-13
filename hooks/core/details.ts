@@ -1,6 +1,7 @@
 // The task page: its labelled rows and wrapping them to the panel width.
 import type { SymccStatus, SymccTask } from '../../types'
-import { STATUS_WORD } from './board-file'
+import { intoOf, STATUS_WORD } from './board-file'
+import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
 import { originOf } from './origin'
 import { findRole, type RoleDef, roleOf } from './roles'
@@ -31,7 +32,8 @@ export function originSegs(t: { origin?: unknown }): Seg[] {
 }
 
 /**
- * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, After, Research, Branch, Commits, Tries.
+ * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, Into (the branch it
+ * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
@@ -48,6 +50,7 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
   if (og?.by === 'owner' && og.request?.trim()) R.push({ label: 'Request', segs: [{ text: `“${squash(og.request)}”`, color: 'text', italic: true }] })
   if (og?.evidence) R.push({ label: 'Seen', segs: [{ text: squash(og.evidence), color: 'subtle' }] })
   R.push({ label: 'Files', segs: t.files.length ? t.files.flatMap((f, i) => [...(i ? [{ text: ', ', color: 'subtle' }] : []), { text: f, color: 'autoAccept' }]) : [{ text: 'anywhere in the project', color: 'subtle' }] })
+  R.push({ label: 'Into', segs: [{ text: 'merges into: ', color: 'subtle' }, { text: intoOf(t), color: 'ide', bold: true }] })
   t.after.forEach((id, i) => {
     const dep = o.all.find(x => x.id === id)
     // a done task moved to archive.json counts as done
@@ -58,6 +61,7 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
       segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, state, ...(dep ? [{ text: ` · ${dep.title}`, color: 'subtle' }] : [])],
     })
   })
+  for (const n of crossBranchNotes(t, o.all)) R.push({ label: '', segs: [{ text: `⚠ ${n}`, color: 'warning' }] })
   // research notes the merged work added or changed (docs/research/…), one row each
   const notes = t.research_notes ?? []
   notes.forEach((f, i) => R.push({ label: i ? '' : 'Research', segs: [{ text: f, color: 'autoAccept' }] }))

@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { emptyBoard, STATUS_WORD } from './board-file'
+import { emptyBoard, intoOf, STATUS_WORD } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { originOf } from './origin'
@@ -83,8 +83,16 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number,
 /** The subtle text at the right end of a task row: "tester · try 1" for a task being worked on, "after T-3" for
  *  one waiting on unfinished tasks (else its role), "Enter to review" in review (a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
- *  waiting task, the note of a failed or backlog one, and '' for finished ones. */
-export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): string {
+ *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked
+ *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean. */
+export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = ''): string {
+  const into = intoOf(t)
+  const other = here && into !== here ? `→ ${into}` : ''
+  const rest = rowExtraOf(t, tasks)
+  return [other, rest].filter(Boolean).join(' · ')
+}
+
+function rowExtraOf(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): string {
   switch (t.status) {
     case 'doing':
       return [roleMark(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')

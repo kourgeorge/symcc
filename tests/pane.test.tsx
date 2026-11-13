@@ -734,7 +734,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
 })
 
 test('"c" and the Settings tab show one row per setting, with value, default and range', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], target_branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['off', 'sound'] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['off', 'sound'] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const settingsTab = await ui.find({ key: 'tab-settings' })
   expect(settingsTab?.props.hotkey).toBe('c')
@@ -749,7 +749,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(tasksTab?.props.bold).toBeFalsy()
   expect(tasksTab?.props.color).toBe('inactive')
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -1370,7 +1370,7 @@ test('the Runs rows say how each try ended; a run with no reason shows none', as
 
 test('/symcc-task says how each try ended next to its time and tokens', async ($, on) => {
   const t = task('T-1', 'done', 'Ended', { attempts: 4, runs: ENDED_RUNS })
-  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [t] }
+  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], tasks: [t] }
   fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
   stateOf(on, {})
   on('ui.toast', () => ({ value: undefined }))
@@ -1383,7 +1383,7 @@ test('/symcc-task says how each try ended next to its time and tokens', async ($
 
 test('/symcc-task shows the latest report, or its first 40 lines and where the full one is', async ($, on) => {
   const many = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
-  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })] }
+  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })] }
   fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null, '/reports/T-1-try-1.md': 'Old.\n', '/reports/T-1-try-2.md': many })
   stateOf(on, {})
   on('ui.toast', () => ({ value: undefined }))

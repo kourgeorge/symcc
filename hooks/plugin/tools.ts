@@ -1,9 +1,8 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, type LeadCall, type StatsRange, type TeamInput } from '../board'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, type LeadCall, type StatsRange, type TeamInput } from '../board'
 import { scoutMemoryFile } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
-import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
-import { publish } from './lead'
+import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
 import { loadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
@@ -36,12 +35,14 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.status === 'waiting' && bt.options?.length) L.push(`OPTIONS: ${bt.options.join(' | ')}`)
   L.push('', 'What to do:', ...(t.details.trim() ? t.details.split('\n').map(l => (l.trim() ? `  ${l}` : '')) : ['  (no details)']))
   L.push('', 'May change:', ...(t.files.length ? t.files.map(f => `  ${f}`) : ['  anywhere in the project']))
+  L.push('', `merges into: ${intoOf(t)}`)
   if (t.after.length) {
     L.push('', 'Waits for:')
     for (const id of t.after) {
       const dep = all.find(x => x.id === id)
       L.push(`  ${id} ${dep ? `[${word[dep.status]}] ${dep.title}` : archivedDone.includes(id) ? `[${word.done}] (archived)` : '[missing]'}`)
     }
+    for (const n of crossBranchNotes(t, all)) L.push(`  note: ${n}`)
   }
   if (t.history.length) L.push('', `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map(line => `  • ${line}`))
   if (t.runs?.length) L.push('', 'Time and cost:', ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`)
@@ -61,7 +62,8 @@ export const MANUAL = (): Record<string, string> => ({
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
   • Workers are background agents. Each builds one task in its own copy of the code
     (${S.N.dir}/worktrees/T-n). When it finishes, ${S.N.name} checks the files it changed, runs the
-    tests and merges into the target branch (target_branch) only if they pass. In mode
+    tests and merges only if they pass. Each task merges into the branch you were on when it
+    was made (its copy starts from that branch too). In mode
     review (or for a task with needs_review) it waits for your approve or reject first.
   • The board has one mode: off (nothing runs), review (work runs; finished work waits for
     you) or auto (work runs; finished work that passes merges on its own; the default).
@@ -102,7 +104,7 @@ export const MANUAL = (): Record<string, string> => ({
   /${S.N.name}-on                  turn it back on, in the mode the board had
   /${S.N.help} [TOPIC]           this manual
 On the board: t tasks · s scouts · c settings · m switch review / auto.
-In the settings view: Enter on a row changes it: on/off flips, mode, notify and target_branch
+In the settings view: Enter on a row changes it: on/off flips, mode and notify
   open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
@@ -111,7 +113,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · k stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's role shows at the right end of its row, with the try number ("tester · try 2"); general shows nothing. A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review".
+On the board list a task's role shows at the right end of its row, with the try number ("tester · try 2"); general shows nothing. A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -122,7 +124,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   Fields: title, details (what to do and how we know it works), files (what the worker
   may change; empty = anywhere), after (tasks that must be done first), order (lower
   runs first), role (the worker role: ${BUILT_IN_ROLES.join(', ')},
-  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed.
+  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed, and merge_into:
+  the branch it merges into, which is the branch you were on when it was made.
   Statuses:
     to do            waiting for a free worker (and for its "after" tasks)
     doing            a worker is on it
@@ -133,7 +136,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     ready for review the worker is done and the checks passed; nothing is merged until you
                      approve it (or reject it with a reason, which sends it back to "todo")
     failed           tests failed, files outside its list changed, or the worker stopped
-    done             merged into the target branch
+    done             merged into its branch (merge_into)
     dropped          given up
     backlog          an idea or work that is not clear yet; it never starts until you
                      move it to todo ("stash this idea", "show the backlog", "move T-5 to todo")
@@ -144,9 +147,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   lead: `The lead (this chat) has these tools:
   board · add · change · retry · ask · drop · pause · resume · settings
   approve · reject (only for a task ready for review)
-  settings: target_branch (the branch work is merged into; a new board starts on the branch
-  you have checked out, and it must be an existing branch), test_commands (must pass before
-  a merge), max_parallel (workers at once, 1-8),
+  Each task merges into the branch you were on when it was made (there is no branch
+  setting); change merge_into moves one task to another existing branch.
+  settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
   session starts, on by default), notify (off, sound or voice: when a task is merged or a worker
@@ -200,11 +203,13 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     finished work that passes waits as "ready for review" (its branch and folder are kept).
     approve runs the same checked merge (brought up to date, scope checked, tests again if it
     had to merge); reject with a reason sends it back to "todo" for a fresh worker.
-  • The target branch only moves by a checked merge; with uncommitted changes on it, ${S.N.name} waits.
-  • A new board merges into the branch you had checked out when it was made. If you are on
-    another branch, the banner and status line say so ("merging into main · you're on x").
-    Change it with ${S.N.name} settings target_branch. If that branch doesn't exist, no work
-    starts (nothing is marked failed) until you set an existing one.
+  • A task's branch only moves by a checked merge; with uncommitted changes on it, ${S.N.name} waits.
+  • Each task merges into the branch you were on when it was made (on a detached checkout,
+    main or master). The board list shows "→ x" for a task that merges into another branch
+    than the one you are on now. If that branch is gone when the task starts or merges, it
+    waits for you ("branch x is gone: merge into main instead?"); nothing is marked failed.
+  • A task that waits for a task on another branch won't get that task's change: the task
+    page says so ("T-6 is on x but waits for T-5, which merges into main").
   • Workers can edit files in their own folder without asking. Their shell commands follow
     your normal permission rules (your settings' allow list applies to them too).
   • Scouts can't edit or write files. They can run shell commands (these follow your normal
@@ -232,11 +237,11 @@ This section is for the main conversation only. If you are a subagent (a ${S.N.n
 The project has a shared task board (${S.N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name; for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
-- When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
+- When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use order for priority (lower runs first), not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / order, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged into main. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
+- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
@@ -264,9 +269,9 @@ export const TOOLS = () => [
   {
     name: 'change',
     description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
-  { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
   { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. Not for a done task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'ask', description: 'Make a task wait for the owner with a question. Not for a done or dropped task (retry it first).', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
@@ -276,13 +281,13 @@ export const TOOLS = () => [
   { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
   {
     name: 'setup_git',
-    description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Sets target_branch to that branch. Never pushes, adds no remote.`,
+    description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'settings',
-    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "T-3 done" / "T-5 needs you" out loud; only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
-    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
+    description: 'Change how the team works (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "T-3 done" / "T-5 needs you" out loud; only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
 
@@ -390,18 +395,23 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')
       const said = { by: a.origin_by, scout: a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why }
-      const t = await change($, b => {
+      // it merges into the branch checked out now (on a detached checkout, the repo's main branch)
+      const merge_into = await homeBranch($)
+      const [t, all] = await change($, b => {
         // check what the lead said first, then add the plugin's own evidence next to it
         const o = makeOrigin(said, now(), b)
-        return addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) } }, now(), S.N.dir)
+        const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
+        return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
+      // told once, here: a task it waits for on another branch won't have its change in this one
+      const notes = crossBranchNotes(t, all).map(n => `\nNote: ${n}.`).join('')
       // plan mode: it went to the backlog; noted, so the lead hears the list when plan mode ends
       if (inPlan(S.plan) && t.status === 'backlog') {
         S.plan = planAdded(S.plan, t.id)
-        return planAddText(t.id, t.title)
+        return planAddText(t.id, t.title) + notes
       }
       void pump($)
-      return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}`
+      return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}${notes}`
     }
     case 'change': {
       const t = await taskOrThrow($, id)
@@ -410,6 +420,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
+      // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
+      let into = str(a.merge_into)?.trim()
+      if (a.merge_into !== undefined && !(into && (await branchExists($, into)))) {
+        const some = (await branchList($)).slice(0, 8)
+        throw new Error(`Nothing changed: '${into ?? String(a.merge_into)}' is not a branch in this project. merge_into must be an existing branch${some.length ? `, e.g. ${some.join(', ')}` : ''}.`)
+      }
+      const gone = parseGoneBranch(t.status === 'waiting' ? t.question : null)
+      if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
       const fields = (): Partial<SymccTask> => {
         const p: Partial<SymccTask> = {}
         if (str(a.title)) p.title = str(a.title)
@@ -419,6 +437,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.order === 'number') p.order = a.order
         if (typeof a.needs_review === 'boolean') p.needs_review = a.needs_review
         if (role) p.role = role
+        if (into) p.merge_into = into
         return p
       }
       if (a.backlog === true) {
@@ -439,7 +458,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, fields(), now(), S.N.dir))
         return `${t.id} updated (still in the backlog)`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role', 'answer'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role', 'answer', 'merge_into'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
@@ -454,6 +473,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (typeof a.order === 'number') patch.order = a.order
       if (typeof a.needs_review === 'boolean') patch.needs_review = a.needs_review
       if (role) patch.role = role
+      if (into) patch.merge_into = into
       // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
       const answer = str(a.answer)?.trim()
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
@@ -464,7 +484,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
       })
       void pump($)
-      return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
+      return `${t.id} updated${wasDoing ? ' (restarting)' : ''}${into ? `; it now merges into ${into}` : ''}`
     }
     case 'retry': {
       const t = await taskOrThrow($, id)
@@ -556,28 +576,19 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
 /**
  * Saves settings for the lead's settings tool and for the owner (/<name>-settings, the Settings
  * view): the same checks and limits (see applySettings). `error` when nothing changed because
- * mode or target_branch is wrong; `mode` is setBoardMode's answer when the mode was set.
+ * mode or notify is wrong; `mode` is setBoardMode's answer when the mode was set.
  */
 export async function saveSettings($: $, a: SettingsInput, who: string): Promise<{ error?: string; changes: SettingChange[]; mode?: string }> {
-  const target = str(a.target_branch)?.trim()
   if (a.mode !== undefined && !isMode(a.mode)) return { error: `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`, changes: [] }
   if (a.notify !== undefined) {
     if (!isNotify(a.notify)) return { error: `notify must be "off", "sound" or "voice" (got ${JSON.stringify(a.notify)})`, changes: [] }
     const refused = notifyRefusal(a.notify, await playable($))
     if (refused) return { error: refused, changes: [] }
   }
-  if (a.target_branch !== undefined && !(target && (await branchExists($, target)))) {
-    return { error: noBranchText(target ?? String(a.target_branch), await branchList($)), changes: [] }
-  }
   const changes = await change($, b => {
     const r = applySettings(b, a)
     return [r.board, r.changes] as [Board, SettingChange[]]
   })
-  if (target && S.missingBranch) {
-    S.missingBranch = ''
-    S.toldMissing = ''
-    await publish($, await load($))
-  }
   const mode = isMode(a.mode) ? await setBoardMode($, a.mode, who) : undefined
   void pump($)
   return { changes, mode }

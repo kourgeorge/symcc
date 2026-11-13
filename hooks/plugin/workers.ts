@@ -1,8 +1,8 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
 import { loadRoles } from './roles'
@@ -31,7 +31,7 @@ If you find you must change a file outside this list, do NOT change it. Stop at 
 (You don't need to finish anything else first; what you already changed in your folder is kept for the next try.)` : 'whatever the task needs.'}
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${S.N.name} commits, tests and merges your work.
-${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
+${t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
 When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question; the task will wait for the owner's answer and a new try continues with it. If the owner can pick from a few answers, add one more line after it: "OPTIONS: a | b | c" (2 to 6 short choices, split by |).`
 
 export async function pump($: $) {
@@ -42,7 +42,6 @@ export async function pump($: $) {
   if (modeOf(b) === 'off' || !symccOn(b)) return
   if (!ready(b).length) return
   if (!(await gitReady($, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
-  if (!(await targetReady($, b))) return // nothing starts and nothing is marked failed
   for (const t of ready(b)) {
     if (workers.size >= b.max_parallel) break
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
@@ -68,8 +67,9 @@ export async function startWorker($: $, id: string) {
     const b = await load($)
     const t0 = find(b, id)
     if (!mayStart(t0, agents, S.N.name)) return
-    if (!(await targetReady($, b))) return // the branch to merge into is missing: leave the task "todo"
-    const { dir, branch } = await prepareWorktree($, t0!, b.target_branch)
+    // the branch it merges into is gone: it waits for the owner instead of failing
+    if (await waitIfBranchGone($, b, t0!, 'start')) return
+    const { dir, branch } = await prepareWorktree($, t0!, intoOf(t0!))
     const roles = await loadRoles($)
     const t = await change($, x => {
       const cur = find(x, id)
@@ -111,6 +111,33 @@ export async function startWorker($: $, id: string) {
   } finally {
     starting.delete(id)
   }
+}
+
+/**
+ * When the branch task `t` merges into (intoOf) no longer exists, the task waits for the owner with
+ * a question ("branch feature-x is gone: merge into main instead?"; main is the branch checked out
+ * now, see homeBranch) instead of failing, and the lead is told. `when`: the task was about to start,
+ * or its work was about to be merged. Returns whether the branch is gone (then nothing else happens).
+ * Written only while the task is still as it was (same status and try).
+ */
+export async function waitIfBranchGone($: $, b: Board, t: SymccTask, when: 'start' | 'merge'): Promise<boolean> {
+  const into = intoOf(t)
+  if (await branchExists($, into)) return false
+  const instead = await homeBranch($)
+  const question = goneBranchQuestion(into, instead)
+  const options = goneBranchOptions(into, instead)
+  const asked = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
+    const line = `${when === 'start' ? 'not started' : 'not merged'}: branch ${into} is gone; asked the owner whether to merge into ${instead} instead`
+    return [patchTask(x, t.id, { status: 'waiting', question, options, note: 'waiting for you', history: [...cur.history, line], ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
+  })
+  if (asked) {
+    sayNeedsYou($, b, t, question)
+    tellLead($, `${t.id} "${t.title}" ${when === 'start' ? "can't start" : "can't be merged"}: the branch it merges into, ${into}, is gone. It now waits for the owner: ${question} An answer of yes moves it to ${instead}; or ${S.N.name} change ${t.id} with merge_into set to an existing branch.`)
+    await publish($, await load($))
+  }
+  return true
 }
 
 /** The agents of this session as $.agent.list() reports them; null if the list can't be read. */
@@ -340,6 +367,7 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     sayNeedsYou($, b, t, question)
     tellLead($, workerQuestionText(t.id, question, options))
   } else {
+    if (await waitIfBranchGone($, b, t, 'merge')) return
     await change($, x => (find(x, t.id)?.status === 'doing' ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, () => stopAsked.get(t.id)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
@@ -372,9 +400,9 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   const tries = t.conflict_tries ?? 0
   if (r.conflict && onConflict(t) === 'retry') {
     // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
-    const note = `conflicts with the latest ${b.target_branch}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
+    const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
     if (!(await write(cur => ({ status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" conflicts with the latest ${b.target_branch}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
+    tellLead($, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
     return
   }
   const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
@@ -386,7 +414,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
     tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
     return
   }
-  const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
+  const detail = r.conflict ? `conflicts with the latest ${intoOf(t)}, still after ${tries} tries to merge it in` : r.detail
   const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
   if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}) })))) return
   if (r.ok) sayDone($, b, t.id)
@@ -403,11 +431,11 @@ export async function approve($: $, id: string): Promise<string> {
   const t = reviewTask(b, id, 'approve')
   if (approving.has(t.id)) return `${t.id} is already being merged`
   if (!(await gitReady($, b))) return `${t.id} stays in review: ${gitNote(S.gitState)}`
-  if (!(await targetReady($, b))) return `${t.id} stays in review: ${missingBranchText(b.target_branch)}`
+  if (await waitIfBranchGone($, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
   try {
     const dir = worktreeDir(t.id)
-    if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, b.target_branch)
+    if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, intoOf(t))
     // The owner's own edits in the folder since review (or edits whose tests failed on an
     // earlier approve, kept as test_output): those are committed with the task and always tested.
     const edits = await ownerEdits($, t, dir).catch(() => [] as string[])
@@ -426,8 +454,8 @@ export async function approve($: $, id: string): Promise<string> {
       // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
       const sha = r.merged.slice(0, 8)
       if (!cur) {
-        tellLead($, `${t.id} "${t.title}" was merged into ${b.target_branch} (${sha}), but it is no longer on the board.`)
-        return `${t.id} was merged into ${b.target_branch} (${sha}), but it is no longer on the board`
+        tellLead($, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
+        return `${t.id} was merged into ${intoOf(t)} (${sha}), but it is no longer on the board`
       }
       await settle($, t, b, r, 'approved by the owner', dir, undefined, true)
       const off = offAsked.get(t.id)
@@ -436,9 +464,9 @@ export async function approve($: $, id: string): Promise<string> {
           const c = find(x, t.id)
           return c?.status === 'done' ? patchTask(x, t.id, { history: [...c.history, `${tryLabel(t)}: ${off} while it was being merged, too late: the work was already merged, so it stays done`] }, now()) : x
         })
-        return `${t.id} was merged into ${b.target_branch} (${sha}) before ${off}; it is done`
+        return `${t.id} was merged into ${intoOf(t)} (${sha}) before ${off}; it is done`
       }
-      return cur.status === 'review' ? `${t.id} approved and merged: ${r.detail}` : `${t.id} was merged into ${b.target_branch} (${sha}) before it was ${cur.status}; it is done`
+      return cur.status === 'review' ? `${t.id} approved and merged: ${r.detail}` : `${t.id} was merged into ${intoOf(t)} (${sha}) before it was ${cur.status}; it is done`
     }
     if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing was merged`
     const off = offAsked.get(t.id)

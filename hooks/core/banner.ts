@@ -95,9 +95,9 @@ export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
 /** One banner line: the drawing part on the left ('' or spaces when none) and the text beside it. */
 export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
-/** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name.
+/** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc turned off) or `mode` 'off' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string; mode?: SymccMode; enabled?: boolean }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
@@ -143,7 +143,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   ]
   const l2 = join([
     ...(root ? [fact(shortHome(root, home))] : []),
-    b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : fact(b.target_branch),
+    ...(b.branch_note ? [[{ text: b.branch_note, tone: 'warning' as const }]] : b.branch ? [fact(b.branch)] : []),
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([

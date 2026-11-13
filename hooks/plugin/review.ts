@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes } from '../board'
+import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf } from '../board'
 import { gitOk, git, worktreeDir } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -7,7 +7,7 @@ import { tellLead } from './tell'
 
 // ---------------- a task's changes, for review ----------------
 
-/** The changes of a task: from where its branch left the target branch (the merge base) to the branch's tip. */
+/** The changes of a task: from where its work branch left the branch it merges into (the merge base) to the branch's tip. */
 export const diffRange = (target: string, t: Pick<SymccTask, 'id' | 'branch'>) => `${target}...${t.branch ?? S.N.branch(t.id)}`
 
 export function gitDiff($: $, target: string, t: SymccTask, opts: string[], file = ''): Promise<string> {
@@ -82,7 +82,7 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
 export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[] }
 
 /**
- * Commit the worker's changes, check scope, bring in the latest main, test, then move main forward.
+ * Commit the worker's changes, check scope, bring in the latest of the task's branch (intoOf), test, then move that branch forward.
  * `mode` 'finish' (a worker just finished): when the task needs review (see needsReview), stop
  * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
  * review): the same checked merge, but the tests run again only if main had to be merged in,
@@ -95,7 +95,8 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
   }
-  const target = b.target_branch
+  // the branch this task merges into: the one checked out when it was made
+  const target = intoOf(t)
   await git($, ['add', '-A', '--', '.'], dir)
   const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   // The message ends with trailers (task, origin, why, try); see commitMessage.

@@ -11,7 +11,6 @@ export type Board = {
   mode: SymccMode
   /** shell commands that must pass before a task's work is merged */
   test_commands: string[]
-  target_branch: string
   max_parallel: number
   /** a worker running longer than this is stopped and its task marked failed */
   max_minutes: number
@@ -102,9 +101,9 @@ export const DEFAULT_AUTO_RETRIES = 2
 /** How many days a done or dropped task stays on the board before it is archived, on a new board (0 = never). */
 export const DEFAULT_ARCHIVE_DAYS = 14
 
-/** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
-export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
+/** A new board. There is no board-wide branch: each task merges into the branch it was made on (see intoOf). */
+export function emptyBoard(): Board {
+  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
 }
 
 /** What reading board.json found: the board, and what was wrong with the file (if anything). */
@@ -129,7 +128,6 @@ const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFin
 const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done'>]: (v: unknown) => boolean } = {
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
-  target_branch: v => typeof v === 'string' && v.trim() !== '',
   max_parallel: v => isNum(v) && v >= 0,
   max_minutes: v => isNum(v) && v >= 0,
   auto_retries: v => isNum(v) && v >= 0,
@@ -173,10 +171,14 @@ function cleanTask(t: unknown): BoardTask | null {
   if (!isNum(x.attempts)) x.attempts = 0
   if (x.question !== null && typeof x.question !== 'string') x.question = null
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
+  if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
   for (const k of ['asked_files', 'options']) if (k in x && !(Array.isArray(x[k]) && (x[k] as unknown[]).every(v => typeof v === 'string'))) delete x[k]
   const { session, ...rest } = cleanCommitFields(x) as BoardTask
   return (typeof session === 'string' && session && x.status === 'doing' ? { ...rest, session } : rest) as BoardTask
 }
+
+/** The branch a task merges into (see SymccTask.merge_into); "main" for a task that has none (made by hand or in a test). */
+export const intoOf = (t: { merge_into?: unknown }): string => (typeof t?.merge_into === 'string' && t.merge_into.trim() ? t.merge_into.trim() : 'main')
 
 /** Roles that were built in before and are gone now, and the role a task with one gets. */
 const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general', frontend: 'general' }
@@ -188,10 +190,12 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - role tests, backend or frontend (no longer built in): tester, general, general;
  * - a try with no end time (left open by a reload) ends where the next try started, or at the task's
  *   last change; the last try of a task that is "doing" is running now and stays open;
- * - a try's tokens saved as one number: kept as-is, marked unsplit (see migrateRunTokens).
+ * - a try's tokens saved as one number: kept as-is, marked unsplit (see migrateRunTokens);
+ * - no merge_into (from before each task kept its own branch): `into`, the board's old target_branch.
  */
-export function migrateTask(t: BoardTask): BoardTask | null {
+export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = t
+  if (!(typeof t.merge_into === 'string' && t.merge_into.trim())) out = { ...out, merge_into: into }
   const split = migrateRunTokens(t.runs)
   if (split) out = { ...out, runs: split }
   if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
@@ -239,6 +243,10 @@ export function readBoard(text: string | null): BoardRead {
   if (archived) board.archived = archived
   else if ('archived' in raw) fixed.push('archived')
   let migrated = archived && isObj(raw.archived) && isNum(raw.archived.tokens) ? 1 : 0
+  // Migration: the board-wide target_branch is gone; each task without its own branch gets it, and
+  // the board is saved once without it (it counts as one migrated entry even with no task to move).
+  const oldTarget = typeof raw.target_branch === 'string' && raw.target_branch.trim() ? raw.target_branch.trim() : 'main'
+  if ('target_branch' in raw) migrated++
   if (Array.isArray(raw.archived_done)) board.archived_done = [...new Set(raw.archived_done.filter((x): x is string => typeof x === 'string').map(normId))]
   else if ('archived_done' in raw) fixed.push('archived_done')
   let skipped = 0
@@ -250,7 +258,7 @@ export function readBoard(text: string | null): BoardRead {
       continue
     }
     seen.add(c.id)
-    const m = migrateTask(c)
+    const m = migrateTask(c, oldTarget)
     if (m) migrated++
     board.tasks.push(m ?? c)
   }

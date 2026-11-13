@@ -1,12 +1,12 @@
 // Which branch work is merged into, cleaning up after merged tasks, and a folder without git.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { DATA_DIR } from './board-file'
+import { DATA_DIR, intoOf } from './board-file'
 
 // ---------------- which branch work is merged into ----------------
 
 /**
- * The branch a new board merges into: the branch checked out now (`current`). With none
+ * The branch a new task merges into: the branch checked out now (`current`). With none
  * (a detached HEAD), the repo's main branch: origin's HEAD (e.g. "origin/main") if set,
  * else "main" or "master", whichever of `branches` exists; "main" when nothing helps.
  */
@@ -18,20 +18,38 @@ export function startBranch(current: string, originHead: string, branches: strin
   return ['main', 'master'].find(x => branches.includes(x)) ?? 'main'
 }
 
-/** The warning when the owner's checked-out branch is not the one work merges into; '' when they match (or no branch is checked out). */
-export function branchWarning(target: string, current: string): string {
-  const cur = String(current ?? '').trim()
-  return cur && cur !== target ? `merging into ${target} · you're on ${cur}` : ''
+/**
+ * The question a task waits with when the branch it merges into (`gone`) no longer exists, and
+ * the answer that moves it to `instead` (the branch checked out now, or the repo's main branch).
+ */
+export const goneBranchQuestion = (gone: string, instead: string) => `branch ${gone} is gone: merge into ${instead} instead?`
+export const goneBranchOptions = (gone: string, instead: string) => [`Yes, merge into ${instead}`, `No, I'll bring back ${gone}`]
+
+/** The two branches in a goneBranchQuestion (the missing one, the one offered), or null when `q` is not one. */
+export function parseGoneBranch(q: string | null | undefined): { gone: string; instead: string } | null {
+  const m = /^branch (\S+) is gone: merge into (\S+) instead\?$/.exec(String(q ?? '').trim())
+  return m ? { gone: m[1]!, instead: m[2]! } : null
 }
 
-/** The settings tool's answer when target_branch names a branch that doesn't exist; lists a few that do. */
-export function noBranchText(name: string, branches: string[]): string {
-  const some = branches.slice(0, 8)
-  return `Nothing changed: '${name}' is not a branch in this project. target_branch must be an existing branch${some.length ? `, e.g. ${some.join(', ')}` : ''}.`
+/** Whether the owner's answer to a goneBranchQuestion says yes (merge into the offered branch). */
+export function saysMergeInstead(answer: string, instead: string): boolean {
+  const a = String(answer ?? '').trim().toLowerCase()
+  if (!a || /^(no|don'?t|do not|wait|keep)\b/.test(a)) return false
+  return /^(yes|y|ok|okay|sure|do it|merge)\b/.test(a) || a.includes(instead.toLowerCase())
 }
 
-/** The note when the branch work merges into doesn't exist. */
-export const missingBranchText = (target: string) => `branch '${target}' doesn't exist; set target_branch`
+/**
+ * The notes for task `t` that waits (after) for a task merging into another branch: that task's
+ * change won't be in `t`'s copy. One line each; none when every task it waits for is on its branch.
+ */
+export function crossBranchNotes(t: Pick<SymccTask, 'id' | 'after' | 'merge_into'>, all: Pick<SymccTask, 'id' | 'merge_into'>[]): string[] {
+  const mine = intoOf(t)
+  return (t.after ?? []).flatMap(id => {
+    const dep = all.find(x => x.id === id)
+    if (!dep || intoOf(dep) === mine) return []
+    return [`${t.id} is on ${mine} but waits for ${dep.id}, which merges into ${intoOf(dep)}; ${dep.id}'s change won't be in ${t.id}`]
+  })
+}
 
 // ---------------- cleaning up after merged tasks ----------------
 // A done task's branch and worktree are removed (the branch only when git lists it as merged).

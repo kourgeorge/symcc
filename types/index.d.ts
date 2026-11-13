@@ -101,8 +101,14 @@ export type SymccTask = {
   runs?: SymccRun[]
   /** the research notes (files under docs/research/) its merged changes added or changed; missing when none */
   research_notes?: string[]
-  /** the full SHA that landed on the target branch when the task was merged; missing until then (and on old boards) */
+  /** the full SHA that landed on the task's branch (merge_into) when it was merged; missing until then (and on old boards) */
   merged?: string
+  /**
+   * The branch this task merges into: the branch checked out in the project when the task was
+   * made (on a detached checkout, the repo's main branch). Its worker's copy starts from it too.
+   */
+  merge_into?: string
+  /** the task's own work branch (its worker's copy), e.g. "symcc/T-3"; null until a worker starts */
   branch: string | null
   /** the agent id of the last worker started on this task */
   agent?: string

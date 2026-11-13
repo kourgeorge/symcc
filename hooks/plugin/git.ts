@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { emptyBoard, startBranch, type Board, missingBranchText, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText } from '../board'
+import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText } from '../board'
 import { publish } from './lead'
 import { type $, S, workers, starting, finishing, approving, keptDirty } from './state'
 import { load, change } from './store'
@@ -35,31 +35,14 @@ export async function branchExists($: $, name: string): Promise<boolean> {
   return (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${name}`]).catch(() => null))?.exitCode === 0
 }
 
-/** The branch a new board merges into: see startBranch. */
-export async function firstBranch($: $): Promise<string> {
-  if (!S.root) return emptyBoard().target_branch
+/**
+ * The branch a task added now merges into: the branch checked out in the main project folder; on
+ * a detached checkout, the repo's main branch (see startBranch).
+ */
+export async function homeBranch($: $): Promise<string> {
+  if (!S.root) return 'main'
   const origin = (await git($, ['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD']).catch(() => null))?.stdout.trim() ?? ''
   return startBranch(await currentBranch($), origin, await branchList($))
-}
-
-/**
- * Whether target_branch exists, so work may start. If not, nothing starts or fails: the lead
- * is told once (per branch name) and the banner and status line say so until it is fixed.
- */
-export async function targetReady($: $, b: Board): Promise<boolean> {
-  const ok = await branchExists($, b.target_branch)
-  const note = ok ? '' : missingBranchText(b.target_branch)
-  if (note !== S.missingBranch) {
-    S.missingBranch = note
-    await publish($, b)
-  }
-  if (ok) S.toldMissing = ''
-  else if (S.toldMissing !== b.target_branch) {
-    S.toldMissing = b.target_branch
-    const some = (await branchList($)).slice(0, 5)
-    tellLead($, `No work can start: the ${S.N.name} board merges into branch '${b.target_branch}', which doesn't exist in this project. Set an existing branch with ${S.N.name} settings target_branch${some.length ? ` (branches here: ${some.join(', ')})` : ''}.`)
-  }
-  return ok
 }
 
 /** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
@@ -96,7 +79,7 @@ export async function gitReady($: $, b?: Board): Promise<boolean> {
  * Sets up git in the project, once the owner said yes: git init on main (if there is no repo),
  * a .gitignore with the data folder and common safe lines, and a first commit of the current
  * files, leaving out files that look like secrets or are over 50 MB (they go in .gitignore).
- * Never pushes, never adds a remote. Then target_branch is set to the new branch and work starts.
+ * Never pushes, never adds a remote. Then the open tasks (made before there was any branch) merge into the new branch, and work starts.
  */
 export async function setupGit($: $, who: string): Promise<string> {
   if (S.settingUp) return 'git is being set up already'
@@ -135,9 +118,8 @@ export async function setupGit($: $, who: string): Promise<string> {
     }
     const files = (await gitOk($, ['ls-files', '--cached'], top)).split('\n').filter(Boolean).length
     await gitOk($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'commit', '-q', '--no-verify', '--allow-empty', '-m', `Initial commit (by ${S.N.name})`], top)
-    await change($, b => ({ ...b, target_branch: branch }))
-    S.missingBranch = ''
-    S.toldMissing = ''
+    // There was no branch before, so every open task's branch was a guess: it merges into this one.
+    await change($, b => ({ ...b, tasks: b.tasks.map(t => (t.status === 'done' || t.status === 'dropped' ? t : { ...t, merge_into: branch })) }))
     S.toldGit = 'ok'
     S.gitState = 'ok'
     await publish($, await load($))
@@ -182,7 +164,7 @@ export async function removeWorktree($: $, taskId: string, dir: string, except?:
 /**
  * Part of the regular check: removes leftover worktrees of done and dropped tasks (never with
  * --force, never while a worker runs there) and deletes the branches of done tasks that git
- * lists as merged into the target branch. Only the plugin's own branches (N.branch) are touched.
+ * lists as merged into the branch they merged into. Only the plugin's own branches (N.branch) are touched.
  */
 export async function cleanupMerged($: $, b: Board) {
   const agents = await agentsNow($)
@@ -205,10 +187,13 @@ export async function cleanupMerged($: $, b: Board) {
     if ((await git($, ['worktree', 'remove', dir])).exitCode === 0) dirs++
   }
   await git($, ['worktree', 'prune'])
-  const merged = await git($, ['branch', '--merged', b.target_branch, '--format=%(refname:short)'])
   let branches = 0
-  if (merged.exitCode === 0) {
-    for (const br of branchesToDelete(b.tasks, merged.stdout.split('\n'), S.N.branch(''))) if ((await git($, ['branch', '-d', br])).exitCode === 0) branches++
+  // Each done task merged into its own branch: ask git per branch which work branches it holds.
+  for (const into of [...new Set(b.tasks.filter(t => t.status === 'done').map(intoOf))]) {
+    const merged = await git($, ['branch', '--merged', into, '--format=%(refname:short)'])
+    if (merged.exitCode !== 0) continue
+    const done = b.tasks.filter(t => intoOf(t) === into)
+    for (const br of branchesToDelete(done, merged.stdout.split('\n'), S.N.branch(''))) if ((await git($, ['branch', '-d', br])).exitCode === 0) branches++
   }
   const text = S.toldCleanup ? '' : cleanupText(branches, dirs)
   if (text) {

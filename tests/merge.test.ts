@@ -208,7 +208,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
 
 /** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
 function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<SymccTask> = {}): [Board, SymccTask] {
-  const [b, t] = addTask({ ...emptyBoard('main'), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
+  const [b, t] = addTask({ ...emptyBoard(), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
   const b2 = patchTask(b, t.id, { status: 'doing', attempts: 1, ...extra }, ISO)
   return [b2, b2.tasks[0]!]
 }
@@ -632,7 +632,7 @@ test('reject sends a task in review back to "todo" with the reason, and merges n
   expect(t.note).toBe('rejected: the name is wrong')
   expect(t.history.at(-1)).toBe('try 1: rejected by the owner: the name is wrong')
   // only looking: nothing committed, merged or moved
-  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q HEAD'])
+  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q refs/remotes/origin/HEAD', 'root: git symbolic-ref --short -q HEAD', 'root: git for-each-ref --format=%(refname:short) refs/heads'])
   expect(w.git.main).toBe(M1)
 })
 
@@ -926,7 +926,7 @@ const LONG_AGO = '2026-01-01T00:00:00.000Z'
 /** A saved board: T-1 done long ago, T-2 dropped long ago, T-3 done just now, T-4 to do; this session drives. */
 async function archiveWorld() {
   const w = world()
-  let b: Board = emptyBoard('main')
+  let b: Board = emptyBoard()
   for (const title of ['old done', 'old dropped', 'new done', 'to do']) b = addTask(b, { origin: { why: 'a test' }, title }, ISO)[0]
   b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: LONG_AGO, ended: '2026-01-01T00:10:00.000Z', tokens: { output: 500 } }] }, LONG_AGO)
   b = patchTask(b, 'T-2', { status: 'dropped' }, LONG_AGO)
@@ -1283,7 +1283,7 @@ test('the Meanwhile block shows at most 10 lines, then "+N more"', () => {
 
 test('owner settings changes are queued for the lead, not sent', async () => {
   const w = world()
-  await saveBoard(w.$, emptyBoard('main'))
+  await saveBoard(w.$, emptyBoard())
   const out = await ownerSettings(w.$, { max_parallel: 5 }, 'from the board')
   expect(out).toContain('max_parallel')
   expect(leadQueue).toEqual([])
@@ -1398,7 +1398,7 @@ test('sound plays a chime (a different one when a question waits), voice says th
 
 test('only the driving session plays, lines are joined, and the first command that works is the last one tried', async () => {
   const m = machine('Linux', ['spd-say', 'espeak'])
-  const b = { ...emptyBoard('main'), notify: 'voice' as const }
+  const b = { ...emptyBoard(), notify: 'voice' as const }
   S.driving = false
   sayDone(m.$, b, 'T-3')
   expect(sayQueue).toEqual([])
@@ -1416,7 +1416,7 @@ test('only the driving session plays, lines are joined, and the first command th
 
 test("a saved notify this machine can't play is told once, plays nothing, and the setting is kept", async () => {
   const m = machine('Linux', ['paplay'], [`${FD}/complete.oga`])
-  await saveBoard(m.$, { ...emptyBoard('main'), notify: 'voice' })
+  await saveBoard(m.$, { ...emptyBoard(), notify: 'voice' })
   expect(await playsFor(m.$, 'voice', ['T-3'])).toEqual([])
   expect(await playsFor(m.$, 'voice', ['T-4'])).toEqual([])
   const notes = m.toasts.filter(t => t.includes('nothing will play'))
@@ -1426,7 +1426,7 @@ test("a saved notify this machine can't play is told once, plays nothing, and th
 
 test("notify can't be set to a choice this machine can't play: the owner and the lead are told why", async () => {
   const m = machine('Linux', ['paplay'], [`${FD}/complete.oga`])
-  await saveBoard(m.$, { ...emptyBoard('main'), notify: 'off' })
+  await saveBoard(m.$, { ...emptyBoard(), notify: 'off' })
   const why = "voice isn't available here: no speech program found (install espeak or speech-dispatcher)"
   expect(await ownerSettings(m.$, { notify: 'voice' }, 'with /symcc-settings')).toBe(why)
   expect(await runTool(m.$, 'settings', { notify: 'voice' })).toBe(why)

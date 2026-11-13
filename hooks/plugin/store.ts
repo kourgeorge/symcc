@@ -1,5 +1,4 @@
 import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale } from '../board'
-import { firstBranch } from './git'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -32,9 +31,8 @@ async function keepCopy($: $, text: string, what: string, say: (copy: string) =>
 
 export async function load($: $): Promise<Board> {
   const exists = await $.fs.exists(path(S.N.boardFile))
-  // A new board starts on the branch the owner has checked out (existing boards keep theirs).
   if (!exists) {
-    const b = emptyBoard(await firstBranch($))
+    const b = emptyBoard()
     S.enabledNow = symccOn(b)
     return b
   }

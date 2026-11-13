@@ -5,7 +5,7 @@ import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/boa
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -404,7 +404,7 @@ test('the icon: one treble clef character for one-line spots, a small clef drawi
 })
 
 test('the banner: the clef drawing beside the name, where, who drives and the settings', () => {
-  const b = { ...emptyBoard(), test_commands: ['claude plugin test .'] }
+  const b = { ...emptyBoard(), branch: 'main', test_commands: ['claude plugin test .'] }
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 80)
   const [a0, a1, a2, a3] = ICON_ART.map(l => `${l}  `)
   expect(lines.map(l => l.art)).toEqual(ICON_ART.map(l => `${l}  `))
@@ -447,7 +447,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
 })
 
 test('a narrow banner drops the drawing and cuts lines to fit', () => {
-  const b = { ...emptyBoard(), test_commands: ['claude plugin test .'] }
+  const b = { ...emptyBoard(), branch: 'main', test_commands: ['claude plugin test .'] }
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 30)
   const text = lines.map(bannerText)
   expect(text[0]).toBe('symcc board · symcc')
@@ -484,31 +484,81 @@ test('another plugin name changes every path, branch, agent type and text made f
   expect([cleanName(''), cleanName('a/b'), cleanName('crew')]).toEqual([DEFAULT_NAME, DEFAULT_NAME, 'crew'])
 })
 
-test('a new board starts on the branch the owner is on, else the repo main branch', async () => {
+test('a new task merges into the branch the owner is on, else the repo main branch (a detached checkout)', async () => {
   expect(startBranch('my-feature', 'origin/main', ['main', 'my-feature'])).toBe('my-feature')
   expect(startBranch('', 'origin/develop', ['main', 'develop'])).toBe('develop')
   expect(startBranch('', '', ['master', 'x'])).toBe('master')
   expect(startBranch('', '', ['main', 'master'])).toBe('main')
   expect(startBranch('', '', [])).toBe('main')
-  expect(emptyBoard('master').target_branch).toBe('master')
-  expect(emptyBoard().target_branch).toBe('main')
+  // the branch is saved on the task when it is added
+  const [b1, t1] = addTask(emptyBoard(), { origin: W, title: 'On a feature', merge_into: startBranch('feature-x', '', ['main', 'feature-x']) }, T)
+  expect(t1.merge_into).toBe('feature-x')
+  const [, t2] = addTask(b1, { origin: W, title: 'Detached', merge_into: startBranch('', '', ['main']) }, T)
+  expect(t2.merge_into).toBe('main')
+  expect(addTask(emptyBoard(), { origin: W, title: 'No branch given' }, T)[1].merge_into).toBe('main')
+  // there is no board-wide branch any more
+  expect('target_branch' in emptyBoard()).toBe(false)
+  expect(intoOf({})).toBe('main')
 })
 
-test('the banner warns when the owner is on another branch, or the target is missing', async () => {
-  expect(branchWarning('main', 'main')).toBe('')
-  expect(branchWarning('main', '')).toBe('')
-  expect(branchWarning('main', 'my-feature')).toBe("merging into main · you're on my-feature")
-  expect(missingBranchText('main')).toBe("branch 'main' doesn't exist; set target_branch")
-  const b = { ...emptyBoard(), branch_note: branchWarning('main', 'my-feature') }
-  const l2 = bannerLines(b, '/Users/me/app', '/Users/me', true, 120)[1]!
-  expect(bannerText(l2)).toContain("merging into main · you're on my-feature")
-  expect(l2.parts.find(p => p.text.includes('you\'re on'))!.tone).toBe('warning')
-  expect(bannerText(bannerLines(emptyBoard(), '/Users/me/app', '/Users/me', true, 120)[1]!)).toContain('main')
+test('the banner shows the branch checked out now', async () => {
+  const l2 = bannerLines({ ...emptyBoard(), tasks: [], branch: 'my-feature' }, '/Users/me/app', '/Users/me', true, 120)[1]!
+  expect(bannerText(l2)).toContain('my-feature')
+  expect(l2.parts.find(p => p.text === 'my-feature')!.tone).toBe('plain')
+  // a warning (e.g. no git) takes its place
+  const w = bannerLines({ ...emptyBoard(), branch: 'main', branch_note: 'no git repo here' }, '/Users/me/app', '/Users/me', true, 120)[1]!
+  expect(w.parts.find(p => p.text === 'no git repo here')!.tone).toBe('warning')
+  expect(bannerText(w)).not.toContain('main ·')
 })
 
-test('setting target_branch to a missing branch is refused with a few that exist', async () => {
-  expect(noBranchText('mian', ['main', 'dev'])).toBe("Nothing changed: 'mian' is not a branch in this project. target_branch must be an existing branch, e.g. main, dev.")
-  expect(noBranchText('x', [])).toBe("Nothing changed: 'x' is not a branch in this project. target_branch must be an existing branch.")
+test('a gone branch: the question, its choices, reading it back and the answer', () => {
+  const q = goneBranchQuestion('feature-x', 'main')
+  expect(q).toBe('branch feature-x is gone: merge into main instead?')
+  expect(goneBranchOptions('feature-x', 'main')).toEqual(['Yes, merge into main', "No, I'll bring back feature-x"])
+  expect(parseGoneBranch(q)).toEqual({ gone: 'feature-x', instead: 'main' })
+  expect(parseGoneBranch('Which color?')).toBeNull()
+  expect(parseGoneBranch(null)).toBeNull()
+  for (const yes of ['Yes, merge into main', 'yes', 'ok', 'merge it into main please', 'sure']) expect(saysMergeInstead(yes, 'main')).toBe(true)
+  for (const no of ["No, I'll bring back feature-x", 'no', 'wait', "don't, I'll make it again", '']) expect(saysMergeInstead(no, 'main')).toBe(false)
+})
+
+test('a task waiting for a task on another branch gets a note; the same branch gets none', () => {
+  const [b1, t5] = addTask(emptyBoard(), { origin: W, title: 'Five', merge_into: 'main' }, T)
+  const [b2, t6] = addTask(b1, { origin: W, title: 'Six', after: [t5.id], merge_into: 'feature-x' }, T)
+  expect(crossBranchNotes(t6, b2.tasks)).toEqual(["T-2 is on feature-x but waits for T-1, which merges into main; T-1's change won't be in T-2"])
+  const [b3, t7] = addTask(b2, { origin: W, title: 'Seven', after: [t5.id], merge_into: 'main' }, T)
+  expect(crossBranchNotes(t7, b3.tasks)).toEqual([])
+  // the task page shows it under After, and says where the task merges into
+  const rows = detailRows(t6, { roles: [], all: b2.tasks, when: s => s, nowMs: 0 })
+  const text = rows.map(r => `${r.label}: ${r.segs.map(g => g.text).join('')}`)
+  expect(text).toContain('Into: merges into: feature-x')
+  expect(text.some(l => l.includes("T-1's change won't be in T-2"))).toBe(true)
+  expect(detailRows(t7, { roles: [], all: b3.tasks, when: s => s, nowMs: 0 }).some(r => r.segs.some(g => g.text.includes("won't be in")))).toBe(false)
+})
+
+test('the board list shows "→ branch" only for a task that merges into another branch than the one checked out', () => {
+  const [b1, t] = addTask(emptyBoard(), { origin: W, title: 'On feature', merge_into: 'feature-x' }, T)
+  const [, u] = addTask(b1, { origin: W, title: 'On main', merge_into: 'main' }, T)
+  expect(rowExtra(t, [t, u], 'main')).toBe('→ feature-x')
+  expect(rowExtra(u, [t, u], 'main')).toBe('')
+  expect(rowExtra(t, [t, u], 'feature-x')).toBe('')
+  expect(rowExtra({ ...t, after: [u.id] }, [t, u], 'main')).toBe('→ feature-x · after T-2')
+})
+
+test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
+  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
+  const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x' })] }
+  const r = readBoard(JSON.stringify(old))
+  expect(r.board.tasks.map(t => t.merge_into)).toEqual(['main', 'feature-x'])
+  expect(r.migrated).toBe(2)
+  expect('target_branch' in r.board).toBe(false)
+  expect(JSON.stringify(r.board)).not.toContain('target_branch')
+  // a board saved after that has nothing more to migrate
+  expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
+  // an old target_branch other than main is what the tasks get
+  expect(readBoard(JSON.stringify({ ...old, target_branch: 'dev' })).board.tasks[0]!.merge_into).toBe('dev')
+  // no tasks: still saved once, to drop target_branch
+  expect(readBoard(JSON.stringify({ ...old, tasks: [] })).migrated).toBe(1)
 })
 
 // ---------------- today in full, older days folded ----------------
@@ -1228,7 +1278,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
   expect(parseCommand('symcc-settings', 'notify Off')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'off' } })
   expect(parseCommand('symcc-settings', 'open_on_start on')).toEqual({ kind: 'set', setting: 'open_on_start', input: { open_on_start: true } })
   expect(parseCommand('symcc-settings', 'mode review')).toEqual({ kind: 'set', setting: 'mode', input: { mode: 'review' } })
-  expect(parseCommand('symcc-settings', 'target_branch dev')).toEqual({ kind: 'set', setting: 'target_branch', input: { target_branch: 'dev' } })
+  expect(parseCommand('symcc-settings', 'target_branch dev')).toEqual({ kind: 'bad', message: expect.stringContaining('There is no setting called target_branch') })
   expect(parseCommand('symcc-settings', 'test_commands "npm test"')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test'] } })
   expect(parseCommand('symcc-settings', 'test_commands npm test && npm run lint')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test', 'npm run lint'] } })
   expect(parseCommand('symcc-settings', 'test_commands none')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: [] } })
@@ -1236,13 +1286,12 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
   expect(bad('notify loud')).toBe('notify must be off, sound or voice')
   expect(bad('open_on_start maybe')).toBe('open_on_start must be on or off')
   expect(bad('mode later')).toBe('mode must be off, review or auto')
-  expect(bad('target_branch two words')).toContain('target_branch must be one')
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
 })
 
@@ -1271,8 +1320,8 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'])
-  const b = { ...emptyBoard('main'), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'])
+  const b = { ...emptyBoard(), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
   expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
   expect(settingValue(b, 'notify')).toBe('off')
   expect(settingValue(b, 'open_on_start')).toBe('on')
@@ -1427,7 +1476,8 @@ test('a board with old roles is migrated once: tests becomes tester, backend and
   const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
   const r = readBoard(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
   expect(r.board.tasks.map(t => t.role)).toEqual(['tester', 'general', 'general', 'docs', undefined])
-  expect(r.migrated).toBe(3)
+  // all five: none had its own branch (merge_into) yet
+  expect(r.migrated).toBe(5)
   // saved and read again, nothing more changes
   expect(readBoard(boardText(r.board)).migrated).toBe(0)
 })
@@ -1676,7 +1726,8 @@ test('a board whose tasks have no origin is migrated once: the lead made them be
   ] }
   const r = readBoard(JSON.stringify(old))
   expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
-  expect(r.migrated).toBe(1)
+  // the task (origin and branch at once) and the dropped target_branch
+  expect(r.migrated).toBe(2)
   expect(fromText(r.board.tasks[0]!)).toBe('from: lead')
   expect(readBoard(boardText(r.board)).migrated).toBe(0)
   // a broken (hand-edited) origin is not usable: "unknown", and nothing breaks
@@ -2287,13 +2338,12 @@ test('no board.json (or an empty one) is a new, empty board', () => {
 test('inside a readable board.json, a bad task entry is skipped and counted; the rest and the settings are kept', () => {
   const [b1] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
   const [b2] = addTask(b1, { origin: W, title: 'B' }, T)
-  const raw = { ...b2, mode: 'review', target_branch: 'dev', max_parallel: 'lots', tasks: [b2.tasks[0], null, 7, { id: 'T-9' }, { ...b2.tasks[0] }, b2.tasks[1]] }
+  const raw = { ...b2, mode: 'review', max_parallel: 'lots', tasks: [b2.tasks[0], null, 7, { id: 'T-9' }, { ...b2.tasks[0] }, b2.tasks[1]] }
   const r = readBoard(JSON.stringify(raw))
   expect(r.broken).toBeUndefined()
   expect(r.board.tasks.map(t => t.id)).toEqual(['T-1', 'T-2'])
   expect(r.skipped).toBe(4)
   expect(r.board.mode).toBe('review')
-  expect(r.board.target_branch).toBe('dev')
   expect(r.board.max_parallel).toBe(3)
   expect(r.fixed).toEqual(['max_parallel'])
   expect(r.board.next_id).toBe(3)
@@ -2312,7 +2362,7 @@ import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as sco
 function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
   const ROOT = '/repo'
   const files = new Map<string, string>()
-  files.set(`${ROOT}/.symcc/board.json`, JSON.stringify({ ...emptyBoard('main'), mode: 'auto' }))
+  files.set(`${ROOT}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'auto' }))
   files.set(`${ROOT}/.symcc/scouts/gaps.md`, '---\nevery_minutes: 0\n---\nLook for gaps.\n')
   const toasts: string[] = []
   const later: { ms: number; f: () => void }[] = []

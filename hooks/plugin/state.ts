@@ -76,12 +76,8 @@ export const S = {
   beat: null as { cancel(): void } | null,
   /** the Settings view's edit box (numbers, test_commands): which setting, what is typed, the last error */
   settingEdit: null as { name: SettingName; value: string; error: string } | null,
-  /** the Settings view's pick list (mode, target_branch): which setting and its choices */
+  /** the Settings view's pick list (mode, notify): which setting and its choices */
   settingPick: null as { name: SettingName; options: string[] } | null,
-  /** set by pump when target_branch doesn't exist (no work starts then); '' when it does */
-  missingBranch: '',
-  /** the target_branch the lead was last told is missing, so it is told once, not every check */
-  toldMissing: '',
   /** what the last git check found (see probeGit); work starts only when 'ok' */
   gitState: 'ok' as GitState,
   /** the git state the lead was last told about, so it is told once, not every check */
@@ -145,7 +141,7 @@ export function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'enabled'> & { driving: boolean; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'enabled'> & { driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

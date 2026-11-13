@@ -12,7 +12,7 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, isWorkerType } from './board'
+import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, isWorkerType, intoOf } from './board'
 import { findArchived, saveArchiveMigrated } from './plugin/archive'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
@@ -290,11 +290,11 @@ export const register: Register = on => {
         if (!t) return say((await findArchived($, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`)
         try {
-          const files = await changedFiles($, b.target_branch, t)
+          const files = await changedFiles($, intoOf(t), t)
           if (!cmd.file) return say(statText(t.id, files, S.N.name))
           const f = cmd.file.replace(/^\.\//, '')
           if (!files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${files.map(x => x.file).join(', ') || 'nothing'}`)
-          const text = await changesText($, b.target_branch, t, f)
+          const text = await changesText($, intoOf(t), t, f)
           return say(cutDiff(text, t.id, 5000, f, S.N.name).join('\n') || `${f}: no text changes (binary?)`)
         } catch (err) {
           return say(`Could not read the changes of ${t.id}: ${(err as Error).message}`)

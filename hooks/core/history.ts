@@ -6,7 +6,7 @@ import { tryLabel } from './roles'
 export const ANSWER_LINE_CHARS = 300
 
 /** The fields of a change that count as "what changed" in a restart line, in this order. */
-const CHANGE_FIELDS = ['title', 'details', 'files', 'after', 'order', 'role', 'needs_review'] as const
+const CHANGE_FIELDS = ['title', 'details', 'files', 'after', 'order', 'role', 'needs_review', 'merge_into'] as const
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
@@ -74,5 +74,6 @@ export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & 
   const waits = afterChangedLine(t.after ?? [], patch.after)
   if (waits) lines.push(waits)
   if (answer?.trim()) lines.push(ownerAnsweredLine(answer))
+  if (patch.merge_into !== undefined && patch.merge_into !== (t.merge_into ?? 'main')) lines.push(`now merges into ${patch.merge_into} (was ${t.merge_into ?? 'main'})`)
   return lines
 }

@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DATA_DIR, find, normId, STATUS_WORD } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DATA_DIR, find, intoOf, normId, STATUS_WORD } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -15,7 +15,11 @@ const cleanRole = (r: unknown): string => {
   return s.toLowerCase() === 'general' ? '' : s
 }
 
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string; origin?: OriginInput }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
+/**
+ * A new task on board `b`. `merge_into` is the branch it merges into (and its worker's copy starts
+ * from): the branch checked out in the project now; "main" when not given.
+ */
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string; origin?: OriginInput; merge_into?: string }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const origin = makeOrigin(f.origin, now, b)
@@ -33,6 +37,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     attempts: 0,
     history: [createdLine(origin)],
     origin,
+    merge_into: intoOf({ merge_into: f.merge_into }),
     branch: null,
     created_at: now,
     updated_at: now,

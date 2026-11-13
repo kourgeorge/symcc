@@ -31,7 +31,6 @@ export async function paneParts($: $, e: PaneEvent) {
   const mode = modeOf(v)
   /** What the m key switches to: review and auto swap; from off it goes to review (m never turns the board off). */
   const switchTo: SymccMode = nextMode(mode)
-  const target = v.target_branch ?? emptyBoard().target_branch
   /** Switches the board mode between review and auto, the same as /<name>-mode with no word. */
   const switchMode = act(async () => {
     const r = await setBoardMode($, switchTo, 'you')
@@ -41,7 +40,7 @@ export async function paneParts($: $, e: PaneEvent) {
   /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
     const d = emptyBoard()
-    const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
+    const facts = { ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
@@ -179,6 +178,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, target, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>

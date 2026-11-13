@@ -122,10 +122,10 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
-/** commands: test_commands; branch: target_branch; number: a whole number within min-max; onoff: true/false; mode: off/review/auto; notify: off/sound/voice */
-export type SettingKind = 'commands' | 'branch' | 'number' | 'onoff' | 'mode' | 'notify'
+/** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: off/review/auto; notify: off/sound/voice */
+export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify'
 export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
 
 /** How many test commands a board keeps. */
@@ -133,7 +133,6 @@ export const MAX_TEST_COMMANDS = 5
 
 export const SETTINGS: SettingInfo[] = [
   { name: 'test_commands', kind: 'commands', default: 'none', range: 'commands joined with " && "', meaning: 'must all pass before work is merged' },
-  { name: 'target_branch', kind: 'branch', default: 'the branch checked out', range: 'an existing local branch', meaning: 'the branch finished work is merged into' },
   { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
   { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer is stopped' },
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
@@ -152,8 +151,6 @@ export function settingValue(b: Partial<Board>, name: SettingName): string {
   switch (name) {
     case 'test_commands':
       return (b.test_commands ?? []).join(' && ') || 'none'
-    case 'target_branch':
-      return b.target_branch ?? d.target_branch
     case 'open_on_start':
       return openOnStart(b) ? 'on' : 'off'
     case 'notify':
@@ -176,15 +173,13 @@ export type SettingChange = { name: SettingName; value: string; said: string; cu
 /**
  * Applies the settings in `a` to the board, with the same limits for the lead and the owner:
  * max_parallel 1-8, max_minutes 5-600, auto_retries 0-10, up to 5 test commands. A value
- * outside its limit is cut to it, and the change says so. target_branch must already be
- * checked to exist; mode and enabled are not set here (see setBoardMode and setEnabled).
+ * outside its limit is cut to it, and the change says so. There is no branch setting: each task
+ * merges into the branch it was made on. Mode and enabled are not set here (see setBoardMode and setEnabled).
  */
 export function applySettings(b: Board, a: SettingsInput): { board: Board; changes: SettingChange[] } {
   const y = { ...b }
   const changes: SettingChange[] = []
   const add = (name: SettingName, said: string, cut = '') => changes.push({ name, value: settingValue(y, name), said, cut })
-  const target = typeof a.target_branch === 'string' ? a.target_branch.trim() : ''
-  if (target) ((y.target_branch = target), add('target_branch', `work merges into ${target}`))
   if (Array.isArray(a.test_commands)) {
     const all = a.test_commands.map(x => String(x).trim()).filter(Boolean)
     y.test_commands = all.slice(0, MAX_TEST_COMMANDS)
@@ -219,7 +214,7 @@ const unquoteValue = (s: string) => {
 
 /**
  * Reads a typed value for one setting into settings tool input: numbers as whole numbers
- * (outside the limit they are cut later, by applySettings), on/off, a mode, one branch name,
+ * (outside the limit they are cut later, by applySettings), on/off, a mode,
  * or test commands joined with " && " ("none" or "" for none).
  */
 export function parseSettingValue(name: SettingName, raw: string): { ok: true; input: SettingsInput } | { ok: false; message: string } {
@@ -243,8 +238,6 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
       const w = v.toLowerCase()
       return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be off, review or auto')
     }
-    case 'branch':
-      return v && !/\s/.test(v) ? { ok: true, input: { target_branch: v } } : bad('target_branch must be one existing branch name')
     case 'commands':
       return { ok: true, input: { test_commands: v.toLowerCase() === 'none' ? [] : v.split(/\s+&&\s+/).map(x => x.trim()).filter(Boolean) } }
   }

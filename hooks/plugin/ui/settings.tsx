@@ -1,6 +1,5 @@
 // The board panel's Settings view.
 import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint } from '../../board'
-import { branchList } from '../git'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
@@ -21,7 +20,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     $.ui.toast(S.N.toast(r))
     $.ui.invalidate('ui.render')
   })
-  /** Enter on a row: on/off flips, mode, notify and target_branch open a pick list, the rest an edit box. */
+  /** Enter on a row: on/off flips, mode and notify open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
     const info = SETTINGS.find(x => x.name === name)!
     const now = settingValue(v, name)
@@ -31,7 +30,6 @@ export async function settingsPage($: $, pane: PaneParts) {
     if (info.kind === 'mode') S.settingPick = { name, options: ['off', 'review', 'auto'] }
     // only what this machine can play (off always)
     else if (info.kind === 'notify') S.settingPick = { name, options: v.notify_choices?.length ? v.notify_choices : ['off'] }
-    else if (info.kind === 'branch') S.settingPick = { name, options: await branchList($) }
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
     $.ui.invalidate('ui.render')
   })
@@ -67,7 +65,6 @@ export async function settingsPage($: $, pane: PaneParts) {
     const now = settingValue(v, name)
     return (
       <Box key={`setting-pick-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
-        {S.settingPick.options.length ? null : <Text color={C('warning')}>No local branches found.</Text>}
         {S.settingPick.options.map(o => (
           <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
             <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${o}` : `○ ${o}`}</Text>

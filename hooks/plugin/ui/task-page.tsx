@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
@@ -11,8 +11,10 @@ import type { PaneParts } from './parts'
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
-  const { Box, Text, Button, Input, v, width, color, word, mark, act, C, target, footer, buttonRows, heading, paragraphs } = pane
+  const { Box, Text, Button, Input, v, width, color, word, mark, act, C, footer, buttonRows, heading, paragraphs } = pane
   if (!S.roles.length) await loadRoles($).catch(() => undefined)
+  // the branch this task merges into: its changes are shown against it
+  const target = intoOf(t)
   const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
   const inReview = t.status === 'review'
   const showDiff = (file: string) => () => ((S.diffOpen = { task: t.id, file }), $.ui.invalidate('ui.render'))

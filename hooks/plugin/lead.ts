@@ -1,5 +1,5 @@
-import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, branchWarning, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
-import { currentBranch } from './git'
+import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { homeBranch } from './git'
 import { type $, S, workers, type PaneView, scoutState, updateView } from './state'
 import { path, locked, change, now, load } from './store'
 import { openPane } from './ui/open'
@@ -98,10 +98,12 @@ export async function handOver($: $) {
 export async function publish($: $, b: Board) {
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
   // Which branch the owner is on is looked at here, once per publish, not on every render.
-  const branch_note = gitNote(S.gitState) || S.missingBranch || branchWarning(b.target_branch, await currentBranch($))
+  // (new tasks merge into it; a task that merges elsewhere shows "→ branch" in the list)
+  const branch = S.gitState === 'ok' ? await homeBranch($) : ''
+  const branch_note = gitNote(S.gitState)
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable($)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
   await updateView($, () => v)
   // the line above the prompt, with the workers and scouts (redrawn every minute while scouts are timed, see refreshStatus)
   const crew = { max_parallel: b.max_parallel, tasks: b.tasks, scouts: v.scouts }
