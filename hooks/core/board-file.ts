@@ -38,7 +38,9 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
  * worker owns it; `agent` is the agent id of the last worker started on it.
  */
-export type BoardTask = SymccTask & { session?: string; agent?: string }
+/** `asked_files`: the files a worker asked for with NEED FILES while the task waits (the owner can allow them from the board);
+ *  `options`: the choices a worker gave with its QUESTION (OPTIONS: a | b), shown as buttons. Both only while waiting. */
+export type BoardTask = SymccTask & { session?: string; agent?: string; asked_files?: string[]; options?: string[] }
 
 /** The data folder for the default name; the paths below are for it too. For another name use namesFor(name). */
 export const DATA_DIR = dataDir()
@@ -148,6 +150,7 @@ function cleanTask(t: unknown): BoardTask | null {
   if (!isNum(x.attempts)) x.attempts = 0
   if (x.question !== null && typeof x.question !== 'string') x.question = null
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
+  for (const k of ['asked_files', 'options']) if (k in x && !(Array.isArray(x[k]) && (x[k] as unknown[]).every(v => typeof v === 'string'))) delete x[k]
   const { session, ...rest } = cleanCommitFields(x) as BoardTask
   return (typeof session === 'string' && session && x.status === 'doing' ? { ...rest, session } : rest) as BoardTask
 }

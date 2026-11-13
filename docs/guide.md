@@ -107,6 +107,19 @@ answers it itself when it can. Otherwise answer it on the board or tell the lead
 goes into the task and sends it back to work, and a new try continues with it. What the
 worker already changed is kept.
 
+**Answering a waiting task on the board.** Open the task (Enter on it under NEEDS YOU):
+
+- **A file request (`NEED FILES`)** shows three buttons, also on the number keys:
+  **1 Allow** adds the files to the task and sends it back to work in one step (its history
+  says "the owner allowed files: + a, + b"; the lead hears of it later, it is not woken up).
+  **2 Don't allow** keeps the task waiting with the note "files not allowed" and tells the
+  lead at once, so it drops the task or narrows the plan. **3 Answer…** opens a text box.
+- **A question with choices.** A worker may add a line `OPTIONS: a | b | c` (2 to 6 choices)
+  after its `QUESTION:` line. Each choice is a button with its number key, plus **Answer…**
+  for your own words. Picking one is your answer (history: the owner answered: “b”) and
+  sends the task back to work.
+- **Any other question** has a text box: type the answer and press Enter.
+
 ---
 
 ## What happens when a worker finishes
@@ -119,7 +132,7 @@ This is where symcc keeps your branch safe. Step by step:
    anything else, nothing is merged (the note says which files; add them to `files` with
    `change`, or split the task). A worker that sees it needs another file should not change
    it: it stops and answers `NEED FILES: path/a, path/b — reason`, and the task waits for
-   you to allow those files (the lead does that with `change`) or drop it.
+   you to allow those files (press Allow on its page, or tell the lead, who uses `change`) or drop it.
 3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).
@@ -221,7 +234,7 @@ You can also do it yourself:
   command, limits, counts) and the task list.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task, Esc to
   close. An open task shows everything about it, with buttons to pause, resume, retry,
-  drop, watch its worker live, and a box to answer it when it waits for you.
+  drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
 - The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner.
   Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one

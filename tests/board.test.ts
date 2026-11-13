@@ -1067,6 +1067,8 @@ test('a worker asking for more files is read from its answer', async () => {
 test('the waiting question and the failure note for files outside the list', async () => {
   expect(needFilesQuestion('T-7', { files: ['README.md', 'tests/x.test.ts'], reason: 'docs' })).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts — docs. Allow them?')
   expect(needFilesQuestion('T-7', { files: ['a.js'], reason: '' })).toBe('T-7 needs to change files outside its list: a.js. Allow them?')
+  // a reason that already ends with a period gets no second one
+  expect(needFilesQuestion('T-7', { files: ['a.js'], reason: 'use b.js instead.' })).toBe('T-7 needs to change files outside its list: a.js — use b.js instead. Allow them?')
   const note = outOfScopeText(['docs/x.md'], ['src/'])
   expect(note).toContain('docs/x.md')
   expect(note).toContain('add them to files with change, or split the task')

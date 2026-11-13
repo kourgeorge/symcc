@@ -338,6 +338,49 @@ test('a waiting task opens with a box to answer it', async ($, on) => {
   await ui.unmount()
 })
 
+test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on keys 1-3; Allow widens the files and sends it back', async ($, on) => {
+  const board = { tasks: [task('T-2', 'waiting', 'Search mode', { files: ['src/'], question: 'T-2 needs to change files outside its list: README.md. Allow them?', asked_files: ['README.md'] })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const [n, label] of [[1, '1 Allow'], [2, "2 Don't allow"], [3, '3 Answer…']] as const) {
+    const b = await ui.find({ key: `choice-${n}` })
+    expect(b?.props.label).toBe(label)
+    expect(b?.props.hotkey).toBe(String(n))
+  }
+  expect(await ui.find({ type: 'Text', text: /1 allow · 2 don't allow · 3 answer/ })).toBeDefined()
+  expect(await ui.find({ key: 'answer' })).toBeUndefined()
+  await ui.press({ key: 'choice-3' })
+  expect(await ui.find({ key: 'answer' })).toBeDefined()
+  await ui.press({ key: 'choice-1' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved.length).toBe(1)
+  expect(saved[0].tasks[0]).toMatchObject({ status: 'todo', files: ['src/', 'README.md'] })
+  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner allowed files: + README.md')
+  await ui.unmount()
+})
+
+test('a question with options shows one button per option plus Answer…; picking one is the answer', async ($, on) => {
+  const board = { tasks: [task('T-2', 'waiting', 'Search mode', { question: 'Which colour?', options: ['red', 'blue'] })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('1 red')
+  expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('2 blue')
+  expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('3 Answer…')
+  expect(await ui.find({ type: 'Text', text: /1-2 pick · 3 answer/ })).toBeDefined()
+  expect(await ui.find({ key: 'answer' })).toBeUndefined()
+  await ui.press({ key: 'choice-2' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved.length).toBe(1)
+  expect(saved[0].tasks[0].status).toBe('todo')
+  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “blue”')
+  expect(saved[0].tasks[0]).not.toHaveProperty('options')
+  await ui.unmount()
+})
+
 test('an opened task shows its details in full, in clear sections', async ($, on) => {
   const long = 'First line of the plan.\n\nSecond paragraph that is long. '.repeat(20)
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })

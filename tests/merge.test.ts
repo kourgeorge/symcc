@@ -8,7 +8,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou } from '../hooks/plugin/voice'
 import { workerFinished, setSymcc, setBoardMode, check } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
-import { runTool, ownerSettings } from '../hooks/plugin/tools'
+import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
 
 // The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
@@ -1055,8 +1055,62 @@ test('NEED FILES still makes the task wait with its question', async () => {
   expect(t.question).toBe('T-1 needs to change files outside its list: README.md — the docs mention it. Allow them?')
   expect(t.note).toBe('waiting for you')
   expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md — the docs mention it')
-  expect(leadQueue.join('\n')).toContain('The task now waits for the owner.')
+  expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md'])
   expect(sayQueue).toEqual(['?T-1'])
+})
+
+test('a worker QUESTION with an OPTIONS line saves the options; without one, or with too few or too many, none', async () => {
+  const { t } = await workerAnswers('QUESTION: Which colour?\nOPTIONS: red | blue | green', { voice: false })
+  expect(t.question).toBe('Which colour?')
+  expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
+  expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
+  for (const bad of ['QUESTION: Which colour?', 'QUESTION: Which?\nOPTIONS: red', `QUESTION: Which?\nOPTIONS: ${'a b c d e f g'.split(' ').join(' | ')}`])
+    expect((await workerAnswers(bad, { voice: false })).t).not.toHaveProperty('options')
+})
+
+/** A board where T-1 (files src/) waits after its worker asked for `files` with NEED FILES. */
+async function askedForFiles(files: string[]) {
+  const w = world()
+  const [b] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: `T-1 needs to change files outside its list: ${files.join(', ')}. Allow them?`, asked_files: files, note: 'waiting for you' } as Partial<SymccTask>, ISO))
+  let saves = 0
+  const fs = (w.$ as { fs: { write: (p: string, t: string) => Promise<void> } }).fs
+  const write = fs.write
+  fs.write = async (p, text) => ((saves += p === `${BOARD}.tmp` ? 1 : 0), write(p, text))
+  return { w, saves: () => saves }
+}
+
+test('Allow on a file request widens the files and sends the task back to work in one change; the lead gets a Meanwhile line', async () => {
+  const { w, saves } = await askedForFiles(['README.md', 'docs/a.md'])
+  await allowAskedFiles(w.$, 'T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(saves()).toBe(1)
+  expect(t.status).toBe('todo')
+  expect(t.files).toEqual(['src/', 'README.md', 'docs/a.md'])
+  expect(t.history.at(-1)).toBe('the owner allowed files: + README.md, + docs/a.md')
+  expect(t.question).toBeNull()
+  expect(t).not.toHaveProperty('asked_files')
+  expect(leadQueue).toEqual([])
+  expect(meanwhile.join('\n')).toContain('The owner allowed README.md, docs/a.md for T-1')
+})
+
+test("Don't allow keeps the task waiting with a note and tells the lead at once", async () => {
+  const { w } = await askedForFiles(['README.md'])
+  await refuseAskedFiles(w.$, 'T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('waiting')
+  expect(t.note).toBe('files not allowed')
+  expect(t.files).toEqual(['src/'])
+  expect(leadQueue.join('\n')).toContain("The owner didn't allow README.md for T-1: drop it or narrow the plan")
+})
+
+test('Allow or Don\'t allow on a task that does not wait for files is refused', async () => {
+  const w = world()
+  const [b] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'Which colour?' }, ISO))
+  await expect(allowAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
+  await expect(refuseAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
 })
 
 test('"T-1 needs you" is queued once per waiting question with voice on, and not with voice off or in another session', async () => {
