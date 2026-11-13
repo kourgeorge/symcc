@@ -429,7 +429,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
   const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
-  const more = bannerLines({ ...emptyBoard(), mode: 'off', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
+  const more = bannerLines({ ...emptyBoard(), branch: 'main', mode: 'off', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
   // mode off: a warning on the first line, as nothing starts (the workers/scouts strip is gone from the banner)
   expect(more.map(bannerText)).toEqual([
     `${a0}symcc board · symcc · ⏹ off: nothing starts`,
