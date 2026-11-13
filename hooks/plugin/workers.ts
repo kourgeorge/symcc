@@ -175,6 +175,12 @@ export const checkingNow = (id: string) => finishing.has(id) || approving.has(id
 /** The words the lead's tools use when a task they stop is being checked. */
 export const CHECKING_TEXT = (id: string) => `${id} is being tested and merged`
 
+/** Whether the owner's approve of task `id` is merging it right now: drop, reject, retry, change and ask refuse it meanwhile. */
+export const mergingNow = (id: string) => approving.has(id)
+
+/** What those tools answer while task `id` is being approved and merged. */
+export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a moment`
+
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
 export async function endCheck($: $, id: string) {
   if (!stopAsked.has(id)) return
@@ -221,7 +227,7 @@ async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, li
     return
   }
   sayDone($, b, t.id)
-  if (await removeWorktree($, t.id, worktree, agentId).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
   tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
@@ -291,7 +297,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done] })))) return
   if (r.ok) sayDone($, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
-  if (r.ok && (await removeWorktree($, t.id, worktree, agentId))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
   tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
 }
@@ -312,14 +318,18 @@ export async function approve($: $, id: string): Promise<string> {
     const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, () => stopAsked.get(t.id)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
-    if (cur?.status !== 'review') {
-      // Merged before the change was seen: settle marks it done, with a line saying so.
-      if (cur && r.ok && r.merged) {
-        await settle($, t, b, r, 'approved by the owner', dir)
-        return `${t.id} was merged before it was ${cur.status}; it is done`
+    if (r.merged) {
+      // The work is on the target branch: the task is done, whatever happened to it meanwhile
+      // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
+      const sha = r.merged.slice(0, 8)
+      if (!cur) {
+        tellLead($, `${t.id} "${t.title}" was merged into ${b.target_branch} (${sha}), but it is no longer on the board.`)
+        return `${t.id} was merged into ${b.target_branch} (${sha}), but it is no longer on the board`
       }
-      return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing more done`
+      await settle($, t, b, r, 'approved by the owner', dir)
+      return cur.status === 'review' ? `${t.id} approved and merged: ${r.detail}` : `${t.id} was merged into ${b.target_branch} (${sha}) before it was ${cur.status}; it is done`
     }
+    if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing was merged`
     if (!r.ok && !r.conflict && r.testOutput === undefined) {
       // Not the work's fault (e.g. uncommitted changes on the target branch): it stays in review.
       await change($, x => patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}` }, now()))

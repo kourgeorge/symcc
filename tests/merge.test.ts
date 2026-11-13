@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict } from '../hooks/board'
 import { checkAndMerge } from '../hooks/plugin/review'
+import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers } from '../hooks/plugin/state'
 import { workerFinished } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
@@ -549,6 +550,67 @@ test('reject with no reason is refused and the task stays in review', async () =
   const err = await runTool(w.$, 'reject', { task: 'T-1', reason: '  ' }).then(() => null, (e: Error) => e.message)
   expect(err).toBe('give a reason for rejecting, so the next worker knows what to fix')
   expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+})
+
+// ---------------- other tools while a task is being approved ----------------
+
+/** Approves T-1 (in review); `during` runs once, right after the first command that matches `when` (by default: moving main). */
+async function approving(during: (w: ReturnType<typeof world>) => Promise<unknown>, when: RegExp = /git update-ref/) {
+  const w = await inReview()
+  let done = false
+  const said: unknown[] = []
+  let removedDuring = false
+  w.onRun(async cmd => {
+    if (done || !when.test(cmd)) return
+    done = true
+    said.push(await during(w).catch((e: Error) => `error: ${e.message}`))
+    removedDuring = w.calls.some(c => c.includes('worktree remove'))
+  })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  return { w, out, said, removedDuring, t: find(await load(w.$), 'T-1')! }
+}
+
+test('reject, drop, retry, change and ask during an approve are refused; the merge goes on and the task ends done', async () => {
+  const tries: [string, Record<string, unknown>][] = [
+    ['reject', { task: 'T-1', reason: 'wrong' }],
+    ['drop', { task: 'T-1' }],
+    ['retry', { task: 'T-1' }],
+    ['change', { task: 'T-1', title: 'Something else' }],
+    ['ask', { task: 'T-1', question: 'more?' }],
+  ]
+  for (const [tool, args] of tries) {
+    const { w, out, said, removedDuring, t } = await approving(w => runTool(w.$, tool, args), /git merge-base/)
+    expect(String(said[0]).replace(/^error: /, '')).toBe('T-1 is being merged; wait a moment')
+    expect(removedDuring).toBe(false)
+    expect(out).toBe(`T-1 approved and merged: merged into main (${H1.slice(0, 8)}); approved by the owner`)
+    expect(w.git.main).toBe(H1)
+    expect(t.status).toBe('done')
+    expect(t.title).toBe('Do it')
+    expect(t.merged).toBe(H1)
+  }
+})
+
+test('the folder of a task being approved is not removed until the approve is done with it', async () => {
+  let removed: boolean | undefined
+  const { w, t } = await approving(async w => {
+    removed = await removeWorktree(w.$, 'T-1', WT)
+  })
+  expect(removed).toBe(false)
+  expect(t.status).toBe('done')
+  // only the approve's own cleanup, after the merge, removed it
+  expect(w.calls.filter(c => c.includes('worktree remove --force'))).toEqual([`root: git worktree remove --force ${WT}`])
+})
+
+test('a merged approve always ends done with its merge commit, even when the task was paused meanwhile', async () => {
+  const { w, out, t } = await approving(async w => {
+    // the change comes too late: main has just moved
+    await change(w.$, x => patchTask(x, 'T-1', { status: 'paused', note: 'paused' }, ISO))
+  }, /git read-tree|git update-ref/)
+  expect(w.git.main).toBe(H1)
+  expect(out).toBe(`T-1 was merged into main (${H1.slice(0, 8)}) before it was paused; it is done`)
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  expect(t.history.at(-1)).toBe('try 1: it was paused while being merged, too late: the work was already merged, so it stays done')
 })
 
 // ---------------- a task dropped, paused or changed while its work is checked ----------------

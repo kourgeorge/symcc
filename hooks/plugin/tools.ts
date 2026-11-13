@@ -6,7 +6,7 @@ import { loadRoles } from './roles'
 import { S, type $, heard } from './state'
 import { load, change, now } from './store'
 import { tellLead } from './tell'
-import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT } from './workers'
+import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
 // ---------------- the lead's tools ----------------
 
@@ -282,6 +282,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'change': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -337,6 +338,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const t = await taskOrThrow($, id)
       if (t.status === 'doing') return `${t.id} is already running`
       if (t.status === 'done') return `${t.id} is already done`
+      if (mergingNow(t.id)) return MERGING_TEXT(t.id)
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
       // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
@@ -352,6 +354,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'ask': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done' || t.status === 'dropped') throw new Error(`${t.id} is ${t.status}; retry it first if it needs more work`)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you' }, now()))
@@ -360,6 +363,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'drop': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is already done`)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // While its work is checked, the check stops before the merge and removes the folder when it ends.
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
@@ -395,6 +399,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       return approve($, id)
     case 'reject': {
       const reason = str(a.reason) ?? ''
+      const t = await taskOrThrow($, id)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       await change($, x => rejectTask(x, id, reason, now()))
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
