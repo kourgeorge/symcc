@@ -42,7 +42,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const banner = () => {
     const d = emptyBoard()
     const facts = { ...v, target_branch: v.target_branch ?? d.target_branch, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
-    const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'subtle', warning: 'warning' }
+    // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
+    const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
       ...bannerLines(facts, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
@@ -53,7 +54,7 @@ export async function paneParts($: $, e: PaneEvent) {
         </Text>
       )),
       // the status strip, right under the counts line: workers and scouts (the banner shows the name and mode)
-      <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
+      <Text key="status-strip" wrap="truncate" color={C(v.enabled === false || mode === 'off' ? 'warning' : 'inactive')}>
         {bannerStrip({ ...v, mode }, Date.now(), width, S.N.name)}
       </Text>,
       ...(v.git_state === 'no-repo' || v.git_state === 'no-commits'
@@ -66,24 +67,26 @@ export async function paneParts($: $, e: PaneEvent) {
         : []),
     ]
   }
-  /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3) │ [c] Settings", the active one bold, underlined and in the accent color. "t", "s" and "c" switch. */
+  /** The tab row under the banner: "t: Tasks (12) │ s: Scouts (3) │ c: Settings", the active one bold, underlined and blue (the
+   *  accent color). Each tab is a `plain` Button, so it has no "[ … ]" frame; a plain Button with a hotkey always draws "KEY: "
+   *  before its text, so the label carries no "[t]" of its own. "t", "s" and "c" switch, and a click works too. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane($, which)))
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
       return (
-        <Button key={`tab-${which}`} hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
+        <Button key={`tab-${which}`} label={label} plain hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
           <Text bold={active} underline={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
     return (
       <Box key="tabs" flexDirection="row">
-        {one('tasks', `[t] Tasks (${v.tasks.length})`)}
+        {one('tasks', `Tasks (${v.tasks.length})`)}
         <Text color={C('subtle')}> │ </Text>
-        {one('scouts', `[s] Scouts (${scouts.length})`)}
+        {one('scouts', `Scouts (${scouts.length})`)}
         <Text color={C('subtle')}> │ </Text>
-        {one('settings', '[c] Settings')}
+        {one('settings', 'Settings')}
       </Box>
     )
   }
