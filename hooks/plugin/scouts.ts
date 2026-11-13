@@ -2,7 +2,7 @@ import type { SymccScout, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage } from '../board'
 import { publish, refreshStatus } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
-import { path, load, now } from './store'
+import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 
 // ---------------- scouts ----------------
@@ -89,29 +89,34 @@ export async function loadScoutMemory($: $) {
 
 /** Saves scouts.json once with old one-number token totals marked unsplit (see migrateScoutUsage); nothing when already current. */
 export async function saveScoutsMigrated($: $) {
-  const text = await $.fs.read(scoutMemoryFile()).catch(() => null)
-  const next = migrateScoutUsage(text)
-  if (next !== null) await writeScoutMemory($, next)
+  await changeScoutMemory($, old => migrateScoutUsage(old))
 }
 
-/** Writes scouts.json (temp file + rename, like board.json). The scouts' token and time totals ("usage") already in
- *  the file are kept when `text` carries none. */
-export async function writeScoutMemory($: $, text: string) {
+/**
+ * Changes scouts.json: reads it, makes the new text with `fn` (null = leave the file as it is) and saves it through
+ * a temp file of its own and a rename (like board.json). The scouts' token and time totals ("usage") already in
+ * the file are kept when the new text carries none. Changes in this session go one at a time, each reading what
+ * the one before saved, so a run's totals and a timer or pause change at the same time are both kept.
+ */
+export function changeScoutMemory($: $, fn: (old: string | null) => string | null): Promise<void> {
   const file = scoutMemoryFile()
-  const tmp = `${file}.tmp`
-  text = keepScoutUsage(text, await $.fs.read(file).catch(() => null))
-  await $.process.run(['mkdir', '-p', path(S.N.dir)])
-  await $.fs.write(tmp, text)
-  const r = await $.process.run(['mv', '-f', tmp, file])
-  if (r.exitCode !== 0) throw new Error(`couldn't save ${S.N.dir}/scouts.json: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+  return oneAtATime(file, async () => {
+    const old = await $.fs.read(file).catch(() => null)
+    const next = fn(typeof old === 'string' ? old : null)
+    if (next === null) return
+    await $.process.run(['mkdir', '-p', path(S.N.dir)])
+    await safeWrite($, file, keepScoutUsage(next, old), `${S.N.dir}/scouts.json`)
+  })
 }
 
 /** Saves the scouts in scoutState; scouts no longer in scouts/ are dropped. Whether each is paused is taken from
  *  the file first, since the owner may have paused or resumed one from another session. */
 export async function saveScoutMemory($: $) {
-  const saved = await loadScoutMemory($)
-  for (const st of scoutState.values()) st.paused = saved[st.name]?.paused === true
-  await writeScoutMemory($, scoutMemoryText(scoutState.values()))
+  await changeScoutMemory($, old => {
+    const saved = parseScoutMemory(old)
+    for (const st of scoutState.values()) st.paused = saved[st.name]?.paused === true
+    return scoutMemoryText(scoutState.values())
+  })
 }
 
 /** True when scout `st` is paused, as scouts.json says now (st.paused is brought up to date). */
@@ -130,12 +135,16 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
   const defs = await scheduleScouts($)
   const st = scoutState.get(name)
   if (!st || !defs.some(d => d.name === name)) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
-  const saved = await loadScoutMemory($)
-  if ((saved[name]?.paused === true) === paused) {
+  let already = false
+  await changeScoutMemory($, old => {
+    const saved = parseScoutMemory(old)
+    already = (saved[name]?.paused === true) === paused
+    return already ? null : scoutPausedText(saved, name, paused)
+  })
+  if (already) {
     st.paused = paused
     return paused ? `${name} is already paused; resume it with p on its page or /${S.N.name}-scout ${name} resume` : `${name} is not paused`
   }
-  await writeScoutMemory($, scoutPausedText(saved, name, paused))
   st.paused = paused
   await publish($, await load($))
   $.ui.invalidate('ui.render')
@@ -145,8 +154,7 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
 
 /** Adds one run of scout `name` (its tokens and time) to the running totals in scouts.json, for /<name>-stats. */
 export async function recordScoutRun($: $, name: string, run: { endMs: number; ms: number; tokens?: SymccTokens }) {
-  const old = await $.fs.read(scoutMemoryFile()).catch(() => null)
-  await writeScoutMemory($, addScoutRun(old, name, run))
+  await changeScoutMemory($, old => addScoutRun(old, name, run))
 }
 
 export async function scoutFinished($: $, agentId: string, answer: string, isAborted = false, tokens?: SymccTokens) {

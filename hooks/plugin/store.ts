@@ -1,4 +1,4 @@
-import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale } from '../board'
+import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale, tmpName } from '../board'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -8,6 +8,50 @@ import { S, type $ } from './state'
 
 export const now = () => new Date().toISOString()
 export const path = (rel: string) => `${S.root}/${rel}`
+
+/** Counts this copy of the plugin's temp files, so each save gets its own (see tmpName). */
+let tmpCount = 0
+
+/** A new temp file name for one save of `file` (never the same twice, in this session or another). */
+export const tmpFor = (file: string) => tmpName(file, S.me || 'unknown', `${++tmpCount}-${Math.random().toString(36).slice(2, 8)}`)
+
+/**
+ * Writes `text` to `file` safely: first to a temp file of its own (tmpFor), then renamed over `file`, so a crash
+ * mid-write never leaves half a file and two saves at once never break each other. A failed rename throws
+ * "couldn't save <what>: ..."; a failed write throws its own error. Either way the temp file is removed.
+ */
+export async function safeWrite($: $, file: string, text: string, what: string): Promise<void> {
+  const tmp = tmpFor(file)
+  let r: { exitCode: number; stdout: string; stderr: string }
+  try {
+    await $.fs.write(tmp, text)
+    // $.fs has no rename; mv within one folder is an atomic rename
+    r = await $.process.run(['mv', '-f', tmp, file])
+  } catch (e) {
+    await $.process.run(['rm', '-f', tmp]).catch(() => undefined)
+    throw e
+  }
+  if (r.exitCode === 0) return
+  await $.process.run(['rm', '-f', tmp]).catch(() => undefined)
+  throw new Error(`couldn't save ${what}: ${(r.stderr || r.stdout).trim().slice(0, 200) || `mv exit ${r.exitCode}`}`)
+}
+
+/** The last job queued for each key (see oneAtATime). */
+const queues = new Map<string, Promise<unknown>>()
+
+/**
+ * Runs `fn` after every job queued before it with the same key has finished (failed or not), so read-change-write
+ * jobs on one file in this session never overlap and never lose each other's changes.
+ */
+export function oneAtATime<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const run = (queues.get(key) ?? Promise.resolve()).then(fn, fn)
+  const tail = run.catch(() => undefined)
+  queues.set(key, tail)
+  void tail.then(() => {
+    if (queues.get(key) === tail) queues.delete(key)
+  })
+  return run
+}
 
 /** board.json texts already reported (broken, or with skipped entries or bad settings), and the copy kept of each */
 const reported = new Map<string, string>()
@@ -79,7 +123,7 @@ export async function takeLock($: $): Promise<string> {
   const lock = path(S.N.lockFile)
   const me = `${await $.session.id().catch(() => 'unknown')}:${Math.random().toString(36).slice(2, 10)}`
   const mine = lockText(me, Date.now())
-  const tmp = `${lock}.${me.replace(/[^\w.-]/g, '_')}.tmp`
+  const tmp = tmpFor(lock)
   await $.fs.write(tmp, mine)
   try {
     const until = Date.now() + 5_000
@@ -107,12 +151,7 @@ export async function dropLock($: $, mine: string) {
 
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
 export async function saveBoard($: $, b: Board) {
-  const file = path(S.N.boardFile)
-  const tmp = `${file}.tmp`
-  await $.fs.write(tmp, JSON.stringify(b, null, 2) + '\n')
-  // $.fs has no rename; mv within one folder is an atomic rename
-  const r = await $.process.run(['mv', '-f', tmp, file])
-  if (r.exitCode !== 0) throw new Error(`couldn't save the board: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+  await safeWrite($, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
 }
 
 /**

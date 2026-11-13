@@ -73,14 +73,28 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
-/** Names of the temp files takeLock and writeLead leave behind if their session is killed. */
-const LEFTOVER_TMP = /^(?:board\.lock|lead\.json)\.[\w.-]+\.tmp$/
+/** The files of the data folder that are saved through a temp file (see tmpName). */
+const TMP_OWNERS = ['board.lock', 'lead.json', 'board.json', 'scouts.json', 'archive.json']
+
+/**
+ * The temp file a save of `file` writes first (then renames over `file`): `<file>.<session>.<n>.tmp`, where `n`
+ * is new for every save (a counter and a random part). Two saves of one file at the same time, in one session
+ * or two, never share a temp file, so neither can rename the other's away.
+ */
+export function tmpName(file: string, session: string, n: string): string {
+  const safe = (x: string) => String(x ?? '').replace(/[^\w-]/g, '_') || 'unknown'
+  return `${file}.${safe(session)}.${safe(n)}.tmp`
+}
+
+/** Names of the temp files a save leaves behind if its session is killed mid-save (see tmpName). */
+const LEFTOVER_TMP = new RegExp(`^(?:${TMP_OWNERS.map(n => n.replace(/\./g, '\\.')).join('|')})\\.[\\w.-]+\\.tmp$`)
 
 /**
  * Which files in the data folder are leftover temp files that may be deleted: only
- * board.lock.<session>.tmp and lead.json.<session>.tmp, and only once they are older than
- * maxAgeMs (a fresh one may still be in use by another session). A file with no usable
- * time, or dated in the future, is kept. Anything else (board.json, lead.json, ...) is never chosen.
+ * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, lead.json, board.json, scouts.json,
+ * archive.json), and only once they are older than maxAgeMs (a fresh one may still be in use by another
+ * session). A file with no usable time, or dated in the future, is kept. Anything else (board.json, lead.json,
+ * ...) is never chosen.
  */
 export function leftoverTmpFiles(files: { name: string; mtimeMs?: number }[], nowMs: number, maxAgeMs = LOCK_STALE_MS): string[] {
   if (!Array.isArray(files) || !Number.isFinite(nowMs)) return []
