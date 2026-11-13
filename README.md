@@ -26,9 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/video/symcc.mp4"><img src="docs/video/symcc.gif" alt="symcc video preview: you talk to the lead, it puts tasks on the board, and workers move them from todo to running to done" width="800"></a>
-  <br>
-  <a href="docs/video/symcc.mp4"><b>▶ Watch the full video</b></a> (78 seconds, no sound)
+  <img src="docs/demo.svg" alt="symcc demo" width="860">
 </p>
 
 You give a coding agent a task and watch it work. Meanwhile new ideas come up, and you
@@ -71,7 +69,9 @@ app and no issue-tracker link. When two changes clash, a new worker sorts out th
 ![How symcc works: you, the lead, workers and scouts](docs/architecture.svg)
 
 <p align="center">
-  <img src="docs/demo.svg" alt="symcc demo" width="860">
+  <a href="docs/video/symcc.mp4"><img src="docs/video/symcc.gif" alt="symcc video preview: you talk to the lead, it puts tasks on the board, and workers move them from todo to running to done" width="800"></a>
+  <br>
+  <a href="docs/video/symcc.mp4"><b>▶ Watch the full video</b></a> (78 seconds, no sound)
 </p>
 
 1. **Ask.** You ask for something, or a scout finds something.
