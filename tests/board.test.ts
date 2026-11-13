@@ -2098,7 +2098,7 @@ test('git status -z is read into codes and paths; a rename keeps only its new pa
 test('a merge waits for uncommitted changes and for untracked files it would overwrite, but not for other untracked files', () => {
   const st = '?? new.txt\0?? notes.txt\0?? lib\0?? .symcc/board.json\0'
   const b = mergeBlockers(st, ['a.txt', 'new.txt', 'lib/x.js'], '.symcc')
-  expect(b).toEqual({ dirty: [], untracked: ['new.txt', 'lib'] })
+  expect(b).toEqual({ dirty: [], untracked: ['new.txt', 'lib'], ignored: [] })
   expect(blockedText('main', 'T-3', b)).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, then say "retry T-3"')
   expect(mergeBlockers(' M a.txt\0 M .symcc/x\0', ['b.txt'], '.symcc').dirty).toEqual(['a.txt'])
   expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toContain('uncommitted changes on main')

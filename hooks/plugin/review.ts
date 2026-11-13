@@ -77,7 +77,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   }
   if (mode === 'finish' && needsReview(b, t)) return { ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` }
   // Move main forward (compare-and-swap). If the person has main checked out, update their
-  // files too, but never over uncommitted changes or untracked files the merge would overwrite.
+  // files too, but never over uncommitted changes or untracked or ignored files the merge would overwrite.
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir })
   if (!moved.ok) return { ok: false, detail: moved.detail }

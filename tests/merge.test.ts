@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, find } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find } from '../hooks/board'
 import { checkAndMerge } from '../hooks/plugin/review'
 import { S, leadQueue } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
@@ -365,6 +365,44 @@ test('checkAndMerge on a checked-out main with only untracked files out of the w
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); no test command set` })
   expect(w.calls).toContain(`root: git read-tree -m -u ${M1} ${H1}`)
+})
+
+test('checkAndMerge waits and names a git-ignored file of the owner that the merge would overwrite', async () => {
+  // main ignores config.local.json and the owner has a private one; the task adds an example one
+  const w = world({ current: 'main', changed: ['src/config.local.json'], status: '!! src/config.local.json\0!! node_modules/\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toBe('you have git-ignored files on main that T-1 would overwrite (src/config.local.json); move or rename them, then say "retry T-1"')
+  expect(w.calls).toContain('root: git status --porcelain -z --untracked-files=all --ignored=matching')
+  expect(movedMain(w)).toBe(false)
+  expect(w.calls.some(c => c.includes('read-tree -m -u'))).toBe(false)
+})
+
+test('checkAndMerge waits when the merge adds a file inside a git-ignored folder of the owner', async () => {
+  const w = world({ current: 'main', changed: ['src/build/out.js'], status: '!! src/build/\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('git-ignored files on main that T-1 would overwrite (src/build/)')
+  expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge merges when the owner\'s git-ignored files are not touched by the merge', async () => {
+  const w = world({ current: 'main', status: '!! node_modules/\0!! config.local.json\0!! .symcc/\0!! app.log\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); no test command set` })
+  expect(w.calls).toContain(`root: git read-tree -m -u ${M1} ${H1}`)
+})
+
+test('mergeBlockers sorts dirty, untracked and ignored paths and skips the board folder', () => {
+  const st = ' M README.md\0?? src/a.ts\0!! secret.env\0!! .symcc/\0?? .symcc/board.json\0!! dist/\0'
+  expect(mergeBlockers(st, ['src/a.ts', 'secret.env', '.symcc/board.json'], '.symcc')).toEqual({ dirty: ['README.md'], untracked: ['src/a.ts'], ignored: ['secret.env'] })
+})
+
+test('blockedText hides control characters in file names', () => {
+  expect(blockedText('main', 'T-1', { dirty: [], untracked: [], ignored: ['a\nb\u001b[31m.txt'] })).toBe('you have git-ignored files on main that T-1 would overwrite (a?b?[31m.txt); move or rename them, then say "retry T-1"')
 })
 
 test('checkAndMerge puts main back and says "not merged" when updating the files fails after main moved', async () => {
