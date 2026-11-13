@@ -75,7 +75,7 @@ export async function paneParts($: $, e: PaneEvent) {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
       return (
         <Button key={`tab-${which}`} hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
-          <Text bold={active} color={C(active ? 'ide' : 'subtle')}>{label}</Text>
+          <Text bold={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
@@ -91,7 +91,7 @@ export async function paneParts($: $, e: PaneEvent) {
   }
   /** The whole header: banner, then the tab row, then the rule under them. */
   const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
-  /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words subtle. */
+  /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
     hintLines(hints, width).map((line, i) => (
       <Text key={`${name}-${i}`} color={C('subtle')}>
@@ -99,7 +99,7 @@ export async function paneParts($: $, e: PaneEvent) {
           <Text key={`${name}-${i}-${j}`}>
             {j ? ' · ' : ''}
             <Text bold color={C('text')}>{kh.key}</Text>
-            <Text color={C('subtle')}>{` ${kh.word}`}</Text>
+            <Text color={C('inactive')}>{` ${kh.word}`}</Text>
           </Text>
         ))}
       </Text>

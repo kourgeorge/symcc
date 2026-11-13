@@ -395,6 +395,15 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a3}`,
   ])
   expect(lines[0]!.parts[0]).toEqual({ text: 'symcc board', tone: 'accent', bold: true })
+  // the facts are in the normal text color (readable in dark mode), the folder and branch bold; only the separators are dim
+  expect(lines[1]!.parts).toEqual([
+    { text: '~/repositories/symcc', tone: 'plain', bold: true },
+    { text: ' · ', tone: 'dim' },
+    { text: 'main', tone: 'plain', bold: true },
+    { text: ' · ', tone: 'dim' },
+    { text: 'this session drives', tone: 'plain' },
+  ])
+  expect(lines[2]!.parts.filter(p => p.text !== ' · ').every(p => p.tone === 'plain')).toBe(true)
   expect(bannerRule(12)).toBe('━'.repeat(12))
   expect(listRule(12)).toBe('┄'.repeat(12))
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
@@ -409,6 +418,8 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
+  expect(more[4]!.parts.filter(p => p.bold).map(p => p.text)).toEqual(['2 doing', '1 to do', '1 done'])
+  expect(more[4]!.parts.some(p => p.tone === 'dim' && p.text !== ' · ')).toBe(false)
 })
 
 test('a narrow banner drops the drawing and cuts lines to fit', () => {
