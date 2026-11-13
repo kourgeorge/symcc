@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccScout, SymccTask } from '../types'
 
-import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
+import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -2392,7 +2392,10 @@ test('a scout run stopped from the agent controls is not saved as a report and n
   expect(st.last_run).toBe(OLD_RUN)
   expect(st.last_report).toBe('the real report')
   expect(scoutLeadQueue.length).toBe(0)
-  expect(w.files.has('/repo/.symcc/scouts.json')).toBe(false)
+  // the stopped run's tokens and time still count (scouts.json's usage), but no report or run time is saved
+  const saved = w.files.get('/repo/.symcc/scouts.json') ?? null
+  expect(parseScoutMemory(saved).gaps).toBe(undefined)
+  expect(parseScoutUsage(saved).gaps?.runs).toBe(1)
   expect(w.toasts.some(t => t.includes('scout gaps was stopped; nothing reported'))).toBe(true)
 })
 

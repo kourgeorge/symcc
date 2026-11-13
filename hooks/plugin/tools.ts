@@ -1,5 +1,6 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText } from '../board'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, type LeadCall, type StatsRange, type TeamInput } from '../board'
+import { scoutMemoryFile } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
@@ -93,8 +94,9 @@ export const MANUAL = (): Record<string, string> => ({
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
                        (several test commands: join them with " && "; "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-stats [7d|T-1..T-9]  time and token stats: totals, averages per task and per try,
-                       outcomes, by role, origin and day (all tasks, the last N days, or an id range)
+  /${S.N.name}-stats [7d|T-1..T-9]  time and token stats: the whole team (lead, workers, scouts), totals,
+                       averages per task and per try, outcomes, by role, origin and day (all tasks,
+                       the last N days, or an id range)
   /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
@@ -268,7 +270,7 @@ export const TOOLS = () => [
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
+  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
   {
     name: 'setup_git',
     description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Sets target_branch to that branch. Never pushes, adds no remote.`,
@@ -293,7 +295,40 @@ export async function statsText($: $, args: string): Promise<string> {
   const text = (await $.fs.exists(file).catch(() => false)) ? await $.fs.read(file).catch(() => null) : null
   const r = readArchive(text)
   const archiveProblem = r.broken ? `${S.N.archiveFile} can't be read (${r.broken})` : !r.archive.tasks.length && archivedCount(b) ? `${archivedCount(b)} archived tasks, but ${S.N.archiveFile} holds none` : undefined
-  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs: Date.now(), offsetMin: localOffset(), name: S.N.name })
+  const nowMs = Date.now()
+  const team: TeamInput = { ...(await leadUsage($, range, nowMs)), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
+  const usd = (await $.session.usage().catch(() => null))?.cost?.usd
+  if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
+  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team })
+}
+
+/**
+ * The lead's tokens: the plugin API gives no per-session token counts (only this session's $ total), so they are
+ * read from Claude Code's own session logs, ~/.claude/projects/<this project's folder>/<session>.jsonl. Read-only,
+ * only this project's folder, only the usage numbers (see leadCalls). For a days range, logs not written to since
+ * the range began are skipped.
+ */
+async function leadUsage($: $, range: StatsRange, nowMs: number): Promise<Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem'>> {
+  const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
+  const base = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
+  if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
+  const dir = `${base}/projects/${projectFolderName(S.root)}`
+  const files = await $.fs.list(dir).catch(() => null)
+  if (!files) return { leadProblem: `no session logs in ${shortHome(dir, home)}` }
+  const from = rangeSpan(range, [], nowMs).from
+  // a resumed session's log may repeat calls of the one before: each call counts once
+  const lead = new Map<string, LeadCall>()
+  let sessions = 0
+  for (const f of files) {
+    if (f.kind !== 'file' || !f.name.endsWith('.jsonl')) continue
+    if (range.kind === 'days' && from !== undefined && f.mtimeMs < from) continue
+    const text = await $.fs.read(`${dir}/${f.name}`).catch(() => null)
+    if (text === null) continue
+    const calls = leadCalls(String(text))
+    if (calls.length) sessions++
+    for (const c of calls) lead.set(c.id, c)
+  }
+  return { lead: [...lead.values()], leadSessions: sessions }
 }
 
 export type In = Record<string, unknown>

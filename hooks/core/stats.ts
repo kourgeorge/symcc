@@ -5,7 +5,7 @@ import type { SymccRun, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
-import { fmtDuration, fmtTokens, runMs } from './runs'
+import { fmtCost, fmtDuration, fmtTokens, runMs } from './runs'
 
 // ---------------- the range ----------------
 
@@ -141,6 +141,8 @@ export type StatsInput = {
   /** the owner's time zone, minutes east of UTC */
   offsetMin?: number
   name?: string
+  /** the lead's and scouts' usage for the "Whole team" part; left out, that part is not shown */
+  team?: TeamInput
 }
 
 const cutTitle = (s: string, n = 35) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
@@ -174,7 +176,7 @@ export function statsReport(input: StatsInput): string {
   const F = (t: SymccTask) => fig.get(t.id)!
   const withData = all.filter(t => F(t).hasData)
   const noData = all.length - withData.length
-  out.push(`Scout runs aren't counted (only worker tries are kept).${noData ? ` ${plural(noData, 'task')} with no try data (older tasks) ${noData === 1 ? 'is' : 'are'} left out of averages.` : ''}`)
+  if (noData) out.push(`${plural(noData, 'task')} with no try data (older tasks) ${noData === 1 ? 'is' : 'are'} left out of averages.`)
   const open = withData.reduce((s, t) => s + endedRuns(t, nowMs).open, 0)
   if (open) out.push(`${plural(open, 'try', 'tries')} with no end time (older boards) count up to the next try, or the task's last change.`)
 
@@ -188,6 +190,14 @@ export function statsReport(input: StatsInput): string {
   out.push(row('worker time', fmtDuration(totalMs)))
   out.push(row('tokens', tokKnown.length ? `${fmtTokens(totalTok)}${tokKnown.length < withData.length ? ` (${tokKnown.length} of ${withData.length} tasks report tokens)` : ''}` : '-'))
   out.push(row('with data', `${withData.length} of ${all.length} tasks`))
+
+  // Whole team: the lead and the scouts too, not only the workers
+  if (input.team) {
+    const tries = withData.reduce((s, t) => s + F(t).tries, 0)
+    const span = rangeSpan(range, all, nowMs)
+    out.push('', `   Whole team (${range.kind === 'all' ? 'all time' : range.kind === 'days' ? rangeText(range) : `${rangeText(range)}; lead and scouts over the time these tasks span`})`)
+    out.push(...teamLines(input.team, span, { tokens: totalTok, tries }, all.filter(t => t.status === 'done').length, name))
+  }
 
   // 2. Per task (done tasks with data)
   const done = withData.filter(t => t.status === 'done')
@@ -277,4 +287,147 @@ export function statsReport(input: StatsInput): string {
   if (!last.length) out.push('  no activity')
   for (const [d, v] of last) out.push(row(d === today ? 'Today' : dayLabel(d, today), `${String(v.done).padStart(3)} done · ${fmtDuration(v.ms).padStart(7)} · ${fmtTokens(v.tokens).padStart(6)} tokens`))
   return out.join('\n')
+}
+
+// ---------------- the whole team: scouts and the lead ----------------
+
+/** One scout's tokens and time: runs, tokens and ms in all, and the same per day (UTC "YYYY-MM-DD") for the range. */
+export type ScoutUsageFigures = { runs: number; tokens: number; ms: number }
+export type ScoutUsage = ScoutUsageFigures & { days: Record<string, ScoutUsageFigures> }
+
+const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0)
+const figs = (v: unknown): ScoutUsageFigures | null => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const o = v as Record<string, unknown>
+  return { runs: num(o.runs), tokens: num(o.tokens), ms: num(o.ms) }
+}
+const jsonObj = (text: string | null | undefined): Record<string, unknown> | null => {
+  try {
+    const raw = JSON.parse(String(text ?? ''))
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/** The scouts' tokens and time kept in scouts.json under "usage" (scout name → totals); {} for a missing or broken file. */
+export function parseScoutUsage(text: string | null | undefined): Record<string, ScoutUsage> {
+  const u = jsonObj(text)?.usage
+  const out: Record<string, ScoutUsage> = {}
+  if (!u || typeof u !== 'object' || Array.isArray(u)) return out
+  for (const [name, v] of Object.entries(u as Record<string, unknown>)) {
+    const f = figs(v)
+    if (!name || !f) continue
+    const days: Record<string, ScoutUsageFigures> = {}
+    const d = (v as { days?: unknown }).days
+    if (d && typeof d === 'object' && !Array.isArray(d))
+      for (const [k, x] of Object.entries(d as Record<string, unknown>)) {
+        const g = figs(x)
+        if (g && /^\d{4}-\d{2}-\d{2}$/.test(k)) days[k] = g
+      }
+    out[name] = { ...f, days }
+  }
+  return out
+}
+
+/** scouts.json's text `text` with one more run of scout `name` added to its usage (ended at `endMs`, `ms` long, `tokens` when reported); the rest kept as it is. */
+export function addScoutRun(text: string | null | undefined, name: string, run: { endMs: number; ms: number; tokens?: number }): string {
+  const raw = jsonObj(text) ?? { scouts: {} }
+  const usage = parseScoutUsage(text)
+  const tok = num(run.tokens)
+  const ms = num(run.ms)
+  const add = (f: ScoutUsageFigures | undefined): ScoutUsageFigures => ({ runs: (f?.runs ?? 0) + 1, tokens: (f?.tokens ?? 0) + tok, ms: (f?.ms ?? 0) + ms })
+  const cur = usage[name]
+  const day = dayOf(run.endMs, 0)
+  usage[name] = { ...add(cur), days: { ...(cur?.days ?? {}), ...(day ? { [day]: add(cur?.days[day]) } : {}) } }
+  return JSON.stringify({ ...raw, usage }, null, 2) + '\n'
+}
+
+/** New scouts.json text `next` with the "usage" of the file's text before (`prev`) kept, when `next` carries none. */
+export function keepScoutUsage(next: string, prev: string | null | undefined): string {
+  const n = jsonObj(next)
+  const usage = jsonObj(prev)?.usage
+  if (!n || n.usage !== undefined || usage === undefined) return next
+  return JSON.stringify({ ...n, usage }, null, 2) + '\n'
+}
+
+/** One API call of the lead, read from Claude Code's session log: its message id, when, and its tokens. */
+export type LeadCall = { id: string; atMs: number; tokens: number }
+
+/**
+ * The lead's calls in one session log (Claude Code's <session>.jsonl): only assistant lines of the main chat
+ * (not sidechains) with usage; only the usage numbers are read. A call written over several lines counts once.
+ */
+export function leadCalls(jsonl: string): LeadCall[] {
+  const byId = new Map<string, LeadCall>()
+  let n = 0
+  for (const line of String(jsonl ?? '').split('\n')) {
+    if (!line.includes('"usage"')) continue
+    const o = jsonObj(line)
+    if (!o || o.type !== 'assistant' || o.isSidechain === true) continue
+    const m = o.message as { id?: unknown; usage?: Record<string, unknown> } | undefined
+    const u = m?.usage
+    if (!u || typeof u !== 'object') continue
+    const tokens = num(u.input_tokens) + num(u.output_tokens) + num(u.cache_read_input_tokens) + num(u.cache_creation_input_tokens)
+    if (!tokens) continue
+    const id = typeof m!.id === 'string' && m!.id ? m!.id : `line-${n++}`
+    const atMs = Date.parse(typeof o.timestamp === 'string' ? o.timestamp : '')
+    const old = byId.get(id)
+    if (!old || tokens > old.tokens) byId.set(id, { id, atMs, tokens })
+  }
+  return [...byId.values()]
+}
+
+/** Claude Code's folder name for a project path under ~/.claude/projects: every character not a letter or digit becomes "-". */
+export const projectFolderName = (root: string) => String(root ?? '').replace(/[^a-zA-Z0-9]/g, '-')
+
+/** The time span a range covers, in ms ([from, to], either open); for an id range, from the first task made to the last change. */
+export function rangeSpan(r: StatsRange, tasks: Pick<SymccTask, 'created_at' | 'updated_at'>[], nowMs: number): { from?: number; to?: number } {
+  if (r.kind === 'days') return { from: nowMs - r.days * 86_400_000 }
+  if (r.kind === 'all') return {}
+  const made = tasks.map(t => Date.parse(t.created_at || '')).filter(Number.isFinite)
+  const changed = tasks.map(t => Date.parse(t.updated_at || t.created_at || '')).filter(Number.isFinite)
+  if (!made.length) return { from: Infinity }
+  return { from: Math.min(...made), to: Math.max(...changed) }
+}
+
+/** The scouts' runs, tokens and time within span `s` (all of it when the span is open on both ends; by whole UTC days otherwise). */
+export function scoutTotals(usage: Record<string, ScoutUsage>, s: { from?: number; to?: number }): ScoutUsageFigures {
+  const out = { runs: 0, tokens: 0, ms: 0 }
+  const open = s.from === undefined && s.to === undefined
+  const lo = s.from === undefined ? '' : s.from === Infinity ? '9999' : dayOf(s.from, 0)
+  const hi = s.to === undefined ? '9999' : dayOf(s.to, 0)
+  for (const u of Object.values(usage)) {
+    const parts = open ? [u] : Object.entries(u.days).filter(([d]) => d >= lo && d <= hi).map(([, f]) => f)
+    for (const f of parts) {
+      out.runs += f.runs
+      out.tokens += f.tokens
+      out.ms += f.ms
+    }
+  }
+  return out
+}
+
+/** The lead's calls and tokens within span `s`. */
+export function leadTotals(calls: LeadCall[], s: { from?: number; to?: number }): { calls: number; tokens: number } {
+  const inside = calls.filter(c => (s.from === undefined || (Number.isFinite(c.atMs) && c.atMs >= s.from)) && (s.to === undefined || (Number.isFinite(c.atMs) && c.atMs <= s.to)))
+  return { calls: inside.length, tokens: inside.reduce((n, c) => n + c.tokens, 0) }
+}
+
+/** What the "Whole team" part needs: the lead's calls (or why they can't be read), the scouts' usage, and this session's $ if Claude Code reports it. */
+export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?: string; scouts?: Record<string, ScoutUsage>; sessionUsd?: number }
+
+/** The "Whole team" lines: lead · workers · scouts · total for the range, and the cost per merged task. */
+export function teamLines(team: TeamInput, span: { from?: number; to?: number }, workers: { tokens: number; tries: number }, merged: number, name: string = DEFAULT_NAME): string[] {
+  const lead = team.lead ? leadTotals(team.lead, span) : null
+  const sc = scoutTotals(team.scouts ?? {}, span)
+  const total = (lead?.tokens ?? 0) + workers.tokens + sc.tokens
+  const out: string[] = []
+  out.push(row('lead', lead ? `${fmtTokens(lead.tokens).padStart(6)} tokens (${plural(lead.calls, 'call')}, from Claude Code's session logs${team.leadSessions !== undefined ? `, ${plural(team.leadSessions, 'session')}` : ''})` : `     - not counted: ${team.leadProblem ?? 'no session logs'}`))
+  out.push(row('workers', `${fmtTokens(workers.tokens).padStart(6)} tokens (${plural(workers.tries, 'try', 'tries')})`))
+  out.push(row('scouts', `${fmtTokens(sc.tokens).padStart(6)} tokens (${plural(sc.runs, 'run')}${sc.runs ? `, ${fmtDuration(sc.ms)}` : ''})`))
+  out.push(row('total', `${fmtTokens(total).padStart(6)} tokens${lead ? '' : ' (without the lead)'}`))
+  out.push(row('per merged', merged ? `${fmtTokens(total / merged).padStart(6)} tokens per merged task (${merged} merged)` : '     - no merged tasks'))
+  out.push(row('dollars', `not shown: ${name} doesn't know the model prices${team.sessionUsd !== undefined ? ` (this session so far, as /cost says: ${fmtCost(team.sessionUsd)}, all of it, not split by range)` : ''}`))
+  return out
 }
