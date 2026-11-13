@@ -67,24 +67,26 @@ export async function paneParts($: $, e: PaneEvent) {
         : []),
     ]
   }
-  /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3) │ [c] Settings", the active one bold, underlined and in the accent color. "t", "s" and "c" switch. */
+  /** The tab row under the banner: "t: Tasks (12) │ s: Scouts (3) │ c: Settings", the active one bold, underlined and blue (the
+   *  accent color). Each tab is a `plain` Button, so it has no "[ … ]" frame; a plain Button with a hotkey always draws "KEY: "
+   *  before its text, so the label carries no "[t]" of its own. "t", "s" and "c" switch, and a click works too. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane($, which)))
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
       return (
-        <Button key={`tab-${which}`} hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
+        <Button key={`tab-${which}`} label={label} plain hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
           <Text bold={active} underline={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
     return (
       <Box key="tabs" flexDirection="row">
-        {one('tasks', `[t] Tasks (${v.tasks.length})`)}
+        {one('tasks', `Tasks (${v.tasks.length})`)}
         <Text color={C('subtle')}> │ </Text>
-        {one('scouts', `[s] Scouts (${scouts.length})`)}
+        {one('scouts', `Scouts (${scouts.length})`)}
         <Text color={C('subtle')}> │ </Text>
-        {one('settings', '[c] Settings')}
+        {one('settings', 'Settings')}
       </Box>
     )
   }
