@@ -513,6 +513,9 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(await ui.find({ key: 'T-1' })).toBeUndefined()
     const active = (await ui.findAll({ type: 'Text', text: /^\[s\] Scouts \(2\)$/ })).find(x => x.props.bold)
     expect(active?.props.color).toBe('ide')
+    // the active tab is underlined too; the others are not
+    expect(active?.props.underline).toBe(true)
+    for (const other of [/^\[t\] Tasks \(1\)$/, /^\[c\] Settings$/]) expect((await ui.find({ type: 'Text', text: other }))?.props.underline).toBeFalsy()
     // one row per scout, running first
     const rows = await ui.findAll({ type: 'Button' })
     const keys = rows.map(r => r.props.key).filter(k => String(k).startsWith('scout:'))

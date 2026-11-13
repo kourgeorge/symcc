@@ -66,14 +66,14 @@ export async function paneParts($: $, e: PaneEvent) {
         : []),
     ]
   }
-  /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3) │ [c] Settings", the active one bold in the accent color. "t", "s" and "c" switch. */
+  /** The tab row under the banner: "[t] Tasks (12) │ [s] Scouts (3) │ [c] Settings", the active one bold, underlined and in the accent color. "t", "s" and "c" switch. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane($, which)))
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
       return (
         <Button key={`tab-${which}`} hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
-          <Text bold={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
+          <Text bold={active} underline={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
