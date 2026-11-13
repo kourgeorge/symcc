@@ -84,7 +84,7 @@ picks up again next time.
 | `failed` | It could not be finished; the lead decides what next |
 | `done` | Merged into your branch. This is final |
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
-| `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog · N" group |
+| `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |
 
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
@@ -308,8 +308,8 @@ skills: [code-review]
 
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
-failed or in the backlog. The board list shows a role after the status
-(`T-12 doing · tester`); `general` shows nothing.
+failed or in the backlog. The board list shows a role at the right end
+of the task's row (`tester · try 2`); `general` shows nothing.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big
 enough to stand alone, the lead splits it into one task per role and links them with `after`:
