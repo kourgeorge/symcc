@@ -268,6 +268,21 @@ export function settingsText(b: Partial<Board>, name: string = DEFAULT_NAME): st
   ].join('\n')
 }
 
+/**
+ * The lead's settings tool called with nothing to change: every setting, one per line, with its
+ * current value and default in plain words; notify also says which choices this machine can play.
+ */
+export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' | 'voice'>): string {
+  return [
+    'Settings now (name: value, default, what it does):',
+    ...SETTINGS.map(s => {
+      const value = s.name === 'notify' ? notifyOf(b, can) : settingValue(b, s.name)
+      const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
+      return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
+    }),
+  ].join('\n')
+}
+
 // ---------------- when the branch conflicts with main ----------------
 
 /** How many new tries a task gets to merge main into its branch after a conflict. */
