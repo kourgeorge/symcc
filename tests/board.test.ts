@@ -2408,12 +2408,12 @@ test('taskReports lists the saved reports by try, and ignores old runs and paths
   expect(taskReports({ runs: [{ started: '' }, { started: '', report: '.symcc/reports/T-1-try-2.md' }, { started: '', report: '/etc/passwd' }, { started: '', report: '.symcc/reports/../x-try-1.md' }] })).toEqual([{ try: 2, file: '.symcc/reports/T-1-try-2.md' }])
 })
 
-test('researchNotes picks files under docs/research/, and the task page shows them as Note rows', () => {
+test('researchNotes picks files under docs/research/, and the task page shows them as Research rows', () => {
   expect(researchNotes(['docs/guide.md', 'docs/research/b.md', 'docs/research/a.md', 'src/docs/research/c.md'])).toEqual(['docs/research/a.md', 'docs/research/b.md'])
   const t = { ...addTask(emptyBoard(), { origin: { why: 'w' }, title: 'x' }, '2026-01-01T00:00:00.000Z')[1], research_notes: ['docs/research/a.md'] } as SymccTask
   const rows = detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 })
-  expect(rows.find(r => r.label === 'Note')?.segs.map(g => g.text).join('')).toBe('docs/research/a.md (research note)')
-  expect(detailRows({ ...t, research_notes: undefined }, { roles: [], all: [t], when: s => s, nowMs: 0 }).some(r => r.label === 'Note')).toBe(false)
+  expect(rows.find(r => r.label === 'Research')?.segs.map(g => g.text).join('')).toBe('docs/research/a.md')
+  expect(detailRows({ ...t, research_notes: undefined }, { roles: [], all: [t], when: s => s, nowMs: 0 }).some(r => r.label === 'Research')).toBe(false)
 })
 
 test('reportPreview shows the first lines and then where the full report is', () => {

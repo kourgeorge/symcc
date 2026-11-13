@@ -44,22 +44,27 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
   return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
 }
 
-/** The one-line status strip on top of the board list: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
+type StripBoard = { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+
+/** The one-line status strip: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
  *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
  *  turned off shows "symcc off · /symcc-on". Busy workers are the tasks being worked on. */
-export function statusStrip(
-  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] },
-  nowMs: number,
-  width = Infinity,
-  name: string = DEFAULT_NAME,
-): string {
+export function statusStrip(v: StripBoard, nowMs: number, width = Infinity, name: string = DEFAULT_NAME): string {
+  if (v.enabled === false) return offStatusLine(name)
+  return bannerStrip(v, nowMs, width - `${name} · ${v.mode} · `.length, name, `${name} · ${v.mode} · `)
+}
+
+/** The status strip as the board panel's banner shows it, right under the counts line: the name and mode are left
+ *  out (the banner already shows them), so "1/3 workers · 4 scouts (next: secrets in 38m)". The next scout goes
+ *  first when it does not fit in `width`; a plugin that is turned off shows "symcc off · /symcc-on". */
+export function bannerStrip(v: StripBoard, nowMs: number, width = Infinity, name: string = DEFAULT_NAME, lead = ''): string {
   if (v.enabled === false) return offStatusLine(name)
   const busy = v.tasks.filter(t => t.status === 'doing').length
   const n = v.scouts.length
-  const base = [name, v.mode, `${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
+  const base = [`${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
   const next = v.mode === 'off' ? '' : nextScoutText(v.scouts, nowMs)
   const full = next ? `${base} (${next})` : base
-  return full.length <= width ? full : base
+  return lead + (full.length <= width ? full : base)
 }
 
 /** The short status column of a task row in the board list: the time of the running try ("4m") for a task being

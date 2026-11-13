@@ -800,8 +800,8 @@ test('the task page shows one labelled row per fact, From and Why on their own r
     const row = L.find(l => l.startsWith(`${label}:`))
     expect(row).toBeDefined()
     // every value starts in the same column
-    expect(row!.slice(0, 9).trim()).toBe(`${label}:`)
-    expect(row![9]).not.toBe(' ')
+    expect(row!.slice(0, 10).trim()).toBe(`${label}:`)
+    expect(row![10]).not.toBe(' ')
   }
   expect(L.some(l => /^From:\s+owner$/.test(l))).toBe(true)
   expect(L.some(l => /^Why:\s+Scouts mostly find/.test(l))).toBe(true)
@@ -809,9 +809,9 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   // the request in full, in quotes, wrapped within the panel, never cut mid-word
   const at = L.findIndex(l => l.startsWith('Request:'))
   const seen = L.findIndex(l => l.startsWith('Seen:'))
-  const wrapped = L.slice(at, seen).map(l => l.slice(9))
+  const wrapped = L.slice(at, seen).map(l => l.slice(10))
   expect(wrapped.length).toBeGreaterThan(1)
-  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(9)))).toBe(true)
+  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(10)))).toBe(true)
   expect(wrapped.join(' ')).toBe(`“${request}”`)
   for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
   expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
@@ -908,7 +908,7 @@ test('while symcc is off its tools answer that it is off and leave the board alo
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
 
-test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
+test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
   const now = Date.now()
   const iso = (m: number) => new Date(now + m * 60_000).toISOString()
   const tasks = [
@@ -924,12 +924,19 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
   for (const w of [40, 60, 100]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    // the strip sits right above the strong rule; the next scout only when it fits
-    const strip = texts.findIndex(t => /^symcc · review · 2\/3 workers · 2 scouts/.test(t))
+    // the strip is the line right under the banner's counts line, above the mode line and the rule; it leaves
+    // out the name and mode (the banner shows them) and the next scout goes first when it does not fit
+    const strip = texts.findIndex(t => /^2\/3 workers · 2 scouts/.test(t))
     expect(strip).toBeGreaterThan(-1)
-    expect(/^━+$/.test(texts[strip + 1] ?? '')).toBe(true)
+    const counts = texts.findIndex(t => /^2 doing · /.test(t))
+    expect(counts).toBeGreaterThan(-1)
+    expect(counts).toBeLessThan(strip)
+    for (const t of texts.slice(counts + 1, strip)) expect(texts[counts]).toContain(t)
+    expect(texts[strip + 1]).toMatch(/review/)
+    expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(strip)
+    expect(texts.filter(t => /workers · \d+ scout/.test(t)).length).toBe(1)
     expect(texts[strip]!.length).toBeLessThanOrEqual(w)
-    if (w >= 100) expect(texts[strip]).toBe('symcc · review · 2/3 workers · 2 scouts (next: secrets in 38m)')
+    expect(texts[strip]).toBe(w >= 60 ? '2/3 workers · 2 scouts (next: secrets in 38m)' : '2/3 workers · 2 scouts')
     // every task row fits the panel; the hint is whole and fits too
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
@@ -966,7 +973,7 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
 
 const STRIP_CASES = [
   ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
-  ['the board is in mode off', { mode: 'off' }, /^symcc · off · 0\/3 workers · 1 scout$/],
+  ['the board is in mode off', { mode: 'off' }, /^0\/3 workers · 1 scout$/],
 ] as const
 for (const [when, extra, want] of STRIP_CASES)
   test(`the status strip when ${when}: a warning, and no next scout`, async ($, on) => {
@@ -1239,7 +1246,7 @@ test('a research task shows its note as a row in Details', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-2.md': 'Wrote it.\n', '/reports/T-1-try-1.md': 'Tried.\n' })
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await lines(ui)).some(l => /^Note:\s+docs\/research\/market\.md \(research note\)$/.test(l))).toBe(true)
+  expect((await lines(ui)).some(l => /^Research:\s+docs\/research\/market\.md$/.test(l))).toBe(true)
   await ui.unmount()
 })
 
