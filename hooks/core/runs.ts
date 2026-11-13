@@ -55,9 +55,18 @@ export function sumRuns(runs: SymccRun[] | undefined, nowMs?: number): RunTotal 
   }
 }
 
-/** Adds up every try of every task on the board. */
-export function boardTotal(b: { tasks: Pick<SymccTask, 'runs'>[] }, nowMs?: number): RunTotal {
-  return sumRuns(b.tasks.flatMap(t => t.runs ?? []), nowMs)
+/** What boardTotal needs: the tasks, and the totals of the tasks moved to the archive (if any). */
+type Totalled = { tasks: Pick<SymccTask, 'runs'>[]; archived?: { tries: number; ms: number; tokens?: number; cost?: number } }
+
+/** Adds up every try of every task on the board, and of the archived tasks. */
+export function boardTotal(b: Totalled, nowMs?: number): RunTotal {
+  const t = sumRuns(b.tasks.flatMap(t => t.runs ?? []), nowMs)
+  const a = b.archived
+  if (!a || !a.tries) return t
+  const add = (x: number | undefined, y: number | undefined) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0))
+  const tokens = add(t.tokens, a.tokens)
+  const cost = add(t.cost, a.cost)
+  return { ms: t.ms + a.ms, tries: t.tries + a.tries, ...(tokens !== undefined ? { tokens } : {}), ...(cost !== undefined ? { cost } : {}) }
 }
 
 /** A length of time: "45s", "12m", "1h 05m". */
@@ -94,7 +103,7 @@ export function fmtRun(r: SymccRun, i: number, nowMs?: number): string {
 }
 
 /** The board's total line, e.g. "total: 1h 12m · ~$3.40 over 4 tries"; '' when no try has run. */
-export function totalLine(b: { tasks: Pick<SymccTask, 'runs'>[] }, nowMs?: number): string {
+export function totalLine(b: Totalled, nowMs?: number): string {
   const t = boardTotal(b, nowMs)
   return t.tries ? `total: ${fmtTotal(t)} over ${t.tries} ${t.tries === 1 ? 'try' : 'tries'}` : ''
 }

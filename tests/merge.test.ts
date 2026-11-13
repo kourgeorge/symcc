@@ -6,6 +6,7 @@ import { S, leadQueue, workers } from '../hooks/plugin/state'
 import { workerFinished } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
+import { archiveOld } from '../hooks/plugin/archive'
 
 // The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
 // process globals, and nothing below the plugin answers $.fs or $.process.run. So these tests run the
@@ -700,4 +701,100 @@ test('retry after a failure that was not a clash resets the merge-main tries but
   const t = find(await load(w.$), 'T-1')!
   expect(t.conflict_tries).toBe(0)
   expect(t.merge_main ?? false).toBe(false)
+})
+
+// ---------------- old tasks: archive.json ----------------
+
+const ARCHIVE = `${ROOT}/.symcc/archive.json`
+const LONG_AGO = '2026-01-01T00:00:00.000Z'
+
+/** A saved board: T-1 done long ago, T-2 dropped long ago, T-3 done just now, T-4 to do; this session drives. */
+async function archiveWorld() {
+  const w = world()
+  let b: Board = emptyBoard('main')
+  for (const title of ['old done', 'old dropped', 'new done', 'to do']) b = addTask(b, { origin: { why: 'a test' }, title }, ISO)[0]
+  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: LONG_AGO, ended: '2026-01-01T00:10:00.000Z', tokens: 500 }] }, LONG_AGO)
+  b = patchTask(b, 'T-2', { status: 'dropped' }, LONG_AGO)
+  b = patchTask(b, 'T-3', { status: 'done' }, new Date(T0).toISOString())
+  await saveBoard(w.$, b)
+  S.driving = true
+  S.lastArchive = 0
+  S.archiveBroken = ''
+  w.calls.splice(0)
+  return { w, b }
+}
+
+test('archiving moves old done and dropped tasks to archive.json, written first, and keeps next_id and the totals', async () => {
+  const { w, b } = await archiveWorld()
+  expect(await archiveOld(w.$, T0)).toEqual(['T-1', 'T-2'])
+  const moves = w.calls.filter(c => c.startsWith('mv '))
+  expect(moves).toEqual([`mv -f ${ARCHIVE}.tmp ${ARCHIVE}`, `mv -f ${BOARD}.tmp ${BOARD}`])
+  const after = await load(w.$)
+  expect(after.tasks.map(t => t.id)).toEqual(['T-3', 'T-4'])
+  expect(after.next_id).toBe(b.next_id)
+  expect(after.archived).toEqual({ done: 1, dropped: 1, tries: 1, ms: 600_000, tokens: 500 })
+  expect(after.archived_done).toEqual(['T-1'])
+  expect(JSON.parse(w.files.get(ARCHIVE)!).tasks.map((t: SymccTask) => t.id)).toEqual(['T-1', 'T-2'])
+  expect(await runTool(w.$, 'board', {})).toMatch(/archived: 1 done, 1 dropped/)
+  expect(await runTool(w.$, 'board', {})).toMatch(/total: 10m · 500 tokens over 1 try/)
+  // at most once an hour
+  expect(await archiveOld(w.$, T0 + 60_000)).toEqual([])
+})
+
+test('archiving runs only in the driving session, and never with archive_days 0', async () => {
+  const { w } = await archiveWorld()
+  S.driving = false
+  expect(await archiveOld(w.$, T0)).toEqual([])
+  S.driving = true
+  await change(w.$, x => ({ ...x, archive_days: 0 }))
+  expect(await archiveOld(w.$, T0)).toEqual([])
+  expect((await load(w.$)).tasks.length).toBe(4)
+  expect(w.files.has(ARCHIVE)).toBe(false)
+})
+
+test('when archive.json cannot be written, nothing leaves the board', async () => {
+  const { w } = await archiveWorld()
+  const fs = (w.$ as unknown as { fs: { write: (p: string, t: string) => Promise<unknown> } }).fs
+  const write = fs.write
+  fs.write = async (p, t) => {
+    if (p.startsWith(ARCHIVE)) throw new Error('disk full')
+    return write(p, t)
+  }
+  expect(await archiveOld(w.$, T0)).toEqual([])
+  expect((await load(w.$)).tasks.length).toBe(4)
+  expect((await load(w.$)).archived).toBeUndefined()
+  expect(w.toasts.some(t => /not archived: disk full/.test(t))).toBe(true)
+})
+
+test('a broken archive.json is never written over: a copy is kept, the owner is told, nothing is archived', async () => {
+  const { w } = await archiveWorld()
+  w.put(ARCHIVE, '{"tasks": [')
+  expect(await archiveOld(w.$, T0)).toEqual([])
+  expect(w.files.get(ARCHIVE)).toBe('{"tasks": [')
+  expect((await load(w.$)).tasks.length).toBe(4)
+  const copies = [...w.files.keys()].filter(p => p.startsWith(`${ARCHIVE}.broken-`))
+  expect(copies.length).toBe(1)
+  expect(w.toasts.filter(t => /archive\.json can't be read/.test(t)).length).toBe(1)
+  // told once, not every hour
+  expect(await archiveOld(w.$, T0 + 2 * 3_600_000)).toEqual([])
+  expect(w.toasts.filter(t => /archive\.json can't be read/.test(t)).length).toBe(1)
+  // fixed: archiving goes on
+  w.put(ARCHIVE, '{"version":1,"tasks":[]}')
+  expect(await archiveOld(w.$, T0 + 4 * 3_600_000)).toEqual(['T-1', 'T-2'])
+})
+
+test('an archived task can still be looked up, is read-only, and an archived dropped task can be retried', async () => {
+  const { w } = await archiveWorld()
+  await archiveOld(w.$, T0)
+  expect(await runTool(w.$, 'board', { task: 'T-1' })).toMatch(/^T-1 is archived[\s\S]*T-1 {2}\[done\] {2}old done/)
+  await expect(runTool(w.$, 'change', { task: 'T-1', title: 'x' })).rejects.toThrow(/T-1 is archived/)
+  await expect(runTool(w.$, 'ask', { task: 'T-2', question: 'x?' })).rejects.toThrow(/T-2 is archived/)
+  await expect(runTool(w.$, 'retry', { task: 'T-1' })).rejects.toThrow(/T-1 is archived/)
+  expect(await runTool(w.$, 'retry', { task: 'T-2' })).toBe('T-2 brought back from the archive and queued')
+  const b = await load(w.$)
+  expect(find(b, 'T-2')!.status).toBe('todo')
+  expect(find(b, 'T-2')!.history.at(-1)).toBe('brought back from the archive (was dropped)')
+  expect(b.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 600_000, tokens: 500 })
+  expect(JSON.parse(w.files.get(ARCHIVE)!).tasks.map((t: SymccTask) => t.id)).toEqual(['T-1'])
+  await expect(runTool(w.$, 'board', { task: 'T-9' })).rejects.toThrow(/not on the board or in the archive/)
 })

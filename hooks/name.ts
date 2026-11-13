@@ -45,6 +45,8 @@ export function namesFor(raw: string = DEFAULT_NAME) {
     /** ".<name>" */
     dir,
     boardFile: `${dir}/board.json`,
+    /** old done and dropped tasks, moved out of board.json (see core/archive.ts) */
+    archiveFile: `${dir}/archive.json`,
     lockFile: `${dir}/board.lock`,
     leadFile: `${dir}/lead.json`,
     worktrees: `${dir}/worktrees`,

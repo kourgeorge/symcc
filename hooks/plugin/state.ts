@@ -110,6 +110,10 @@ export const S = {
   saying: false,
   /** how this machine speaks: a command that takes the text last, or null for silence (found once) */
   speaker: null as Promise<string[][]> | null,
+  /** when this session last looked for old tasks to archive (ms; at most once an hour, see archiveOld) */
+  lastArchive: 0,
+  /** the archive.json text found broken and already reported, so the owner is told once; '' when none */
+  archiveBroken: '',
   /** whether the lead was told about a bigger cleanup already (once per session) */
   toldCleanup: false,
 }
@@ -124,7 +128,7 @@ export function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'open_on_start' | 'voice' | 'enabled'> & { driving: boolean; branch_note: string; git_state: GitState }>
+export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'voice' | 'enabled'> & { driving: boolean; branch_note: string; git_state: GitState }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

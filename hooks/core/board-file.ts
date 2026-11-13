@@ -22,8 +22,17 @@ export type Board = {
   voice: boolean
   /** the whole plugin on or off (/<name>-on, /<name>-off); off: Claude works as normal, the board is kept. true unless turned off */
   enabled: boolean
+  /** done and dropped tasks older than this many days move to archive.json (0 = never) */
+  archive_days: number
   tasks: BoardTask[]
+  /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
+  archived?: ArchivedTotals
+  /** the ids of archived tasks that were done, so a task waiting on one still starts */
+  archived_done?: string[]
 }
+
+/** The running totals of archived tasks: how many were done and dropped, and their tries' time, tokens and cost. */
+export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: number; cost?: number }
 
 /**
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
@@ -81,9 +90,12 @@ export const BACKLOG_FROM: SymccStatus[] = ['todo', 'doing', 'paused', 'failed']
 /** How many automatic retries after failing tests a new board allows. */
 export const DEFAULT_AUTO_RETRIES = 2
 
+/** How many days a done or dropped task stays on the board before it is archived, on a new board (0 = never). */
+export const DEFAULT_ARCHIVE_DAYS = 14
+
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, enabled: true, tasks: [] }
+  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
 }
 
 /** What reading board.json found: the board, and what was wrong with the file (if anything). */
@@ -103,7 +115,7 @@ const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 
 /** Each setting with the test its value must pass; a value that fails is replaced by the default. */
-const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id'>]: (v: unknown) => boolean } = {
+const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done'>]: (v: unknown) => boolean } = {
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
   target_branch: v => typeof v === 'string' && v.trim() !== '',
@@ -113,6 +125,17 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id'>]
   open_on_start: v => typeof v === 'boolean',
   voice: v => typeof v === 'boolean',
   enabled: v => typeof v === 'boolean',
+  archive_days: v => isNum(v) && v >= 0,
+}
+
+/** The archived totals from the file, or undefined when missing or not usable (they then start from zero). */
+function cleanArchived(v: unknown): ArchivedTotals | undefined {
+  if (!isObj(v)) return undefined
+  const n = (x: unknown) => (isNum(x) && x >= 0 ? x : 0)
+  const out: ArchivedTotals = { done: n(v.done), dropped: n(v.dropped), tries: n(v.tries), ms: n(v.ms) }
+  if (isNum(v.tokens) && v.tokens >= 0) out.tokens = v.tokens
+  if (isNum(v.cost) && v.cost >= 0) out.cost = v.cost
+  return out
 }
 
 /** A task entry from the file made usable, or null when it is not a task (it is then skipped). */
@@ -152,6 +175,11 @@ export function readBoard(text: string | null): BoardRead {
     if (SETTING_OK[k](raw[k])) (board as Record<string, unknown>)[k] = raw[k]
     else fixed.push(k)
   }
+  const archived = cleanArchived(raw.archived)
+  if (archived) board.archived = archived
+  else if ('archived' in raw) fixed.push('archived')
+  if (Array.isArray(raw.archived_done)) board.archived_done = [...new Set(raw.archived_done.filter((x): x is string => typeof x === 'string').map(normId))]
+  else if ('archived_done' in raw) fixed.push('archived_done')
   let skipped = 0
   const seen = new Set<string>()
   for (const t of (raw.tasks as unknown[] | undefined) ?? []) {
@@ -164,7 +192,8 @@ export function readBoard(text: string | null): BoardRead {
     board.tasks.push(c)
   }
   // next_id never goes back below a task already on the board (a new task must not reuse an id)
-  const top = Math.max(0, ...board.tasks.map(t => Number(/^T-(\d+)$/.exec(t.id)?.[1] ?? 0)))
+  // (nor an archived one: archived done ids count too)
+  const top = Math.max(0, ...[...board.tasks.map(t => t.id), ...(board.archived_done ?? [])].map(id => Number(/^T-(\d+)$/.exec(id)?.[1] ?? 0)))
   if ('next_id' in raw && !(isNum(raw.next_id) && Number.isInteger(raw.next_id) && raw.next_id >= 1)) fixed.push('next_id')
   board.next_id = Math.max(isNum(raw.next_id) && Number.isInteger(raw.next_id) && raw.next_id >= 1 ? raw.next_id : 1, top + 1)
   return { board, skipped, fixed }

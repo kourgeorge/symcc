@@ -34,7 +34,7 @@ export function originSegs(t: { origin?: unknown }): Seg[] {
  * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, After, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
-export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number }): DetailRow[] {
+export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
   R.push({ label: 'Status', segs: [{ text: `${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'subtle' }] })
   if (t.note) R.push({ label: 'Note', segs: [{ text: t.note, color: 'subtle', italic: true }] })
@@ -50,9 +50,12 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
   R.push({ label: 'Files', segs: t.files.length ? t.files.flatMap((f, i) => [...(i ? [{ text: ', ', color: 'subtle' }] : []), { text: f, color: 'autoAccept' }]) : [{ text: 'anywhere in the project', color: 'subtle' }] })
   t.after.forEach((id, i) => {
     const dep = o.all.find(x => x.id === id)
+    // a done task moved to archive.json counts as done
+    const gone = !dep && (o.archivedDone ?? []).includes(id)
+    const state: Seg = dep ? { text: `${STATUS_MARK[dep.status]} ${STATUS_WORD[dep.status]}`, color: STATUS_BADGE[dep.status] } : gone ? { text: `${STATUS_MARK.done} ${STATUS_WORD.done} (archived)`, color: STATUS_BADGE.done } : { text: 'missing', color: 'error' }
     R.push({
       label: i ? '' : 'After',
-      segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, dep ? { text: `${STATUS_MARK[dep.status]} ${STATUS_WORD[dep.status]}`, color: STATUS_BADGE[dep.status] } : { text: 'missing', color: 'error' }, ...(dep ? [{ text: ` · ${dep.title}`, color: 'subtle' }] : [])],
+      segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, state, ...(dep ? [{ text: ` · ${dep.title}`, color: 'subtle' }] : [])],
     })
   })
   if (t.branch) R.push({ label: 'Branch', segs: [{ text: t.branch, color: 'ide' }] })

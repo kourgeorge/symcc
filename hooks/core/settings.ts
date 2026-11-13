@@ -1,7 +1,7 @@
 // Failing tests, turning things on and off, the settings, and branch conflicts.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, DEFAULT_AUTO_RETRIES, emptyBoard, isMode, modeOf } from './board-file'
+import { type Board, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, emptyBoard, isMode, modeOf } from './board-file'
 import { num } from './text'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
@@ -58,7 +58,7 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'voice', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; branch: target_branch; number: a whole number within min-max; onoff: true/false; mode: off/review/auto */
 export type SettingKind = 'commands' | 'branch' | 'number' | 'onoff' | 'mode'
@@ -73,6 +73,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
   { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer is stopped' },
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
+  { name: 'archive_days', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
   { name: 'voice', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'say "T-3 done" out loud when a task is merged' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
@@ -125,14 +126,19 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
     y.test_commands = all.slice(0, MAX_TEST_COMMANDS)
     add('test_commands', `tests: ${y.test_commands.join(' && ') || 'none'}`, all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept: test_commands holds up to ${MAX_TEST_COMMANDS})` : '')
   }
-  for (const name of ['max_parallel', 'max_minutes', 'auto_retries'] as const) {
+  for (const name of ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days'] as const) {
     const n = a[name]
     if (typeof n !== 'number' || !Number.isFinite(n)) continue
     const s = settingInfo(name)!
     const v = Math.max(s.min!, Math.min(s.max!, Math.round(n)))
     y[name] = v
     const cut = v !== Math.round(n) ? ` (cut from ${n} to the limit: ${name} must be ${s.range})` : ''
-    add(name, name === 'max_parallel' ? `up to ${v} at once` : name === 'max_minutes' ? `a worker may run ${v} min` : `${v} automatic ${v === 1 ? 'retry' : 'retries'} after failing tests`, cut)
+    const said =
+      name === 'max_parallel' ? `up to ${v} at once`
+      : name === 'max_minutes' ? `a worker may run ${v} min`
+      : name === 'archive_days' ? (v ? `done and dropped tasks older than ${v} ${v === 1 ? 'day' : 'days'} are archived` : 'old tasks are never archived')
+      : `${v} automatic ${v === 1 ? 'retry' : 'retries'} after failing tests`
+    add(name, said, cut)
   }
   if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), add('open_on_start', a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
   if (typeof a.voice === 'boolean') ((y.voice = a.voice), add('voice', a.voice ? 'merged tasks are said out loud' : 'merged tasks are no longer said out loud'))

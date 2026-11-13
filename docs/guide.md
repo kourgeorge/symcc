@@ -366,13 +366,34 @@ Every two minutes symcc checks the board by itself. It:
 - starts tasks that are ready (up to `max_parallel`, 3 by default, at once),
 - stops a worker that runs too long (`max_minutes`, 45 by default) and marks the task failed,
 - notices a worker that ended without reporting back,
-- reminds the lead about a failed task nobody has dealt with for 10 minutes.
+- reminds the lead about a failed task nobody has dealt with for 10 minutes,
+- once an hour, archives old finished tasks (see below).
 
 A stopped worker can't do anything more: symcc refuses every tool it tries to use.
 
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+
+### Old tasks are archived
+
+So `board.json` stays small, done and dropped tasks that have not changed for
+`archive_days` days (14 by default) move to `.symcc/archive.json`.
+
+- **When:** on the regular check, in the driving window, at most once an hour.
+  `archive_days 0` turns it off (`/symcc-settings archive_days 0`).
+- **Safely:** the archive is written first (to a temp file, then renamed), and only then are
+  the tasks taken off the board. If writing the archive fails, nothing leaves the board.
+  If `archive.json` can't be read, symcc never writes over it: it keeps a copy
+  (`archive.json.broken-<time>`), tells you, and archives nothing more until it is fixed.
+- **Never in the way:** a done task that an unfinished task still waits for (its `after`)
+  stays on the board. A task waiting on an archived done task still starts.
+- **Still counted:** the Done row says how many were archived, e.g. `▸ Done  12 (+96 archived)`,
+  and the board's total time and tokens include them. Task numbers are never reused.
+- **Finding one:** `/symcc-task T-12` shows an archived task (or ask the lead, who can look
+  it up with its `board` tool). Archived tasks are read-only: change, ask, approve and so on
+  answer "T-12 is archived". Retrying an archived *dropped* task brings it back to the
+  board as `todo`, with a history line.
 
 ---
 
@@ -400,6 +421,7 @@ on, in the mode the board had. The switch is kept per project, as `enabled` in
 your-project/
 └── .symcc/
     ├── board.json        the board: settings + every task
+    ├── archive.json      old done and dropped tasks, moved off the board (see archive_days)
     ├── board.lock        held for a moment while a window saves the board
     ├── lead.json         which window drives the board (with a heartbeat)
     ├── scouts/           your scout files (*.md)
@@ -430,7 +452,7 @@ start with `symcc/` are never touched.
   45 minutes; raise `max_minutes` or split the task.
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
 - **A dropped task never runs on its own.** There is no delete; a dropped task stays on
-  the list, and nothing automatic (retries after failed tests, a finishing check) starts
+  the list (until it is archived), and nothing automatic (retries after failed tests, a finishing check) starts
   it again. To bring it back on purpose, press `r` (Retry) on its page or ask the lead to
   retry it: it goes back to `todo`, with "brought back from dropped" in its history.
   `done` is final: a done task can't be retried or sent a question.

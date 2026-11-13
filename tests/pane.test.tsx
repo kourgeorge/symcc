@@ -676,7 +676,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   const active = (await ui.findAll({ type: 'Text', text: /^\[c\] Settings$/ })).find(x => x.props.bold)
   expect(active?.props.color).toBe('ide')
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode', 'enabled'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'voice', 'mode', 'enabled'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -1201,4 +1201,22 @@ test('a broken board.json is never saved over: a change is refused, a copy is ke
   expect(toasts.some(t => /board\.json can't be read/.test(t))).toBe(true)
   expect(toasts.some(t => /T-1 role: docs/.test(t))).toBe(false)
   await ui.unmount()
+})
+
+test('archived tasks are only counted on the Done row, and /symcc-task still finds one in archive.json', async ($, on) => {
+  const archived = { done: 96, dropped: 3, tries: 0, ms: 0 }
+  const board = { version: 1, next_id: 13, tasks: [task('T-11', 'done', 'Still here'), task('T-12', 'todo', 'Waits on an old one', { after: ['T-5'] })], archived, archived_done: ['T-5'] }
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: board.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], archived, archived_done: ['T-5'] } } })
+  fakeFiles(on, { ...ROLE_FILES, '/board.json': JSON.stringify(board), '/board.lock': null, '/archive.json': JSON.stringify({ version: 1, tasks: [task('T-5', 'done', 'An old one')] }) })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^ {2}▸ Done +1 \(\+96 archived\)$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /An old one/ })).toBeUndefined()
+  // T-12 waits on T-5, which is archived as done: no "after T-5"
+  expect(await ui.find({ type: 'Text', text: /after T-5/ })).toBeUndefined()
+  await ui.unmount()
+  const shown = String((await $.command.run({ command: 'symcc-task', args: 'T-5' })).text)
+  expect(shown).toMatch(/^T-5 is archived \(in \.symcc\/archive\.json; read-only\)/)
+  expect(shown).toMatch(/An old one/)
+  expect(String((await $.command.run({ command: 'symcc-approve', args: 'T-5' })).text)).toBe('T-5 is archived.')
+  expect(String((await $.command.run({ command: 'symcc-task', args: 'T-6' })).text)).toBe('T-6 is not on the board.')
 })

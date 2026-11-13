@@ -99,7 +99,7 @@ export async function publish($: $, b: Board) {
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   const branch_note = gitNote(S.gitState) || S.missingBranch || branchWarning(b.target_branch, await currentBranch($))
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, open_on_start: openOnStart(b), voice: voiceOn(b), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, target_branch: b.target_branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), voice: voiceOn(b), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState }
   await updateView($, () => v)
   $.ui.status(symccOn(b) ? statusLine(b, S.driving, branch_note, modeOf(b)) : offStatusLine(S.N.name))
 }

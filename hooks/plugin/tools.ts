@@ -1,9 +1,10 @@
 import type { SymccTask } from '../../types'
 import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
+import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
 import { loadRoles } from './roles'
-import { S, type $, heard } from './state'
+import { S, type $, heard, workers } from './state'
 import { load, change, now } from './store'
 import { tellLead } from './tell'
 import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT } from './workers'
@@ -13,7 +14,7 @@ import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsk
 /** A short date and time, like "Nov 11, 09:30"; "?" when there is none. */
 export const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
 
-export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string {
+export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
   L.push(fromText(t, 120))
@@ -27,7 +28,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []):
     L.push('', 'Waits for:')
     for (const id of t.after) {
       const dep = all.find(x => x.id === id)
-      L.push(`  ${id} ${dep ? `[${word[dep.status]}] ${dep.title}` : '[missing]'}`)
+      L.push(`  ${id} ${dep ? `[${word[dep.status]}] ${dep.title}` : archivedDone.includes(id) ? `[${word.done}] (archived)` : '[missing]'}`)
     }
   }
   if (t.history.length) L.push('', `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map(line => `  • ${line}`))
@@ -114,7 +115,10 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     dropped          given up
     backlog          an idea or work that is not clear yet; it never starts until you
                      move it to todo ("stash this idea", "show the backlog", "move T-5 to todo")
-  The board lists the newest task at the top.`,
+  The board lists the newest task at the top.
+  Done and dropped tasks older than archive_days (14 by default; 0 = never) move to
+  ${S.N.archiveFile}. They still count ("▸ Done  12 (+96 archived)"), /${S.N.name}-task T-n still
+  shows one, and they are read-only (retry brings back an archived dropped task).`,
   lead: `The lead (this chat) has these tools:
   board · add · change · retry · ask · drop · pause · resume · settings
   approve · reject (only for a task ready for review)
@@ -221,7 +225,7 @@ ${rolesLeadText(S.roles, S.N.name)}
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board.`
 
 export const TOOLS = () => [
-  { name: 'board', description: `Show the ${S.N.name} task board.`, inputSchema: { type: 'object', properties: {} } },
+  { name: 'board', description: `Show the ${S.N.name} task board; with task, show that one task in full (also an archived one).`, inputSchema: { type: 'object', properties: { task: { type: 'string', description: 'A task id, e.g. T-12, to see in full.' } } } },
   {
     name: 'add',
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
@@ -247,7 +251,7 @@ export const TOOLS = () => [
   {
     name: 'settings',
     description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
-    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
+    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
 
@@ -262,11 +266,32 @@ export async function taskOrThrow($: $, id: string) {
   return t
 }
 
+/** The lead's tools that act on one task. */
+const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'pause', 'resume']
+
 export async function runTool($: $, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
+  // A task moved to archive.json is read-only; only retry brings back a dropped one.
+  if (id && TASK_TOOLS.includes(name) && !find(await load($), id)) {
+    const old = await findArchived($, id)
+    if (old) {
+      if (name === 'retry' && old.status === 'dropped') {
+        const said = await bringBackArchived($, old.id)
+        void pump($)
+        return said
+      }
+      throw new Error(name === 'retry' ? `${old.id} is archived and already done` : archivedText(old.id))
+    }
+  }
   switch (name) {
-    case 'board':
-      return boardText(await load($), Date.now(), shortHome(S.root, S.home), S.N.name)
+    case 'board': {
+      const b = await load($)
+      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name)
+      const t = find(b, id) ?? (await findArchived($, id))
+      if (!t) throw new Error(`${id} is not on the board or in the archive`)
+      const archived = !find(b, id)
+      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, b.archived_done)}`
+    }
     case 'add': {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')

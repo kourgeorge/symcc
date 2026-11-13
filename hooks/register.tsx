@@ -14,6 +14,7 @@
 import type { Register } from 'claude-code'
 import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
 import { dataDir } from './name'
+import { findArchived } from './plugin/archive'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
@@ -246,14 +247,19 @@ export const register: Register = on => {
       }
       case 'show': {
         const t = find(b, cmd.id)
-        if (!t) return say(`${cmd.id} is not on the board.`)
+        if (!t) {
+          // not on the board: it may have been moved to archive.json (read-only, shown as text)
+          const old = await findArchived($, cmd.id)
+          if (!old) return say(`${cmd.id} is not on the board.`)
+          return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, b.archived_done)}`)
+        }
         await openPane($, { tab: 'tasks', task: t.id })
-        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks))
+        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, b.archived_done))
       }
       case 'approve':
       case 'reject': {
         const t = find(b, cmd.id)
-        if (!t) return say(`${cmd.id} is not on the board.`)
+        if (!t) return say((await findArchived($, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}).`)
         const r = await runTool($, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
         tellLead($, cmd.kind === 'approve' ? `The owner approved ${t.id} with /${S.N.name}-approve: ${r}` : `The owner rejected ${t.id} with /${S.N.name}-reject ("${cmd.reason}"): ${r}`)
@@ -261,7 +267,7 @@ export const register: Register = on => {
       }
       case 'diff': {
         const t = find(b, cmd.id)
-        if (!t) return say(`${cmd.id} is not on the board.`)
+        if (!t) return say((await findArchived($, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`)
         try {
           const files = await changedFiles($, b.target_branch, t)

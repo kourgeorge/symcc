@@ -1,5 +1,6 @@
 import type { SymccTask, SymccMode } from '../../types'
 import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo } from '../board'
+import { archiveOld } from './archive'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits } from './review'
@@ -543,5 +544,7 @@ export async function check($: $) {
   for (const t of late) reminded.set(t.id, t.updated_at)
   if (late.length) tellLead($, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
   if (S.gitState === 'ok') await cleanupMerged($, await load($)).catch(() => undefined)
+  // old done and dropped tasks move to archive.json (at most once an hour)
+  await archiveOld($).catch(() => undefined)
   await pump($)
 }

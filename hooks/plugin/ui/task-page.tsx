@@ -165,7 +165,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  const rows = detailRows(t, { roles: S.roles, all: v.tasks, when, nowMs: Date.now() })
+  const rows = detailRows(t, { roles: S.roles, all: v.tasks, when, nowMs: Date.now(), archivedDone: v.archived_done })
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">

@@ -355,6 +355,7 @@ directly. A value over its limit is cut to it, and the answer says so (e.g.
 | `max_parallel` | 3 | 1–8 | How many workers at once |
 | `max_minutes` | 45 | 5–600 | A worker running longer is stopped |
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
+| `archive_days` | 14 | 0–3650 (0 = never) | Done and dropped tasks older than this move from `board.json` to `.symcc/archive.json` |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
 | `voice` | on | on / off | Say "T-3 done" out loud when a task is merged (Mac) |
 | `mode` | `auto` | `off` / `review` / `auto` | See above |

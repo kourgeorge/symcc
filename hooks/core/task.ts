@@ -1,9 +1,13 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
 import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DATA_DIR, find, normId, STATUS_WORD } from './board-file'
+import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
 import { clean, num } from './text'
+
+/** Whether `id` may stand in a task's `after`: on the board, or archived as done (it then counts as done). */
+const knownDep = (b: Board, id: string) => !!find(b, id) || (b.archived_done ?? []).includes(id)
 
 /** A task's role as stored: the name, or '' for general (which is the same as no role). */
 const cleanRole = (r: unknown): string => {
@@ -15,7 +19,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const origin = makeOrigin(f.origin, now, b)
-  const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => find(b, x))
+  const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => knownDep(b, x))
   const t: SymccTask = {
     id: `T-${b.next_id}`,
     title,
@@ -62,15 +66,15 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
     if (patch.needs_review === true) next.needs_review = true
     else delete next.needs_review
   }
-  if (patch.after !== undefined) next.after = patch.after.map(normId).filter(x => x !== t.id && find(b, x))
+  if (patch.after !== undefined) next.after = patch.after.map(normId).filter(x => x !== t.id && knownDep(b, x))
   if (next.status !== 'waiting') next.question = null
   return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
 }
 
-/** Tasks a worker could start now: to do (never backlog), and everything they wait for is done. */
+/** Tasks a worker could start now: to do (never backlog), and everything they wait for is done (an archived done task counts). */
 export function ready(b: Board): SymccTask[] {
   return b.tasks
-    .filter(t => t.status === 'todo' && t.after.every(a => find(b, a)?.status === 'done'))
+    .filter(t => t.status === 'todo' && t.after.every(a => depDone(b, a)))
     .sort((x, y) => x.order - y.order || num(x.id) - num(y.id))
 }
 

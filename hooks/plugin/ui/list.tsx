@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, doneExtra, groupLabel, ALL_CLEAR, statusCell, statusStrip, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, doneExtra, groupLabel, ALL_CLEAR, statusCell, statusStrip, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
@@ -40,8 +40,10 @@ export function listPage($: $, pane: PaneParts) {
         ...(!S.backlogOpen ? [] : [...tasksOf(backlogShown, 4), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore), indent: 4 }] : [])]),
       ]
     : []
-  const doneHead = parts.done.length ? foldedRow('Done', parts.done.length, S.doneOpen, countWidth) : ''
-  const doneRows: Row[] = parts.done.length
+  // tasks moved to archive.json are not listed, only counted: "▸ Done  12 (+96 archived)"
+  const gone = archivedOf(v).done
+  const doneHead = parts.done.length || gone ? [foldedRow('Done', parts.done.length, S.doneOpen, countWidth), archivedNote(gone)].filter(Boolean).join(' ') : ''
+  const doneRows: Row[] = doneHead
     ? [
         { day: 'done', label: doneHead, extra: doneExtra(parts.done[0], nowMs, offset, doneHead, width - 2), indent: 2 },
         ...(!S.doneOpen

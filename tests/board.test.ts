@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccScout, SymccTask } from '../types'
 
 import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
+import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
@@ -1210,7 +1211,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, open_on_start, voice, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, voice, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
   expect(bad('voice maybe')).toBe('voice must be on or off')
@@ -1244,7 +1245,7 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'open_on_start', 'voice', 'mode', 'enabled'])
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'voice', 'mode', 'enabled'])
   const b = { ...emptyBoard('main'), test_commands: ['npm test', 'npm run lint'], voice: false }
   expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
   expect(settingValue(b, 'voice')).toBe('off')
@@ -2330,4 +2331,123 @@ test('a scout run stopped from the agent controls is not saved as a report and n
   expect(scoutLeadQueue.length).toBe(0)
   expect(w.files.has('/repo/.symcc/scouts.json')).toBe(false)
   expect(w.toasts.some(t => t.includes('scout gaps was stopped; nothing reported'))).toBe(true)
+})
+
+// ---------------- old tasks: the archive ----------------
+
+const A_DAY = 24 * 60 * 60_000
+const A_NOW = Date.parse('2026-11-30T00:00:00.000Z')
+const daysAgo = (n: number) => new Date(A_NOW - n * A_DAY).toISOString()
+
+/** A board with T-1 done 20 days ago, T-2 dropped 20 days ago, T-3 done 2 days ago and T-4 to do. */
+function oldBoard(): Board {
+  let b = emptyBoard()
+  for (const title of ['old done', 'old dropped', 'new done', 'still to do']) b = addTask(b, { origin: W, title }, T)[0]
+  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: daysAgo(21), ended: new Date(Date.parse(daysAgo(21)) + 60_000).toISOString(), tokens: 1000 }] }, daysAgo(20))
+  b = patchTask(b, 'T-2', { status: 'dropped' }, daysAgo(20))
+  b = patchTask(b, 'T-3', { status: 'done' }, daysAgo(2))
+  return b
+}
+
+test('archive: done and dropped tasks older than archive_days are picked, newer ones and open ones stay', () => {
+  const b = oldBoard()
+  expect(b.archive_days).toBe(DEFAULT_ARCHIVE_DAYS)
+  expect(DEFAULT_ARCHIVE_DAYS).toBe(14)
+  expect(toArchive(b, A_NOW).map(t => t.id)).toEqual(['T-1', 'T-2'])
+  expect(toArchive({ ...b, archive_days: 30 }, A_NOW).map(t => t.id)).toEqual([])
+  expect(toArchive({ ...b, archive_days: 1 }, A_NOW).map(t => t.id)).toEqual(['T-1', 'T-2', 'T-3'])
+})
+
+test('archive: archive_days 0 never archives anything', () => {
+  expect(toArchive({ ...oldBoard(), archive_days: 0 }, A_NOW + 1000 * A_DAY)).toEqual([])
+})
+
+test('archive: a done task still listed in an open or backlog task\'s after is not archived', () => {
+  let b = patchTask(oldBoard(), 'T-4', { after: ['T-1'] }, daysAgo(1))
+  expect(toArchive(b, A_NOW).map(t => t.id)).toEqual(['T-2'])
+  b = stashTask(b, 'T-4', daysAgo(1))
+  expect(toArchive(b, A_NOW).map(t => t.id)).toEqual(['T-2'])
+  // once the waiting task is itself finished, the one it waited for may go
+  b = patchTask(b, 'T-4', { status: 'dropped' }, daysAgo(1))
+  expect(toArchive(b, A_NOW).map(t => t.id)).toEqual(['T-1', 'T-2'])
+})
+
+test('archive: taking tasks off keeps next_id, counts them, and keeps the done ids', () => {
+  const b = oldBoard()
+  const y = removeArchived(b, toArchive(b, A_NOW))
+  expect(y.tasks.map(t => t.id)).toEqual(['T-3', 'T-4'])
+  expect(y.next_id).toBe(b.next_id)
+  expect(y.archived).toEqual({ done: 1, dropped: 1, tries: 1, ms: 60_000, tokens: 1000 })
+  expect(y.archived_done).toEqual(['T-1'])
+  expect(archivedCount(y)).toBe(2)
+  // a new task never reuses an archived id, also after the file is read again
+  const z = parseBoard(JSON.stringify(y))
+  expect(z.next_id).toBe(5)
+  expect(z.archived).toEqual(y.archived)
+  expect(z.archived_done).toEqual(['T-1'])
+  expect(addTask(z, { origin: W, title: 'next' }, T)[1].id).toBe('T-5')
+  expect(parseBoard(JSON.stringify({ ...y, next_id: 1, tasks: [] })).next_id).toBe(2)
+})
+
+test('archive: the totals and the Done count include archived tasks', () => {
+  const b = oldBoard()
+  const before = boardTotal(b, A_NOW)
+  const y = removeArchived(b, toArchive(b, A_NOW))
+  expect(boardTotal(y, A_NOW)).toEqual(before)
+  expect(boardText(y, A_NOW)).toContain('total: 1m · 1k tokens over 1 try')
+  expect(boardText(y, A_NOW)).toContain('archived: 1 done, 1 dropped (in .symcc/archive.json')
+  expect(boardText(y, A_NOW)).not.toMatch(/old done|old dropped/)
+  expect(archivedNote(96)).toBe('(+96 archived)')
+  expect(archivedNote(0)).toBe('')
+  expect(`${foldedRow('Done', 12, false, 2)} ${archivedNote(96)}`).toBe('▸ Done     12 (+96 archived)')
+  const counts = bannerText(bannerLines({ ...y, tasks: y.tasks }, '', '', true, 40, A_NOW).at(-1)!)
+  expect(counts).toContain('1 done (+1 archived)')
+})
+
+test('archive: a task waiting on an archived done task still starts, and shows it as done', () => {
+  let b = patchTask(oldBoard(), 'T-4', { after: ['T-3'] }, daysAgo(1))
+  b = patchTask(b, 'T-3', { status: 'done' }, daysAgo(20))
+  // archived by hand (as an older board might have it): T-4 waits on T-3, which is now only in the archive
+  const y = removeArchived(b, [find(b, 'T-3')!])
+  expect(find(y, 'T-3')).toBeUndefined()
+  expect(depDone(y, 'T-3')).toBe(true)
+  expect(depDone(y, 'T-2')).toBe(false)
+  expect(ready(y).map(t => t.id)).toEqual(['T-4'])
+  // a change to the task keeps the archived id in its after
+  expect(patchTask(y, 'T-4', { after: ['T-3'] }, T).tasks.find(t => t.id === 'T-4')!.after).toEqual(['T-3'])
+  expect(addTask(y, { origin: W, title: 'later', after: ['T-3'] }, T)[1].after).toEqual(['T-3'])
+  expect(rowExtra(find(y, 'T-4')!, y.tasks)).toBe('')
+  const rows = detailRows(find(y, 'T-4')!, { roles: [], all: y.tasks, when: () => '', nowMs: A_NOW, archivedDone: y.archived_done })
+  expect(rows.find(r => r.label === 'After')!.segs.map(s => s.text).join('')).toBe('T-3 ✓ done (archived)')
+})
+
+test('archive: the file is read safely; a broken one is reported, and an archived dropped task can come back', () => {
+  expect(readArchive(null)).toEqual({ archive: emptyArchive() })
+  expect(readArchive('{nope').broken).toMatch(/not valid JSON/)
+  expect(readArchive('[]').broken).toMatch(/not an archive/)
+  expect(readArchive('{"tasks":3}').broken).toMatch(/not a list/)
+  const b = oldBoard()
+  const a = addToArchive(emptyArchive(), toArchive(b, A_NOW))
+  expect(readArchive(archiveText(a)).archive.tasks.map(t => t.id)).toEqual(['T-1', 'T-2'])
+  // added twice, a task is there once
+  expect(addToArchive(a, [a.tasks[0]!]).tasks.map(t => t.id)).toEqual(['T-2', 'T-1'])
+  const y = removeArchived(b, a.tasks)
+  const back = bringBack(y, a.tasks[1]!, T)
+  const t = find(back, 'T-2')!
+  expect(t.status).toBe('todo')
+  expect(t.history.at(-1)).toBe('brought back from the archive (was dropped)')
+  expect(back.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: 1000 })
+  expect(() => bringBack(y, a.tasks[0]!, T)).toThrow(/done/)
+})
+
+test('archive_days is a setting like the others: shown, set and cut to its limits', () => {
+  expect(settingValue(emptyBoard(), 'archive_days')).toBe('14')
+  const r = applySettings(emptyBoard(), { archive_days: 0 })
+  expect(r.board.archive_days).toBe(0)
+  expect(r.changes[0]!.said).toBe('old tasks are never archived')
+  expect(applySettings(emptyBoard(), { archive_days: -3 }).board.archive_days).toBe(0)
+  expect(applySettings(emptyBoard(), { archive_days: 30 }).changes[0]!.said).toBe('done and dropped tasks older than 30 days are archived')
+  expect(parseSettingsCommand('archive_days 7')).toEqual({ kind: 'set', setting: 'archive_days', input: { archive_days: 7 } })
+  expect(readBoard(JSON.stringify({ ...emptyBoard(), archive_days: 'x' })).fixed).toContain('archive_days')
+  expect(settingsText(emptyBoard())).toMatch(/archive_days\s+14/)
 })

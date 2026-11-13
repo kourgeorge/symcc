@@ -6,6 +6,7 @@ import { boardSections, type BoardSections, groupLabel, localOffset } from './da
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
 import { roleMark } from './roles'
+import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
@@ -85,7 +86,7 @@ export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
 export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch_note`: a warning about the branch (see branchWarning, missingBranchText), shown in place of the branch name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
+export type BannerBoard = Pick<Board, 'test_commands' | 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch_note?: string }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
@@ -133,8 +134,10 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     dim(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
   ])
   const texts = [l1, l2, l3]
-  if (b.tasks.length) {
-    const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog'))
+  const gone = archivedOf(b).done
+  if (b.tasks.length || gone) {
+    const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog').replace(/^(\d+) done$/, `$1 done${gone ? ` ${archivedNote(gone)}` : ''}`))
+    if (gone && !b.tasks.some(t => t.status === 'done')) counts.push(`${gone} done (archived)`)
     const t = boardTotal(b, nowMs)
     texts.push(dim([...counts, ...(t.tries ? [fmtTotal(t)] : [])].join(' · ')))
   }
@@ -164,7 +167,8 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
  *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
 export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs)): string {
   const top = where ? [`${boardBrand(name)} · ${where}`] : []
-  if (!b.tasks.length) return [...top, 'The board is empty.'].join('\n')
+  const gone = archivedLine(b, name)
+  if (!b.tasks.length) return [...top, 'The board is empty.', ...(gone ? [gone] : [])].join('\n')
   const s: BoardSections = nowMs === undefined ? boardSections(b.tasks, NaN, offsetMin) : boardSections(b.tasks, nowMs, offsetMin)
   const rows = [...s.open, ...s.backlog, ...s.today]
   const lines = rows.map(t => {
@@ -176,5 +180,5 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
   const days = s.days.map(g => groupLabel(g))
-  return [...top, head, ...lines, ...days, ...(total ? [total] : [])].join('\n')
+  return [...top, head, ...lines, ...days, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
 }
