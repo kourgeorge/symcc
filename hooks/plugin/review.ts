@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget } from '../board'
+import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes } from '../board'
 import { gitOk, git, worktreeDir } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -79,7 +79,7 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
 }
 
 /** What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner. */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string }
+export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[] }
 
 /**
  * Commit the worker's changes, check scope, bring in the latest main, test, then move main forward.
@@ -141,7 +141,13 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir })
   if (!moved.ok) return { ok: false, detail: moved.detail }
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
-  return { ok: true, merged: candidate, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+  // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
+  let notes: string[] = []
+  if (researchNotes(changed).length) {
+    const n = await git($, ['diff', '--name-only', '--no-renames', '-z', '--diff-filter=AM', main, candidate])
+    notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
+  }
+  return { ok: true, merged: candidate, ...(notes.length ? { notes } : {}), detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
 }
 
 /**

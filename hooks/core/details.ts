@@ -31,7 +31,7 @@ export function originSegs(t: { origin?: unknown }): Seg[] {
 }
 
 /**
- * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, After, Branch, Commits, Tries.
+ * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, After, Note (research notes), Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number }): DetailRow[] {
@@ -55,6 +55,9 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
       segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, dep ? { text: `${STATUS_MARK[dep.status]} ${STATUS_WORD[dep.status]}`, color: STATUS_BADGE[dep.status] } : { text: 'missing', color: 'error' }, ...(dep ? [{ text: ` · ${dep.title}`, color: 'subtle' }] : [])],
     })
   })
+  // research notes the merged work added or changed (docs/research/…), one row each
+  const notes = t.research_notes ?? []
+  notes.forEach((f, i) => R.push({ label: i ? '' : 'Note', segs: [{ text: f, color: 'autoAccept' }, { text: ' (research note)', color: 'subtle' }] }))
   if (t.branch) R.push({ label: 'Branch', segs: [{ text: t.branch, color: 'ide' }] })
   const commits = taskCommits(t)
   if (commits.length) {

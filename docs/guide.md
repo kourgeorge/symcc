@@ -227,7 +227,8 @@ You can also do it yourself:
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
-  `r` retry, `m` switch review / auto, `n` needs review, `t` / `s` / `c` switch views, `b` back.
+  `r` retry, `m` switch review / auto, `n` needs review, `1`-`9` a try's report on the task
+  page, `t` / `s` / `c` switch views, `b` back.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a
   total, e.g. `total: 1h 12m · 1.2M tokens over 4 tries`.
@@ -242,6 +243,25 @@ with `/symcc`, or one task with `/symcc-task T-3`: the `from:` line says, for ex
 try. Every merge commit starts with the task ID, so `git log --grep "T-3"` finds the work
 for a task, and the ID on a commit takes you back to the task and your request. Tasks made
 before this was kept show `from: unknown`.
+
+## Where to see what a task did
+
+- **The git commit.** Each try's commit starts with the task ID (`T-3: ...`) and ends with
+  trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
+  with `git log --grep "T-3"`.
+- **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
+  line per try (what the worker said, cut at a word end with "…", and how it went),
+  **Commits** lists the commits each try made and the one that was merged, and **Report**
+  shows the worker's full final report for the latest try. When more than one try has a
+  report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
+  shows the first 40 lines and says where the full report is.
+- **The report files.** Every try's full final answer (its report, or its NEED FILES or
+  QUESTION text) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
+  Tasks from before this was kept say "no saved report".
+- **The research note.** When a task's merged work adds or changes a file under
+  `docs/research/`, the task page shows it in Details as `Note: docs/research/<file>.md`.
+- **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
+  while: it is not kept. The report file and the commit are what stay.
 
 ## Scouts
 
@@ -438,6 +458,7 @@ your-project/
     ├── scouts/           your scout files (*.md)
     ├── scouts.json       each scout's last run and report, and whether it is paused
     ├── roles/            your own worker roles (*.md), see Worker roles
+    ├── reports/          each try's full worker report (T-3-try-2.md)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged

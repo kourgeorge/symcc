@@ -22,7 +22,7 @@ import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScout
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now } from './plugin/store'
 import { tellLead } from './plugin/tell'
-import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText } from './plugin/tools'
+import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane } from './plugin/ui/open'
 import { renderPane } from './plugin/ui/pane'
@@ -248,7 +248,7 @@ export const register: Register = on => {
         const t = find(b, cmd.id)
         if (!t) return say(`${cmd.id} is not on the board.`)
         await openPane($, { tab: 'tasks', task: t.id })
-        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks))
+        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t)))
       }
       case 'approve':
       case 'reject': {

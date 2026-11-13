@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue } from '../hooks/plugin/state'
@@ -950,4 +950,78 @@ test('pause of a running task and resume both leave a history line', async () =>
   await runTool(w.$, 'resume', { task: 'T-1' })
   const t = find(await load(w.$), 'T-1')!
   expect(t.history.slice(-2)).toEqual(['try 1: stopped: paused', 'resumed after a pause'])
+})
+
+// ---------------- each try's full report ----------------
+
+const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
+
+/** T-1 is "doing" (try 1, one run) with worker ag1, which then answers `answer`; the fake git and the task as given. */
+async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<SymccTask> = {}) {
+  const w = world(g)
+  const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...extra })
+  await saveBoard(w.$, b0)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', answer, false)
+  return { w, t: find(await load(w.$), 'T-1')! }
+}
+
+test("a try's full report is saved to .symcc/reports through a temp file, with its path on the run", async () => {
+  const long = `I changed src/a.ts.\n\n${'Every word here counts. '.repeat(400)}\nThe end.`
+  const { w, t } = await finishes(long)
+  expect(t.status).toBe('done')
+  expect(t.runs![0]!.report).toBe('.symcc/reports/T-1-try-1.md')
+  // kept in full, not cut to the old 600 characters
+  expect(w.files.get(REPORT1)).toBe(`${long.trim()}\n`)
+  expect(w.files.has(`${REPORT1}.tmp`)).toBe(false)
+  expect(w.calls).toContain(`mv -f ${REPORT1}.tmp ${REPORT1}`)
+  // the history line stays short and ends cleanly, never inside a word
+  const line = t.history.find(l => l.startsWith('try 1: '))!
+  const said = line.slice('try 1: '.length, line.indexOf(' → '))
+  expect(said.length).toBeLessThanOrEqual(300)
+  expect(said.endsWith('…')).toBe(true)
+  expect(said).toMatch(/(counts\.|here|word|Every) ?…$/)
+})
+
+test('a report longer than the cap is kept up to the cap, with a line saying it was cut', async () => {
+  const { w } = await finishes(`START ${'y'.repeat(REPORT_MAX_CHARS + 5000)}`)
+  const text = w.files.get(REPORT1)!
+  expect(text.startsWith(`START ${'y'.repeat(100)}`)).toBe(true)
+  expect(text.length).toBeLessThan(REPORT_MAX_CHARS + 200)
+  expect(text).toContain('(cut here: the report was longer than 50 KB)')
+})
+
+test("a QUESTION or NEED FILES try saves its text as the try's report too", async () => {
+  const { w, t } = await finishes('I looked around.\nNEED FILES: README.md — the docs mention it')
+  expect(t.status).toBe('waiting')
+  expect(t.runs![0]!.report).toBe('.symcc/reports/T-1-try-1.md')
+  expect(w.files.get(REPORT1)).toContain('NEED FILES: README.md')
+})
+
+test('a report that cannot be saved is told once and never blocks the task', async () => {
+  // a failing move: the task still goes on; told to the lead only once
+  for (const n of [1, 2]) {
+    const w = world()
+    const [b0] = boardWith('auto', [], { runs: [{ started: ISO }] })
+    await saveBoard(w.$, b0)
+    const run = w.$ as unknown as { process: { run: (a: string[], o?: object) => Promise<unknown> } }
+    const real = run.process.run
+    run.process.run = async (a, o) => (a[0] === 'mv' && String(a[2]).includes('/reports/') ? { exitCode: 1, stdout: '', stderr: 'disk full' } : real(a, o))
+    leadQueue.splice(0)
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+    await workerFinished(w.$, 'ag1', 'Done.', false)
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('done')
+    expect(t.runs![0]!.report).toBeUndefined()
+    expect(leadQueue.some(m => /could not save the worker's report/.test(m))).toBe(n === 1)
+  }
+})
+
+test('merged work that adds a file under docs/research/ keeps it as a research note on the task', async () => {
+  const { t } = await finishes('Wrote the note.', { changed: ['docs/research/market.md', 'docs/guide.md'] }, { files: ['docs/'] })
+  expect(t.status).toBe('done')
+  expect(t.research_notes).toEqual(['docs/research/market.md'])
+  const { t: plain } = await finishes('Done.')
+  expect(plain.research_notes).toBeUndefined()
 })

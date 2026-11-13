@@ -170,8 +170,9 @@ export const viewKeys = (enter = true): KeyHint[] => [
 ]
 
 /** The keys at the bottom of a task's page, the ones that matter most for its state first; "↑↓ scroll" and
- *  "b back" always come last. `worker`: a worker is on the task now (w opens it). */
-export function taskKeys(status: SymccStatus, worker = false): KeyHint[] {
+ *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
+ *  with a saved report; with more than one, their numbers (1-9) show that try's report. */
+export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = []): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = []
   if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
@@ -179,6 +180,8 @@ export function taskKeys(status: SymccStatus, worker = false): KeyHint[] {
   if (worker) keys.push(k('w', 'watch worker'))
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
   if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
+  const keyed = reports.filter(n => n >= 1 && n <= 9)
+  if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
   return [...keys, k('↑↓', 'scroll'), k('b', 'back')]
 }
 

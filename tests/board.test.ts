@@ -2372,3 +2372,58 @@ test('backToTodo of a running task says in its history why it restarts', async (
   expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
   expect(backToTodo({ ...t, status: 'failed' }, 'x', T).history).toEqual(t.history)
 })
+
+// ---------------- saved reports and clean cuts ----------------
+
+import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
+
+test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {
+  expect(cutLine('  short\n text  ', 50)).toBe('short text')
+  // never in the middle of a word: "change a →" style ends are gone
+  const s = 'It adds drop, reject, retry, change and ask buttons to the task page and wires them up.'
+  for (const max of [20, 31, 40, 55, 70]) {
+    const c = cutLine(s, max)
+    expect(c.length).toBeLessThanOrEqual(max)
+    expect(c.endsWith('…')).toBe(true)
+    const kept = c.slice(0, -1).trimEnd()
+    // what is kept is the start of the text, ending at a whole word
+    expect(s.startsWith(kept)).toBe(true)
+    expect(/[\s.,]/.test(s[kept.length] ?? ' ')).toBe(true)
+  }
+  expect(cutLine('One sentence here. Another sentence that is quite long and goes on.', 30)).toBe('One sentence here. …')
+  expect(cutLine('word '.repeat(100), 300).length).toBeLessThanOrEqual(300)
+  expect(cutLine('x'.repeat(50), 10)).toBe(`${'x'.repeat(9)}…`)
+})
+
+test('reportText keeps a report in full up to the cap; reportFile names the try', () => {
+  expect(reportText('  hello\n')).toBe('hello\n')
+  const big = 'a'.repeat(REPORT_MAX_CHARS + 10)
+  expect(reportText(big).startsWith('a'.repeat(REPORT_MAX_CHARS))).toBe(true)
+  expect(reportText(big)).toContain('longer than 50 KB')
+  expect(reportFile('.symcc', 'T-3', 2)).toBe('.symcc/reports/T-3-try-2.md')
+})
+
+test('taskReports lists the saved reports by try, and ignores old runs and paths outside the reports folder', () => {
+  expect(taskReports({})).toEqual([])
+  expect(taskReports({ runs: [{ started: '' }, { started: '', report: '.symcc/reports/T-1-try-2.md' }, { started: '', report: '/etc/passwd' }, { started: '', report: '.symcc/reports/../x-try-1.md' }] })).toEqual([{ try: 2, file: '.symcc/reports/T-1-try-2.md' }])
+})
+
+test('researchNotes picks files under docs/research/, and the task page shows them as Note rows', () => {
+  expect(researchNotes(['docs/guide.md', 'docs/research/b.md', 'docs/research/a.md', 'src/docs/research/c.md'])).toEqual(['docs/research/a.md', 'docs/research/b.md'])
+  const t = { ...addTask(emptyBoard(), { origin: { why: 'w' }, title: 'x' }, '2026-01-01T00:00:00.000Z')[1], research_notes: ['docs/research/a.md'] } as SymccTask
+  const rows = detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 })
+  expect(rows.find(r => r.label === 'Note')?.segs.map(g => g.text).join('')).toBe('docs/research/a.md (research note)')
+  expect(detailRows({ ...t, research_notes: undefined }, { roles: [], all: [t], when: s => s, nowMs: 0 }).some(r => r.label === 'Note')).toBe(false)
+})
+
+test('reportPreview shows the first lines and then where the full report is', () => {
+  expect(reportPreview('a\nb\n', 'f.md', 5)).toEqual(['a', 'b'])
+  expect(reportPreview('1\n2\n3\n4', 'f.md', 2)).toEqual(['1', '2', '… (2 more lines) full report: f.md'])
+})
+
+test("taskKeys shows the try number keys for reports only when more than one try has a report", () => {
+  const words = (k: { key: string; word: string }[]) => k.map(x => `${x.key} ${x.word}`)
+  expect(words(taskKeys('done', false, [1]))).toEqual(['↑↓ scroll', 'b back'])
+  expect(words(taskKeys('done', false, [1, 2, 3]))).toEqual(["1-3 a try's report", '↑↓ scroll', 'b back'])
+  expect(words(taskKeys('done', false, [9, 10]))).toEqual(["9 a try's report", '↑↓ scroll', 'b back'])
+})

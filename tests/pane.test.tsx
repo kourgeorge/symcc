@@ -1192,3 +1192,68 @@ test('a broken board.json is never saved over: a change is refused, a copy is ke
   expect(toasts.some(t => /T-1 role: docs/.test(t))).toBe(false)
   await ui.unmount()
 })
+
+// ---------------- each try's report on the task page ----------------
+
+const R1 = '.symcc/reports/T-1-try-1.md'
+const R2 = '.symcc/reports/T-1-try-2.md'
+const reportedTask = (extra: Record<string, unknown> = {}) =>
+  task('T-1', 'done', 'Explore the market', { attempts: 2, runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '', report: R2 }], history: ['try 1: first go → tests failed', 'try 2: second go → merged into main'], ...extra })
+
+test('the task page shows the latest try\'s full report, and a try\'s number key shows that try\'s report', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-1.md': 'First try report: the tests failed.\n', '/reports/T-1-try-2.md': `Second try report.\n\n${'A long line of words that must wrap. '.repeat(6)}\nLast line.\n` })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask()], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  let L = await lines(ui)
+  expect(L.some(l => /^▍Report \(try 2, 2 of 2\)$/.test(l))).toBe(true)
+  expect(L.some(l => /Second try report\./.test(l))).toBe(true)
+  expect(L.some(l => /Last line\./.test(l))).toBe(true)
+  expect(L.some(l => /First try report/.test(l))).toBe(false)
+  // wrapped to the panel width
+  for (const l of L.filter(x => /A long line/.test(x))) expect(l.length).toBeLessThanOrEqual(50)
+  expect(L.some(l => /1-2 a try's report/.test(l))).toBe(true)
+  expect((await ui.find({ key: 'report-try-1' }))?.props.hotkey).toBe('1')
+  expect((await ui.find({ key: 'report-try-2' }))?.props.label).toBe('● Try 2 (2)')
+  await ui.press({ key: 'report-try-1' })
+  L = await lines(ui)
+  expect(L.some(l => /^▍Report \(try 1, 1 of 2\)$/.test(l))).toBe(true)
+  expect(L.some(l => /First try report: the tests failed\./.test(l))).toBe(true)
+  expect(L.some(l => /Second try report/.test(l))).toBe(false)
+  expect((await ui.find({ key: 'report-try-1' }))?.props.label).toBe('● Try 1 (1)')
+  await ui.press({ key: 'report-try-2' })
+  expect((await lines(ui)).some(l => /Second try report\./.test(l))).toBe(true)
+  await ui.unmount()
+})
+
+test('an old task without saved reports still opens and says "no saved report"', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Old one', { attempts: 1, runs: [{ started: '', ended: '' }], history: ['try 1: did it → merged into main'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L.some(l => /^▍Report$/.test(l))).toBe(true)
+  expect(L.some(l => /no saved report/.test(l))).toBe(true)
+  expect(await ui.find({ key: 'report-try-1' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a research task shows its note as a row in Details', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-2.md': 'Wrote it.\n', '/reports/T-1-try-1.md': 'Tried.\n' })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await lines(ui)).some(l => /^Note:\s+docs\/research\/market\.md \(research note\)$/.test(l))).toBe(true)
+  await ui.unmount()
+})
+
+test('/symcc-task shows the latest report, or its first 40 lines and where the full one is', async ($, on) => {
+  const many = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
+  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })] }
+  fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null, '/reports/T-1-try-1.md': 'Old.\n', '/reports/T-1-try-2.md': many })
+  stateOf(on, {})
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: undefined }))
+  const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
+  expect(text).toContain(`Report (try 2, ${R2}):`)
+  expect(text).toContain('  line 40')
+  expect(text).not.toContain('line 41\n')
+  expect(text).toContain(`… (20 more lines) full report: ${R2}`)
+  expect(text).toContain('Note: docs/research/market.md')
+})

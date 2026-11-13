@@ -1,10 +1,10 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview } from '../board'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
 import { loadRoles } from './roles'
 import { S, type $, heard } from './state'
-import { load, change, now } from './store'
+import { load, change, now, path } from './store'
 import { tellLead } from './tell'
 import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
@@ -13,7 +13,15 @@ import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsk
 /** A short date and time, like "Nov 11, 09:30"; "?" when there is none. */
 export const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
 
-export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []): string {
+/** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
+export async function latestReport($: $, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
+  const r = taskReports(t).at(-1)
+  if (!r) return null
+  return { ...r, text: await $.fs.read(path(r.file)).then(x => String(x), () => null) }
+}
+
+/** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
+export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: { file: string; try: number; text: string | null } | null): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
   L.push(fromText(t, 120))
@@ -35,6 +43,9 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = []):
   const commits = taskCommits(t)
   if (commits.length) L.push('', 'Commits (newest first):', ...commits.map(c => `  ${commitText(c)}`))
   if (t.branch) L.push('', `branch: ${t.branch}`)
+  if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Note: ${f}`))
+  if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
+  if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
   return L.join('\n')
 }
