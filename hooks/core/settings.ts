@@ -1,7 +1,7 @@
 // Failing tests, turning things on and off, the settings, and branch conflicts.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, emptyBoard, isMode, modeOf } from './board-file'
+import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, modeOf } from './board-file'
 import { num } from './text'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
@@ -29,8 +29,54 @@ export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
 /** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */
 export const openOnStart = (b: Partial<Pick<Board, 'open_on_start'>>) => b.open_on_start !== false
 
-/** Should a merged task be said out loud? Yes unless the board turned voice off. */
-export const voiceOn = (b: Partial<Pick<Board, 'voice'>>) => b.voice !== false
+// ---------------- notify: off, sound or voice ----------------
+
+/** The system a session runs on, as far as notify cares. */
+export type NotifySystem = 'mac' | 'linux' | 'windows' | 'other'
+
+/** What this machine can play (found once per session, without playing anything). */
+export type Playable = { system: NotifySystem; sound: boolean; voice: boolean }
+
+/** The default notify for a machine: voice where it can speak, else sound where it can chime, else off. */
+export const bestNotify = (can: Pick<Playable, 'sound' | 'voice'>): Notify => (can.voice ? 'voice' : can.sound ? 'sound' : 'off')
+
+/**
+ * The notify setting in use: the board's own choice, or (none saved) the best this machine can
+ * play. Without `can` (the machine not known yet) an unsaved choice reads as 'voice'.
+ */
+export const notifyOf = (b: Partial<Pick<Board, 'notify'>>, can?: Pick<Playable, 'sound' | 'voice'>): Notify => (isNotify(b.notify) ? b.notify : can ? bestNotify(can) : 'voice')
+
+/** Does this machine play `n`? off always "plays" (nothing). */
+export const canPlay = (n: Notify, can: Pick<Playable, 'sound' | 'voice'>) => n === 'off' || !!can[n]
+
+/** The notify choices this machine can play, in order: off always, then sound and voice when found. */
+export const notifyChoices = (can: Pick<Playable, 'sound' | 'voice'>): Notify[] => NOTIFY_CHOICES.filter(n => canPlay(n, can))
+
+/** What is missing for `n` here, with what to install: "no speech program found (install espeak or speech-dispatcher)". */
+export function missingText(n: 'sound' | 'voice', system: NotifySystem): string {
+  if (n === 'voice') {
+    if (system === 'mac') return 'no speech program found (the say command is missing)'
+    if (system === 'linux') return 'no speech program found (install espeak or speech-dispatcher)'
+    if (system === 'windows') return 'no speech program found (PowerShell is missing)'
+    return 'no speech program found (voice works on macOS, Linux and Windows)'
+  }
+  if (system === 'mac') return 'no sound player found (the afplay command or its sounds are missing)'
+  if (system === 'linux') return 'no sound player found (install pulseaudio-utils or libcanberra, and the freedesktop sound theme)'
+  if (system === 'windows') return 'no sound player found (PowerShell is missing)'
+  return 'no sound player found (sound works on macOS, Linux and Windows)'
+}
+
+/** Why `n` can't be turned on here ("voice isn't available here: no speech program found (...)"), or '' when it can. */
+export function notifyRefusal(n: Notify, can: Playable): string {
+  if (n === 'off' || canPlay(n, can)) return ''
+  return `${n} isn't available here: ${missingText(n, can.system)}`
+}
+
+/** The one-time note when the saved choice can't play on this machine, or '' when it can. */
+export function unplayableNote(n: Notify, can: Playable): string {
+  if (n === 'off' || canPlay(n, can)) return ''
+  return `notify is '${n}' but no ${n === 'voice' ? 'speech program' : 'sound player'} was found here; nothing will play`
+}
 
 /** Is the plugin on for this project? Yes unless /<name>-off turned it off (old boards have no `enabled`: on). */
 export const symccOn = (b: Partial<Pick<Board, 'enabled'>>) => b.enabled !== false
@@ -63,7 +109,7 @@ export function spokenNeedsYou(ids: string[]): string {
   return `${list} ${xs.length === 1 ? 'needs' : 'need'} you`
 }
 
-/** The one spoken line for the voice queue: merged ids ("T-3 done") and ids marked with NEEDS_YOU_MARK ("T-5 needs you"). */
+/** The one spoken line for the notify queue: merged ids ("T-3 done") and ids marked with NEEDS_YOU_MARK ("T-5 needs you"). */
 export function spokenLine(items: string[]): string {
   const needs = items.filter(x => String(x ?? '').startsWith(NEEDS_YOU_MARK)).map(x => x.slice(NEEDS_YOU_MARK.length))
   const done = items.filter(x => !String(x ?? '').startsWith(NEEDS_YOU_MARK))
@@ -76,10 +122,10 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'voice', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
-/** commands: test_commands; branch: target_branch; number: a whole number within min-max; onoff: true/false; mode: off/review/auto */
-export type SettingKind = 'commands' | 'branch' | 'number' | 'onoff' | 'mode'
+/** commands: test_commands; branch: target_branch; number: a whole number within min-max; onoff: true/false; mode: off/review/auto; notify: off/sound/voice */
+export type SettingKind = 'commands' | 'branch' | 'number' | 'onoff' | 'mode' | 'notify'
 export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
 
 /** How many test commands a board keeps. */
@@ -93,7 +139,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
   { name: 'archive_days', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
-  { name: 'voice', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'say "T-3 done" out loud when a task is merged, and "T-5 needs you" when a worker asks you something' },
+  { name: 'notify', kind: 'notify', default: 'voice (else sound, else off)', range: 'off / sound / voice', meaning: 'when a task is merged or a worker asks you something: a chime (sound), or "T-3 done" / "T-5 needs you" out loud (voice)' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
 ]
@@ -110,8 +156,8 @@ export function settingValue(b: Partial<Board>, name: SettingName): string {
       return b.target_branch ?? d.target_branch
     case 'open_on_start':
       return openOnStart(b) ? 'on' : 'off'
-    case 'voice':
-      return voiceOn(b) ? 'on' : 'off'
+    case 'notify':
+      return notifyOf(b)
     case 'enabled':
       return symccOn(b) ? 'on' : 'off'
     case 'mode':
@@ -159,7 +205,7 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
     add(name, said, cut)
   }
   if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), add('open_on_start', a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
-  if (typeof a.voice === 'boolean') ((y.voice = a.voice), add('voice', a.voice ? 'merged tasks are said out loud' : 'merged tasks are no longer said out loud'))
+  if (isNotify(a.notify)) ((y.notify = a.notify), add('notify', a.notify === 'voice' ? 'merged tasks and questions are said out loud' : a.notify === 'sound' ? 'a chime plays when a task is merged or a question waits' : 'nothing plays when a task is merged or a question waits'))
   return { board: y, changes }
 }
 
@@ -189,6 +235,10 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
       if (['off', 'false', 'no'].includes(w)) return { ok: true, input: { [name]: false } }
       return bad(`${name} must be on or off`)
     }
+    case 'notify': {
+      const w = v.toLowerCase()
+      return isNotify(w) ? { ok: true, input: { notify: w } } : bad('notify must be off, sound or voice')
+    }
     case 'mode': {
       const w = v.toLowerCase()
       return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be off, review or auto')
@@ -202,7 +252,7 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
 
 /**
  * /<name>-settings: no words opens the Settings view; "NAME VALUE" sets one setting
- * (e.g. "max_parallel 5", "voice off", 'test_commands "npm test"').
+ * (e.g. "max_parallel 5", "notify sound", 'test_commands "npm test"').
  */
 export function parseSettingsCommand(args: string, name: string = DEFAULT_NAME): { kind: 'settings' } | { kind: 'set'; setting: SettingName; input: SettingsInput } | { kind: 'bad'; message: string } {
   const s = String(args ?? '').trim()

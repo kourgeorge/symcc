@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
@@ -7,6 +7,7 @@ import { loadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
 import { noteForLead, brief } from './tell'
+import { playable } from './voice'
 import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
 // ---------------- the lead's tools ----------------
@@ -86,19 +87,19 @@ export const MANUAL = (): Record<string, string> => ({
                        review: work runs; finished tasks wait for your approve or reject
                        auto: work runs; finished tasks that pass merge on their own
   /${S.N.name}-settings [NAME VALUE]  open the settings view, or set one setting, e.g.
-                       /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings voice off
+                       /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings notify sound
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
                        (several test commands: join them with " && "; "none" clears them)
                        a value over its limit is cut to it, and the answer says so
   /${S.N.name}-stats [7d|T-1..T-9]  time and token stats: totals, averages per task and per try,
                        outcomes, by role, origin and day (all tasks, the last N days, or an id range)
   /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
-                       guide, no workers, scouts, updates or voice); the board is kept
+                       guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
   /${S.N.help} [TOPIC]           this manual
 On the board: t tasks · s scouts · c settings · m switch review / auto.
-In the settings view: Enter on a row changes it: on/off flips, mode and target_branch
-  open a pick list, numbers and test_commands an edit box · Esc cancels.
+In the settings view: Enter on a row changes it: on/off flips, mode, notify and target_branch
+  open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box · Esc cancels.
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
   · k stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
@@ -121,7 +122,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     paused           stopped on purpose; resume to continue
     waiting for you  a question for you; answer it in the board panel or tell the lead
                      (asked by the lead, or by a worker: QUESTION, or NEED FILES for files
-                     outside its list); with voice on you hear "T-5 needs you"
+                     outside its list); with notify on you hear "T-5 needs you" (or a chime)
     ready for review the worker is done and the checks passed; nothing is merged until you
                      approve it (or reject it with a reason, which sends it back to "todo")
     failed           tests failed, files outside its list changed, or the worker stopped
@@ -141,8 +142,10 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
-  session starts, on by default), voice (say "T-3 done" out loud when a task is merged, and "T-5 needs you" when a worker asks you something;
-  only the session driving the board speaks; on by default), mode (off stops every
+  session starts, on by default), notify (off, sound or voice: when a task is merged or a worker
+  asks you something, play a chime, or say "T-3 done" / "T-5 needs you" out loud; only the
+  session driving the board plays; voice by default where this machine can speak, else sound,
+  else off; a choice this machine can't play is refused), mode (off stops every
   worker and scout and starts nothing new; review makes every finished task wait for
   your approve or reject; auto, the default, merges a finished task that passes at once).
   You can also change every setting yourself with /${S.N.name}-settings (or the c tab in the
@@ -228,7 +231,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
-- A worker that needs the owner to decide something stops and answers "QUESTION: ..."; the task then waits for the owner (NEEDS YOU) with that question, and with voice on the owner hears "T-5 needs you". You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
+- A worker that needs the owner to decide something stops and answers "QUESTION: ..."; the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
@@ -267,8 +270,8 @@ export const TOOLS = () => [
   },
   {
     name: 'settings',
-    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done", and when a question from a worker waits for the owner, "T-5 needs you"; only the session driving the board speaks, default true), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
-    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
+    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "T-3 done" / "T-5 needs you" out loud; only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
 
@@ -493,6 +496,11 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
 export async function saveSettings($: $, a: SettingsInput, who: string): Promise<{ error?: string; changes: SettingChange[]; mode?: string }> {
   const target = str(a.target_branch)?.trim()
   if (a.mode !== undefined && !isMode(a.mode)) return { error: `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`, changes: [] }
+  if (a.notify !== undefined) {
+    if (!isNotify(a.notify)) return { error: `notify must be "off", "sound" or "voice" (got ${JSON.stringify(a.notify)})`, changes: [] }
+    const refused = notifyRefusal(a.notify, await playable($))
+    if (refused) return { error: refused, changes: [] }
+  }
   if (a.target_branch !== undefined && !(target && (await branchExists($, target)))) {
     return { error: noBranchText(target ?? String(a.target_branch), await branchList($)), changes: [] }
   }

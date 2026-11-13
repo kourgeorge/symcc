@@ -5,7 +5,7 @@ import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
-import { saidNeedsYou } from '../hooks/plugin/voice'
+import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
 import { workerFinished, setSymcc, setBoardMode } from '../hooks/plugin/workers'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings } from '../hooks/plugin/tools'
@@ -1016,11 +1016,11 @@ test('an archived task can still be looked up, is read-only, and an archived dro
 
 // ---------------- a worker asks the owner ----------------
 
-/** T-1 is "doing" with worker ag1, which then answers `answer`; voice and driving as given. */
-async function workerAnswers(answer: string, o: { voice?: boolean; driving?: boolean } = {}) {
+/** T-1 is "doing" with worker ag1, which then answers `answer`; notify and driving as given. */
+async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean } = {}) {
   const w = world()
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'] })
-  await saveBoard(w.$, { ...b0, voice: o.voice ?? true })
+  await saveBoard(w.$, { ...b0, notify: o.notify ?? 'voice' })
   w.put(`${WT}/.git`, 'gitdir: x')
   S.driving = o.driving ?? true
   sayQueue.splice(0)
@@ -1043,7 +1043,7 @@ test('a worker QUESTION makes the task wait for the owner with the question, not
 })
 
 test('a worker QUESTION is cut to 1000 characters on the task', async () => {
-  const { t } = await workerAnswers(`QUESTION: ${'x'.repeat(1500)}`, { voice: false })
+  const { t } = await workerAnswers(`QUESTION: ${'x'.repeat(1500)}`, { notify: 'off' })
   expect(t.status).toBe('waiting')
   expect(t.question!.length).toBe(1000)
 })
@@ -1059,7 +1059,7 @@ test('NEED FILES still makes the task wait with its question', async () => {
   expect(sayQueue).toEqual(['?T-1'])
 })
 
-test('"T-1 needs you" is queued once per waiting question with voice on, and not with voice off or in another session', async () => {
+test('"T-1 needs you" is queued once per waiting question with notify on, and not with notify off or in another session', async () => {
   saidNeedsYou.clear()
   await workerAnswers('QUESTION: which colour?')
   expect(sayQueue).toEqual(['?T-1'])
@@ -1068,7 +1068,7 @@ test('"T-1 needs you" is queued once per waiting question with voice on, and not
   await workerAnswers('QUESTION: which colour?')
   expect(sayQueue).toEqual([])
   saidNeedsYou.clear()
-  await workerAnswers('QUESTION: which colour?', { voice: false })
+  await workerAnswers('QUESTION: which colour?', { notify: 'off' })
   expect(sayQueue).toEqual([])
   await workerAnswers('QUESTION: which colour?', { driving: false })
   expect(sayQueue).toEqual([])
@@ -1204,13 +1204,13 @@ function leadWorld() {
 test("the owner's own actions are queued, not sent; the next real board update starts with them", () => {
   const { $, sent } = leadWorld()
   noteForLead('The owner approved T-127: merged.')
-  noteForLead('The owner changed the settings: voice set to off')
+  noteForLead('The owner changed the settings: notify set to off')
   expect(sent).toEqual([])
   expect(S.leadTimer).toBe(null)
   tellLead($, 'T-3 "x" is ready for review.')
   expect(sent.length).toBe(1)
   const text = sent[0]!
-  expect(text).toContain('Meanwhile the owner (nothing to answer):\n- The owner approved T-127: merged.\n- The owner changed the settings: voice set to off\n\nT-3 "x" is ready for review.')
+  expect(text).toContain('Meanwhile the owner (nothing to answer):\n- The owner approved T-127: merged.\n- The owner changed the settings: notify set to off\n\nT-3 "x" is ready for review.')
   expect(text.indexOf('Meanwhile')).toBeLessThan(text.indexOf('T-3'))
   expect(meanwhile.length).toBe(0)
   // the next update has no Meanwhile block
@@ -1252,4 +1252,132 @@ test("a worker's result still reaches the lead, as the outcome only (its report 
   expect(msg).toMatch(/^✓ T-1 "Do it" merged into main \([0-9a-f]{8}\)/)
   expect(msg).not.toContain('very particular sentence')
   expect(meanwhile).toEqual([])
+})
+
+// ---------------- notify: off, sound or voice ----------------
+
+/**
+ * A fake machine for notify: `uname` answers `os` ('' = no uname, as on Windows, where `cmd /c ver`
+ * answers instead), and only the programs in `programs` and the files in `files` are found.
+ * Every command run is kept in `ran` (with its env), so a test can see nothing was played while looking.
+ */
+function machine(os: string, programs: string[], files: string[] = []) {
+  const w = world()
+  const ran: { argv: string[]; env?: Record<string, string> }[] = []
+  const $ = w.$ as unknown as { process: { run: (a: string[], o?: { env?: Record<string, string> }) => Promise<Res> } }
+  const real = $.process.run
+  $.process.run = async (argv, o = {}) => {
+    if (['git', 'mv', 'ln', 'rm'].includes(argv[0]!)) return real(argv, o)
+    ran.push({ argv: [...argv], ...(o.env ? { env: o.env } : {}) })
+    const [cmd, ...rest] = argv
+    if (cmd === 'uname') return os ? ok(os + '\n') : fail('not found', 127)
+    if (cmd === 'cmd') return !os ? ok('\r\nMicrosoft Windows [Version 10.0.22631]\r\n') : fail('not found', 127)
+    if (cmd === 'sh' && rest[0] === '-c' && rest[1]!.startsWith('command -v')) return programs.includes(rest[3]!) ? ok() : fail()
+    if (cmd === 'where') return programs.includes(rest[0]!) ? ok(`C:\\Windows\\${rest[0]}.exe`) : fail()
+    if (cmd === 'test') return files.includes(rest[1]!) ? ok() : fail()
+    return ok()
+  }
+  S.players = null
+  S.toldUnplayable = false
+  S.notifyWanted = null
+  sayQueue.splice(0)
+  return { ...w, ran }
+}
+const MAC_FILES = ['/System/Library/Sounds/Glass.aiff', '/System/Library/Sounds/Ping.aiff']
+const FD = '/usr/share/sounds/freedesktop/stereo'
+/** The programs looked up or run, in order (lookups as "?name"). */
+const lookedUp = (ran: { argv: string[] }[]) => ran.map(r => (r.argv[0] === 'sh' ? `?${r.argv[4]}` : r.argv[0] === 'where' ? `?${r.argv[1]}` : r.argv[0] === 'test' ? `?${r.argv[2]}` : r.argv.join(' ')))
+
+test('notify finds what the machine can play by looking for programs, once per session, playing nothing', async () => {
+  const mac = machine('Darwin', ['say', 'afplay'], MAC_FILES)
+  expect(await playable(mac.$)).toEqual({ system: 'mac', sound: true, voice: true })
+  // only lookups: no say, afplay or other player was run
+  expect(lookedUp(mac.ran).filter(x => !x.startsWith('?'))).toEqual(['uname -s'])
+  const n = mac.ran.length
+  await playable(mac.$)
+  expect(mac.ran.length).toBe(n)
+
+  const linux = machine('Linux', ['paplay'], [`${FD}/complete.oga`])
+  expect(await playable(linux.$)).toEqual({ system: 'linux', sound: true, voice: false })
+  const linuxVoice = machine('Linux', ['espeak'])
+  expect(await playable(linuxVoice.$)).toEqual({ system: 'linux', sound: false, voice: true })
+  // paplay without a sound file can't chime; canberra needs no file
+  expect((await playable(machine('Linux', ['paplay']).$)).sound).toBe(false)
+  expect((await playable(machine('Linux', ['canberra-gtk-play']).$)).sound).toBe(true)
+
+  // Windows: no uname; cmd /c ver says Windows, and PowerShell is looked up with where
+  const win = machine('', ['powershell'])
+  expect(await playable(win.$)).toEqual({ system: 'windows', sound: true, voice: true })
+  expect(lookedUp(win.ran)).toEqual(['uname -s', 'cmd /c ver', '?powershell'])
+  // Git Bash on Windows answers uname with MINGW
+  expect((await playable(machine('MINGW64_NT-10.0', ['powershell']).$)).system).toBe('windows')
+  expect(await playable(machine('', []).$)).toEqual({ system: 'windows', sound: false, voice: false })
+  expect(await playable(machine('FreeBSD', ['espeak']).$)).toEqual({ system: 'other', sound: false, voice: false })
+})
+
+test('sound plays a chime (a different one when a question waits), voice says the line; the text is an argument, never shell code', async () => {
+  const evil = "T-3'; rm -rf ~; echo '"
+  const mac = machine('Darwin', ['say', 'afplay'], MAC_FILES)
+  expect(await playsFor(mac.$, 'voice', ['T-3'])).toEqual([{ argv: ['say', '-r', '200', 'T-3 done'] }])
+  expect(await playsFor(mac.$, 'sound', ['T-3'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Glass.aiff'] }])
+  expect(await playsFor(mac.$, 'sound', ['T-3', '?T-5'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Ping.aiff'] }])
+  expect(await playsFor(mac.$, 'off', ['T-3'])).toEqual([])
+  expect(await playsFor(mac.$, 'voice', [evil])).toEqual([{ argv: ['say', '-r', '200', `${evil} done`] }])
+
+  const linux = machine('Linux', ['spd-say', 'espeak', 'paplay', 'canberra-gtk-play'], [`${FD}/complete.oga`, `${FD}/bell.oga`])
+  expect((await playsFor(linux.$, 'voice', ['T-3'])).map(p => p.argv)).toEqual([['spd-say', '-w', 'T-3 done'], ['espeak', 'T-3 done']])
+  expect((await playsFor(linux.$, 'sound', ['?T-5'])).map(p => p.argv)).toEqual([['paplay', `${FD}/bell.oga`], ['canberra-gtk-play', '-i', 'bell']])
+  // none saved: the best this machine has (voice)
+  expect((await playsFor(linux.$, null, ['T-3']))[0]!.argv[0]).toBe('spd-say')
+
+  // Windows: the text goes in an environment value the script reads, never into the script
+  const win = machine('', ['powershell'])
+  const [speak] = await playsFor(win.$, 'voice', [evil])
+  expect(speak!.argv.slice(0, 4)).toEqual(['powershell', '-NoProfile', '-NonInteractive', '-Command'])
+  expect(speak!.argv[4]).toBe(`Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak($env:${WIN_TEXT_VAR})`)
+  expect(speak!.argv.join(' ')).not.toContain('rm -rf')
+  expect(speak!.env).toEqual({ [WIN_TEXT_VAR]: `${evil} done` })
+  const [chime] = await playsFor(win.$, 'sound', ['T-3'])
+  expect(chime!.argv[4]).toContain('[System.Media.SystemSounds]::Asterisk.Play()')
+  expect((await playsFor(win.$, 'sound', ['?T-3']))[0]!.argv[4]).toContain('Exclamation')
+})
+
+test('only the driving session plays, lines are joined, and the first command that works is the last one tried', async () => {
+  const m = machine('Linux', ['spd-say', 'espeak'])
+  const b = { ...emptyBoard('main'), notify: 'voice' as const }
+  S.driving = false
+  sayDone(m.$, b, 'T-3')
+  expect(sayQueue).toEqual([])
+  S.driving = true
+  sayDone(m.$, { ...b, notify: 'off' }, 'T-3')
+  expect(sayQueue).toEqual([])
+  sayDone(m.$, b, 'T-3')
+  sayDone(m.$, b, 'T-4')
+  S.sayTimer = null
+  await sayNext(m.$)
+  S.driving = false
+  const played = m.ran.filter(r => ['spd-say', 'espeak'].includes(r.argv[0]!))
+  expect(played.map(r => r.argv)).toEqual([['spd-say', '-w', 'T-3 and T-4 done']])
+})
+
+test("a saved notify this machine can't play is told once, plays nothing, and the setting is kept", async () => {
+  const m = machine('Linux', ['paplay'], [`${FD}/complete.oga`])
+  await saveBoard(m.$, { ...emptyBoard('main'), notify: 'voice' })
+  expect(await playsFor(m.$, 'voice', ['T-3'])).toEqual([])
+  expect(await playsFor(m.$, 'voice', ['T-4'])).toEqual([])
+  const notes = m.toasts.filter(t => t.includes('nothing will play'))
+  expect(notes).toEqual([JSON.stringify("symcc: notify is 'voice' but no speech program was found here; nothing will play")])
+  expect((await load(m.$)).notify).toBe('voice')
+})
+
+test("notify can't be set to a choice this machine can't play: the owner and the lead are told why", async () => {
+  const m = machine('Linux', ['paplay'], [`${FD}/complete.oga`])
+  await saveBoard(m.$, { ...emptyBoard('main'), notify: 'off' })
+  const why = "voice isn't available here: no speech program found (install espeak or speech-dispatcher)"
+  expect(await ownerSettings(m.$, { notify: 'voice' }, 'with /symcc-settings')).toBe(why)
+  expect(await runTool(m.$, 'settings', { notify: 'voice' })).toBe(why)
+  expect((await load(m.$)).notify).toBe('off')
+  expect(await ownerSettings(m.$, { notify: 'loud' }, 'from the board')).toContain('notify must be "off", "sound" or "voice"')
+  expect(await ownerSettings(m.$, { notify: 'sound' }, 'from the board')).toBe('notify set to sound')
+  expect((await load(m.$)).notify).toBe('sound')
 })

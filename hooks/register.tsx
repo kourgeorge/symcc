@@ -9,10 +9,10 @@
 //   scout on a timer ──▶  report    ──▶  the lead is told and decides what goes on the board
 //
 // This file only wires up the hooks. The code lives in plugin/: state.ts (what the plugin holds
-// while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts, git.ts, review.ts, workers.ts,
+// while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
+import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
 import { dataDir } from './name'
 import { findArchived } from './plugin/archive'
 import { gitReady } from './plugin/git'
@@ -23,6 +23,7 @@ import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScout
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now } from './plugin/store'
 import { noteForLead, brief } from './plugin/tell'
+import { playable } from './plugin/voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane } from './plugin/ui/open'
@@ -236,7 +237,7 @@ export const register: Register = on => {
         S.settingPick = null
         const placed = await openPane($, { tab: 'settings' }).then(r => r.isPlaced).catch(() => false)
         if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, Esc closes.`)
-        return say(settingsText(b, S.N.name))
+        return say(settingsText({ ...b, notify: notifyOf(b, await playable($)) }, S.N.name))
       }
       case 'set':
         return say(await ownerSettings($, cmd.input, `with /${S.N.name}-settings`))

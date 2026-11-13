@@ -3,8 +3,9 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout } from '../../types'
-import { type RoleDef, type SettingName, type GitState, type Board, type Heard, emptyHeard } from '../board'
+import { type RoleDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
+import type { Players } from './voice'
 
 export type $ = EngineInterface
 
@@ -110,8 +111,12 @@ export const S = {
   reportTry: null as { task: string; try: number } | null,
   sayTimer: null as { cancel(): void } | null,
   saying: false,
-  /** how this machine speaks: a command that takes the text last, or null for silence (found once) */
-  speaker: null as Promise<string[][]> | null,
+  /** this machine's speech and sound commands (see voice.ts), found once per session; null until looked for */
+  players: null as Promise<Players> | null,
+  /** the board's notify choice when the queue was last filled (null: none saved, the machine's best) */
+  notifyWanted: null as Notify | null,
+  /** whether the owner was told the saved notify can't play on this machine (once per session) */
+  toldUnplayable: false,
   /** when this session last looked for old tasks to archive (ms; at most once an hour, see archiveOld) */
   lastArchive: 0,
   /** the archive.json text found broken and already reported, so the owner is told once; '' when none */
@@ -130,7 +135,7 @@ export function useName($: $) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'voice' | 'enabled'> & { driving: boolean; branch_note: string; git_state: GitState }>
+export type PaneView = SymccView & Partial<Pick<Board, 'target_branch' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'enabled'> & { driving: boolean; notify_choices: Notify[]; branch_note: string; git_state: GitState }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
@@ -164,7 +169,7 @@ export type ScoutDraft = { scout: string; isNew: boolean; every: string; model: 
  */
 export const heard: Heard = emptyHeard()
 
-/** task ids merged but not yet said; joined into one line so lines never talk over each other */
+/** task ids merged (or, marked, waiting for the owner) but not yet told; joined into one line so lines never talk over each other */
 export const sayQueue: string[] = []
 
 /** task ids whose leftover folder was skipped for uncommitted changes (told once each) */

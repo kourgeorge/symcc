@@ -204,9 +204,9 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-scout <name>` | Run a scout now |
 | `/symcc-scout <name> pause` / `resume` | Pause a scout (it doesn't run, on its timer or with run now, until you resume it), or resume it. `p` on the scout's page in the panel does the same |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
-| `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`, `/symcc-settings test_commands "npm test"` |
+| `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`, `/symcc-settings test_commands "npm test"` |
 | `/symcc-stats [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too): totals, averages and medians per task and per try, outcomes, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range |
-| `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates or voice); the board is kept |
+| `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-on` | Turn symcc back on, in the mode the board had |
 | `/symcc-help [topic]` | The built-in manual |
 
@@ -214,7 +214,7 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 
 Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
 The Settings tab (`c` in the panel) has one row per setting; Enter flips an on/off
-setting, opens a pick list for `mode` and `target_branch`, or an edit box for numbers and
+setting, opens a pick list for `mode`, `notify` and `target_branch`, or an edit box for numbers and
 `test_commands`. A value over its limit is cut to it, and the answer says so.
 
 | Setting | Default | Allowed | Meaning |
@@ -226,9 +226,22 @@ setting, opens a pick list for `mode` and `target_branch`, or an edit box for nu
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
 | `archive_days` | 14 | 0–3650 (0 = never) | Done and dropped tasks older than this move from `board.json` to `.symcc/archive.json` |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
-| `voice` | on | on / off | Say "T-3 done" out loud when a task is merged, and "T-5 needs you" when a worker asks you something (Mac) |
+| `notify` | `voice` where this computer can speak, else `sound`, else `off` | `off` / `sound` / `voice` | What plays when a task is merged or a worker asks you something: `sound` a short chime, `voice` says "T-3 done" / "T-5 needs you" out loud. Only choices this computer can play can be picked (see below) |
 | `mode` | `auto` | `off` / `review` / `auto` | See Modes above |
 | `enabled` | on | on / off | The whole plugin on or off, same as `/symcc-on` and `/symcc-off` |
+
+#### What `notify` uses on each system
+
+symcc looks once per session for these programs (it only checks they exist, it plays
+nothing). A choice whose program is missing can't be turned on, and the answer says what to
+install. If the board was set on another computer and its choice can't play here, you are
+told once and nothing plays; the setting is kept. Only the session driving the board plays.
+
+| System | `sound` | `voice` |
+|---|---|---|
+| macOS | `afplay` with the built-in `Glass` sound (`Ping` when a question waits) | `say` |
+| Linux | `paplay` with the freedesktop `complete` / `bell` sounds, `canberra-gtk-play`, or `aplay` with a `.wav` sound | `spd-say` (speech-dispatcher), `espeak-ng` or `espeak` |
+| Windows | PowerShell's system sounds (`Asterisk`, `Exclamation` when a question waits) | PowerShell's built-in speech (System.Speech) |
 
 ### Scouts and task statuses
 

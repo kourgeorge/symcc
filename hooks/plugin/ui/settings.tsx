@@ -16,7 +16,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     $.ui.toast(S.N.toast(r))
     $.ui.invalidate('ui.render')
   })
-  /** Enter on a row: on/off flips, mode and target_branch open a pick list, the rest an edit box. */
+  /** Enter on a row: on/off flips, mode, notify and target_branch open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
     const info = SETTINGS.find(x => x.name === name)!
     const now = settingValue(v, name)
@@ -24,6 +24,8 @@ export async function settingsPage($: $, pane: PaneParts) {
     S.settingEdit = null
     S.settingPick = null
     if (info.kind === 'mode') S.settingPick = { name, options: ['off', 'review', 'auto'] }
+    // only what this machine can play (off always)
+    else if (info.kind === 'notify') S.settingPick = { name, options: v.notify_choices?.length ? v.notify_choices : ['off'] }
     else if (info.kind === 'branch') S.settingPick = { name, options: await branchList($) }
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
     $.ui.invalidate('ui.render')
@@ -75,6 +77,7 @@ export async function settingsPage($: $, pane: PaneParts) {
         <Button key={`setting:${x.name}`} autoFocus={i === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={pressRow(x.name)}>
           <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
           <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
+          {x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
           <Text color={C('subtle')}> · default {x.default} · {x.range} · {x.meaning}</Text>
         </Button>,
         ...[editBox(x.name), pickBox(x.name)].filter(Boolean),

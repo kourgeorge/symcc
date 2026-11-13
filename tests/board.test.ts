@@ -5,7 +5,7 @@ import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -334,20 +334,49 @@ test('the board panel opens on start unless the open_on_start setting is turned 
   expect(openOnStart(parseBoard(JSON.stringify(off)))).toBe(false)
 })
 
-test('a merged task is said out loud, several are joined into one line, and the voice setting turns it off', async () => {
+test('a merged task is said out loud, several are joined into one line, and notify picks off, sound or voice', async () => {
   expect(spokenDone(['T-3'])).toBe('T-3 done')
   expect(spokenDone(['T-3', 'T-4'])).toBe('T-3 and T-4 done')
   expect(spokenDone(['T-3', 'T-4', 'T-5'])).toBe('T-3, T-4 and T-5 done')
   expect(spokenDone(['T-3', 'T-3'])).toBe('T-3 done')
   expect(spokenDone([])).toBe('')
   const b = emptyBoard()
-  expect(b.voice).toBe(true)
-  expect(voiceOn(b)).toBe(true)
-  expect(voiceOn({})).toBe(true)
-  expect(voiceOn(parseBoard(JSON.stringify({ version: 1, tasks: [] })))).toBe(true)
-  const off = { ...b, voice: false }
-  expect(voiceOn(off)).toBe(false)
-  expect(voiceOn(parseBoard(JSON.stringify(off)))).toBe(false)
+  // a new board saves no choice: the best this machine can play
+  expect(b.notify).toBeUndefined()
+  expect(notifyOf(b, { voice: true, sound: true })).toBe('voice')
+  expect(notifyOf(b, { voice: false, sound: true })).toBe('sound')
+  expect(notifyOf(b, { voice: false, sound: false })).toBe('off')
+  expect(bestNotify({ voice: true, sound: false })).toBe('voice')
+  // a saved choice is kept, even where it can't play
+  expect(notifyOf({ notify: 'sound' }, { voice: true, sound: true })).toBe('sound')
+  expect(notifyOf({ notify: 'voice' }, { voice: false, sound: false })).toBe('voice')
+  expect(notifyOf(parseBoard(JSON.stringify({ ...b, notify: 'off' })))).toBe('off')
+  // a bad value is set back to the default (none saved)
+  expect(parseBoard(JSON.stringify({ ...b, notify: 'loud' })).notify).toBeUndefined()
+})
+
+test('the old on/off voice setting becomes notify once, and is dropped', () => {
+  const old = (voice: boolean) => JSON.stringify({ version: 1, next_id: 1, tasks: [], voice })
+  expect(parseBoard(old(true)).notify).toBe('voice')
+  expect(parseBoard(old(false)).notify).toBe('off')
+  expect('voice' in parseBoard(old(true))).toBe(false)
+  expect(JSON.stringify(parseBoard(old(false)))).not.toContain('"voice"')
+  // a board that already has notify keeps it
+  expect(parseBoard(JSON.stringify({ version: 1, tasks: [], voice: true, notify: 'sound' })).notify).toBe('sound')
+})
+
+test("a notify choice this machine can't play is refused with the reason, and a saved one is told once", () => {
+  const linux = { system: 'linux' as const, sound: true, voice: false }
+  expect(notifyChoices(linux)).toEqual(['off', 'sound'])
+  expect(notifyChoices({ system: 'other', sound: false, voice: false })).toEqual(['off'])
+  expect(notifyChoices({ system: 'mac', sound: true, voice: true })).toEqual(['off', 'sound', 'voice'])
+  expect(notifyRefusal('voice', linux)).toBe("voice isn't available here: no speech program found (install espeak or speech-dispatcher)")
+  expect(notifyRefusal('sound', linux)).toBe('')
+  expect(notifyRefusal('off', { system: 'other', sound: false, voice: false })).toBe('')
+  expect(notifyRefusal('sound', { system: 'windows', sound: false, voice: false })).toContain("sound isn't available here: no sound player found")
+  expect(unplayableNote('voice', linux)).toBe("notify is 'voice' but no speech program was found here; nothing will play")
+  expect(unplayableNote('sound', linux)).toBe('')
+  expect(unplayableNote('off', { system: 'other', sound: false, voice: false })).toBe('')
 })
 
 test('the project folder name is the last part of its path', () => {
@@ -1211,7 +1240,8 @@ test('setup leaves secrets and big files out of the first commit', async () => {
 test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad names and values say why', () => {
   expect(parseCommand('symcc-settings', '')).toEqual({ kind: 'settings' })
   expect(parseCommand('symcc-settings', 'max_parallel 5')).toEqual({ kind: 'set', setting: 'max_parallel', input: { max_parallel: 5 } })
-  expect(parseCommand('symcc-settings', 'voice off')).toEqual({ kind: 'set', setting: 'voice', input: { voice: false } })
+  expect(parseCommand('symcc-settings', 'notify sound')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'sound' } })
+  expect(parseCommand('symcc-settings', 'notify Off')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'off' } })
   expect(parseCommand('symcc-settings', 'open_on_start on')).toEqual({ kind: 'set', setting: 'open_on_start', input: { open_on_start: true } })
   expect(parseCommand('symcc-settings', 'mode review')).toEqual({ kind: 'set', setting: 'mode', input: { mode: 'review' } })
   expect(parseCommand('symcc-settings', 'target_branch dev')).toEqual({ kind: 'set', setting: 'target_branch', input: { target_branch: 'dev' } })
@@ -1222,10 +1252,11 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, voice, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, target_branch, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
-  expect(bad('voice maybe')).toBe('voice must be on or off')
+  expect(bad('notify loud')).toBe('notify must be off, sound or voice')
+  expect(bad('open_on_start maybe')).toBe('open_on_start must be on or off')
   expect(bad('mode later')).toBe('mode must be off, review or auto')
   expect(bad('target_branch two words')).toContain('target_branch must be one')
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
@@ -1233,18 +1264,18 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
 
 test('settings keep their limits, and a value cut to its limit says so', () => {
   const b = emptyBoard()
-  const r = applySettings(b, { max_parallel: 12, max_minutes: 2, auto_retries: 4, voice: false, test_commands: [' npm test ', ''] })
+  const r = applySettings(b, { max_parallel: 12, max_minutes: 2, auto_retries: 4, notify: 'off', test_commands: [' npm test ', ''] })
   expect(r.board.max_parallel).toBe(8)
   expect(r.board.max_minutes).toBe(5)
   expect(r.board.auto_retries).toBe(4)
-  expect(r.board.voice).toBe(false)
+  expect(r.board.notify).toBe('off')
   expect(r.board.test_commands).toEqual(['npm test'])
   expect(b.max_parallel).toBe(3)
   const by = Object.fromEntries(r.changes.map(c => [c.name, c]))
   expect(settingSetText(by.max_parallel!)).toBe('max_parallel set to 8 (cut from 12 to the limit: max_parallel must be 1-8)')
   expect(settingSetText(by.max_minutes!)).toBe('max_minutes set to 5 (cut from 2 to the limit: max_minutes must be 5-600)')
   expect(settingSetText(by.auto_retries!)).toBe('auto_retries set to 4')
-  expect(settingSetText(by.voice!)).toBe('voice set to off')
+  expect(settingSetText(by.notify!)).toBe('notify set to off')
   expect(settingSetText(by.test_commands!)).toBe('test_commands set to npm test')
   // the lead's wording keeps its text and gets the same note
   expect(by.max_parallel!.said + by.max_parallel!.cut).toBe('up to 8 at once (cut from 12 to the limit: max_parallel must be 1-8)')
@@ -1252,14 +1283,14 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
   expect(applySettings(b, { max_parallel: 5 }).changes[0]!.cut).toBe('')
   expect(applySettings(b, { test_commands: ['a', 'b', 'c', 'd', 'e', 'f'] }).changes[0]!.cut).toContain('only the first 5 kept')
   // wrong types are left alone
-  expect(applySettings(b, { max_parallel: 'x', voice: 'no' }).changes).toEqual([])
+  expect(applySettings(b, { max_parallel: 'x', notify: 'no' }).changes).toEqual([])
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'voice', 'mode', 'enabled'])
-  const b = { ...emptyBoard('main'), test_commands: ['npm test', 'npm run lint'], voice: false }
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'target_branch', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'])
+  const b = { ...emptyBoard('main'), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
   expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
-  expect(settingValue(b, 'voice')).toBe('off')
+  expect(settingValue(b, 'notify')).toBe('off')
   expect(settingValue(b, 'open_on_start')).toBe('on')
   expect(settingValue(b, 'mode')).toBe('auto')
   expect(settingValue({}, 'max_parallel')).toBe('3')

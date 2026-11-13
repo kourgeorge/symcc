@@ -18,8 +18,11 @@ export type Board = {
   auto_retries: number
   /** open the board panel by itself when a session starts (true unless turned off) */
   open_on_start: boolean
-  /** say it out loud when a task is merged (true unless turned off) */
-  voice: boolean
+  /**
+   * what plays when a task is merged or a question waits for the owner: off, sound (a chime) or
+   * voice ("T-3 done"); absent: the best this machine can play (see notifyOf)
+   */
+  notify?: Notify
   /** the whole plugin on or off (/<name>-on, /<name>-off); off: Claude works as normal, the board is kept. true unless turned off */
   enabled: boolean
   /** done and dropped tasks older than this many days move to archive.json (0 = never) */
@@ -30,6 +33,11 @@ export type Board = {
   /** the ids of archived tasks that were done, so a task waiting on one still starts */
   archived_done?: string[]
 }
+
+/** What plays when a task is merged or waits for the owner. */
+export type Notify = 'off' | 'sound' | 'voice'
+export const NOTIFY_CHOICES: Notify[] = ['off', 'sound', 'voice']
+export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
 
 /** The running totals of archived tasks: how many were done and dropped, and their tries' time, tokens and cost. */
 export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: number; cost?: number }
@@ -95,7 +103,7 @@ export const DEFAULT_ARCHIVE_DAYS = 14
 
 /** A new board; `target_branch` is where finished work is merged (see startBranch for a new project). */
 export function emptyBoard(target_branch = 'main'): Board {
-  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, voice: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
+  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], target_branch, max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
 }
 
 /** What reading board.json found: the board, and what was wrong with the file (if anything). */
@@ -123,7 +131,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   max_minutes: v => isNum(v) && v >= 0,
   auto_retries: v => isNum(v) && v >= 0,
   open_on_start: v => typeof v === 'boolean',
-  voice: v => typeof v === 'boolean',
+  notify: v => isNotify(v),
   enabled: v => typeof v === 'boolean',
   archive_days: v => isNum(v) && v >= 0,
 }
@@ -175,6 +183,8 @@ export function readBoard(text: string | null): BoardRead {
     if (SETTING_OK[k](raw[k])) (board as Record<string, unknown>)[k] = raw[k]
     else fixed.push(k)
   }
+  // the old on/off `voice` setting becomes notify once (voice or off); the board is saved without it
+  if (!('notify' in raw) && typeof raw.voice === 'boolean') board.notify = raw.voice ? 'voice' : 'off'
   const archived = cleanArchived(raw.archived)
   if (archived) board.archived = archived
   else if ('archived' in raw) fixed.push('archived')

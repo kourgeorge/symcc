@@ -101,7 +101,7 @@ lower task number).
 A worker that can't go on without a decision from you stops and answers
 `QUESTION: …`. (A worker that needs files outside its list answers `NEED FILES: …`; see
 the scope check below.) The task does not fail: it goes straight to `waiting` with the
-question, shows under NEEDS YOU on the board, and with voice on you hear "T-5 needs you"
+question, shows under NEEDS YOU on the board, and with `notify` on you hear "T-5 needs you" (or a chime)
 (once per question, only in the session that drives the board). The lead is told too and
 answers it itself when it can. Otherwise answer it on the board or tell the lead: the answer
 goes into the task and sends it back to work, and a new try continues with it. What the
@@ -233,14 +233,25 @@ You can also do it yourself:
   Esc goes back to the list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
-  `voice` flip on/off; `mode` and `target_branch` open a pick list (off / review / auto,
-  or your local branches); numbers and `test_commands` open an edit box (several test
+  `enabled` flip on/off; `mode`, `notify` and `target_branch` open a pick list (off / review
+  / auto; only the notify choices this computer can play; or your local branches); numbers and `test_commands` open an edit box (several test
   commands are joined with ` && `). Esc cancels. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
-- Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings voice off`,
+- Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`,
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
+- `notify` is `off`, `sound` (a short chime) or `voice` ("T-3 done", "T-5 needs you" out
+  loud). A new board uses `voice` where this computer can speak, else `sound`, else `off`.
+  Once per session symcc checks which programs exist (without playing anything): on macOS
+  `say` for voice and `afplay` with the built-in sounds for sound; on Linux `spd-say`,
+  `espeak-ng` or `espeak` for voice and `paplay` (freedesktop sounds), `canberra-gtk-play`
+  or `aplay` for sound; on Windows PowerShell's built-in speech and system sounds. A choice
+  that can't play here is refused with the reason, e.g. `voice isn't available here: no
+  speech program found (install espeak or speech-dispatcher)`, from the panel, from
+  `/symcc-settings` and from the lead. If the saved choice can't play on this computer (the
+  board was set on another one), you are told once and nothing plays; the setting is kept.
+  Task text is always passed to these programs as a plain argument, never as shell code.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
   `r` retry, `m` switch review / auto, `n` needs review, `1`-`9` a try's report on the task
   page, `t` / `s` / `c` switch views, `b` back.
@@ -494,7 +505,7 @@ your next message, no restart needed:
 
 - the lead instructions are no longer added to Claude's prompt,
 - running workers and scouts are stopped (their tasks go back to `todo`) and nothing new starts,
-- no "[symcc] Board update" messages and no voice,
+- no "[symcc] Board update" messages and no sounds or voice,
 - the panel does not open by itself and the status line just says `symcc off · /symcc-on`,
 - the symcc tools answer "symcc is off. The owner can turn it on with /symcc-on." and change nothing.
 
