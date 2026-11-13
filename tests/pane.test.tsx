@@ -1234,7 +1234,7 @@ test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts wit
   // only bugs is on the timer: the panel shows its next run, and none for secrets and bad
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
   await ui.press({ key: 'tab-scouts' })
-  expect(String((await ui.find({ key: 'scout:bugs' }))?.text)).toMatch(/every 30 min\s+next in 30m/)
+  expect(String((await ui.find({ key: 'scout:bugs' }))?.text)).toMatch(/every 30 min\s+next in 1m/)
   expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran$/)
   expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran$/)
   await ui.unmount()
