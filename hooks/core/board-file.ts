@@ -1,6 +1,7 @@
 // The board file itself: its shape, loading it safely, the lock, and finding a task.
-import type { SymccMode, SymccRun, SymccStatus, SymccTask } from '../../types'
+import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { dataDir, namesFor } from '../name'
+import { cleanTokens } from './runs'
 import { parseStamp } from './text'
 
 export type Board = {
@@ -40,7 +41,7 @@ export const NOTIFY_CHOICES: Notify[] = ['off', 'sound', 'voice']
 export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
 
 /** The running totals of archived tasks: how many were done and dropped, and their tries' time, tokens and cost. */
-export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: number; cost?: number }
+export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: SymccTokens; cost?: number }
 
 /**
  * A task as the board file keeps it: while it is "doing", `session` names the session whose
@@ -115,7 +116,7 @@ export type BoardRead = {
   skipped: number
   /** the settings whose value was bad and were set to their default */
   fixed: string[]
-  /** how many tasks were brought to the current shape (see migrateTask); the board should then be saved once */
+  /** how many tasks (and the archived totals, counted as one) were brought to the current shape (see migrateTask); the board should then be saved once */
   migrated: number
 }
 
@@ -138,14 +139,28 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   archive_days: v => isNum(v) && v >= 0,
 }
 
-/** The archived totals from the file, or undefined when missing or not usable (they then start from zero). */
+/**
+ * The archived totals from the file, or undefined when missing or not usable (they then start from zero).
+ * Migration: tokens saved as one number (before the kinds were kept apart) become { unsplit: n }.
+ */
 function cleanArchived(v: unknown): ArchivedTotals | undefined {
   if (!isObj(v)) return undefined
   const n = (x: unknown) => (isNum(x) && x >= 0 ? x : 0)
   const out: ArchivedTotals = { done: n(v.done), dropped: n(v.dropped), tries: n(v.tries), ms: n(v.ms) }
-  if (isNum(v.tokens) && v.tokens >= 0) out.tokens = v.tokens
+  const tok = isNum(v.tokens) ? cleanTokens({ unsplit: v.tokens }) ?? {} : cleanTokens(v.tokens)
+  if (tok) out.tokens = tok
   if (isNum(v.cost) && v.cost >= 0) out.cost = v.cost
   return out
+}
+
+/**
+ * Migration: tries whose tokens were saved as one number (input, output and cache added up, before
+ * the kinds were kept apart) get that number kept as-is, marked unsplit: { unsplit: n }. Null when no
+ * try needs it.
+ */
+export function migrateRunTokens(runs: unknown): SymccRun[] | null {
+  if (!Array.isArray(runs) || !runs.some(r => isNum((r as SymccRun)?.tokens))) return null
+  return runs.map(r => (isNum(r?.tokens) ? { ...r, tokens: { unsplit: Math.max(0, r.tokens) } } : r))
 }
 
 /** A task entry from the file made usable, or null when it is not a task (it is then skipped). */
@@ -172,14 +187,17 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - no origin: origin { by: 'lead', why: 'made before origins were kept' }, dated when the task was made;
  * - role tests, backend or frontend (no longer built in): tester, general, general;
  * - a try with no end time (left open by a reload) ends where the next try started, or at the task's
- *   last change; the last try of a task that is "doing" is running now and stays open.
+ *   last change; the last try of a task that is "doing" is running now and stays open;
+ * - a try's tokens saved as one number: kept as-is, marked unsplit (see migrateRunTokens).
  */
 export function migrateTask(t: BoardTask): BoardTask | null {
   let out = t
+  const split = migrateRunTokens(t.runs)
+  if (split) out = { ...out, runs: split }
   if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
   const role = typeof t.role === 'string' ? OLD_ROLES[t.role.trim().toLowerCase()] : undefined
   if (role) out = { ...out, role }
-  const rs = Array.isArray(t.runs) ? t.runs : []
+  const rs = Array.isArray(out.runs) ? out.runs : []
   const open = (r: SymccRun, i: number) => typeof r.started === 'string' && !r.ended && !(i === rs.length - 1 && t.status === 'doing')
   if (rs.some(open)) {
     out = {
@@ -220,10 +238,10 @@ export function readBoard(text: string | null): BoardRead {
   const archived = cleanArchived(raw.archived)
   if (archived) board.archived = archived
   else if ('archived' in raw) fixed.push('archived')
+  let migrated = archived && isObj(raw.archived) && isNum(raw.archived.tokens) ? 1 : 0
   if (Array.isArray(raw.archived_done)) board.archived_done = [...new Set(raw.archived_done.filter((x): x is string => typeof x === 'string').map(normId))]
   else if ('archived_done' in raw) fixed.push('archived_done')
   let skipped = 0
-  let migrated = 0
   const seen = new Set<string>()
   for (const t of (raw.tasks as unknown[] | undefined) ?? []) {
     const c = cleanTask(t)

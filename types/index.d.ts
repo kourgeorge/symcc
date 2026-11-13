@@ -8,14 +8,14 @@ export type SymccStatus = 'backlog' | 'todo' | 'doing' | 'paused' | 'waiting' | 
 
 /**
  * One worker try on a task: when it started and ended (ISO times), and what it used.
- * `tokens` comes from the worker's turn result (all input, cache and output tokens added up).
+ * `tokens` comes from the worker's turn result, each kind kept apart (see SymccTokens).
  * `cost` (US dollars) is kept for when a result reports it: the worker's turn result in the
  * Claude Code types gives token counts but no dollar cost, so today only time and tokens are filled.
  */
 export type SymccRun = {
   started: string
   ended?: string
-  tokens?: number
+  tokens?: SymccTokens
   cost?: number
   /**
    * The full SHAs of the commits symcc made for this try, oldest first: the task's own commit
@@ -34,6 +34,15 @@ export type SymccRun = {
   /** set when this try first had to merge main into the branch, after a clash with main */
   merge_main?: true
 }
+
+/**
+ * Token counts kept apart by kind, as the API reports them: `input` (normal input), `output`,
+ * `cache_write` (input written to the prompt cache) and `cache_read` (input read from the cache).
+ * Each kind is billed differently, so they are never added into one number when saved.
+ * `unsplit`: an old count saved before the kinds were kept apart (one sum of all of them).
+ * A missing field is 0.
+ */
+export type SymccTokens = { input?: number; output?: number; cache_write?: number; cache_read?: number; unsplit?: number }
 
 /** How a try ended: its work was checked, it was stopped and sent back to work, stopped, ran too long, or the worker asked something. */
 export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | 'asked'

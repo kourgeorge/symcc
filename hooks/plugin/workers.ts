@@ -1,4 +1,4 @@
-import type { SymccTask, SymccMode } from '../../types'
+import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
@@ -137,7 +137,7 @@ export async function waitEnded($: $, ids: string[], ms: number): Promise<AgentI
   }
 }
 
-export async function workerFinished($: $, agentId: string, answer: string, aborted: boolean, tokens?: number) {
+export async function workerFinished($: $, agentId: string, answer: string, aborted: boolean, tokens?: SymccTokens) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)

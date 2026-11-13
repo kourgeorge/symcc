@@ -13,12 +13,12 @@
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
 import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, isWorkerType } from './board'
-import { findArchived } from './plugin/archive'
+import { findArchived, saveArchiveMigrated } from './plugin/archive'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
-import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScoutEdit } from './plugin/scouts'
+import { saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScoutEdit } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
@@ -88,8 +88,11 @@ export const register: Register = on => {
       S.root = (await $.session.repo())?.root ?? (await $.session.root())
       S.home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
       S.me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
-      // An older board is saved once in the current shape (before anything else saves it), with a copy as it was.
+      // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
+      // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
       await saveMigrated($).catch(() => undefined)
+      await saveArchiveMigrated($).catch(() => undefined)
+      await saveScoutsMigrated($).catch(() => undefined)
       // Become the driver if nobody drives the board. As the driver, old workers still running
       // from before a reload are stopped first and their tasks go back to "todo".
       await claimLead($, true).catch(() => (S.driving = false))

@@ -293,7 +293,8 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   page, `t` / `s` / `c` switch views, `b` back.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a
-  total, e.g. `total: 1h 12m · 1.2M tokens over 4 tries`.
+  total, e.g. `total: 1h 12m · 1.2M tokens in all over 4 tries`. "In all" means every kind of
+  token added up; `/symcc-stats` shows the kinds apart (see below).
 
 ---
 
@@ -552,8 +553,23 @@ its read-only `stats` tool.
 
 - **Range:** `/symcc-stats` covers every task; `/symcc-stats 7d` the tasks changed in the last
   7 days; `/symcc-stats T-100..T-130` an id range.
+- **Kinds of tokens:** symcc keeps four counts apart wherever it records tokens (each try,
+  each scout run, the lead's calls): *input*, *output*, *cache write* (input saved to the
+  prompt cache) and *cache read* (input read back from it). They cost very different amounts:
+  a cache read costs about a tenth of normal input, so one plain sum makes the cost look much
+  bigger than it is. The totals and the "Whole team" part show the kinds on the line under each
+  figure, plus a **billed-eq.** (billed-equivalent) figure: the kinds weighed by their usual
+  price compared with input (input 1, cache write 1.25, cache read 0.1, output 5), i.e. how many
+  plain input tokens would cost the same. It is an estimate: real prices depend on the model.
+  Elsewhere (the board, the banner, a task's page, the per-task and per-day rows) one short
+  figure is shown, "in all": every kind added up.
+- **Unsplit tokens:** tries and scout runs saved before the kinds were kept apart only have one
+  number. symcc changes those files once (when a session starts): the number is kept as it was,
+  marked *unsplit*. They count in the "in all" figures and are shown as `unsplit`, but are left
+  out of the billed-equivalent (the report says how many), since their kinds are not known.
 - **Whole team:** the tokens of the lead (the main Claude Code chat), the workers and the
-  scouts, their total, and the tokens per merged task, for the chosen range. Workers are
+  scouts, each with its kinds apart, their total with its billed-equivalent, and the tokens per
+  merged task (in all and billed-equivalent), for the chosen range. Workers are
   counted by task (their tries); the lead and the scouts by time: for `7d` the last 7 days,
   for an id range the time those tasks span (from the first one made to the last change).
   - *Lead:* Claude Code's plugin API gives no token counts per session (only this session's
@@ -568,7 +584,7 @@ its read-only `stats` tool.
     Runs from before this was added are not counted.
   - *Dollars:* not shown, since symcc doesn't know the model prices. Where Claude Code
     reports one, the report adds this session's total so far, as `/cost` says.
-- **Parts:** totals (tasks by status, worker time, tokens); per task (average and median time
+- **Parts:** totals (tasks by status, worker time, tokens in all, by kind and billed-equivalent); per task (average and median time
   and tokens of done tasks, tries per task, the 5 biggest by tokens and by time); per try
   (average time and tokens, share of tasks done on the first try); flow (time from made to
   done); outcomes (merged on its own or approved by you, failed tries by reason: tests,

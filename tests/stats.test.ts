@@ -1,13 +1,13 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, failReason, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { addScoutRun, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 
-/** A task made `ageMin` minutes ago; `tries` are [minutes, tokens] per try, each starting at the task's creation. */
+/** A task made `ageMin` minutes ago; `tries` are [minutes, tokens] per try (the tokens as plain input), each starting at the task's creation. */
 function task(id: string, over: Partial<SymccTask> = {}, tries: [number, number?][] = [], ageMin = 60): SymccTask {
-  const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), ...(tokens !== undefined ? { tokens } : {}) }))
+  const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), ...(tokens !== undefined ? { tokens: { input: tokens } } : {}) }))
   return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', question: null, order: 0, after: [], attempts: tries.length, history: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
 }
 
@@ -19,7 +19,8 @@ test('stats: averages and medians', () => {
   expect(median([4, 1, 3, 2])).toBe(2.5)
   const f = taskFigures(task('T-1', {}, [[10, 1000], [20]]), NOW)
   expect(f.ms).toBe(30 * 60_000)
-  expect(f.tokens).toBe(1000)
+  expect(f.tokens).toEqual({ input: 1000 })
+  expect(f.tok).toBe(1000)
   expect(f.tries).toBe(2)
   expect(taskFigures(task('T-2')).hasData).toBe(false)
 })
@@ -119,22 +120,24 @@ const logLine = (id: string, minAgo: number, u: { i?: number; o?: number; cr?: n
 
 test('stats: a scout run adds its tokens and time to scouts.json, and the rest of the file is kept', () => {
   const mem = scoutMemoryText([{ name: 'bugs', last_run: iso(5), last_report: 'all fine' }])
-  let text = addScoutRun(mem, 'bugs', { endMs: NOW, ms: 120_000, tokens: 5000 })
+  let text = addScoutRun(mem, 'bugs', { endMs: NOW, ms: 120_000, tokens: { input: 1000, output: 500, cache_write: 500, cache_read: 3000 } })
   text = addScoutRun(text, 'bugs', { endMs: NOW - 86_400_000 * 3, ms: 60_000 })
-  text = addScoutRun(text, 'docs', { endMs: NOW, ms: 30_000, tokens: 700 })
+  text = addScoutRun(text, 'docs', { endMs: NOW, ms: 30_000, tokens: { input: 700 } })
   expect(parseScoutMemory(text).bugs?.last_report).toBe('all fine')
   const u = parseScoutUsage(text)
-  expect(u.bugs).toMatchObject({ runs: 2, tokens: 5000, ms: 180_000 })
-  expect(u.bugs!.days['2026-11-13']).toEqual({ runs: 1, tokens: 5000, ms: 120_000 })
-  expect(u.docs?.tokens).toBe(700)
+  // each kind is kept apart, not one sum
+  expect(u.bugs).toMatchObject({ runs: 2, tokens: { input: 1000, output: 500, cache_write: 500, cache_read: 3000 }, ms: 180_000 })
+  expect(u.bugs!.days['2026-11-13']).toEqual({ runs: 1, tokens: { input: 1000, output: 500, cache_write: 500, cache_read: 3000 }, ms: 120_000 })
+  expect(u.docs?.tokens).toEqual({ input: 700 })
   // a later save of the scouts' memory (which knows nothing of usage) keeps it
   const saved = keepScoutUsage(scoutMemoryText([{ name: 'bugs', last_run: iso(1), last_report: 'new' }]), text)
   expect(parseScoutUsage(saved)).toEqual(u)
   expect(parseScoutMemory(saved).bugs?.last_report).toBe('new')
   expect(parseScoutUsage('not json')).toEqual({})
   // the range: the last 2 days leave out the run 3 days ago
-  expect(scoutTotals(u, {})).toEqual({ runs: 3, tokens: 5700, ms: 210_000 })
-  expect(scoutTotals(u, rangeSpan({ kind: 'days', days: 2 }, [], NOW))).toEqual({ runs: 2, tokens: 5700, ms: 150_000 })
+  const both = { input: 1700, output: 500, cache_write: 500, cache_read: 3000 }
+  expect(scoutTotals(u, {})).toEqual({ runs: 3, tokens: both, ms: 210_000 })
+  expect(scoutTotals(u, rangeSpan({ kind: 'days', days: 2 }, [], NOW))).toEqual({ runs: 2, tokens: both, ms: 150_000 })
 })
 
 test('stats: the lead is summed from session log lines, each call once, main chat only', () => {
@@ -149,22 +152,23 @@ test('stats: the lead is summed from session log lines, each call once, main cha
   ].join('\n')
   const calls = leadCalls(jsonl)
   expect(calls.length).toBe(2)
-  expect(leadTotals(calls, {})).toEqual({ calls: 2, tokens: 2018 })
-  expect(leadTotals(calls, rangeSpan({ kind: 'days', days: 1 }, [], NOW))).toEqual({ calls: 1, tokens: 1018 })
+  // each kind kept apart: input, output, cache writes (cache_creation) and cache reads
+  expect(leadTotals(calls, {})).toEqual({ calls: 2, tokens: { input: 1002, output: 98, cache_write: 18, cache_read: 900 } })
+  expect(leadTotals(calls, rangeSpan({ kind: 'days', days: 1 }, [], NOW))).toEqual({ calls: 1, tokens: { input: 2, output: 98, cache_write: 18, cache_read: 900 } })
   expect(projectFolderName('/Users/me/repos/my.app')).toBe('-Users-me-repos-my-app')
 })
 
 test('stats: the whole team adds up lead, workers and scouts, and gives tokens per merged task', () => {
   const tasks = [task('T-1', {}, [[10, 1000]]), task('T-2', {}, [[10, 3000]]), task('T-3', { status: 'doing' }, [[5, 1000]])]
   const lead = leadCalls([logLine('a', 10, { i: 4000 }), logLine('b', 60 * 24 * 20, { i: 90_000 })].join('\n'))
-  const scouts = parseScoutUsage(addScoutRun(null, 'bugs', { endMs: NOW, ms: 60_000, tokens: 2000 }))
+  const scouts = parseScoutUsage(addScoutRun(null, 'bugs', { endMs: NOW, ms: 60_000, tokens: { input: 2000 } }))
   const text = statsReport({ tasks, nowMs: NOW, team: { lead, leadSessions: 1, scouts, sessionUsd: 1.5 } })
   expect(text).toContain('Whole team (all time)')
   expect(text).toMatch(/lead\s+94k tokens \(2 calls, from Claude Code's session logs, 1 session\)/)
   expect(text).toMatch(/workers\s+5k tokens \(3 tries\)/)
   expect(text).toMatch(/scouts\s+2k tokens \(1 run, 1m\)/)
   expect(text).toMatch(/total\s+101k tokens/)
-  expect(text).toMatch(/per merged\s+50\.5k tokens per merged task \(2 merged\)/)
+  expect(text).toMatch(/per merged\s+50\.5k tokens in all per merged task \(2 merged\) · billed-eq\. 50\.5k/)
   expect(text).toContain("symcc doesn't know the model prices (this session so far, as /cost says: $1.50")
   // the last 7 days: the lead's call 20 days ago is left out
   const week = statsReport({ tasks, range: { kind: 'days', days: 7 }, nowMs: NOW, team: { lead, scouts } })
@@ -174,7 +178,7 @@ test('stats: the whole team adds up lead, workers and scouts, and gives tokens p
   // no logs: the lead is said to be left out, the rest still adds up
   const none = statsReport({ tasks, nowMs: NOW, team: { leadProblem: 'no session logs in ~/x' } })
   expect(none).toContain('not counted: no session logs in ~/x')
-  expect(none).toMatch(/total\s+5k tokens \(without the lead\)/)
+  expect(none).toMatch(/total\s+5k tokens in all \(without the lead\)/)
 })
 
 test('stats: an id range counts the lead and scouts over the time its tasks span', () => {
@@ -184,4 +188,47 @@ test('stats: an id range counts the lead and scouts over the time its tasks span
   expect(text).toContain('Whole team (T-1..T-1; lead and scouts over the time these tasks span)')
   expect(text).toMatch(/lead\s+700 tokens \(1 call/)
   expect(text).toMatch(/total\s+1.7k tokens/)
+})
+
+test('stats: a worker try keeps its kinds apart, and the report shows them with a billed-equivalent estimate', () => {
+  const t = task('T-1', { runs: [{ started: iso(60), ended: iso(50), tokens: { input: 1000, output: 2000, cache_write: 4000, cache_read: 100_000 } }] })
+  const text = statsReport({ tasks: [t], nowMs: NOW, team: { lead: leadCalls(logLine('a', 10, { i: 10, o: 20, cr: 1000, cc: 40 })) } })
+  expect(text).toMatch(/tokens\s+107k in all\n\s+input 1k · output 2k · cache write 4k · cache read 100k\n\s+billed-eq\.\s+26k \(an estimate: each kind weighed by its usual price compared with input \(input 1, cache write 1\.25, cache read 0\.1, output 5\)\)/)
+  // the whole team: each part and the total with their kinds, and the billed-equivalent of the total
+  expect(text).toMatch(/lead\s+1.1k tokens \(1 call.*\n\s+input 10 · output 20 · cache write 40 · cache read 1k/)
+  expect(text).toMatch(/workers\s+107k tokens \(1 try\)\n\s+input 1k · output 2k · cache write 4k · cache read 100k/)
+  expect(text).toMatch(/total\s+108.1k tokens in all\n\s+input 1k · output 2k · cache write 4k · cache read 101k\n\s+billed-eq\.\s+26\.3k \(an estimate/)
+})
+
+test('stats: the billed-equivalent weighs input 1, cache write 1.25, cache read 0.1 and output 5, and leaves out unsplit tokens', () => {
+  expect(billedTokens({ input: 1000, output: 100, cache_write: 400, cache_read: 10_000 })).toBe(1000 + 500 + 500 + 1000)
+  expect(billedTokens({})).toBe(0)
+  expect(billedTokens({ input: 10, unsplit: 5000 })).toBe(10)
+  expect(tokenCount({ input: 10, output: 1, cache_write: 2, cache_read: 3, unsplit: 4 })).toBe(20)
+  expect(billedText({ input: 1000, unsplit: 2000 })).toMatch(/^1k \(an estimate: .*; leaves out 2k unsplit tokens, saved before the kinds were kept apart\)$/)
+  expect(fmtTokenKinds({ cache_read: 5, unsplit: 7, input: 1 })).toBe('input 1 · cache read 5 · unsplit 7')
+})
+
+test('stats: old saved runs with one number are migrated once, kept as-is and shown as unsplit', () => {
+  // board.json: a try's tokens and the archived totals
+  const old = { ...task('T-1', { runs: [] }), runs: [{ started: iso(60), ended: iso(50), tokens: 5000 }, { started: iso(40), ended: iso(30), tokens: { input: 10 } }] }
+  const r = readBoard(JSON.stringify({ version: 1, tasks: [old], archived: { done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: 300 } }))
+  expect(r.migrated).toBe(2)
+  expect(r.board.tasks[0]!.runs!.map(x => x.tokens)).toEqual([{ unsplit: 5000 }, { input: 10 }])
+  expect(r.board.archived!.tokens).toEqual({ unsplit: 300 })
+  expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
+  const text = statsReport({ tasks: r.board.tasks, nowMs: NOW })
+  expect(text).toMatch(/tokens\s+5k in all\n\s+input 10 · unsplit 5k\n\s+billed-eq\.\s+10 \(.*leaves out 5k unsplit tokens/)
+  // archive.json: its tasks' tries too
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...old, status: 'done' }] }))
+  expect(a.migrated).toBe(1)
+  expect(a.archive.tasks[0]!.runs![0]!.tokens).toEqual({ unsplit: 5000 })
+  expect(readArchive(archiveText(a.archive)).migrated).toBeUndefined()
+  // scouts.json: the usage totals, all and per day
+  const scouts = JSON.stringify({ scouts: {}, usage: { bugs: { runs: 2, tokens: 900, ms: 10, days: { '2026-11-13': { runs: 1, tokens: 400, ms: 5 } } } } })
+  const moved = migrateScoutUsage(scouts)!
+  expect(parseScoutUsage(moved).bugs).toEqual({ runs: 2, tokens: { unsplit: 900 }, ms: 10, days: { '2026-11-13': { runs: 1, tokens: { unsplit: 400 }, ms: 5 } } })
+  expect(migrateScoutUsage(moved)).toBe(null)
+  expect(migrateScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } }))).toBe(null)
+  expect(parseScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } })).bugs!.tokens).toEqual({ input: 1, unsplit: 900 })
 })

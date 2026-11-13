@@ -413,7 +413,7 @@ test('a paused task shows as paused and can be resumed from the board', async ($
 })
 
 const RUNS = [
-  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: 40_000 },
+  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 40_000 } },
   { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 0.42 },
 ]
 
@@ -421,16 +421,17 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /Runs \(time and cost\)/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens in all/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 2: 1h 00m · ~\$0\.42/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens · ~\$0\.42/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens in all · ~\$0\.42/ })).toBeDefined()
   await ui.unmount()
 })
 
 test('the banner shows the counts and the total time and cost of all tries', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens · ~\$0\.42$/ })).toBeDefined()
+  // wide enough for the whole line (the tokens figure says it is every kind added up: "in all")
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens in all · ~\$0\.42$/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -1320,8 +1321,8 @@ test('a research task shows its note as a row in Details', async ($, on) => {
 
 const ENDED_RUNS = [
   { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:00:24.000Z', ended_by: 'restarted', ended_note: 'the task was changed (after, details)' },
-  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', tokens: 5_600_000, ended_by: 'finished', ended_note: 'clash with main' },
-  { started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', tokens: 232_500, merge_main: true, ended_by: 'finished', ended_note: 'merged' },
+  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', tokens: { cache_read: 5_000_000, input: 600_000 }, ended_by: 'finished', ended_note: 'clash with main' },
+  { started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', tokens: { input: 232_500 }, merge_main: true, ended_by: 'finished', ended_note: 'merged' },
   { started: '2026-11-09T13:00:00.000Z', ended: '2026-11-09T13:01:00.000Z' },
 ]
 
@@ -1330,8 +1331,8 @@ test('the Runs rows say how each try ended; a run with no reason shows none', as
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /try 1: 24s · restarted: the task was changed \(after, details\)/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /try 2: 17m · 5\.6M tokens · finished: clash with main/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /try 3: 3m · 232\.5k tokens · merged main in \(clash with main\) · finished: merged/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 2: 17m · 5\.6M tokens in all · finished: clash with main/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try 3: 3m · 232\.5k tokens in all · merged main in \(clash with main\) · finished: merged/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ {2}try 4: 1m$/ })).toBeDefined()
   await ui.unmount()
 })
@@ -1345,7 +1346,7 @@ test('/symcc-task says how each try ended next to its time and tokens', async ($
   on('ui.open', () => ({ value: undefined }))
   const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
   expect(text).toContain('  try 1: 24s · restarted: the task was changed (after, details)\n')
-  expect(text).toContain('  try 3: 3m · 232.5k tokens · merged main in (clash with main) · finished: merged\n')
+  expect(text).toContain('  try 3: 3m · 232.5k tokens in all · merged main in (clash with main) · finished: merged\n')
   expect(text).toContain('  try 4: 1m\n')
 })
 

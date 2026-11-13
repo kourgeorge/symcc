@@ -1,5 +1,5 @@
 // Time and cost of each try.
-import type { SymccRun, SymccRunEnd, SymccTask } from '../../types'
+import type { SymccRun, SymccRunEnd, SymccTask, SymccTokens } from '../../types'
 
 // ---------------- time and cost of each try ----------------
 
@@ -50,7 +50,7 @@ export function runEndText(r: SymccRun): string {
  * The runs with the last try ended at `now`, adding what it used if known. A try already
  * ended keeps its end time (a second end does not move it), but missing tokens/cost are filled in.
  */
-export function endRun(runs: SymccRun[] | undefined, now: string, used: { tokens?: number; cost?: number } = {}): SymccRun[] {
+export function endRun(runs: SymccRun[] | undefined, now: string, used: { tokens?: SymccTokens; cost?: number } = {}): SymccRun[] {
   const out = [...(runs ?? [])]
   const last = out[out.length - 1]
   if (!last) return out
@@ -62,14 +62,68 @@ export function endRun(runs: SymccRun[] | undefined, now: string, used: { tokens
   return out
 }
 
+// ---------------- tokens, each kind kept apart ----------------
+
+/** The token kinds, in the order they are shown. */
+export const TOKEN_KINDS = ['input', 'output', 'cache_write', 'cache_read', 'unsplit'] as const
+export type TokenKind = (typeof TOKEN_KINDS)[number]
+const KIND_WORD: Record<TokenKind, string> = { input: 'input', output: 'output', cache_write: 'cache write', cache_read: 'cache read', unsplit: 'unsplit' }
+
 /**
- * All the tokens a turn result reports (input, cache reads, cache writes and output), or
- * undefined if it reports none. The worker's turn result gives token counts only, no dollar cost.
+ * Each kind's usual price compared with normal input (Anthropic's list prices): cache writes cost
+ * about 1.25 times input, cache reads about a tenth, output about 5 times. Only an estimate:
+ * the real ratios depend on the model and the cache time.
  */
-export function usageTokens(u: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined): number | undefined {
+export const PRICE_WEIGHT = { input: 1, cache_write: 1.25, cache_read: 0.1, output: 5 } as const
+
+const cnt = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
+
+/** Only the known kinds with a count above 0 (anything else is dropped); undefined when none is left. */
+export function cleanTokens(x: unknown): SymccTokens | undefined {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return undefined
+  const o = x as Record<string, unknown>
+  const out: SymccTokens = {}
+  for (const k of TOKEN_KINDS) if (cnt(o[k])) out[k] = cnt(o[k])
+  return Object.keys(out).length ? out : undefined
+}
+
+/** Counts added up kind by kind (`sign` -1 takes `b` away, never below 0); kinds at 0 are left out. */
+export function addTokens(a: SymccTokens | undefined, b: SymccTokens | undefined, sign: 1 | -1 = 1): SymccTokens {
+  const out: SymccTokens = {}
+  for (const k of TOKEN_KINDS) {
+    const n = Math.max(0, cnt(a?.[k]) + sign * cnt(b?.[k]))
+    if (n) out[k] = n
+  }
+  return out
+}
+
+/** All the counts added up kind by kind. */
+export const sumTokens = (xs: (SymccTokens | undefined)[]): SymccTokens => xs.reduce<SymccTokens>((s, x) => addTokens(s, x), {})
+
+/** Every token of every kind (and unsplit ones) as one plain count. */
+export const tokenCount = (t: SymccTokens | undefined): number => TOKEN_KINDS.reduce((s, k) => s + cnt(t?.[k]), 0)
+
+/**
+ * The billed-equivalent count: the split kinds weighed by their price compared with input
+ * (PRICE_WEIGHT), so it says how many plain input tokens would cost the same. An estimate;
+ * unsplit tokens are left out (their kinds are not known).
+ */
+export const billedTokens = (t: SymccTokens | undefined): number =>
+  cnt(t?.input) * PRICE_WEIGHT.input + cnt(t?.cache_write) * PRICE_WEIGHT.cache_write + cnt(t?.cache_read) * PRICE_WEIGHT.cache_read + cnt(t?.output) * PRICE_WEIGHT.output
+
+/** The kinds in words: "input 1.2k · output 3k · cache write 40k · cache read 1.1M" (kinds at 0 left out; unsplit ones last); "0" for none. */
+export function fmtTokenKinds(t: SymccTokens | undefined): string {
+  const parts = TOKEN_KINDS.filter(k => cnt(t?.[k])).map(k => `${KIND_WORD[k]} ${fmtTokens(cnt(t?.[k]))}`)
+  return parts.length ? parts.join(' · ') : '0'
+}
+
+/**
+ * The tokens a turn result reports, each kind kept apart (input, output, cache writes, cache
+ * reads), or undefined if it reports none. The worker's turn result gives token counts only, no dollar cost.
+ */
+export function usageTokens(u: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined): SymccTokens | undefined {
   if (!u) return undefined
-  const n = [u.input_tokens, u.output_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].reduce<number>((s, x) => s + (typeof x === 'number' && Number.isFinite(x) ? x : 0), 0)
-  return n > 0 ? n : undefined
+  return cleanTokens({ input: u.input_tokens, output: u.output_tokens, cache_write: u.cache_creation_input_tokens, cache_read: u.cache_read_input_tokens })
 }
 
 /** How long one try took, in ms. A try still running counts up to `nowMs` (0 if not given). */
@@ -80,32 +134,31 @@ export function runMs(r: SymccRun, nowMs?: number): number {
   return Math.max(0, z - a)
 }
 
-export type RunTotal = { ms: number; tokens?: number; cost?: number; tries: number }
+export type RunTotal = { ms: number; tokens?: SymccTokens; cost?: number; tries: number }
 
 /** Adds up tries: their time, and their tokens and cost where any try reports them. */
 export function sumRuns(runs: SymccRun[] | undefined, nowMs?: number): RunTotal {
   const rs = runs ?? []
-  const tok = rs.filter(r => typeof r.tokens === 'number')
+  const tok = rs.filter(r => r.tokens !== undefined)
   const usd = rs.filter(r => typeof r.cost === 'number')
   return {
     ms: rs.reduce((s, r) => s + runMs(r, nowMs), 0),
     tries: rs.length,
-    ...(tok.length ? { tokens: tok.reduce((s, r) => s + r.tokens!, 0) } : {}),
+    ...(tok.length ? { tokens: sumTokens(tok.map(r => r.tokens)) } : {}),
     ...(usd.length ? { cost: usd.reduce((s, r) => s + r.cost!, 0) } : {}),
   }
 }
 
 /** What boardTotal needs: the tasks, and the totals of the tasks moved to the archive (if any). */
-type Totalled = { tasks: Pick<SymccTask, 'runs'>[]; archived?: { tries: number; ms: number; tokens?: number; cost?: number } }
+type Totalled = { tasks: Pick<SymccTask, 'runs'>[]; archived?: { tries: number; ms: number; tokens?: SymccTokens; cost?: number } }
 
 /** Adds up every try of every task on the board, and of the archived tasks. */
 export function boardTotal(b: Totalled, nowMs?: number): RunTotal {
   const t = sumRuns(b.tasks.flatMap(t => t.runs ?? []), nowMs)
   const a = b.archived
   if (!a || !a.tries) return t
-  const add = (x: number | undefined, y: number | undefined) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0))
-  const tokens = add(t.tokens, a.tokens)
-  const cost = add(t.cost, a.cost)
+  const tokens = t.tokens === undefined && a.tokens === undefined ? undefined : addTokens(t.tokens, a.tokens)
+  const cost = t.cost === undefined && a.cost === undefined ? undefined : (t.cost ?? 0) + (a.cost ?? 0)
   return { ms: t.ms + a.ms, tries: t.tries + a.tries, ...(tokens !== undefined ? { tokens } : {}), ...(cost !== undefined ? { cost } : {}) }
 }
 
@@ -132,18 +185,21 @@ export function fmtTokens(n: number): string {
   return `${one(n / 1_000_000)}M`
 }
 
-/** One total in words: "1h 12m · 1.2M tokens · ~$3.40" (tokens and cost only when known). */
+/**
+ * One total in words: "1h 12m · 1.2M tokens in all · ~$3.40" (tokens and cost only when known).
+ * The one tokens figure is every kind added up ("in all"); /<name>-stats shows the kinds apart.
+ */
 export function fmtTotal(t: RunTotal): string {
-  return [fmtDuration(t.ms), t.tokens !== undefined && `${fmtTokens(t.tokens)} tokens`, t.cost !== undefined && `~${fmtCost(t.cost)}`].filter(Boolean).join(' · ')
+  return [fmtDuration(t.ms), t.tokens !== undefined && `${fmtTokens(tokenCount(t.tokens))} tokens in all`, t.cost !== undefined && `~${fmtCost(t.cost)}`].filter(Boolean).join(' · ')
 }
 
-/** One try in words: "try 2: 12m · 40k tokens · finished: merged", with "(running)" while it has not ended. */
+/** One try in words: "try 2: 12m · 40k tokens in all · finished: merged", with "(running)" while it has not ended. */
 export function fmtRun(r: SymccRun, i: number, nowMs?: number): string {
   const end = runEndText(r)
   return `try ${i + 1}: ${fmtTotal(sumRuns([r], nowMs))}${end ? ` · ${end}` : ''}${r.ended ? '' : ' (running)'}`
 }
 
-/** The board's total line, e.g. "total: 1h 12m · ~$3.40 over 4 tries"; '' when no try has run. */
+/** The board's total line, e.g. "total: 1h 12m · 1.2M tokens in all over 4 tries"; '' when no try has run. */
 export function totalLine(b: Totalled, nowMs?: number): string {
   const t = boardTotal(b, nowMs)
   return t.tries ? `total: ${fmtTotal(t)} over ${t.tries} ${t.tries === 1 ? 'try' : 'tries'}` : ''

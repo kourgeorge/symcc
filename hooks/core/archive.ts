@@ -2,8 +2,8 @@
 // Every function here is pure; the plugin (plugin/archive.ts) reads and writes the files.
 import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, normId } from './board-file'
-import { sumRuns } from './runs'
+import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId } from './board-file'
+import { addTokens, sumRuns } from './runs'
 
 /** Archiving runs at most this often (ms), on the regular check of the driving session. */
 export const ARCHIVE_EVERY_MS = 60 * 60_000
@@ -27,8 +27,9 @@ const FINISHED: SymccStatus[] = ['done', 'dropped']
 /**
  * What reading archive.json found: the archive, or `broken` (the reason) when the text is not an
  * archive. A broken archive must never be written over (keep a copy, tell the owner, stop archiving).
+ * `migrated`: how many tasks were brought to the current shape; the file should then be saved once.
  */
-export function readArchive(text: string | null): { archive: Archive; broken?: string } {
+export function readArchive(text: string | null): { archive: Archive; broken?: string; migrated?: number } {
   if (text === null || text === undefined || !String(text).trim()) return { archive: emptyArchive() }
   let raw: unknown
   try {
@@ -40,7 +41,14 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   const tasks = (raw as { tasks?: unknown }).tasks
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' }
   const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && FINISHED.includes((t as BoardTask).status))
-  return { archive: { version: 1, tasks: ok.map(t => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] })) } }
+  // Migration: tries with tokens saved as one number get it marked unsplit (see migrateRunTokens); `migrated` counts the tasks changed so the file is saved once.
+  let migrated = 0
+  const clean = ok.map(t => {
+    const split = migrateRunTokens(t.runs)
+    if (split) migrated++
+    return { ...cleanCommitFields(split ? { ...t, runs: split } : t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }
+  })
+  return { archive: { version: 1, tasks: clean }, ...(migrated ? { migrated } : {}) }
 }
 
 /** The archive as file text. */
@@ -83,7 +91,7 @@ function addTotals(x: ArchivedTotals, t: BoardTask, sign: 1 | -1): ArchivedTotal
   const out: ArchivedTotals = { ...x, tries: Math.max(0, x.tries + sign * r.tries), ms: Math.max(0, x.ms + sign * r.ms) }
   if (t.status === 'done') out.done = Math.max(0, x.done + sign)
   else out.dropped = Math.max(0, x.dropped + sign)
-  if (r.tokens !== undefined) out.tokens = Math.max(0, (x.tokens ?? 0) + sign * r.tokens)
+  if (r.tokens !== undefined) out.tokens = addTokens(x.tokens, r.tokens, sign)
   if (r.cost !== undefined) out.cost = Math.max(0, (x.cost ?? 0) + sign * r.cost)
   return out
 }

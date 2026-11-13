@@ -36,6 +36,15 @@ export async function saveArchive($: $, a: Archive) {
   if (r.exitCode !== 0) throw new Error(`couldn't save the archive: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
 }
 
+/** Saves archive.json once in the current shape when reading it brought old tasks up to date (see readArchive's `migrated`). */
+export async function saveArchiveMigrated($: $): Promise<void> {
+  await locked($, async () => {
+    const r = await readArchiveFile($)
+    if (r.broken || !r.migrated) return
+    await saveArchive($, r.archive)
+  })
+}
+
 /**
  * Moves old done and dropped tasks to archive.json (see toArchive): only in the driving session,
  * at most once an hour (`force` skips that wait). The archive is written first; if that fails, or

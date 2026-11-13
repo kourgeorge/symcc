@@ -275,24 +275,25 @@ test('time and cost: a try records its start and end, and leaving "doing" ends i
   let [b, t] = addTask(emptyBoard(), { origin: W, title: 'timed' }, T)
   b = patchTask(b, t.id, { status: 'doing', runs: startRun(undefined, '2026-11-09T10:00:00.000Z') }, T)
   expect(b.tasks[0]!.runs).toEqual([{ started: '2026-11-09T10:00:00.000Z' }])
-  const ended = endRun(b.tasks[0]!.runs, '2026-11-09T10:12:00.000Z', { tokens: 1500 })
-  expect(ended).toEqual([{ started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: 1500 }])
+  const ended = endRun(b.tasks[0]!.runs, '2026-11-09T10:12:00.000Z', { tokens: { input: 1000, output: 500 } })
+  expect(ended).toEqual([{ started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 1000, output: 500 } }])
   // A second end keeps the first end time.
   expect(endRun(ended, '2026-11-09T11:00:00.000Z', { cost: 0.5 })[0]).toEqual({ ...ended[0], cost: 0.5 })
   // A task that leaves "doing" with an open try gets it ended.
   b = patchTask(b, t.id, { status: 'failed' }, '2026-11-09T10:05:00.000Z')
   expect(b.tasks[0]!.runs![0]!.ended).toBe('2026-11-09T10:05:00.000Z')
-  expect(usageTokens({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 1 })).toBe(116)
+  expect(usageTokens({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 1 })).toEqual({ input: 10, output: 5, cache_read: 100, cache_write: 1 })
+  expect(usageTokens({ input_tokens: 0, output_tokens: 0 })).toBe(undefined)
   expect(usageTokens(undefined)).toBe(undefined)
 })
 
 test('time and cost: tries add up, and a running try counts up to now', async () => {
   const runs = [
-    { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: 1000, cost: 0.4 },
+    { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 1000 }, cost: 0.4 },
     { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 3 },
     { started: '2026-11-09T13:00:00.000Z' },
   ]
-  expect(sumRuns(runs, Date.parse('2026-11-09T13:05:00.000Z'))).toEqual({ ms: 77 * 60_000, tries: 3, tokens: 1000, cost: 3.4 })
+  expect(sumRuns(runs, Date.parse('2026-11-09T13:05:00.000Z'))).toEqual({ ms: 77 * 60_000, tries: 3, tokens: { input: 1000 }, cost: 3.4 })
   expect(sumRuns(runs).ms).toBe(72 * 60_000)
   expect(sumRuns([])).toEqual({ ms: 0, tries: 0 })
   expect(sumRuns([{ started: 'bad', ended: 'worse' }]).ms).toBe(0)
@@ -301,7 +302,7 @@ test('time and cost: tries add up, and a running try counts up to now', async ()
   expect(boardText(b)).not.toContain('total:')
   b = { ...b, tasks: b.tasks.map(t => ({ ...t, runs: runs.slice(0, 2) })) }
   expect(boardTotal(b).tries).toBe(2)
-  expect(boardText(b).split('\n').at(-1)).toBe('total: 1h 12m · 1k tokens · ~$3.40 over 2 tries')
+  expect(boardText(b).split('\n').at(-1)).toBe('total: 1h 12m · 1k tokens in all · ~$3.40 over 2 tries')
 })
 
 test('time and cost: formatting', async () => {
@@ -426,7 +427,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   expect(bannerRule(12)).toBe('━'.repeat(12))
   expect(listRule(12)).toBe('┄'.repeat(12))
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
-  const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: 643_700 }
+  const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
   const more = bannerLines({ ...emptyBoard(), mode: 'off', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
   expect(more.map(bannerText)).toEqual([
@@ -434,7 +435,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
-    '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
+    '2 doing · 1 to do · 1 done · 8m · 643.7k tokens in all',
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
   expect(more[4]!.parts.filter(p => p.bold).map(p => p.text)).toEqual(['2 doing', '1 to do', '1 done'])
@@ -2419,7 +2420,7 @@ const daysAgo = (n: number) => new Date(A_NOW - n * A_DAY).toISOString()
 function oldBoard(): Board {
   let b = emptyBoard()
   for (const title of ['old done', 'old dropped', 'new done', 'still to do']) b = addTask(b, { origin: W, title }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: daysAgo(21), ended: new Date(Date.parse(daysAgo(21)) + 60_000).toISOString(), tokens: 1000 }] }, daysAgo(20))
+  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: daysAgo(21), ended: new Date(Date.parse(daysAgo(21)) + 60_000).toISOString(), tokens: { input: 1000 } }] }, daysAgo(20))
   b = patchTask(b, 'T-2', { status: 'dropped' }, daysAgo(20))
   b = patchTask(b, 'T-3', { status: 'done' }, daysAgo(2))
   return b
@@ -2453,7 +2454,7 @@ test('archive: taking tasks off keeps next_id, counts them, and keeps the done i
   const y = removeArchived(b, toArchive(b, A_NOW))
   expect(y.tasks.map(t => t.id)).toEqual(['T-3', 'T-4'])
   expect(y.next_id).toBe(b.next_id)
-  expect(y.archived).toEqual({ done: 1, dropped: 1, tries: 1, ms: 60_000, tokens: 1000 })
+  expect(y.archived).toEqual({ done: 1, dropped: 1, tries: 1, ms: 60_000, tokens: { input: 1000 } })
   expect(y.archived_done).toEqual(['T-1'])
   expect(archivedCount(y)).toBe(2)
   // a new task never reuses an archived id, also after the file is read again
@@ -2470,7 +2471,7 @@ test('archive: the totals and the Done count include archived tasks', () => {
   const before = boardTotal(b, A_NOW)
   const y = removeArchived(b, toArchive(b, A_NOW))
   expect(boardTotal(y, A_NOW)).toEqual(before)
-  expect(boardText(y, A_NOW)).toContain('total: 1m · 1k tokens over 1 try')
+  expect(boardText(y, A_NOW)).toContain('total: 1m · 1k tokens in all over 1 try')
   expect(boardText(y, A_NOW)).toContain('archived: 1 done, 1 dropped (in .symcc/archive.json')
   expect(boardText(y, A_NOW)).not.toMatch(/old done|old dropped/)
   expect(archivedNote(96)).toBe('(+96 archived)')
@@ -2512,7 +2513,7 @@ test('archive: the file is read safely; a broken one is reported, and an archive
   const t = find(back, 'T-2')!
   expect(t.status).toBe('todo')
   expect(t.history.at(-1)).toBe('brought back from the archive (was dropped)')
-  expect(back.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: 1000 })
+  expect(back.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: { input: 1000 } })
   expect(() => bringBack(y, a.tasks[0]!, T)).toThrow(/done/)
 })
 

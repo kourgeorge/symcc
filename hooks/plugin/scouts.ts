@@ -1,5 +1,5 @@
-import type { SymccScout } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage } from '../board'
+import type { SymccScout, SymccTokens } from '../../types'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, scoutNotReady, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage } from '../board'
 import { publish } from './lead'
 import { type $, S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { path, load, now } from './store'
@@ -85,6 +85,13 @@ export async function loadScoutMemory($: $) {
   return parseScoutMemory(text)
 }
 
+/** Saves scouts.json once with old one-number token totals marked unsplit (see migrateScoutUsage); nothing when already current. */
+export async function saveScoutsMigrated($: $) {
+  const text = await $.fs.read(scoutMemoryFile()).catch(() => null)
+  const next = migrateScoutUsage(text)
+  if (next !== null) await writeScoutMemory($, next)
+}
+
 /** Writes scouts.json (temp file + rename, like board.json). The scouts' token and time totals ("usage") already in
  *  the file are kept when `text` carries none. */
 export async function writeScoutMemory($: $, text: string) {
@@ -135,12 +142,12 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
 }
 
 /** Adds one run of scout `name` (its tokens and time) to the running totals in scouts.json, for /<name>-stats. */
-export async function recordScoutRun($: $, name: string, run: { endMs: number; ms: number; tokens?: number }) {
+export async function recordScoutRun($: $, name: string, run: { endMs: number; ms: number; tokens?: SymccTokens }) {
   const old = await $.fs.read(scoutMemoryFile()).catch(() => null)
   await writeScoutMemory($, addScoutRun(old, name, run))
 }
 
-export async function scoutFinished($: $, agentId: string, answer: string, isAborted = false, tokens?: number) {
+export async function scoutFinished($: $, agentId: string, answer: string, isAborted = false, tokens?: SymccTokens) {
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
   const started = runStarted.get(agentId)

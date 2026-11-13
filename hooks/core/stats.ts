@@ -1,11 +1,11 @@
 // /<name>-stats and the lead's stats tool: time and token figures built only from what the board
 // already keeps (tasks, their tries in runs[], their history), plus the archived tasks.
 // Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in.
-import type { SymccStatus, SymccTask } from '../../types'
+import type { SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
-import { fmtCost, fmtDuration, fmtTokens, runMs } from './runs'
+import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, PRICE_WEIGHT, runMs, sumTokens, tokenCount } from './runs'
 
 // ---------------- the range ----------------
 
@@ -67,13 +67,17 @@ export function median(xs: number[]): number | undefined {
 
 // ---------------- one task ----------------
 
-/** One task's figures: worker time (ms), tokens (when any try reports them), tries, and whether it has try data at all. */
-export type TaskFigures = { ms: number; tokens?: number; tries: number; hasData: boolean }
+/**
+ * One task's figures: worker time (ms), tokens (each kind apart, when any try reports them) and
+ * `tok`, the same added up into one count ("in all"), tries, and whether it has try data at all.
+ */
+export type TaskFigures = { ms: number; tokens?: SymccTokens; tok?: number; tries: number; hasData: boolean }
 
 export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFigures {
   const runs = t.runs ?? []
-  const tok = runs.filter(r => typeof r.tokens === 'number')
-  return { ms: runs.reduce((s, r) => s + runMs(r, nowMs), 0), tries: runs.length, hasData: runs.length > 0, ...(tok.length ? { tokens: tok.reduce((s, r) => s + r.tokens!, 0) } : {}) }
+  const tok = runs.filter(r => r.tokens !== undefined)
+  const tokens = tok.length ? sumTokens(tok.map(r => r.tokens)) : undefined
+  return { ms: runs.reduce((s, r) => s + runMs(r, nowMs), 0), tries: runs.length, hasData: runs.length > 0, ...(tokens ? { tokens, tok: tokenCount(tokens) } : {}) }
 }
 
 /** Why a try failed, read from one history line; null when the line is not a clear failure. */
@@ -132,6 +136,18 @@ const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')
 const row = (label: string, text: string, w = 14) => `  ${label.padEnd(w)} ${text}`
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
+/** How the billed-equivalent figure is made, said next to it. */
+export const BILLED_NOTE = `an estimate: each kind weighed by its usual price compared with input (input ${PRICE_WEIGHT.input}, cache write ${PRICE_WEIGHT.cache_write}, cache read ${PRICE_WEIGHT.cache_read}, output ${PRICE_WEIGHT.output})`
+
+/** The billed-equivalent figure in words: "150k (an estimate: ...)", plus the unsplit tokens it leaves out. */
+export function billedText(t: SymccTokens | undefined): string {
+  const un = t?.unsplit ?? 0
+  return `${fmtTokens(billedTokens(t))} (${BILLED_NOTE}${un ? `; leaves out ${fmtTokens(un)} unsplit tokens, saved before the kinds were kept apart` : ''})`
+}
+
+/** The kinds of `t` on their own line under a figure, e.g. "                 input 1k · output 2k · ..."; none for no tokens. */
+const kindsRow = (t: SymccTokens | undefined): string[] => (tokenCount(t) ? [row('', fmtTokenKinds(t))] : [])
+
 const STATUS_ORDER: SymccStatus[] = ['done', 'dropped', 'doing', 'todo', 'review', 'waiting', 'paused', 'failed', 'backlog']
 
 /** The whole /<name>-stats report as plain text. */
@@ -162,11 +178,12 @@ export function statsReport(input: StatsInput): string {
   const counts = STATUS_ORDER.map(s => [s, all.filter(t => t.status === s).length] as const).filter(([, n]) => n)
   const totalMs = withData.reduce((s, t) => s + F(t).ms, 0)
   const tokKnown = withData.filter(t => F(t).tokens !== undefined)
-  const totalTok = tokKnown.reduce((s, t) => s + F(t).tokens!, 0)
+  const totalTok = sumTokens(tokKnown.map(t => F(t).tokens))
   out.push('', '1. Totals')
   out.push(row('tasks', counts.map(([s, n]) => `${n} ${STATUS_WORD[s] ?? s}`).join(' · ')))
   out.push(row('worker time', fmtDuration(totalMs)))
-  out.push(row('tokens', tokKnown.length ? `${fmtTokens(totalTok)}${tokKnown.length < withData.length ? ` (${tokKnown.length} of ${withData.length} tasks report tokens)` : ''}` : '-'))
+  out.push(row('tokens', tokKnown.length ? `${fmtTokens(tokenCount(totalTok))} in all${tokKnown.length < withData.length ? ` (${tokKnown.length} of ${withData.length} tasks report tokens)` : ''}` : '-'))
+  if (tokKnown.length) out.push(...kindsRow(totalTok), row('billed-eq.', billedText(totalTok)))
   out.push(row('with data', `${withData.length} of ${all.length} tasks`))
 
   // Whole team: the lead and the scouts too, not only the workers
@@ -180,11 +197,11 @@ export function statsReport(input: StatsInput): string {
   // 2. Per task (done tasks with data)
   const done = withData.filter(t => t.status === 'done')
   const doneMs = done.map(t => F(t).ms)
-  const doneTok = done.filter(t => F(t).tokens !== undefined).map(t => F(t).tokens!)
+  const doneTok = done.filter(t => F(t).tok !== undefined).map(t => F(t).tok!)
   out.push('', `2. Per task (${plural(done.length, 'done task')} with data)`)
   if (done.length) {
     out.push(row('time', `avg ${avgDur(doneMs)} · median ${fmtDuration(median(doneMs)!)}`))
-    out.push(row('tokens', doneTok.length ? `avg ${avgTok(doneTok)} · median ${fmtTokens(median(doneTok)!)}` : '-'))
+    out.push(row('tokens', doneTok.length ? `avg ${avgTok(doneTok)} · median ${fmtTokens(median(doneTok)!)} (in all)` : '-'))
     out.push(row('tries', `avg ${(mean(done.map(t => F(t).tries)) ?? 0).toFixed(1)} per task`))
     const top = (pick: (t: SymccTask) => number | undefined, fmt: (n: number) => string) =>
       done
@@ -192,18 +209,18 @@ export function statsReport(input: StatsInput): string {
         .sort((a, b) => pick(b)! - pick(a)! || a.id.localeCompare(b.id))
         .slice(0, 5)
         .map(t => `    ${t.id.padEnd(6)} ${cutTitle(t.title).padEnd(36)} ${fmt(pick(t)!)}`)
-    const byTok = top(t => F(t).tokens, fmtTokens)
+    const byTok = top(t => F(t).tok, fmtTokens)
     if (byTok.length) out.push('  most tokens:', ...byTok)
     out.push('  most time:', ...top(t => F(t).ms, fmtDuration))
   } else out.push('  no done tasks with data')
 
   // 3. Per try
   const runs = withData.flatMap(t => t.runs ?? [])
-  const runTok = runs.filter(r => typeof r.tokens === 'number').map(r => r.tokens!)
+  const runTok = runs.filter(r => r.tokens !== undefined).map(r => tokenCount(r.tokens))
   const first = done.filter(t => F(t).tries === 1).length
   out.push('', `3. Per try (${plural(runs.length, 'try', 'tries')})`)
   out.push(row('time', `avg ${avgDur(runs.map(r => runMs(r, nowMs)))}`))
-  out.push(row('tokens', `avg ${avgTok(runTok)}`))
+  out.push(row('tokens', `avg ${avgTok(runTok)} in all`))
   out.push(row('first try', done.length ? `${pct(first, done.length)} of done tasks (${first} of ${done.length})` : '-'))
 
   // 4. Flow
@@ -239,7 +256,7 @@ export function statsReport(input: StatsInput): string {
       .sort(([a, x], [b, y]) => y.length - x.length || a.localeCompare(b))
       .map(([k, ts]) => {
         const d = ts.filter(t => F(t).hasData)
-        const tok = d.filter(t => F(t).tokens !== undefined).map(t => F(t).tokens!)
+        const tok = d.filter(t => F(t).tok !== undefined).map(t => F(t).tok!)
         return row(k, `${plural(ts.length, 'task').padStart(9)} · avg ${avgTok(tok).padStart(6)} tokens · avg ${avgDur(d.map(t => F(t).ms)).padStart(7)}`, w)
       })
   }
@@ -257,27 +274,27 @@ export function statsReport(input: StatsInput): string {
     const d = dayOf(Date.parse(r.started), off)
     if (!d) continue
     at(d).ms += runMs(r, nowMs)
-    at(d).tokens += r.tokens ?? 0
+    at(d).tokens += tokenCount(r.tokens)
   }
   const today = dayOf(nowMs, off)
   const last = [...days.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 7)
   out.push('', '7. By day (the last 7 days with activity)')
   if (!last.length) out.push('  no activity')
-  for (const [d, v] of last) out.push(row(d === today ? 'Today' : dayLabel(d, today), `${String(v.done).padStart(3)} done · ${fmtDuration(v.ms).padStart(7)} · ${fmtTokens(v.tokens).padStart(6)} tokens`))
+  for (const [d, v] of last) out.push(row(d === today ? 'Today' : dayLabel(d, today), `${String(v.done).padStart(3)} done · ${fmtDuration(v.ms).padStart(7)} · ${fmtTokens(v.tokens).padStart(6)} tokens in all`))
   return out.join('\n')
 }
 
 // ---------------- the whole team: scouts and the lead ----------------
 
-/** One scout's tokens and time: runs, tokens and ms in all, and the same per day (UTC "YYYY-MM-DD") for the range. */
-export type ScoutUsageFigures = { runs: number; tokens: number; ms: number }
+/** One scout's tokens and time: runs, tokens (each kind apart) and ms in all, and the same per day (UTC "YYYY-MM-DD") for the range. */
+export type ScoutUsageFigures = { runs: number; tokens: SymccTokens; ms: number }
 export type ScoutUsage = ScoutUsageFigures & { days: Record<string, ScoutUsageFigures> }
 
 const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0)
 const figs = (v: unknown): ScoutUsageFigures | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null
   const o = v as Record<string, unknown>
-  return { runs: num(o.runs), tokens: num(o.tokens), ms: num(o.ms) }
+  return { runs: num(o.runs), tokens: cleanTokens(o.tokens) ?? {}, ms: num(o.ms) }
 }
 const jsonObj = (text: string | null | undefined): Record<string, unknown> | null => {
   try {
@@ -309,16 +326,37 @@ export function parseScoutUsage(text: string | null | undefined): Record<string,
 }
 
 /** scouts.json's text `text` with one more run of scout `name` added to its usage (ended at `endMs`, `ms` long, `tokens` when reported); the rest kept as it is. */
-export function addScoutRun(text: string | null | undefined, name: string, run: { endMs: number; ms: number; tokens?: number }): string {
+export function addScoutRun(text: string | null | undefined, name: string, run: { endMs: number; ms: number; tokens?: SymccTokens }): string {
   const raw = jsonObj(text) ?? { scouts: {} }
   const usage = parseScoutUsage(text)
-  const tok = num(run.tokens)
   const ms = num(run.ms)
-  const add = (f: ScoutUsageFigures | undefined): ScoutUsageFigures => ({ runs: (f?.runs ?? 0) + 1, tokens: (f?.tokens ?? 0) + tok, ms: (f?.ms ?? 0) + ms })
+  const add = (f: ScoutUsageFigures | undefined): ScoutUsageFigures => ({ runs: (f?.runs ?? 0) + 1, tokens: addTokens(f?.tokens, run.tokens), ms: (f?.ms ?? 0) + ms })
   const cur = usage[name]
   const day = dayOf(run.endMs, 0)
   usage[name] = { ...add(cur), days: { ...(cur?.days ?? {}), ...(day ? { [day]: add(cur?.days[day]) } : {}) } }
   return JSON.stringify({ ...raw, usage }, null, 2) + '\n'
+}
+
+/**
+ * Migration: scouts.json's text with every usage total whose tokens were saved as one number
+ * (before the kinds were kept apart) kept as-is, marked unsplit: { unsplit: n }. Null when nothing needs it.
+ */
+export function migrateScoutUsage(text: string | null | undefined): string | null {
+  const raw = jsonObj(text)
+  const u = raw?.usage
+  if (!raw || !u || typeof u !== 'object' || Array.isArray(u)) return null
+  let changed = false
+  const fix = (v: unknown): unknown => {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || typeof (v as { tokens?: unknown }).tokens !== 'number') return v
+    changed = true
+    return { ...(v as object), tokens: cleanTokens({ unsplit: (v as { tokens: number }).tokens }) ?? {} }
+  }
+  const usage = Object.fromEntries(Object.entries(u as Record<string, unknown>).map(([k, v]) => {
+    const top = fix(v) as Record<string, unknown>
+    const d = top && typeof top === 'object' ? top.days : undefined
+    return [k, d && typeof d === 'object' && !Array.isArray(d) ? { ...top, days: Object.fromEntries(Object.entries(d as Record<string, unknown>).map(([day, x]) => [day, fix(x)])) } : top]
+  }))
+  return changed ? JSON.stringify({ ...raw, usage }, null, 2) + '\n' : null
 }
 
 /** New scouts.json text `next` with the "usage" of the file's text before (`prev`) kept, when `next` carries none. */
@@ -329,8 +367,8 @@ export function keepScoutUsage(next: string, prev: string | null | undefined): s
   return JSON.stringify({ ...n, usage }, null, 2) + '\n'
 }
 
-/** One API call of the lead, read from Claude Code's session log: its message id, when, and its tokens. */
-export type LeadCall = { id: string; atMs: number; tokens: number }
+/** One API call of the lead, read from Claude Code's session log: its message id, when, and its tokens (each kind apart). */
+export type LeadCall = { id: string; atMs: number; tokens: SymccTokens }
 
 /**
  * The lead's calls in one session log (Claude Code's <session>.jsonl): only assistant lines of the main chat
@@ -346,12 +384,12 @@ export function leadCalls(jsonl: string): LeadCall[] {
     const m = o.message as { id?: unknown; usage?: Record<string, unknown> } | undefined
     const u = m?.usage
     if (!u || typeof u !== 'object') continue
-    const tokens = num(u.input_tokens) + num(u.output_tokens) + num(u.cache_read_input_tokens) + num(u.cache_creation_input_tokens)
+    const tokens = cleanTokens({ input: u.input_tokens, output: u.output_tokens, cache_write: u.cache_creation_input_tokens, cache_read: u.cache_read_input_tokens })
     if (!tokens) continue
     const id = typeof m!.id === 'string' && m!.id ? m!.id : `line-${n++}`
     const atMs = Date.parse(typeof o.timestamp === 'string' ? o.timestamp : '')
     const old = byId.get(id)
-    if (!old || tokens > old.tokens) byId.set(id, { id, atMs, tokens })
+    if (!old || tokenCount(tokens) > tokenCount(old.tokens)) byId.set(id, { id, atMs, tokens })
   }
   return [...byId.values()]
 }
@@ -371,7 +409,7 @@ export function rangeSpan(r: StatsRange, tasks: Pick<SymccTask, 'created_at' | '
 
 /** The scouts' runs, tokens and time within span `s` (all of it when the span is open on both ends; by whole UTC days otherwise). */
 export function scoutTotals(usage: Record<string, ScoutUsage>, s: { from?: number; to?: number }): ScoutUsageFigures {
-  const out = { runs: 0, tokens: 0, ms: 0 }
+  const out: ScoutUsageFigures = { runs: 0, tokens: {}, ms: 0 }
   const open = s.from === undefined && s.to === undefined
   const lo = s.from === undefined ? '' : s.from === Infinity ? '9999' : dayOf(s.from, 0)
   const hi = s.to === undefined ? '9999' : dayOf(s.to, 0)
@@ -379,7 +417,7 @@ export function scoutTotals(usage: Record<string, ScoutUsage>, s: { from?: numbe
     const parts = open ? [u] : Object.entries(u.days).filter(([d]) => d >= lo && d <= hi).map(([, f]) => f)
     for (const f of parts) {
       out.runs += f.runs
-      out.tokens += f.tokens
+      out.tokens = addTokens(out.tokens, f.tokens)
       out.ms += f.ms
     }
   }
@@ -387,25 +425,31 @@ export function scoutTotals(usage: Record<string, ScoutUsage>, s: { from?: numbe
 }
 
 /** The lead's calls and tokens within span `s`. */
-export function leadTotals(calls: LeadCall[], s: { from?: number; to?: number }): { calls: number; tokens: number } {
+export function leadTotals(calls: LeadCall[], s: { from?: number; to?: number }): { calls: number; tokens: SymccTokens } {
   const inside = calls.filter(c => (s.from === undefined || (Number.isFinite(c.atMs) && c.atMs >= s.from)) && (s.to === undefined || (Number.isFinite(c.atMs) && c.atMs <= s.to)))
-  return { calls: inside.length, tokens: inside.reduce((n, c) => n + c.tokens, 0) }
+  return { calls: inside.length, tokens: sumTokens(inside.map(c => c.tokens)) }
 }
 
 /** What the "Whole team" part needs: the lead's calls (or why they can't be read), the scouts' usage, and this session's $ if Claude Code reports it. */
 export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?: string; scouts?: Record<string, ScoutUsage>; sessionUsd?: number }
 
-/** The "Whole team" lines: lead · workers · scouts · total for the range, and the cost per merged task. */
-export function teamLines(team: TeamInput, span: { from?: number; to?: number }, workers: { tokens: number; tries: number }, merged: number, name: string = DEFAULT_NAME): string[] {
+/**
+ * The "Whole team" lines: lead · workers · scouts · total for the range, each with its kinds apart
+ * on the next line, the billed-equivalent of the total, and the tokens per merged task.
+ */
+export function teamLines(team: TeamInput, span: { from?: number; to?: number }, workers: { tokens: SymccTokens; tries: number }, merged: number, name: string = DEFAULT_NAME): string[] {
   const lead = team.lead ? leadTotals(team.lead, span) : null
   const sc = scoutTotals(team.scouts ?? {}, span)
-  const total = (lead?.tokens ?? 0) + workers.tokens + sc.tokens
+  const total = sumTokens([lead?.tokens, workers.tokens, sc.tokens])
+  const n = (t: SymccTokens) => fmtTokens(tokenCount(t)).padStart(6)
   const out: string[] = []
-  out.push(row('lead', lead ? `${fmtTokens(lead.tokens).padStart(6)} tokens (${plural(lead.calls, 'call')}, from Claude Code's session logs${team.leadSessions !== undefined ? `, ${plural(team.leadSessions, 'session')}` : ''})` : `     - not counted: ${team.leadProblem ?? 'no session logs'}`))
-  out.push(row('workers', `${fmtTokens(workers.tokens).padStart(6)} tokens (${plural(workers.tries, 'try', 'tries')})`))
-  out.push(row('scouts', `${fmtTokens(sc.tokens).padStart(6)} tokens (${plural(sc.runs, 'run')}${sc.runs ? `, ${fmtDuration(sc.ms)}` : ''})`))
-  out.push(row('total', `${fmtTokens(total).padStart(6)} tokens${lead ? '' : ' (without the lead)'}`))
-  out.push(row('per merged', merged ? `${fmtTokens(total / merged).padStart(6)} tokens per merged task (${merged} merged)` : '     - no merged tasks'))
+  if (lead) out.push(row('lead', `${n(lead.tokens)} tokens (${plural(lead.calls, 'call')}, from Claude Code's session logs${team.leadSessions !== undefined ? `, ${plural(team.leadSessions, 'session')}` : ''})`), ...kindsRow(lead.tokens))
+  else out.push(row('lead', `     - not counted: ${team.leadProblem ?? 'no session logs'}`))
+  out.push(row('workers', `${n(workers.tokens)} tokens (${plural(workers.tries, 'try', 'tries')})`), ...kindsRow(workers.tokens))
+  out.push(row('scouts', `${n(sc.tokens)} tokens (${plural(sc.runs, 'run')}${sc.runs ? `, ${fmtDuration(sc.ms)}` : ''})`), ...kindsRow(sc.tokens))
+  out.push(row('total', `${n(total)} tokens in all${lead ? '' : ' (without the lead)'}`), ...kindsRow(total))
+  out.push(row('billed-eq.', billedText(total)))
+  out.push(row('per merged', merged ? `${fmtTokens(tokenCount(total) / merged).padStart(6)} tokens in all per merged task (${merged} merged) · billed-eq. ${fmtTokens(billedTokens(total) / merged)}` : '     - no merged tasks'))
   out.push(row('dollars', `not shown: ${name} doesn't know the model prices${team.sessionUsd !== undefined ? ` (this session so far, as /cost says: ${fmtCost(team.sessionUsd)}, all of it, not split by range)` : ''}`))
   return out
 }
