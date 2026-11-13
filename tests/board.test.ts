@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import type { SymccScout, SymccTask } from '../types'
+import type { SymccScout, SymccStatus, SymccTask } from '../types'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
@@ -607,12 +607,12 @@ test('day labels: Yesterday, then the date, with the year only for another year'
   expect(dayLabel('2025-12-30', '2026-01-02')).toBe('Tue 30 Dec 2025')
 })
 
-test('boardText lists open and today in full, and one line per older day', () => {
+test('boardText lists the open tasks in full and the done ones as a count; status: done lists them newest first', () => {
   const b = { ...emptyBoard(), tasks: [at('T-1', 'done', '2026-11-09T10:00:00Z'), at('T-2', 'todo', '2026-11-01T10:00:00Z'), at('T-3', 'done', '2026-11-11T10:00:00Z'), at('T-4', 'done', '2026-11-10T10:00:00Z')] }
   const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
-  expect(lines.map(l => l.split(/\s+/)[0])).toEqual(['T-2', 'T-3', '▸', '▸'])
-  expect(lines.slice(2)).toEqual(['▸ Yesterday · 1 done', '▸ Mon 9 Nov · 1 done'])
-  expect(lines.join('\n')).not.toContain('T-1')
+  expect(lines).toEqual([expect.stringMatching(/^T-2 /), '3 done; ask with status: done to see them'])
+  const done = boardText(b, NOW, undefined, DEFAULT_NAME, 0, { status: ['done'] }).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
+  expect(done.map(l => l.split(/\s+/)[0])).toEqual(['T-3', 'T-4', 'T-1', '3'])
 })
 
 test('a scout row says how often it runs, when it runs next and when it last ran', async () => {
@@ -1186,17 +1186,19 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
   expect(() => stashTask(b, a.id, T)).toThrow()
 })
 
-test('the board text lists open tasks first, then the backlog, then done ones; the status line stays quiet', async () => {
+test('the board text lists open tasks first, then the backlog (done ones only as a count, or last when asked); the status line stays quiet', async () => {
   let b = emptyBoard()
   const [b1, done] = addTask(b, { origin: W, title: 'Finished' }, '2026-11-09T03:00:00.000Z')
   const [b2, idea] = addTask(b1, { origin: W, title: 'Idea: requests and triage', backlog: true }, '2026-11-09T01:00:00.000Z')
   const [b3, open] = addTask(b2, { origin: W, title: 'Open work' }, '2026-11-09T00:30:00.000Z')
   b = patchTask(b3, done.id, { status: 'done' }, '2026-11-09T03:00:00.000Z')
-  for (const text of [boardText(b), boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0)]) {
+  const every = { status: ['todo', 'backlog', 'done'] as SymccStatus[] }
+  for (const [text, shown] of [[boardText(b), false], [boardText(b, Date.parse('2026-11-09T12:00:00.000Z'), undefined, DEFAULT_NAME, 0), false], [boardText(b, undefined, undefined, DEFAULT_NAME, 0, every), true], [boardText(b, Date.parse('2026-11-12T12:00:00.000Z'), undefined, DEFAULT_NAME, 0, every), true]] as const) {
     const lines = text.split('\n')
     const at = (id: string) => lines.findIndex(l => l.startsWith(id + ' '))
     expect(at(open.id)).toBeLessThan(at(idea.id))
-    expect(at(idea.id)).toBeLessThan(at(done.id))
+    if (shown) expect(at(idea.id)).toBeLessThan(at(done.id))
+    else expect(at(done.id)).toBe(-1)
     expect(lines[at(idea.id)]).toBe(`${idea.id}   backlog Idea: requests and triage`)
   }
   const s = boardSections(b.tasks, Date.parse('2026-11-12T12:00:00.000Z'), 0)

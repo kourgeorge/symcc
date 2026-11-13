@@ -1,15 +1,15 @@
 // Board titles, the status line, the banner at the top of the panel, and the board as text.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME, ICON, ICON_ART, namesFor } from '../name'
-import { type Board, modeOf, STATUS_WORD } from './board-file'
-import { boardSections, type BoardSections, groupLabel, localOffset } from './days'
+import { type Board, modeOf, OPEN, STATUS_WORD } from './board-file'
+import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
 import { roleMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew } from './panel'
+import { type CrewBoard, withCrew, taskMatches } from './panel'
 import { offStatusLine } from './settings'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
@@ -183,24 +183,63 @@ export const footerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor
 /** A banner line as plain text (for tests and plain output). */
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
 
-/** One line per task for the model and for /<name> (with a short "from:" line under it, see fromText), then the total time (and cost) of all tries.
- *  With `where` (the project's path), that comes first so you can tell boards apart.
- *  Open tasks come first, then the backlog, then today's others; finished tasks of older days are one line per
- *  day (see boardSections), seen from `nowMs` in time zone `offsetMin`. Without `nowMs`, every task is listed. */
-export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs)): string {
+/** The status words the lead's board tool takes; "open" stands for every OPEN status (not done, dropped or backlog). */
+export const BOARD_STATUSES: SymccStatus[] = ['todo', 'doing', 'review', 'waiting', 'failed', 'paused', 'done', 'dropped', 'backlog']
+
+/** What the lead's board tool lists: tasks with one of `status` and matching `search` (see taskMatches). */
+export type BoardFilter = { status?: SymccStatus[]; search?: string }
+
+/** The board tool's status words (a list, or one string like "todo, doing") as statuses; "open" adds every OPEN one.
+ *  Undefined when none were given; throws on an unknown word. */
+export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
+  const list = (Array.isArray(words) ? words : typeof words === 'string' ? [words] : []).flatMap(w => String(w).toLowerCase().split(/[\s,]+/)).filter(Boolean)
+  if (!list.length) return undefined
+  const out = new Set<SymccStatus>()
+  for (const w of list) {
+    if (w === 'open') OPEN.forEach(x => out.add(x))
+    else if ((BOARD_STATUSES as string[]).includes(w)) out.add(w as SymccStatus)
+    else throw new Error(`unknown status "${w}": use ${BOARD_STATUSES.join(', ')} or open`)
+  }
+  return [...out]
+}
+
+/** One row (and its "from:" line) of the board as text. */
+function boardRow(t: SymccTask): string[] {
+  const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
+  const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
+  const role = roleMark(t) ? ` [${roleMark(t)}]` : ''
+  return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
+}
+
+/** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */
+export function hiddenLine(done: number, dropped: number): string {
+  if (!done && !dropped) return ''
+  const counts = [done ? `${done} done` : '', dropped ? `${dropped} dropped` : ''].filter(Boolean).join(', ')
+  return `${counts}; ask with status: ${done ? 'done' : 'dropped'} to see them`
+}
+
+/** The board for the model (the lead's board tool): the project's path (with `where`), the settings line, then the rows,
+ *  newest first (with a short "from:" line under each, see fromText), then the archived count and the total time (and cost).
+ *  With no `filter`: the open tasks and the backlog in full, the done and dropped ones only as counts (see hiddenLine).
+ *  With a filter: every task on the board with one of its statuses and matching its search words (as the panel's search). */
+export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs), filter: BoardFilter = {}): string {
   const top = where ? [`${boardBrand(name)} · ${where}`] : []
   const gone = archivedLine(b, name)
   if (!b.tasks.length) return [...top, 'The board is empty.', ...(gone ? [gone] : [])].join('\n')
-  const s: BoardSections = nowMs === undefined ? boardSections(b.tasks, NaN, offsetMin) : boardSections(b.tasks, nowMs, offsetMin)
-  const rows = [...s.open, ...s.backlog, ...s.today]
-  const lines = rows.map(t => {
-    const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
-    const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
-    const role = roleMark(t) ? ` [${roleMark(t)}]` : ''
-    return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
-  }).flat()
+  const s: BoardSections = boardSections(b.tasks, nowMs ?? NaN, offsetMin)
+  const closed = [...s.today, ...s.days.flatMap(g => g.tasks)]
+  const all = [...s.open, ...s.backlog, ...closed]
   const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
-  const days = s.days.map(g => groupLabel(g))
-  return [...top, head, ...lines, ...days, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
+  const search = filter.search?.trim() ?? ''
+  let body: string[]
+  if (filter.status?.length || search) {
+    const rows = all.filter(t => (!filter.status?.length || filter.status.includes(t.status)) && taskMatches(t, search))
+    const asked = [filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
+    body = rows.length ? [...rows.flatMap(boardRow), `${rows.length} of ${b.tasks.length} tasks (${asked})`] : [`No tasks match (${asked}).`]
+  } else {
+    const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
+    body = [...[...s.open, ...s.backlog].flatMap(boardRow), ...(hidden ? [hidden] : [])]
+  }
+  return [...top, head, ...body, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
 }
