@@ -1,14 +1,14 @@
 import type { SymccTask, SymccMode } from '../../types'
-import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo } from '../board'
+import { type Board, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText } from '../board'
 import { archiveOld } from './archive'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
 import { publish } from './lead'
-import { type CheckResult, checkAndMerge, recordCommits } from './review'
+import { type CheckResult, checkAndMerge, recordCommits, ownerEdits } from './review'
 import { loadRoles } from './roles'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path } from './store'
 import { tellLead } from './tell'
-import { sayDone } from './voice'
+import { sayDone, sayNeedsYou } from './voice'
 
 // ---------------- workers ----------------
 
@@ -31,7 +31,7 @@ If you find you must change a file outside this list, do NOT change it. Stop at 
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${S.N.name} commits, tests and merges your work.
 ${t.merge_main ? `\nFirst, ${b.target_branch} has moved and your branch now conflicts with it. In that folder, run \`git merge ${b.target_branch}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
-When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question.`
+When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question; the task will wait for the owner's answer and a new try continues with it.`
 
 export async function pump($: $) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
@@ -170,14 +170,57 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
 /** Tasks dropped, paused or sent to the owner while their work was being checked: task id → what happened. */
 export const stopAsked = new Map<string, string>()
 
+/** Tasks whose check was stopped because symcc or the board was turned off: task id → why (e.g. "symcc was turned off"). */
+export const offAsked = new Map<string, string>()
+
+/**
+ * Symcc or the board was turned off (`why`): every check and merge running now stops before the
+ * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
+ * stays in review. Tasks already stopped another way are left alone. Returns the ids of both kinds.
+ */
+export async function stopChecks($: $, why: string): Promise<{ back: string[]; review: string[] }> {
+  const back: string[] = []
+  const review: string[] = []
+  for (const id of [...finishing, ...approving]) {
+    if (stopAsked.has(id) || back.includes(id) || review.includes(id)) continue
+    const kind = await change($, x => {
+      const cur = find(x, id)
+      if (cur?.status === 'review' && approving.has(id)) return [x, 'review'] as [Board, string]
+      if (cur?.status !== 'doing' || !finishing.has(id)) return [x, null] as [Board, null]
+      const y = patchTask(x, id, { status: 'todo', note: `stopped: ${why} while its work was being checked; nothing merged, continues when it is on again`, history: [...cur.history, stoppedLine(cur, `${why} while its work was being checked; nothing merged, its files are kept`)] }, now())
+      return [y, 'back'] as [Board, string]
+    })
+    if (!kind) continue
+    stopAsked.set(id, `stopped because ${why}`)
+    offAsked.set(id, why)
+    ;(kind === 'back' ? back : review).push(id)
+  }
+  return { back, review }
+}
+
+/** The part of an off reply that names the checks it stopped (empty when there were none). */
+export function stoppedChecksText(s: { back: string[]; review: string[] }): string {
+  const out: string[] = []
+  if (s.back.length) out.push(`${s.back.join(', ')} ${s.back.length === 1 ? 'was' : 'were'} being tested and merged and went back to todo`)
+  if (s.review.length) out.push(`${s.review.join(', ')} ${s.review.length === 1 ? 'was' : 'were'} already merging and stayed in review`)
+  return out.length ? `${out.join('; ')} (if a merge had already happened, that task is done)` : ''
+}
+
 /** Whether task `id`'s finished work is being checked and merged right now. */
 export const checkingNow = (id: string) => finishing.has(id) || approving.has(id)
 
 /** The words the lead's tools use when a task they stop is being checked. */
 export const CHECKING_TEXT = (id: string) => `${id} is being tested and merged`
 
+/** Whether the owner's approve of task `id` is merging it right now: drop, reject, retry, change and ask refuse it meanwhile. */
+export const mergingNow = (id: string) => approving.has(id)
+
+/** What those tools answer while task `id` is being approved and merged. */
+export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a moment`
+
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
 export async function endCheck($: $, id: string) {
+  offAsked.delete(id)
   if (!stopAsked.has(id)) return
   stopAsked.delete(id)
   try {
@@ -208,29 +251,76 @@ async function writeIfSame($: $, t: SymccTask, patch: (cur: SymccTask) => Partia
  */
 async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
   const merged = r.ok && !r.review && !!r.merged
+  const off = offAsked.get(t.id)
   const was = await change($, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, null] as [Board, null]
+    const late = off ? `${off} while it was being merged, too late` : `it was ${cur.status} while being merged, too late`
     const y = merged
-      ? patchTask(x, t.id, { status: 'done', note: `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, history: [...cur.history, line, `${tryLabel(t)}: it was ${cur.status} while being merged, too late: the work was already merged, so it stays done`] }, now())
-      : patchTask(x, t.id, { history: [...cur.history, `${line} (not used: the task was ${cur.status} meanwhile)`] }, now())
+      ? patchTask(x, t.id, { status: 'done', note: off ? `merged; ${off} too late to stop it` : `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, ...(r.notes?.length ? { research_notes: r.notes } : {}), history: [...cur.history, line, `${tryLabel(t)}: ${late}: the work was already merged, so it stays done`] }, now())
+      : patchTask(x, t.id, { history: [...cur.history, `${line} (not used: ${off ?? `the task was ${cur.status} meanwhile`})`] }, now())
     return [y, cur.status] as [Board, string]
   })
   if (!was) return
   if (!merged) {
-    tellLead($, `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
+    tellLead($, off ? `${t.id} "${t.title}" was stopped while its work was being checked (${off}); nothing was merged and it is ${was} again, its files kept.` : `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
+    return
+  }
+  if (off) {
+    sayDone($, b, t.id)
+    if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+    tellLead($, `✓ ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`)
     return
   }
   sayDone($, b, t.id)
-  if (await removeWorktree($, t.id, worktree, agentId).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
   tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
+}
+
+/** What the lead is told when a worker stopped with a QUESTION and its task now waits for the owner. */
+export const workerQuestionText = (id: string, question: string) =>
+  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'} If you can answer it from what you know, answer with ${S.N.name} change ${id} (put the answer in the details); otherwise leave it for the owner.`
+
+/** Whether a report that could not be saved was already told (once per session, so it never floods). */
+let reportWarned = false
+
+/**
+ * Saves try `t.attempts`'s full final answer to <dir>/reports/<id>-try-<N>.md (through a temp file
+ * and a rename, cut at REPORT_MAX_CHARS) and puts its path on the try's run. A failure is told
+ * once and never stops the task.
+ */
+export async function saveReport($: $, t: SymccTask, answer: string) {
+  if (!answer.trim()) return
+  const rel = reportFile(S.N.dir, t.id, t.attempts)
+  try {
+    const file = path(rel)
+    const tmp = `${file}.tmp`
+    await $.process.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
+    await $.fs.write(tmp, reportText(answer))
+    const r = await $.process.run(['mv', '-f', tmp, file])
+    if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().slice(0, 200) || `mv exit ${r.exitCode}`)
+    await change($, x => {
+      const cur = find(x, t.id)
+      if (!cur?.runs?.length || cur.attempts !== t.attempts) return x
+      const runs = [...cur.runs]
+      runs[runs.length - 1] = { ...runs[runs.length - 1]!, report: rel }
+      return patchTask(x, t.id, { runs }, now())
+    })
+  } catch (e) {
+    if (reportWarned) return
+    reportWarned = true
+    const msg = `${t.id}: could not save the worker's report to ${rel} (${(e as Error).message.slice(0, 200)}); the task goes on. Later reports that fail are not told again.`
+    $.ui.toast(S.N.toast(msg))
+    tellLead($, msg)
+  }
 }
 
 export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean) {
   const b = await load($)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
-  const summary = answer.trim().slice(0, 600) || '(no summary)'
+  await saveReport($, t, answer)
+  const summary = cutLine(answer, 600) || '(no summary)'
   const q = /^\s*QUESTION:\s*(.+)$/im.exec(answer)
   const need = parseNeedFiles(answer)
   if (aborted) {
@@ -239,10 +329,14 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
   } else if (need) {
     const question = needFilesQuestion(t.id, need)
     if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`] }))) return
+    sayNeedsYou($, b, t, question)
     tellLead($, `${question}\nThe task now waits for the owner. If they agree, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (q) {
-    if (await writeIfSame($, t, cur => ({ status: 'failed', note: `worker asks: ${q[1]!.slice(0, 200)}`, history: [...cur.history, `${tryLabel(t)}: worker asked: ${q[1]}`] }))) return
-    tellLead($, `${t.id} "${t.title}": the worker stopped with a question: ${q[1]}\nAnswer it yourself and change the task, or ask the owner with ${S.N.name} ask.`)
+    // Straight to the owner, like NEED FILES: the task waits with the question; their answer sends it back to work.
+    const question = q[1]!.trim()
+    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`] }))) return
+    sayNeedsYou($, b, t, question)
+    tellLead($, workerQuestionText(t.id, question))
   } else {
     await change($, x => (find(x, t.id)?.status === 'doing' ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
@@ -258,7 +352,7 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
  * else "done" (merged) or "failed". `summary` is what the worker (or the owner, on approve) said.
  */
 export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string) {
-  const line = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${r.detail}`
+  const line = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   const write = async (patch: (cur: SymccTask) => Partial<SymccTask>) => {
     const moved = await writeIfSame($, t, patch)
@@ -267,7 +361,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   }
   if (r.review) {
     if (!(await write(cur => ({ status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" is ready for review. Worker: ${summary.slice(0, 300)}\nThe change is on branch ${t.branch ?? S.N.branch(t.id)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker.`)
+    tellLead($, `${t.id} "${t.title}" is ready for review. Worker: ${cutLine(summary, 300)}\nThe change is on branch ${t.branch ?? S.N.branch(t.id)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
   const tries = t.conflict_tries ?? 0
@@ -288,13 +382,13 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${b.target_branch}, still after ${tries} tries to merge it in` : r.detail
-  const done = `${tryLabel(t)}: ${summary.slice(0, 300)} → ${detail}`
-  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done] })))) return
+  const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
+  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}) })))) return
   if (r.ok) sayDone($, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
-  if (r.ok && (await removeWorktree($, t.id, worktree, agentId))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
-  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${summary.slice(0, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${summary.slice(0, 300)}${gaveUp}`)
+  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" is merged. Worker: ${cutLine(summary, 300)}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}\nWorker said: ${cutLine(summary, 300)}${gaveUp}`)
 }
 
 /** The owner approved task `id` (in "review"): the same checked merge as for a finished worker. */
@@ -308,18 +402,56 @@ export async function approve($: $, id: string): Promise<string> {
   try {
     const dir = worktreeDir(t.id)
     if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, b.target_branch)
-    await change($, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: 'approved; checking and merging' }, now()) : x))
+    // The owner's own edits in the folder since review (or edits whose tests failed on an
+    // earlier approve, kept as test_output): those are committed with the task and always tested.
+    const edits = await ownerEdits($, t, dir).catch(() => [] as string[])
+    const retest = edits.length > 0 || t.test_output !== undefined
+    await change($, x => {
+      const cur = find(x, t.id)
+      if (cur?.status !== 'review') return x
+      return patchTask(x, t.id, { note: 'approved; checking and merging', ...(edits.length ? { history: [...cur.history, ownerEditedLine(edits)] } : {}) }, now())
+    })
     const made: string[] = []
-    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, () => stopAsked.get(t.id)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, () => stopAsked.get(t.id), retest).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
-    if (cur?.status !== 'review') {
-      // Merged before the change was seen: settle marks it done, with a line saying so.
-      if (cur && r.ok && r.merged) {
-        await settle($, t, b, r, 'approved by the owner', dir)
-        return `${t.id} was merged before it was ${cur.status}; it is done`
+    if (r.merged) {
+      // The work is on the target branch: the task is done, whatever happened to it meanwhile
+      // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
+      const sha = r.merged.slice(0, 8)
+      if (!cur) {
+        tellLead($, `${t.id} "${t.title}" was merged into ${b.target_branch} (${sha}), but it is no longer on the board.`)
+        return `${t.id} was merged into ${b.target_branch} (${sha}), but it is no longer on the board`
       }
-      return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing more done`
+      await settle($, t, b, r, 'approved by the owner', dir)
+      const off = offAsked.get(t.id)
+      if (off && cur.status === 'review') {
+        await change($, x => {
+          const c = find(x, t.id)
+          return c?.status === 'done' ? patchTask(x, t.id, { history: [...c.history, `${tryLabel(t)}: ${off} while it was being merged, too late: the work was already merged, so it stays done`] }, now()) : x
+        })
+        return `${t.id} was merged into ${b.target_branch} (${sha}) before ${off}; it is done`
+      }
+      return cur.status === 'review' ? `${t.id} approved and merged: ${r.detail}` : `${t.id} was merged into ${b.target_branch} (${sha}) before it was ${cur.status}; it is done`
+    }
+    if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing was merged`
+    const off = offAsked.get(t.id)
+    if (off) {
+      await change($, x => {
+        const c = find(x, t.id)
+        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${off} first; approve it again`, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged: ${off} while it was being merged; it stays in review`] }, now()) : x
+      })
+      return `${t.id} was not merged and stays in review: ${off} while it was being merged. Approve it again.`
+    }
+    if (retest && r.testOutput !== undefined) {
+      // The owner's edits fail the tests: it stays in review with the output, not sent to a worker.
+      const folder = `${S.N.dir}/worktrees/${t.id}`
+      await change($, x => {
+        const c = find(x, t.id)
+        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, test_output: r.testOutput, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`] }, now()) : x
+      })
+      tellLead($, `${t.id} "${t.title}" was not merged: with the owner's edits the tests fail. It stays in review; the owner can fix the files in ${folder} and approve again.\n${r.testOutput}`)
+      return `${t.id} was not merged and stays in review: ${r.detail}. Fix the files in ${folder}, then approve it again (the tests run again).`
     }
     if (!r.ok && !r.conflict && r.testOutput === undefined) {
       // Not the work's fault (e.g. uncommitted changes on the target branch): it stays in review.
@@ -381,9 +513,14 @@ export async function setBoardMode($: $, m: SymccMode, who: string): Promise<str
     const ids: string[] = []
     await haltAll($, `${who} turned the board off`, async w => {
       ids.push(w.task)
-      await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again` }, now()))
+      await change($, x => {
+        const cur = find(x, w.task)
+        return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again`, ...(cur ? { history: [...cur.history, stoppedLine(cur, `${who} turned the board off`)] } : {}) }, now())
+      })
     })
     if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
+    const checks = stoppedChecksText(await stopChecks($, 'the board was turned off'))
+    if (checks) extra.push(checks)
     await publish($, await load($))
   } else {
     const inReview = b.tasks.filter(t => t.status === 'review').length
@@ -413,12 +550,13 @@ export async function setSymcc($: $, on: boolean): Promise<string> {
       ids.push(w.task)
       await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was turned off; continues when it is on again` }, now()))
     })
+    const checks = stoppedChecksText(await stopChecks($, `${S.N.name} was turned off`))
     leadQueue.splice(0)
     S.leadTimer?.cancel()
     S.leadTimer = null
     sayQueue.splice(0)
     await publish($, await load($))
-    const stopped = ids.length ? ` Stopped ${ids.join(', ')}.` : ''
+    const stopped = `${ids.length ? ` Stopped ${ids.join(', ')}.` : ''}${checks ? ` ${checks[0]!.toUpperCase()}${checks.slice(1)}.` : ''}`
     return `${S.N.name} is ${before ? 'now ' : ''}off: Claude works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${S.N.name}-on.`
   }
   await publish($, b)

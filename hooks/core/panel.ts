@@ -44,22 +44,27 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
   return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
 }
 
-/** The one-line status strip on top of the board list: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
+type StripBoard = { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+
+/** The one-line status strip: "symcc · auto · 1/3 workers · 4 scouts (next: secrets in 38m)".
  *  The part in brackets is left out when it does not fit in `width` (or the board is in mode off); a plugin that is
  *  turned off shows "symcc off · /symcc-on". Busy workers are the tasks being worked on. */
-export function statusStrip(
-  v: { mode: SymccMode; enabled?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] },
-  nowMs: number,
-  width = Infinity,
-  name: string = DEFAULT_NAME,
-): string {
+export function statusStrip(v: StripBoard, nowMs: number, width = Infinity, name: string = DEFAULT_NAME): string {
+  if (v.enabled === false) return offStatusLine(name)
+  return bannerStrip(v, nowMs, width - `${name} · ${v.mode} · `.length, name, `${name} · ${v.mode} · `)
+}
+
+/** The status strip as the board panel's banner shows it, right under the counts line: the name and mode are left
+ *  out (the banner already shows them), so "1/3 workers · 4 scouts (next: secrets in 38m)". The next scout goes
+ *  first when it does not fit in `width`; a plugin that is turned off shows "symcc off · /symcc-on". */
+export function bannerStrip(v: StripBoard, nowMs: number, width = Infinity, name: string = DEFAULT_NAME, lead = ''): string {
   if (v.enabled === false) return offStatusLine(name)
   const busy = v.tasks.filter(t => t.status === 'doing').length
   const n = v.scouts.length
-  const base = [name, v.mode, `${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
+  const base = [`${busy}/${v.max_parallel ?? emptyBoard().max_parallel} workers`, n === 1 ? '1 scout' : `${n} scouts`].join(' · ')
   const next = v.mode === 'off' ? '' : nextScoutText(v.scouts, nowMs)
   const full = next ? `${base} (${next})` : base
-  return full.length <= width ? full : base
+  return lead + (full.length <= width ? full : base)
 }
 
 /** The short status column of a task row in the board list: the time of the running try ("4m") for a task being
@@ -170,8 +175,9 @@ export const viewKeys = (enter = true): KeyHint[] => [
 ]
 
 /** The keys at the bottom of a task's page, the ones that matter most for its state first; "↑↓ scroll" and
- *  "b back" always come last. `worker`: a worker is on the task now (w opens it). */
-export function taskKeys(status: SymccStatus, worker = false): KeyHint[] {
+ *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
+ *  with a saved report; with more than one, their numbers (1-9) show that try's report. */
+export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = []): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = []
   if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
@@ -179,6 +185,8 @@ export function taskKeys(status: SymccStatus, worker = false): KeyHint[] {
   if (worker) keys.push(k('w', 'watch worker'))
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
   if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
+  const keyed = reports.filter(n => n >= 1 && n <= 9)
+  if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
   return [...keys, k('↑↓', 'scroll'), k('b', 'back')]
 }
 
@@ -259,16 +267,3 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
   }
 }
 
-/** The subtle text after the folded Done row: "last today: T-88 Task page: collapse the Details rows" ("yesterday",
- *  or the date for older days). The title is cut with "…" so `head`, three spaces and this fit in `width` columns;
- *  '' when even a short title does not fit. */
-export function doneExtra(last: SymccTask | undefined, nowMs: number, offsetMin: number, head: string, width = Infinity): string {
-  if (!last) return ''
-  const today = dayOf(nowMs, offsetMin)
-  const day = taskDay(last, offsetMin)
-  const when = !day || !today || day >= today ? 'today' : dayLabel(day, today) === 'Yesterday' ? 'yesterday' : dayLabel(day, today)
-  const lead = `last ${when}: ${last.id} `
-  const room = width - head.length - 3 - lead.length
-  if (room < Math.min(8, last.title.length)) return ''
-  return `${lead}${cutTo(last.title, room)}`
-}

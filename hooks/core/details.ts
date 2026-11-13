@@ -31,7 +31,7 @@ export function originSegs(t: { origin?: unknown }): Seg[] {
 }
 
 /**
- * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, After, Branch, Commits, Tries.
+ * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, After, Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
@@ -58,6 +58,9 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
       segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, state, ...(dep ? [{ text: ` · ${dep.title}`, color: 'subtle' }] : [])],
     })
   })
+  // research notes the merged work added or changed (docs/research/…), one row each
+  const notes = t.research_notes ?? []
+  notes.forEach((f, i) => R.push({ label: i ? '' : 'Research', segs: [{ text: f, color: 'autoAccept' }] }))
   if (t.branch) R.push({ label: 'Branch', segs: [{ text: t.branch, color: 'ide' }] })
   const commits = taskCommits(t)
   if (commits.length) {
@@ -77,7 +80,7 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
 }
 
 /** The width of the label column on the task page: the longest label, its colon and a space. */
-export const DETAIL_LABEL_WIDTH = 'Request: '.length
+export const DETAIL_LABEL_WIDTH = 'Research: '.length
 
 /**
  * Splits colored text into lines of at most `width` characters, breaking between words

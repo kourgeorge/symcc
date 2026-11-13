@@ -61,11 +61,12 @@ picks up again next time.
    │         │    failing output (up to 2 times by itself)  │
    │         ├──▶ still failing / out of time ──▶ failed ───┘
    │         ├──▶ worker needs files outside its list ──▶ waiting (NEED FILES)
-   │         └──▶ worker has a question ──▶ failed + question to the lead
+   │         └──▶ worker has a question ──▶ waiting (QUESTION), "T-5 needs you"
    │
    ├── review   (only in review mode) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
-   ├── waiting  the lead asked YOU something; your answer sends it back to work
+   ├── waiting  the lead or a worker asked YOU something; your answer sends it
+   │            back to work
    ├── paused   stopped on purpose; "resume" sends it back
    ├── dropped  cancelled; stays on the list and never runs on its own;
    │            retry (r on its page, or ask the lead) brings it back to todo
@@ -78,7 +79,7 @@ picks up again next time.
 |---|---|
 | `todo` | Ready to be picked up (once the tasks it waits for are done) |
 | `doing` | A worker is on it right now |
-| `waiting` | It needs an answer from you |
+| `waiting` | It needs an answer from you (shown under NEEDS YOU) |
 | `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
 | `paused` | Stopped on purpose, until resumed |
 | `failed` | It could not be finished; the lead decides what next |
@@ -91,6 +92,19 @@ finished first: it starts only when every one of them is `done` (merged). Any ot
 keeps it waiting, also `dropped` or `failed`; then the lead changes or clears its `after`.
 Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
 lower task number).
+
+---
+
+### When a worker needs you
+
+A worker that can't go on without a decision from you stops and answers
+`QUESTION: …`. (A worker that needs files outside its list answers `NEED FILES: …`; see
+the scope check below.) The task does not fail: it goes straight to `waiting` with the
+question, shows under NEEDS YOU on the board, and with voice on you hear "T-5 needs you"
+(once per question, only in the session that drives the board). The lead is told too and
+answers it itself when it can. Otherwise answer it on the board or tell the lead: the answer
+goes into the task and sends it back to work, and a new try continues with it. What the
+worker already changed is kept.
 
 ---
 
@@ -117,7 +131,7 @@ This is where symcc keeps your branch safe. Step by step:
    out with uncommitted changes, or with untracked files the merge would overwrite,
    symcc waits instead of overwriting them.
 7. **Tell.** The lead gets one line: merged, or why not. On a Mac you also hear
-   "T-3 done".
+   "T-3 done" (and "T-5 needs you" when a task waits for your answer).
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
@@ -146,13 +160,28 @@ The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) an
   nothing is merged; the task goes back to `todo` with your reason in its history, and a
   fresh worker redoes it with that reason in front of it.
 
+So there are three ways to change a task in review before it is merged:
+
+1. **Reject it with a reason**: a fresh worker redoes it (see above).
+2. **Ask the lead to change the task** ("T-5: also update the README"): the lead changes
+   what the task asks for, and it goes back to work.
+3. **Edit the files yourself** in its folder, `.symcc/worktrees/T-5`, then approve. Your
+   edits are committed as part of the task (same commit message) and its history gets a
+   line like `owner edited files before approving: a.ts, b.md`. The tests always run
+   again when you edited something. If they fail, nothing is merged: the task stays in
+   review with the test output, so you can fix the files and approve again.
+
+The diff (`d` on the task page, `/symcc-diff T-5`) shows the folder as it is now, your
+edits included, against your branch; it says `(includes your edits)` when there are some.
+
 Both only work on a task in `review`. Switching back to `auto` does not merge tasks
 already waiting; approve or reject each of them.
 
 You can also do it yourself:
 
 - **In the board panel**, tasks ready for review are listed near the top. Open one to see
-  the files it changed with `+`/`-` line counts. Press `d` (Show changes) for the whole
+  the files it changed with `+`/`-` line counts, and its folder (edit files there, then
+  approve). Press `d` (Show changes) for the whole
   diff, or pick a file for just that file's diff, with added lines in green and removed
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
   A very long diff is cut, with a note like `… 340 more lines (see /symcc-diff T-5)`.
@@ -198,7 +227,8 @@ You can also do it yourself:
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
-  `r` retry, `m` switch review / auto, `n` needs review, `t` / `s` / `c` switch views, `b` back.
+  `r` retry, `m` switch review / auto, `n` needs review, `1`-`9` a try's report on the task
+  page, `t` / `s` / `c` switch views, `b` back.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a
   total, e.g. `total: 1h 12m · 1.2M tokens over 4 tries`.
@@ -213,6 +243,25 @@ with `/symcc`, or one task with `/symcc-task T-3`: the `from:` line says, for ex
 try. Every merge commit starts with the task ID, so `git log --grep "T-3"` finds the work
 for a task, and the ID on a commit takes you back to the task and your request. Tasks made
 before this was kept show `from: unknown`.
+
+## Where to see what a task did
+
+- **The git commit.** Each try's commit starts with the task ID (`T-3: ...`) and ends with
+  trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
+  with `git log --grep "T-3"`.
+- **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
+  line per try (what the worker said, cut at a word end with "…", and how it went),
+  **Commits** lists the commits each try made and the one that was merged, and **Report**
+  shows the worker's full final report for the latest try. When more than one try has a
+  report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
+  shows the first 40 lines and says where the full report is.
+- **The report files.** Every try's full final answer (its report, or its NEED FILES or
+  QUESTION text) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
+  Tasks from before this was kept say "no saved report".
+- **The research note.** When a task's merged work adds or changes a file under
+  `docs/research/`, the task page shows it in Details as `Note: docs/research/<file>.md`.
+- **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
+  while: it is not kept. The report file and the commit are what stay.
 
 ## Scouts
 
@@ -291,7 +340,11 @@ skills: [code-review]
 
 - `description` is required: the lead reads it to choose. `model` and `skills` are optional.
 - The built-in roles live in the plugin's `roles/` folder: `general`, `docs`, `refactor`,
-  `security` and `tester`.
+  `researcher`, `security` and `tester`.
+- `researcher` is for "find out whether / how ..." tasks. The worker reads the project, the
+  installed tools and the web, but changes no code. It writes a short note, usually
+  `docs/research/<topic>.md`: the short answer first, what exists (with file:line, URL or
+  version), what doesn't exist or couldn't be checked, and a next step.
 - Tasks made before with the old roles `tests`, `backend` or `frontend` still show that
   name. When such a task starts or is retried, `tests` runs as `tester` and `backend` or
   `frontend` as `general`, with a history line saying so. A project file
@@ -427,6 +480,7 @@ your-project/
     ├── scouts/           your scout files (*.md)
     ├── scouts.json       each scout's last run and report, and whether it is paused
     ├── roles/            your own worker roles (*.md), see Worker roles
+    ├── reports/          each try's full worker report (T-3-try-2.md)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged
@@ -451,6 +505,10 @@ start with `symcc/` are never touched.
 - **Big tasks can run out of time.** A task that touches a lot of code may need more than
   45 minutes; raise `max_minutes` or split the task.
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
+- **What workers and scouts can use.** Workers can't commit, push or merge. They use
+  Read, Edit, Write, Glob, Grep and Bash, with edits accepted automatically, inside your
+  normal Claude Code permission settings. Scouts can't edit or write files: they use Read,
+  Glob, Grep, Bash, WebSearch and WebFetch, and their shell commands follow the same rules.
 - **A dropped task never runs on its own.** There is no delete; a dropped task stays on
   the list (until it is archived), and nothing automatic (retries after failed tests, a finishing check) starts
   it again. To bring it back on purpose, press `r` (Retry) on its page or ask the lead to

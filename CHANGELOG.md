@@ -5,6 +5,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## Unreleased
 
 - Old done and dropped tasks are archived: after `archive_days` days (new setting, 14 by default, 0 = never) they move from `board.json` to `.symcc/archive.json`, so the board file stays small. The archive is written safely first and a broken one is never overwritten. Tasks waiting on an archived done task still start; `/symcc-task T-n` still finds an archived task; the Done row and the totals still count them ("▸ Done  12 (+96 archived)").
+- New built-in worker role `researcher`: it looks into a question and writes a short note (usually `docs/research/<topic>.md`) instead of changing code. The lead uses it for "find out whether / how ..." tasks.
 
 ## 0.3.0 — 2026-11-13
 

@@ -22,6 +22,11 @@ export type SymccRun = {
    * and, if main had moved, the "bring up to date with main" merge commit. Missing on old boards.
    */
   commits?: string[]
+  /**
+   * The file with this try's full final answer (the worker's report, or its NEED FILES / QUESTION text),
+   * relative to the project, e.g. ".symcc/reports/T-3-try-2.md". Missing on old boards and when it could not be saved.
+   */
+  report?: string
 }
 
 /**
@@ -76,6 +81,8 @@ export type SymccTask = {
   needs_review?: boolean
   /** one entry per worker try, oldest first */
   runs?: SymccRun[]
+  /** the research notes (files under docs/research/) its merged changes added or changed; missing when none */
+  research_notes?: string[]
   /** the full SHA that landed on the target branch when the task was merged; missing until then (and on old boards) */
   merged?: string
   branch: string | null

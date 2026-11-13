@@ -165,9 +165,11 @@ export async function prepareWorktree($: $, t: SymccTask, target: string) {
 
 /**
  * Removes a task's worktree, but never while a live agent may still use it (`except` = the
- * worker that just finished there). Returns whether it was removed.
+ * worker that just finished there), and never while its work is being checked or approved and
+ * merged there, unless that check itself is done with it (`ownCheck`). Returns whether it was removed.
  */
-export async function removeWorktree($: $, taskId: string, dir: string, except?: string): Promise<boolean> {
+export async function removeWorktree($: $, taskId: string, dir: string, except?: string, ownCheck = false): Promise<boolean> {
+  if (!ownCheck && (finishing.has(taskId) || approving.has(taskId))) return false
   const agents = await agentsNow($)
   if (!agents) return false
   const t = find(await load($), taskId)

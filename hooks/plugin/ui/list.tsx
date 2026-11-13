@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, doneExtra, groupLabel, ALL_CLEAR, statusCell, statusStrip, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 
@@ -45,7 +45,7 @@ export function listPage($: $, pane: PaneParts) {
   const doneHead = parts.done.length || gone ? [foldedRow('Done', parts.done.length, S.doneOpen, countWidth), archivedNote(gone)].filter(Boolean).join(' ') : ''
   const doneRows: Row[] = doneHead
     ? [
-        { day: 'done', label: doneHead, extra: doneExtra(parts.done[0], nowMs, offset, doneHead, width - 2), indent: 2 },
+        { day: 'done', label: doneHead, indent: 2 },
         ...(!S.doneOpen
           ? []
           : [
@@ -75,9 +75,6 @@ export function listPage($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column">
       {[...banner(), tabs()]}
-      <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
-        {statusStrip({ ...v, mode }, nowMs, width, S.N.name)}
-      </Text>
       <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>
       {list.map((r, i) => {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>

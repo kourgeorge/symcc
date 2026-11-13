@@ -1,20 +1,28 @@
 import type { SymccTask } from '../../types'
-import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText } from '../board'
+import { STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, noBranchText, applySettings, type Board, settingSetText, taskReports, reportPreview } from '../board'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList } from './git'
 import { publish } from './lead'
 import { loadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
-import { load, change, now } from './store'
+import { load, change, now, path } from './store'
 import { tellLead } from './tell'
-import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT } from './workers'
+import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
 // ---------------- the lead's tools ----------------
 
 /** A short date and time, like "Nov 11, 09:30"; "?" when there is none. */
 export const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
 
-export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], archivedDone: string[] = []): string {
+/** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
+export async function latestReport($: $, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
+  const r = taskReports(t).at(-1)
+  if (!r) return null
+  return { ...r, text: await $.fs.read(path(r.file)).then(x => String(x), () => null) }
+}
+
+/** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
+export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: { file: string; try: number; text: string | null } | null, archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
   L.push(fromText(t, 120))
@@ -36,6 +44,9 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   const commits = taskCommits(t)
   if (commits.length) L.push('', 'Commits (newest first):', ...commits.map(c => `  ${commitText(c)}`))
   if (t.branch) L.push('', `branch: ${t.branch}`)
+  if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Note: ${f}`))
+  if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
+  if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
   return L.join('\n')
 }
@@ -91,7 +102,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · l pick the worker role (a task to do, paused, failed or in the backlog).
 In a backlog task: o move to todo · x drop · l role.
 On the board list a task's role shows at the right end of its row, with the try number ("tester · try 2"); general shows nothing. A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review".
-The board list goes top to bottom: the status strip; NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N  last today: …" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
+The board list goes top to bottom: the status strip; NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 On the board list: m switches the mode between review and auto (never to off).
@@ -106,8 +117,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     to do            waiting for a free worker (and for its "after" tasks)
     doing            a worker is on it
     paused           stopped on purpose; resume to continue
-    waiting for you  the lead asked you a question; answer it in the board panel
-                     (also when a worker answered NEED FILES: it needs files outside its list)
+    waiting for you  a question for you; answer it in the board panel or tell the lead
+                     (asked by the lead, or by a worker: QUESTION, or NEED FILES for files
+                     outside its list); with voice on you hear "T-5 needs you"
     ready for review the worker is done and the checks passed; nothing is merged until you
                      approve it (or reject it with a reason, which sends it back to "todo")
     failed           tests failed, files outside its list changed, or the worker stopped
@@ -127,7 +139,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
   after failing tests, 2 by default), open_on_start (open the board panel when a
-  session starts, on by default), voice (say "T-3 done" out loud when a task is merged;
+  session starts, on by default), voice (say "T-3 done" out loud when a task is merged, and "T-5 needs you" when a worker asks you something;
   only the session driving the board speaks; on by default), mode (off stops every
   worker and scout and starts nothing new; review makes every finished task wait for
   your approve or reject; auto, the default, merges a finished task that passes at once).
@@ -213,7 +225,8 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. If they allow it, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
-- When the owner answers a waiting task, put the answer into the task with ${S.N.name} change (that sends it back to work).
+- A worker that needs the owner to decide something stops and answers "QUESTION: ..."; the task then waits for the owner (NEEDS YOU) with that question, and with voice on the owner hears "T-5 needs you". You are told too: if you can answer it from what you know, ${S.N.name} change the task with the answer in its details; otherwise leave it for the owner.
+- When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
@@ -229,12 +242,12 @@ export const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list); general when unsure.' }, why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: 'string', description: "For a scout finding: the scout's name." }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
+    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: 'string', description: "For a scout finding: the scout's name." }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
   },
   {
     name: 'change',
     description: 'Rewrite a task. A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: 'The worker role for the task; general when unsure.' } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
@@ -250,7 +263,7 @@ export const TOOLS = () => [
   },
   {
     name: 'settings',
-    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done"; only the session driving the board speaks, default true), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    description: 'Change how the team works: target_branch (the existing branch finished work is merged into; a new board starts on the branch checked out then), test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), open_on_start (open the board panel by itself when a session starts, default true), voice (say it out loud when a task is merged, e.g. "T-3 done", and when a question from a worker waits for the owner, "T-5 needs you"; only the session driving the board speaks, default true), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
     inputSchema: { type: 'object', properties: { target_branch: { type: 'string', description: 'An existing local branch to merge finished work into.' }, test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, voice: { type: 'boolean' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
@@ -290,7 +303,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
-      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, b.archived_done)}`
+      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, undefined, b.archived_done)}`
     }
     case 'add': {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -307,6 +320,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'change': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -339,7 +353,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, fields(), now(), S.N.dir))
         return `${t.id} updated (still in the backlog)`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'files', 'after', 'order', 'role', 'answer'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
@@ -354,7 +368,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (typeof a.order === 'number') patch.order = a.order
       if (typeof a.needs_review === 'boolean') patch.needs_review = a.needs_review
       if (role) patch.role = role
-      await change($, x => patchTask(x, t.id, patch, now(), S.N.dir))
+      // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
+      const answer = str(a.answer)?.trim()
+      if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
+      await change($, x => {
+        const cur = find(x, t.id) ?? t
+        const lines = changeLines(t, patch, wasDoing, answer)
+        return patchTask(x, t.id, lines.length ? { ...patch, history: [...cur.history, ...lines] } : patch, now(), S.N.dir)
+      })
       void pump($)
       return `${t.id} updated${wasDoing ? ' (restarting)' : ''}`
     }
@@ -362,6 +383,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const t = await taskOrThrow($, id)
       if (t.status === 'doing') return `${t.id} is already running`
       if (t.status === 'done') return `${t.id} is already done`
+      if (mergingNow(t.id)) return MERGING_TEXT(t.id)
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
       // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
@@ -377,14 +399,17 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'ask': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done' || t.status === 'dropped') throw new Error(`${t.id} is ${t.status}; retry it first if it needs more work`)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you' }, now()))
+      const asked = t.status === 'doing' && !checkingNow(t.id)
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}) }, now()))
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done') throw new Error(`${t.id} is already done`)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // While its work is checked, the check stops before the merge and removes the folder when it ends.
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
@@ -405,14 +430,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}` }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
     case 'resume': {
       const t = await taskOrThrow($, id)
       if (t.status !== 'paused') return `${t.id} is not paused (it is ${t.status})`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed' }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed', history: [...(find(x, t.id) ?? t).history, 'resumed after a pause'] }, now()))
       void pump($)
       return `${t.id} resumed`
     }
@@ -420,6 +445,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       return approve($, id)
     case 'reject': {
       const reason = str(a.reason) ?? ''
+      const t = await taskOrThrow($, id)
+      if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       await change($, x => rejectTask(x, id, reason, now()))
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`

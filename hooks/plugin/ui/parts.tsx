@@ -1,7 +1,7 @@
 // What every page of the board panel shares: the view it shows, the banner, the tabs, key hints and text styles.
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, type KeyHint, hintLines, packRows } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, bannerStrip, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
 import { tellLead } from '../tell'
@@ -52,6 +52,10 @@ export async function paneParts($: $, e: PaneEvent) {
           ))}
         </Text>
       )),
+      // the status strip, right under the counts line: workers and scouts (the banner shows the name and mode)
+      <Text key="status-strip" wrap="truncate" bold color={C(v.enabled === false || mode === 'off' ? 'warning' : 'text')}>
+        {bannerStrip({ ...v, mode }, Date.now(), width, S.N.name)}
+      </Text>,
       <Box key="banner-mode" flexDirection="row">
         <Text wrap="truncate">
           <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
@@ -75,7 +79,7 @@ export async function paneParts($: $, e: PaneEvent) {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
       return (
         <Button key={`tab-${which}`} hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
-          <Text bold={active} color={C(active ? 'ide' : 'subtle')}>{label}</Text>
+          <Text bold={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
@@ -91,7 +95,7 @@ export async function paneParts($: $, e: PaneEvent) {
   }
   /** The whole header: banner, then the tab row, then the rule under them. */
   const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
-  /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words subtle. */
+  /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
     hintLines(hints, width).map((line, i) => (
       <Text key={`${name}-${i}`} color={C('subtle')}>
@@ -99,7 +103,7 @@ export async function paneParts($: $, e: PaneEvent) {
           <Text key={`${name}-${i}-${j}`}>
             {j ? ' · ' : ''}
             <Text bold color={C('text')}>{kh.key}</Text>
-            <Text color={C('subtle')}>{` ${kh.word}`}</Text>
+            <Text color={C('inactive')}>{` ${kh.word}`}</Text>
           </Text>
         ))}
       </Text>

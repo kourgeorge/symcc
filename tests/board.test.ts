@@ -5,7 +5,7 @@ import { parseScoutMemory, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, doneExtra, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, branchWarning, missingBranchText, branchesToDelete, worktreesToRemove, cleanupText, noBranchText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, voiceOn, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, statusStrip, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, oldRoleSwap, OLD_ROLES, BUILT_IN_ROLES, leftoverTmpFiles, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -396,6 +396,15 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a3}`,
   ])
   expect(lines[0]!.parts[0]).toEqual({ text: 'symcc board', tone: 'accent', bold: true })
+  // the facts are in the normal text color (readable in dark mode), the folder and branch bold; only the separators are dim
+  expect(lines[1]!.parts).toEqual([
+    { text: '~/repositories/symcc', tone: 'plain', bold: true },
+    { text: ' · ', tone: 'dim' },
+    { text: 'main', tone: 'plain', bold: true },
+    { text: ' · ', tone: 'dim' },
+    { text: 'this session drives', tone: 'plain' },
+  ])
+  expect(lines[2]!.parts.filter(p => p.text !== ' · ').every(p => p.tone === 'plain')).toBe(true)
   expect(bannerRule(12)).toBe('━'.repeat(12))
   expect(listRule(12)).toBe('┄'.repeat(12))
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
@@ -410,6 +419,8 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
+  expect(more[4]!.parts.filter(p => p.bold).map(p => p.text)).toEqual(['2 doing', '1 to do', '1 done'])
+  expect(more[4]!.parts.some(p => p.tone === 'dim' && p.text !== ' · ')).toBe(false)
 })
 
 test('a narrow banner drops the drawing and cuts lines to fit', () => {
@@ -1330,10 +1341,25 @@ test('the role mark: the role name, nothing for general; the open task\'s role l
   expect(boardText(b2)).not.toContain('[general]')
 })
 
-test('the built-in roles are general, docs, refactor, security and tester', async () => {
-  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'security', 'tester'])
+test('the built-in roles are general, docs, refactor, researcher, security and tester', async () => {
+  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'researcher', 'security', 'tester'])
   for (const old of ['tests', 'backend', 'frontend']) expect(BUILT_IN_ROLES).not.toContain(old)
   expect(Object.values(OLD_ROLES).every(r => BUILT_IN_ROLES.includes(r))).toBe(true)
+})
+
+/** A copy of roles/researcher.md (tests can't read the plugin's files); keep the two the same. */
+const RESEARCHER_MD = "---\ndescription: finding things out - investigates a question and writes a short note, no code changes\n---\n- Don't change the project's code, tests or settings; your only output is the note in the task's files (usually docs/research/<topic>.md).\n- Read the project, the installed tools and their type files and docs, and the web if needed.\n- Run read-only commands only. Throwaway experiments go outside the project (e.g. /tmp) and are cleaned up after.\n- Start the note with the short answer, in a sentence or two.\n- Then say what exists, with exact names and where you found each one (file:line, URL, version).\n- Say plainly what doesn't exist or what you couldn't check.\n- End with a recommended next step for the project.\n- No guessing presented as fact: mark anything you didn't confirm as a guess, or leave it out.\n"
+
+test('the researcher role file parses like the others: a description, a checklist, no model or skills', async () => {
+  expect(roleSkipReason('researcher', RESEARCHER_MD)).toBe(null)
+  const r = parseRole('researcher', RESEARCHER_MD)!
+  expect(r).toMatchObject({ name: 'researcher', skills: [] })
+  expect(r.model).toBeUndefined()
+  expect(r.description).toContain('no code changes')
+  expect(r.prompt).toContain('docs/research/<topic>.md')
+  expect(r.prompt).toContain('No guessing presented as fact')
+  expect(roleSection(r)).toContain('Your role: researcher')
+  expect(rolesLeadText([r])).toContain('Use researcher for "find out whether / how ..." tasks')
 })
 
 test('a task with an old role keeps its name until it starts; then tests runs as tester, backend and frontend as general', async () => {
@@ -1880,14 +1906,6 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   expect(sectionHeader('Done', 42, true)).toBe('▾ Done (42)')
   const head = foldedRow('Done', 2, false)
   expect(head).toBe('▸ Done     2')
-  expect(doneExtra(s.done[0], NOW, 0, head)).toBe('last today: T-8 Task page: collapse the Details rows')
-  expect(doneExtra(s.done[1], NOW, 0, head)).toBe('last yesterday: T-1 Yesterday work')
-  const cut = doneExtra(s.done[0], NOW, 0, head, 50)
-  expect(cut).toBe('last today: T-8 Task page: collaps…')
-  expect(head.length + 3 + cut.length).toBeLessThanOrEqual(50)
-  // too narrow for even a short title: just the count
-  expect(doneExtra(s.done[0], NOW, 0, head, 30)).toBe('')
-  expect(doneExtra(undefined, NOW, 0, head)).toBe('')
 })
 
 test('folded rows line up their counts; no brackets', () => {
@@ -2450,4 +2468,82 @@ test('archive_days is a setting like the others: shown, set and cut to its limit
   expect(parseSettingsCommand('archive_days 7')).toEqual({ kind: 'set', setting: 'archive_days', input: { archive_days: 7 } })
   expect(readBoard(JSON.stringify({ ...emptyBoard(), archive_days: 'x' })).fixed).toContain('archive_days')
   expect(settingsText(emptyBoard())).toMatch(/archive_days\s+14/)
+})
+
+// ---------------- history lines for restarts and answers ----------------
+
+import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppedLine, ANSWER_LINE_CHARS } from '../hooks/board'
+
+test('changeLines names the changed fields of a restart, the widened files and the owner answer', async () => {
+  const t = { attempts: 2, role: 'general', files: ['hooks/'], details: 'old', after: [] as string[] }
+  expect(changedFields(t, { details: 'old', files: ['hooks/', 'tests/'], after: [] })).toEqual(['files'])
+  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)'])
+  expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual(['files widened: + a.ts, + b.ts'])
+  expect(changeLines(t, {}, false, ' yes, go ')).toEqual(['the owner answered: “yes, go”'])
+  expect(changeLines(t, { files: ['hooks/'] }, false)).toEqual([])
+  expect(filesWidenedLine(['a'], undefined)).toBe(null)
+  expect(ownerAnsweredLine('x'.repeat(1000)).length).toBeLessThan(ANSWER_LINE_CHARS + 30)
+  expect(stoppedLine({ attempts: 3, role: 'tester' }, 'paused')).toBe('try 3 (role tester): stopped: paused')
+})
+
+test('backToTodo of a running task says in its history why it restarts', async () => {
+  const [b] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
+  const t = { ...b.tasks[0]!, status: 'doing' as const, attempts: 1 }
+  expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(backToTodo({ ...t, status: 'failed' }, 'x', T).history).toEqual(t.history)
+})
+
+// ---------------- saved reports and clean cuts ----------------
+
+import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
+
+test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {
+  expect(cutLine('  short\n text  ', 50)).toBe('short text')
+  // never in the middle of a word: "change a →" style ends are gone
+  const s = 'It adds drop, reject, retry, change and ask buttons to the task page and wires them up.'
+  for (const max of [20, 31, 40, 55, 70]) {
+    const c = cutLine(s, max)
+    expect(c.length).toBeLessThanOrEqual(max)
+    expect(c.endsWith('…')).toBe(true)
+    const kept = c.slice(0, -1).trimEnd()
+    // what is kept is the start of the text, ending at a whole word
+    expect(s.startsWith(kept)).toBe(true)
+    expect(/[\s.,]/.test(s[kept.length] ?? ' ')).toBe(true)
+  }
+  expect(cutLine('One sentence here. Another sentence that is quite long and goes on.', 30)).toBe('One sentence here. …')
+  expect(cutLine('word '.repeat(100), 300).length).toBeLessThanOrEqual(300)
+  expect(cutLine('x'.repeat(50), 10)).toBe(`${'x'.repeat(9)}…`)
+})
+
+test('reportText keeps a report in full up to the cap; reportFile names the try', () => {
+  expect(reportText('  hello\n')).toBe('hello\n')
+  const big = 'a'.repeat(REPORT_MAX_CHARS + 10)
+  expect(reportText(big).startsWith('a'.repeat(REPORT_MAX_CHARS))).toBe(true)
+  expect(reportText(big)).toContain('longer than 50 KB')
+  expect(reportFile('.symcc', 'T-3', 2)).toBe('.symcc/reports/T-3-try-2.md')
+})
+
+test('taskReports lists the saved reports by try, and ignores old runs and paths outside the reports folder', () => {
+  expect(taskReports({})).toEqual([])
+  expect(taskReports({ runs: [{ started: '' }, { started: '', report: '.symcc/reports/T-1-try-2.md' }, { started: '', report: '/etc/passwd' }, { started: '', report: '.symcc/reports/../x-try-1.md' }] })).toEqual([{ try: 2, file: '.symcc/reports/T-1-try-2.md' }])
+})
+
+test('researchNotes picks files under docs/research/, and the task page shows them as Research rows', () => {
+  expect(researchNotes(['docs/guide.md', 'docs/research/b.md', 'docs/research/a.md', 'src/docs/research/c.md'])).toEqual(['docs/research/a.md', 'docs/research/b.md'])
+  const t = { ...addTask(emptyBoard(), { origin: { why: 'w' }, title: 'x' }, '2026-01-01T00:00:00.000Z')[1], research_notes: ['docs/research/a.md'] } as SymccTask
+  const rows = detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 })
+  expect(rows.find(r => r.label === 'Research')?.segs.map(g => g.text).join('')).toBe('docs/research/a.md')
+  expect(detailRows({ ...t, research_notes: undefined }, { roles: [], all: [t], when: s => s, nowMs: 0 }).some(r => r.label === 'Research')).toBe(false)
+})
+
+test('reportPreview shows the first lines and then where the full report is', () => {
+  expect(reportPreview('a\nb\n', 'f.md', 5)).toEqual(['a', 'b'])
+  expect(reportPreview('1\n2\n3\n4', 'f.md', 2)).toEqual(['1', '2', '… (2 more lines) full report: f.md'])
+})
+
+test("taskKeys shows the try number keys for reports only when more than one try has a report", () => {
+  const words = (k: { key: string; word: string }[]) => k.map(x => `${x.key} ${x.word}`)
+  expect(words(taskKeys('done', false, [1]))).toEqual(['↑↓ scroll', 'b back'])
+  expect(words(taskKeys('done', false, [1, 2, 3]))).toEqual(["1-3 a try's report", '↑↓ scroll', 'b back'])
+  expect(words(taskKeys('done', false, [9, 10]))).toEqual(["9 a try's report", '↑↓ scroll', 'b back'])
 })

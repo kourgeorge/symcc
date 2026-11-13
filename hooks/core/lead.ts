@@ -2,6 +2,7 @@
 import { namesFor } from '../name'
 import type { Board, BoardTask } from './board-file'
 import { parseStamp } from './text'
+import { stoppedLine } from './history'
 
 // ---------------- who drives the board ----------------
 // Several sessions may have the same project open. Only one of them, the driver, starts
@@ -91,8 +92,8 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
   }
 }
 
-/** Task `t` back to "todo" with `note`, no longer tied to a session. */
+/** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
 export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
   const { session: _gone, ...rest } = t
-  return { ...rest, status: 'todo' as const, note, updated_at: now }
+  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: [...(t.history ?? []), stoppedLine(t, note)] } : {}) }
 }

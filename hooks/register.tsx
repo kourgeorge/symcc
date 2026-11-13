@@ -23,7 +23,7 @@ import { scheduleScouts, scoutFinished, runScoutNow, setScoutPaused, cancelScout
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, readTab, readOpened, readScoutOpen, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now } from './plugin/store'
 import { tellLead } from './plugin/tell'
-import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText } from './plugin/tools'
+import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane } from './plugin/ui/open'
 import { renderPane } from './plugin/ui/pane'
@@ -251,10 +251,10 @@ export const register: Register = on => {
           // not on the board: it may have been moved to archive.json (read-only, shown as text)
           const old = await findArchived($, cmd.id)
           if (!old) return say(`${cmd.id} is not on the board.`)
-          return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, b.archived_done)}`)
+          return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
         }
         await openPane($, { tab: 'tasks', task: t.id })
-        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, b.archived_done))
+        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done))
       }
       case 'approve':
       case 'reject': {

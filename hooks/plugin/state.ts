@@ -106,6 +106,8 @@ export const S = {
   rejecting: null as { task: string; reason: string } | null,
   /** the role pick list on an open task in the board panel: the task and the role names; null when it isn't shown */
   rolePick: null as { task: string; options: string[] } | null,
+  /** which try's report the open task shows (its try number); null = the latest */
+  reportTry: null as { task: string; try: number } | null,
   sayTimer: null as { cancel(): void } | null,
   saying: false,
   /** how this machine speaks: a command that takes the text last, or null for silence (found once) */

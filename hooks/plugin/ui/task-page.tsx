@@ -1,9 +1,10 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys } from '../../board'
-import { changesText, changedFiles } from '../review'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, taskReports } from '../../board'
+import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
+import { path } from '../store'
 import { tellLead } from '../tell'
 import { runTool, when } from '../tools'
 import type { PaneParts } from './parts'
@@ -53,11 +54,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       </Box>
     ) : null
   if (inReview && S.diffOpen?.task === t.id) {
-    // The changes themselves: the diff against the merge base, colored line by line.
+    // The changes themselves: the folder as it is now (the owner's edits too) against the merge base, colored line by line.
     const d = S.diffOpen
-    const got = await changesText($, target, t, d.file).then(
-      x => ({ lines: cutDiff(x, t.id, DIFF_LINES, d.file, S.N.name), error: '' }),
-      (err: Error) => ({ lines: [] as string[], error: err.message }),
+    const got = await folderDiff($, target, t, [], d.file).then(
+      x => ({ lines: cutDiff(x.text, t.id, DIFF_LINES, d.file, S.N.name), error: '', mine: x.edits.length > 0 }),
+      (err: Error) => ({ lines: [] as string[], error: err.message, mine: false }),
     )
     const kinds = diffKinds(got.lines)
     return (
@@ -69,6 +70,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               {mark.review} {word.review}
             </Text>
             <Text color={C('subtle')}> · changes in {d.file || 'all files'}</Text>
+            {got.mine ? <Text color={C('warning')}> {YOUR_EDITS}</Text> : null}
           </Text>
           <Text bold color={C('text')}>
             {t.title}
@@ -166,6 +168,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     </Text>
   )
   const rows = detailRows(t, { roles: S.roles, all: v.tasks, when, nowMs: Date.now(), archivedDone: v.archived_done })
+  // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
+  const reports = taskReports(t)
+  if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
+  const picked = S.reportTry ? reports.findIndex(r => r.try === S.reportTry!.try) : -1
+  const at = picked >= 0 ? picked : reports.length - 1
+  const shown = reports[at]
+  const reportBody = shown ? await $.fs.read(path(shown.file)).then(x => String(x), () => null) : null
+  const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
@@ -224,7 +234,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
 
       {changes && (
         <Box flexDirection="column">
-          {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})`)}
+          {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})${changes.files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}`)}
+          <Text color={C('subtle')}>  folder: {S.N.dir}/worktrees/{t.id} · edit files there, then approve (the tests run again)</Text>
           {changes.error ? <Text color={C('error')}>  Could not read the changes: {changes.error}</Text> : null}
           {!changes.error && !changes.files.length ? <Text color={C('subtle')}>  no changes</Text> : null}
           {changes.files.map(f => (
@@ -238,6 +249,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
                   <Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text>
                 </Text>
               )}
+              {f.edited ? <Text color={C('warning')}>  edited by you</Text> : null}
             </Button>
           ))}
           <Text color={C('subtle')}>  Enter on a file shows its diff · d all files</Text>
@@ -258,7 +270,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             onSubmit={value =>
               act(async () => {
                 if (!value.trim()) return
-                await runTool($, 'change', { task: t.id, details: `${t.details}\n\nOwner's answer to "${t.question ?? ''}": ${value.trim()}` })
+                await runTool($, 'change', { task: t.id, answer: value.trim() })
                 tellLead($, `The owner answered ${t.id} on the board: "${value.trim()}". I put it into the task and sent it back to work.`)
               })()
             }
@@ -278,6 +290,27 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
+      {(reports.length > 0 || t.attempts > 0) && (
+        <Box flexDirection="column">
+          {heading(shown ? `Report (try ${shown.try}${reports.length > 1 ? `, ${at + 1} of ${reports.length}` : ''})` : 'Report')}
+          {!shown ? <Text color={C('subtle')}>  no saved report</Text> : null}
+          {shown ? <Text color={C('subtle')}>  {shown.file}</Text> : null}
+          {shown && reportBody === null ? <Text color={C('error')}>  Could not read the report file.</Text> : null}
+          {reportBody !== null
+            ? reportBody
+                .trimEnd()
+                .split('\n')
+                .flatMap((l, i) => (l.trim() ? wrapSegs([{ text: l, color: 'text' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `report-${i}-${j}`)) : [<Text key={`report-${i}`}> </Text>]))
+            : null}
+          {reports.length > 1
+            ? buttonRows(
+                reports.map((r, i) => <Button key={`report-try-${r.try}`} label={`${i === at ? '● ' : ''}Try ${r.try}${r.try <= 9 ? ` (${r.try})` : ''}`} hotkey={r.try <= 9 ? String(r.try) : undefined} onPress={pickReport(r.try)} />),
+                'report-buttons',
+              )
+            : null}
+        </Box>
+      )}
+
       {(t.runs?.length ?? 0) > 0 && (
         <Box flexDirection="column">
           {heading('Runs (time and cost)')}
@@ -288,7 +321,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      <Box flexDirection="column">{keyLines(taskKeys(t.status, !!agentId), 'task-keys')}</Box>
+      <Box flexDirection="column">{keyLines(taskKeys(t.status, !!agentId, reports.map(r => r.try)), 'task-keys')}</Box>
     </Box>
   )
 }

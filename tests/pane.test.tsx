@@ -237,7 +237,7 @@ test('the list goes: NEEDS YOU, then doing and to do as one untitled list, then 
   await ui.unmount()
 })
 
-test('the Done row shows the count and, when it fits, the task that finished last, with its day', async ($, on) => {
+test('the Done row shows just the count, at any width', async ($, on) => {
   const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
   stateOf(on, {
     view: {
@@ -256,21 +256,12 @@ test('the Done row shows the count and, when it fits, the task that finished las
       },
     },
   })
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
-  const head = await ui.find({ key: 'day:done' })
-  expect(head?.text).toBe('  ▸ Done     3   last today: T-2 Task page: collapse the Details rows')
-  expect((await ui.find({ type: 'Text', text: /^   last today: T-2/ }))?.props.color).toBe('subtle')
-  await ui.unmount()
-  // a narrow panel cuts the title
-  const narrow = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const cut = (await narrow.find({ key: 'day:done' }))?.text ?? ''
-  expect(cut).toMatch(/^  ▸ Done     3   last today: T-2 .+…$/)
-  expect(cut.length).toBeLessThanOrEqual(50)
-  await narrow.unmount()
-  // too narrow for a title: just the count
-  const tiny = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
-  expect((await tiny.find({ key: 'day:done' }))?.text).toBe('  ▸ Done     3')
-  await tiny.unmount()
+  for (const cols of [80, 50, 30]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: cols }, surface: 'terminal' })
+    expect((await ui.find({ key: 'day:done' }))?.text).toBe('  ▸ Done     3')
+    expect(await ui.find({ type: 'Text', text: /last today/ })).toBeUndefined()
+    await ui.unmount()
+  }
 })
 
 test('with nothing to do, need or run, two subtle "All clear" lines sit above the folded groups', async ($, on) => {
@@ -809,8 +800,8 @@ test('the task page shows one labelled row per fact, From and Why on their own r
     const row = L.find(l => l.startsWith(`${label}:`))
     expect(row).toBeDefined()
     // every value starts in the same column
-    expect(row!.slice(0, 9).trim()).toBe(`${label}:`)
-    expect(row![9]).not.toBe(' ')
+    expect(row!.slice(0, 10).trim()).toBe(`${label}:`)
+    expect(row![10]).not.toBe(' ')
   }
   expect(L.some(l => /^From:\s+owner$/.test(l))).toBe(true)
   expect(L.some(l => /^Why:\s+Scouts mostly find/.test(l))).toBe(true)
@@ -818,9 +809,9 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   // the request in full, in quotes, wrapped within the panel, never cut mid-word
   const at = L.findIndex(l => l.startsWith('Request:'))
   const seen = L.findIndex(l => l.startsWith('Seen:'))
-  const wrapped = L.slice(at, seen).map(l => l.slice(9))
+  const wrapped = L.slice(at, seen).map(l => l.slice(10))
   expect(wrapped.length).toBeGreaterThan(1)
-  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(9)))).toBe(true)
+  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(10)))).toBe(true)
   expect(wrapped.join(' ')).toBe(`“${request}”`)
   for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
   expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
@@ -917,7 +908,7 @@ test('while symcc is off its tools answer that it is off and leave the board alo
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
 
-test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
+test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one doing / to do list with extras, aligned folded rows, a short hint', async ($, on) => {
   const now = Date.now()
   const iso = (m: number) => new Date(now + m * 60_000).toISOString()
   const tasks = [
@@ -933,12 +924,19 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
   for (const w of [40, 60, 100]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    // the strip sits right above the strong rule; the next scout only when it fits
-    const strip = texts.findIndex(t => /^symcc · review · 2\/3 workers · 2 scouts/.test(t))
+    // the strip is the line right under the banner's counts line, above the mode line and the rule; it leaves
+    // out the name and mode (the banner shows them) and the next scout goes first when it does not fit
+    const strip = texts.findIndex(t => /^2\/3 workers · 2 scouts/.test(t))
     expect(strip).toBeGreaterThan(-1)
-    expect(/^━+$/.test(texts[strip + 1] ?? '')).toBe(true)
+    const counts = texts.findIndex(t => /^2 doing · /.test(t))
+    expect(counts).toBeGreaterThan(-1)
+    expect(counts).toBeLessThan(strip)
+    for (const t of texts.slice(counts + 1, strip)) expect(texts[counts]).toContain(t)
+    expect(texts[strip + 1]).toMatch(/review/)
+    expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(strip)
+    expect(texts.filter(t => /workers · \d+ scout/.test(t)).length).toBe(1)
     expect(texts[strip]!.length).toBeLessThanOrEqual(w)
-    if (w >= 100) expect(texts[strip]).toBe('symcc · review · 2/3 workers · 2 scouts (next: secrets in 38m)')
+    expect(texts[strip]).toBe(w >= 60 ? '2/3 workers · 2 scouts (next: secrets in 38m)' : '2/3 workers · 2 scouts')
     // every task row fits the panel; the hint is whole and fits too
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
@@ -949,8 +947,7 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
     const backlog = (await ui.find({ key: 'day:backlog' }))!.text
     const done = (await ui.find({ key: 'day:done' }))!.text
     expect(backlog).toBe('  ▸ Backlog   3')
-    expect(done.startsWith('  ▸ Done     12')).toBe(true)
-    if (w >= 60) expect(done).toMatch(/^  ▸ Done     12   last today: T-10 Work 0$/)
+    expect(done).toBe('  ▸ Done     12')
     expect(await ui.find({ key: 'day:dropped' })).toBeUndefined()
     await ui.unmount()
   }
@@ -976,7 +973,7 @@ test('the Tasks view: a status strip on top, NEEDS YOU then one doing / to do li
 
 const STRIP_CASES = [
   ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
-  ['the board is in mode off', { mode: 'off' }, /^symcc · off · 0\/3 workers · 1 scout$/],
+  ['the board is in mode off', { mode: 'off' }, /^0\/3 workers · 1 scout$/],
 ] as const
 for (const [when, extra, want] of STRIP_CASES)
   test(`the status strip when ${when}: a warning, and no next scout`, async ($, on) => {
@@ -999,9 +996,9 @@ test('a task in review on a narrow or wide panel shows every key and every butto
     expect(lines.join(' · ')).toBe('a approve · x reject · d show changes · ↑↓ scroll · b back')
     if (w === 30) expect(lines).toEqual(['a approve · x reject', 'd show changes · ↑↓ scroll', 'b back'])
     if (w === 80) expect(lines).toEqual(['a approve · x reject · d show changes · ↑↓ scroll · b back'])
-    // the keys are bold, the words subtle
+    // the keys are bold, the words in the inactive color
     expect((await ui.find({ type: 'Text', text: /^a$/ }))?.props.bold).toBe(true)
-    expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('subtle')
+    expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('inactive')
     // every action button is there, in the same order as before
     const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key))
     expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review'])
@@ -1219,4 +1216,69 @@ test('archived tasks are only counted on the Done row, and /symcc-task still fin
   expect(shown).toMatch(/An old one/)
   expect(String((await $.command.run({ command: 'symcc-approve', args: 'T-5' })).text)).toBe('T-5 is archived.')
   expect(String((await $.command.run({ command: 'symcc-task', args: 'T-6' })).text)).toBe('T-6 is not on the board.')
+})
+
+// ---------------- each try's report on the task page ----------------
+
+const R1 = '.symcc/reports/T-1-try-1.md'
+const R2 = '.symcc/reports/T-1-try-2.md'
+const reportedTask = (extra: Record<string, unknown> = {}) =>
+  task('T-1', 'done', 'Explore the market', { attempts: 2, runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '', report: R2 }], history: ['try 1: first go → tests failed', 'try 2: second go → merged into main'], ...extra })
+
+test('the task page shows the latest try\'s full report, and a try\'s number key shows that try\'s report', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-1.md': 'First try report: the tests failed.\n', '/reports/T-1-try-2.md': `Second try report.\n\n${'A long line of words that must wrap. '.repeat(6)}\nLast line.\n` })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask()], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  let L = await lines(ui)
+  expect(L.some(l => /^▍Report \(try 2, 2 of 2\)$/.test(l))).toBe(true)
+  expect(L.some(l => /Second try report\./.test(l))).toBe(true)
+  expect(L.some(l => /Last line\./.test(l))).toBe(true)
+  expect(L.some(l => /First try report/.test(l))).toBe(false)
+  // wrapped to the panel width
+  for (const l of L.filter(x => /A long line/.test(x))) expect(l.length).toBeLessThanOrEqual(50)
+  expect(L.some(l => /1-2 a try's report/.test(l))).toBe(true)
+  expect((await ui.find({ key: 'report-try-1' }))?.props.hotkey).toBe('1')
+  expect((await ui.find({ key: 'report-try-2' }))?.props.label).toBe('● Try 2 (2)')
+  await ui.press({ key: 'report-try-1' })
+  L = await lines(ui)
+  expect(L.some(l => /^▍Report \(try 1, 1 of 2\)$/.test(l))).toBe(true)
+  expect(L.some(l => /First try report: the tests failed\./.test(l))).toBe(true)
+  expect(L.some(l => /Second try report/.test(l))).toBe(false)
+  expect((await ui.find({ key: 'report-try-1' }))?.props.label).toBe('● Try 1 (1)')
+  await ui.press({ key: 'report-try-2' })
+  expect((await lines(ui)).some(l => /Second try report\./.test(l))).toBe(true)
+  await ui.unmount()
+})
+
+test('an old task without saved reports still opens and says "no saved report"', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Old one', { attempts: 1, runs: [{ started: '', ended: '' }], history: ['try 1: did it → merged into main'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L.some(l => /^▍Report$/.test(l))).toBe(true)
+  expect(L.some(l => /no saved report/.test(l))).toBe(true)
+  expect(await ui.find({ key: 'report-try-1' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a research task shows its note as a row in Details', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-2.md': 'Wrote it.\n', '/reports/T-1-try-1.md': 'Tried.\n' })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await lines(ui)).some(l => /^Research:\s+docs\/research\/market\.md$/.test(l))).toBe(true)
+  await ui.unmount()
+})
+
+test('/symcc-task shows the latest report, or its first 40 lines and where the full one is', async ($, on) => {
+  const many = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
+  const board = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', tasks: [reportedTask({ research_notes: ['docs/research/market.md'] })] }
+  fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null, '/reports/T-1-try-1.md': 'Old.\n', '/reports/T-1-try-2.md': many })
+  stateOf(on, {})
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: undefined }))
+  const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
+  expect(text).toContain(`Report (try 2, ${R2}):`)
+  expect(text).toContain('  line 40')
+  expect(text).not.toContain('line 41\n')
+  expect(text).toContain(`… (20 more lines) full report: ${R2}`)
+  expect(text).toContain('Note: docs/research/market.md')
 })

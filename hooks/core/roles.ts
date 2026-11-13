@@ -73,7 +73,7 @@ export function mergeRoles(builtIn: RoleDef[], project: RoleDef[]): RoleDef[] {
 }
 
 /** The roles that come with the plugin (one file each in its roles/ folder). */
-export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refactor', 'security', 'tester']
+export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refactor', 'researcher', 'security', 'tester']
 
 /** Roles that were built in before and are gone now, and the role a task with one gets when it starts. */
 export const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: DEFAULT_ROLE, frontend: DEFAULT_ROLE }
@@ -147,6 +147,6 @@ export function roleSection(r: RoleDef | undefined): string {
 /** The lead's paragraph about roles: each one with its description, and how to pick. */
 export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): string {
   const list = roles.length ? roles.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
-  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.
+  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Use researcher for "find out whether / how ..." tasks whose result is a note (usually docs/research/<topic>.md), not code. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.
 - One task, one role. When a request needs several kinds of work (e.g. code, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
 }

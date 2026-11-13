@@ -21,6 +21,18 @@ export function addCommits(runs: SymccRun[] | undefined, shas: readonly string[]
   return out
 }
 
+/**
+ * The newest commit saved for a task (the last one of its newest try that saved any): the
+ * commit its folder was at when it went to review. Undefined when none was saved.
+ */
+export function reviewedCommit(t: { runs?: SymccRun[] }): string | undefined {
+  for (const r of [...(t.runs ?? [])].reverse()) {
+    const c = (Array.isArray(r?.commits) ? r.commits : []).filter(isSha)
+    if (c.length) return c[c.length - 1]
+  }
+  return undefined
+}
+
 /** One line of text for a commit message: control characters and line breaks become spaces, cut to `n` (with "…"). */
 export function oneLine(s: unknown, n: number): string {
   // eslint-disable-next-line no-control-regex

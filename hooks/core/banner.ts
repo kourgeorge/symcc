@@ -106,7 +106,7 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
     out.push({ ...p, text: p.text.slice(0, left) })
     left -= p.text.length
   }
-  if (room > 0) out.push({ text: '…', tone: out[out.length - 1]?.tone ?? 'dim' })
+  if (room > 0) out.push({ text: '…', tone: out[out.length - 1]?.tone ?? 'plain' })
   return out
 }
 
@@ -117,21 +117,23 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
  * The separator under it is `bannerRule(width)`.
  */
 export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME): BannerLine[] {
+  // Facts are drawn in the normal text color so they read well on light and dark themes;
+  // the folder, branch and counts are bold, and only the " · " separators are dim.
   const sep: BannerPart = { text: ' · ', tone: 'dim' }
   const join = (groups: BannerPart[][]) => groups.flatMap((g, i) => (i ? [sep, ...g] : g))
-  const dim = (text: string): BannerPart[] => [{ text, tone: 'dim' }]
+  const fact = (text: string, bold?: boolean): BannerPart[] => [bold ? { text, tone: 'plain', bold } : { text, tone: 'plain' }]
   const folder = folderName(root)
   const l1: BannerPart[] = [{ text: namesFor(name).boardName, tone: 'accent', bold: true }, ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : [])]
   const l2 = join([
-    ...(root ? [dim(shortHome(root, home))] : []),
-    b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : dim(b.target_branch),
-    dim(driving ? 'this session drives' : 'driven by another session'),
+    ...(root ? [fact(shortHome(root, home), true)] : []),
+    b.branch_note ? [{ text: b.branch_note, tone: 'warning' as const }] : fact(b.target_branch, true),
+    fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
-    b.test_commands.length ? dim(`tests: ${b.test_commands.join(' && ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
-    dim(`${b.max_parallel} at once`),
-    dim(`${b.max_minutes} min`),
-    dim(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
+    b.test_commands.length ? fact(`tests: ${b.test_commands.join(' && ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
+    fact(`${b.max_parallel} at once`),
+    fact(`${b.max_minutes} min`),
+    fact(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
   ])
   const texts = [l1, l2, l3]
   const gone = archivedOf(b).done
@@ -139,7 +141,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog').replace(/^(\d+) done$/, `$1 done${gone ? ` ${archivedNote(gone)}` : ''}`))
     if (gone && !b.tasks.some(t => t.status === 'done')) counts.push(`${gone} done (archived)`)
     const t = boardTotal(b, nowMs)
-    texts.push(dim([...counts, ...(t.tries ? [fmtTotal(t)] : [])].join(' · ')))
+    texts.push(join([...counts.map(c => fact(c, true)), ...(t.tries ? [fact(fmtTotal(t))] : [])]))
   }
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW
