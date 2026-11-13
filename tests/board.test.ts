@@ -861,6 +861,10 @@ test('reject sends a task in review back to "todo" with the reason in its histor
   expect(x.history.length).toBe(2)
   expect(x.test_tries).toBe(0)
   expect(ready(r).map(y => y.id)).toEqual([t.id])
+  const c = rejectTask(patchTask(b, t.id, { conflict_tries: 2, merge_main: true }, T), t.id, 'try again', T).tasks[0]!
+  expect(c.conflict_tries).toBe(0)
+  expect(c.merge_main).toBe(false)
+  expect(onConflict(c)).toBe('retry')
   expect(() => rejectTask(b, t.id, '  ', T)).toThrow()
 })
 

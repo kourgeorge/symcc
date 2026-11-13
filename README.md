@@ -367,7 +367,8 @@ instructions below. `every_minutes: 0` means it runs only on demand ("run now" o
 or `/symcc-scout <name>`), never on the timer. A value that is not a whole number (like `-5`)
 also means only on demand, and the scout shows a warning until you fix it. See
 [scouts](docs/guide.md#scouts). A task is `todo`, `doing`,
-`waiting` (for your answer), `review`, `paused`, `failed`, `done` (merged), `dropped` or
+`waiting` (for your answer), `review`, `paused`, `failed`, `done` (merged, final), `dropped`
+(never runs on its own; Retry brings it back to todo on purpose) or
 `backlog` (parked; never starts until you move it to todo). See
 [a task's life](docs/guide.md#a-tasks-life).
 

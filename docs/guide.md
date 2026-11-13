@@ -67,7 +67,8 @@ picks up again next time.
    │            (merge) or reject with a reason (back to todo, fresh worker)
    ├── waiting  the lead asked YOU something; your answer sends it back to work
    ├── paused   stopped on purpose; "resume" sends it back
-   ├── dropped  cancelled; stays on the list, never runs
+   ├── dropped  cancelled; stays on the list and never runs on its own;
+   │            retry (r on its page, or ask the lead) brings it back to todo
    └── backlog  a parked idea or unclear work; never starts until you move it
                 to todo ("move T-5 to todo"); "stash" sends a todo, paused or
                 failed task back here
@@ -81,8 +82,8 @@ picks up again next time.
 | `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
 | `paused` | Stopped on purpose, until resumed |
 | `failed` | It could not be finished; the lead decides what next |
-| `done` | Merged into your branch |
-| `dropped` | Cancelled |
+| `done` | Merged into your branch. This is final |
+| `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog · N" group |
 
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
@@ -428,8 +429,11 @@ start with `symcc/` are never touched.
 - **Big tasks can run out of time.** A task that touches a lot of code may need more than
   45 minutes; raise `max_minutes` or split the task.
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
-- **`dropped` is the end.** There is no delete; a dropped task stays on the list but
-  never runs again.
+- **A dropped task never runs on its own.** There is no delete; a dropped task stays on
+  the list, and nothing automatic (retries after failed tests, a finishing check) starts
+  it again. To bring it back on purpose, press `r` (Retry) on its page or ask the lead to
+  retry it: it goes back to `todo`, with "brought back from dropped" in its history.
+  `done` is final: a done task can't be retried or sent a question.
 
 ---
 

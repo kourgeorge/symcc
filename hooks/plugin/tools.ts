@@ -234,8 +234,8 @@ export const TOOLS = () => [
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into the target branch by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
-  { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'ask', description: 'Make a task wait for the owner with a question.', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
+  { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. Not for a done task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'ask', description: 'Make a task wait for the owner with a question. Not for a done or dropped task (retry it first).', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
@@ -337,12 +337,21 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const t = await taskOrThrow($, id)
       if (t.status === 'doing') return `${t.id} is already running`
       if (t.status === 'done') return `${t.id} is already done`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'queued', test_tries: 0 }, now()))
+      if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
+      // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
+      const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
+      const fromDropped = t.status === 'dropped'
+      await change($, x => {
+        const cur = find(x, t.id)
+        const history = fromDropped && cur ? [...cur.history, 'brought back from dropped'] : undefined
+        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, conflict_tries: 0, merge_main: clashed, ...(history ? { history } : {}) }, now())
+      })
       void pump($)
-      return `${t.id} queued`
+      return fromDropped ? `${t.id} brought back from dropped and queued` : `${t.id} queued${clashed ? '; its new worker merges the latest main first' : ''}`
     }
     case 'ask': {
       const t = await taskOrThrow($, id)
+      if (t.status === 'done' || t.status === 'dropped') throw new Error(`${t.id} is ${t.status}; retry it first if it needs more work`)
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you' }, now()))

@@ -54,13 +54,13 @@ export function reviewTask(b: Board, id: string, what: 'approve' | 'reject'): Bo
 
 /**
  * The owner rejected task `id` (in "review") because of `reason`: it goes back to "todo" with the
- * reason in its note and history, so the next worker sees it; its test retries start over.
+ * reason in its note and history, so the next worker sees it; its test and merge-main retries start over.
  */
 export function rejectTask(b: Board, id: string, reason: string, now: string): Board {
   const t = reviewTask(b, id, 'reject')
   const why = clean(reason, 1000)
   if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
-  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
 }
 
 // ---------------- looking at a task's changes (review) ----------------

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict } from '../hooks/board'
 import { checkAndMerge } from '../hooks/plugin/review'
 import { S, leadQueue, workers } from '../hooks/plugin/state'
 import { workerFinished } from '../hooks/plugin/workers'
@@ -624,4 +624,80 @@ test('a drop seen only after the merge keeps the task done, with a line saying t
   expect(t.status).toBe('done')
   expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
   expect(t.history.at(-1)).toBe('try 1: it was dropped while being merged, too late: the work was already merged, so it stays done')
+})
+
+// ---------------- retry and ask on dropped, done and clashed tasks ----------------
+
+test('retry brings a dropped task back to "todo" on purpose, with a history line', async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { status: 'dropped', note: 'not needed', history: ['created by the lead'] })
+  await saveBoard(w.$, b)
+  const out = await runTool(w.$, 'retry', { task: 'T-1' })
+  expect(out).toBe('T-1 brought back from dropped and queued')
+  const t = find(await load(w.$), 'T-1')!
+  expect(['todo', 'doing']).toContain(t.status)
+  expect(t.history).toContain('brought back from dropped')
+})
+
+test('retry refuses a done task', async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { status: 'done' })
+  await saveBoard(w.$, b)
+  expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 is already done')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+})
+
+test('ask refuses a done or dropped task and leaves it as it is', async () => {
+  for (const status of ['done', 'dropped'] as const) {
+    const w = world()
+    const [b] = boardWith('auto', [], { status })
+    await saveBoard(w.$, b)
+    const err = await runTool(w.$, 'ask', { task: 'T-1', question: 'more?' }).then(() => null, (e: Error) => e.message)
+    expect(err).toBe(`T-1 is ${status}; retry it first if it needs more work`)
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe(status)
+    expect(t.question ?? null).toBe(null)
+  }
+})
+
+test('a task dropped while its branch clashes with main does not go back to "todo" for a merge-main try', async () => {
+  const w = world({ upToDate: false, conflict: true })
+  const [b] = boardWith('auto', [])
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  let done = false
+  w.onRun(async cmd => {
+    if (done || !/ git /.test(cmd)) return
+    done = true
+    await runTool(w.$, 'drop', { task: 'T-1' })
+  })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change', false)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('dropped')
+  expect(t.conflict_tries ?? 0).toBe(0)
+  expect(t.merge_main ?? false).toBe(false)
+})
+
+test('retry after a clash with main gives the task its merge-main tries again, starting with a merge', async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main, still after 2 tries to merge it in', conflict_tries: 2, merge_main: false })
+  await saveBoard(w.$, b)
+  expect(onConflict(find(await load(w.$), 'T-1')!)).toBe('fail')
+  const out = await runTool(w.$, 'retry', { task: 'T-1' })
+  expect(out).toBe('T-1 queued; its new worker merges the latest main first')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.conflict_tries).toBe(0)
+  expect(t.merge_main).toBe(true)
+  expect(onConflict(t)).toBe('retry')
+})
+
+test('retry after a failure that was not a clash resets the merge-main tries but does not ask for a merge', async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'tests failed', conflict_tries: 1, merge_main: false })
+  await saveBoard(w.$, b)
+  expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 queued')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.conflict_tries).toBe(0)
+  expect(t.merge_main ?? false).toBe(false)
 })
