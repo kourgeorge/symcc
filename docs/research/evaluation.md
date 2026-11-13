@@ -211,3 +211,5 @@ driver script, and a small log parser that sums dollars per model across the ses
 `subagents/` folder (counting each `message.id` once). Then run 2 runs each of plain Claude Code and
 symcc. A separate small task could make `/symcc-stats` report lead and scout usage and a dollar
 estimate, so symcc's own numbers can be checked against the logs.
+
+Follow-up: the pilot harness is in [eval/](../../eval/README.md) (task T-141).

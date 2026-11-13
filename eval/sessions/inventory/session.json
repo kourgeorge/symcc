@@ -1,0 +1,129 @@
+{
+  "name": "inventory",
+  "about": "Pilot project session: a tiny Python stock list (library + CLI). 10 owner requests: some independent, some depending on earlier ones, several sharing inv/store.py, inv/cli.py or inv/report.py, one vague request (R08) and one change of mind (R09).",
+  "repo": "repo",
+  "hidden_tests": "hidden",
+  "test_command": ["python3", "-m", "unittest", "discover", "-s", "tests", "-t", "."],
+  "hidden_test_command": ["python3", "-m", "unittest", "-q", "{test_module}"],
+  "lint_command": ["python3", "-m", "pyflakes", "inv"],
+  "lint_fallback_command": ["python3", "-m", "compileall", "-q", "inv"],
+  "type_command": ["python3", "-m", "mypy", "--ignore-missing-imports", "inv"],
+  "budget": {
+    "minutes_per_run": 90,
+    "billed_equivalent_tokens_per_run": 40000000,
+    "max_budget_usd_per_call": 5
+  },
+  "settle": {
+    "poll_every_min": 2,
+    "max_min": 30,
+    "message": "Status check from the owner: is everything I asked for finished and merged? Reply DONE if so."
+  },
+  "setup": {
+    "plain": [],
+    "symcc": [
+      "Set the test command to `python3 -m unittest discover -s tests -t .` and use auto mode."
+    ]
+  },
+  "requests": [
+    {
+      "id": "R01",
+      "send_at_min": 0,
+      "text": "Items need a price. Let `Inventory.add(name, qty=1, price=None)` take an optional unit price (a float; the last price given for an item wins, items with no price count as 0), add `Inventory.price(name)` and `Inventory.total_value()` which is the sum of qty x price over all items.",
+      "after": [],
+      "files": ["inv/store.py"],
+      "hidden_test": "test_r01_price.py"
+    },
+    {
+      "id": "R02",
+      "send_at_min": 0,
+      "text": "Removing more than we have makes the count go negative. `remove` should raise ValueError in that case and leave the count as it was. Removing the last one should take the item off the list completely.",
+      "after": [],
+      "files": ["inv/store.py"],
+      "hidden_test": "test_r02_remove.py"
+    },
+    {
+      "id": "R03",
+      "send_at_min": 5,
+      "text": "Add `Inventory.save(path)` and a classmethod `Inventory.load(path)` that write and read the stock list as JSON. Prices must survive a save and load too.",
+      "after": ["R01"],
+      "files": ["inv/store.py"],
+      "hidden_test": "test_r03_save_load.py"
+    },
+    {
+      "id": "R04",
+      "send_at_min": 5,
+      "text": "The `list` command should print items sorted by name, one per line as `name: qty`.",
+      "after": [],
+      "files": ["inv/cli.py"],
+      "hidden_test": "test_r04_list_sorted.py"
+    },
+    {
+      "id": "R05",
+      "send_at_min": 10,
+      "text": "Add a `value` command to the CLI that prints the total stock value with two decimals, like `total: 12.50`. The `add` command should take the price as an option: `add pen 3 --price 1.5`.",
+      "after": ["R01"],
+      "files": ["inv/cli.py"],
+      "hidden_test": "test_r05_value_cmd.py"
+    },
+    {
+      "id": "R06",
+      "send_at_min": 10,
+      "text": "Item names should not care about upper or lower case: `Apple` and `apple` are the same item. Keep the name as it was first added for display.",
+      "after": [],
+      "files": ["inv/store.py"],
+      "hidden_test": "test_r06_case.py"
+    },
+    {
+      "id": "R07",
+      "send_at_min": 15,
+      "text": "New module `inv/report.py` with `low_stock(inv, threshold=5)`: the names of items with fewer than `threshold` in stock, sorted by name.",
+      "after": [],
+      "files": ["inv/report.py"],
+      "hidden_test": "test_r07_low_stock.py"
+    },
+    {
+      "id": "R08",
+      "send_at_min": 15,
+      "text": "The CLI forgets everything between runs. Make it remember.",
+      "after": ["R03"],
+      "files": ["inv/cli.py"],
+      "hidden_test": "test_r08_cli_file.py",
+      "vague": true
+    },
+    {
+      "id": "R09",
+      "send_at_min": 20,
+      "text": "Change of mind on the list output: show the price too, as `name: qty @ price` with the price to two decimals (e.g. `pen: 3 @ 1.50`). Keep it sorted by name.",
+      "after": ["R04", "R05"],
+      "files": ["inv/cli.py"],
+      "hidden_test": "test_r09_list_price.py",
+      "change_of_mind": true
+    },
+    {
+      "id": "R10",
+      "send_at_min": 20,
+      "text": "Add `csv_export(inv)` to `inv/report.py`: returns CSV text with the header `name,qty,price` and one row per item, sorted by name.",
+      "after": ["R01", "R07"],
+      "files": ["inv/report.py"],
+      "hidden_test": "test_r10_csv.py"
+    }
+  ],
+  "answers": [
+    {
+      "keywords": ["file", "where", "path", "store", "save", "persist", "remember", "location", "json"],
+      "for": ["R08"],
+      "answer": "Add a `--file PATH` option to the CLI (before the command, e.g. `inv --file stock.json add pen 2`), default `inventory.json` in the current folder. Load it at the start if it exists and save it after `add` and `remove`. `main(argv)` with no `inv` given should use that file."
+    },
+    {
+      "keywords": ["price", "format", "decimal", "missing price", "no price"],
+      "for": ["R09", "R05"],
+      "answer": "Prices print with two decimals; an item with no price shows 0.00."
+    },
+    {
+      "keywords": ["case", "upper", "lower", "display", "first added"],
+      "for": ["R06"],
+      "answer": "Match names case-insensitively; show the spelling used the first time the item was added."
+    }
+  ],
+  "default_answer": "Decide yourself, do what you think is best."
+}
