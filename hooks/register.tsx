@@ -12,7 +12,7 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText } from './board'
+import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, isWorkerType } from './board'
 import { dataDir } from './name'
 import { findArchived } from './plugin/archive'
 import { gitReady } from './plugin/git'
@@ -33,17 +33,20 @@ import { cleanLeftoverTmp, check, pump, workerFinished, setSymcc, setBoardMode }
 
 // ---------------- registration ----------------
 
-/** Registers the worker and scout agent types, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */
+/** Registers the worker agent types (base, and one per set of extra role tools), the scout agent type, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */
 export async function registerAll($: $) {
   const ok = (p: Promise<unknown>) => p.catch(() => undefined)
-  await ok($.agent.register({
-    name: 'worker',
-    description: `${S.N.name} worker: builds one task from the ${S.N.name} board in its own worktree. Started by ${S.N.name} only.`,
-    prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary.`,
-    tools: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
-    background: true,
-    permissionMode: 'acceptEdits',
-  }))
+  // One worker type for the base tools, and one more per set of extra tools a role can ask for
+  // (e.g. "worker-web" for WebSearch and WebFetch); a task is spawned as the type its role needs.
+  for (const w of workerAgentTypes())
+    await ok($.agent.register({
+      name: w.suffix,
+      description: `${S.N.name} worker${w.suffix === 'worker' ? '' : ` (with ${w.tools.slice(BASE_WORKER_TOOLS.length).join(', ')})`}: builds one task from the ${S.N.name} board in its own worktree. Started by ${S.N.name} only.`,
+      prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary.${w.suffix === 'worker' ? '' : ` ${WEB_SAFETY_LINE}`}`,
+      tools: w.tools,
+      background: true,
+      permissionMode: 'acceptEdits',
+    }))
   await ok($.agent.register({
     name: 'scout',
     description: `${S.N.name} scout: does what its scout file asks (reading the project, shell commands, the web) and reports to the lead. Started by ${S.N.name} only.`,
@@ -162,7 +165,7 @@ export const register: Register = on => {
   // (The name is only known once a hook runs, so these match inside rather than by a filter.)
   on('agent.offer', ($, e, next) => {
     useName($)
-    return e.agent === S.N.worker || e.agent === S.N.scout ? { isOffered: false } : next(e)
+    return isWorkerType(e.agent, S.N.name) || e.agent === S.N.scout ? { isOffered: false } : next(e)
   })
 
   // One tool.call hook for every tool (the name is only known once a hook runs):

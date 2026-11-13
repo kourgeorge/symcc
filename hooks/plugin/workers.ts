@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, oldRoleSwap, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, missingBranchText, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, targetReady, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -85,7 +85,7 @@ export async function startWorker($: $, id: string) {
     let agentId: string
     try {
       const role = findRole(roles, roleOf(t))
-      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), subagentType: S.N.worker, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), subagentType: workerTypeFor(role, S.N.name), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
       if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
@@ -117,7 +117,8 @@ export async function startWorker($: $, id: string) {
 
 /** The agents of this session as $.agent.list() reports them; null if the list can't be read. */
 export async function agentsNow($: $): Promise<AgentInfo[] | null> {
-  return ((await $.agent.list().catch(() => null)) as AgentInfo[] | null) ?? null
+  const listed = (await $.agent.list().catch(() => null)) as AgentInfo[] | null
+  return listed ? asBaseWorkers(listed, S.N.name) : null
 }
 
 /** The workers this copy of the plugin started, as agents (they may not be listed yet). */
@@ -584,7 +585,8 @@ export const LIVE = new Set(['pending', 'running', 'waiting'])
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
 export async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
-  const agents = await $.agent.list().catch(() => [])
+  // Every worker type (worker, worker-web, ...) counts as a worker here.
+  const agents = asBaseWorkers(await $.agent.list().catch(() => []), S.N.name)
   // $.agent.list() names this session's agents only, but in case it ever lists another
   // session's too: never stop a worker whose task the live driver (another session) owns.
   const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(S.N.leadFile)).catch(() => null)
