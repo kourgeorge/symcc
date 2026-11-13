@@ -1,7 +1,7 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys } from '../../board'
-import { changesText, changedFiles } from '../review'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS } from '../../board'
+import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
 import { tellLead } from '../tell'
@@ -53,11 +53,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       </Box>
     ) : null
   if (inReview && S.diffOpen?.task === t.id) {
-    // The changes themselves: the diff against the merge base, colored line by line.
+    // The changes themselves: the folder as it is now (the owner's edits too) against the merge base, colored line by line.
     const d = S.diffOpen
-    const got = await changesText($, target, t, d.file).then(
-      x => ({ lines: cutDiff(x, t.id, DIFF_LINES, d.file, S.N.name), error: '' }),
-      (err: Error) => ({ lines: [] as string[], error: err.message }),
+    const got = await folderDiff($, target, t, [], d.file).then(
+      x => ({ lines: cutDiff(x.text, t.id, DIFF_LINES, d.file, S.N.name), error: '', mine: x.edits.length > 0 }),
+      (err: Error) => ({ lines: [] as string[], error: err.message, mine: false }),
     )
     const kinds = diffKinds(got.lines)
     return (
@@ -69,6 +69,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               {mark.review} {word.review}
             </Text>
             <Text color={C('subtle')}> · changes in {d.file || 'all files'}</Text>
+            {got.mine ? <Text color={C('warning')}> {YOUR_EDITS}</Text> : null}
           </Text>
           <Text bold color={C('text')}>
             {t.title}
@@ -224,7 +225,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
 
       {changes && (
         <Box flexDirection="column">
-          {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})`)}
+          {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})${changes.files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}`)}
+          <Text color={C('subtle')}>  folder: {S.N.dir}/worktrees/{t.id} · edit files there, then approve (the tests run again)</Text>
           {changes.error ? <Text color={C('error')}>  Could not read the changes: {changes.error}</Text> : null}
           {!changes.error && !changes.files.length ? <Text color={C('subtle')}>  no changes</Text> : null}
           {changes.files.map(f => (
@@ -238,6 +240,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
                   <Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text>
                 </Text>
               )}
+              {f.edited ? <Text color={C('warning')}>  edited by you</Text> : null}
             </Button>
           ))}
           <Text color={C('subtle')}>  Enter on a file shows its diff · d all files</Text>

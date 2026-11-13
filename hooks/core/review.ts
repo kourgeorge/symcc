@@ -65,8 +65,14 @@ export function rejectTask(b: Board, id: string, reason: string, now: string): B
 
 // ---------------- looking at a task's changes (review) ----------------
 
-/** One changed file from `git diff --stat`: its path, lines added and removed, or binary. */
-export type DiffFile = { file: string; added: number; removed: number; binary?: boolean }
+/** One changed file from `git diff --stat`: its path, lines added and removed, or binary; `edited`: the owner changed it by hand in the task's folder since review. */
+export type DiffFile = { file: string; added: number; removed: number; binary?: boolean; edited?: boolean }
+
+/** Said next to a task's changes when they include the owner's own edits in its folder. */
+export const YOUR_EDITS = '(includes your edits)'
+
+/** The history line of an approve after the owner edited files in the task's folder. */
+export const ownerEditedLine = (files: readonly string[]) => `owner edited files before approving: ${files.join(', ')}`
 
 /** Strips git's quoting of an unusual path ("a b\".txt" → a b".txt). */
 const unquote = (s: string) => (/^".*"$/.test(s) ? s.slice(1, -1).replace(/\\(.)/g, '$1') : s)

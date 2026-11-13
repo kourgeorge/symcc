@@ -160,13 +160,28 @@ The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) an
   nothing is merged; the task goes back to `todo` with your reason in its history, and a
   fresh worker redoes it with that reason in front of it.
 
+So there are three ways to change a task in review before it is merged:
+
+1. **Reject it with a reason**: a fresh worker redoes it (see above).
+2. **Ask the lead to change the task** ("T-5: also update the README"): the lead changes
+   what the task asks for, and it goes back to work.
+3. **Edit the files yourself** in its folder, `.symcc/worktrees/T-5`, then approve. Your
+   edits are committed as part of the task (same commit message) and its history gets a
+   line like `owner edited files before approving: a.ts, b.md`. The tests always run
+   again when you edited something. If they fail, nothing is merged: the task stays in
+   review with the test output, so you can fix the files and approve again.
+
+The diff (`d` on the task page, `/symcc-diff T-5`) shows the folder as it is now, your
+edits included, against your branch; it says `(includes your edits)` when there are some.
+
 Both only work on a task in `review`. Switching back to `auto` does not merge tasks
 already waiting; approve or reject each of them.
 
 You can also do it yourself:
 
 - **In the board panel**, tasks ready for review are listed near the top. Open one to see
-  the files it changed with `+`/`-` line counts. Press `d` (Show changes) for the whole
+  the files it changed with `+`/`-` line counts, and its folder (edit files there, then
+  approve). Press `d` (Show changes) for the whole
   diff, or pick a file for just that file's diff, with added lines in green and removed
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
   A very long diff is cut, with a note like `… 340 more lines (see /symcc-diff T-5)`.

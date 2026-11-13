@@ -151,7 +151,8 @@ The flow is **discovery → triage → implementation → review → merge**.
 4. **Checks.** symcc runs the scope check and the test gate. If the tests fail, automatic
    retries send the task to a new worker with the failing output.
 5. **Review.** In review mode the task waits. You look at the diff and approve it, or
-   reject it with a reason.
+   reject it with a reason. You can also edit its files in `.symcc/worktrees/T-x` and then
+   approve: your edits go in with the task, and the tests run again first.
 6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests and
    merges. The next tasks start, and the lead tells you each step.
 

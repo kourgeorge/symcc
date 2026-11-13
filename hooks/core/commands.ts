@@ -2,7 +2,7 @@
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { isMode, modeOf, normId } from './board-file'
-import { type DiffFile, statCount } from './review'
+import { type DiffFile, statCount, YOUR_EDITS } from './review'
 import { parseSettingsCommand, type SettingName, type SettingsInput } from './settings'
 
 // ---------------- the slash commands ----------------
@@ -105,7 +105,7 @@ export function statText(id: string, files: DiffFile[], name: string = DEFAULT_N
   const w = Math.max(...files.map(f => f.file.length))
   const add = files.reduce((n, f) => n + f.added, 0)
   const del = files.reduce((n, f) => n + f.removed, 0)
-  return [`${id} changes ${files.length} ${files.length === 1 ? 'file' : 'files'} (+${add} -${del}):`, ...files.map(f => `  ${f.file.padEnd(w)}  ${statCount(f)}`), `One file in full: /${name}-diff ${id} <file>`].join('\n')
+  return [`${id} changes ${files.length} ${files.length === 1 ? 'file' : 'files'} (+${add} -${del})${files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}:`, ...files.map(f => `  ${f.file.padEnd(w)}  ${statCount(f)}`), `One file in full: /${name}-diff ${id} <file>`].join('\n')
 }
 
 /** Where the review/waiting/failed tasks go in the panel's list: those first (in this order), the rest after. */
