@@ -69,6 +69,8 @@ export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
   }
   startWarned.delete(s.name)
   st.last_run = now()
+  // the next timed run counts from this one (run by hand too); the timer, when it goes off early, waits the rest
+  if (!onDemand(s)) st.next_run = new Date(Date.parse(st.last_run) + s.every_minutes * 60_000).toISOString()
   runBefore.set(agentId, lastRun)
   runStarted.set(agentId, Date.now())
   scoutRuns.set(agentId, s.name)
@@ -183,31 +185,73 @@ export async function scoutFinished($: $, agentId: string, answer: string, isAbo
   }
 }
 
+/** How soon after start a scout that is overdue (or never ran) runs: the first one after SOON_MS, each next one
+ *  SPREAD_MS later, so several scouts don't all start at once. */
+export const SCOUT_SOON_MS = 60_000
+export const SCOUT_SPREAD_MS = 30_000
+/** How often a paused scout whose time has come checks again whether it was resumed. */
+const PAUSED_RECHECK_MS = 60_000
+
+/** When a scout runs next (ms): its last run + its interval, or `soon` when that is already past or it never ran. */
+export function nextRunFrom(lastRun: string | null, everyMinutes: number, soon: () => number): number {
+  const last = Date.parse(lastRun ?? '')
+  const at = Number.isFinite(last) ? last + everyMinutes * 60_000 : NaN
+  return Number.isFinite(at) && at > Date.now() ? at : soon()
+}
+
+/** Sets the timer for scout `st` to its next_run. When next_run moved since (the scout ran by hand, so it counts
+ *  from that run) it waits the rest; a paused scout keeps its time and checks again shortly. */
+function armScout($: $, s: ScoutDef, st: SymccScout) {
+  const armedFor = st.next_run
+  const at = Date.parse(armedFor ?? '')
+  const wait = Number.isFinite(at) ? Math.max(0, at - Date.now()) : s.every_minutes * 60_000
+  timers.push(
+    $.clock.after(wait, () => {
+      if (scoutState.get(s.name) !== st) return
+      if (st.next_run !== armedFor) return armScout($, s, st)
+      void (async () => {
+        if (!st.running && (await pausedNow($, st).catch(() => false))) {
+          timers.push($.clock.after(PAUSED_RECHECK_MS, () => scoutState.get(s.name) === st && armScout($, s, st)))
+          return
+        }
+        // if it didn't start (another session drives the board, the board is off, …) try again an interval later
+        st.next_run = new Date(Date.now() + s.every_minutes * 60_000).toISOString()
+        await runScout($, s).catch(() => undefined)
+        if (scoutState.get(s.name) === st) armScout($, s, st)
+      })()
+    }),
+  )
+}
+
+/**
+ * Reads the scouts folder and sets every timed scout's timer. A scout's next run counts from its last run
+ * (kept in scouts.json): last_run + every_minutes, or soon after start when that is past or it never ran. A scout
+ * already known with the same every_minutes keeps its next run, so editing one scout doesn't move the others.
+ */
 export async function scheduleScouts($: $) {
   for (const t of timers.splice(0)) t.cancel()
   const defs = await loadScouts($)
   for (const k of [...scoutState.keys()]) if (!defs.some(d => d.name === k)) scoutState.delete(k)
   // after a restart the map is empty: take each scout's last run and report from scouts.json
   const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory($) : {}
-  for (const s of defs) {
-    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = scoutState.get(s.name) ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
-    const ms = s.every_minutes * 60_000
+  let soonCount = 0
+  const soon = () => Date.now() + SCOUT_SOON_MS + SCOUT_SPREAD_MS * soonCount++
+  for (const s of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
+    const known = scoutState.get(s.name)
+    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = known ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
     const timed = !onDemand(s)
     const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt }
-    if (timed) st.next_run = new Date(Date.now() + ms).toISOString()
+    if (timed) {
+      const keep = known && known.every_minutes === s.every_minutes && Number.isFinite(Date.parse(known.next_run ?? '')) ? known.next_run : undefined
+      st.next_run = keep ?? new Date(nextRunFrom(st.last_run, s.every_minutes, soon)).toISOString()
+    }
     if (s.model) st.model = s.model
     if (s.warning) st.warning = s.warning
     if (old?.last_report !== undefined) st.last_report = old.last_report
     if (old?.paused) st.paused = true
     scoutState.set(s.name, st)
     // every_minutes 0 (or a bad value): only on demand, so no timer
-    if (!timed) continue
-    timers.push(
-      $.clock.every(ms, () => {
-        st.next_run = new Date(Date.now() + ms).toISOString()
-        void runScout($, s)
-      }),
-    )
+    if (timed) armScout($, s, st)
   }
   // the line above the prompt says when the next scout runs ("in 38m"): draw it again every minute so it counts down
   if (defs.some(d => !onDemand(d))) timers.push($.clock.every(60_000, () => refreshStatus($)))
