@@ -7,7 +7,7 @@ import type { PaneParts } from './parts'
 /** The Tasks view: the status strip, then the tasks (needs you under its label, then doing and to do as one list,
  *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead. */
 export function listPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, v, width, mark, act, C, mode, banner, tabs, keyLines } = pane
+  const { Box, Text, Button, v, width, mark, act, C, banner, tabs, footer } = pane
   const nowMs = Date.now()
   const offset = localOffset(nowMs)
   const parts = panelSections(v.tasks, nowMs, offset)
@@ -111,7 +111,7 @@ export function listPage($: $, pane: PaneParts) {
         )
       })}
       <Text key="list-blank"> </Text>
-      {keyLines(listKeys(), 'list-hint')}
+      {footer(listKeys(), 'list-hint', true)}
     </Box>
   )
 }

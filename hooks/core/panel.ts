@@ -220,6 +220,20 @@ export const diffKeys = (review: boolean, oneFile: boolean): KeyHint[] => [
   { key: 'b', word: 'back to the task' },
 ]
 
+/** The keys at the bottom of the Settings page. */
+export const settingsKeys = (): KeyHint[] => [
+  { key: 'Enter', word: 'change' },
+  { key: '↑↓', word: 'move' },
+  { key: 't s c', word: 'views' },
+  { key: 'Esc', word: 'close' },
+]
+
+/** The keys at the bottom of a scout's edit page. */
+export const scoutEditKeys = (): KeyHint[] => [
+  { key: '↑↓', word: 'move between boxes' },
+  { key: 'Esc', word: 'cancel' },
+]
+
 /** The keys under the Scouts list. */
 export const scoutListKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },

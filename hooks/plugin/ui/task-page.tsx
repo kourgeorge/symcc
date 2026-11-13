@@ -14,7 +14,7 @@ let answering: string | null = null
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
-  const { Box, Text, Button, Input, v, width, color, word, mark, act, C, target, keyLines, buttonRows, heading, paragraphs } = pane
+  const { Box, Text, Button, Input, v, width, color, word, mark, act, C, target, footer, buttonRows, heading, paragraphs } = pane
   if (!S.roles.length) await loadRoles($).catch(() => undefined)
   const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
   const inReview = t.status === 'review'
@@ -94,7 +94,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Text>
           ))}
         </Box>
-        <Box flexDirection="column">{keyLines(diffKeys(inReview, !!d.file), 'diff-keys')}</Box>
+        {footer(diffKeys(inReview, !!d.file), 'diff-keys')}
       </Box>
     )
   }
@@ -334,7 +334,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      <Box flexDirection="column">{keyLines(taskKeys(t.status, !!agentId, reports.map(r => r.try), t.status === 'waiting' ? answerKeys(asked.asked_files, asked.options) : []), 'task-keys')}</Box>
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), t.status === 'waiting' ? answerKeys(asked.asked_files, asked.options) : []), 'task-keys')}
     </Box>
   )
 }

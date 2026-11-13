@@ -975,8 +975,9 @@ test('the Tasks view: a status strip under the banner counts, NEEDS YOU then one
     expect(counts).toBeGreaterThan(-1)
     expect(counts).toBeLessThan(strip)
     for (const t of texts.slice(counts + 1, strip)) expect(texts[counts]).toContain(t)
-    expect(texts[strip + 1]).toMatch(/review/)
     expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(strip)
+    // the mode line is in the footer, after the list, not under the banner
+    expect(texts.findIndex(t => /^⏸ review merge $/.test(t))).toBeGreaterThan(texts.findIndex(t => /^━+$/.test(t)))
     expect(texts.filter(t => /workers · \d+ scout/.test(t)).length).toBe(1)
     expect(texts[strip]!.length).toBeLessThanOrEqual(w)
     expect(texts[strip]).toBe(w >= 60 ? '2/3 workers · 2 scouts (next: secrets in 38m)' : '2/3 workers · 2 scouts')
@@ -1400,3 +1401,53 @@ test('plan mode: add puts the task in the backlog and says so; leaving plan mode
   expect(JSON.parse(files['/board.json']!).tasks.find((t: { id: string }) => t.id === 'T-3').status).toBe('backlog')
   expect(await add('After')).toContain('added T-5 After')
 })
+
+type Mounted = Awaited<ReturnType<Parameters<Parameters<typeof test>[1]>[0]['ui']['mount']>>
+/** The page's footer: there is exactly one, it is the last thing on the page, it starts with the light rule, and
+ *  the page's key hints are in it and nowhere else. Returns its text without the rule. */
+async function footerOf(ui: Mounted, hints: KeyHint[], width = 50): Promise<string> {
+  const boxes = await ui.findAll({ type: 'Box' })
+  const feet = boxes.filter(b => String(b.key).endsWith('-footer'))
+  expect(feet.length).toBe(1)
+  const foot = feet[0]!.text
+  expect(boxes[0]!.text.endsWith(foot)).toBe(true)
+  expect(foot.startsWith('─'.repeat(width))).toBe(true)
+  const lines = hintLines(hints, width).map(hintLineText)
+  expect(foot.endsWith(lines.join(''))).toBe(true)
+  // each hint line is drawn once on the page
+  for (const l of lines) expect(boxes[0]!.text.split(l).length - 1).toBe(1)
+  return foot.slice(width)
+}
+
+test('the Tasks page ends with a footer: the light rule, the mode line with [m], then its key hints; the header has no mode line', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const foot = await footerOf(ui, listKeys())
+  expect(foot).toBe('⏸ review merge [m] auto' + 'Enter open · ↑↓ move · t s c views · Esc close')
+  expect((await ui.findAll({ type: 'Text', text: /^⏸ review merge $/ })).length).toBe(1)
+  expect((await ui.findAll({ key: 'mode' })).length).toBe(1)
+  // the mode line comes after the list, not under the banner
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(texts.indexOf('⏸ review merge ')).toBeGreaterThan(texts.findIndex(t => /^\s*Enter to review$/.test(t)))
+  await ui.unmount()
+})
+
+const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
+  ['task page', { opened: 'T-5' }, null, taskKeys('review')],
+  ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
+  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'close' }]],
+  ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
+  ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Esc', word: 'cancel' }]],
+  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'Esc', word: 'close' }]],
+]
+for (const [name, seed, press, hints] of NO_MODE_PAGES)
+  test(`the ${name} ends with a footer of its own key hints and has no mode line`, async ($, on) => {
+    stateOf(on, { ...seed, view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })], working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.' })], mode: 'review', test_commands: [] } } })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    if (press) await ui.press({ key: press })
+    expect(await footerOf(ui, hints)).toBe(hintLines(hints, 50).map(hintLineText).join(''))
+    expect(await ui.find({ key: 'mode' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /review merge/ })).toBeUndefined()
+    await ui.unmount()
+  })

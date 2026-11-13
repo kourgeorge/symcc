@@ -163,6 +163,9 @@ export const bannerRule = (width: number) => '━'.repeat(Math.max(1, Math.floor
 /** The light dotted break inside the list, under the Backlog section (drawn in the subtle color). */
 export const listRule = (width: number) => '┄'.repeat(Math.max(1, Math.floor(width)))
 
+/** The light line over the footer at the bottom of every page of the panel (drawn in the subtle color). */
+export const footerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor(width)))
+
 /** A banner line as plain text (for tests and plain output). */
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
 

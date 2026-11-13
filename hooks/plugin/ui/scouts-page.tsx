@@ -1,12 +1,12 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys } from '../../board'
+import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
 import { type $, S, readScoutOpen, updateScoutOpen } from '../state'
 import type { PaneParts } from './parts'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file. */
 export function scoutEditPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, act, C, scouts, heading } = pane
+  const { Box, Text, Button, Input, act, C, scouts, heading, footer } = pane
   // A scout's edit mode: the same header as its page, then a box per part of its file.
   // (renderPane calls this only while S.draft is set)
   const d = S.draft!
@@ -21,7 +21,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
           <Text bold color={C('warning')}>{d.isNew ? 'new scout' : 'editing'}</Text>
           {r ? <Text color={C('subtle')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · {r.ran}</Text> : null}
         </Text>
-        <Text color={C('subtle')}>save writes {file}</Text>
+        <Text color={C('subtle')}>save writes {file} · other front matter keys are kept</Text>
       </Box>
 
       <Box flexDirection="row" gap={1}>
@@ -46,14 +46,14 @@ export function scoutEditPage($: $, pane: PaneParts) {
         {heading('instructions')}
         <Input key="scout-body" value={d.body} rows={8} placeholder="what to look for, in plain words" submitLabel="keep" onInput={value => void (d.body = value)} onSubmit={value => void (d.body = value)} />
       </Box>
-      <Text color={C('subtle')}>↑↓ move between boxes · other front matter keys are kept · Esc cancels</Text>
+      {footer(scoutEditKeys(), 'scout-edit-keys')}
     </Box>
   )
 }
 
 /** The Scouts view: one scout's page when one is open, else the list of scouts. */
 export async function scoutsPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, width, act, C, scouts, header, keyLines, buttonRows, heading, paragraphs } = pane
+  const { Box, Text, Button, Input, width, act, C, scouts, header, footer, buttonRows, heading, paragraphs } = pane
   const nowMs = Date.now()
   const opener = await readScoutOpen($)
   const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
@@ -108,7 +108,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             <Text color={C('autoAccept')}>{file}</Text>
           </Text>
         </Box>
-        <Box flexDirection="column">{keyLines(scoutKeys(sc.paused === true, sc.running === true), 'scout-keys')}</Box>
+        {footer(scoutKeys(sc.paused === true, sc.running === true), 'scout-keys')}
       </Box>
     )
   }
@@ -156,7 +156,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
         )
       })}
       <Text key="scouts-blank"> </Text>
-      {keyLines(scoutListKeys(), 'scouts-keys')}
+      {footer(scoutListKeys(), 'scouts-keys')}
     </Box>
   )
 }
