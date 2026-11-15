@@ -371,7 +371,7 @@ async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, li
 
 /** What the lead is told when a worker stopped with a QUESTION and its task now waits for the owner. */
 export const workerQuestionText = (id: string, question: string, options?: readonly string[]) =>
-  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} If you can answer it from what you know, answer with ${S.N.name} change ${id} (put the answer in the details); otherwise leave it for the owner.`
+  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? ', offering the options as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"' : ', and say they can also answer on the board'}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.`
 
 /** Whether a report that could not be saved was already told (once per session, so it never floods). */
 let reportWarned = false

@@ -102,10 +102,13 @@ A worker that can't go on without a decision from you stops and answers
 `QUESTION: …`. (A worker that needs files outside its list answers `NEED FILES: …`; see
 the scope check below.) The task does not fail: it goes straight to `waiting` with the
 question, shows under NEEDS YOU on the board, and with `notify` on you hear "T-5 needs you" (or a chime)
-(once per question, only in the session that drives the board). The lead is told too and
-answers it itself when it can. Otherwise answer it on the board or tell the lead: the answer
-goes into the task and sends it back to work, and a new try continues with it. What the
-worker already changed is kept.
+(once per question, only in the session that drives the board). The lead is told too. It
+answers it itself only when you already clearly said the answer, and then tells you what it
+answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
+any) as choices you can pick. You can answer in the chat or on the board, whichever comes
+first (if you answer on the board, the lead doesn't ask again): the answer goes into the
+task and sends it back to work, and a new try continues with it. What the worker already
+changed is kept.
 
 **Answering a waiting task on the board.** Open the task (Enter on it under NEEDS YOU):
 
