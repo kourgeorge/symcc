@@ -76,12 +76,26 @@ export function originWho(t: { origin?: unknown }): string {
 export const createdLine = (o: SymccOrigin) => `created by ${originWho({ origin: o })} because ${o.why}`
 
 /**
- * The short "from:" text for the board and the task detail, e.g. 'from: owner — “add a search command…”',
- * 'from: scout bugs', 'from: T-12 (split)'; 'from: unknown' when its origin is missing or broken (hand-edited).
+ * The small one-width mark in front of a "from:" line, by who made the task: ♟ owner, ⌕ scout, ▸ worker report,
+ * ◆ lead, ↳ split or follow-up (for a worker or lead task; an owner or scout task keeps its own mark). '' when unknown.
+ */
+export const ORIGIN_MARK = { owner: '♟', scout: '⌕', worker: '▸', lead: '◆', from: '↳' } as const
+
+/**
+ * The short "from:" text for the board and the task detail, after its mark (ORIGIN_MARK) and one space, e.g.
+ * '♟ from: owner — “add a search command…”', '⌕ from: scout bugs', '↳ from: T-12 (split)';
+ * 'from: unknown' (no mark) when its origin is missing or broken (hand-edited).
  */
 export function fromText(t: { origin?: unknown }, quote = 60): string {
   const o = originOf(t)
   if (!o) return 'from: unknown'
+  return `${originMark(o)} ${fromWords(o, quote)}`
+}
+
+/** The ORIGIN_MARK for a usable origin: its maker's mark, or ↳ for a worker or lead split or follow-up of a task. */
+export const originMark = (o: SymccOrigin): string => (o.by === 'owner' || o.by === 'scout' || !o.how || !o.task ? ORIGIN_MARK[o.by] : ORIGIN_MARK.from)
+
+function fromWords(o: SymccOrigin, quote: number): string {
   const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
   const taskPart = o.task ? `${o.task}${how ? ` (${how})` : ''}` : ''
   if (o.by === 'owner') {

@@ -228,9 +228,10 @@ const gitError = (r: { stdout: string; stderr: string }) => `${r.stderr}\n${r.st
  * checked out (`checkedOut`), their files are updated too, but never over their uncommitted
  * changes or untracked or git-ignored files the merge would overwrite: then it waits and says why. If updating
  * the files fails after the branch moved, the branch is put back, so the owner's folder is left as it was.
- * `ok` only when the branch moved and (if checked out) the files were updated.
+ * `ok` only when the branch moved and (if checked out) the files were updated; `raced` when the
+ * branch was no longer at `from` (something else moved it first), so bringing the work up to date and trying again can work.
  */
-export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string }> {
+export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; raced?: boolean }> {
   const ref = `refs/heads/${o.target}`
   const action = o.action ?? 'retry'
   if (o.checkedOut) {
@@ -247,7 +248,7 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
     if (dry.exitCode !== 0) return { ok: false, detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then ${thenDo(action, o.id)}` }
   }
   const cas = await run(['update-ref', '-m', o.note, ref, o.to, o.from])
-  if (cas.exitCode !== 0) return { ok: false, detail: `${o.target} moved during the merge; try again` }
+  if (cas.exitCode !== 0) return { ok: false, raced: true, detail: `${o.target} moved during the merge; try again` }
   if (!o.checkedOut) return { ok: true, detail: '' }
   const rt = await run(['read-tree', '-m', '-u', o.from, o.to])
   if (rt.exitCode === 0) return { ok: true, detail: '' }
