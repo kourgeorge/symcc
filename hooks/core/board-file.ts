@@ -301,11 +301,14 @@ export const normId = (id: string) => {
 
 export const find = (b: Board, id: string) => b.tasks.find(t => t.id === normId(id))
 
-/** Repository-relative paths only; never the plugin's data folder `dir` (the board) or Git internals. */
+/** Repository-relative paths only ("." anywhere in the list means the whole project, so the list is empty); never the plugin's data folder `dir` (the board) or Git internals. */
 export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
   if (!Array.isArray(files)) return []
-  return files
-    .map(f => String(f).trim().replace(/\\/g, '/').replace(/^\.\//, ''))
+  const all = files.map(f => String(f).trim().replace(/\\/g, '/'))
+  // "." or "./" is the whole project: the same as an empty list (anywhere).
+  if (all.some(f => f === '.' || f === './')) return []
+  return all
+    .map(f => f.replace(/^\.\//, ''))
     .filter(f => f && !f.startsWith('/') && !f.split('/').includes('..') && !f.startsWith(dir) && !f.startsWith('.git/') && f !== '.git')
     .slice(0, 30)
 }
