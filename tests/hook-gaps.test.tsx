@@ -200,10 +200,41 @@ test('/symcc-reject puts "The owner rejected T-1" in the lead\'s notes, sent wit
   await run($, 'symcc-reject', 'T-1 too big')
   // the owner's own action waits for the next update sent for a real reason: a broken board.json is one
   w.files.set(BOARD, '{ not json')
-  await run($, 'symcc-diff', 'T-1').catch(() => undefined)
+  const r = await run($, 'symcc-diff', 'T-1')
+  expect(r.text).toContain("board.json can't be read")
   await w.clock.advance(2000)
   const update = w.prompts.find(p => p.startsWith('[symcc] Board update:')) ?? ''
   expect(update).toContain('Meanwhile the owner (nothing to answer):\n- The owner rejected T-1 ("too big"): T-1 rejected: back to "todo"')
+})
+
+// ---------------- commands with a broken board.json ----------------
+
+test('/symcc-help still shows the manual when board.json is broken', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, '{ not json')
+  const r = await run($, 'symcc-help', '')
+  expect(r.text).toContain('/symcc-')
+  expect(r.text).not.toContain("can't be read")
+  expect(w.files.get(BOARD)).toBe('{ not json')
+})
+
+test('/symcc-off and /symcc-approve T-1 answer that board.json can\'t be read, and leave it as it was', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, '{ not json')
+  const off = await run($, 'symcc-off', '')
+  expect(off.text).toContain("board.json can't be read")
+  const ok = await run($, 'symcc-approve', 'T-1')
+  expect(ok.text).toContain("board.json can't be read")
+  expect(w.files.get(BOARD)).toBe('{ not json')
+})
+
+// ---------------- symcc's own agent types are hidden from the main chat ----------------
+
+test("symcc's worker and scout types are not offered in the main chat; other agents pass on unchanged", async ($, on) => {
+  world(on)
+  on('agent.offer', () => ({ isOffered: true, from: 'below' }) as never)
+  for (const agent of ['symcc:worker', 'symcc:worker-web', 'symcc:scout']) expect(await $.agent.offer({ agent } as never)).toEqual({ isOffered: false })
+  expect(await $.agent.offer({ agent: 'general-purpose' } as never)).toEqual({ isOffered: true, from: 'below' })
 })
 
 // ---------------- which prompts count as the owner's request ----------------
