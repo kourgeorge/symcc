@@ -3,6 +3,7 @@ import type { SymccRun, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { isSha } from './board-file'
 import { originOf } from './origin'
+import { ellipsis } from './text'
 
 // ---------------- the commits of a task ----------------
 
@@ -37,7 +38,7 @@ export function reviewedCommit(t: { runs?: SymccRun[] }): string | undefined {
 export function oneLine(s: unknown, n: number): string {
   // eslint-disable-next-line no-control-regex
   const t = String(s ?? '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t
+  return ellipsis(t, n)
 }
 
 /** How long the Symcc-Why trailer may be. */

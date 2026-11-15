@@ -1,6 +1,7 @@
 // Short history lines for things that stop or restart a task, or that the owner said.
 import type { SymccTask } from '../../types'
 import { tryLabel } from './roles'
+import { ellipsis, squash } from './text'
 
 /** How much of the owner's answer goes into a history line. */
 export const ANSWER_LINE_CHARS = 300
@@ -51,10 +52,10 @@ export function afterChangedLine(before: readonly string[], after: readonly stri
 }
 
 /** 'the owner answered: “...”', cut to ANSWER_LINE_CHARS. */
-export function ownerAnsweredLine(answer: string): string {
-  const a = answer.trim().replace(/\s+/g, ' ')
-  return `the owner answered: “${a.length > ANSWER_LINE_CHARS ? `${a.slice(0, ANSWER_LINE_CHARS - 1)}…` : a}”`
-}
+export const ownerAnsweredLine = (answer: string) => quotedLine('the owner answered', answer)
+
+/** '<words>: “<text>”', the text on one line and cut to ANSWER_LINE_CHARS. */
+const quotedLine = (words: string, text: string) => `${words}: “${ellipsis(squash(text), ANSWER_LINE_CHARS)}”`
 
 /** "try 3: stopped: <why>": a running worker was stopped and its task waits or goes back to "todo". */
 export function stoppedLine(t: Pick<SymccTask, 'role' | 'attempts'>, why: string): string {
@@ -86,10 +87,7 @@ export function addDetailsText(details: string, note: string, day: string): stri
 }
 
 /** 'the lead added a note: “...”', cut to ANSWER_LINE_CHARS. */
-export function noteAddedLine(note: string): string {
-  const a = note.trim().replace(/\s+/g, ' ')
-  return `the lead added a note: “${a.length > ANSWER_LINE_CHARS ? `${a.slice(0, ANSWER_LINE_CHARS - 1)}…` : a}”`
-}
+export const noteAddedLine = (note: string) => quotedLine('the lead added a note', note)
 
 /** Why a change that gives both `details` (a full rewrite) and `add_details` (a note added) is refused; null when it is fine. */
 export function detailsBothRefusal(a: { details?: unknown; add_details?: unknown }): string | null {

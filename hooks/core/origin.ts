@@ -1,7 +1,7 @@
 // Where a task came from (owner, scout, worker, lead) and the evidence for it.
 import type { SymccOrigin } from '../../types'
 import { type Board, find, normId } from './board-file'
-import { clean, squash } from './text'
+import { clean, ellipsis, squash } from './text'
 
 /** Who can start a task: the owner, a scout's report, a worker's report, or the lead's own idea. */
 export const ORIGIN_BY = ['owner', 'scout', 'worker', 'lead'] as const
@@ -99,8 +99,8 @@ function fromWords(o: SymccOrigin, quote: number): string {
   const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
   const taskPart = o.task ? `${o.task}${how ? ` (${how})` : ''}` : ''
   if (o.by === 'owner') {
-    const r = (o.request ?? '').replace(/\s+/g, ' ').trim()
-    const q = r ? ` — “${r.length > quote ? `${r.slice(0, quote - 1).trimEnd()}…` : r}”` : ''
+    const r = squash(o.request ?? '')
+    const q = r ? ` — “${ellipsis(r, quote)}”` : ''
     return `from: owner${q}${taskPart ? `, ${taskPart}` : ''}`
   }
   if (o.by === 'scout') return `from: scout ${o.scout || '?'}${taskPart ? `, ${taskPart}` : ''}`
@@ -119,7 +119,7 @@ export const emptyHeard = (): Heard => ({ scouts: {}, workers: {} })
 
 /** An ISO time as "2026-11-12 14:05 UTC" (the text itself when it is not a time). */
 export const utcTime = (iso: string) => (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(iso) ? `${iso.slice(0, 16).replace('T', ' ')} UTC` : iso)
-const cutQuote = (s: string, n: number) => (squash(s).length > n ? `${squash(s).slice(0, n - 1).trimEnd()}…` : squash(s))
+const cutQuote = (s: string, n: number) => ellipsis(squash(s), n)
 
 /**
  * The plugin's own short link to the evidence for a new task, next to what the lead said:

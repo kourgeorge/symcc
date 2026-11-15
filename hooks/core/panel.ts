@@ -7,7 +7,7 @@ import { originOf } from './origin'
 import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs } from './runs'
-import { num } from './text'
+import { ellipsis, num } from './text'
 
 /** A section's header in the board panel: "▸ Done (42)" folded, "▾ Done (42)" open; with `opened` left out (a section
  *  that is always open, like "Doing") there is no arrow: "Doing (1)". */
@@ -115,7 +115,7 @@ function rowExtraOf(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): st
 }
 
 /** Cuts text to `n` columns, ending with "…" when cut. */
-const cutTo = (s: string, n: number) => (s.length <= n ? s : n <= 1 ? '…'.slice(0, Math.max(0, n)) : `${s.slice(0, n - 1).trimEnd()}…`)
+const cutTo = (s: string, n: number) => (n <= 0 ? '' : ellipsis(s, n))
 
 /** Fits a task row's title and extra after `lead` columns (indent, id, mark and status) in `width` columns: the
  *  extra goes to the right end (`pad` fills the gap, at least two spaces) when the whole title fits beside it;

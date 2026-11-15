@@ -16,6 +16,9 @@ export const clean = (s: unknown, n: number) => String(s ?? '').replace(/[\u0000
 
 export const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
 
+/** `s` cut to `n` characters, ending with "…" when cut. */
+export const ellipsis = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`)
+
 /** A task id's number ("T-12" → 12; 0 when there is none), for ordering. */
 export const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
 
