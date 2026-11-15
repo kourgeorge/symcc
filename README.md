@@ -234,7 +234,7 @@ setting, opens a pick list for `mode` and `notify`, or an edit box for numbers a
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
 | `archive_days` | 14 | 0–3650 (0 = never) | Done and dropped tasks older than this move from `board.json` to `.symcc/archive.json` |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
-| `notify` | `voice` where this computer can speak, else `sound`, else `off` | `off` / `sound` / `voice` | What plays when a task is merged or a worker asks you something: `sound` a short chime, `voice` says "T-3 done" / "T-5 needs you" out loud. Only choices this computer can play can be picked (see below) |
+| `notify` | `voice` where this computer can speak, else `sound`, else `off` | `off` / `sound` / `voice` | What plays when a task is merged or a worker asks you something: `sound` a short chime, `voice` says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project folder's name first). Only choices this computer can play can be picked (see below) |
 | `mode` | `auto` | `off` / `review` / `auto` | See Modes above |
 | `enabled` | on | on / off | The whole plugin on or off, same as `/symcc-on` and `/symcc-off` |
 
@@ -256,7 +256,7 @@ told once and nothing plays; the setting is kept. Only the session driving the b
 A scout is one Markdown file in `.symcc/scouts/`: how often it runs at the top, its
 instructions below. `every_minutes: 0` (or a value that is not a whole number) means it
 runs only on demand. See [scouts](docs/guide.md#scouts). A task is `todo`, `doing`,
-`waiting` (for your answer: you hear "T-5 needs you"), `review`, `paused`, `failed`,
+`waiting` (for your answer: you hear "symcc: T-5 needs you"), `review`, `paused`, `failed`,
 `done` (merged, final), `dropped` (never runs on its own; Retry brings it back) or
 `backlog` (parked until you move it to todo). See
 [a task's life](docs/guide.md#a-tasks-life).

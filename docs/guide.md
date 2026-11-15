@@ -62,7 +62,7 @@ picks up again next time.
    │         │    failing output (up to 2 times by itself)  │
    │         ├──▶ still failing / out of time ──▶ failed ───┘
    │         ├──▶ worker needs files outside its list ──▶ waiting (NEED FILES)
-   │         └──▶ worker has a question ──▶ waiting (QUESTION), "T-5 needs you"
+   │         └──▶ worker has a question ──▶ waiting (QUESTION), "symcc: T-5 needs you"
    │
    ├── review   (only in review mode) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
@@ -101,7 +101,7 @@ lower task number).
 A worker that can't go on without a decision from you stops and answers
 `QUESTION: …`. (A worker that needs files outside its list answers `NEED FILES: …`; see
 the scope check below.) The task does not fail: it goes straight to `waiting` with the
-question, shows under NEEDS YOU on the board, and with `notify` on you hear "T-5 needs you" (or a chime)
+question, shows under NEEDS YOU on the board, and with `notify` on you hear "symcc: T-5 needs you" (or a chime)
 (once per question, only in the session that drives the board). The lead is told too. It
 answers it itself only when you already clearly said the answer, and then tells you what it
 answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
@@ -148,7 +148,8 @@ This is where symcc keeps your branch safe. Step by step:
    out with uncommitted changes, or with untracked files the merge would overwrite,
    symcc waits instead of overwriting them.
 7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
-   "T-3 done" (and "T-5 needs you" when a task waits for your answer).
+   "symcc: T-3 done" (and "symcc: T-5 needs you" when a task waits for your answer), starting with
+   the project's name so you know which project spoke.
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
@@ -343,8 +344,9 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
 - Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`,
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
-- `notify` is `off`, `sound` (a short chime) or `voice` ("T-3 done", "T-5 needs you" out
-  loud). A new board uses `voice` where this computer can speak, else `sound`, else `off`.
+- `notify` is `off`, `sound` (a short chime) or `voice` ("symcc: T-3 done", "my app: T-5 needs you"
+  out loud: the project folder's name comes first, with dashes, underscores and dots said as
+  spaces, and only its first three words when it is long). A new board uses `voice` where this computer can speak, else `sound`, else `off`.
   Once per session symcc checks which programs exist (without playing anything): on macOS
   `say` for voice and `afplay` with the built-in sounds for sound; on Linux `spd-say`,
   `espeak-ng` or `espeak` for voice and `paplay` (freedesktop sounds), `canberra-gtk-play`

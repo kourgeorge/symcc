@@ -1498,14 +1498,14 @@ test('notify finds what the machine can play by looking for programs, once per s
 test('sound plays a chime (a different one when a question waits), voice says the line; the text is an argument, never shell code', async () => {
   const evil = "T-3'; rm -rf ~; echo '"
   const mac = machine('Darwin', ['say', 'afplay'], MAC_FILES)
-  expect(await playsFor(mac.$, 'voice', ['T-3'])).toEqual([{ argv: ['say', '-r', '200', 'T-3 done'] }])
+  expect(await playsFor(mac.$, 'voice', ['T-3'])).toEqual([{ argv: ['say', '-r', '200', 'repo: T-3 done'] }])
   expect(await playsFor(mac.$, 'sound', ['T-3'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Glass.aiff'] }])
   expect(await playsFor(mac.$, 'sound', ['T-3', '?T-5'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Ping.aiff'] }])
   expect(await playsFor(mac.$, 'off', ['T-3'])).toEqual([])
-  expect(await playsFor(mac.$, 'voice', [evil])).toEqual([{ argv: ['say', '-r', '200', `${evil} done`] }])
+  expect(await playsFor(mac.$, 'voice', [evil])).toEqual([{ argv: ['say', '-r', '200', `repo: ${evil} done`] }])
 
   const linux = machine('Linux', ['spd-say', 'espeak', 'paplay', 'canberra-gtk-play'], [`${FD}/complete.oga`, `${FD}/bell.oga`])
-  expect((await playsFor(linux.$, 'voice', ['T-3'])).map(p => p.argv)).toEqual([['spd-say', '-w', 'T-3 done'], ['espeak', 'T-3 done']])
+  expect((await playsFor(linux.$, 'voice', ['T-3'])).map(p => p.argv)).toEqual([['spd-say', '-w', 'repo: T-3 done'], ['espeak', 'repo: T-3 done']])
   expect((await playsFor(linux.$, 'sound', ['?T-5'])).map(p => p.argv)).toEqual([['paplay', `${FD}/bell.oga`], ['canberra-gtk-play', '-i', 'bell']])
   // none saved: the best this machine has (voice)
   expect((await playsFor(linux.$, null, ['T-3']))[0]!.argv[0]).toBe('spd-say')
@@ -1516,7 +1516,7 @@ test('sound plays a chime (a different one when a question waits), voice says th
   expect(speak!.argv.slice(0, 4)).toEqual(['powershell', '-NoProfile', '-NonInteractive', '-Command'])
   expect(speak!.argv[4]).toBe(`Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak($env:${WIN_TEXT_VAR})`)
   expect(speak!.argv.join(' ')).not.toContain('rm -rf')
-  expect(speak!.env).toEqual({ [WIN_TEXT_VAR]: `${evil} done` })
+  expect(speak!.env).toEqual({ [WIN_TEXT_VAR]: `repo: ${evil} done` })
   const [chime] = await playsFor(win.$, 'sound', ['T-3'])
   expect(chime!.argv[4]).toContain('[System.Media.SystemSounds]::Asterisk.Play()')
   expect((await playsFor(win.$, 'sound', ['?T-3']))[0]!.argv[4]).toContain('Exclamation')
@@ -1537,7 +1537,7 @@ test('only the driving session plays, lines are joined, and the first command th
   await sayNext(m.$)
   S.driving = false
   const played = m.ran.filter(r => ['spd-say', 'espeak'].includes(r.argv[0]!))
-  expect(played.map(r => r.argv)).toEqual([['spd-say', '-w', 'T-3 and T-4 done']])
+  expect(played.map(r => r.argv)).toEqual([['spd-say', '-w', 'repo: T-3 and T-4 done']])
 })
 
 test("a saved notify this machine can't play is told once, plays nothing, and the setting is kept", async () => {

@@ -1,4 +1,4 @@
-// Notify: a chime (sound) or "T-3 done" said out loud (voice) when a task is merged or a question waits.
+// Notify: a chime (sound) or "symcc: T-3 done" said out loud (voice) when a task is merged or a question waits.
 import type { SymccTask } from '../../types'
 import { type Board, type Notify, type NotifySystem, type Playable, notifyOf, canPlay, unplayableNote, symccOn, spokenLine, NEEDS_YOU_MARK } from '../board'
 import { type $, S, sayQueue } from './state'
@@ -94,7 +94,24 @@ export async function playable($: $): Promise<Playable> {
   return { system: p.system, sound: p.sound.length > 0, voice: p.voice.length > 0 }
 }
 
-/** Says "T-3 done" (or chimes) for a merged task, if this session drives the board and notify is on. Never waits, never shows an error. */
+/**
+ * The project's name as it is said before every spoken line: the last part of `root` (the folder
+ * the board lives in), with dashes, underscores and dots said as spaces, and only its first few
+ * words when it is long. '' when there is no folder name.
+ */
+export function spokenProject(root: string, maxWords = 3): string {
+  const folder = String(root ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+  const words = folder.replace(/[-_.]+/g, ' ').split(/\s+/).filter(Boolean)
+  return words.slice(0, maxWords).join(' ')
+}
+
+/** `text` with the project's name first ("symcc: T-3 done"); `text` as it is when there is no name. */
+export function withProject(text: string, root: string): string {
+  const name = spokenProject(root)
+  return name && text ? `${name}: ${text}` : text
+}
+
+/** Says "symcc: T-3 done" (or chimes) for a merged task, if this session drives the board and notify is on. Never waits, never shows an error. */
 export function sayDone($: $, b: Board, id: string) {
   queueSay($, b, id)
 }
@@ -103,7 +120,7 @@ export function sayDone($: $, b: Board, id: string) {
 export const saidNeedsYou = new Set<string>()
 
 /**
- * Says "T-5 needs you" (or chimes) when task `t`'s worker asked the owner something (QUESTION or
+ * Says "symcc: T-5 needs you" (or chimes) when task `t`'s worker asked the owner something (QUESTION or
  * NEED FILES), once per waiting question, under the same rules and in the same queue as "T-3 done".
  */
 export function sayNeedsYou($: $, b: Board, t: Pick<SymccTask, 'id' | 'attempts'>, question = '') {
@@ -141,7 +158,9 @@ export async function playsFor($: $, wanted: Notify | null, items: string[]): Pr
     return []
   }
   const needsYou = items.some(x => String(x ?? '').startsWith(NEEDS_YOU_MARK))
-  return p[n].map(make => make(text, needsYou))
+  // only the spoken line has the project's name; the chime is the same in every project
+  const line = n === 'voice' ? withProject(text, S.root) : text
+  return p[n].map(make => make(line, needsYou))
 }
 
 export async function sayNext($: $) {
