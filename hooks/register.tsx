@@ -255,10 +255,17 @@ export const register: Register = on => {
     // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
     if (e.command === `${S.N.name}-stats`) return { text: await statsText($, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
     if (!commandNames(S.N.name).includes(e.command)) return next(e)
-    const b = await load($)
-    const cmd = parseCommand(e.command, e.args, modeOf(b), S.N.name)
+    // A broken board.json makes load throw (it is never written over): the commands that don't need the
+    // board (help, opening the panel, a usage line) still work; the others answer with the reason.
+    const loaded = await load($).then(
+      board => ({ board, broken: '' }),
+      (err: Error) => ({ board: null, broken: err.message }),
+    )
+    const cmd = parseCommand(e.command, e.args, loaded.board ? modeOf(loaded.board) : undefined, S.N.name)
     if (!cmd) return next(e)
     const say = (text: string) => ({ text, isTextDisplayOnly: true })
+    if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
+    const b = loaded.board!
     switch (cmd.kind) {
       case 'bad':
         return say(cmd.message)
