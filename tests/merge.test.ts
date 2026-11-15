@@ -951,6 +951,83 @@ test('the board turned off only after an approve\'s merge keeps the task done, w
   expect(t.history.at(-1)).toBe('try 1: the board was turned off while it was being merged, too late: the work was already merged, so it stays done')
 })
 
+// ---------------- symcc or the board turned back on (T-213) ----------------
+
+/**
+ * A world where work can start: this session drives the board, startup is done, and agent.spawn is
+ * recorded (each spawn gets a new agent id). The board is in auto mode with T-1 "doing" and a live worker (ag1).
+ */
+async function liveWorld() {
+  const w = world()
+  S.me = 'me'
+  const spawned: string[] = []
+  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
+  x.plugin = { root: '/plugin' }
+  x.fs.list = async () => []
+  const [b] = boardWith('auto', [], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  workers.clear()
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  S.startupDone = true
+  S.driving = true
+  return { w, spawned }
+}
+
+/** Lets the `void pump($)` started by setSymcc or setBoardMode run to its end (no clock: only promise turns). */
+async function settle(w: ReturnType<typeof world>, done: () => boolean) {
+  for (let i = 0; i < 5000 && !(done() && !w.files.has(LOCK)); i++) await Promise.resolve()
+  expect(done()).toBe(true)
+  // a few more turns, so the board write that records the new agent has finished too
+  for (let i = 0; i < 200; i++) await Promise.resolve()
+}
+
+const workerOn = (id: string) => [...workers.values()].some(x => x.task === id)
+
+/** Puts the shared plugin state back as the other tests expect it. */
+function cleanUp() {
+  workers.clear()
+  S.startupDone = false
+  S.driving = false
+  S.enabledNow = true
+}
+
+test('/symcc-off then /symcc-on: the reply names the mode, the lead is told once, and T-1 gets a new worker', async () => {
+  const { w, spawned } = await liveWorld()
+  try {
+    await setSymcc(w.$, false)
+    expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+    expect(workerOn('T-1')).toBe(false)
+    const on = await setSymcc(w.$, true)
+    expect(on.startsWith('symcc is on, in mode auto')).toBe(true)
+    await settle(w, () => workerOn('T-1'))
+    expect(leadQueue.filter(m => m.includes('You are the lead again; the board is in mode auto')).length).toBe(1)
+    expect(spawned.length).toBe(1)
+    expect(spawned[0]).toContain('T-1')
+    expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  } finally {
+    cleanUp()
+  }
+})
+
+test('/symcc-on when symcc is already on says "already on" and tells the lead nothing new', async () => {
+  const { w, spawned } = await liveWorld()
+  try {
+    await setSymcc(w.$, false)
+    await setSymcc(w.$, true)
+    await settle(w, () => workerOn('T-1'))
+    const told = leadQueue.length
+    const again = await setSymcc(w.$, true)
+    expect(again.startsWith('symcc is already on, in mode auto: ')).toBe(true)
+    for (let i = 0; i < 200; i++) await Promise.resolve()
+    expect(leadQueue.length).toBe(told)
+    // T-1 already has its worker: no second one
+    expect(spawned.length).toBe(1)
+  } finally {
+    cleanUp()
+  }
+})
+
 // ---------------- retry and ask on dropped, done and clashed tasks ----------------
 
 test('retry brings a dropped task back to "todo" on purpose, with a history line', async () => {

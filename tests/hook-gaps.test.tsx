@@ -310,3 +310,39 @@ test("session.start with a board.json that isn't JSON finishes quietly, tells th
   expect(w.spawned.length).toBe(1)
   expect(w.spawned[0]).toContain('T-1')
 })
+
+// ---------------- /symcc-mode back on after off (T-213) ----------------
+
+/** A board in auto mode with T-1 "doing" for this session, worked on by the live worker a1. */
+function doingBoard(): Board {
+  const [b] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'Change b', files: ['src/'], merge_into: 'main' }, ISO)
+  return patchTask(b, 'T-1', { status: 'doing', attempts: 1, session: 'me', agent: 'a1', branch: 'symcc/T-1', runs: [{ started: ISO }] }, ISO)
+}
+
+test('/symcc-mode off then review: work starts again, T-1 gets a worker, and the lead hears the owner set review', async ($, on) => {
+  const w = world(on, { agents: [{ id: 'a1', type: 'symcc:worker' }] })
+  w.files.set(BOARD, JSON.stringify(doingBoard()))
+  await $.session.start({ cwd: '/repo' } as never)
+  const off = await run($, 'symcc-mode', 'off')
+  expect(off.text).not.toContain('work starts again')
+  expect(w.sent).toContain('a1')
+  expect(w.board().tasks[0]!.status).toBe('todo')
+  const before = w.spawned.length
+  const review = await run($, 'symcc-mode', 'review')
+  expect(review.text).toContain('work starts again')
+  await w.clock.advance(2000)
+  expect(w.spawned.slice(before).some(n => n.includes('T-1'))).toBe(true)
+  const update = w.prompts.find(p => p.startsWith('[symcc] Board update:')) ?? ''
+  expect(update).toContain('The owner set the board mode to review')
+})
+
+test('/symcc-mode auto with a task in review says it still waits for approve or reject, and it stays in review', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await $.session.start({ cwd: '/repo' } as never)
+  const r = await run($, 'symcc-mode', 'auto')
+  expect(r.text).toContain('1 already in review still waits for approve or reject')
+  expect(r.text).not.toContain('work starts again')
+  await w.clock.advance(2000)
+  expect(w.board().tasks.find(t => t.id === 'T-1')!.status).toBe('review')
+})
