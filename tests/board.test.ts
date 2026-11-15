@@ -2335,29 +2335,34 @@ test('scout list rows: aligned columns; on a narrow panel the model goes first, 
   expect(scoutListText(scoutListRows([{ name: long, every_minutes: 30, last_run: null, running: false }], at, 30)[0]!)).toBe(`  ◎ ${long}`)
 })
 
-import { parseStatusZ, mergeBlockers, blockedText, moveTarget, type GitRun } from '../hooks/board'
+import { parseStatusZ, mergeBlockers, blockedText, waitFilesNote, stillBlocks, moveTarget, type GitRun } from '../hooks/board'
 
-test('git status -z is read into codes and paths; a rename keeps only its new path', () => {
+test('git status -z is read into codes and paths; a rename keeps its old path in from', () => {
   expect(parseStatusZ(' M a.txt\0?? new dir/x.txt\0R  b.txt\0old.txt\0')).toEqual([
     { code: ' M', path: 'a.txt' },
     { code: '??', path: 'new dir/x.txt' },
-    { code: 'R ', path: 'b.txt' },
+    { code: 'R ', path: 'b.txt', from: 'old.txt' },
   ])
   expect(parseStatusZ('')).toEqual([])
 })
 
-test('a merge waits for uncommitted changes and for untracked files it would overwrite, but not for other untracked files', () => {
+test('a merge waits only for the owner\'s files it changes: uncommitted changes there and untracked files it would overwrite', () => {
   const st = '?? new.txt\0?? notes.txt\0?? lib\0?? .symcc/board.json\0'
   const b = mergeBlockers(st, ['a.txt', 'new.txt', 'lib/x.js'], '.symcc')
   expect(b).toEqual({ dirty: [], untracked: ['new.txt', 'lib'], ignored: [] })
-  expect(blockedText('main', 'T-3', b)).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, then say "retry T-3"')
-  expect(mergeBlockers(' M a.txt\0 M .symcc/x\0', ['b.txt'], '.symcc').dirty).toEqual(['a.txt'])
-  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toContain('uncommitted changes on main')
-  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toBe('you have uncommitted changes on main; commit or stash them, then say "retry T-3"')
-  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] }, 'approve')).toBe('you have uncommitted changes on main; commit or stash them, then approve T-3 again')
-  expect(blockedText('main', 'T-3', b, 'approve')).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, then approve T-3 again')
-  expect(blockedText('main', 'T-3', { dirty: [], untracked: [], ignored: ['x.log'] }, 'approve')).not.toContain('retry')
-  expect(blockedText('main', 'T-3', mergeBlockers('?? other.txt\0', ['a.txt'], '.symcc'))).toBe('')
+  expect(blockedText('main', 'T-3', b)).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, and T-3 merges on its own at the next check')
+  // an uncommitted change (staged or not) blocks only in a file the merge changes; the board folder never does
+  expect(mergeBlockers(' M a.txt\0M  b.txt\0 M .symcc/x\0', ['b.txt', '.symcc/x'], '.symcc').dirty).toEqual(['b.txt'])
+  expect(mergeBlockers(' M a.txt\0MM c.txt\0', ['b.txt'], '.symcc')).toEqual({ dirty: [], untracked: [], ignored: [] })
+  // a staged rename away from a file the merge changes blocks too (by its old path)
+  expect(mergeBlockers('R  new.md\0b.txt\0', ['b.txt'], '.symcc').dirty).toEqual(['b.txt'])
+  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toBe('you have uncommitted changes on main to files T-3 changes (a.txt); commit or stash them, and T-3 merges on its own at the next check')
+  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: ['n.txt'] })).toBe('you have uncommitted changes on main to files T-3 changes (a.txt) and untracked files on main that T-3 would overwrite (n.txt); commit or stash, or move, rename or commit them, and T-3 merges on its own at the next check')
+  expect(blockedText('main', 'T-3', { dirty: [], untracked: [], ignored: ['x.log'] })).not.toContain('retry')
+  expect(blockedText('main', 'T-3', mergeBlockers('?? other.txt\0 M other.md\0', ['a.txt'], '.symcc'))).toBe('')
+  expect(waitFilesNote('main', { dirty: ['README.md'], untracked: [], ignored: [] })).toBe('waiting for your files on main: README.md; commit or stash them')
+  expect(stillBlocks(' M README.md\0', ['README.md'], '.symcc')).toBe(true)
+  expect(stillBlocks(' M other.md\0', ['README.md'], '.symcc')).toBe(false)
 })
 
 /** A fake git: answers by the command's first word; records every call. */
@@ -2401,12 +2406,27 @@ test('a dry run that fails stops the merge before the branch moves', async () =>
 test('a merge blocked during an approve says to approve again, never "retry"', async () => {
   const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0new.txt\0' }], status: [{ exitCode: 0, stdout: '?? new.txt\0' }] })
   const r = await moveTarget(g.run, { ...MOVE, action: 'approve' })
-  expect(r.detail).toBe('you have untracked files on main that T-3 would overwrite (new.txt); move, rename or commit them, then approve T-3 again')
+  expect(r.detail).toBe('you have untracked files on main that T-3 would overwrite (new.txt); move, rename or commit them, and T-3 merges on its own at the next check')
+  expect(r.blocked).toEqual({ dirty: [], untracked: ['new.txt'], ignored: [] })
   const dry = await moveTarget(fakeGit({ 'dry-run': [{ exitCode: 128, stderr: 'error: something in the way' }] }).run, { ...MOVE, action: 'approve' })
   expect(dry.detail).toBe('your files on main can\'t be updated (error: something in the way); fix that, then approve T-3 again')
   const back = await moveTarget(fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], 'read-tree': [{ exitCode: 128, stderr: 'error: boom' }] }).run, { ...MOVE, action: 'approve' })
   expect(back.detail).toMatch(/Fix that, then approve T-3 again$/)
   expect([r, dry, back].some(x => x.detail.includes('retry'))).toBe(false)
+})
+
+test('an uncommitted change in a file the merge does not change is kept: the files are updated around it', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], status: [{ exitCode: 0, stdout: ' M README.md\0M  notes.md\0' }] })
+  expect(await moveTarget(g.run, MOVE)).toEqual({ ok: true, detail: '' })
+  // the dry run first, then read-tree -m -u (which leaves files the merge doesn't change alone); never a reset or checkout
+  expect(g.calls.map(c => c.join(' '))).toEqual(['diff --name-only --no-renames -z aaaa bbbb', 'status --porcelain -z --untracked-files=all --ignored=matching', 'read-tree -n -m -u aaaa bbbb', 'update-ref -m symcc T-3 refs/heads/main bbbb aaaa', 'read-tree -m -u aaaa bbbb'])
+})
+
+test('an uncommitted change in a file the merge changes blocks it before anything moves, and names the file', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0README.md\0' }], status: [{ exitCode: 0, stdout: ' M README.md\0 M other.md\0' }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r).toEqual({ ok: false, detail: 'you have uncommitted changes on main to files T-3 changes (README.md); commit or stash them, and T-3 merges on its own at the next check', blocked: { dirty: ['README.md'], untracked: [], ignored: [] } })
+  expect(g.calls.some(c => c[0] === 'update-ref' || c[0] === 'read-tree')).toBe(false)
 })
 
 test('the normal merge moves the branch and updates the files; another branch checked out only moves the branch', async () => {

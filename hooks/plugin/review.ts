@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit } from '../board'
+import { type Blockers, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit } from '../board'
 import { gitOk, git, worktreeDir, asSymcc } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -78,8 +78,14 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
   return mine ? `${YOUR_EDITS}\n${d.text}` : d.text
 }
 
-/** What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner. */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[] }
+/**
+ * What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner;
+ * `blocked`: everything passed, only the owner's files on the target branch are in the way of the merge (nothing moved).
+ */
+export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers }
+
+/** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
+export type CheckMode = 'finish' | 'approve' | 'merge'
 
 /**
  * Commit the worker's changes, check scope (on a worker's try, files outside the task are undone on the branch, see undoOutOfScope; on approve they are kept), bring in the latest of the task's branch (intoOf), test, then move that branch forward.
@@ -87,13 +93,14 @@ export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; tes
  * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
  * review): the same checked merge, but the tests run again only if main had to be merged in,
  * or when `retest` (the owner edited files in the task's folder since review, see ownerEdits).
+ * 'merge' is the same as 'approve', for finished work whose merge waited only for the owner's files.
  * `stop` is asked after each test and just before the merge: when it returns a reason (the task
  * was dropped or paused meanwhile), nothing is merged and that reason is returned.
  * Merges into the same branch take turns (mergeTurn); when the branch still moved before ours
  * could move it, the task is brought up to date, tested and merged again by itself (MAX_MERGE_RACES at most).
  * `release`: settles when the caller gave this check up as stuck, so later merges into the branch stop waiting for it.
  */
-export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>): Promise<CheckResult> {
+export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -118,7 +125,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) {
     // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
-    if (mode === 'approve') return { ok: false, detail: outOfScopeText(bad, t.files) }
+    if (mode !== 'finish') return { ok: false, detail: outOfScopeText(bad, t.files) }
     const undo = await undoOutOfScope($, t, dir, base, bad, made)
     return { ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo }
   }
@@ -177,7 +184,7 @@ export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Pro
 }
 
 /** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
-async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve', made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[]): Promise<{ result: CheckResult; raced?: boolean }> {
+async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[]): Promise<{ result: CheckResult; raced?: boolean }> {
   const res = (result: CheckResult) => ({ result })
   // First, before touching the folder: a step stopped or given up while it waited for its merge
   // turn does nothing, as the next try may already be using the folder.
@@ -207,12 +214,12 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   }
   if (mode === 'finish' && needsReview(b, t)) return res({ ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
-  // files too, but never over uncommitted changes or untracked or ignored files the merge would overwrite.
+  // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
   if (s) return res(s)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
-  if (!moved.ok) return { result: { ok: false, detail: moved.detail }, ...(moved.raced ? { raced: true } : {}) }
+  if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []

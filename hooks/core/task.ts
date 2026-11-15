@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DATA_DIR, find, intoOf, normId, STATUS_WORD } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -77,6 +77,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'waiting') next.question = null
   // The worker's file request and choices belong to the question they came with.
   for (const k of ['asked_files', 'options'] as const) if (next.status !== 'waiting' || (patch.question !== undefined && !(k in patch)) || !next[k]?.length) delete next[k]
+  // Waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again).
+  if (!waitsForFiles(next) || (next.status !== t.status && !('merge_wait' in patch))) delete next.merge_wait
   return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
 }
 

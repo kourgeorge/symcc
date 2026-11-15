@@ -145,8 +145,16 @@ This is where symcc keeps your branch safe. Step by step:
 5. **Approval (optional).** In review mode (see below), the task stops here as
    `review` ("ready for review") and nothing is merged until you say so.
 6. **Merge.** Only now does your branch move forward. If you have that branch checked
-   out with uncommitted changes, or with untracked files the merge would overwrite,
-   symcc waits instead of overwriting them.
+   out, your files are updated too, but your own work is never overwritten: uncommitted
+   changes (staged or not) in files the task doesn't change are simply kept as they are.
+   Only your uncommitted changes, untracked or git-ignored files in files the task changes
+   hold the merge back. Then the task waits (`waiting`, with a note like "waiting for your
+   files on main: README.md; commit or stash them") and the lead is told once. No new
+   worker is needed: once you commit, stash or undo those files, the regular check (every
+   two minutes) merges it by itself (it is brought up to date, and tested again only if
+   the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
+   merge at once. If the branch moved and the task now clashes or fails its tests, it gets
+   a new try as usual.
 7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
    "symcc: T-3 done" (and "symcc: T-5 needs you" when a task waits for your answer), starting with
    the project's name so you know which project spoke.

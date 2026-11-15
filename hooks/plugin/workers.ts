@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, FINISH_BEAT_MS, FINISH_LIMIT_MS } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, FINISH_BEAT_MS, FINISH_LIMIT_MS, waitsForFiles, blockerFiles, waitFilesNote, stillBlocks } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -149,7 +149,7 @@ export async function waitIfBranchGone($: $, b: Board, t: SymccTask, when: 'star
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     const line = `${when === 'start' ? 'not started' : 'not merged'}: branch ${into} is gone; asked the owner whether to merge into ${instead} instead`
-    return [patchTask(x, t.id, { status: 'waiting', question, options, note: 'waiting for you', history: [...cur.history, line], ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
+    return [patchTask(x, t.id, { status: 'waiting', question, options, merge_wait: undefined, note: 'waiting for you', history: [...cur.history, line], ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
   })
   if (asked) {
     sayNeedsYou($, b, t, question)
@@ -324,7 +324,7 @@ export async function stopChecks($: $, why: string): Promise<{ back: string[]; r
     if (stopAsked.has(id) || back.includes(id) || review.includes(id)) continue
     const kind = await change($, x => {
       const cur = find(x, id)
-      if (cur?.status === 'review' && approving.has(id)) return [x, 'review'] as [Board, string]
+      if ((cur?.status === 'review' || cur?.status === 'waiting') && approving.has(id)) return [x, 'review'] as [Board, string]
       if (cur?.status !== 'doing' || !finishing.has(id)) return [x, null] as [Board, null]
       const y = patchTask(x, id, { status: 'todo', note: `stopped: ${why} while its work was being checked; nothing merged, continues when it is on again`, history: [...cur.history, stoppedLine(cur, `${why} while its work was being checked; nothing merged, its files are kept`)], ...endedBy(cur, now(), 'stopped', `${why} while its work was being checked`) }, now())
       return [y, 'back'] as [Board, string]
@@ -486,7 +486,64 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     // Given up meanwhile: the task was already sent back (or found merged); this late outcome is not written over it.
     if (gaveUp()) return
     await recordCommits($, t.id, made, r.merged)
-    await settle($, t, b, r, summary, w.worktree, agentId)
+    if (r.blocked) await holdForFiles($, t, b, r, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`, w.worktree, agentId)
+    else await settle($, t, b, r, summary, w.worktree, agentId)
+  }
+}
+
+/**
+ * Task `t`'s finished work passed its checks, but the owner's files on the branch it merges into
+ * are in the way of the merge (`r.blocked`, nothing moved): it waits with merge_wait and a note
+ * naming the files ("waiting" after a worker's try; a task in review stays in review). No worker is
+ * needed again: the regular check, a retry or an approve only merges it once they are out of the
+ * way. The lead is told the first time only (not when it already waited for files). `line` goes
+ * into its history that first time. Written only while the task is still as it was.
+ */
+async function holdForFiles($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
+  const files = blockerFiles(r.blocked!)
+  const note = waitFilesNote(intoOf(t), r.blocked!)
+  const res = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur) return [x, 'gone'] as [Board, 'gone']
+    if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur] as [Board, SymccTask]
+    const first = !waitsForFiles(cur)
+    const status = cur.status === 'review' ? 'review' : 'waiting'
+    const y = patchTask(x, t.id, { status, merge_wait: files, note, ...(first ? { history: [...cur.history, line] } : {}), ...endedBy(cur, now(), 'finished', 'waiting for your files') }, now())
+    return [y, first] as [Board, boolean]
+  })
+  if (res === 'gone') return
+  if (typeof res !== 'boolean') return changedMeanwhile($, t, b, r, line, worktree, agentId)
+  if (!res) return
+  const text = `${t.id} "${t.title}" passed its checks, but its merge into ${intoOf(t)} waits for the owner's files there (${note.replace(/^waiting for your files on \S+: /, '')}). It merges on its own at the next regular check once they are out of the way, with no new worker; ${S.N.name} retry ${t.id} merges it at once. Tell the owner.`
+  if (quiet) noteForLead(text)
+  else tellLead($, text)
+}
+
+/**
+ * The regular check's part for tasks whose finished work waits only for the owner's files
+ * (BoardTask.merge_wait): each one whose files are out of the way now (or whose branch is not
+ * checked out any more) is merged again, with no worker (see mergeWaiting). Not in mode off.
+ */
+export async function retryFileWaits($: $) {
+  const b = await load($)
+  if (modeOf(b) === 'off') return
+  const waiting = b.tasks.filter(t => waitsForFiles(t) && !checkingNow(t.id))
+  let current: string | null = null
+  let status: string | null = null
+  for (const t of waiting) {
+    current ??= (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
+    if (current === intoOf(t)) {
+      if (status === null) {
+        const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
+        if (st.exitCode !== 0) return
+        status = st.stdout
+      }
+      if (stillBlocks(status, t.merge_wait ?? [], S.N.dir)) continue
+    }
+    await mergeWaiting($, t.id).catch(() => undefined)
+    // that merge may have changed the owner's files: look again for the next one
+    current = null
+    status = null
   }
 }
 
@@ -530,7 +587,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)}, still after ${tries} tries to merge it in` : r.detail
   const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
-  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}) })))) return
+  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
   if (r.ok) sayDone($, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
   if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
@@ -543,64 +600,99 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
 export async function approve($: $, id: string): Promise<string> {
   const b = await load($)
   const t = reviewTask(b, id, 'approve')
+  return mergeFinished($, b, t, 'approve')
+}
+
+/**
+ * Task `id`'s finished work waits only for the owner's files (BoardTask.merge_wait): only the merge
+ * step runs again, with no worker (brought up to date, tested only if its branch moved, then
+ * merged). A task in review (an approve that was blocked) is approved again.
+ */
+export async function mergeWaiting($: $, id: string): Promise<string> {
+  const b = await load($)
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (!waitsForFiles(t)) return `${t.id} is not waiting for your files`
+  return mergeFinished($, b, t, t.status === 'review' ? 'approve' : 'merge')
+}
+
+/**
+ * Merges task `t`'s finished work: `kind` 'approve' (the owner approved it, in "review") or 'merge'
+ * (it was "waiting" only for the owner's files). The same checked merge as for a finished worker.
+ */
+async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
+  const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
-  if (!(await gitReady($, b))) return `${t.id} stays in review: ${gitNote(S.gitState)}`
+  if (!(await gitReady($, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
   if (await waitIfBranchGone($, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
-  // The same time limit as a finished worker's check (FINISH_LIMIT_MS): past it the approve is
-  // given up (approveRanOver), so it no longer holds the task, its id or the branch's merge turn.
+  // The same time limit as a finished worker's check (FINISH_LIMIT_MS): past it the merge is
+  // given up (mergeRanOver), so it no longer holds the task, its id or the branch's merge turn.
   // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
   let gaveUp = false
   let letGo = () => {}
   const over = new Promise<'over'>(r => (letGo = () => r('over')))
   const limit = afterMs($, FINISH_LIMIT_MS, () => ((gaveUp = true), letGo()))
-  const step = approveWork($, t, b, () => gaveUp, over)
+  const step = mergeWork($, t, b, kind, () => gaveUp, over)
   const how = limit ? await Promise.race([step, over]) : await step
   limit?.cancel()
   if (how !== 'over') return how
   step.catch(() => undefined)
   approving.delete(t.id)
   await endCheck($, t.id)
-  const out = await approveRanOver($, t.id)
+  const out = await mergeRanOver($, t.id, t.status, kind)
   void pump($)
   return out
 }
 
 /**
- * The owner's approve of task `id` ran over FINISH_LIMIT_MS and was given up: while it is still in
- * review it stays there, with a note and a history line saying so; the lead is told once.
+ * The merge of task `id` (an approve, or a merge waiting for the owner's files) ran over
+ * FINISH_LIMIT_MS and was given up: while it is still `status` it stays there, with a note and a
+ * history line saying so; the lead is told once.
  */
-async function approveRanOver($: $, id: string): Promise<string> {
+async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind: 'approve' | 'merge'): Promise<string> {
   const min = Math.round(FINISH_LIMIT_MS / 60_000)
+  const again = kind === 'approve' ? 'approve it again' : `${S.N.name} retry ${id}`
+  const what = kind === 'approve' ? 'approved by the owner' : 'merging once your files were out of the way'
   const t = await change($, x => {
     const cur = find(x, id)
-    if (cur?.status !== 'review') return [x, null] as [Board, null]
-    const y = patchTask(x, id, { note: `approved, but the merge ran over ${min} min and was given up; approve it again`, history: [...cur.history, `${tryLabel(cur)}: approved by the owner → its checking and merging ran over ${min} min and was given up; nothing written, it stays in review`] }, now())
+    if (cur?.status !== status) return [x, null] as [Board, null]
+    const y = patchTask(x, id, { note: `${kind === 'approve' ? 'approved, but the' : 'the'} merge ran over ${min} min and was given up; ${again}`, merge_wait: undefined, history: [...cur.history, `${tryLabel(cur)}: ${what} → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`] }, now())
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
-  if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
-  return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
+  if (kind === 'approve') {
+    if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
+    return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
+  }
+  if (t) tellLead($, `${id} "${t.title}": its merge ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It keeps waiting; ${S.N.name} retry ${id} tries the merge again.`)
+  return `${id} was not merged and keeps waiting: its checking and merging ran over ${min} minutes and was given up. Retry it.`
 }
 
-/** The body of approve, once the task is marked as being approved. `gaveUp`, `release`: as for finishWork. */
-async function approveWork($: $, t: SymccTask, b: Board, gaveUp: () => boolean, release: Promise<unknown>): Promise<string> {
+/** How a status is said in a history line: "in review", "waiting". */
+const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)
+
+/** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`: as for finishWork. */
+async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>): Promise<string> {
+  const status = t.status
+  const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
+  const by = kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
   try {
     const dir = worktreeDir(t.id)
     if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, intoOf(t))
     // The owner's own edits in the folder since review (or edits whose tests failed on an
     // earlier approve, kept as test_output): those are committed with the task and always tested.
     const edits = await ownerEdits($, t, dir).catch(() => [] as string[])
-    const retest = edits.length > 0 || t.test_output !== undefined
+    const retest = edits.length > 0 || (kind === 'approve' && t.test_output !== undefined)
     if (gaveUp()) return ''
     await change($, x => {
       const cur = find(x, t.id)
-      if (cur?.status !== 'review' || gaveUp()) return x
-      return patchTask(x, t.id, { note: 'approved; checking and merging', ...(edits.length ? { history: [...cur.history, ownerEditedLine(edits)] } : {}) }, now())
+      if (cur?.status !== status || gaveUp()) return x
+      return patchTask(x, t.id, { note: kind === 'approve' ? 'approved; checking and merging' : 'your files are out of the way; merging', ...(edits.length ? { history: [...cur.history, ownerEditedLine(edits)] } : {}) }, now())
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, stop, retest, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    // Given up meanwhile: approveRanOver already wrote its note; this late outcome is not written over it.
+    const r: CheckResult = await checkAndMerge($, t, dir, b, kind, made, stop, retest, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over it.
     if (gaveUp()) return ''
     await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
@@ -612,46 +704,53 @@ async function approveWork($: $, t: SymccTask, b: Board, gaveUp: () => boolean, 
         tellLead($, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
         return `${t.id} was merged into ${intoOf(t)} (${sha}), but it is no longer on the board`
       }
-      await settle($, t, b, r, 'approved by the owner', dir, undefined, true)
+      await settle($, t, b, r, by, dir, undefined, kind === 'approve')
       const off = offAsked.get(t.id)
-      if (off && cur.status === 'review') {
+      if (off && cur.status === status) {
         await change($, x => {
           const c = find(x, t.id)
           return c?.status === 'done' ? patchTask(x, t.id, { history: [...c.history, `${tryLabel(t)}: ${off} while it was being merged, too late: the work was already merged, so it stays done`] }, now()) : x
         })
         return `${t.id} was merged into ${intoOf(t)} (${sha}) before ${off}; it is done`
       }
-      return cur.status === 'review' ? `${t.id} approved and merged: ${r.detail}` : `${t.id} was merged into ${intoOf(t)} (${sha}) before it was ${cur.status}; it is done`
+      return cur.status === status ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} was merged into ${intoOf(t)} (${sha}) before it was ${cur.status}; it is done`
     }
-    if (cur?.status !== 'review') return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing was merged`
+    if (cur?.status !== status) return `${t.id} changed while it was being merged (it is now ${cur?.status ?? 'gone'}); nothing was merged`
     const off = offAsked.get(t.id)
     if (off) {
+      const again = kind === 'approve' ? 'approve it again' : 'it merges at a later check'
       await change($, x => {
         const c = find(x, t.id)
-        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${off} first; approve it again`, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged: ${off} while it was being merged; it stays in review`] }, now()) : x
+        return c?.status === status ? patchTask(x, t.id, { note: `${kind === 'approve' ? 'approved, but ' : ''}not merged: ${off} first; ${again}`, history: [...c.history, `${tryLabel(t)}: ${by.replace(/^merged /, 'merging ')} → not merged: ${off} while it was being merged; it ${stays}`] }, now()) : x
       })
-      return `${t.id} was not merged and stays in review: ${off} while it was being merged. Approve it again.`
+      return `${t.id} was not merged and ${stays}: ${off} while it was being merged. ${kind === 'approve' ? 'Approve it again.' : `Retry it, or it merges at a later check.`}`
     }
-    if (retest && r.testOutput !== undefined) {
+    if (r.blocked) {
+      // Only the owner's files are in the way: it waits for them (merge_wait); the regular check merges it once they are clear.
+      await holdForFiles($, t, b, r, `${tryLabel(t)}: ${kind === 'approve' ? 'approved by the owner' : 'merging again'} → ${r.detail}`, dir, undefined, kind === 'approve')
+      return `${t.id} was not merged and ${stays}: ${r.detail}.`
+    }
+    if (kind === 'approve' && retest && r.testOutput !== undefined) {
       // The owner's edits fail the tests: it stays in review with the output, not sent to a worker.
       const folder = `${S.N.dir}/worktrees/${t.id}`
       await change($, x => {
         const c = find(x, t.id)
-        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, test_output: r.testOutput, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`] }, now()) : x
+        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, merge_wait: undefined, test_output: r.testOutput, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`] }, now()) : x
       })
       tellLead($, `${t.id} "${t.title}" was not merged: with the owner's edits the tests fail. It stays in review; the owner can fix the files in ${folder} and approve again.\n${r.testOutput}`)
       return `${t.id} was not merged and stays in review: ${r.detail}. Fix the files in ${folder}, then approve it again (the tests run again).`
     }
-    if (!r.ok && !r.conflict && r.testOutput === undefined) {
-      // Not the work's fault (e.g. uncommitted changes on the target branch): it stays in review.
-      await change($, x => patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}` }, now()))
-      // A blocked-by-your-files answer already says to approve again; anything else gets that advice here.
+    if (kind === 'approve' && !r.ok && !r.conflict && r.testOutput === undefined) {
+      // Not the work's fault (e.g. the owner's files could not be updated): it stays in review.
+      await change($, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}`, merge_wait: undefined }, now()) : x))
+      // An answer that already says to approve again needs no more advice; anything else gets it here.
       return `${t.id} was not merged and stays in review: ${r.detail}${/approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'}`
     }
-    await settle($, cur, b, r, 'approved by the owner', dir)
-    return r.ok ? `${t.id} approved and merged: ${r.detail}` : `${t.id} approved, but not merged: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
+    await settle($, cur, b, r, by, dir)
+    const label = kind === 'approve' ? 'approved, but not merged' : 'not merged'
+    return r.ok ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} ${label}: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
   } finally {
-    // Given up: approve already let go of the id (a new approve may hold it now) and ended the check.
+    // Given up: mergeFinished already let go of the id (a new merge may hold it now) and ended the check.
     if (!gaveUp()) {
       approving.delete(t.id)
       await endCheck($, t.id)
@@ -921,6 +1020,8 @@ export async function check($: $) {
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
   for (const t of late) reminded.set(t.id, t.updated_at)
   if (late.length) tellLead($, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
+  // Finished work waiting only for the owner's files: merged now (no worker) once they are out of the way.
+  await retryFileWaits($).catch(() => undefined)
   if (S.gitState === 'ok') await cleanupMerged($, await load($)).catch(() => undefined)
   // old done and dropped tasks move to archive.json (at most once an hour)
   await archiveOld($).catch(() => undefined)

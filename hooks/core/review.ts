@@ -148,10 +148,10 @@ export const DIFF_COLOR: Record<DiffKind, string> = { add: 'success', remove: 'e
 
 // ---------------- moving the target branch (the last step of a merge) ----------------
 
-/** One line of `git status --porcelain -z`: its two-letter code ("M ", "??", ...) and path. */
-export type StatusEntry = { code: string; path: string }
+/** One line of `git status --porcelain -z`: its two-letter code ("M ", "??", ...) and path; `from`: the old path of a rename or copy. */
+export type StatusEntry = { code: string; path: string; from?: string }
 
-/** The entries of `git status --porcelain -z` output. For a rename or copy, the new path (the old one is skipped). */
+/** The entries of `git status --porcelain -z` output. For a rename or copy, the new path, with the old one in `from`. */
 export function parseStatusZ(text: string): StatusEntry[] {
   const parts = String(text ?? '').split('\0')
   const out: StatusEntry[] = []
@@ -159,8 +159,9 @@ export function parseStatusZ(text: string): StatusEntry[] {
     const s = parts[i]!
     if (s.length < 4) continue
     const code = s.slice(0, 2)
-    out.push({ code, path: s.slice(3) })
-    if (code[0] === 'R' || code[0] === 'C') i++
+    const e: StatusEntry = { code, path: s.slice(3) }
+    if ((code[0] === 'R' || code[0] === 'C') && parts[i + 1]) e.from = parts[++i]!
+    out.push(e)
   }
   return out
 }
@@ -172,26 +173,30 @@ const clashes = (a: string, b: string) => {
   return x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`)
 }
 
+/** The owner's files that stop a merge: uncommitted changes (`dirty`), untracked and git-ignored files, each only where the merge changes files. */
+export type Blockers = { dirty: string[]; untracked: string[]; ignored: string[] }
+
 /**
  * What stops a merge from updating the owner's files, from
- * `git status --porcelain -z --untracked-files=all --ignored=matching`:
- * `dirty`, their uncommitted changes to tracked files; `untracked` and `ignored`, their untracked
- * and git-ignored files that the merge (`incoming`: the paths it changes) would create or overwrite.
- * Ignored files the merge doesn't touch (node_modules/ and the like) never count, and neither do
+ * `git status --porcelain -z --untracked-files=all --ignored=matching`, given `incoming` (the paths
+ * the merge changes): `dirty`, their uncommitted changes (staged or not) to those files; `untracked`
+ * and `ignored`, their untracked and git-ignored files there. Anything the merge doesn't touch never
+ * counts (their other edits stay as they are while the merge updates the rest), and neither do
  * paths under `skipDir/` (the board).
  */
-export function mergeBlockers(statusZ: string, incoming: readonly string[], skipDir: string): { dirty: string[]; untracked: string[]; ignored: string[] } {
-  const dirty: string[] = []
-  const untracked: string[] = []
-  const ignored: string[] = []
+export function mergeBlockers(statusZ: string, incoming: readonly string[], skipDir: string): Blockers {
+  const out: Blockers = { dirty: [], untracked: [], ignored: [] }
+  const inSkip = (p: string) => !!skipDir && (p === skipDir || p === `${skipDir}/` || p.startsWith(`${skipDir}/`))
+  const hit = (p: string | undefined) => p !== undefined && !inSkip(p) && incoming.some(f => clashes(f, p))
   for (const e of parseStatusZ(statusZ)) {
-    if (skipDir && (e.path === skipDir || e.path === `${skipDir}/` || e.path.startsWith(`${skipDir}/`))) continue
-    if (e.code === '??' || e.code === '!!') {
-      if (incoming.some(f => clashes(f, e.path))) (e.code === '!!' ? ignored : untracked).push(e.path)
-    } else dirty.push(e.path)
+    if (!hit(e.path) && !hit(e.from)) continue
+    ;(e.code === '??' ? out.untracked : e.code === '!!' ? out.ignored : out.dirty).push(hit(e.path) ? e.path : e.from!)
   }
-  return { dirty, untracked, ignored }
+  return out
 }
+
+/** All the owner's files in `b`, in the order dirty, untracked, ignored. */
+export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...(b.ignored ?? [])]
 
 /** A path made safe to show: control characters (newlines, terminal escapes) become "?". */
 const shown = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
@@ -202,20 +207,40 @@ const fileList = (files: readonly string[], n = 5) => {
   return f.length > n ? `${f.slice(0, n).join(', ')} and ${f.length - n} more` : f.join(', ')
 }
 
+/** What the owner does about blocking files: commit or stash changes, move untracked or ignored files out of the way. */
+const fixText = (b: Blockers) => {
+  const ways: string[] = []
+  if (b.dirty.length) ways.push('commit or stash')
+  if (b.untracked.length || b.ignored?.length) ways.push(b.untracked.length ? 'move, rename or commit' : 'move or rename')
+  return `${[...new Set(ways)].join(', or ')} them`
+}
+
 /** What the owner does once they fixed their files: a worker's finished work is retried, a blocked approve is approved again. */
 export type BlockedAction = 'retry' | 'approve'
 
 /** The end of a "fix your files" message: 'say "retry T-1"' or 'approve T-1 again'. */
 const thenDo = (action: BlockedAction, id: string) => action === 'approve' ? `approve ${id} again` : `say "retry ${id}"`
 
-/** Why a merge waits for the owner, or '' when nothing stops it. `action` is what they do after fixing it. */
-export function blockedText(target: string, id: string, b: { dirty: readonly string[]; untracked: readonly string[]; ignored?: readonly string[] }, action: BlockedAction = 'retry'): string {
-  const then = thenDo(action, id)
-  if (b.dirty.length) return `you have uncommitted changes on ${target}; commit or stash them, then ${then}`
-  if (b.untracked.length) return `you have untracked files on ${target} that ${id} would overwrite (${fileList(b.untracked)}); move, rename or commit them, then ${then}`
-  if (b.ignored?.length) return `you have git-ignored files on ${target} that ${id} would overwrite (${fileList(b.ignored)}); move or rename them, then ${then}`
-  return ''
+/**
+ * Why a merge waits for the owner's files, or '' when nothing stops it. It names the files and says
+ * the merge happens on its own once they are out of the way (the regular check tries it again).
+ */
+export function blockedText(target: string, id: string, b: Partial<Blockers>): string {
+  const all: Blockers = { dirty: b.dirty ?? [], untracked: b.untracked ?? [], ignored: b.ignored ?? [] }
+  if (!blockerFiles(all).length) return ''
+  const what = [
+    all.dirty.length ? `uncommitted changes on ${target} to files ${id} changes (${fileList(all.dirty)})` : '',
+    all.untracked.length ? `untracked files on ${target} that ${id} would overwrite (${fileList(all.untracked)})` : '',
+    all.ignored.length ? `git-ignored files on ${target} that ${id} would overwrite (${fileList(all.ignored)})` : '',
+  ].filter(Boolean)
+  return `you have ${what.join(' and ')}; ${fixText(all)}, and ${id} merges on its own at the next check`
 }
+
+/** The note of a task whose finished work waits only for the owner's files: "waiting for your files on main: README.md; commit or stash them". */
+export const waitFilesNote = (target: string, b: Blockers) => `waiting for your files on ${target}: ${fileList(blockerFiles(b))}; ${fixText(b)}`
+
+/** Whether any of `files` (a task's merge_wait) is still in the owner's way, from their `git status --porcelain -z --untracked-files=all --ignored=matching`. */
+export const stillBlocks = (statusZ: string, files: readonly string[], skipDir: string): boolean => blockerFiles(mergeBlockers(statusZ, files, skipDir)).length > 0
 
 /** Runs one git command in the owner's folder. */
 export type GitRun = (args: string[]) => Promise<{ exitCode: number; stdout: string; stderr: string }>
@@ -226,12 +251,14 @@ const gitError = (r: { stdout: string; stderr: string }) => `${r.stderr}\n${r.st
 /**
  * Moves `target` from commit `from` to `to` (compare-and-swap). When the owner has `target`
  * checked out (`checkedOut`), their files are updated too, but never over their uncommitted
- * changes or untracked or git-ignored files the merge would overwrite: then it waits and says why. If updating
+ * changes, untracked or git-ignored files in files the merge changes: then it returns `blocked` (those
+ * files) and says why. Their other uncommitted changes are kept as they are (read-tree -m -u leaves
+ * files the merge doesn't change alone). If updating
  * the files fails after the branch moved, the branch is put back, so the owner's folder is left as it was.
  * `ok` only when the branch moved and (if checked out) the files were updated; `raced` when the
  * branch was no longer at `from` (something else moved it first), so bringing the work up to date and trying again can work.
  */
-export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; raced?: boolean }> {
+export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; raced?: boolean; blocked?: Blockers }> {
   const ref = `refs/heads/${o.target}`
   const action = o.action ?? 'retry'
   if (o.checkedOut) {
@@ -241,8 +268,8 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
     // file in it): read-tree overwrites ignored files without a word, so they must be checked here.
     const st = await run(['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
     if (st.exitCode !== 0) return { ok: false, detail: `could not check your files on ${o.target}: ${gitError(st)}` }
-    const why = blockedText(o.target, o.id, mergeBlockers(st.stdout, diff.stdout.split('\0').filter(Boolean), o.skipDir), action)
-    if (why) return { ok: false, detail: why }
+    const blocked = mergeBlockers(st.stdout, diff.stdout.split('\0').filter(Boolean), o.skipDir)
+    if (blockerFiles(blocked).length) return { ok: false, detail: blockedText(o.target, o.id, blocked), blocked }
     // A dry run catches anything else that would stop the update, before the branch moves.
     const dry = await run(['read-tree', '-n', '-m', '-u', o.from, o.to])
     if (dry.exitCode !== 0) return { ok: false, detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then ${thenDo(action, o.id)}` }

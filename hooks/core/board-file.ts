@@ -47,8 +47,15 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * worker owns it; `agent` is the agent id of the last worker started on it. `finishing`: while
  * its finished work is being tested and merged, when that copy of the plugin last said it is
  * still at it (an ISO time, refreshed often), so a reloaded copy doesn't send the task back meanwhile.
+ * `merge_wait`: its work is finished and checked (on its branch), and only the merge waits for these
+ * files of the owner on the branch it merges into (uncommitted changes, untracked or ignored files in
+ * the way); only while "waiting" (a finished worker's try) or "review" (an approve). The regular
+ * check, a retry or an approve then only merges it, with no new worker.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; merge_wait?: string[] }
+
+/** Whether task `t` only waits for the owner's files before its finished work is merged (see BoardTask.merge_wait). */
+export const waitsForFiles = (t: { status?: unknown; merge_wait?: unknown } | undefined): boolean => !!t && (t.status === 'waiting' || t.status === 'review') && Array.isArray(t.merge_wait) && t.merge_wait.length > 0
 
 /** The data folder for the default name. For another name use namesFor(name). */
 export const DATA_DIR = dataDir()
@@ -185,7 +192,8 @@ function cleanTask(t: unknown): BoardTask | null {
   if (x.question !== null && typeof x.question !== 'string') x.question = null
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
-  for (const k of ['asked_files', 'options']) if (k in x && !(Array.isArray(x[k]) && (x[k] as unknown[]).every(v => typeof v === 'string'))) delete x[k]
+  for (const k of ['asked_files', 'options', 'merge_wait']) if (k in x && !(Array.isArray(x[k]) && (x[k] as unknown[]).every(v => typeof v === 'string'))) delete x[k]
+  if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
   const { session, finishing, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'
   return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}) } as BoardTask

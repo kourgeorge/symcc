@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, FINISH_LIMIT_MS } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, FINISH_LIMIT_MS } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -499,13 +499,28 @@ test('mergeTurn runs merges into the same branch one after another, even when on
   expect(log).toEqual(['a start', 'd', 'a end', 'b', 'c'])
 })
 
-test('checkAndMerge waits when the owner has main checked out with uncommitted changes', async () => {
-  const w = world({ current: 'main', status: ' M README.md\0' })
+test('checkAndMerge on a checked-out main merges around the owner\'s uncommitted changes in other files, and leaves them alone', async () => {
+  const w = world({ current: 'main', status: ' M README.md\0M  docs/notes.md\0' })
   const [b, t] = boardWith('auto')
   const r = await checkAndMerge(w.$, t, WT, b)
-  expect(r).toEqual({ ok: false, detail: blockedText('main', 'T-1', { dirty: ['README.md'], untracked: [] }) })
-  expect(r.detail).toBe('you have uncommitted changes on main; commit or stash them, then say "retry T-1"')
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); no test command set` })
+  expect(w.git.main).toBe(H1)
+  // the dry run first, then the files are updated with read-tree -m -u, which keeps changes to files the merge doesn't change
+  const root = w.calls.filter(c => c.startsWith('root: git '))
+  expect(root.indexOf(`root: git read-tree -n -m -u ${M1} ${H1}`)).toBeLessThan(root.indexOf(`root: git read-tree -m -u ${M1} ${H1}`))
+  // nothing that could throw the owner's edits away ran in their folder
+  expect(root.some(c => / git (reset|checkout|stash|restore|clean|merge) /.test(c))).toBe(false)
+  expect(w.git.status).toBe(' M README.md\0M  docs/notes.md\0')
+})
+
+test('checkAndMerge waits when the owner has uncommitted changes in a file the task changes, and names it', async () => {
+  const w = world({ current: 'main', status: ' M src/a.ts\0 M README.md\0' })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: blockedText('main', 'T-1', { dirty: ['src/a.ts'], untracked: [] }), blocked: { dirty: ['src/a.ts'], untracked: [], ignored: [] } })
+  expect(r.detail).toBe('you have uncommitted changes on main to files T-1 changes (src/a.ts); commit or stash them, and T-1 merges on its own at the next check')
   expect(movedMain(w)).toBe(false)
+  expect(w.calls.some(c => c.includes('read-tree'))).toBe(false)
 })
 
 test('checkAndMerge waits when an untracked file of the owner would be overwritten by the merge', async () => {
@@ -513,7 +528,7 @@ test('checkAndMerge waits when an untracked file of the owner would be overwritt
   const [b, t] = boardWith('auto')
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r.ok).toBe(false)
-  expect(r.detail).toBe('you have untracked files on main that T-1 would overwrite (src/a.ts); move, rename or commit them, then say "retry T-1"')
+  expect(r.detail).toBe('you have untracked files on main that T-1 would overwrite (src/a.ts); move, rename or commit them, and T-1 merges on its own at the next check')
   expect(movedMain(w)).toBe(false)
 })
 
@@ -531,7 +546,7 @@ test('checkAndMerge waits and names a git-ignored file of the owner that the mer
   const [b, t] = boardWith('auto')
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r.ok).toBe(false)
-  expect(r.detail).toBe('you have git-ignored files on main that T-1 would overwrite (src/config.local.json); move or rename them, then say "retry T-1"')
+  expect(r.detail).toBe('you have git-ignored files on main that T-1 would overwrite (src/config.local.json); move or rename them, and T-1 merges on its own at the next check')
   expect(w.calls).toContain('root: git status --porcelain -z --untracked-files=all --ignored=matching')
   expect(movedMain(w)).toBe(false)
   expect(w.calls.some(c => c.includes('read-tree -m -u'))).toBe(false)
@@ -555,12 +570,12 @@ test('checkAndMerge merges when the owner\'s git-ignored files are not touched b
 })
 
 test('mergeBlockers sorts dirty, untracked and ignored paths and skips the board folder', () => {
-  const st = ' M README.md\0?? src/a.ts\0!! secret.env\0!! .symcc/\0?? .symcc/board.json\0!! dist/\0'
-  expect(mergeBlockers(st, ['src/a.ts', 'secret.env', '.symcc/board.json'], '.symcc')).toEqual({ dirty: ['README.md'], untracked: ['src/a.ts'], ignored: ['secret.env'] })
+  const st = ' M README.md\0 M other.md\0?? src/a.ts\0!! secret.env\0!! .symcc/\0?? .symcc/board.json\0!! dist/\0'
+  expect(mergeBlockers(st, ['README.md', 'src/a.ts', 'secret.env', '.symcc/board.json'], '.symcc')).toEqual({ dirty: ['README.md'], untracked: ['src/a.ts'], ignored: ['secret.env'] })
 })
 
 test('blockedText hides control characters in file names', () => {
-  expect(blockedText('main', 'T-1', { dirty: [], untracked: [], ignored: ['a\nb\u001b[31m.txt'] })).toBe('you have git-ignored files on main that T-1 would overwrite (a?b?[31m.txt); move or rename them, then say "retry T-1"')
+  expect(blockedText('main', 'T-1', { dirty: [], untracked: [], ignored: ['a\nb\u001b[31m.txt'] })).toBe('you have git-ignored files on main that T-1 would overwrite (a?b?[31m.txt); move or rename them, and T-1 merges on its own at the next check')
 })
 
 test('checkAndMerge puts main back and says "not merged" when updating the files fails after main moved', async () => {
@@ -629,16 +644,22 @@ test('approve when main moved runs the tests again; failing, nothing merges and 
   expect(t.test_output).toContain('FAIL a.test')
 })
 
-test('approve that is blocked by the owner\'s uncommitted changes keeps the task in review', async () => {
-  const w = await inReview({ current: 'main', status: ' M README.md\0' })
+test('approve that is blocked by the owner\'s uncommitted changes in a file it changes keeps the task in review, waiting for that file', async () => {
+  const w = await inReview({ current: 'main', status: ' M src/a.ts\0' })
   const out = await runTool(w.$, 'approve', { task: 'T-1' })
-  expect(out).toBe('T-1 was not merged and stays in review: you have uncommitted changes on main; commit or stash them, then approve T-1 again.')
+  expect(out).toBe('T-1 was not merged and stays in review: you have uncommitted changes on main to files T-1 changes (src/a.ts); commit or stash them, and T-1 merges on its own at the next check.')
   expect(out).not.toContain('retry')
-  const t = find(await load(w.$), 'T-1')!
+  let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
-  expect(t.note).toMatch(/^approved, but not merged: you have uncommitted changes on main/)
-  expect(t.note).not.toContain('retry')
+  expect(t.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
+  expect((t as BoardTask).merge_wait).toEqual(['src/a.ts'])
   expect(w.git.main).toBe(M1)
+  // once the file is committed, approving again only merges it
+  w.git.status = ''
+  expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe(`T-1 approved and merged: merged into main (${H1.slice(0, 8)}); approved by the owner`)
+  t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect((t as BoardTask).merge_wait).toBeUndefined()
 })
 
 test('approve with no edits since review adds no "owner edited" line', async () => {
@@ -2194,4 +2215,173 @@ test('a finish step given up while it waits for its merge turn runs no git comma
   expect(late.filter(c => c.startsWith('wt:') || c.startsWith('/bin/sh'))).toEqual([])
   expect(late.some(c => c.includes('git update-ref'))).toBe(false)
   expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+})
+
+// ---------------- finished work waiting only for the owner's files (T-223) ----------------
+
+/**
+ * T-1's worker (ag1) finishes in auto mode while the owner has main checked out with `status` (their
+ * `git status --porcelain -z`). This session drives the board; every worker start is kept in `spawned`.
+ */
+async function finishedOnDirtyMain(status: string, test_commands = ['npm test']) {
+  const w = world({ current: 'main', status })
+  S.me = 'me'
+  const spawned: string[] = []
+  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
+  x.plugin = { root: '/plugin' }
+  x.fs.list = async () => []
+  const [b0] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b0)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.clear()
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  S.startupDone = true
+  S.driving = true
+  leadQueue.splice(0)
+  await workerFinished(w.$, 'ag1', 'made the change', false)
+  return { w, spawned, t: async () => find(await load(w.$), 'T-1')! as BoardTask }
+}
+
+const toldWaiting = () => leadQueue.filter(m => m.includes("waits for the owner's files")).length
+
+test("an unrelated uncommitted change on main doesn't block a finished task: it merges and the change is still there", async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain(' M README.md\0')
+    expect((await t()).status).toBe('done')
+    expect(w.git.main).toBe(H1)
+    expect(w.calls).toContain(`root: git read-tree -m -u ${M1} ${H1}`)
+    expect(w.git.status).toBe(' M README.md\0')
+    expect(w.calls.some(c => /^root: git (reset|checkout|stash|restore|clean) /.test(c))).toBe(false)
+    expect(spawned).toEqual([])
+  } finally {
+    cleanUp()
+  }
+})
+
+test('an uncommitted change in a file the task changes: the task waits with a note, the lead is told once, no worker starts; the next check merges it once the file is clear', async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0 M README.md\0')
+    let x = await t()
+    expect(x.status).toBe('waiting')
+    expect(x.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
+    expect(x.merge_wait).toEqual(['src/a.ts'])
+    expect(x.question).toBeNull()
+    expect(x.runs!.at(-1)!.ended_note).toBe('waiting for your files')
+    expect(w.git.main).toBe(M1)
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+    expect(toldWaiting()).toBe(1)
+    // the regular check while the file is still changed: nothing merges, nothing is told again, no worker
+    await check(w.$)
+    x = await t()
+    expect(x.status).toBe('waiting')
+    expect(w.git.main).toBe(M1)
+    expect(toldWaiting()).toBe(1)
+    expect(spawned).toEqual([])
+    // the owner reverts src/a.ts (README.md stays changed): the next check only merges, with no worker and no new test run (main did not move)
+    w.git.status = ' M README.md\0'
+    await check(w.$)
+    x = await t()
+    expect(x.status).toBe('done')
+    expect(x.merged).toBe(H1)
+    expect(x.merge_wait).toBeUndefined()
+    expect(x.runs!.at(-1)!.ended_note).toBe('merged')
+    expect(w.git.main).toBe(H1)
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+    expect(spawned).toEqual([])
+    expect(x.attempts).toBe(1)
+    expect(leadQueue.some(m => m.startsWith('✓ T-1 "Do it" merged into main'))).toBe(true)
+    expect(w.git.status).toBe(' M README.md\0')
+  } finally {
+    cleanUp()
+  }
+})
+
+test('a waiting merge whose main moved meanwhile is brought up to date and tested again, still with no worker', async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
+    expect((await t()).status).toBe('waiting')
+    // the owner committed their change to src/a.ts: main moved
+    w.git.status = ''
+    w.git.main = M2
+    w.git.upToDate = false
+    await check(w.$)
+    const x = await t()
+    expect(x.status).toBe('done')
+    expect(w.git.main).toBe(H2)
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm test'])
+    expect(spawned).toEqual([])
+  } finally {
+    cleanUp()
+  }
+})
+
+test('a waiting merge that now conflicts with a moved main gets a new try with a worker, as before', async () => {
+  try {
+    const { w, t } = await finishedOnDirtyMain(' M src/a.ts\0')
+    w.git.status = ''
+    w.git.main = M2
+    w.git.upToDate = false
+    w.git.conflict = true
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 not merged: conflicts with the latest main (see the board for what happens next)')
+    const x = await t()
+    expect(x.status === 'todo' || x.status === 'doing').toBe(true)
+    expect(x.merge_main).toBe(true)
+    expect(x.merge_wait).toBeUndefined()
+  } finally {
+    cleanUp()
+  }
+})
+
+test('a manual retry of a task waiting for the owner\'s files only merges it; while they are still in the way it keeps waiting', async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain('?? src/a.ts\0')
+    expect((await t()).note).toBe('waiting for your files on main: src/a.ts; move, rename or commit them')
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 was not merged and keeps waiting: you have untracked files on main that T-1 would overwrite (src/a.ts); move, rename or commit them, and T-1 merges on its own at the next check.')
+    expect((await t()).status).toBe('waiting')
+    expect(toldWaiting()).toBe(1)
+    w.git.status = ''
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe(`T-1 merged: merged into main (${H1.slice(0, 8)})`)
+    const x = await t()
+    expect(x.status).toBe('done')
+    expect(x.attempts).toBe(1)
+    expect(spawned).toEqual([])
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  } finally {
+    cleanUp()
+  }
+})
+
+test('an approve blocked by the owner\'s files is merged by the regular check once they are clear, and a retry of it only merges too', async () => {
+  try {
+    for (const how of ['check', 'retry'] as const) {
+      const w = await inReview({ current: 'main', status: ' M src/a.ts\0' })
+      S.me = 'me'
+      const x = w.$ as unknown as { fs: Record<string, unknown> }
+      x.fs.list = async () => []
+      S.startupDone = true
+      S.driving = true
+      await runTool(w.$, 'approve', { task: 'T-1' })
+      expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+      w.git.status = ''
+      if (how === 'check') await check(w.$)
+      else expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe(`T-1 approved and merged: merged into main (${H1.slice(0, 8)}); approved by the owner`)
+      const t = find(await load(w.$), 'T-1')!
+      expect(t.status).toBe('done')
+      expect(w.git.main).toBe(H1)
+    }
+  } finally {
+    cleanUp()
+  }
+})
+
+test('merge_wait is kept only while the task stays waiting or in review', () => {
+  const [b] = boardWith('auto')
+  const w = patchTask(b, 'T-1', { status: 'waiting', merge_wait: ['a.txt'], note: 'waiting for your files' }, ISO)
+  expect((find(w, 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
+  expect((find(patchTask(w, 'T-1', { note: 'x' }, ISO), 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
+  expect((find(patchTask(w, 'T-1', { status: 'todo' }, ISO), 'T-1') as BoardTask).merge_wait).toBeUndefined()
+  expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
+  const done = { ...w, tasks: w.tasks.map(t => ({ ...t, status: 'done' as const })) }
+  expect((find(parseBoard(JSON.stringify(done)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
 })

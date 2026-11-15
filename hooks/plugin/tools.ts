@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
@@ -8,7 +8,7 @@ import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
-import { pump, stopWorker, approve, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
+import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT } from './workers'
 
 // ---------------- the lead's tools ----------------
 
@@ -215,7 +215,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     finished work that passes waits as "ready for review" (its branch and folder are kept).
     approve runs the same checked merge (brought up to date, scope checked, tests again if it
     had to merge); reject with a reason sends it back to "todo" for a fresh worker.
-  • A task's branch only moves by a checked merge; with uncommitted changes on it, ${S.N.name} waits.
+  • A task's branch only moves by a checked merge. Your uncommitted edits on it are kept; only
+    edits (or untracked files) in files the task changes make it wait, and it merges by itself
+    once they are committed, stashed or undone ("retry T-x" merges it at once; no new worker).
   • Each task merges into the branch you were on when it was made (on a detached checkout,
     main or master). The board list shows "→ x" for a task that merges into another branch
     than the one you are on now. If that branch is gone when the task starts or merges, it
@@ -292,7 +294,7 @@ export const TOOLS = () => [
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
-  { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. Not for a done task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. For a task whose finished work only waits for the owner\'s files on its branch ("waiting for your files on ..."), it only tries the merge again, with no worker. Not for a done task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'ask', description: 'Make a task wait for the owner with a question. Not for a done or dropped task (retry it first).', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
@@ -533,6 +535,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (t.status === 'done') return `${t.id} is already done`
       if (mergingNow(t.id)) return MERGING_TEXT(t.id)
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
+      // Finished work that waited only for the owner's files: just the merge runs again, no worker.
+      if (waitsForFiles(t)) return mergeWaiting($, t.id)
       // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
       const fromDropped = t.status === 'dropped'
