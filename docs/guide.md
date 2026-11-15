@@ -306,8 +306,9 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   `x` clears the search and shows everything. Enter on an empty search box clears it too.
   (Claude Code only lets panel keys be a letter or a digit, so
   the key is `f`, not `/`.)
-- The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner.
-  Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one
+- The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner:
+  `[ [t]: Tasks (12) ] │ [ [s]: Scouts (3) ] │ [ [c]: Settings ]`, the open one bold, blue and
+  underlined. Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one
   row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
   it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
   `never ran`) and its model. On a narrow panel the model column goes first, then the

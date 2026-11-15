@@ -62,15 +62,18 @@ export async function paneParts($: $, e: PaneEvent) {
         : []),
     ]
   }
-  /** The tab row under the banner: "t: Tasks (12) │ s: Scouts (3) │ c: Settings", the active one bold, underlined and blue (the
-   *  accent color). Each tab is a `plain` Button, so it has no "[ … ]" frame; a plain Button with a hotkey always draws "KEY: "
-   *  before its text, so the label carries no "[t]" of its own. "t", "s" and "c" switch, and a click works too. */
+  /** The tab row under the banner: "[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings", the active one bold, underlined and blue
+   *  (the accent color), the whole tab underlined, "[t]: " included. Each tab is a framed (not `plain`) Button, because a plain
+   *  Button with a hotkey draws its own "t: " outside the Text, where the underline can't reach; so the terminal draws
+   *  "[ [t]: Tasks (12) ]" (the owner chose that, double brackets and all). "t", "s" and "c" switch, and a click works too. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane($, which)))
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
+      const key = which === 'settings' ? 'c' : which[0]
+      label = `[${key}]: ${label}`
       return (
-        <Button key={`tab-${which}`} label={label} plain hotkey={which === 'settings' ? 'c' : which[0]} onPress={go(which)}>
+        <Button key={`tab-${which}`} label={label} hotkey={key} onPress={go(which)}>
           <Text bold={active} underline={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
