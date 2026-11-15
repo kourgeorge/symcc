@@ -8,6 +8,9 @@ import { pump, agentsNow } from './workers'
 
 // ---------------- git ----------------
 
+/** git options that make a commit (or merge) authored by symcc: put them before the git command. */
+export const asSymcc = () => ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`]
+
 export async function git($: $, args: string[], cwd = S.root, timeoutMs = 120_000) {
   return $.process.run(['git', ...args], { cwd, timeoutMs })
 }
@@ -117,7 +120,7 @@ export async function setupGit($: $, who: string): Promise<string> {
       await gitOk($, ['add', '--', '.gitignore'], top)
     }
     const files = (await gitOk($, ['ls-files', '--cached'], top)).split('\n').filter(Boolean).length
-    await gitOk($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'commit', '-q', '--no-verify', '--allow-empty', '-m', `Initial commit (by ${S.N.name})`], top)
+    await gitOk($, [...asSymcc(), 'commit', '-q', '--no-verify', '--allow-empty', '-m', `Initial commit (by ${S.N.name})`], top)
     // There was no branch before, so every open task's branch was a guess: it merges into this one.
     await change($, b => ({ ...b, tasks: b.tasks.map(t => (t.status === 'done' || t.status === 'dropped' ? t : { ...t, merge_into: branch })) }))
     S.toldGit = 'ok'
