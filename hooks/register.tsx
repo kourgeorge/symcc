@@ -127,18 +127,22 @@ export const register: Register = on => {
           .then(async d => (d ? pump($) : undefined))
           .catch(() => undefined),
       )
-      const b = await load($)
-      // Look at git once now: with no git, no repo or no commit, the lead is told (once) and nothing starts.
-      await gitReady($, b).catch(() => undefined)
-      await publish($, b)
-      // Open the board panel by itself (every session, driver or not), without taking the cursor
-      // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
-      // that is fine: the band above the prompt and /<name> still work.
-      if (openOnStart(b) && symccOn(b)) await openPane($, { focus: false, quiet: true })
+      // A board.json that can't be read: load already kept a copy and told the owner (once); nothing
+      // more happens now and board.json is left as it is. The heartbeat's pump starts work once it is fixed.
+      const b = await load($).catch(() => null)
+      if (b) {
+        // Look at git once now: with no git, no repo or no commit, the lead is told (once) and nothing starts.
+        await gitReady($, b).catch(() => undefined)
+        await publish($, b)
+        // Open the board panel by itself (every session, driver or not), without taking the cursor
+        // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
+        // that is fine: the band above the prompt and /<name> still work.
+        if (openOnStart(b) && symccOn(b)) await openPane($, { focus: false, quiet: true })
+      }
     } finally {
       S.startupDone = true
     }
-    void pump($)
+    void pump($).catch(() => undefined)
     return result
   })
 
