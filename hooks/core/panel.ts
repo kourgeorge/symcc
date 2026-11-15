@@ -266,6 +266,23 @@ export const settingsKeys = (): KeyHint[] => [
   { key: 'b', word: 'back' },
 ]
 
+/** The keys at the bottom of a role's page in Settings; which ones depend on its buttons. */
+export function roleKeys(o: { canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean }): KeyHint[] {
+  return [
+    { key: 'e', word: 'edit' },
+    ...(o.canOff ? [{ key: 'o', word: o.off ? 'turn on' : 'turn off' }] : []),
+    ...(o.canReset ? [{ key: 'r', word: 'reset to built-in' }] : []),
+    ...(o.canRemove ? [{ key: 'd', word: 'remove' }] : []),
+    { key: 'b', word: 'back' },
+  ]
+}
+
+/** The keys at the bottom of a role's edit page: its boxes take every letter, so the way out is its Cancel button. */
+export const roleEditKeys = (): KeyHint[] => [
+  { key: '↑↓', word: 'move between boxes' },
+  { key: 'Cancel', word: 'leaves without saving' },
+]
+
 /** The keys at the bottom of a scout's edit page: its boxes take every letter, so the way out is its Cancel button. */
 export const scoutEditKeys = (): KeyHint[] => [
   { key: '↑↓', word: 'move between boxes' },

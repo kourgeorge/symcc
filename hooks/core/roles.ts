@@ -246,3 +246,13 @@ export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: strin
 export function leadRoleText(r: RoleDef, source: RoleSource, file: string): string {
   return `${leadRoleLine(r, source).slice(2)}\nfile: ${file}\n${roleFileText(r).trim()}`
 }
+
+/** What a new role made in the panel's Settings view starts with (the owner changes it in the edit mode). */
+export const NEW_ROLE_TEMPLATE = {
+  description: 'what this role is for, in a few words (the lead reads it to choose)',
+  checklist: '- the first thing a worker with this role checks\n- the next thing',
+} as const
+
+/** Where a role comes from as the Settings view's Roles section shows it: "built-in", "replaced" or "added", then ", off" when it is turned off. */
+export const roleSourceLabel = (source: RoleSource, off: boolean | undefined): string => `${source}${off ? ', off' : ''}`
+

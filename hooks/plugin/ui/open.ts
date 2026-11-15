@@ -1,17 +1,19 @@
 // Opening the board panel, and choosing what it shows.
 import { boardTitle } from '../../board'
 import { type $, S, updateOpened, updateScoutOpen, updateTab } from '../state'
+import { resetRoleView } from '../roles'
 
 /** The board panel's views: its tabs. */
 export type PaneTab = 'tasks' | 'scouts' | 'settings'
 
 /**
  * Sets what the board panel shows: task `task` opened ('' = the list). With `which`, it also
- * switches to that view ('tasks', 'scouts' or 'settings') with no scout opened; without, the view stays.
+ * switches to that view ('tasks', 'scouts' or 'settings') with no scout and no role opened; without, the view stays.
  */
 export async function resetPane($: $, which?: PaneTab, task = '') {
   await updateOpened($, () => task)
   if (!which) return
+  resetRoleView()
   await updateScoutOpen($, () => '')
   await updateTab($, () => which)
 }

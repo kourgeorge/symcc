@@ -325,6 +325,18 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   commands are joined with ` && `; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
+- Under the settings, the **Roles** section has one row per worker role: its name, where it
+  comes from (`built-in`, `replaced`, `added`, with `, off` when it is turned off) and its
+  description. Enter (or a click) opens a role in full: its front matter, its checklist and
+  its file, with buttons: Edit (`e`), Turn off / Turn on (`o`, not for `general`), Reset to
+  built-in (`r`, only for a built-in you replaced) and Remove (`d`, only for a role you
+  added; it asks "Yes, remove (`y`)" or Cancel (`x`) first). Back (`b`) goes back to Settings.
+  Edit opens the role's edit page in the panel (like a scout's): one box each for the
+  description, model, skills, tools and checklist; Save writes `.symcc/roles/<name>.md`
+  (a built-in role is copied there first), Cancel (`x`) leaves without saving. `+ New role`
+  (`n`) asks for a name, makes `.symcc/roles/<name>.md` from a short template and opens it
+  in the edit page. All of it uses the same checks as the lead's `roles` tool (see
+  [Worker roles](#worker-roles)), and a toast says what changed.
 - Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`,
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
@@ -491,6 +503,9 @@ skills: [code-review]
   off, on), so you never have to find the plugin's folder or write the file yourself. The
   list says where each role comes from: `built-in`, `replaced` (your file over a built-in),
   `added` (your own) or `off`.
+- Or do it yourself in the board panel: the Settings view (`c`) has a **Roles** section that
+  lists every role, opens one in full, and has Edit, Turn off / Turn on, Reset to built-in,
+  Remove and `+ New role` (see [Live status](#live-status-seeing-the-board)).
 - Your own roles go in `.symcc/roles/<name>.md` in your project. A file with the same name as
   a built-in role replaces it; a new name adds a role. Names use letters, digits, `-` and `_`.
   Editing a built-in role through the lead first copies it there, then changes the copy.
