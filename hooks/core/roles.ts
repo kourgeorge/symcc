@@ -10,8 +10,9 @@ import { frontMatterLine, splitFrontMatter } from './text'
  * project (which overrides a built-in one with the same name). Front matter: description (needed),
  * model, skills and tools (optional); the body is the role's checklist (may be empty, as for "general").
  * tools lists extra tools the role's workers get on top of the base ones (only those in EXTRA_TOOLS).
+ * off: true turns the role off: the lead never picks it and it isn't offered on the task page (a task that has it keeps it).
  */
-export type RoleDef = { name: string; description: string; model?: string; skills: string[]; tools?: string[]; prompt: string }
+export type RoleDef = { name: string; description: string; model?: string; skills: string[]; tools?: string[]; off?: boolean; prompt: string }
 
 /** The tools every worker has. */
 export const BASE_WORKER_TOOLS: readonly string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash']
@@ -55,7 +56,7 @@ export function workerAgentTypes(): { suffix: string; tools: string[] }[] {
 export const DEFAULT_ROLE = 'general'
 
 /** A role's name: letters, digits, - and _ only. */
-const ROLE_NAME = /^[A-Za-z0-9_-]{1,64}$/
+export const ROLE_NAME = /^[A-Za-z0-9_-]{1,64}$/
 
 /** A front matter list: "[a, b]" or "a, b", quotes dropped. */
 function frontMatterList(value: string): string[] {
@@ -107,7 +108,8 @@ function readRole(name: string, text: string): RoleDef | string {
     if (!known) return `unknown tool "${t}" in tools (a role may only add: ${EXTRA_TOOLS.join(', ')})`
     if (!tools.includes(known)) tools.push(known)
   }
-  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), ...(tools.length ? { tools } : {}), prompt: fm.body.trim() }
+  const off = /^(true|yes)$/i.test(unquote(meta.off))
+  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), ...(tools.length ? { tools } : {}), ...(off ? { off: true } : {}), prompt: fm.body.trim() }
 }
 
 /** The built-in roles with the project's added: a project role replaces a built-in one with the same name. Sorted by name, general first. */
@@ -132,9 +134,11 @@ export function findRole(roles: RoleDef[], name: string | undefined): RoleDef | 
 /** The known role name for `name` (spelled as in its file), or throws a clear error listing the roles. */
 export function checkRole(roles: RoleDef[], name: string): string {
   const r = findRole(roles, name)
+  const on = onRoles(roles)
+  if (r?.off) throw new Error(`role "${r.name}" is turned off (the owner can turn it on again: roles action "on"); the roles are: ${roleChoices(on).join(', ')}`)
   if (r) return r.name
   if (name.trim().toLowerCase() === DEFAULT_ROLE) return DEFAULT_ROLE
-  const have = roles.map(x => x.name)
+  const have = on.map(x => x.name)
   if (!have.some(x => x.toLowerCase() === DEFAULT_ROLE)) have.unshift(DEFAULT_ROLE)
   throw new Error(`unknown role "${name}"; the roles are: ${have.join(', ')}`)
 }
@@ -154,7 +158,7 @@ export function roleLine(t: Pick<SymccTask, 'role'>, roles: RoleDef[]): string {
 
 /** The roles to pick from in the board panel: the known ones, general first (general alone when none are loaded). */
 export function roleChoices(roles: RoleDef[]): string[] {
-  const names = roles.map(r => r.name)
+  const names = onRoles(roles).map(r => r.name)
   return names.some(n => n.toLowerCase() === DEFAULT_ROLE) ? names : [DEFAULT_ROLE, ...names]
 }
 
@@ -177,7 +181,68 @@ export function roleSection(r: RoleDef | undefined): string {
 
 /** The lead's paragraph about roles: each one with its description, and how to pick. */
 export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): string {
-  const list = roles.length ? roles.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
-  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Use researcher for "find out whether / how ..." tasks whose result is a note (usually docs/research/<topic>.md), not code. Put the task's own focus in its details. A project can add or override roles in ${namesFor(name).dir}/roles/<name>.md.
+  const on = onRoles(roles)
+  const list = on.length ? on.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
+  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Use researcher for "find out whether / how ..." tasks whose result is a note (usually docs/research/<topic>.md), not code. Put the task's own focus in its details. To add, change, reset or turn off a role when the owner asks, use ${name} roles (never write ${namesFor(name).dir}/roles/ files by hand).
 - One task, one role. When a request needs several kinds of work (e.g. code, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
+}
+
+/** The roles that are not turned off (general always counts as on). */
+export const onRoles = (roles: RoleDef[]): RoleDef[] => roles.filter(r => !r.off || r.name.toLowerCase() === DEFAULT_ROLE)
+
+/** Where a role comes from: the plugin (built-in), the owner's file with a built-in's name (replaced), or the owner's own (added). */
+export type RoleSource = 'built-in' | 'replaced' | 'added'
+
+/** Role `name` (any case) in `roles`, exactly (no general fallback). */
+export const roleNamed = (roles: RoleDef[], name: string): RoleDef | undefined => roles.find(r => r.name.toLowerCase() === name.trim().toLowerCase())
+
+/** Where role `name` comes from, or undefined when there is no such role. */
+export function roleSource(name: string, builtIn: RoleDef[], project: RoleDef[]): RoleSource | undefined {
+  const b = !!roleNamed(builtIn, name)
+  const p = !!roleNamed(project, name)
+  return b && p ? 'replaced' : b ? 'built-in' : p ? 'added' : undefined
+}
+
+/** Why `name` can't be a role name (it goes into a file path), or null when it can. */
+export function roleNameError(name: string): string | null {
+  if (!name.trim()) return 'give the role a name'
+  return ROLE_NAME.test(name) ? null : `"${name}" is not a valid role name: use letters, digits, - and _ only (no "/" or "..")`
+}
+
+/** The tools a role asks for, spelled as in EXTRA_TOOLS, or the reason one is not allowed. */
+export function roleTools(tools: string[]): string[] | string {
+  const out: string[] = []
+  for (const t of tools.map(x => x.trim()).filter(Boolean)) {
+    const known = EXTRA_TOOLS.find(x => x.toLowerCase() === t.toLowerCase())
+    if (!known) return `unknown tool "${t}" in tools (a role may only add: ${EXTRA_TOOLS.join(', ')})`
+    if (!out.includes(known)) out.push(known)
+  }
+  return out
+}
+
+/** A role's file text: the front matter (description, then model, skills, tools and off when set), then the checklist. */
+export function roleFileText(r: Omit<RoleDef, 'name'>): string {
+  const lines = [`description: ${r.description.replace(/\s+/g, ' ').trim()}`]
+  if (r.model) lines.push(`model: ${r.model}`)
+  if (r.skills.length) lines.push(`skills: [${r.skills.join(', ')}]`)
+  if (r.tools?.length) lines.push(`tools: ${r.tools.join(', ')}`)
+  if (r.off) lines.push('off: true')
+  return `---\n${lines.join('\n')}\n---\n${r.prompt.trim() ? `${r.prompt.trim()}\n` : ''}`
+}
+
+/** One role's line for the lead's roles list: "tester (built-in): writes tests · model sonnet", with ", off" when it is off. */
+function leadRoleLine(r: RoleDef, source: RoleSource): string {
+  return `- ${r.name} (${source}${r.off ? ', off' : ''}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}`
+}
+
+/** The lead's roles list: every role, where it comes from and whether it is off. */
+export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: string): string {
+  const all = mergeRoles(builtIn, project)
+  if (!all.length) return 'no roles found'
+  return `Roles (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${all.map(r => leadRoleLine(r, roleSource(r.name, builtIn, project)!)).join('\n')}`
+}
+
+/** One role in full for the lead: its line, its file, its front matter and its checklist. */
+export function leadRoleText(r: RoleDef, source: RoleSource, file: string): string {
+  return `${leadRoleLine(r, source).slice(2)}\nfile: ${file}\n${roleFileText(r).trim()}`
 }

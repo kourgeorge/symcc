@@ -1,9 +1,9 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
-import { loadRoles } from './roles'
+import { loadRoles, leadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
@@ -149,7 +149,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   lead: `The lead (this chat) has these tools:
   ${TOOLS().map(t => t.name).filter(n => n !== 'approve' && n !== 'reject').join(' · ')}
   approve · reject (only for a task ready for review)
-  scouts lists, adds, changes, removes or runs scouts; stats shows time and token use;
+  scouts lists, adds, changes, removes or runs scouts; roles lists, adds, edits, resets,
+  removes or turns off / on worker roles; stats shows time and token use;
   setup_git sets up git in a folder without it (only after you say yes).
   board lists the open tasks and the backlog (done / dropped only as counts); it takes status
   and search to narrow the list, and task to see one task with its latest report.
@@ -268,6 +269,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
 - ${S.N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
+- Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off). An off role is never picked for a new task.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search) narrow it, e.g. status: ["done"], search: "notify"; with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).`
 
 export const TOOLS = () => [
@@ -297,6 +299,11 @@ export const TOOLS = () => [
     name: 'scouts',
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt and whole last report). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (refused with the reason when it is paused, already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'remove', 'run'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The scout, e.g. docs-check (lowercase letters, digits and dashes).' }, every_minutes: { type: 'number', description: 'For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand.' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, prompt: { type: 'string', description: 'For add / edit: what the scout looks for, in plain words.' } } },
+  },
+  {
+    name: 'roles',
+    description: `List, add, edit, reset, remove, turn off or turn on the worker roles (built-in ones in the plugin's roles/ folder, the owner's own in ${S.N.dir}/roles/<name>.md). action "list" (the default): every role with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that role in full (front matter and checklist). "add": writes ${S.N.dir}/roles/<name>.md (name: letters, digits, - and _; description needed; optional model, skills, tools (only ${EXTRA_TOOLS.join(', ')}) and checklist); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in role is first copied to ${S.N.dir}/roles/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added role's file (confirm with the owner first). "off": the role is never picked and not offered on the task page (${DEFAULT_ROLE} can't be turned off; tasks that already have it keep it); "on" turns it back on. A change counts from the next worker on. Only change roles when the owner asks.`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'reset', 'remove', 'off', 'on'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The role, e.g. tester (letters, digits, - and _).' }, description: { type: 'string', description: 'For add / edit: what the role is for, in a few words (the lead reads it to choose).' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, skills: { type: 'array', items: { type: 'string' }, description: 'For add / edit: optional skills the worker should use.' }, tools: { type: 'array', items: { type: 'string' }, description: `For add / edit: optional extra tools (only ${EXTRA_TOOLS.join(', ')}); an empty list removes them.` }, checklist: { type: 'string', description: 'For add / edit: the checklist the worker follows (the file\'s body).' } } },
   },
   { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
   {
@@ -592,6 +599,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     }
     case 'scouts':
       return leadScouts($, a)
+    case 'roles':
+      return leadRoles($, a)
     case 'stats':
       return statsText($, str(a.range) ?? '')
     case 'setup_git':
