@@ -20,7 +20,7 @@ import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
-import { path, load, isOn, now, saveMigrated } from './plugin/store'
+import { path, load, isOn, now, saveMigrated, startWait } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
 import { noteForLead, brief } from './plugin/tell'
 import { playable } from './plugin/voice'
@@ -91,6 +91,9 @@ function filesChanged($: $, hit: { scouts: boolean; roles: boolean }) {
   })().catch(() => undefined)
 }
 
+/** Counts session.start runs, so a late claimLead of an earlier start doesn't end a newer one's wait. */
+let starts = 0
+
 export const register: Register = on => {
   // Every hook starts with useName($), so S.N (the plugin's name) is right everywhere.
   on('session.start', async ($, e, next) => {
@@ -101,6 +104,15 @@ export const register: Register = on => {
     // by a lead tool call, must find the worker type.
     await registerAll($)
     const result = await next(e)
+    // claimLead may wait on the clock: for the board lock (up to 5 s), for old workers it stopped
+    // to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (2 s). A hook has 10 s and
+    // $.clock waits count against it, so session.start doesn't wait for those: once claimLead is
+    // about to wait (startWait.mark), the rest of the start goes on and claimLead finishes on its
+    // own. S.startupDone stays false until claimLead has finished, so pump starts no work before
+    // old tasks went back to "todo". When nothing waits, all of it runs in order as before.
+    const run = ++starts
+    let leadDone = true
+    let lead: Promise<unknown> = Promise.resolve()
     // Even if a later step throws, pump must not stay blocked for the whole session.
     try {
       S.root = (await $.session.repo())?.root ?? (await $.session.root())
@@ -113,7 +125,13 @@ export const register: Register = on => {
       await saveScoutsMigrated($).catch(() => undefined)
       // Become the driver if nobody drives the board. As the driver, old workers still running
       // from before a reload are stopped first and their tasks go back to "todo".
-      await claimLead($, true).catch(() => (S.driving = false))
+      const waits = new Promise<void>(r => (startWait.mark = r))
+      leadDone = false
+      lead = claimLead($, true)
+        .catch(() => (S.driving = false))
+        .finally(() => (leadDone = true))
+      await Promise.race([lead, waits])
+      startWait.mark = null
       if (!(await $.fs.exists(path(S.N.boardFile)))) await publish($, await load($))
       await scheduleScouts($)
       await loadRoles($).catch(() => undefined)
@@ -140,9 +158,15 @@ export const register: Register = on => {
         if (openOnStart(b) && symccOn(b)) await openPane($, { focus: false, quiet: true })
       }
     } finally {
-      S.startupDone = true
+      startWait.mark = null
+      const done = () => {
+        if (run !== starts) return
+        S.startupDone = true
+        void pump($).catch(() => undefined)
+      }
+      if (leadDone) done()
+      else void lead.then(done)
     }
-    void pump($).catch(() => undefined)
     return result
   })
 

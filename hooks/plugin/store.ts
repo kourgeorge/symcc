@@ -114,6 +114,14 @@ export async function isOn($: $): Promise<boolean> {
 }
 
 /**
+ * session.start sets `mark` while it runs claimLead: a clock wait in claimLead's path (the board
+ * lock, old workers ending, the reload settle) calls it first, so session.start can go on
+ * without waiting (see register.tsx). Called from other hooks meanwhile it does no harm.
+ */
+export const startWait: { mark: (() => void) | null } = { mark: null }
+export const aboutToWait = () => startWait.mark?.()
+
+/**
  * Take .<name>/board.lock so no other session reads or writes the board meanwhile.
  * The lock is written to its own temp file first and then hard-linked into place:
  * `ln` fails if the lock exists, so only one session can win, and nobody ever sees
@@ -137,6 +145,7 @@ export async function takeLock($: $): Promise<string> {
         continue
       }
       if (Date.now() > until) throw new Error(`the board is busy (another session holds ${S.N.lockFile}); try again`)
+      aboutToWait()
       await $.clock.sleep(100)
     }
   } finally {

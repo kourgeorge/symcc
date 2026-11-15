@@ -7,7 +7,7 @@ import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
-import { load, change, now, path, safeWrite } from './store'
+import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 
@@ -179,6 +179,7 @@ export async function waitEnded($: $, ids: string[], ms: number): Promise<AgentI
     const agents = await agentsNow($)
     const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED_STATUSES.includes(a.status)) : ids.map(id => ({ id, type: S.N.worker, status: 'running' }))
     if (!alive.length || Date.now() > until) return alive
+    aboutToWait()
     await $.clock.sleep(500)
   }
 }
@@ -704,7 +705,10 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
   // Just loaded (called from claimLead, with lead.json as it was): a "doing" task of this session
   // with no live worker and no merge mark may be one whose worker has only just handed back to the
   // old copy, which is about to mark it. Wait a moment and look again, so it is not sent back for nothing.
-  if (leadNow !== undefined && (await waitingOnOld($, agents))) await $.clock.sleep(RELOAD_SETTLE_MS)
+  if (leadNow !== undefined && (await waitingOnOld($, agents))) {
+    aboutToWait()
+    await $.clock.sleep(RELOAD_SETTLE_MS)
+  }
   return out
 }
 
