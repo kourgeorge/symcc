@@ -89,9 +89,11 @@ export const ORIGIN_MARK = { owner: '♟', scout: '⌕', worker: '▸', lead: '�
 export function fromText(t: { origin?: unknown }, quote = 60): string {
   const o = originOf(t)
   if (!o) return 'from: unknown'
-  const mark = o.by === 'owner' || o.by === 'scout' || !o.how || !o.task ? ORIGIN_MARK[o.by] : ORIGIN_MARK.from
-  return `${mark} ${fromWords(o, quote)}`
+  return `${originMark(o)} ${fromWords(o, quote)}`
 }
+
+/** The ORIGIN_MARK for a usable origin: its maker's mark, or ↳ for a worker or lead split or follow-up of a task. */
+export const originMark = (o: SymccOrigin): string => (o.by === 'owner' || o.by === 'scout' || !o.how || !o.task ? ORIGIN_MARK[o.by] : ORIGIN_MARK.from)
 
 function fromWords(o: SymccOrigin, quote: number): string {
   const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
