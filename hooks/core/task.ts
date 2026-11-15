@@ -212,5 +212,5 @@ export function outOfScopeText(bad: string[], allowed: string[], undone = false)
   const head = `changed files outside the task (${bad.slice(0, 5).map(shown).join(', ')}); allowed: ${allowed.join(', ') || '-'}`
   if (undone) return `${head}. Those changes were undone on the task's branch, so the next try starts without them; if the task needs those files, add them to files with change (or split the task) before it tries again`
   // approve: change sends a task in review back to work (a fresh worker runs); the edits stay committed on the task's branch
-  return `${head}. To fix: add them to files with change, or split the task. Adding them with change (or Allow on the board) sends the task back to work with these edits kept, and it comes back to review, where you approve it again`
+  return `${head}. To fix: add them to files with change, or split the task. Adding them with change sends the task back to work with these edits kept, and it comes back to review, where you approve it again`
 }
