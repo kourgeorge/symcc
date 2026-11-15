@@ -82,7 +82,7 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
 export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[] }
 
 /**
- * Commit the worker's changes, check scope (files outside the task are undone on the branch, see undoOutOfScope), bring in the latest of the task's branch (intoOf), test, then move that branch forward.
+ * Commit the worker's changes, check scope (on a worker's try, files outside the task are undone on the branch, see undoOutOfScope; on approve they are kept), bring in the latest of the task's branch (intoOf), test, then move that branch forward.
  * `mode` 'finish' (a worker just finished): when the task needs review (see needsReview), stop
  * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
  * review): the same checked merge, but the tests run again only if main had to be merged in,
@@ -120,8 +120,10 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   }
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) {
+    // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
+    if (mode === 'approve') return { ok: false, detail: outOfScopeText(bad, t.files) }
     const undo = await undoOutOfScope($, t, dir, base, bad, made)
-    return { ok: false, detail: outOfScopeText(bad, t.files) + undo }
+    return { ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo }
   }
   // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
   // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.

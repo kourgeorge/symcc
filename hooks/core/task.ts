@@ -204,10 +204,12 @@ export function refuseFiles(b: Board, id: string, now: string): Board {
   return patchTask(b, t.id, { note: 'files not allowed', history: [...t.history, `the owner didn't allow files: ${asked.join(', ')}`] }, now)
 }
 
-/** Why a try failed when the worker changed files outside its list without asking. */
-export function outOfScopeText(bad: string[], allowed: string[]): string {
+/** Why a try failed when files outside the task's list changed. `undone`: they were undone on the task's branch (a worker's try), so the next try starts without them. */
+export function outOfScopeText(bad: string[], allowed: string[], undone = false): string {
   // A name may hold any character but NUL: control characters (newlines, terminal escapes) are shown as "?".
   // eslint-disable-next-line no-control-regex
   const shown = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
-  return `changed files outside the task (${bad.slice(0, 5).map(shown).join(', ')}); allowed: ${allowed.join(', ') || '-'}. To fix: add them to files with change, or split the task`
+  const head = `changed files outside the task (${bad.slice(0, 5).map(shown).join(', ')}); allowed: ${allowed.join(', ') || '-'}`
+  if (undone) return `${head}. Those changes were undone on the task's branch, so the next try starts without them; if the task needs those files, add them to files with change (or split the task) before it tries again`
+  return `${head}. To fix: add them to files with change, or split the task`
 }

@@ -357,7 +357,9 @@ test('checkAndMerge refuses a change to a file outside the task, before testing 
   const w = world({ changed: ['src/a.ts', 'docs/x.md'] })
   const [b, t] = boardWith('auto', ['npm test'])
   const r = await checkAndMerge(w.$, t, WT, b)
-  expect(r).toEqual({ ok: false, detail: outOfScopeText(['docs/x.md'], ['src/']) })
+  expect(r).toEqual({ ok: false, detail: outOfScopeText(['docs/x.md'], ['src/'], true) })
+  expect(r.detail).toContain('were undone on the task\'s branch, so the next try starts without them')
+  expect(r.detail).not.toContain('To fix')
   expect(ranTests(w)).toEqual([])
   expect(w.git.main).toBe(M1)
 })
@@ -378,7 +380,7 @@ test('checkAndMerge undoes files outside the task on the branch, so the next try
   const [b, t] = boardWith('auto', ['npm test'])
   const made1: string[] = []
   const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', made1)
-  expect(r1).toEqual({ ok: false, detail: outOfScopeText(['docs/x.md'], ['src/']) })
+  expect(r1).toEqual({ ok: false, detail: outOfScopeText(['docs/x.md'], ['src/'], true) })
   expect(w.calls.some(c => c.startsWith('wt: git ') && c.includes(' commit ') && c.includes('T-1: undo changes outside the task'))).toBe(true)
   expect(made1).toEqual([H1, H3])
   expect(w.git.main).toBe(M1)
@@ -692,6 +694,31 @@ test('approve whose edits fail the tests keeps the task in review with the outpu
   t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.test_output).toBeUndefined()
+})
+
+test('approve with an owner edit outside the task keeps the edit and the task in review; once the file is allowed, approving again merges it', async () => {
+  // the owner edited docs/x.md (outside the task's src/) in the task's folder
+  const w = await inReview({ dirty: true, wtStatus: ' M docs/x.md\0', changed: ['src/a.ts', 'docs/x.md'] }, {}, ['npm test'], { runs: [{ started: ISO, commits: [H1] }] })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe(`T-1 was not merged and stays in review: ${outOfScopeText(['docs/x.md'], ['src/'])}. Fix that, then approve it again.`)
+  expect(out).toContain('add them to files with change')
+  // nothing was undone: no restore, no undo commit; the edit is committed on the branch and still in the folder
+  expect(w.calls.some(c => c.startsWith('wt: git restore'))).toBe(false)
+  expect(w.calls.some(c => c.includes('undo changes outside the task'))).toBe(false)
+  expect(w.git.head).toBe(H3)
+  expect(w.git.changed).toEqual(['src/a.ts', 'docs/x.md'])
+  expect(w.git.main).toBe(M1)
+  let t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.note).toMatch(/^approved, but not merged: changed files outside the task/)
+  // the owner allows the file (the task's files now include it; it stays in review), then approves again: the edit merges
+  await saveBoard(w.$, patchTask(await load(w.$), 'T-1', { files: ['src/', 'docs/x.md'] }, ISO))
+  const again = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(again).toContain('T-1 approved and merged: merged into main')
+  expect(w.git.main).toBe(H3)
+  t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H3)
 })
 
 test('the diff of a task in review shows its folder as it is now, with the owner\'s edits, and says so', async () => {
