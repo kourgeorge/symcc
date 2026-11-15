@@ -1789,6 +1789,35 @@ test('the "from:" line starts with a one-width mark for each kind of origin', ()
   expect(under).toBe(`${' '.repeat(14)}⌕ from: scout bugs`)
 })
 
+test('the task page\'s From row starts with the same mark as the board\'s "from:" line', () => {
+  const [b, t1] = addTask(emptyBoard(), { title: 'big', origin: W }, T)
+  const fromRow = (origin: unknown) => {
+    const t = { ...t1, origin } as unknown as SymccTask
+    const row = detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 }).find(r => r.label === 'From')!
+    return row.segs.map(g => g.text).join('')
+  }
+  const mk = (x: Record<string, unknown>) => makeOrigin(x, T, b)
+  expect(fromRow(mk({ by: 'owner', request: 'go', why: 'w' }))).toBe('♟ owner')
+  expect(fromRow(mk({ by: 'owner', request: 'go', task: 'T-1', how: 'split', why: 'w' }))).toBe('♟ owner, T-1 (split)')
+  expect(fromRow(mk({ by: 'scout', scout: 'bugs', why: 'w' }))).toBe('⌕ scout bugs')
+  expect(fromRow(mk({ by: 'scout', scout: 'bugs', task: 'T-1', how: 'follow-up', why: 'w' }))).toBe('⌕ scout bugs, T-1 (follow-up)')
+  expect(fromRow(mk({ by: 'worker', task: 'T-1', why: 'w' }))).toBe('▸ T-1 (worker report)')
+  expect(fromRow(mk({ by: 'lead', why: 'w' }))).toBe('◆ lead')
+  expect(fromRow(mk({ by: 'lead', task: 'T-1', why: 'w' }))).toBe('◆ lead, about T-1')
+  expect(fromRow(mk({ by: 'lead', task: 'T-1', how: 'split', why: 'w' }))).toBe('↳ T-1 (split)')
+  expect(fromRow(mk({ by: 'worker', task: 'T-1', how: 'follow-up', why: 'w' }))).toBe('↳ T-1 (follow-up)')
+  // no usable origin: no mark
+  expect(fromRow(undefined)).toBe('unknown')
+  expect(fromRow({ by: 'nobody' })).toBe('unknown')
+  // the mark is the same one the board's "from:" line uses
+  for (const o of [mk({ by: 'owner', why: 'w' }), mk({ by: 'scout', scout: 's', why: 'w' }), mk({ by: 'worker', task: 'T-1', why: 'w' }), mk({ by: 'lead', why: 'w' }), mk({ by: 'lead', task: 'T-1', how: 'split', why: 'w' })]) {
+    expect(fromRow(o)[0]).toBe(fromText({ origin: o })[0])
+  }
+  // the mark is one character and a space, so the wrapped row still lines up under its label
+  const lines = wrapSegs(detailRows({ ...t1, origin: mk({ by: 'scout', scout: 'bugs', why: 'w' }) }, { roles: [], all: [t1], when: s => s, nowMs: 0 }).find(r => r.label === 'From')!.segs, 40)
+  expect(lines.map(l => l.map(g => g.text).join(''))).toEqual(['⌕ scout bugs'])
+})
+
 test('the plugin links a new task to what it saw itself: the owner prompt or the report', () => {
   const h = emptyHeard()
   expect(evidenceText({ by: 'owner', request: 'x' }, h)).toBe('no owner prompt was seen by the plugin in this session')

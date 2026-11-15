@@ -891,7 +891,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
     expect(row!.slice(0, 10).trim()).toBe(`${label}:`)
     expect(row![10]).not.toBe(' ')
   }
-  expect(L.some(l => /^From:\s+owner$/.test(l))).toBe(true)
+  expect(L.some(l => /^From:     ♟ owner$/.test(l))).toBe(true)
   expect(L.some(l => /^Why:\s+Scouts mostly find/.test(l))).toBe(true)
   expect(L.some(l => /·\s*why:/.test(l))).toBe(false)
   // the request in full, in quotes, wrapped within the panel, never cut mid-word
@@ -924,6 +924,26 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
   expect((await lines(ui)).some(l => /^Request:/.test(l))).toBe(false)
   await ui.unmount()
 })
+
+// the From row on the task page starts with the mark of its origin, in the value column
+{
+  const kinds: [Record<string, unknown>, string][] = [
+    [{ by: 'owner', request: 'go', why: 'w', at: '' }, '♟ owner'],
+    [{ by: 'scout', scout: 'bugs', why: 'w', at: '' }, '⌕ scout bugs'],
+    [{ by: 'scout', scout: 'bugs', task: 'T-1', how: 'follow-up', why: 'w', at: '' }, '⌕ scout bugs, T-1 (follow-up)'],
+    [{ by: 'worker', task: 'T-1', why: 'w', at: '' }, '▸ T-1 (worker report)'],
+    [{ by: 'lead', why: 'w', at: '' }, '◆ lead'],
+    [{ by: 'lead', task: 'T-1', how: 'split', why: 'w', at: '' }, '↳ T-1 (split)'],
+    [{ by: 'worker', task: 'T-1', how: 'follow-up', why: 'w', at: '' }, '↳ T-1 (follow-up)'],
+  ]
+  for (const [origin, want] of kinds) test(`the task page's From row shows "${want}"`, async ($, on) => {
+    stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base'), task('T-2', 'todo', 'Next', { origin })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const row = (await lines(ui)).find(l => l.startsWith('From:'))
+    expect(row).toBe(`${'From:'.padEnd(10)}${want}`)
+    await ui.unmount()
+  })
+}
 
 test('an old task without an origin still opens, with From: unknown and no Why row', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Old one')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })

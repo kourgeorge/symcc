@@ -89,6 +89,8 @@ export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; tes
  * or when `retest` (the owner edited files in the task's folder since review, see ownerEdits).
  * `stop` is asked after each test and just before the merge: when it returns a reason (the task
  * was dropped or paused meanwhile), nothing is merged and that reason is returned.
+ * Merges into the same branch take turns (mergeTurn); when the branch still moved before ours
+ * could move it, the task is brought up to date, tested and merged again by itself (MAX_MERGE_RACES at most).
  */
 export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
@@ -118,12 +120,41 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   }
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
-  let candidate = head
-  if ((await git($, ['merge-base', '--is-ancestor', main, head])).exitCode !== 0) {
+  // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
+  // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
+  for (let n = 1; ; n++) {
+    const r = await mergeTurn(target, () => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed))
+    if (!r.raced || n >= MAX_MERGE_RACES) return r.result
+  }
+}
+
+/** How many times checkAndMerge brings a task up to date and tries again when its branch moved during the merge. */
+export const MAX_MERGE_RACES = 5
+
+/** The merge running now (or last) into each branch: the next one into that branch waits for it. */
+const mergeTurns = new Map<string, Promise<unknown>>()
+
+/** Runs `fn` once every earlier merge into branch `target` (through this function) has ended, whether it worked or not. */
+export function mergeTurn<T>(target: string, fn: () => Promise<T>): Promise<T> {
+  const prev = mergeTurns.get(target) ?? Promise.resolve()
+  const mine = prev.then(fn, fn)
+  const tail = mine.catch(() => undefined)
+  mergeTurns.set(target, tail)
+  void tail.then(() => { if (mergeTurns.get(target) === tail) mergeTurns.delete(target) })
+  return mine
+}
+
+/** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
+async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve', made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[]): Promise<{ result: CheckResult; raced?: boolean }> {
+  const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
+  const res = (result: CheckResult) => ({ result })
+  const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
+  let candidate = tip
+  if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
     const m = await git($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'merge', '--no-edit', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
-      return { ok: false, detail: `conflicts with the latest ${target}`, conflict: true }
+      return res({ ok: false, detail: `conflicts with the latest ${target}`, conflict: true })
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
@@ -133,19 +164,19 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: 600_000 }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
       const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-      return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
+      return res(stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) })
     }
     const s = stopped()
-    if (s) return s
+    if (s) return res(s)
   }
-  if (mode === 'finish' && needsReview(b, t)) return { ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` }
+  if (mode === 'finish' && needsReview(b, t)) return res({ ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over uncommitted changes or untracked or ignored files the merge would overwrite.
   const s = stopped()
-  if (s) return s
+  if (s) return res(s)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
-  if (!moved.ok) return { ok: false, detail: moved.detail }
+  if (!moved.ok) return { result: { ok: false, detail: moved.detail }, ...(moved.raced ? { raced: true } : {}) }
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
@@ -153,7 +184,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     const n = await git($, ['diff', '--name-only', '--no-renames', '-z', '--diff-filter=AM', main, candidate])
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
-  return { ok: true, merged: candidate, ...(notes.length ? { notes } : {}), detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+  return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
 }
 
 /** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */
