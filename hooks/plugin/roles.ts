@@ -1,12 +1,13 @@
-import { type RoleDef, NEW_ROLE_TEMPLATE, parseRole, roleSkipReason, skippedRoleNote, mergeRoles, EXTRA_TOOLS, DEFAULT_ROLE, roleNamed, roleSource, roleNameError, roleTools, roleFileText, leadRolesText, leadRoleText } from '../board'
+import { type RoleDef, NEW_ROLE_TEMPLATE, parseRole, roleSkipReason, skippedRoleNote, mergeRoles, EXTRA_TOOLS, DEFAULT_ROLE, roleNamed, roleSource, roleNameError, roleTools, roleFileText, leadRolesText, leadRoleText, type BrokenRole, brokenNamed, leadBrokenLine } from '../board'
 import { type $, skippedRoles, S } from './state'
 import { path } from './store'
 import { tellLead } from './tell'
 
 // ---------------- worker roles ----------------
 
-/** The role files in folder `dir`, shown as `shown` (e.g. ".symcc/roles"); a file that can't be used is skipped with a note (see skippedRole). */
-export async function roleFiles($: $, dir: string, shown: string): Promise<RoleDef[]> {
+/** The role files in folder `dir`, shown as `shown` (e.g. ".symcc/roles"); a file that can't be used is skipped with a note (see skippedRole)
+ *  and, when `broken` is given, added to it with the reason. */
+export async function roleFiles($: $, dir: string, shown: string, broken?: BrokenRole[]): Promise<RoleDef[]> {
   if (!(await $.fs.exists(dir).catch(() => false))) return []
   const out: RoleDef[] = []
   for (const f of await $.fs.list(dir).catch(() => [])) {
@@ -18,7 +19,11 @@ export async function roleFiles($: $, dir: string, shown: string): Promise<RoleD
     if (r) {
       out.push(r)
       skippedRoles.delete(`${shown}/${f.name}`)
-    } else skippedRole($, `${shown}/${f.name}`, roleSkipReason(name, body) ?? 'it can not be used')
+    } else {
+      const reason = roleSkipReason(name, body) ?? 'it can not be used'
+      broken?.push({ name, file: `${shown}/${f.name}`, reason })
+      skippedRole($, `${shown}/${f.name}`, reason)
+    }
   }
   return out
 }
@@ -55,13 +60,14 @@ export async function leadRoles($: $, a: LeadRoleInput): Promise<string> {
   return (await changeRole($, a)).text
 }
 
-/** The plugin's roles and the project's own, read again (S.roles too). */
-export async function roleLists($: $): Promise<{ builtIn: RoleDef[]; project: RoleDef[]; dir: string }> {
+/** The plugin's roles and the project's own, read again (S.roles too); `broken` is the project's files that can't be read, with why. */
+export async function roleLists($: $): Promise<{ builtIn: RoleDef[]; project: RoleDef[]; broken: BrokenRole[]; dir: string }> {
   const dir = `${S.N.dir}/roles`
   const builtIn = await roleFiles($, `${$.plugin.root}/roles`, 'roles')
-  const project = S.root ? await roleFiles($, path(dir), dir) : []
+  const broken: BrokenRole[] = []
+  const project = S.root ? await roleFiles($, path(dir), dir, broken) : []
   S.roles = mergeRoles(builtIn, project)
-  return { builtIn, project, dir }
+  return { builtIn, project, broken, dir }
 }
 
 /** The roles tool's work (see leadRoles); `ok` says a role file was written or removed. */
@@ -80,9 +86,11 @@ async function changeRoleText($: $, a: LeadRoleInput): Promise<string | { ok: tr
     if (bad) return action === 'list' || asked ? bad : `say which role to ${action} (name)`
   }
   if (action !== 'list' && !S.root) return 'no project folder yet, so roles can not be changed'
-  const { builtIn, project, dir } = await roleLists($)
+  const { builtIn, project, broken, dir } = await roleLists($)
   const have = () => `have: ${S.roles.map(r => r.name).join(', ') || 'none'}`
-  if (action === 'list' && !asked) return leadRolesText(builtIn, project, dir)
+  if (action === 'list' && !asked) return leadRolesText(builtIn, project, dir, broken)
+  const broke = brokenNamed(broken, asked)
+  if (action === 'list' && broke) return leadBrokenLine(broke, builtIn).slice(2)
   const b = roleNamed(builtIn, asked)
   const p = roleNamed(project, asked)
   const name = b?.name ?? p?.name ?? asked
@@ -122,6 +130,7 @@ async function changeRoleText($: $, a: LeadRoleInput): Promise<string | { ok: tr
     return err || await done(`removed role ${name} (your file ${file} is deleted)`)
   }
   if (action === 'add') {
+    if (broke) return `${broke.file} is already there but can't be read: ${broke.reason}. Fix the file, or use ${b ? 'reset to go back to the built-in' : 'remove to delete it'} first.`
     if (cur || hasFile) return `a role named ${name} already exists; use action "edit" to change it`
     const description = typeof a.description === 'string' ? a.description.trim() : ''
     if (!description) return 'description is missing: say in a few words what the role is for (the lead reads it to choose)'
@@ -209,6 +218,15 @@ export async function saveRoleDraft($: $): Promise<string> {
 /** "New role": makes .<name>/roles/<role>.md from the short template and opens it in the edit mode; a bad or taken name stays in the name box with the reason. */
 export async function newRoleFile($: $, name: string): Promise<string> {
   const n = name.trim()
+  // A file with that name is there but can't be read: say what the Roles page offers for it (the tool's own words name its actions).
+  const lists = roleNameError(n) ? undefined : await roleLists($)
+  const broke = lists && brokenNamed(lists.broken, n)
+  if (lists && broke) {
+    const out = roleNamed(lists.builtIn, n) ? 'open it in the list to Reset to built-in' : 'open it in the list to Remove it'
+    roleView.naming = { name: n, error: `${broke.file} is already there but can't be read (${broke.reason}): ${out}, or fix the file by hand` }
+    $.ui.invalidate('ui.render')
+    return ''
+  }
   const r = await changeRole($, { action: 'add', name: n, ...NEW_ROLE_TEMPLATE })
   if (!r.ok) {
     roleView.naming = { name: n, error: r.text }

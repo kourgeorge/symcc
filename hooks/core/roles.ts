@@ -235,11 +235,34 @@ function leadRoleLine(r: RoleDef, source: RoleSource): string {
   return `- ${r.name} (${source}${r.off ? ', off' : ''}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}`
 }
 
-/** The lead's roles list: every role, where it comes from and whether it is off. */
-export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: string): string {
+/** One of the owner's role files that can't be read (so it is left out of the roles): its role name, its file and why. */
+export type BrokenRole = { name: string; file: string; reason: string }
+
+/** Broken file `name` (any case) in `broken`. */
+export const brokenNamed = (broken: BrokenRole[], name: string): BrokenRole | undefined => broken.find(b => b.name.toLowerCase() === name.trim().toLowerCase())
+
+/** What a broken role file shows as: "your file can't be read: no description". */
+export const brokenRoleLabel = (b: BrokenRole): string => `your file can't be read: ${b.reason}`
+
+/** The lead's line for a broken role file: what it is, why, and the way out (reset for a built-in's name, remove for an added role). */
+export function leadBrokenLine(b: BrokenRole, builtIn: RoleDef[]): string {
+  const isBuiltIn = !!roleNamed(builtIn, b.name)
+  const out = !roleNameError(b.name)
+    ? isBuiltIn ? `the built-in role is used meanwhile; fix the file, or action "reset" deletes it` : `fix the file, or action "remove" deletes it (ask the owner first)`
+    : 'fix the file by hand'
+  return `- ${b.name} (${brokenRoleLabel(b)}; ${b.file}): ${out}`
+}
+
+/** The lead's roles list: every role, where it comes from and whether it is off; a role whose file can't be read shows why instead. */
+export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: string, broken: BrokenRole[] = []): string {
   const all = mergeRoles(builtIn, project)
-  if (!all.length) return 'no roles found'
-  return `Roles (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${all.map(r => leadRoleLine(r, roleSource(r.name, builtIn, project)!)).join('\n')}`
+  if (!all.length && !broken.length) return 'no roles found'
+  const lines = all.map(r => {
+    const b = brokenNamed(broken, r.name)
+    return b ? leadBrokenLine(b, builtIn) : leadRoleLine(r, roleSource(r.name, builtIn, project)!)
+  })
+  for (const b of broken) if (!roleNamed(all, b.name)) lines.push(leadBrokenLine(b, builtIn))
+  return `Roles (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${lines.join('\n')}`
 }
 
 /** One role in full for the lead: its line, its file, its front matter and its checklist. */

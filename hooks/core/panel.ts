@@ -276,9 +276,9 @@ export const rolesKeys = (): KeyHint[] => [
 ]
 
 /** The keys at the bottom of a role's page; which ones depend on its buttons. */
-export function roleKeys(o: { canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean }): KeyHint[] {
+export function roleKeys(o: { canEdit?: boolean; canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean }): KeyHint[] {
   return [
-    { key: 'e', word: 'edit' },
+    ...(o.canEdit === false ? [] : [{ key: 'e', word: 'edit' }]),
     ...(o.canOff ? [{ key: 'o', word: o.off ? 'turn on' : 'turn off' }] : []),
     ...(o.canReset ? [{ key: 'r', word: 'reset to built-in' }] : []),
     ...(o.canRemove ? [{ key: 'd', word: 'remove' }] : []),

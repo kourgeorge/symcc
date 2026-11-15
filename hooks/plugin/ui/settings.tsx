@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleFileText, roleKeys, roleEditKeys, rolesKeys } from '../../board'
+import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleFileText, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError } from '../../board'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
@@ -102,17 +102,75 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
           <Text color={C('autoAccept')}>{source === 'built-in' ? `roles/${r.name}.md (in the plugin; Edit copies it to ${roleFileOf(r.name)})` : roleFileOf(r.name)}</Text>
         </Text>
       </Box>
-      {footer(roleKeys({ canOff, off: !!r.off, canReset, canRemove }), 'role-keys')}
+      {footer(roleKeys({ canEdit: true, canOff, off: !!r.off, canReset, canRemove }), 'role-keys')}
+    </Box>
+  )
+}
+
+/** The page of a role whose file can't be read: why, then only what works: Reset to built-in (a built-in's name) or Remove
+ *  (an added role, after a confirm step). The edit page can't load a broken file, so it is fixed by hand. */
+function brokenRolePage($: $, pane: PaneParts, b: BrokenRole, builtIn: RoleDef[]) {
+  const { Box, Text, Button, act, C, heading, footer, buttonRows } = pane
+  const run = (input: Parameters<typeof changeRole>[1]) => act(async () => {
+    const res = await changeRole($, input)
+    if (res.ok) roleView.open = ''
+    roleView.confirmRemove = false
+    $.ui.toast(S.N.toast(res.text))
+    $.ui.invalidate('ui.render')
+  })
+  const okName = !roleNameError(b.name)
+  const canReset = okName && !!roleNamed(builtIn, b.name)
+  const canRemove = okName && !canReset
+  const out = canReset ? 'Reset to built-in deletes it (the built-in role is used meanwhile)' : canRemove ? 'Remove deletes it' : ''
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text>
+          <Text bold color={C('subtle')}>{b.name}</Text>
+          <Text color={C('error')}> · {brokenRoleLabel(b)}</Text>
+        </Text>
+        <Text color={C('text')}>Fix the file by hand: {b.file}{out ? `; or ${out}` : ''}.</Text>
+      </Box>
+      {buttonRows([
+        <Button key="role-back" label="Back" hotkey="b" autoFocus={roleView.confirmRemove ? undefined : true} onPress={() => ((roleView.open = ''), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
+        canReset && <Button key="role-reset" label="Reset to built-in" hotkey="r" onPress={run({ action: 'reset', name: b.name })} />,
+        canRemove && <Button key="role-remove" label="Remove" hotkey="d" onPress={() => ((roleView.confirmRemove = true), $.ui.invalidate('ui.render'))} />,
+      ], 'role-buttons')}
+      {roleView.confirmRemove && canRemove ? (
+        <Box key="role-remove-box" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+          <Text color={C('warning')}>Remove role {b.name} and delete {b.file}?</Text>
+          <Box flexDirection="row" gap={1}>
+            <Button key="role-remove-yes" label="Yes, remove (y)" hotkey="y" autoFocus onPress={run({ action: 'remove', name: b.name })} />
+            <Button key="role-remove-cancel" label="Cancel (x)" hotkey="x" onPress={() => ((roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />
+          </Box>
+        </Box>
+      ) : null}
+      <Box flexDirection="column">
+        {heading('File')}
+        <Text>
+          {'  '}
+          <Text color={C('autoAccept')}>{b.file}</Text>
+        </Text>
+      </Box>
+      {footer(roleKeys({ canEdit: false, canOff: false, off: false, canReset, canRemove }), 'role-keys')}
     </Box>
   )
 }
 
 /** The Roles page, opened from Settings' Roles row: one row per role (Enter opens it), + New role (n) and Back (b)
  *  to Settings. The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
-function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[]) {
+function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenRole[]) {
   const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
   const cancel = () => ((roleView.naming = null), $.ui.invalidate('ui.render'))
-  const nameW = Math.max(0, ...roles.map(r => r.name.length))
+  const nameW = Math.max(0, ...roles.map(r => r.name.length), ...broken.map(b => b.name.length))
+  const openRow = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))
+  /** A role whose file can't be read: "tester — your file can't be read: no description". */
+  const brokenRow = (b: BrokenRole, first: boolean) => (
+    <Button key={`roleRow:${b.name}`} label={`${b.name} — ${brokenRoleLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
+      <Text bold color={C('subtle')}>{`  ${b.name.padEnd(nameW)}`}</Text>
+      <Text color={C('error')}>{` — ${brokenRoleLabel(b)}`}</Text>
+    </Button>
+  )
   /** "New role": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel button (x), leaves it. */
   const newRoleBox = () =>
     roleView.naming ? (
@@ -144,15 +202,18 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
       {header()}
       {heading('Roles')}
       {roles.map((r, i) => {
+        const bad = brokenNamed(broken, r.name)
+        if (bad) return brokenRow(bad, i === 0)
         const source = roleSource(r.name, builtIn, project)!
         return (
-          <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={() => ((roleView.open = r.name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))}>
+          <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
             <Text bold={!r.off} color={C(r.off ? 'subtle' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
             <Text color={C(r.off ? 'warning' : 'subtle')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
             <Text color={C(r.off ? 'subtle' : 'text')}>{` · ${r.description}`}</Text>
           </Button>
         )
       })}
+      {broken.filter(b => !roleNamed(roles, b.name)).map((b, i) => brokenRow(b, !roles.length && i === 0))}
       {newRoleBox()}
       <Text color={C('subtle')}>Enter opens a role · n makes a new one · or tell the lead</Text>
       <Text key="roles-page-blank"> </Text>
@@ -167,13 +228,15 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, act, C, header, footer } = pane
-  const { builtIn, project } = await roleLists($)
+  const { builtIn, project, broken } = await roleLists($)
   const roles = mergeRoles(builtIn, project)
+  const openedBroken = roleView.open ? broken.find(b => b.name === roleView.open) : undefined
+  if (openedBroken) return brokenRolePage($, pane, openedBroken, builtIn)
   const opened = roleView.open ? roles.find(r => r.name === roleView.open) : undefined
   if (roleView.open && !opened) resetRoleOpen()
   if (opened && roleView.draft) return roleEditPage($, pane, roleSource(opened.name, builtIn, project))
   if (opened) return rolePage($, pane, opened, roleSource(opened.name, builtIn, project)!)
-  if (roleView.list) return rolesPage($, pane, roles, builtIn, project)
+  if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const offCount = roles.filter(r => r.off).length
   const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`

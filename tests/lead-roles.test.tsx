@@ -131,6 +131,20 @@ test('a broken role file of the owner is never written over by edit, off or on; 
   skippedRoles.clear()
 })
 
+test('the roles list shows broken files with why and the way out; add on a broken name says so', async () => {
+  const { $ } = setup({ 'tester.md': '---\nmodel: sonnet\n---\n', 'mobile.md': 'no front matter\n' })
+  const list = await call($, {})
+  expect(list).toContain("- tester (your file can't be read: no description; .symcc/roles/tester.md): the built-in role is used meanwhile; fix the file, or action \"reset\" deletes it")
+  expect(list).not.toContain('- tester (built-in)')
+  expect(list).toContain("- mobile (your file can't be read: no front matter")
+  expect(list).toContain('action "remove" deletes it')
+  expect(await call($, { action: 'list', name: 'mobile' })).toContain("mobile (your file can't be read")
+  expect(await call($, { action: 'add', name: 'mobile', description: 'x' })).toContain("is already there but can't be read: no front matter")
+  expect(await call($, { action: 'remove', name: 'mobile' })).toContain('removed role mobile')
+  leadQueue.splice(0)
+  skippedRoles.clear()
+})
+
 test('roles reset brings the built-in back; an added role says to use remove, which deletes it', async () => {
   const { $, mine } = setup({ 'tester.md': '---\ndescription: my tests\n---\n', 'mobile.md': '---\ndescription: phone apps\n---\n' })
   expect(await call($, { action: 'reset', name: 'tester' })).toContain('tester is the built-in role again')
