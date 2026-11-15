@@ -4,7 +4,7 @@ import type { SymccScout, SymccStatus, SymccTask } from '../types'
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
-import { cleanFiles } from '../hooks/board'
+import { cleanFiles, taskCopyText, copyToast } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
@@ -2786,4 +2786,40 @@ test('a scout answer that starts with a NOTHING line, then what it checked, is s
   expect(st.last_report).toBe('NOTHING\n\nWhat I checked: .env files, keys in src/, the git history.')
   expect(scoutLeadQueue.length).toBe(0)
   expect(scoutLastText(st).text).toBe('last: nothing')
+})
+
+test('taskCopyText: a task as plain text for the clipboard, with details, notes, files, after and the latest report', () => {
+  const [b1, a] = addTask(emptyBoard(), { origin: W, title: 'Parser' }, T)
+  const [, t] = addTask(b1, { origin: { by: 'owner', why: 'copy is handy', request: 'let me copy it' }, title: 'Copy a task', details: 'Add a Copy button.\n\nNote (lead, 2026-11-14): use y.\n\nOwner\'s answer to "which key?": y', files: ['hooks/a.ts', 'docs/guide.md'], after: [a.id], role: 'tester' }, T)
+  const text = taskCopyText({ ...t, note: 'worker on it' }, { roles: [], report: 'Added the button.\nTests pass.\n' })
+  expect(text).toBe(
+    [
+      `${t.id}  Copy a task`,
+      'to do · tester · from: owner',
+      'why: copy is handy',
+      'note: worker on it',
+      'What to do:',
+      'Add a Copy button.',
+      '',
+      'Note (lead, 2026-11-14): use y.',
+      '',
+      'Owner\'s answer to "which key?": y',
+      'May change: hooks/a.ts, docs/guide.md',
+      `Waits for: ${a.id}`,
+      'Latest report:',
+      'Added the button.',
+      'Tests pass.',
+      '',
+    ].join('\n'),
+  )
+  expect(text).not.toMatch(/\x1b/)
+})
+
+test('taskCopyText: a minimal task; copyToast says copied or why not', () => {
+  const [, t] = addTask(emptyBoard(), { origin: W, title: 'Small' }, T)
+  expect(taskCopyText({ ...t, details: '' })).toBe(`${t.id}  Small\nto do · general · from: lead\nwhy: a test\nWhat to do:\n(no details)\nMay change: anywhere in the project\n`)
+  expect(copyToast('T-12', { isCopied: true })).toBe('T-12 copied')
+  expect(copyToast('T-12', { isCopied: false, reason: 'no-clipboard' })).toBe("couldn't copy: this terminal has no clipboard access")
+  expect(copyToast('T-12', { isCopied: false, reason: 'no-surface' })).toMatch(/^couldn't copy: /)
+  expect(copyToast('T-12', { isCopied: false, reason: 'refused' })).toBe("couldn't copy: the copy was refused")
 })

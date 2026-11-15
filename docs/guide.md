@@ -354,6 +354,10 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
   `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
   page, `t` / `s` / `c` switch views, `b` back.
+- Copy, `y` on the task page: puts the task on the clipboard as plain text (its title, status, role,
+  where it came from, why, what to do with the notes and your answers, the files it may change,
+  what it waits for and the latest worker report). A toast says `T-12 copied`, or why it
+  couldn't, e.g. `couldn't copy: this terminal has no clipboard access`.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
 - Each task lists how long each try took and the tokens it used; the board ends with a
   total, e.g. `total: 1h 12m · 1.2M tokens in all over 4 tries`. "In all" means every kind of

@@ -141,3 +141,30 @@ export function detailRowLines(row: DetailRow, width: number): Seg[][] {
   const pad = DETAIL_LABEL_WIDTH
   return wrapSegs(row.segs, Math.max(12, width - pad)).map((l, i) => [{ text: (i === 0 && row.label ? `${row.label}:` : '').padEnd(pad), color: 'text', bold: true }, ...l])
 }
+
+/**
+ * A task as plain text for the clipboard (the task page's Copy button, y): the id and title, its status, role and
+ * origin in the page's words, why, the note, what to do (the details, with the notes and the owner's answers in
+ * them), the files it may change, what it waits for and the latest worker report (`report`), when there is one.
+ */
+export function taskCopyText(t: SymccTask, o: { roles?: RoleDef[]; report?: string | null } = {}): string {
+  const name = roleOf(t)
+  const role = findRole(o.roles ?? [], name)?.name ?? name
+  const og = originOf(t)
+  const from = og ? originWordSegs(og).map(s => s.text).join('') : 'unknown'
+  const L = [`${t.id}  ${t.title}`, `${STATUS_WORD[t.status]} · ${role} · from: ${from}`]
+  if (og?.why) L.push(`why: ${squash(og.why)}`)
+  if (t.note) L.push(`note: ${t.note}`)
+  L.push('What to do:', t.details.trim() ? t.details.trimEnd() : '(no details)')
+  L.push(`May change: ${t.files.length ? t.files.join(', ') : 'anywhere in the project'}`)
+  if (t.after.length) L.push(`Waits for: ${t.after.join(', ')}`)
+  if (o.report?.trim()) L.push('Latest report:', o.report.trimEnd())
+  return L.join('\n') + '\n'
+}
+
+/** The toast after the Copy button: "T-12 copied", or why the clipboard didn't take it, in plain words. */
+export function copyToast(id: string, r: { isCopied: true } | { isCopied: false; reason: string }): string {
+  if (r.isCopied) return `${id} copied`
+  const why: Record<string, string> = { 'no-surface': 'nothing is showing the panel right now', 'no-clipboard': 'this terminal has no clipboard access', refused: 'the copy was refused' }
+  return `couldn't copy: ${why[r.reason] ?? r.reason}`
+}

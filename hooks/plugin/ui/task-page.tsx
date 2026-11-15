@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
@@ -202,6 +202,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     if (asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles($, t.id) : await refuseAskedFiles($, t.id))))
     return sendAnswer(choices[i]!)
   }
+  // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
+  const copyTask = (press?: { surface?: Parameters<typeof $.ui.copy>[0]['surface'] }) =>
+    act(async () => {
+      const latest = reports[reports.length - 1]
+      const report = latest ? await $.fs.read(path(latest.file)).then(x => String(x), () => null) : null
+      const r = await $.ui.copy({ text: taskCopyText(t, { roles: S.roles, report }), ...(press?.surface ? { surface: press.surface } : {}) })
+      $.ui.toast(S.N.toast(copyToast(t.id, r)))
+    })()
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
@@ -248,6 +256,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             })}
           />
         ),
+        <Button key="copy" label="Copy (y)" hotkey="y" onPress={copyTask} />,
       ], 'task-buttons')}
 
       {rejectBox}

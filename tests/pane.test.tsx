@@ -1102,7 +1102,7 @@ test('a task in review on a narrow or wide panel shows every key and every butto
     expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('inactive')
     // every action button is there, in the same order as before
     const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key))
-    expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review'])
+    expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'])
     await ui.unmount()
   }
 })
@@ -1521,5 +1521,27 @@ test('the banner text is in the unselected tabs\' color, not bold; warnings keep
   // the tabs that aren't selected use the same color
   expect((await ui.find({ type: 'Text', text: /^\[s\]: Scouts \(/ }))?.props.color).toBe('inactive')
   expect((await ui.find({ type: 'Text', text: /^no test command$/ }))?.props.color).toBe('warning')
+  await ui.unmount()
+})
+
+test('Copy (y) on a task page puts the task on the clipboard as plain text and says so; a no says why', async ($, on) => {
+  const board = { tasks: [task('T-12', 'failed', 'Copy a task', { details: 'Add a Copy button.', files: ['docs/guide.md'], attempts: 1, runs: [{ started: '', ended: '', report: '.symcc/reports/T-12-try-1.md' }] })] }
+  stateOf(on, { opened: 'T-12', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, { ...ROLE_FILES, '/board.json': JSON.stringify(board), '/reports/T-12-try-1.md': 'Did the button.\n' })
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
+  const copied: string[] = []
+  let answer: { isCopied: true } | { isCopied: false; reason: 'no-clipboard' } = { isCopied: true }
+  on('ui.copy', (_, e) => (copied.push(e.text), { value: answer }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'copy' }))?.props.hotkey).toBe('y')
+  await ui.press({ key: 'copy' })
+  expect(copied.length).toBe(1)
+  expect(copied[0]).toMatch(/^T-12  Copy a task\nfailed · general · from: unknown\nWhat to do:\nAdd a Copy button\.\nMay change: docs\/guide\.md\nLatest report:\nDid the button\.\n$/)
+  expect(toasts.some(t => /T-12 copied/.test(t))).toBe(true)
+  answer = { isCopied: false, reason: 'no-clipboard' }
+  await ui.press({ key: 'copy' })
+  expect(copied.length).toBe(2)
+  expect(toasts.some(t => /couldn't copy: this terminal has no clipboard access/.test(t))).toBe(true)
   await ui.unmount()
 })
