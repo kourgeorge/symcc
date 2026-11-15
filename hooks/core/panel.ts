@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { type BoardTask, emptyBoard, intoOf, STATUS_WORD } from './board-file'
+import { type BoardTask, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { finishingNow } from './lead'
@@ -92,7 +92,7 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number,
 export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = ''): string {
   const into = intoOf(t)
   const other = here && into !== here ? `→ ${into}` : ''
-  const rest = rowExtraOf(t, tasks)
+  const rest = fileWaitText(t) || rowExtraOf(t, tasks)
   return [other, rest].filter(Boolean).join(' · ')
 }
 
@@ -116,6 +116,16 @@ function rowExtraOf(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): st
     default:
       return ''
   }
+}
+
+/** What a task whose finished work waits only for the owner's files (BoardTask.merge_wait) says, in the board list,
+ *  on its page and above the prompt: "waiting for your files on main: a.ts, b.ts; commit or stash them, it merges on
+ *  its own". '' for any other task. */
+export function fileWaitText(t: Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>): string {
+  if (!waitsForFiles(t)) return ''
+  const f = t.merge_wait!
+  const list = f.length > 5 ? `${f.slice(0, 5).join(', ')} and ${f.length - 5} more` : f.join(', ')
+  return `waiting for your files on ${intoOf(t)}: ${list}; commit or stash them, it merges on its own`
 }
 
 /** Cuts text to `n` columns, ending with "…" when cut. */
@@ -221,12 +231,14 @@ export const viewKeys = (enter = true): KeyHint[] => [
 /** The keys at the bottom of a task's page, the ones that matter most for its state first; "y copy", "↑↓ scroll" and
  *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
  *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answer`: the keys of a
- *  waiting task's answer buttons (answerKeys); they then take the number keys instead of the reports. */
-export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answer: readonly KeyHint[] = []): KeyHint[] {
+ *  waiting task's answer buttons (answerKeys); they then take the number keys instead of the reports. `fileWait`:
+ *  its finished work waits only for the owner's files (fileWaitText), so r merges it now. */
+export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answer: readonly KeyHint[] = [], fileWait = false): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = []
   if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
   if (status === 'backlog') keys.push(k('o', 'move to todo'), k('x', 'drop'))
+  if (fileWait) keys.push(k('r', 'merge now'))
   if (worker) keys.push(k('w', 'watch worker'))
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
   if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))

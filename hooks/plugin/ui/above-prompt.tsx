@@ -1,6 +1,6 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew } from '../../board'
+import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
 import { type $, readView, type PaneView, S } from '../state'
 import { openPane } from './open'
 
@@ -42,7 +42,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
             {t.id} {word[t.status]}
           </Text>
           <Text> {t.title}</Text>
-          <Text dimColor>{t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
+          <Text dimColor>{fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
         </Text>
       ))}
       {live.length > rows && <Text dimColor>+{live.length - rows} more · /{S.N.name}</Text>}
