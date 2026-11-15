@@ -126,3 +126,33 @@ test('pump starts no work while session.start is still waiting for the reload se
   await w.clock.settle()
   expect(w.spawned.map(x => x.name).sort()).toEqual(['symcc-T-1', 'symcc-T-2'])
 })
+
+test('two session.starts in a row: the older one finishing its wait starts no work; only the newer one does', async ($, on) => {
+  const agents: { id: string; type: string }[] = []
+  const w = world(on, { agents })
+  w.files.set(BOARD, JSON.stringify(board(2)))
+  // first start: T-1 "doing" with no live agent, so its claimLead waits RELOAD_SETTLE_MS
+  const s1 = start($)
+  await w.clock.settle()
+  expect(s1.done()).toBe(true)
+  // an old worker shows up before the second start: it is told to stop and keeps running, so the
+  // second start's claimLead keeps waiting for it after the first one's wait is over
+  agents.push({ id: 'old1', type: 'symcc:worker' })
+  const s2 = start($)
+  await w.clock.settle()
+  expect(s2.done()).toBe(true)
+  expect(w.sent).toEqual(['old1'])
+  // the first start's claimLead ends (T-1 went back to todo), but T-2 must not start yet
+  await w.clock.advance(RELOAD_SETTLE_MS)
+  await w.clock.settle()
+  expect(w.spawned.filter(x => x.name === 'symcc-T-2')).toEqual([])
+  expect(w.task('T-1').status).toBe('todo')
+  await w.clock.advance(1_500)
+  await w.clock.settle()
+  expect(w.spawned).toEqual([])
+  // old1 ends: the second start's claimLead ends on its next look, and now T-2 gets one worker
+  agents.splice(0)
+  await w.clock.advance(500)
+  await w.clock.settle()
+  expect(w.spawned.filter(x => x.name === 'symcc-T-2')).toHaveLength(1)
+})
