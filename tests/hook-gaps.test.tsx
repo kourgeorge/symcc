@@ -4,7 +4,7 @@
 // The plugin is loaded fresh for every test, so its state (stopped agents, the owner's last prompt) starts empty.
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
+import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -26,9 +26,13 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   const prompts: string[] = []
   const sent: string[] = []
   const ended = new Set<string>()
+  const toasts: string[] = []
+  const spawned: string[] = []
   const state = { gitFails: false }
 
   function git(args: string[]): Res {
+    // a repo with a commit, so work can start
+    if (args[0] === 'rev-parse' && args[1] === '--is-inside-work-tree') return ok('true\n')
     if (args[0] !== 'diff') return ok()
     if (state.gitFails) return { exitCode: 128, stdout: '', stderr: 'fatal: bad object symcc/T-1' }
     if (args.some(a => a.startsWith('--stat'))) return ok(' src/b.md | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n')
@@ -43,7 +47,10 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('fs.stat', (_, e) => (files.has(key(e.path)) ? { value: { mtimeMs: T0 } } : Promise.reject(new Error('no file'))) as never)
   on('fs.list', () => ({ value: [] }))
   on('ui.status', () => ({ value: undefined }))
-  on('ui.toast', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
+  // the workers asked for (by name). This hook only sees a spawn about to happen; nothing in the test kit
+  // really starts an agent, so each start then fails ("no implementation for agent.spawn").
+  on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git') return { value: git(rest) }
@@ -77,7 +84,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  return { files, tools, prompts, sent, state, clock, board: () => JSON.parse(files.get(BOARD)!) as Board }
+  return { files, tools, prompts, sent, toasts, spawned, state, clock, board: () => JSON.parse(files.get(BOARD)!) as Board }
 }
 
 type Eng = Parameters<Parameters<typeof test>[1]>[0]
@@ -252,4 +259,23 @@ test('a 3000-character prompt is kept as its first 2000 characters', async ($, o
   // the request is checked against the kept text: inside it, no note; past the cut, "not word for word"
   expect(await ownerAdd($, w, 'MARKONE')).not.toContain('not word for word')
   expect(await ownerAdd($, w, 'MARKTWO')).toContain('(the quoted request is not word for word in it)')
+})
+
+// ---------------- a broken board.json at session start ----------------
+
+test("session.start with a board.json that isn't JSON finishes quietly, tells the owner once and leaves the file alone; once fixed, the heartbeat asks for a worker", async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, '{ not json')
+  // it does not throw (S.startupDone, inside the loaded plugin, is shown true below: pump runs, and it returns early while it is false)
+  await $.session.start({ cwd: '/repo' } as never)
+  expect([...w.files.keys()].filter(k => k.startsWith(`${BOARD}.broken-`)).length).toBe(1)
+  expect(w.toasts.filter(t => /board\.json can't be read/.test(t)).length).toBe(1)
+  expect(w.files.get(BOARD)).toBe('{ not json')
+  expect(w.spawned).toEqual([])
+  // fixed: the next heartbeat pumps, and a worker is asked for the task to do
+  const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Change b', files: ['src/'], merge_into: 'main' }, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  await w.clock.advance(LEAD_BEAT_MS)
+  expect(w.spawned.length).toBe(1)
+  expect(w.spawned[0]).toContain('T-1')
 })
