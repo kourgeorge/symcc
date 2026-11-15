@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import { type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit } from '../board'
-import { gitOk, git, worktreeDir } from './git'
+import { gitOk, git, worktreeDir, asSymcc } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
 import { tellLead } from './tell'
@@ -100,13 +100,9 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
   await git($, ['add', '-A', '--', '.'], dir)
-  const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
-  // The message ends with trailers (task, origin, why, try); see commitMessage.
-  const c = await git($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name })], dir)
+  await commitTry($, t, dir, made)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
-  // Nothing to commit is fine (exit 1, HEAD unchanged); only a new HEAD counts as a commit of this try.
-  if (c.exitCode === 0 && head !== before) made.push(head)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
   // -z: names come through as they are (without it git quotes and escapes unusual ones, e.g. "caf\303\251.md").
   const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
@@ -140,16 +136,26 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
  * to add to the failure when it could not be undone.
  */
 async function undoOutOfScope($: $, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
-  const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   // :(literal): names are taken as they are, never as patterns.
   for (let i = 0; i < bad.length; i += 100) {
     const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
     if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`
   }
-  const c = await git($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: undo changes outside the task` })], dir)
+  await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
+  return ''
+}
+
+/**
+ * Commits what is staged in task `t`'s folder `dir` as symcc (no hooks), with the task's message
+ * (see commitMessage; `subject` replaces its first line). Nothing to commit is fine (exit 1, HEAD
+ * unchanged); only a new HEAD counts as a commit of this try and is added to `made`.
+ */
+async function commitTry($: $, t: SymccTask, dir: string, made: string[], subject?: string): Promise<void> {
+  const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
+  // The message ends with trailers (task, origin, why, try); see commitMessage.
+  const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}) })], dir)
   const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   if (c.exitCode === 0 && head && head !== before) made.push(head)
-  return ''
 }
 
 /** How many times checkAndMerge brings a task up to date and tries again when its branch moved during the merge. */
@@ -175,7 +181,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
   let candidate = tip
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
-    const m = await git($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'merge', '--no-edit', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
+    const m = await git($, [...asSymcc(), 'merge', '--no-edit', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       return res({ ok: false, detail: `conflicts with the latest ${target}`, conflict: true })
