@@ -27,6 +27,7 @@ Needs: Python 3 with Pillow and kokoro-onnx, ffmpeg, and the fonts make_video.py
 """
 
 import hashlib
+import json
 import math
 import os
 import re
@@ -76,6 +77,8 @@ LEAD_IN = 0.8     # silence at the start of each scene, before the voice
 SENT_GAP = 0.35   # silence between sentences inside a scene
 TAIL = 0.7        # silence at the end of each scene (with LEAD_IN: the pause between scenes)
 END_HOLD = 2.5    # extra time on the last picture
+LOUDNESS = -14.0  # target loudness in LUFS (YouTube plays most videos at about this level)
+TRUE_PEAK = -1.5  # highest peak in dBTP, a little under -1 so the AAC sound does not clip
 FADE = 0.5        # cross-fade between scenes
 
 # ---------------------------------------------------------------- narration
@@ -966,10 +969,33 @@ def wrap_plain(s, width):
 # ---------------------------------------------------------------- build
 
 
+def louder(src, dst):
+    """Make the sound in src as loud as a normal YouTube video and save it to dst.
+
+    Two passes with ffmpeg's loudnorm: the first measures, the second turns the whole
+    track up by one fixed amount (linear), so the voice itself does not change."""
+    target = "I=%s:TP=%s:LRA=20" % (LOUDNESS, TRUE_PEAK)
+    r = subprocess.run([ffmpeg_bin(), "-hide_banner", "-nostats", "-i", src,
+                        "-af", "loudnorm=%s:print_format=json" % target, "-f", "null", "-"],
+                       capture_output=True, text=True)
+    err = r.stderr
+    m = json.loads(err[err.rindex("{"):err.rindex("}") + 1])
+    measured = ("measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s"
+                % (m["input_i"], m["input_tp"], m["input_lra"], m["input_thresh"],
+                   m["target_offset"]))
+    subprocess.run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", src,
+                    "-af", "loudnorm=%s:%s:linear=true" % (target, measured),
+                    "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", dst], check=True)
+    print("loudness: %s LUFS -> %s LUFS" % (m["input_i"], LOUDNESS), flush=True)
+
+
 def build(scenes, audio, rate):
     os.makedirs(OUT_DIR, exist_ok=True)
+    raw = os.path.join(OUT_DIR, "narration_raw.wav")
     wav = os.path.join(OUT_DIR, "narration.wav")
-    write_wav(wav, audio, rate)
+    write_wav(raw, audio, rate)
+    louder(raw, wav)
+    os.remove(raw)
     total = scenes[-1]["start"] + scenes[-1]["dur"]
     n = int(math.ceil(total * FPS))
     print("video length: %d:%04.1f, %d frames" % (total // 60, total % 60, n), flush=True)
