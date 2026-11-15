@@ -19,6 +19,43 @@ export async function loadScouts($: $): Promise<ScoutDef[]> {
   return out
 }
 
+/**
+ * The first time symcc sets up a project (no <dir>/scouts/ folder yet), copies the plugin's example scouts
+ * (examples/scouts/*.md) into it, each marked paused in scouts.json first, so they show in the Scouts view but
+ * never run until the owner resumes one. A scouts folder that is there (even empty) gets nothing. Never throws:
+ * when the examples can't be read or a copy fails, the owner is told once in a toast and symcc starts as usual.
+ * Returns the names copied.
+ */
+export async function seedExampleScouts($: $): Promise<string[]> {
+  try {
+    const dir = path(S.N.scouts)
+    if (await $.fs.exists(dir)) return []
+    const from = `${$.plugin.root}/examples/scouts`
+    const examples: { name: string; text: string }[] = []
+    for (const f of await $.fs.list(from)) {
+      if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
+      const name = f.name.replace(/\.md$/, '')
+      if (!SCOUT_FILE_NAME.test(name)) continue
+      examples.push({ name, text: await $.fs.read(`${from}/${f.name}`) })
+    }
+    if (!examples.length) return []
+    // Paused first: a scout file never lands without its pause, so none can run before the owner resumes it.
+    await changeScoutMemory($, old => {
+      let text = old ?? ''
+      for (const e of examples) text = scoutPausedText(parseScoutMemory(text), e.name, true)
+      return text
+    })
+    const r = await $.process.run(['mkdir', '-p', dir])
+    if (r.exitCode !== 0) throw new Error(r.stderr || r.stdout || `mkdir exit ${r.exitCode}`)
+    for (const e of examples) await $.fs.write(`${dir}/${e.name}.md`, e.text)
+    $.ui.toast(S.N.toast(`added ${examples.length} example scouts, all paused: resume one with p on its page or /${S.N.name}-scout <name> resume`))
+    return examples.map(e => e.name)
+  } catch (e) {
+    $.ui.toast(S.N.toast(`couldn't add the example scouts: ${String((e as Error)?.message ?? e).slice(0, 200)}`))
+    return []
+  }
+}
+
 /** agent id of a scout run going now → the scout's last_run before it started (put back if the run is stopped) */
 const runBefore = new Map<string, string | null>()
 /** agent id of a scout run going now → when it started (ms), for the run's time in scouts.json's usage */

@@ -18,7 +18,7 @@ import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
-import { fileToolHits, saveScoutsMigrated, scheduleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
+import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
@@ -133,6 +133,8 @@ export const register: Register = on => {
       await Promise.race([lead, waits])
       startWait.mark = null
       if (!(await $.fs.exists(path(S.N.boardFile)))) await publish($, await load($))
+      // A new project (no scouts folder yet) gets the plugin's example scouts, all paused; never stops the start.
+      await seedExampleScouts($).catch(() => undefined)
       await scheduleScouts($)
       await loadRoles($).catch(() => undefined)
       await cleanLeftoverTmp($).catch(() => undefined)

@@ -430,11 +430,19 @@ doesn't suggest them again.
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
 tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message. The
 last report shows on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
-has examples to copy: [`bugs.md`](../examples/scouts/bugs.md),
+has examples: [`bugs.md`](../examples/scouts/bugs.md),
 [`test-gaps.md`](../examples/scouts/test-gaps.md),
 [`deps.md`](../examples/scouts/deps.md), which checks the web for new versions and
 security notices, and [`secrets.md`](../examples/scouts/secrets.md), which looks for keys,
 tokens and passwords that are in git or could end up there.
+
+A new project starts with these example scouts. The first time symcc starts in a project with
+no `.symcc/scouts/` folder yet, it copies every example there and marks each one paused (in
+`.symcc/scouts.json`), so they show in the Scouts view but never run, not on their timer and
+not on "run now", until you resume one: press `p` on its page, or run
+`/symcc-scout <name> resume`. If the folder is already there (even empty, e.g. you removed
+every scout), nothing is copied, and a scout file is never overwritten or added back. If the
+copy fails, symcc says so once and starts as usual.
 
 A scout's page in the board panel shows a header line (its name, state, how often it runs,
 e.g. "every 7 days", its model and when it last ran), then its summary, then the sections

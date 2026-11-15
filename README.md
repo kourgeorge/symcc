@@ -151,7 +151,7 @@ a wide enough terminal; if not, run `/symcc`. The status line starts with the mo
 1. **Install** symcc (see above).
 2. **Keep the board local:** `echo ".symcc/" >> .gitignore`
 3. **Set your tests:** tell the lead "set the test command to `npm test`". Without one, changes merge without tests.
-4. **Optional, a scout:** copy one from [`examples/scouts/`](examples/scouts/) into `.symcc/scouts/` ([`bugs.md`](examples/scouts/bugs.md), [`test-gaps.md`](examples/scouts/test-gaps.md), [`deps.md`](examples/scouts/deps.md), [`secrets.md`](examples/scouts/secrets.md)), or make one in the panel's Scouts view.
+4. **Optional, a scout:** a new project starts with the example scouts from [`examples/scouts/`](examples/scouts/) ([`bugs.md`](examples/scouts/bugs.md), [`test-gaps.md`](examples/scouts/test-gaps.md), [`deps.md`](examples/scouts/deps.md), [`secrets.md`](examples/scouts/secrets.md)), all paused. To turn one on, press `p` on its page in the panel's Scouts view, or run `/symcc-scout <name> resume`. You can also make your own there.
 5. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
 ## Things you can say
