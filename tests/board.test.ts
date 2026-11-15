@@ -2132,6 +2132,15 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   // the text never brings its own ⚠: what needs attention is said in words
   for (const st of ['done', 'failed', 'waiting', 'review', 'doing'] as const) expect(statusLine({ tasks: [{ id: 'T-1', status: st }] }, true, '', 'auto', false, crew, now)).not.toContain('⚠')
   expect(crewParts({ tasks: [], scouts: [] }, now)).toEqual({ workers: '', scouts: '', next: '' })
+  // a task symcc is only testing and merging (a fresh finishing mark) is "merging", not a worker
+  const fresh = new Date(now - 10_000).toISOString()
+  const working = { status: 'doing' as const }
+  const merging = { status: 'doing' as const, finishing: fresh }
+  expect(crewParts({ max_parallel: 3, tasks: [working], scouts: [] }, now).workers).toBe('1/3 workers')
+  expect(crewParts({ max_parallel: 3, tasks: [merging], scouts: [] }, now).workers).toBe('1 merging')
+  expect(crewParts({ max_parallel: 3, tasks: [working, merging], scouts: [] }, now).workers).toBe('1/3 workers · 1 merging')
+  // a stale mark (the copy that merged it is gone) is not merging now
+  expect(crewParts({ max_parallel: 3, tasks: [{ status: 'doing', finishing: new Date(now - 3_600_000).toISOString() }], scouts: [] }, now).workers).toBe('1/3 workers')
   expect(withCrew((w, s) => [w, s].join('|'), undefined, now)).toBe('|')
   expect(nextScoutText([{ name: 'bugs', running: true, next_run: null }, ...scouts], now)).toBe('running: bugs')
   expect(nextScoutText([], now)).toBe('')

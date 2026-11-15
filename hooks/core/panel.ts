@@ -1,8 +1,9 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { emptyBoard, intoOf, STATUS_WORD } from './board-file'
+import { type BoardTask, emptyBoard, intoOf, STATUS_WORD } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
+import { finishingNow } from './lead'
 import { originOf } from './origin'
 import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
@@ -43,18 +44,21 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
   return next.at <= nowMs ? `next: ${next.name} now` : `next: ${next.name} in ${fmtDuration(next.at - nowMs)}`
 }
 
-/** What the workers and scouts part of the line above the prompt needs. Busy workers are the tasks being worked on. */
-export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: Pick<SymccTask, 'status'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+/** What the workers and scouts part of the line above the prompt needs. Busy workers are the tasks being worked on;
+ *  a doing task whose work symcc is testing and merging now (see finishingNow) is "merging", not a worker. */
+export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: Pick<BoardTask, 'status' | 'finishing'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
-/** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers" (left out while none run:
- *  "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
+/** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers", then "1 merging" for tasks
+ *  symcc is testing and merging (each left out while there are none: "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
  *  "running: gaps-bot" (no "next" in plan mode or board mode off, as no scout starts then). */
 export function crewParts(c: CrewBoard, nowMs: number): { workers: string; scouts: string; next: string } {
-  const busy = c.tasks.filter(t => t.status === 'doing').length
+  const merging = c.tasks.filter(t => finishingNow(t, nowMs)).length
+  const busy = c.tasks.filter(t => t.status === 'doing').length - merging
   const n = c.scouts.length
   const running = c.scouts.find(s => s.running)
   const next = !n ? '' : running ? `running: ${running.name}` : c.plan_mode || c.mode === 'off' ? '' : nextScoutText(c.scouts, nowMs)
-  return { workers: busy ? `${busy}/${c.max_parallel ?? emptyBoard().max_parallel} workers` : '', scouts: !n ? '' : n === 1 ? '1 scout' : `${n} scouts`, next }
+  const workers = [busy ? `${busy}/${c.max_parallel ?? emptyBoard().max_parallel} workers` : '', merging ? `${merging} merging` : ''].filter(Boolean).join(' · ')
+  return { workers, scouts: !n ? '' : n === 1 ? '1 scout' : `${n} scouts`, next }
 }
 
 /** Builds a line with the workers and scouts in it (`build` gets the workers text and the scouts text) so it fits in
