@@ -91,7 +91,7 @@ test('the board lists the newest task at the top and the oldest at the bottom', 
   const [b1] = addTask(emptyBoard(), { origin: W, title: 'Old' }, '2026-01-01T00:00:00Z')
   const [b2] = addTask(b1, { origin: W, title: 'Middle' }, '2026-01-02T00:00:00Z')
   const [b3] = addTask(b2, { origin: W, title: 'New' }, '2026-01-03T00:00:00Z')
-  const lines = boardText(b3).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
+  const lines = boardText(b3).split('\n').slice(1).filter(l => !/^(\S )?from:/.test(l.trim()))
   expect(lines.map(l => l.trim().split(/\s+/).pop())).toEqual(['New', 'Middle', 'Old'])
 })
 
@@ -609,9 +609,9 @@ test('day labels: Yesterday, then the date, with the year only for another year'
 
 test('boardText lists the open tasks in full and the done ones as a count; status: done lists them newest first', () => {
   const b = { ...emptyBoard(), tasks: [at('T-1', 'done', '2026-11-09T10:00:00Z'), at('T-2', 'todo', '2026-11-01T10:00:00Z'), at('T-3', 'done', '2026-11-11T10:00:00Z'), at('T-4', 'done', '2026-11-10T10:00:00Z')] }
-  const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
+  const lines = boardText(b, NOW, undefined, DEFAULT_NAME, 0).split('\n').slice(1).filter(l => !/^(\S )?from:/.test(l.trim()))
   expect(lines).toEqual([expect.stringMatching(/^T-2 /), '3 done; ask with status: done to see them'])
-  const done = boardText(b, NOW, undefined, DEFAULT_NAME, 0, { status: ['done'] }).split('\n').slice(1).filter(l => !l.trim().startsWith('from:'))
+  const done = boardText(b, NOW, undefined, DEFAULT_NAME, 0, { status: ['done'] }).split('\n').slice(1).filter(l => !/^(\S )?from:/.test(l.trim()))
   expect(done.map(l => l.split(/\s+/)[0])).toEqual(['T-3', 'T-4', 'T-1', '3'])
 })
 
@@ -1741,7 +1741,7 @@ test('a board whose tasks have no origin is migrated once: the lead made them be
   expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
   // the task (origin and branch at once) and the dropped target_branch
   expect(r.migrated).toBe(2)
-  expect(fromText(r.board.tasks[0]!)).toBe('from: lead')
+  expect(fromText(r.board.tasks[0]!)).toBe('◆ from: lead')
   expect(readBoard(boardText(r.board)).migrated).toBe(0)
   // a broken (hand-edited) origin is not usable: "unknown", and nothing breaks
   expect(fromText({ origin: { by: 'nobody' } })).toBe('from: unknown')
@@ -1750,21 +1750,43 @@ test('a board whose tasks have no origin is migrated once: the lead made them be
 
 test('the "from:" text is short: the owner\'s words, the scout, or the task it came from', () => {
   const o = (x: Record<string, unknown>) => ({ origin: makeOrigin(x, T) })
-  expect(fromText(o({ by: 'owner', request: 'add a search command', why: 'w' }))).toBe('from: owner — “add a search command”')
-  expect(fromText(o({ by: 'owner', request: 'add a search command that also looks in the details of every task and the history', why: 'w' }))).toBe('from: owner — “add a search command that also looks in the details of ever…”')
-  expect(fromText(o({ by: 'owner', why: 'w' }))).toBe('from: owner')
-  expect(fromText(o({ by: 'scout', scout: 'bugs', why: 'w' }))).toBe('from: scout bugs')
+  expect(fromText(o({ by: 'owner', request: 'add a search command', why: 'w' }))).toBe('♟ from: owner — “add a search command”')
+  expect(fromText(o({ by: 'owner', request: 'add a search command that also looks in the details of every task and the history', why: 'w' }))).toBe('♟ from: owner — “add a search command that also looks in the details of ever…”')
+  expect(fromText(o({ by: 'owner', why: 'w' }))).toBe('♟ from: owner')
+  expect(fromText(o({ by: 'scout', scout: 'bugs', why: 'w' }))).toBe('⌕ from: scout bugs')
   const b = addTask(emptyBoard(), { title: 'big', origin: W }, T)[0]
   const t = (x: Record<string, unknown>) => ({ origin: makeOrigin(x, T, b) })
-  expect(fromText(t({ by: 'lead', task: 'T-1', how: 'split', why: 'w' }))).toBe('from: T-1 (split)')
-  expect(fromText(t({ by: 'worker', task: 'T-1', why: 'w' }))).toBe('from: T-1 (worker report)')
-  expect(fromText(t({ by: 'worker', task: 'T-1', how: 'follow-up', why: 'w' }))).toBe('from: T-1 (follow-up)')
-  expect(fromText(t({ by: 'lead', task: 'T-1', why: 'w' }))).toBe('from: lead, about T-1')
-  expect(fromText(t({ by: 'lead', why: 'w' }))).toBe('from: lead')
+  expect(fromText(t({ by: 'lead', task: 'T-1', how: 'split', why: 'w' }))).toBe('↳ from: T-1 (split)')
+  expect(fromText(t({ by: 'worker', task: 'T-1', why: 'w' }))).toBe('▸ from: T-1 (worker report)')
+  expect(fromText(t({ by: 'worker', task: 'T-1', how: 'follow-up', why: 'w' }))).toBe('↳ from: T-1 (follow-up)')
+  expect(fromText(t({ by: 'lead', task: 'T-1', why: 'w' }))).toBe('◆ from: lead, about T-1')
+  expect(fromText(t({ by: 'lead', why: 'w' }))).toBe('◆ from: lead')
   expect(createdLine(makeOrigin({ by: 'worker', task: 'T-1', why: 'tests were missing' }, T, b))).toBe('created by the worker of T-1 because tests were missing')
   const [b2] = addTask(b, { title: 'small', origin: { by: 'scout', scout: 'bugs', why: 'w' } }, T)
   const lines = boardText(b2).split('\n')
-  expect(lines[lines.findIndex(l => l.startsWith('T-2 ')) + 1]!.trim()).toBe('from: scout bugs')
+  expect(lines[lines.findIndex(l => l.startsWith('T-2 ')) + 1]!.trim()).toBe('⌕ from: scout bugs')
+})
+
+test('the "from:" line starts with a one-width mark for each kind of origin', () => {
+  const b = addTask(emptyBoard(), { title: 'big', origin: W }, T)[0]
+  const f = (x: Record<string, unknown>) => fromText({ origin: makeOrigin(x, T, b) })
+  // the owner and a scout keep their own mark, even when they name a task
+  expect(f({ by: 'owner', request: 'go', why: 'w' })).toBe('♟ from: owner — “go”')
+  expect(f({ by: 'owner', request: 'go', task: 'T-1', how: 'split', why: 'w' })).toBe('♟ from: owner — “go”, T-1 (split)')
+  expect(f({ by: 'scout', scout: 'test-gaps', why: 'w' })).toBe('⌕ from: scout test-gaps')
+  expect(f({ by: 'scout', scout: 'bugs', task: 'T-1', how: 'follow-up', why: 'w' })).toBe('⌕ from: scout bugs, T-1 (follow-up)')
+  expect(f({ by: 'worker', task: 'T-1', why: 'w' })).toBe('▸ from: T-1 (worker report)')
+  expect(f({ by: 'lead', why: 'w' })).toBe('◆ from: lead')
+  expect(f({ by: 'lead', task: 'T-1', why: 'w' })).toBe('◆ from: lead, about T-1')
+  expect(f({ by: 'lead', task: 'T-1', how: 'split', why: 'w' })).toBe('↳ from: T-1 (split)')
+  expect(f({ by: 'worker', task: 'T-1', how: 'follow-up', why: 'w' })).toBe('↳ from: T-1 (follow-up)')
+  expect(fromText({ origin: undefined })).toBe('from: unknown')
+  // every mark is one plain character (no emoji) followed by one space, so the board's lines still line up
+  for (const m of ['♟', '⌕', '▸', '◆', '↳']) expect([...m].length === 1 && m.length === 1 && !/\p{Emoji_Presentation}/u.test(m)).toBe(true)
+  const [b2] = addTask(b, { title: 'small', origin: { by: 'scout', scout: 'bugs', why: 'w' } }, T)
+  const lines = boardText(b2).split('\n')
+  const under = lines[lines.findIndex(l => l.startsWith('T-2 ')) + 1]!
+  expect(under).toBe(`${' '.repeat(14)}⌕ from: scout bugs`)
 })
 
 test('the plugin links a new task to what it saw itself: the owner prompt or the report', () => {
@@ -1836,7 +1858,7 @@ test('a hand-broken task origin does not break the board or the task page', () =
   }
   const ok = { ...addTask(emptyBoard(), { origin: W, title: 'x' }, T)[1], origin: { by: 'owner', why: 'w', request: 'add search', at: T } } as unknown as SymccTask
   expect(fromText(ok)).toContain('add search')
-  expect(fromText({ origin: { by: 'scout', scout: 9, why: 'w' } })).toBe('from: scout ?')
+  expect(fromText({ origin: { by: 'scout', scout: 9, why: 'w' } })).toBe('⌕ from: scout ?')
 })
 
 // ---------------- the commits of a task (T-85) ----------------
