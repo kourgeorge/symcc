@@ -1,5 +1,4 @@
 // Who drives the board, and which session owns a running task.
-import { namesFor } from '../name'
 import { type Board, type BoardTask, isSha, intoOf } from './board-file'
 import { parseStamp } from './text'
 import { stoppedLine, stopEnd } from './history'
@@ -11,7 +10,6 @@ import { endedBy, withEnd } from './runs'
 // workers, merges, runs scouts and the regular check. It writes .<name>/lead.json and
 // refreshes the heartbeat in it; the others only read and change the board.
 
-export const LEAD_FILE = namesFor().leadFile
 /** how often the driver refreshes its heartbeat (and the others look at it) */
 export const LEAD_BEAT_MS = 30_000
 /** a heartbeat older than this means the driver is gone, and another session may take over */

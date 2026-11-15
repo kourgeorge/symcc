@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { parseScout, safeScoutFile, resolveRel } from '../hooks/board'
+import { parseScout, safeScoutFile, resolveRel, SCOUT_FILE_NAME } from '../hooks/board'
 import { runScoutNow, setScoutPaused } from '../hooks/plugin/scouts'
 
 /**
@@ -140,4 +140,38 @@ test("the owner's /symcc-scout refuses a name that is not a scout name", async (
   setup(on, base())
   expect(await runScoutNow($ as never, '../../README')).toContain('is not a scout name')
   expect(await setScoutPaused($ as never, 'a/b', true)).toContain('is not a scout name')
+})
+
+test('a scout made in the panel with any allowed name ("My_Scout") can be listed, run, edited and removed by the lead', async ($, on) => {
+  const files = { ...base(), '/.symcc/scouts/My_Scout.md': '---\nevery_minutes: 0\n---\nLook for slow tests.\n' }
+  setup(on, files)
+  expect(await call($, {})).toContain('My_Scout: on demand')
+  expect(await call($, { action: 'list', name: 'My_Scout' })).toContain('Look for slow tests.')
+  const ran = await call($, { action: 'run', name: 'My_Scout' })
+  expect(ran).not.toMatch(/not a valid scout name|no scout named/)
+  expect(await call($, { action: 'edit', name: 'My_Scout', prompt: 'Look for flaky tests.' })).toContain('saved scout My_Scout')
+  expect(parseScout('My_Scout', files['/.symcc/scouts/My_Scout.md']!)).toMatchObject({ every_minutes: 0, prompt: 'Look for flaky tests.' })
+  expect(await call($, { action: 'remove', name: 'My_Scout' })).toContain('removed scout My_Scout')
+  expect(files['/.symcc/scouts/My_Scout.md']).toBeNull()
+  // the lead still adds only lowercase-and-dashes names
+  expect(await call($, { action: 'add', name: 'My_Scout', every_minutes: 0, prompt: 'Look.' })).toContain('not a valid scout name')
+})
+
+test('a dotted scout file ("deps.v2.md") works everywhere: lead tool, and the same name rule as /symcc-scout and the panel', async ($, on) => {
+  const files = { ...base(), '/.symcc/scouts/deps.v2.md': '---\nevery_minutes: 0\n---\nCheck the deps.\n' }
+  setup(on, files)
+  expect(safeScoutFile('deps.v2')).toBe('.symcc/scouts/deps.v2.md')
+  expect(await call($, { action: 'list', name: 'deps.v2' })).toContain('Check the deps.')
+  expect(await call($, { action: 'run', name: 'deps.v2' })).not.toMatch(/not a valid scout name|no scout named/)
+  // /symcc-scout run, pause and resume and the panel editor all check names with SCOUT_FILE_NAME
+  expect(SCOUT_FILE_NAME.test('deps.v2')).toBe(true)
+  expect(await call($, { action: 'edit', name: 'deps.v2', prompt: 'Check the deps again.' })).toContain('saved scout deps.v2')
+  expect(files['/.symcc/scouts/deps.v2.md']).toContain('Check the deps again.')
+  expect(await call($, { action: 'remove', name: 'deps.v2' })).toContain('removed scout deps.v2')
+  expect(files['/.symcc/scouts/deps.v2.md']).toBeNull()
+  // dots never make "." or ".." or a path
+  for (const bad of ['.', '..', '../x', 'a/../b', '..\\x']) expect(safeScoutFile(bad)).toBeNull()
+  for (const bad of ['.', '..', 'a/b', 'a b']) expect(SCOUT_FILE_NAME.test(bad)).toBe(false)
+  expect(await runScoutNow($ as never, '..')).toContain('is not a scout name')
+  expect(await setScoutPaused($ as never, '..', true)).toContain('is not a scout name')
 })
