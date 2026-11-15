@@ -1,0 +1,271 @@
+1
+00:00:00,800 --> 00:00:03,957
+You ask a coding agent for one thing, and
+then you wait.
+
+2
+00:00:04,307 --> 00:00:08,446
+New ideas come up, but the agent can only
+do one thing at a time.
+
+3
+00:00:08,796 --> 00:00:12,572
+So you interrupt it, or you try to
+remember everything yourself.
+
+4
+00:00:14,072 --> 00:00:15,779
+symcc fixes that.
+
+5
+00:00:16,129 --> 00:00:17,985
+It is a plugin for Claude Code.
+
+6
+00:00:18,335 --> 00:00:20,852
+You talk to one lead, in your normal chat.
+
+7
+00:00:21,202 --> 00:00:25,433
+The lead listens, writes your ideas down
+on a shared task board,
+
+8
+00:00:25,433 --> 00:00:27,879
+and splits big jobs into small tasks.
+
+9
+00:00:28,229 --> 00:00:31,643
+Then workers pick up the tasks and do them
+side by side.
+
+10
+00:00:31,993 --> 00:00:34,628
+Each worker has its own copy of your code,
+
+11
+00:00:34,628 --> 00:00:38,457
+so your own branch stays untouched until
+something is merged.
+
+12
+00:00:39,957 --> 00:00:41,301
+The board is simple.
+
+13
+00:00:41,651 --> 00:00:43,912
+A task is in one of four places.
+
+14
+00:00:44,262 --> 00:00:46,246
+Todo, doing, review, or done.
+
+15
+00:00:46,596 --> 00:00:50,735
+You can see at a glance what is running,
+what is waiting, and what needs you.
+
+16
+00:00:51,085 --> 00:00:53,047
+And the lead is smart about order.
+
+17
+00:00:53,397 --> 00:00:56,427
+If one task needs the result of another,
+it waits.
+
+18
+00:00:56,777 --> 00:01:00,659
+If two tasks change the same files, they
+go one after the other.
+
+19
+00:01:01,009 --> 00:01:03,185
+Everything else runs at the same time.
+
+20
+00:01:03,535 --> 00:01:05,477
+You can change your mind any time.
+
+21
+00:01:05,827 --> 00:01:07,811
+Just say, do task six first.
+
+22
+00:01:09,311 --> 00:01:11,593
+Each worker gets its own git worktree.
+
+23
+00:01:11,943 --> 00:01:15,045
+That is just a separate folder with its
+own branch,
+
+24
+00:01:15,045 --> 00:01:17,234
+so workers never step on each other.
+
+25
+00:01:17,584 --> 00:01:19,995
+By default, three workers run at once.
+
+26
+00:01:20,345 --> 00:01:22,606
+A task lists the files it may change.
+
+27
+00:01:22,956 --> 00:01:26,177
+If a worker changes anything else, it is
+not merged.
+
+28
+00:01:26,527 --> 00:01:28,981
+Before any merge, your tests must pass.
+
+29
+00:01:29,331 --> 00:01:32,701
+If they fail, a new worker sees the error
+and tries again.
+
+30
+00:01:33,051 --> 00:01:34,886
+You choose how much to trust it.
+
+31
+00:01:35,236 --> 00:01:39,247
+In auto mode, a finished task that passes
+is merged right away.
+
+32
+00:01:39,597 --> 00:01:42,365
+In review mode, you look at the changes
+first,
+
+33
+00:01:42,365 --> 00:01:44,653
+then approve, or reject with a reason.
+
+34
+00:01:45,003 --> 00:01:49,461
+And if a worker has a question, the task
+waits under a heading called needs you.
+
+35
+00:01:49,811 --> 00:01:51,646
+You answer, and it goes on.
+
+36
+00:01:53,146 --> 00:01:54,426
+Then there are scouts.
+
+37
+00:01:54,776 --> 00:01:57,443
+A scout is a helper that wakes up on a
+timer.
+
+38
+00:01:57,793 --> 00:02:01,291
+It looks for bugs, missing tests, or old
+dependencies.
+
+39
+00:02:01,641 --> 00:02:04,308
+It can only read, never change your files.
+
+40
+00:02:04,658 --> 00:02:07,325
+When it finds something, it reports to the
+lead.
+
+41
+00:02:07,675 --> 00:02:11,515
+The lead turns the finding into a task,
+and a worker picks it up.
+
+42
+00:02:11,865 --> 00:02:14,809
+So the work keeps moving, even when you
+step away.
+
+43
+00:02:16,309 --> 00:02:18,101
+Let us follow one request.
+
+44
+00:02:18,451 --> 00:02:21,992
+You type, add a search command, and make
+the errors friendlier.
+
+45
+00:02:22,342 --> 00:02:24,006
+The lead makes three tasks.
+
+46
+00:02:24,356 --> 00:02:25,593
+The search index.
+
+47
+00:02:25,943 --> 00:02:28,695
+The search command, which waits for the
+index.
+
+48
+00:02:29,045 --> 00:02:30,496
+And the friendlier errors.
+
+49
+00:02:30,846 --> 00:02:33,598
+The index and the errors start now, in
+parallel.
+
+50
+00:02:33,948 --> 00:02:37,191
+Each worker builds in its own copy, and
+the tests run.
+
+51
+00:02:37,541 --> 00:02:39,525
+The first task lands in review.
+
+52
+00:02:39,875 --> 00:02:43,565
+You open it, see the changes, and say,
+approve task one.
+
+53
+00:02:43,915 --> 00:02:46,390
+It merges, and the search command starts.
+
+54
+00:02:46,740 --> 00:02:48,276
+You never typed a command.
+
+55
+00:02:48,626 --> 00:02:49,735
+You just talked.
+
+56
+00:02:51,235 --> 00:02:55,843
+symcc is free and open source, under the
+MIT license.
+
+57
+00:02:56,193 --> 00:02:57,857
+You need Claude Code and git.
+
+58
+00:02:58,207 --> 00:03:03,114
+Install it as a plugin with one command,
+and the steps are in the project's page.
+
+59
+00:03:03,464 --> 00:03:06,963
+Set your test command, ask for something,
+and watch the board.
+
+60
+00:03:07,313 --> 00:03:08,422
+symcc.
+
+61
+00:03:08,772 --> 00:03:10,479
+Many agents, one board.

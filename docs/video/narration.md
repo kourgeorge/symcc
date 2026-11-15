@@ -65,7 +65,7 @@ You talk to one lead. It keeps a shared task board with todo, doing, review and 
 
 Choose auto mode to merge right away, or review mode to approve every change yourself. If a worker has a question, it waits for you. Scouts check for bugs, missing tests and old dependencies on a timer, and the lead turns what they find into tasks.
 
-Get symcc, read the guide and try it: REPO_LINK_HERE
+Get symcc, read the guide and try it: https://github.com/kourgeorge/symcc
 
 ## Tags
 

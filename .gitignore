@@ -2,3 +2,4 @@
 node_modules/
 .symcc/
 .DS_Store
+docs/video/out/
