@@ -754,7 +754,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`hooks/plugin/ui/`](../hooks/plugin/ui/) | The panel pages and the part above the prompt (`list.tsx`, `task-page.tsx`, `scouts-page.tsx`, `settings.tsx`, ...) |
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
-| [`tests/`](../tests/) | `board.test.ts` (the board logic), `pane.test.tsx` (the panel) |
+| [`tests/`](../tests/) | The tests: one file per area (the board logic, the panel, merging, scouts, stats, and so on) |
 
 **Where to add a new feature:** pure logic goes in `hooks/core/`; Claude Code wiring goes in `hooks/plugin/`; panel pages go in `hooks/plugin/ui/`.
 
@@ -763,18 +763,11 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 - A function that takes `$` and is imported from another file must be a `function` declaration, not an arrow `const`.
 - Panel atoms (`read` / `update`) must be used in the file that declares them. From other files, use the `readX` / `updateX` helpers in `hooks/plugin/state.ts`.
 
----|---|
-| [`hooks/register.tsx`](../hooks/register.tsx) | Everything that talks to Claude Code: the lead's tools, starting and stopping workers, checking and merging, scouts, the panel and status line |
-| [`hooks/board.ts`](../hooks/board.ts) | The board as plain data: adding and changing tasks, which tasks are ready, the scope check, retry rules, who drives, the banner text. No Claude Code calls, so it's easy to test |
-| [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
-| [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
-| [`tests/`](../tests/) | `board.test.ts` (the board logic), `pane.test.tsx` (the panel) |
-
 ---
 
 ## Working on symcc
 
 - **Run the tests:** `claude plugin test .` from the project folder.
-- **Where tests live:** `tests/board.test.ts` tests the board logic; `tests/pane.test.tsx` tests the panel.
+- **Where tests live:** in `tests/`, one file per area (for example `board.test.ts` for the board logic and `pane.test.tsx` for the panel).
 - **Layout:** `hooks/core/` holds the logic you can test (plain data, no Claude Code calls). `hooks/plugin/` and `hooks/plugin/ui/` do the wiring to Claude Code, and `hooks/register.tsx` only connects events. Put new logic in `hooks/core/` when you can. See the code map above.
 - **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).

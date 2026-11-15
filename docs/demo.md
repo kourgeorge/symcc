@@ -247,7 +247,7 @@ push(show([[21.5, 27.6]], [
 const SCOUT_LIST = [31, 33.6], SCOUT_PAGE = [33.6, 41]
 const scoutRow = (y, name, every, state, ran, color) => text(PX, y, [[name.padEnd(5), C.accent, true], [' ' + every.padEnd(12), C.dim], [' · ', C.dim], [state, color], [' · ' + ran, C.dim]])
 push(show([SCOUT_LIST], [
-  text(PX, 230, 'Enter opens · t tasks · s scouts · Esc closes', { fill: C.dim }),
+  text(PX, 230, 'Enter opens · t tasks · s scouts · c settings', { fill: C.dim }),
   `<rect x="${PX - 4}" y="246" width="376" height="20" rx="3" fill="${C.user}"/>`,
   show([[31, 31.8]], scoutRow(260, 'tests', 'every 30 min', 'due now', 'ran 30m ago', C.text)),
   show([[31.8, 33.6]], scoutRow(260, 'tests', 'every 30 min', 'running', 'ran 30m ago', C.green)),

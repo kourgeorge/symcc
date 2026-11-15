@@ -4,6 +4,53 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Added
+- Plan mode: while Claude Code is in plan mode, nothing starts and new tasks go to the backlog.
+- Search the board: press `f` and type to filter tasks.
+- `notify` setting: off, sound or voice. It works on Windows too, and it will not turn on something this machine cannot play.
+- Waiting tasks are answered with buttons: Allow / Don't allow for file requests, and the options for questions.
+- Review: you can edit a task's files by hand, then approve (tests re-run and the diff shows your edits).
+- The lead has a `scouts` tool: list, add, edit, remove and run a scout now.
+- The lead's board tool can filter by status or words, hides done tasks by default and shows a task's latest report.
+- The lead can add a note to a task's details without rewriting them (`add_details`).
+- A small symbol on the "from:" line (and the task page's "From" row) shows who a task came from.
+- Each try's full worker report is saved and shown on the task page; each try records how it ended.
+- Board health check: it spots stuck, starving or too-serial tasks and asks the lead to sort them out.
+- Stats keep input, output, cache write and cache read tokens apart, and count the lead's and scouts' tokens too.
+- Roles can grant extra tools; the researcher gets web search and fetch.
+- A narrated 1080p YouTube explainer video (script and build steps are in `docs/video`).
+- An eval harness that compares plain Claude Code with symcc on scripted sessions, and research notes on how to show lower cost and better quality.
+
+### Changed
+- The `target_branch` setting is gone. Each task now merges into the branch you were on when you asked for it.
+- No Esc needed in the panel: every text box and pick list has another way out, and Esc hints are removed from the footers.
+- Panel look: each page has its own footer, tabs are bold and blue when selected, "workers · scouts" sits above the prompt, and the banner text is dimmer and readable in dark mode.
+- Two workers finishing at once now take turns merging.
+- Fewer plugin messages to the lead: none for your own actions, and no duplicate reports.
+- A worker's question goes straight to you (the task waits) and is said out loud.
+- The video voice is as loud as a normal YouTube video, and the narration shows approving on the board.
+- README is shorter and clearer, and shows the demo first.
+- Small tests and tidy-ups (merge, scouts, session start and end, turn complete) and one shared scout-name check.
+
+### Fixed
+- Merge: the owner's branch is no longer left half-updated by a clashing untracked file, and git-ignored files are not silently overwritten.
+- A `board.json` that cannot be read is never overwritten, and a broken one is reported once without failing the hook.
+- Safe writes use a unique temp file, so two saves at once cannot break each other.
+- Finishing a task no longer overwrites one that was dropped, paused or changed meanwhile.
+- Scouts: failed starts and stopped runs are handled, "run now" says why it did not start, scout files from the lead show up at once, the next run counts from the last run, and a report starting with "NOTHING" counts as nothing found.
+- The scope check reads file names safely, and "." in a task's files means the whole project.
+- Turning symcc off also stops tasks in their tests and merge.
+- Approve, drop, reject and retry no longer collide while a task is being merged.
+- The health check no longer calls a task "pushed back" the moment it becomes ready.
+- A plugin reload no longer puts a task back to todo while its worker is still finishing or merging.
+- The lead's scout names are checked everywhere, so `../` cannot reach files outside `.symcc/scouts`.
+- The lead's settings tool reads every setting back.
+- Approve blocked by your files now tells you to approve again, not "retry".
+- Session start no longer waits too long for old workers or fails on a broken board.
+- The 2-minute check no longer fails a worker whose report is still on its way.
+- Docs and the "Board opened" message no longer mention `target_branch` or Esc.
+
+### Earlier in this release
 - Old done and dropped tasks are archived: after `archive_days` days (new setting, 14 by default, 0 = never) they move from `board.json` to `.symcc/archive.json`, so the board file stays small. The archive is written safely first and a broken one is never overwritten. Tasks waiting on an archived done task still start; `/symcc-task T-n` still finds an archived task; the Done row and the totals still count them ("▸ Done  12 (+96 archived)").
 - `/symcc-stats`: time and token stats from the data the board already keeps: totals, averages and medians per task and per try, the whole team (lead, workers and scouts), outcomes, roles, origins and the last days with activity; for every task, the last few days (`7d`) or an id range (`T-100..T-130`).
 - Removed backward-compatibility code; boards are migrated once. When a session starts, an older `board.json` is saved once in the current shape (a copy of the file as it was is kept beside it): tasks without an origin get "made before origins were kept" by the lead, the old roles `tests`, `backend` and `frontend` become `tester`, `general` and `general`, and tries left with no end time get one (where the next try started, or the task's last change). The board banner's total time now matches `/symcc-stats` (it counted those open tries up to now). The old `voice` setting and the `every` key in scout files are no longer read (use `notify` and `every_minutes`), and the note about an old data folder after a rename is gone.
