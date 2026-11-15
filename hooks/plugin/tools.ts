@@ -255,7 +255,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you only hear of it in a "Meanwhile" line) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
-- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.
+- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
@@ -385,6 +385,15 @@ export async function refuseAskedFiles($: $, id: string): Promise<string> {
   return `${id}: files not allowed; the lead will drop it or narrow the plan`
 }
 
+/** The change tool's reply when `answer` comes for a task that is not waiting (any) more: nothing is changed. */
+function alreadyAnsweredText(t: SymccTask, a: In): string {
+  const earlier = [...t.history].reverse().find(l => l.startsWith('the owner answered: '))
+  const quoted = earlier ? `, ${earlier}` : ''
+  const others = ['title', 'details', 'add_details', 'files', 'after', 'order', 'needs_review', 'backlog', 'role', 'merge_into'].filter(k => a[k] !== undefined)
+  const also = others.length ? ` The other changes (${others.join(', ')}) were not made either; send them again without answer.` : ''
+  return `${t.id} was already answered (it is ${STATUS_WORD[t.status]} now${quoted}); nothing changed. To add something, use add_details.${also}`
+}
+
 /** The lead's tools that act on one task. */
 const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'pause', 'resume']
 
@@ -439,6 +448,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
+      // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
+      if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
       let into = str(a.merge_into)?.trim()

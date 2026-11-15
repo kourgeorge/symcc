@@ -1233,6 +1233,36 @@ test("the owner's answer to a waiting task goes into its details and its history
   expect(t.history.some(l => l.includes('restarted'))).toBe(false)
 })
 
+test('an answer to a task that is doing again (answered on the board first) changes nothing and keeps its worker', async () => {
+  const w = world()
+  const [b] = boardWith('review', [], { history: ['the owner answered: “blue”'] })
+  await saveBoard(w.$, b)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'red', order: 3 })
+  const t = find(await load(w.$), 'T-1')!
+  expect(said).toBe('T-1 was already answered (it is doing now, the owner answered: “blue”); nothing changed. To add something, use add_details. The other changes (order) were not made either; send them again without answer.')
+  expect(t.status).toBe('doing')
+  expect(t.details).toBe(find(b, 'T-1')!.details)
+  expect(t.order).toBe(find(b, 'T-1')!.order)
+  expect(t.history).toEqual(find(b, 'T-1')!.history)
+  expect(workers.has('ag1')).toBe(true)
+  workers.delete('ag1')
+})
+
+test('an answer to a task in review or to do changes nothing', async () => {
+  for (const status of ['review', 'todo'] as const) {
+    const w = world()
+    const [b] = boardWith('review', [], { status })
+    await saveBoard(w.$, b)
+    const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'red' })
+    const t = find(await load(w.$), 'T-1')!
+    expect(said).toBe(`T-1 was already answered (it is ${status === 'review' ? 'ready for review' : 'to do'} now); nothing changed. To add something, use add_details.`)
+    expect(t.status).toBe(status)
+    expect(t.details).toBe(find(b, 'T-1')!.details)
+    expect(t.history).toEqual(find(b, 'T-1')!.history)
+  }
+})
+
 test('change add_details adds a note to the details, keeps the old text and writes a history line', async () => {
   const w = world()
   const [b] = boardWith('review')
