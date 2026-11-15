@@ -147,21 +147,25 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   ${S.N.archiveFile}. They still count ("▸ Done  12 (+96 archived)"), /${S.N.name}-task T-n still
   shows one, and they are read-only (retry brings back an archived dropped task).`,
   lead: `The lead (this chat) has these tools:
-  board · add · change · retry · ask · drop · pause · resume · settings
+  ${TOOLS().map(t => t.name).filter(n => n !== 'approve' && n !== 'reject').join(' · ')}
   approve · reject (only for a task ready for review)
+  scouts lists, adds, changes, removes or runs scouts; stats shows time and token use;
+  setup_git sets up git in a folder without it (only after you say yes).
   board lists the open tasks and the backlog (done / dropped only as counts); it takes status
   and search to narrow the list, and task to see one task with its latest report.
   Each task merges into the branch you were on when it was made (there is no branch
   setting); change merge_into moves one task to another existing branch.
   settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer is stopped), auto_retries (new tries on their own
-  after failing tests, 2 by default), open_on_start (open the board panel when a
+  after failing tests, 2 by default), archive_days (done and dropped tasks older than this
+  many days move to the archive, 14 by default, 0 = never), open_on_start (open the board panel when a
   session starts, on by default), notify (off, sound or voice: when a task is merged or a worker
   asks you something, play a chime, or say "T-3 done" / "T-5 needs you" out loud; only the
   session driving the board plays; voice by default where this machine can speak, else sound,
   else off; a choice this machine can't play is refused), mode (off stops every
   worker and scout and starts nothing new; review makes every finished task wait for
-  your approve or reject; auto, the default, merges a finished task that passes at once).
+  your approve or reject; auto, the default, merges a finished task that passes at once),
+  enabled (off makes the whole plugin rest; only you can change it, with /${S.N.name}-off and /${S.N.name}-on).
   You can also change every setting yourself with /${S.N.name}-settings (or the c tab in the
   board). A value over its limit is cut to it, and the answer says so.
   add and change also take needs_review: that one task waits for review even in mode auto.
