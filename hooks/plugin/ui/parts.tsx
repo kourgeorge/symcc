@@ -63,21 +63,23 @@ export async function paneParts($: $, e: PaneEvent) {
     ]
   }
   /** The tab row under the banner: "[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings", the active one bold, underlined and blue
-   *  (the accent color), the whole tab underlined, "[t]: " included. Each tab is a framed (not `plain`) Button, because a plain
-   *  Button with a hotkey draws its own "t: " outside the Text, where the underline can't reach; so the terminal draws
-   *  "[ [t]: Tasks (12) ]" (the owner chose that, double brackets and all). "t", "s" and "c" switch, and a click works too. */
+   *  (the accent color), the whole tab underlined, "[t]: " included. Each tab is a `plain` Button with NO hotkey (a plain Button
+   *  with a hotkey draws its own "t: " outside the Text, where the underline can't reach; a framed one draws "[ … ]" around it),
+   *  so the one Text inside is all the terminal draws, and a click on it switches. The "t", "s" and "c" keys belong to three
+   *  hidden Buttons in a Box drawn `display="none"`: they take no room and draw nothing, but still carry the hotkeys. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane($, which)))
+    const keyOf = (which: PaneTab) => (which === 'settings' ? 'c' : which[0])
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
-      const key = which === 'settings' ? 'c' : which[0]
-      label = `[${key}]: ${label}`
+      label = `[${keyOf(which)}]: ${label}`
       return (
-        <Button key={`tab-${which}`} label={label} hotkey={key} onPress={go(which)}>
+        <Button key={`tab-${which}`} plain label={label} onPress={go(which)}>
           <Text bold={active} underline={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
+    const tabKeys: PaneTab[] = ['tasks', 'scouts', 'settings']
     return (
       <Box key="tabs" flexDirection="row">
         {one('tasks', `Tasks (${v.tasks.length})`)}
@@ -85,6 +87,11 @@ export async function paneParts($: $, e: PaneEvent) {
         {one('scouts', `Scouts (${scouts.length})`)}
         <Text color={C('subtle')}> │ </Text>
         {one('settings', 'Settings')}
+        <Box key="tab-keys" display="none">
+          {tabKeys.map(which => (
+            <Button key={`tab-key-${which}`} label={keyOf(which)} hotkey={keyOf(which)} onPress={go(which)} />
+          ))}
+        </Box>
       </Box>
     )
   }
