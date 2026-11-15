@@ -3,7 +3,7 @@
 // hints say so.
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { boxHint, pickHint, scoutEditKeys, scoutListKeys, settingsKeys, hintLineText } from '../hooks/board'
+import { boxHint, pickHint, scoutEditKeys, scoutListKeys, settingsKeys, rolesKeys, hintLineText } from '../hooks/board'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -44,9 +44,10 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
   ])
   for (const l of lines) expect(l.length).toBeLessThanOrEqual(50)
   expect(hintLineText(settingsKeys())).toBe('Enter change · ↑↓ move · t s c views · b back')
+  expect(hintLineText(rolesKeys())).toBe('Enter open · n new role · ↑↓ move · t s c views · b back')
   expect(hintLineText(scoutListKeys())).toBe('Enter open · t s c views · b back')
   expect(hintLineText(scoutEditKeys())).toBe('↑↓ move between boxes · Cancel leaves without saving')
-  for (const keys of [settingsKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
+  for (const keys of [settingsKeys(), rolesKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
 })
 
 test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its Cancel (c) button', async ($, on) => {

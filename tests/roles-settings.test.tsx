@@ -80,10 +80,44 @@ function fakeRoles(on: On, mine: Record<string, string>) {
 type Eng = Parameters<Parameters<typeof test>[1]>[0]
 
 /** Starts the session (so the plugin knows its project folder) and mounts the panel on its Settings view. */
-async function settings($: Eng) {
+async function settingsOnly($: Eng) {
   await $.session.start({ cwd: '/proj' } as never)
   return $.ui.mount(PANE)
 }
+
+/** Mounts the panel on Settings and opens its Roles page. */
+async function settings($: Eng) {
+  const ui = await settingsOnly($)
+  await ui.press({ key: 'settings-roles' })
+  return ui
+}
+
+test('Settings shows one Roles row (count and off count), not the roles; it opens the Roles page and Back returns', async ($, on) => {
+  stateOf(on, VIEW)
+  fakeRoles(on, { 'mobile.md': '---\ndescription: phone apps\n---\n', 'docs.md': '---\ndescription: writes the docs\noff: true\n---\n' })
+  const ui = await settingsOnly($)
+  expect((await ui.find({ key: 'settings-roles' }))?.props.label).toBe('Roles: 5 roles · 1 off')
+  expect(await ui.find({ key: 'roleRow:general' })).toBeUndefined()
+  expect(await ui.find({ key: 'role-new' })).toBeUndefined()
+  await ui.press({ key: 'settings-roles' })
+  expect(await ui.find({ key: 'roleRow:general' })).toBeDefined()
+  expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Enter open · n new role · ↑↓ move · t s c views · b back/ })).toBeDefined()
+  // a role's Back returns to the Roles page; the Roles page's Back to Settings
+  await ui.press({ key: 'roleRow:tester' })
+  await ui.press({ key: 'role-back' })
+  expect(await ui.find({ key: 'roleRow:tester' })).toBeDefined()
+  await ui.press({ key: 'roles-back' })
+  expect(await ui.find({ key: 'setting:mode' })).toBeDefined()
+  expect(await ui.find({ key: 'roleRow:tester' })).toBeUndefined()
+  // switching tabs closes the Roles page
+  await ui.press({ key: 'settings-roles' })
+  await ui.press({ key: 'tab-key-scouts' })
+  await ui.press({ key: 'tab-key-settings' })
+  expect(await ui.find({ key: 'setting:mode' })).toBeDefined()
+  expect(await ui.find({ key: 'role-back' })).toBeUndefined()
+  await ui.unmount()
+})
 
 test('Settings lists every role: built-in, replaced, added and off, each with its description', async ($, on) => {
   stateOf(on, VIEW)

@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleFileText, roleKeys, roleEditKeys } from '../../board'
+import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleFileText, roleKeys, roleEditKeys, rolesKeys } from '../../board'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
@@ -47,7 +47,7 @@ function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
   )
 }
 
-/** One role's page in Settings: its front matter and checklist, with Back, Edit, Turn off / on (not for general),
+/** One role's page (opened from the Roles page; Back returns there): its front matter and checklist, with Back, Edit, Turn off / on (not for general),
  *  Reset to built-in (a replaced built-in only) and Remove (an added role only, after a confirm step). */
 function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
@@ -107,19 +107,77 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
   )
 }
 
+/** The Roles page, opened from Settings' Roles row: one row per role (Enter opens it), + New role (n) and Back (b)
+ *  to Settings. The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
+function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[]) {
+  const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
+  const cancel = () => ((roleView.naming = null), $.ui.invalidate('ui.render'))
+  const nameW = Math.max(0, ...roles.map(r => r.name.length))
+  /** "New role": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel button (x), leaves it. */
+  const newRoleBox = () =>
+    roleView.naming ? (
+      <Box key="role-new-box" flexDirection="column">
+        <Input
+          key="role-new-name"
+          label="New role's name"
+          placeholder="letters, digits, - and _"
+          value={roleView.naming.name}
+          autoFocus
+          submitLabel="make it"
+          onInput={value => void (roleView.naming && (roleView.naming.name = value))}
+          onSubmit={value => (value.trim() ? act(async () => {
+            const said = await newRoleFile($, value)
+            if (said) $.ui.toast(S.N.toast(said))
+          })() : cancel())}
+        />
+        {roleView.naming.error ? <Text color={C('error')}>{roleView.naming.error}</Text> : null}
+        <Button key="role-new-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
+        <Text color={C('subtle')}>{boxHint(`Enter makes ${S.N.dir}/roles/<name>.md and opens it`)}</Text>
+      </Box>
+    ) : (
+      <Button key="role-new" label="+ New role" hotkey="n" onPress={() => ((roleView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
+        <Text color={C('text')}>{'  + New role'}</Text>
+      </Button>
+    )
+  return (
+    <Box flexDirection="column">
+      {header()}
+      {heading('Roles')}
+      {roles.map((r, i) => {
+        const source = roleSource(r.name, builtIn, project)!
+        return (
+          <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={() => ((roleView.open = r.name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))}>
+            <Text bold={!r.off} color={C(r.off ? 'subtle' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
+            <Text color={C(r.off ? 'warning' : 'subtle')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
+            <Text color={C(r.off ? 'subtle' : 'text')}>{` · ${r.description}`}</Text>
+          </Button>
+        )
+      })}
+      {newRoleBox()}
+      <Text color={C('subtle')}>Enter opens a role · n makes a new one · or tell the lead</Text>
+      <Text key="roles-page-blank"> </Text>
+      <Button key="roles-back" label="Back (b)" hotkey="b" onPress={() => ((roleView.list = false), (roleView.naming = null), $.ui.invalidate('ui.render'))} />
+      {footer(rolesKeys(), 'roles-keys')}
+    </Box>
+  )
+}
+
 /** The Settings view: one row per setting; Enter changes it. Every box and pick list has a Cancel button (x), and
  *  Enter on an empty edit box cancels it too; Back (b) goes to the board list. None of it needs Esc, which
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, v, act, C, header, footer, heading } = pane
+  const { Box, Text, Button, Input, v, act, C, header, footer } = pane
   const { builtIn, project } = await roleLists($)
   const roles = mergeRoles(builtIn, project)
   const opened = roleView.open ? roles.find(r => r.name === roleView.open) : undefined
   if (roleView.open && !opened) resetRoleOpen()
   if (opened && roleView.draft) return roleEditPage($, pane, roleSource(opened.name, builtIn, project))
   if (opened) return rolePage($, pane, opened, roleSource(opened.name, builtIn, project)!)
+  if (roleView.list) return rolesPage($, pane, roles, builtIn, project)
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
-  const cancel = () => ((S.settingEdit = null), (S.settingPick = null), (roleView.naming = null), $.ui.invalidate('ui.render'))
+  const offCount = roles.filter(r => r.off).length
+  const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
+  const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
   const cancelButton = <Button key="setting-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
   const saveIt = (input: SettingsInput) => act(async () => {
     const r = await ownerSettings($, input, 'from the board')
@@ -135,7 +193,6 @@ export async function settingsPage($: $, pane: PaneParts) {
     if (info.kind === 'onoff') return saveIt({ [name]: now !== 'on' })()
     S.settingEdit = null
     S.settingPick = null
-    roleView.naming = null
     if (info.kind === 'mode') S.settingPick = { name, options: ['off', 'review', 'auto'] }
     // only what this machine can play (off always)
     else if (info.kind === 'notify') S.settingPick = { name, options: v.notify_choices?.length ? v.notify_choices : ['off'] }
@@ -184,38 +241,11 @@ export async function settingsPage($: $, pane: PaneParts) {
       </Box>
     )
   }
-  const nameW = Math.max(0, ...roles.map(r => r.name.length))
-  /** "New role": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel button (x), leaves it. */
-  const newRoleBox = () =>
-    roleView.naming ? (
-      <Box key="role-new-box" flexDirection="column">
-        <Input
-          key="role-new-name"
-          label="New role's name"
-          placeholder="letters, digits, - and _"
-          value={roleView.naming.name}
-          autoFocus
-          submitLabel="make it"
-          onInput={value => void (roleView.naming && (roleView.naming.name = value))}
-          onSubmit={value => (value.trim() ? act(async () => {
-            const said = await newRoleFile($, value)
-            if (said) $.ui.toast(S.N.toast(said))
-          })() : cancel())}
-        />
-        {roleView.naming.error ? <Text color={C('error')}>{roleView.naming.error}</Text> : null}
-        <Button key="role-new-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
-        <Text color={C('subtle')}>{boxHint(`Enter makes ${S.N.dir}/roles/<name>.md and opens it`)}</Text>
-      </Box>
-    ) : (
-      <Button key="role-new" label="+ New role" hotkey="n" onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
-        <Text color={C('text')}>{'  + New role'}</Text>
-      </Button>
-    )
   return (
     <Box flexDirection="column">
       {header()}
       {SETTINGS.flatMap((x, i) => [
-        <Button key={`setting:${x.name}`} autoFocus={i === 0 && !S.settingEdit && !S.settingPick && !roleView.naming ? true : undefined} onPress={pressRow(x.name)}>
+        <Button key={`setting:${x.name}`} autoFocus={i === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={pressRow(x.name)}>
           <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
           <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
           {x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
@@ -225,19 +255,11 @@ export async function settingsPage($: $, pane: PaneParts) {
       ])}
       <Text color={C('subtle')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
       <Text key="roles-blank"> </Text>
-      {heading('Roles')}
-      {roles.map(r => {
-        const source = roleSource(r.name, builtIn, project)!
-        return (
-          <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}`} onPress={() => ((roleView.open = r.name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))}>
-            <Text bold={!r.off} color={C(r.off ? 'subtle' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
-            <Text color={C(r.off ? 'warning' : 'subtle')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
-            <Text color={C(r.off ? 'subtle' : 'text')}>{` · ${r.description}`}</Text>
-          </Button>
-        )
-      })}
-      {newRoleBox()}
-      <Text color={C('subtle')}>Enter opens a role · n makes a new one · or tell the lead</Text>
+      <Button key="settings-roles" label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>
+        <Text bold color={C('claude')}>{'Roles'.padEnd(nameWidth)}</Text>
+        <Text bold color={C('text')}> {rolesCount}</Text>
+        <Text color={C('subtle')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>
+      </Button>
       <Text key="settings-blank"> </Text>
       <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
       {footer(settingsKeys(), 'settings-keys')}

@@ -157,21 +157,24 @@ async function changeRoleText($: $, a: LeadRoleInput): Promise<string | { ok: tr
   return err || await done(`saved role ${name} (${file})${copied}`)
 }
 
-// ---------------- the Roles section of the panel's Settings view ----------------
+// ---------------- the Roles page of the panel's Settings view ----------------
 
 /** A role's edit mode in the panel: one box per part of its file. */
 export type RoleDraft = { role: string; description: string; model: string; skills: string; tools: string; checklist: string; error: string }
 
-/** What the Settings view's Roles section shows: the opened role ('' = none), its edit mode, the Remove confirm step, the new role's name box. */
+/** What the Roles page (opened from Settings) shows: whether it is shown at all (`list`), the opened role ('' = none),
+ *  its edit mode, the Remove confirm step, the new role's name box. */
 export const roleView = {
+  list: false,
   open: '',
   draft: null as RoleDraft | null,
   confirmRemove: false,
   naming: null as { name: string; error: string } | null,
 }
 
-/** Closes everything the Roles section has open. */
+/** Closes the Roles page and everything on it. */
 export function resetRoleView() {
+  roleView.list = false
   roleView.open = ''
   roleView.draft = null
   roleView.confirmRemove = false

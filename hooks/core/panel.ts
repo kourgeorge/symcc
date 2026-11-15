@@ -266,7 +266,16 @@ export const settingsKeys = (): KeyHint[] => [
   { key: 'b', word: 'back' },
 ]
 
-/** The keys at the bottom of a role's page in Settings; which ones depend on its buttons. */
+/** The keys at the bottom of the Roles page (opened from Settings). */
+export const rolesKeys = (): KeyHint[] => [
+  { key: 'Enter', word: 'open' },
+  { key: 'n', word: 'new role' },
+  { key: '↑↓', word: 'move' },
+  { key: 't s c', word: 'views' },
+  { key: 'b', word: 'back' },
+]
+
+/** The keys at the bottom of a role's page; which ones depend on its buttons. */
 export function roleKeys(o: { canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean }): KeyHint[] {
   return [
     { key: 'e', word: 'edit' },
