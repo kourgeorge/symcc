@@ -130,6 +130,8 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
     }
     return new RegExp(`^${out}$`)
   }
+  // "." or "./" is the whole project, like an empty list.
+  if (allowed.some(g => ['.', './', ''].includes(g.trim()))) allowed = []
   const inside = (f: string) =>
     allowed.some(g => {
       const n = g.trim().replace(/^\.\//, '')
