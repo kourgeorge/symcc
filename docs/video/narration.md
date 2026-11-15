@@ -1,6 +1,6 @@
 # symcc explainer video: narration script
 
-Length: about 4 to 5 minutes. Read by a text-to-speech voice (Kokoro), so the spoken text has no symbols, file paths or code. Each part has a scene name, the narration, and what the picture shows. The narration is about 750 words.
+Length: about 4 to 5 minutes. Read by a text-to-speech voice (Kokoro), so the spoken text has no symbols, file paths or code. Each part has a scene name, the narration, and what the picture shows. The narration is about 780 words (about 4 minutes 45 seconds when read).
 
 ## Scene 1: The problem (about 10 seconds)
 
