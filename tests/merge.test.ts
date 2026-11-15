@@ -700,8 +700,8 @@ test('approve with an owner edit outside the task keeps the edit and the task in
   // the owner edited docs/x.md (outside the task's src/) in the task's folder
   const w = await inReview({ dirty: true, wtStatus: ' M docs/x.md\0', changed: ['src/a.ts', 'docs/x.md'] }, {}, ['npm test'], { runs: [{ started: ISO, commits: [H1] }] })
   const out = await runTool(w.$, 'approve', { task: 'T-1' })
-  expect(out).toBe(`T-1 was not merged and stays in review: ${outOfScopeText(['docs/x.md'], ['src/'])}. Fix that, then approve it again.`)
-  expect(out).toContain('add them to files with change')
+  expect(out).toBe(`T-1 was not merged and stays in review: ${outOfScopeText(['docs/x.md'], ['src/'])}.`)
+  expect(out).toBe("T-1 was not merged and stays in review: changed files outside the task (docs/x.md); allowed: src/. To fix: add them to files with change, or split the task. Adding them with change (or Allow on the board) sends the task back to work with these edits kept, and it comes back to review, where you approve it again.")
   // nothing was undone: no restore, no undo commit; the edit is committed on the branch and still in the folder
   expect(w.calls.some(c => c.startsWith('wt: git restore'))).toBe(false)
   expect(w.calls.some(c => c.includes('undo changes outside the task'))).toBe(false)
