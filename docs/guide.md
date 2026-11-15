@@ -155,6 +155,16 @@ This is where symcc keeps your branch safe. Step by step:
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
    a new try as usual.
+   **Time limit.** Each test command may run up to 10 minutes. The whole checking and
+   merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
+   and the board: 15 minutes with one test command, 35 with three. A step still running
+   then is taken as stuck and given up: a finished worker's task goes back to `todo` for a
+   fresh try (its folder and branch are kept); if the try before was given up the same
+   way, the task is marked `failed` instead ("ran over … twice in a row"), so it never
+   loops, and the lead is told. An approve, or a merge waiting for your files, that runs
+   over stays as it was (approve it again, or retry it). If a given-up step still ends
+   later and its work did reach the branch after all, the task is marked done with that
+   commit (when nothing else happened to it meanwhile), or the lead is told it landed.
 7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
    "symcc: T-3 done" (and "symcc: T-5 needs you" when a task waits for your answer), starting with
    the project's name so you know which project spoke.

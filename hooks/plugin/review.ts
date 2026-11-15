@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit } from '../board'
+import { type Blockers, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS } from '../board'
 import { gitOk, git, worktreeDir, asSymcc } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -204,7 +204,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   }
   const testsRun = mode === 'finish' || candidate !== head || retest
   for (const cmd of testsRun ? b.test_commands : []) {
-    const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: 600_000 }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
+    const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
       const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
       return res(stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) })

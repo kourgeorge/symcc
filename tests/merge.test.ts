@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, FINISH_LIMIT_MS } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -2009,7 +2009,7 @@ test("a late report from a worker this copy lost in a reload is still taken when
 
 /**
  * A world where T-1's worker has just finished and its first test command hangs until `free()`
- * is called. The FINISH_LIMIT_MS timer is caught (`limit`), never fired by itself; other timers never fire.
+ * is called. The finishLimitMs(1) timer is caught (`limit`), never fired by itself; other timers never fire.
  */
 function stuckFinish(g: Partial<Git> = {}) {
   const w = world(g)
@@ -2023,7 +2023,7 @@ function stuckFinish(g: Partial<Git> = {}) {
   })
   const limit: { fire?: () => void; ms?: number; cancelled: boolean } = { cancelled: false }
   ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
-    if (ms !== FINISH_LIMIT_MS) return { cancel() {} }
+    if (ms !== finishLimitMs(1)) return { cancel() {} }
     limit.fire = f
     limit.ms = ms
     return { cancel: () => void (limit.cancelled = true) }
@@ -2051,8 +2051,8 @@ test('a checking and merging step that never ends is sent back to todo after the
   expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
   expect(finishingSet.has('T-1')).toBe(true)
   expect(ended).toBe(false)
-  expect(limit.ms).toBe(FINISH_LIMIT_MS)
-  expect(FINISH_LIMIT_MS).toBeGreaterThan(600_000)
+  expect(limit.ms).toBe(finishLimitMs(1))
+  expect(finishLimitMs(1)).toBeGreaterThan(600_000)
   limit.fire!()
   await turns(w, () => ended)
   let t = find(await load(w.$), 'T-1')!
@@ -2152,7 +2152,7 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   })
   const limits: (() => void)[] = []
   ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
-    if (ms === FINISH_LIMIT_MS) limits.push(f)
+    if (ms === finishLimitMs(1)) limits.push(f)
     return { cancel() {} }
   }
   let out: string | undefined
@@ -2384,4 +2384,180 @@ test('merge_wait is kept only while the task stays waiting or in review', () => 
   expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
   const done = { ...w, tasks: w.tasks.map(t => ({ ...t, status: 'done' as const })) }
   expect((find(parseBoard(JSON.stringify(done)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
+})
+
+// ---------------- the limit grows with the test commands, two give-ups in a row fail, work that landed late (T-224) ----------------
+
+/** Catches the timers the step asks for of at least a minute (the merge time limit); the short ones (the lead's) never fire. */
+function catchLimits(w: ReturnType<typeof world>) {
+  const timers: { ms: number; f: () => void; off: boolean }[] = []
+  ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
+    if (ms < 60_000) return { cancel() {} }
+    const x = { ms, f, off: false }
+    timers.push(x)
+    return { cancel: () => void (x.off = true) }
+  }
+  return timers
+}
+
+/** T-1 "doing" in auto mode with `test_commands`, its worker ag1 just about to finish. */
+async function aboutToFinish(w: ReturnType<typeof world>, test_commands = ['npm test']) {
+  const [b] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+}
+
+test('the merge time limit grows with the test commands: three get more time than one', () => {
+  expect(finishLimitMs(3)).toBeGreaterThan(finishLimitMs(1))
+  expect(finishLimitMs(3)).toBeGreaterThan(3 * TEST_TIMEOUT_MS)
+  expect(finishLimitMs(1)).toBeGreaterThan(TEST_TIMEOUT_MS)
+  expect(finishLimitMs(0)).toBe(finishLimitMs(1))
+})
+
+test('a finish step with three slow but finishing test commands (8 min each) is not given up: it merges under its limit', async () => {
+  S.me = 'me'
+  const w = world()
+  const timers = catchLimits(w)
+  // a fake clock: each test command takes 8 minutes; the limit fires once its time has come
+  let spent = 0
+  w.onRun(async cmd => {
+    if (!cmd.startsWith('/bin/sh -c ')) return
+    spent += 8 * 60_000
+    for (const x of timers) if (!x.off && x.ms <= spent) (x.off = true), x.f()
+  })
+  await aboutToFinish(w, ['npm test', 'npm run lint', 'npm run e2e'])
+  await workerFinished(w.$, 'ag1', 'made the change', false)
+  // 24 minutes in all: over the one-command limit, within the three-command one
+  expect(spent).toBeGreaterThan(finishLimitMs(1))
+  expect(timers.map(x => x.ms)).toEqual([finishLimitMs(3)])
+  const t = find(await load(w.$), 'T-1')!
+  expect(ranTests(w).length).toBe(3)
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  expect(w.git.main).toBe(H1)
+  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+})
+
+test('a task whose checking and merging is given up twice in a row ends failed with a note; no third worker starts; the lead is told', async () => {
+  try {
+    const w = world()
+    S.me = 'me'
+    const spawned: string[] = []
+    const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+    x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
+    x.plugin = { root: '/plugin' }
+    x.fs.list = async () => []
+    const timers = catchLimits(w)
+    // every test command hangs: each try's checking and merging is stuck
+    let hung = 0
+    w.onRun(async cmd => {
+      if (!cmd.startsWith('/bin/sh -c ')) return
+      hung++
+      await new Promise<void>(() => {})
+    })
+    await aboutToFinish(w)
+    S.startupDone = true
+    S.driving = true
+    // try 1: given up, back to todo, and a second worker starts by itself
+    let ended = false
+    void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+    await turns(w, () => hung === 1 && timers.length === 1)
+    timers[0]!.f()
+    await turns(w, () => ended && spawned.length === 1)
+    for (let i = 0; i < 500; i++) await Promise.resolve()
+    let t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('doing')
+    expect(t.attempts).toBe(2)
+    expect(workers.get('ag2')?.task).toBe('T-1')
+    // try 2: given up again, so it fails instead of looping
+    ended = false
+    void workerFinished(w.$, 'ag2', 'made the change again', false).then(() => (ended = true))
+    await turns(w, () => hung === 2 && timers.length === 2)
+    timers[1]!.f()
+    await turns(w, () => ended)
+    t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('failed')
+    expect(t.note).toBe('its checking and merging ran over 15 min twice in a row and was given up both times; nothing was merged')
+    expect(t.history.at(-1)).toBe(`try 2: ${t.note}`)
+    expect(t.session).toBeUndefined()
+    expect(t.finishing).toBeUndefined()
+    expect(t.runs!.at(-1)!.ended_by).toBe('stopped')
+    const told = leadQueue.filter(m => m.startsWith('✗ T-1') && m.includes('twice in a row'))
+    expect(told.length).toBe(1)
+    expect(told[0]).toContain('no new try starts')
+    // no third worker, not even at the regular check
+    await check(w.$)
+    for (let i = 0; i < 500; i++) await Promise.resolve()
+    expect(spawned.length).toBe(1)
+    expect(find(await load(w.$), 'T-1')!.status).toBe('failed')
+    expect(w.git.main).toBe(M1)
+  } finally {
+    cleanUp()
+  }
+})
+
+/** Makes the move of main (git update-ref) fire the merge time limit and then hang until `free()`: the step is given up while main moves. */
+function hangOnMove(w: ReturnType<typeof world>) {
+  const timers = catchLimits(w)
+  let free = () => {}
+  const gate = new Promise<void>(r => (free = r))
+  let moving = false
+  w.onRun(async cmd => {
+    if (moving || !/ git update-ref .*refs\/heads\/main/.test(cmd)) return
+    moving = true
+    for (const x of timers) if (!x.off) (x.off = true), x.f()
+    await gate
+  })
+  return { free, moving: () => moving }
+}
+
+test('an approve given up while it moves main, which then lands, ends with the task done and its commits recorded; the lead is told once', async () => {
+  const w = await inReview({ upToDate: false }, {}, ['npm test'], { history: [], runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'ready for review' }] })
+  const { free, moving } = hangOnMove(w)
+  let out: string | undefined
+  void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
+  await turns(w, () => out !== undefined)
+  expect(moving()).toBe(true)
+  expect(out).toContain('was not merged and stays in review')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+  // the move ends late: main is at the task's work
+  free()
+  await turns(w, () => find(w.files.has(BOARD) ? parseBoard(w.files.get(BOARD)!) : emptyBoard(), 'T-1')?.status === 'done')
+  for (let i = 0; i < 500; i++) await Promise.resolve()
+  const t = find(await load(w.$), 'T-1')!
+  expect(w.git.main).toBe(H2)
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H2)
+  expect(t.runs!.at(-1)!.commits).toContain(H2)
+  expect(t.runs!.at(-1)!.ended_note).toBe('merged')
+  expect(t.history.at(-1)).toBe(`try 1: its checking and merging was given up as stuck, but it ended late and its work was merged into main (${H2.slice(0, 8)}), so it is done`)
+  expect(leadQueue.filter(m => m.includes('T-1') && m.includes('done after all')).length).toBe(1)
+})
+
+test('a finish step given up while it moves main, which then lands, ends with the task done and its commits recorded, with no new try', async () => {
+  S.me = 'me'
+  const w = world()
+  const { free, moving } = hangOnMove(w)
+  await aboutToFinish(w)
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  await turns(w, () => ended)
+  expect(moving()).toBe(true)
+  // given up: sent back to todo, the move still running
+  let t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.attempts).toBe(1)
+  free()
+  await turns(w, () => find(w.files.has(BOARD) ? parseBoard(w.files.get(BOARD)!) : emptyBoard(), 'T-1')?.status === 'done')
+  for (let i = 0; i < 500; i++) await Promise.resolve()
+  t = find(await load(w.$), 'T-1')!
+  expect(w.git.main).toBe(H1)
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  expect(t.attempts).toBe(1)
+  expect(t.runs!.at(-1)!.commits).toContain(H1)
+  expect(t.runs!.at(-1)!.ended_by).toBe('finished')
+  expect(t.runs!.at(-1)!.ended_note).toBe('merged')
+  expect(leadQueue.filter(m => m.includes('T-1') && m.includes('done after all')).length).toBe(1)
 })

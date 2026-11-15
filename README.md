@@ -228,7 +228,7 @@ setting, opens a pick list for `mode` and `notify`, or an edit box for numbers a
 
 | Setting | Default | Allowed | Meaning |
 |---|---|---|---|
-| `test_commands` | none | up to 5, joined with ` && ` | Shell commands that must pass before anything is merged |
+| `test_commands` | none | up to 5, joined with ` && ` | Shell commands that must pass before anything is merged. Each may run 10 minutes; the whole check and merge may take 10 minutes per command plus 5 (a stuck one goes back to `todo`, and fails the second time in a row) |
 | `max_parallel` | 3 | 1–8 | How many workers at once |
 | `max_minutes` | 45 | 5–600 | A worker running longer is stopped |
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |

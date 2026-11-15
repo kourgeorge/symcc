@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, FINISH_BEAT_MS, FINISH_LIMIT_MS, waitsForFiles, blockerFiles, waitFilesNote, stillBlocks } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, waitFilesNote, stillBlocks } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -194,6 +194,7 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
   finishing.add(w.task)
   let beat: { cancel(): void } | null = null
   let tryNo: number | undefined
+  let limitMs = finishLimitMs(0)
   try {
     // The try ends now (checking and merging is not counted). The turn result gives tokens but
     // no dollar cost, so `cost` stays empty until Claude Code reports one.
@@ -203,16 +204,17 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
     tryNo = await change($, x => {
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
+      limitMs = finishLimitMs(x.test_commands.length)
       return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens }) } : {}) }, ended), t.attempts] as [Board, number]
     })
     if (tryNo !== undefined) beat = everyMs($, FINISH_BEAT_MS, () => void markFinishing($, w.task, tryNo!).catch(() => undefined))
-    // The whole step has a time limit (FINISH_LIMIT_MS): the heartbeat above keeps going even when
+    // The whole step has a time limit (finishLimitMs: it grows with the test commands): the heartbeat above keeps going even when
     // the step hangs, so without it a stuck step would keep its task "doing" forever. Past the limit
     // the step is given up: it may still wake up later, but then it writes nothing (gaveUp).
     let gaveUp = false
     let letGo = () => {}
     const over = new Promise<'over'>(r => (letGo = () => r('over')))
-    const limit = tryNo === undefined ? null : afterMs($, FINISH_LIMIT_MS, () => ((gaveUp = true), letGo()))
+    const limit = tryNo === undefined ? null : afterMs($, limitMs, () => ((gaveUp = true), letGo()))
     const step = finishWork($, agentId, w, answer, aborted, () => gaveUp, over).then(() => 'done' as const)
     const how = limit ? await Promise.race([step, over]) : await step
     limit?.cancel()
@@ -221,7 +223,7 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
       beat?.cancel()
       beat = null
       finishing.delete(w.task)
-      await finishRanOver($, w.task, tryNo!)
+      await finishRanOver($, w.task, tryNo!, limitMs)
     }
   } finally {
     beat?.cancel()
@@ -242,25 +244,70 @@ function afterMs($: $, ms: number, f: () => void): { cancel(): void } | null {
 }
 
 /**
- * Task `id`'s checking and merging (of try `tryNo`) ran over FINISH_LIMIT_MS and was given up:
- * while it is still "doing" on that try, it goes back to "todo" for a fresh try (its folder and
- * branch are kept), or is done when its work already reached its branch. The lead is told once.
+ * Task `id`'s checking and merging (of try `tryNo`) ran over its limit (`limitMs`, see finishLimitMs)
+ * and was given up: while it is still "doing" on that try, it goes back to "todo" for a fresh try
+ * (its folder and branch are kept), or is done when its work already reached its branch. When its
+ * try before was given up the same way, it is failed instead, so it never loops. The lead is told once.
  */
-async function finishRanOver($: $, id: string, tryNo: number) {
-  const min = Math.round(FINISH_LIMIT_MS / 60_000)
+async function finishRanOver($: $, id: string, tryNo: number, limitMs: number) {
+  const min = Math.round(limitMs / 60_000)
   const still = (t: BoardTask | undefined): t is BoardTask => t?.status === 'doing' && t.attempts === tryNo
   const before = find(await load($).catch(() => null) ?? emptyBoard(), id)
   if (!still(before)) return
   const sha = mergedThisTry(before) ?? (S.gitState === 'ok' ? await alreadyMerged($, before).catch(() => null) : null)
-  const t = await change($, x => {
+  const twice = `its checking and merging ran over ${min} min twice in a row and was given up both times; nothing was merged`
+  const out = await change($, x => {
     const cur = find(x, id)
     if (!still(cur)) return [x, null] as [Board, null]
-    const next = sha ? mergedDone(cur, sha, `sent back to todo (its checking and merging ran over ${min} min)`, now()) : backToTodo(cur, `restarted: its checking and merging ran over ${min} min and was stopped`, now())
-    return [{ ...x, tasks: x.tasks.map(y => (y.id === id ? next : y)) }, cur] as [Board, BoardTask]
+    const again = !sha && ranOverBefore(cur)
+    const next = sha ? mergedDone(cur, sha, `sent back to todo (its checking and merging ran over ${min} min)`, now()) : again ? ranOverFailed(cur, twice, `its checking and merging ran over ${min} min again`) : backToTodo(cur, `restarted: ${ranOverNote(min)}`, now())
+    return [{ ...x, tasks: x.tasks.map(y => (y.id === id ? next : y)) }, { t: cur, again }] as [Board, { t: BoardTask; again: boolean }]
   })
-  if (!t) return
+  if (!out) return
+  const { t, again } = out
   if (sha) tellLead($, `✓ ${id} "${t.title}" is done: its checking and merging ran over ${min} minutes, but its work was already merged (${sha.slice(0, 8)}).`)
+  else if (again) tellLead($, `✗ ${id} "${t.title}" failed: its checking and merging ran over ${min} minutes twice in a row and was given up both times, so no new try starts. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
   else tellLead($, `${id} "${t.title}": its checking and merging ran over ${min} minutes and seemed stuck, so I stopped waiting for it and sent it back to todo for a fresh try (its folder and branch are kept). Nothing to do unless it gets stuck again.`)
+}
+
+/** Task `t` failed with `note`, its running try ended as stopped (`end`): its checking and merging was given up a second time in a row. */
+function ranOverFailed(t: BoardTask, note: string, end: string): BoardTask {
+  const { session: _s, finishing: _f, ...rest } = t
+  return { ...rest, status: 'failed' as const, note, updated_at: now(), history: [...(t.history ?? []), `${tryLabel(t)}: ${note}`], ...endedBy(t, now(), 'stopped', end) }
+}
+
+/**
+ * A step of task `t` that was given up as stuck (`kind`: a finished worker's check, an approve or a
+ * merge waiting for the owner's files) ended late, and its work reached the branch it merges into
+ * (`sha`). While the task is still as the give-up left it (the same try, not yet started again:
+ * "doing", "todo" or "failed" for a finish, still `status` for an approve or merge), it is done with
+ * that commit and the step's commits (`made`) are recorded. Otherwise the lead is told the work landed,
+ * so they can decide. The lead is told once either way.
+ */
+async function landedLate($: $, t: SymccTask, sha: string, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
+  const fits = (cur: BoardTask) => cur.attempts === t.attempts && (kind === 'finish' ? ['doing', 'todo', 'failed'].includes(cur.status) : cur.status === status)
+  const short = sha.slice(0, 8)
+  const into = intoOf(t)
+  const r = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || !fits(cur)) return [x, { done: false, cur }] as [Board, { done: boolean; cur?: BoardTask }]
+    const next = mergedDone({ ...cur, runs: addCommits(cur.runs, [...made, sha]) }, sha, 'left as given up', now())
+    const line = `${tryLabel(cur)}: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}), so it is done`
+    return [{ ...x, tasks: x.tasks.map(y => (y.id === t.id ? { ...next, history: [...(cur.history ?? []), line] } : y)) }, { done: true, cur }] as [Board, { done: boolean; cur?: BoardTask }]
+  }).catch((e: Error) => {
+    tellLead($, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short}), but the board could not be updated (${e.message.slice(0, 200)}).`)
+    return null
+  })
+  if (!r) return
+  if (r.done) {
+    tellLead($, `✓ ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}).`)
+    if (await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)]).catch(() => undefined)
+    void pump($)
+    return
+  }
+  if (r.cur?.status === 'done' && r.cur.merged) return // already found merged (or merged again) and told
+  const now_ = r.cur ? `it is now ${r.cur.status}${r.cur.attempts !== t.attempts ? `, on try ${r.cur.attempts}` : ''}` : 'it is no longer on the board'
+  tellLead($, `${t.id} "${t.title}": its checking and merging (${tryLabel(t)}) was given up as stuck, but it ended late and its work was merged into ${into} (${short}) after all. The task moved on meanwhile (${now_}), so I left it as it is: decide whether it is done (then drop the new try) or still needs work.`)
 }
 
 /** A repeating timer, if this Claude Code has one ($.clock.every); null when it has none. */
@@ -451,7 +498,7 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
 }
 
 /**
- * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over FINISH_LIMIT_MS): from
+ * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
  */
 export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean, gaveUp: () => boolean = () => false, release?: Promise<unknown>) {
@@ -483,8 +530,13 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
     const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    // Given up meanwhile: the task was already sent back (or found merged); this late outcome is not written over it.
-    if (gaveUp()) return
+    // Given up meanwhile: the task was already sent back (or found merged); this late outcome is not
+    // written over it, unless the work reached the branch after all (landedLate).
+    if (gaveUp()) {
+      const sha = r.merged ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
+      if (sha) await landedLate($, t, sha, made, 'finish', 'doing')
+      return
+    }
     await recordCommits($, t.id, made, r.merged)
     if (r.blocked) await holdForFiles($, t, b, r, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`, w.worktree, agentId)
     else await settle($, t, b, r, summary, w.worktree, agentId)
@@ -626,13 +678,14 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
   if (!(await gitReady($, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
   if (await waitIfBranchGone($, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
-  // The same time limit as a finished worker's check (FINISH_LIMIT_MS): past it the merge is
+  // The same time limit as a finished worker's check (finishLimitMs): past it the merge is
   // given up (mergeRanOver), so it no longer holds the task, its id or the branch's merge turn.
   // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
   let gaveUp = false
   let letGo = () => {}
   const over = new Promise<'over'>(r => (letGo = () => r('over')))
-  const limit = afterMs($, FINISH_LIMIT_MS, () => ((gaveUp = true), letGo()))
+  const limitMs = finishLimitMs(b.test_commands.length)
+  const limit = afterMs($, limitMs, () => ((gaveUp = true), letGo()))
   const step = mergeWork($, t, b, kind, () => gaveUp, over)
   const how = limit ? await Promise.race([step, over]) : await step
   limit?.cancel()
@@ -640,18 +693,19 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
   step.catch(() => undefined)
   approving.delete(t.id)
   await endCheck($, t.id)
-  const out = await mergeRanOver($, t.id, t.status, kind)
+  const out = await mergeRanOver($, t.id, t.status, kind, limitMs)
   void pump($)
   return out
 }
 
 /**
  * The merge of task `id` (an approve, or a merge waiting for the owner's files) ran over
- * FINISH_LIMIT_MS and was given up: while it is still `status` it stays there, with a note and a
- * history line saying so; the lead is told once.
+ * its limit (`limitMs`, see finishLimitMs) and was given up: while it is still `status` it stays
+ * there, with a note and a history line saying so; the lead is told once. Should it still land
+ * later, landedLate marks it done.
  */
-async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind: 'approve' | 'merge'): Promise<string> {
-  const min = Math.round(FINISH_LIMIT_MS / 60_000)
+async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
+  const min = Math.round(limitMs / 60_000)
   const again = kind === 'approve' ? 'approve it again' : `${S.N.name} retry ${id}`
   const what = kind === 'approve' ? 'approved by the owner' : 'merging once your files were out of the way'
   const t = await change($, x => {
@@ -660,6 +714,8 @@ async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind:
     const y = patchTask(x, id, { note: `${kind === 'approve' ? 'approved, but the' : 'the'} merge ran over ${min} min and was given up; ${again}`, merge_wait: undefined, history: [...cur.history, `${tryLabel(cur)}: ${what} → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`] }, now())
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
+  const late = t ? null : find(await load($).catch(() => null) ?? emptyBoard(), id)
+  if (late?.status === 'done' && late.merged) return `${id} is done: its checking and merging ran over ${min} minutes, but its work was merged into ${intoOf(late)} (${late.merged.slice(0, 8)}) after all.`
   if (kind === 'approve') {
     if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
     return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
@@ -692,8 +748,13 @@ async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge'
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
     const r: CheckResult = await checkAndMerge($, t, dir, b, kind, made, stop, retest, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over it.
-    if (gaveUp()) return ''
+    // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
+    // it, unless the work reached the branch after all (landedLate).
+    if (gaveUp()) {
+      const sha = r.merged ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
+      if (sha) await landedLate($, t, sha, made, kind, status)
+      return ''
+    }
     await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
     if (r.merged) {

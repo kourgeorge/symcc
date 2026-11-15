@@ -73,12 +73,27 @@ export function ownedHere(t: BoardTask, me: string, live: string | null): boolea
 export const FINISH_BEAT_MS = 30_000
 /** a finishing mark older than this was left by a copy of the plugin that is gone */
 export const FINISH_STALE_MS = 3 * 60_000
+/** the longest one test command may run before it is stopped */
+export const TEST_TIMEOUT_MS = 10 * 60_000
+/** the time a checking and merging step gets for git and the board, on top of its test commands */
+export const FINISH_GIT_MS = 5 * 60_000
+
 /**
- * The longest a finished task's checking and merging may take in a live copy of the plugin (the
- * 10-minute test run plus some minutes for git and the board). A step still running then is taken
- * as stuck: its task goes back to "todo" (or is done, when its work already reached its branch).
+ * The longest a finished task's checking and merging may take in a live copy of the plugin: each
+ * of its `tests` test commands may run TEST_TIMEOUT_MS (counted at least once), plus FINISH_GIT_MS
+ * for git and the board. A step still running then is taken as stuck: its task goes back to "todo"
+ * (or is done, when its work already reached its branch; or failed, the second time in a row).
  */
-export const FINISH_LIMIT_MS = 15 * 60_000
+export const finishLimitMs = (tests: number) => Math.max(1, tests) * TEST_TIMEOUT_MS + FINISH_GIT_MS
+
+/** The note a try's run ends with when its checking and merging ran over `min` minutes and was given up. */
+export const ranOverNote = (min: number) => `its checking and merging ran over ${min} min and was stopped`
+
+/** Whether task `t`'s try before the current one also ended because its checking and merging was given up. */
+export function ranOverBefore(t: Pick<BoardTask, 'runs'>): boolean {
+  const prev = t.runs?.[t.runs.length - 2]
+  return prev?.ended_by === 'restarted' && /^its checking and merging ran over \d+ min\b/.test(prev.ended_note ?? '')
+}
 
 /** Whether task `t`'s work is being tested and merged right now by some copy of the plugin (its mark is fresh). */
 export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: number, staleMs = FINISH_STALE_MS): boolean {
