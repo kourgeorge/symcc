@@ -748,6 +748,9 @@ export async function cleanLeftoverTmp($: $) {
   if (fresh.length) $.ui.toast(S.N.toast(`couldn't remove leftover temp files in ${S.N.dir}/: ${fresh.join('; ')}`))
 }
 
+/** workers whose agent a check saw ended without a hand-back: failed on the next check if still not handed back */
+export const seenEnded = new Set<string>()
+
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
 export async function check($: $) {
   if (!S.driving) return
@@ -757,7 +760,10 @@ export async function check($: $) {
   if (!symccOn(b)) return
   const agents = await $.agent.list().catch(() => undefined)
   const nowMs = Date.now()
+  for (const id of seenEnded) if (!workers.has(id)) seenEnded.delete(id)
   for (const [agentId, w] of [...workers]) {
+    // An earlier step of this loop waited (halt, change): the worker may have finished meanwhile.
+    if (workers.get(agentId) !== w) continue
     const minutes = (nowMs - w.since) / 60_000
     const info = agents?.find(a => a.id === agentId)
     const t = find(b, w.task)
@@ -770,12 +776,21 @@ export async function check($: $) {
       continue
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
-    const lost = minutes > 3 && info !== undefined && ENDED_STATUSES.includes(info.status)
-    if (lost) {
-      workers.delete(agentId)
-      await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`], ...endedBy(find(x, w.task), now(), 'stopped', 'the worker ended without a result') }, now()))
-      tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
+    // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so it is
+    // only failed when it was already seen ended on an earlier check and is still not handed back.
+    const ended = minutes > 3 && info !== undefined && ENDED_STATUSES.includes(info.status)
+    if (!ended) {
+      seenEnded.delete(agentId)
+      continue
     }
+    if (!seenEnded.has(agentId)) {
+      seenEnded.add(agentId)
+      continue
+    }
+    seenEnded.delete(agentId)
+    workers.delete(agentId)
+    await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`], ...endedBy(find(x, w.task), now(), 'stopped', 'the worker ended without a result') }, now()))
+    tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
   }
   // A task kept "doing" after a reload because its old worker was still alive, or because its work
   // was being tested and merged by the old copy of the plugin: once no live agent works on it any

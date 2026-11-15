@@ -1606,6 +1606,38 @@ test('a try that ran over max_minutes ends as timed out', async () => {
   }
 })
 
+test('a worker whose agent ended is failed only on a later check, unless its report arrived in between', async () => {
+  try {
+    // still not handed back on the second check: failed
+    const lost = await tryEnds(async w => {
+      S.driving = true // world() sets it to false
+      ;(w.$ as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
+      workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
+      await check(w.$)
+      expect(workers.has('ag1')).toBe(true)
+      expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+      await check(w.$)
+      expect(workers.has('ag1')).toBe(false)
+    })
+    expect(lost.t.status).toBe('failed')
+    expect(lost.t.note).toBe('the worker ended without a result')
+    expect(lost.end).toEqual(['stopped', 'the worker ended without a result'])
+    // the report arrives between the two checks: merged, not failed
+    const late = await tryEnds(async w => {
+      S.driving = true
+      ;(w.$ as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
+      workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
+      await check(w.$)
+      await workerFinished(w.$, 'ag1', 'made the change', false)
+      await check(w.$)
+    })
+    expect(late.t.status).not.toBe('failed')
+    expect(late.end).toEqual(['finished', 'merged'])
+  } finally {
+    S.driving = false
+  }
+})
+
 test('the merge-main-in try is marked when it starts, and the first end reason is kept', async () => {
   const runs = startRun([], ISO, true)
   expect(runs[0]!.merge_main).toBe(true)
