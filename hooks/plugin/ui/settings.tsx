@@ -78,6 +78,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
           <Text color={C(r.off ? 'warning' : 'subtle')}> · {roleSourceLabel(source, r.off)}</Text>
         </Text>
         <Text bold color={C('text')}>{r.description}</Text>
+        {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
       </Box>
       {buttonRows([
         <Button key="role-back" label="Back" hotkey="b" autoFocus={roleView.confirmRemove ? undefined : true} onPress={() => ((roleView.open = ''), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
@@ -213,10 +214,11 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         if (bad) return brokenRow(bad, i === 0)
         const source = roleSource(r.name, builtIn, project)!
         return (
-          <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
+          <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
             <Text bold={!r.off} color={C(r.off ? 'subtle' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
             <Text color={C(r.off ? 'warning' : 'subtle')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
             <Text color={C(r.off ? 'subtle' : 'text')}>{` · ${r.description}`}</Text>
+            {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
           </Button>
         )
       })}

@@ -263,3 +263,18 @@ test('a broken added role shows why with Remove (after the confirm step); New ro
   expect(await ui.find({ key: 'roleRow:tester' })).toBeDefined()
   await ui.unmount()
 })
+
+test("a role whose name: line differs from its file name shows a mark on its row and the warning on its page", async ($, on) => {
+  stateOf(on, VIEW)
+  fakeRoles(on, { 'tester.md': '---\nname: qa\ndescription: my own tests\n---\n' })
+  const ui = await settings($)
+  expect((await ui.find({ key: 'roleRow:tester' }))?.props.label).toBe('tester: replaced ⚠')
+  expect((await ui.find({ key: 'roleRow:docs' }))?.props.label).toBe('docs: built-in')
+  expect(await ui.find({ type: 'Text', text: /^ ⚠$/ })).toBeDefined()
+  await ui.press({ key: 'roleRow:tester' })
+  expect(await ui.find({ type: 'Text', text: "name: qa is ignored; the role's name is its file name, tester" })).toBeDefined()
+  await ui.press({ key: 'role-back' })
+  await ui.press({ key: 'roleRow:docs' })
+  expect(await ui.find({ type: 'Text', text: /is ignored/ })).toBeUndefined()
+  await ui.unmount()
+})
