@@ -11,8 +11,13 @@ import { frontMatterLine, splitFrontMatter } from './text'
  * model, skills and tools (optional); the body is the role's checklist (may be empty, as for "general").
  * tools lists extra tools the role's workers get on top of the base ones (only those in EXTRA_TOOLS).
  * off: true turns the role off: the lead never picks it and it isn't offered on the task page (a task that has it keeps it).
+ * The role's name is always its file name; a name: line in the front matter is ignored, and when it says something else
+ * the role gets a `warning` (shown in the lead's roles list), but still works.
  */
-export type RoleDef = { name: string; description: string; model?: string; skills: string[]; tools?: string[]; off?: boolean; prompt: string }
+export type RoleDef = { name: string; description: string; model?: string; skills: string[]; tools?: string[]; off?: boolean; prompt: string; warning?: string }
+
+/** The warning for a role file whose name: line differs from its file name: "name: qa is ignored; the role's name is its file name, tester". */
+export const ignoredNameWarning = (said: string, name: string): string => `name: ${said} is ignored; the role's name is its file name, ${name}`
 
 /** The tools every worker has. */
 export const BASE_WORKER_TOOLS: readonly string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash']
@@ -97,7 +102,10 @@ function readRole(name: string, text: string): RoleDef | string {
     if (kv) meta[kv.key] = kv.value.replace(/\s+#.*$/, '')
   }
   const unquote = (s: string | undefined) => (s ?? '').trim().replace(/^["']|["']$/g, '').trim()
-  const roleName = unquote(meta.name) || name
+  // The file name is the role's name: a name: line can't rename it (it only gets a warning).
+  const roleName = name
+  const said = unquote(meta.name)
+  const warning = said && said !== name ? ignoredNameWarning(said, name) : ''
   const description = unquote(meta.description)
   if (!ROLE_NAME.test(roleName)) return `bad name "${roleName}" (use letters, digits, - and _ only)`
   if (!description) return 'no description'
@@ -109,7 +117,7 @@ function readRole(name: string, text: string): RoleDef | string {
     if (!tools.includes(known)) tools.push(known)
   }
   const off = /^(true|yes)$/i.test(unquote(meta.off))
-  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), ...(tools.length ? { tools } : {}), ...(off ? { off: true } : {}), prompt: fm.body.trim() }
+  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), ...(tools.length ? { tools } : {}), ...(off ? { off: true } : {}), prompt: fm.body.trim(), ...(warning ? { warning } : {}) }
 }
 
 /** The built-in roles with the project's added: a project role replaces a built-in one with the same name. Sorted by name, general first. */
@@ -230,9 +238,9 @@ export function roleFileText(r: Omit<RoleDef, 'name'>): string {
   return `---\n${lines.join('\n')}\n---\n${r.prompt.trim() ? `${r.prompt.trim()}\n` : ''}`
 }
 
-/** One role's line for the lead's roles list: "tester (built-in): writes tests · model sonnet", with ", off" when it is off. */
+/** One role's line for the lead's roles list: "tester (built-in): writes tests · model sonnet", with ", off" when it is off and its warning, if any, at the end. */
 function leadRoleLine(r: RoleDef, source: RoleSource): string {
-  return `- ${r.name} (${source}${r.off ? ', off' : ''}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}`
+  return `- ${r.name} (${source}${r.off ? ', off' : ''}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
 }
 
 /** One of the owner's role files that can't be read (so it is left out of the roles): its role name, its file and why. */

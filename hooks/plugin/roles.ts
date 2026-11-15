@@ -152,7 +152,7 @@ async function changeRoleText($: $, a: LeadRoleInput): Promise<string | { ok: tr
     const off = action === 'off'
     if (off && name.toLowerCase() === DEFAULT_ROLE) return `${DEFAULT_ROLE} can't be turned off: it is the default role`
     if (!!cur.off === off) return `${name} is already ${action}`
-    const { name: _n, ...rest } = cur
+    const { name: _n, warning: _w, ...rest } = cur
     const err = await save({ ...rest, off })
     return err || await done(off ? `turned ${name} off${copied}: the lead won't pick it and it isn't offered on the task page; tasks that already have it keep it` : `turned ${name} on again`)
   }

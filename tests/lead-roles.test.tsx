@@ -178,6 +178,33 @@ test('an off role is not offered and not in the lead\'s roles; on brings it back
   expect(rolesLeadText(S.roles)).toContain('docs (writes the docs)')
 })
 
+test('the file name is the role\'s name: a name: line is ignored with a warning, and every action works on that file only', async () => {
+  const qaTester = '---\nname: qa\ndescription: my tests\n---\n- mine\n'
+  const { $, mine, touched } = setup({ 'tester.md': qaTester })
+  const warning = "name: qa is ignored; the role's name is its file name, tester"
+  expect(parseRole('tester', qaTester)).toMatchObject({ name: 'tester', description: 'my tests', warning })
+  expect(parseRole('tester', '---\nname: tester\ndescription: my tests\n---\n')?.warning).toBeUndefined()
+  const list = await call($, {})
+  expect(list).toContain(`- tester (replaced): my tests · warning: ${warning}`)
+  expect(list).not.toContain('- qa')
+  expect(S.roles.find(r => r.name === 'tester')?.description).toBe('my tests')
+  expect(S.roles.some(r => r.name === 'qa')).toBe(false)
+  expect(await call($, { action: 'list', name: 'qa' })).toContain('no role named qa')
+  expect(await call($, { action: 'remove', name: 'qa' })).toContain('no role named qa')
+  expect(await call($, { action: 'edit', name: 'qa', description: 'x' })).toContain('no role named qa')
+  expect(await call($, { action: 'list', name: 'tester' })).toContain(warning)
+  expect(await call($, { action: 'off', name: 'tester' })).toContain('turned tester off')
+  expect(parseRole('tester', mine['tester.md']!)).toMatchObject({ description: 'my tests', off: true, prompt: '- mine' })
+  expect(await call($, { action: 'on', name: 'tester' })).toContain('turned tester on again')
+  expect(await call($, { action: 'edit', name: 'tester', description: 'my own tests' })).toContain('saved role tester (.symcc/roles/tester.md)')
+  expect(parseRole('tester', mine['tester.md']!)).toMatchObject({ name: 'tester', description: 'my own tests', prompt: '- mine' })
+  expect(Object.keys(mine)).toEqual(['tester.md'])
+  expect(await call($, { action: 'reset', name: 'tester' })).toContain('tester is the built-in role again')
+  expect(mine['tester.md']).toBeUndefined()
+  expect(new Set(touched)).toEqual(new Set([`${MINE}/tester.md`]))
+  expect(S.roles.find(r => r.name === 'tester')?.description).toBe('writes tests')
+})
+
 test('roles refuses a name that could reach outside the roles folder, for every action', async () => {
   const { $, mine, touched } = setup({ 'mobile.md': '---\ndescription: phone apps\n---\n' })
   for (const bad of ['../x', '../../README', 'a/b', '..', '.', '/etc/passwd', 'a\\b', 'a b'])
