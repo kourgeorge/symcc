@@ -28,6 +28,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Two workers finishing at once now take turns merging.
 - Fewer plugin messages to the lead: none for your own actions, and no duplicate reports.
 - A worker's question goes straight to you (the task waits) and is said out loud.
+- Uncommitted or untracked files on your branch only block a merge when the task changes those same files. A finished task blocked that way waits, with no new worker, and merges on its own once you commit or stash them.
+- A task waiting for your files shows them on the board ("commit or stash them, it merges on its own") with a Merge now (r) button instead of an answer box, plays no "needs you" sound, and the hour-long reminder says to commit or stash them.
 - The video voice is as loud as a normal YouTube video, and the narration shows approving on the board.
 - README is shorter and clearer, and shows the demo first.
 - Small tests and tidy-ups (merge, scouts, session start and end, turn complete) and one shared scout-name check.

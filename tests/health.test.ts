@@ -97,6 +97,18 @@ test('health: a task waiting on the owner over an hour is told once, again only 
   expect(newFindings(boardHealth(changed, NOW), second.told).fresh.length).toBe(1)
 })
 
+test('health: a task waiting over an hour only for the owner\'s files says to commit or stash them, not to answer', () => {
+  const old = new Date(NOW - OWNER_IDLE_MS - 60_000).toISOString()
+  const files = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), merge_wait: ['src/a.ts'] }]), NOW)
+  expect(files.length).toBe(1)
+  expect(files[0]!.text).toContain("T-4 waits for the owner's files on main")
+  expect(files[0]!.consider).toContain('commit or stash src/a.ts on main')
+  expect(files[0]!.consider).not.toContain('answer it')
+  // a waiting task with a question is unchanged
+  const asked = boardHealth(board([task('T-5', { status: 'waiting', question: 'which one?', updated_at: old })]), NOW)
+  expect(asked[0]!.consider).toBe("remind the owner of T-5's question, or answer it yourself if you can")
+})
+
 test('health: no repeat for the same tasks and reason; reset once the problem is gone', () => {
   const b = board([task('T-5', { status: 'dropped' }), task('T-7', { after: ['T-5'] })])
   const a = newFindings(boardHealth(b, NOW), new Set())

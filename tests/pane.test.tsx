@@ -2,6 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { hintLines, hintLineText, listKeys, taskKeys, type KeyHint } from '../hooks/board'
+import { sayQueue } from '../hooks/plugin/state'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -358,6 +359,22 @@ test('a waiting task opens with a box to answer it', async ($, on) => {
   expect((await ui.find({ type: 'Text', text: /asks: Case-sensitive/ }))).toBeDefined()
   expect((await ui.find({ key: 'answer' }))).toBeDefined()
   expect(await ui.find({ key: 'retry' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test("a task waiting only for the owner's files shows them and a Merge now button, with no answer box and no \"needs you\" sound", async ($, on) => {
+  sayQueue.splice(0)
+  const t = task('T-2', 'waiting', 'Search mode', { merge_wait: ['src/a.ts', 'README.md'], note: 'waiting for your files on main: src/a.ts, README.md; commit or stash them' })
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', notify: 'voice', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^waiting for your files on main: src\/a\.ts, README\.md; commit or stash them, it merges on its own$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /asks:/ })).toBeUndefined()
+  expect(await ui.find({ key: 'answer' })).toBeUndefined()
+  expect(await ui.find({ key: 'choice-1' })).toBeUndefined()
+  expect((await ui.find({ key: 'merge-now' }))?.props.hotkey).toBe('r')
+  expect((await ui.find({ key: 'back' }))?.props.autoFocus).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /r merge now/ })).toBeDefined()
+  expect(sayQueue).toEqual([])
   await ui.unmount()
 })
 

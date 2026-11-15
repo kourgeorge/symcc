@@ -23,7 +23,7 @@
 // Each finding has a key made of its reason, its tasks and their updated_at, so the same
 // problem is told once, and told again only when one of its tasks changes.
 import type { Board, BoardTask } from './board-file'
-import { find } from './board-file'
+import { find, intoOf, waitsForFiles } from './board-file'
 import { AFTER_CHANGED } from './history'
 import { num } from './text'
 import { ready } from './task'
@@ -193,8 +193,10 @@ function owner(b: Board, nowMs: number): HealthFinding[] {
     .sort(byId)
     .map(t => {
       const h = Math.floor((nowMs - Date.parse(t.updated_at)) / 3_600_000)
-      const what = t.status === 'review' ? 'is ready for review' : 'waits for the owner'
-      return finding(b, 'owner', [t.id], `${t.id} ${what} and nothing happened for ${h}+ hour${h > 1 ? 's' : ''}`, t.status === 'review' ? `remind the owner to approve or reject ${t.id}` : `remind the owner of ${t.id}'s question, or answer it yourself if you can`)
+      const files = waitsForFiles(t)
+      const what = files ? `waits for the owner's files on ${intoOf(t)}` : t.status === 'review' ? 'is ready for review' : 'waits for the owner'
+      const consider = files ? `remind the owner to commit or stash ${t.merge_wait!.join(', ')} on ${intoOf(t)}; ${t.id} then merges on its own (no answer needed)` : t.status === 'review' ? `remind the owner to approve or reject ${t.id}` : `remind the owner of ${t.id}'s question, or answer it yourself if you can`
+      return finding(b, 'owner', [t.id], `${t.id} ${what} and nothing happened for ${h}+ hour${h > 1 ? 's' : ''}`, consider)
     })
 }
 

@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
@@ -183,7 +183,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
   // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
   const asked = t as BoardTask
-  const choices = t.status === 'waiting' ? answerChoices(asked.asked_files, asked.options) : []
+  // Finished work that waits only for the owner's files: nothing to answer; it merges on its own once they are
+  // committed or stashed, and r runs just the merge now.
+  const fileWait = fileWaitText(asked)
+  const answerable = t.status === 'waiting' && !fileWait
+  const choices = answerable ? answerChoices(asked.asked_files, asked.options) : []
   if (S.answering !== null && S.answering !== t.id) S.answering = null
   const typing = !choices.length || S.answering === t.id
   const cancelAnswer = () => ((S.answering = null), $.ui.invalidate('ui.render'))
@@ -221,7 +225,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       </Box>
 
       {buttonRows([
-        <Button key="back" label="Back" hotkey="b" autoFocus={t.status === 'waiting' || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await updateOpened($, () => '')))} />,
+        <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await updateOpened($, () => '')))} />,
         ...reviewButtons,
         inReview && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
         agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />,
@@ -230,6 +234,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         ),
         t.status === 'paused' && (
           <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool($, 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))} />
+        ),
+        fileWait && (
+          <Button key="merge-now" label="Merge now (r)" hotkey="r" onPress={act(async () => ($.ui.toast(S.N.toast(await runTool($, 'retry', { task: t.id }))), noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`)))} />
         ),
         (t.status === 'failed' || t.status === 'dropped') && (
           <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))} />
@@ -291,7 +298,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {t.status === 'waiting' && (
+      {fileWait && (
+        <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+          <Text color={C('text')}>{fileWait}</Text>
+          <Text color={C('subtle')}>r merges it now</Text>
+        </Box>
+      )}
+
+      {answerable && (
         <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
           <Text>
             <Text bold color={C('warning')}>asks: </Text>
@@ -351,7 +365,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), t.status === 'waiting' ? answerKeys(asked.asked_files, asked.options) : []), 'task-keys')}
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(asked.asked_files, asked.options) : [], !!fileWait), 'task-keys')}
     </Box>
   )
 }
