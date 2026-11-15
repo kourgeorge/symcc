@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleFileText, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError } from '../../board'
+import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError } from '../../board'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
@@ -9,7 +9,8 @@ import type { PaneParts } from './parts'
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
 
-/** A role's edit mode in Settings: a box per part of its file, then Save and Cancel (x). Its boxes take every letter
+/** A role's edit mode in Settings: the same header as its page, then Save and Cancel (x), then a box per part of its
+ *  file, named and ordered as the page shows them: Description, Model, Skills, Tools, Checklist. Its boxes take every letter
  *  and Esc doesn't reach the panel from a text box, so Cancel is the way out. */
 function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
   const { Box, Text, Button, Input, act, C, heading, footer } = pane
@@ -28,6 +29,7 @@ function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
           <Text bold color={C('claude')}>{d.role}</Text> <Text bold color={C('warning')}>editing</Text>
         </Text>
         <Text color={C('subtle')}>save writes {roleFileOf(d.role)}{source === 'built-in' ? ' (a copy of the built-in role; Reset to built-in undoes it)' : ''}</Text>
+        <Text color={C('subtle')}>the name is the file's name: to rename the role, rename {roleFileOf(d.role)}</Text>
       </Box>
       <Box flexDirection="row" gap={1}>
         <Button key="role-save" label="Save" onPress={act(async () => {
@@ -37,11 +39,11 @@ function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
         <Button key="role-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
       </Box>
       {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
-      {box('description', 'description', 'what the role is for, in a few words', { autoFocus: true })}
-      {box('model', 'model', "empty: the session's model")}
-      {box('skills', 'skills', 'skill names joined with ", " (empty: none)')}
-      {box('tools', 'tools', 'extra tools: WebSearch, WebFetch (empty: none)')}
-      {box('checklist', 'checklist', 'what a worker with this role checks, one line each', { rows: 8 })}
+      {box('description', 'Description', 'what the role is for, in a few words', { autoFocus: true })}
+      {box('model', 'Model', "empty: the session's model")}
+      {box('skills', 'Skills', 'skill names joined with ", " (empty: none)')}
+      {box('tools', 'Tools', 'extra tools: WebSearch, WebFetch (empty: none)')}
+      {box('checklist', 'Checklist', 'what a worker with this role checks, one line each', { rows: 8 })}
       {footer(roleEditKeys(), 'role-edit-keys')}
     </Box>
   )
@@ -61,7 +63,13 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
   const canOff = r.name.toLowerCase() !== DEFAULT_ROLE
   const canReset = source === 'replaced'
   const canRemove = source === 'added'
-  const front = roleFileText({ ...r, prompt: '' }).trim().split('\n').filter(l => l !== '---')
+  // one section per part of the file, named as the edit page's boxes; the description is the subheader
+  const section = (title: string, value: string | undefined, none: string) => (
+    <Box flexDirection="column">
+      {heading(title)}
+      {value ? <Text color={C('text')}>{`  ${value}`}</Text> : <Text color={C('subtle')}>{`  ${none}`}</Text>}
+    </Box>
+  )
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
@@ -87,10 +95,9 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
           </Box>
         </Box>
       ) : null}
-      <Box flexDirection="column">
-        {heading('Front matter')}
-        {front.map((l, i) => <Text key={`role-front-${i}`} color={C('text')}>{`  ${l}`}</Text>)}
-      </Box>
+      {section('Model', r.model, "(none: the session's model)")}
+      {section('Skills', r.skills.join(', '), '(none)')}
+      {section('Tools', (r.tools ?? []).join(', '), '(none: the base tools only)')}
       <Box flexDirection="column">
         {heading('Checklist')}
         {r.prompt.trim() ? paragraphs(r.prompt.trim()) : <Text color={C('subtle')}>(none: a plain worker)</Text>}

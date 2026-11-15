@@ -5,7 +5,8 @@ import { type $, S, readScoutOpen, updateScoutOpen } from '../state'
 import type { PaneParts } from './parts'
 import { resetPane } from './open'
 
-/** A scout's edit mode: the same header as its page, then a box per part of its file. Its Cancel button leaves it
+/** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
+ *  page shows them: Runs every, Model, Summary, Instructions. Its Cancel button leaves it
  *  without saving (its boxes take every letter, and Esc doesn't reach the panel from a text box). */
 export function scoutEditPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, scouts, heading, footer } = pane
@@ -24,6 +25,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
           {r ? <Text color={C('subtle')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · {r.ran}</Text> : null}
         </Text>
         <Text color={C('subtle')}>save writes {file} · other front matter keys are kept</Text>
+        <Text color={C('subtle')}>the name is the file's name: to rename the scout, rename {file}</Text>
       </Box>
 
       <Box flexDirection="row" gap={1}>
@@ -34,18 +36,23 @@ export function scoutEditPage($: $, pane: PaneParts) {
       {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
 
       <Box flexDirection="column">
-        {heading('every (minutes)')}
-        <Input key="scout-every" value={d.every} placeholder="a whole number: 0, or 1 or more" autoFocus submitLabel="keep" onInput={value => void (d.every = value)} onSubmit={value => void (d.every = value)} />
-        <Text color={C('subtle')}>0 = only on demand</Text>
+        {heading('Runs every')}
+        <Input key="scout-every" value={d.every} placeholder="minutes: a whole number, 0 or more" autoFocus submitLabel="keep" onInput={value => void (d.every = value)} onSubmit={value => void (d.every = value)} />
+        <Text color={C('subtle')}>in minutes · 0 = only on demand</Text>
       </Box>
 
       <Box flexDirection="column">
-        {heading('model')}
+        {heading('Model')}
         <Input key="scout-model" value={d.model} placeholder="empty: the session's model" submitLabel="keep" onInput={value => void (d.model = value)} onSubmit={value => void (d.model = value)} />
       </Box>
 
       <Box flexDirection="column">
-        {heading('instructions')}
+        {heading('Summary')}
+        <Input key="scout-summary" value={d.summary} placeholder="empty: the first line of the instructions" submitLabel="keep" onInput={value => void (d.summary = value)} onSubmit={value => void (d.summary = value)} />
+      </Box>
+
+      <Box flexDirection="column">
+        {heading('Instructions')}
         <Input key="scout-body" value={d.body} rows={8} placeholder="what to look for, in plain words" submitLabel="keep" onInput={value => void (d.body = value)} onSubmit={value => void (d.body = value)} />
       </Box>
       {footer(scoutEditKeys(), 'scout-edit-keys')}
@@ -63,7 +70,9 @@ export async function scoutsPage($: $, pane: PaneParts) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
     const report = scoutReport(sc.last_report)
-    const title = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? sc.name
+    // the subheader: the summary from the file's front matter, else the first line of the instructions (in the subtle colour)
+    const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
+    const title = sc.summary?.trim() || firstLine
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
@@ -79,9 +88,11 @@ export async function scoutsPage($: $, pane: PaneParts) {
               {r.model ? ` · ${r.model}` : ''} · {r.ran}
             </Text>
           </Text>
-          <Text bold color={C('text')}>
-            {title}
-          </Text>
+          {title ? (
+            <Text bold={!!sc.summary?.trim()} color={C(sc.summary?.trim() ? 'text' : 'subtle')}>
+              {title}
+            </Text>
+          ) : null}
           {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
         </Box>
 
@@ -94,7 +105,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
         ], 'scout-buttons')}
 
         <Box flexDirection="column">
-          {heading('What it looks for')}
+          {heading('Instructions')}
           {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('subtle')}>(not loaded yet: run /{S.N.name}-scouts)</Text>}
         </Box>
 

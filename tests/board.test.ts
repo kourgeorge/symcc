@@ -787,6 +787,12 @@ test('a scout file is written from its front matter and body, keeping the other 
   expect(parseScout('new', fresh)).toEqual({ name: 'new', every_minutes: 60, model: undefined, prompt: 'Look around.' })
   // an old file without front matter gets some
   expect(parseScout('x', scoutText('Just text.', { every_minutes: 5, model: 'haiku' }, 'Just text.'))).toEqual({ name: 'x', every_minutes: 5, model: 'haiku', prompt: 'Just text.' })
+  // summary: its own front matter line, set or dropped from the edit mode; left alone when not given (the lead's tool)
+  const withSummary = scoutText(null, { every_minutes: 5, summary: '  Crash\n hunter ' }, 'Look.')
+  expect(withSummary).toBe('---\nevery_minutes: 5\nsummary: Crash hunter\n---\n\nLook.\n')
+  expect(parseScout('x', withSummary)).toEqual({ name: 'x', every_minutes: 5, summary: 'Crash hunter', prompt: 'Look.' })
+  expect(scoutText(withSummary, { every_minutes: 5 }, 'Look.')).toContain('summary: Crash hunter')
+  expect(scoutText(withSummary, { every_minutes: 5, summary: '' }, 'Look.')).not.toContain('summary')
 })
 
 test('a new scout name and every_minutes are checked', async () => {
@@ -806,7 +812,7 @@ test('a new scout name and every_minutes are checked', async () => {
   expect(everyMinutesOf('')).toBeNull()
   expect(scoutDraftError({ every: '30', body: 'Look.' })).toBe('')
   expect(scoutDraftError({ every: '0', body: 'Look.' })).toBe('')
-  expect(scoutDraftError({ every: '-5', body: 'Look.' })).toBe('every (minutes) must be a whole number: 0 for only on demand, or 1 or more')
+  expect(scoutDraftError({ every: '-5', body: 'Look.' })).toBe('Runs every must be a whole number of minutes: 0 for only on demand, or 1 or more')
   expect(scoutDraftError({ every: '1.5', body: 'Look.' })).toMatch(/0 for only on demand/)
   expect(scoutDraftError({ every: '30', body: '  ' })).toMatch(/looks for/)
 })

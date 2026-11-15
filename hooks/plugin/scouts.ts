@@ -257,6 +257,7 @@ export async function scheduleScouts($: $) {
       st.next_run = keep ?? new Date(nextRunFrom(st.last_run, s.every_minutes, soon)).toISOString()
     }
     if (s.model) st.model = s.model
+    if (s.summary) st.summary = s.summary
     if (s.warning) st.warning = s.warning
     if (old?.last_report !== undefined) st.last_report = old.last_report
     if (old?.paused) st.paused = true
@@ -295,7 +296,7 @@ export async function readScoutFile($: $, scout: string): Promise<string | null>
 export async function editScout($: $, sc: SymccScout) {
   const text = await readScoutFile($, sc.name)
   const def = text === null ? null : parseScout(sc.name, text)
-  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
+  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', summary: def?.summary ?? sc.summary ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
   $.ui.invalidate('ui.render')
 }
 
@@ -309,7 +310,7 @@ export async function newScout($: $, name: string, shown: string[] = []) {
     S.naming = { name: s, error: err }
   } else {
     S.naming = null
-    S.draft = { scout: s, isNew: true, every: '60', model: '', body: '', error: '' }
+    S.draft = { scout: s, isNew: true, every: '60', model: '', summary: '', body: '', error: '' }
   }
   $.ui.invalidate('ui.render')
 }
@@ -336,7 +337,7 @@ export async function saveScout($: $) {
     $.ui.invalidate('ui.render')
     return
   }
-  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model }, d.body)
+  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary }, d.body)
   await $.process.run(['mkdir', '-p', path(S.N.scouts)])
   await $.fs.write(path(rel), text)
   S.draft = null

@@ -131,6 +131,8 @@ export type SymccScout = {
   running: boolean
   /** the model from the scout file's front matter, if set */
   model?: string
+  /** the one-line subheader from the scout file's front matter (`summary:`), if set; else the page shows the first line of the instructions */
+  summary?: string
   /** the scout's instructions: the body of its file */
   prompt?: string
   /** what the scout answered last time (its first ~2000 characters) */

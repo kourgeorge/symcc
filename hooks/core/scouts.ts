@@ -10,7 +10,8 @@ import { frontMatterLine, splitFrontMatter } from './text'
 /** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
 /** `every_minutes` 0 means "only on demand" (never on the timer). A bad value in the file also gives 0, with
  *  `warning` saying so and `bad_every` holding the value as written. */
-export type ScoutDef = { name: string; every_minutes: number; model?: string; prompt: string; warning?: string; bad_every?: string }
+/** `summary` is the optional one-line subheader shown on the scout's page (front matter `summary:`). */
+export type ScoutDef = { name: string; every_minutes: number; model?: string; summary?: string; prompt: string; warning?: string; bad_every?: string }
 
 /** The warning for a scout file whose every_minutes can't be used. */
 export const badEveryWarning = (value: string): string => `every_minutes "${value}" is not valid: runs only on demand until fixed`
@@ -28,7 +29,8 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   const prompt = fm.body.trim()
   if (!prompt) return null
   const raw = (meta.every_minutes ?? '').trim()
-  const base = { name: meta.name || name, model: meta.model || undefined, prompt }
+  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'prompt'> = { name: meta.name || name, model: meta.model || undefined, prompt }
+  if (meta.summary?.trim()) base.summary = meta.summary.trim()
   // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
   if (!raw) return { ...base, every_minutes: 60 }
   const every = everyMinutesOf(raw)
@@ -39,13 +41,16 @@ export function parseScout(name: string, text: string): ScoutDef | null {
 /**
  * A scout file's text from its front matter and body, as the panel's edit mode saves it.
  * `old` is the file as it was (or null for a new scout): every front matter line it has is kept
- * as it was, except every_minutes and model (dropped when empty).
+ * as it was, except every_minutes, model and summary (dropped when empty). A `summary` left out of `set`
+ * (undefined) keeps the file's summary line as it was.
  */
-export function scoutText(old: string | null, set: { every_minutes: number; model?: string }, body: string): string {
+export function scoutText(old: string | null, set: { every_minutes: number; model?: string; summary?: string }, body: string): string {
   const lines: string[] = []
   let everyDone = false
   let modelDone = false
+  let summaryDone = set.summary === undefined
   const model = (set.model ?? '').trim()
+  const summary = (set.summary ?? '').replace(/\s+/g, ' ').trim()
   for (const line of (old ? splitFrontMatter(old).lines : null) ?? []) {
     const key = frontMatterLine(line)?.key
     if (key === 'every_minutes') {
@@ -54,10 +59,14 @@ export function scoutText(old: string | null, set: { every_minutes: number; mode
     } else if (key === 'model') {
       if (!modelDone && model) lines.push(`model: ${model}`)
       modelDone = true
+    } else if (key === 'summary' && set.summary !== undefined) {
+      if (!summaryDone && summary) lines.push(`summary: ${summary}`)
+      summaryDone = true
     } else lines.push(line)
   }
   if (!everyDone) lines.push(`every_minutes: ${set.every_minutes}`)
   if (!modelDone && model) lines.push(`model: ${model}`)
+  if (!summaryDone && summary) lines.push(`summary: ${summary}`)
   return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`
 }
 
@@ -80,7 +89,7 @@ export function everyMinutesOf(text: string): number | null {
 
 /** Why a scout's edit can't be saved ('' when it can). */
 export function scoutDraftError(d: { every: string; body: string }): string {
-  if (everyMinutesOf(d.every) === null) return 'every (minutes) must be a whole number: 0 for only on demand, or 1 or more'
+  if (everyMinutesOf(d.every) === null) return 'Runs every must be a whole number of minutes: 0 for only on demand, or 1 or more'
   if (!d.body.trim()) return 'write what the scout looks for'
   return ''
 }

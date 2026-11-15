@@ -572,7 +572,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     // laid out like an opened task: no tabs, sections with headings
     expect(await ui.find({ key: 'tab-tasks' })).toBeUndefined()
     expect(await ui.find({ key: 'tab-scouts' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /What it looks for/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^▍Instructions$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Last report/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^▍File$/ })).toBeDefined()
     expect(await ui.find({ key: 'scout-back' })).toBeDefined()
@@ -588,6 +588,28 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(await ui.find({ key: 'T-1' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('a scout\'s page shows its summary as the subheader, else the first line of its instructions in the subtle colour', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { summary: 'Crash hunter', prompt: 'Look for crashes.\nAnd leaks.' }), scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const sub = await ui.find({ type: 'Text', text: /^Crash hunter$/ })
+  expect(sub?.props.color).toBe('text')
+  // Instructions is always the whole text
+  expect(await ui.find({ type: 'Text', text: /Look for crashes/ })).toBeDefined()
+  const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
+  expect(heads).toEqual(['▍Instructions', '▍Last report', '▍File'])
+  await ui.press({ key: 'scout-edit' })
+  expect((await ui.find({ key: 'scout-summary' }))?.props.value).toBe('Crash hunter')
+  await ui.unmount()
+})
+
+test('with no summary, a scout\'s page shows the first line of its instructions in the subtle colour', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'docs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const first = (await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'subtle')
+  expect(first).toBeDefined()
+  await ui.unmount()
 })
 
 test('a scout that found nothing says so', async ($, on) => {
@@ -622,16 +644,25 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   expect(Number(body?.props.rows)).toBeGreaterThan(1)
   expect(await ui.find({ key: 'scout-save' })).toBeDefined()
   // under the box, a hint that 0 means only on demand
-  expect(await ui.find({ type: 'Text', text: /^0 = only on demand$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^in minutes · 0 = only on demand$/ })).toBeDefined()
+  // the same section names, in the same order, as the scout's page
+  const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
+  expect(heads).toEqual(['▍Runs every', '▍Model', '▍Summary', '▍Instructions'])
+  // no summary in the file: its box is empty and says the first line of the instructions is used
+  const summary = await ui.find({ key: 'scout-summary' })
+  expect(summary?.props.value).toBe('')
+  expect(summary?.props.placeholder).toBe('empty: the first line of the instructions')
+  // the panel can't rename: it says how
+  expect(await ui.find({ type: 'Text', text: /to rename the scout, rename \.symcc\/scouts\/bugs\.md/ })).toBeDefined()
   // a bad every_minutes is refused with a short error
   await ui.input({ key: 'scout-every', text: '-5' })
   await ui.press({ key: 'scout-save' })
-  expect(await ui.find({ type: 'Text', text: /^every \(minutes\) must be a whole number: 0 for only on demand, or 1 or more$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Runs every must be a whole number of minutes: 0 for only on demand, or 1 or more$/ })).toBeDefined()
   expect(await ui.find({ key: 'scout-save' })).toBeDefined()
   await ui.press({ key: 'scout-cancel' })
   expect(await ui.find({ key: 'scout-save' })).toBeUndefined()
   expect(await ui.find({ key: 'scout-edit' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /What it looks for/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Instructions/ })).toBeDefined()
   await ui.unmount()
 })
 

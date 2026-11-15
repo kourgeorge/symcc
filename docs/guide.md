@@ -331,12 +331,15 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   role: its name, where it comes from (`built-in`, `replaced`, `added`, with `, off` when it
   is turned off) and its description. Back (`b`) on the Roles page goes back to Settings, and
   switching views (`t`, `s`, `c`) closes it. Enter (or a click) on a role opens it in full: its
-  front matter, its checklist and its file, with buttons: Edit (`e`), Turn off / Turn on (`o`,
+  name and where it comes from, its description under that, then the sections **Model**,
+  **Skills**, **Tools**, **Checklist** and **File**, with buttons: Edit (`e`), Turn off / Turn on (`o`,
   not for `general`), Reset to built-in (`r`, only for a built-in you replaced) and Remove (`d`,
   only for a role you added; it asks "Yes, remove (`y`)" or Cancel (`x`) first). Back (`b`)
   goes back to the Roles page.
-  Edit opens the role's edit page in the panel (like a scout's): one box each for the
-  description, model, skills, tools and checklist; Save writes `.symcc/roles/<name>.md`
+  Edit opens the role's edit page in the panel (like a scout's): the same names in the same
+  order, one box each for **Description**, **Model**, **Skills**, **Tools** and **Checklist**.
+  The name is the file's name, so the edit page can't change it: to rename a role, rename its
+  file. Save writes `.symcc/roles/<name>.md`
   (a built-in role is copied there first), Cancel (`x`) leaves without saving. `+ New role`
   (`n`) asks for a name, makes `.symcc/roles/<name>.md` from a short template and opens it
   in the edit page. All of it uses the same checks as the lead's `roles` tool (see
@@ -433,10 +436,20 @@ has examples to copy: [`bugs.md`](../examples/scouts/bugs.md),
 security notices, and [`secrets.md`](../examples/scouts/secrets.md), which looks for keys,
 tokens and passwords that are in git or could end up there.
 
+A scout's page in the board panel shows a header line (its name, state, how often it runs,
+e.g. "every 7 days", its model and when it last ran), then its summary, then the sections
+**Instructions** (the whole text of its file), **Last report** and **File**. The summary is
+the optional `summary:` line in the file's front matter, e.g. `summary: Looks for crashes`.
+Without one, the page shows the first line of the instructions there instead, in a dimmer
+colour.
+
 You can also make and change scouts right in the board panel: on the Scouts view, "New
-scout" asks for a name, and "Edit" on a scout's page lets you change how often it runs, its
-model and its instructions. Save writes the file (other front matter keys are kept) and the
-new timing applies at once. `/symcc-scout <name>` runs a scout now.
+scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
+header line, then the same names in the same order, one box each: **Runs every** (in
+minutes, 0 = only on demand), **Model**, **Summary** (empty: the first line of the
+instructions is used) and **Instructions**. The name is the file's name, so the edit page
+can't change it: to rename a scout, rename its file. Save writes the file (other front
+matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` runs a scout now.
 
 Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
 like "every 2 days" or "on demand", whether it is paused or running, its next and last run
@@ -449,7 +462,7 @@ you pause or resume scouts; the lead can't.
 
 ### Scouts that run only on demand
 
-`every_minutes: 0` (or 0 in the panel's "every (minutes)" box) means the scout runs only
+`every_minutes: 0` (or 0 in the panel's "Runs every" box) means the scout runs only
 on demand: never on the timer, only when you press "run now" on its page or run
 `/symcc-scout <name>`. The Scouts list and its page say "on demand" instead of "every N"
 and show no "next in …", for example `◎ secrets  on demand  last: nothing`, and the status
