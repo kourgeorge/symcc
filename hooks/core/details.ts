@@ -3,7 +3,7 @@ import type { SymccStatus, SymccTask } from '../../types'
 import { intoOf, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
-import { originOf } from './origin'
+import { originMark, originOf } from './origin'
 import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
@@ -17,10 +17,18 @@ export type DetailRow = { label: string; segs: Seg[] }
 export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'subtle', todo: 'subtle', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'subtle' }
 export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
 
-/** Who a task came from, with its own color: the owner, scout NAME, T-x (split), the lead; "unknown" when its origin is missing or broken (hand-edited). */
+/**
+ * Who a task came from, with its own color, after its one-width mark (ORIGIN_MARK) and a space: ♟ owner, ⌕ scout NAME,
+ * ▸ T-x (worker report), ◆ lead, ↳ T-x (split); "unknown" (no mark) when its origin is missing or broken (hand-edited).
+ */
 export function originSegs(t: { origin?: unknown }): Seg[] {
   const o = originOf(t)
   if (!o) return [{ text: 'unknown', color: 'subtle' }]
+  const segs = originWordSegs(o)
+  return [{ text: `${originMark(o)} `, color: segs[0]?.color ?? 'subtle' }, ...segs]
+}
+
+function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
   const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
   const taskPart: Seg[] = o.task ? [{ text: o.task, color: 'claude', bold: true }, ...(how ? [{ text: ` (${how})`, color: 'subtle' }] : [])] : []
   const then = (who: Seg[]) => (taskPart.length ? [...who, { text: ', ', color: 'subtle' }, ...taskPart] : who)
