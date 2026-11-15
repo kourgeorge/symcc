@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, bar, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
@@ -334,4 +334,29 @@ test('stats: the summary keeps every figure of the full view; full only adds the
 test('stats: zero tasks shows a clear "no tasks yet" line, in both views', () => {
   expect(statsReport({ tasks: [], nowMs: NOW })).toBe('symcc stats · all tasks (0 tasks)\n\nNo tasks yet.')
   expect(statsReport({ tasks: [], nowMs: NOW, full: true })).toContain('No tasks yet.')
+})
+
+test('stats: wide titles (Japanese, emoji) are cut and padded by screen width, never splitting a character', () => {
+  expect(textWidth('abc')).toBe(3)
+  expect(textWidth('日本語')).toBe(6)
+  expect(textWidth('🚀🎉')).toBe(4)
+  expect(cutTitle('a'.repeat(40))).toBe(`${'a'.repeat(34)}…`)
+  expect(cutTitle('short title')).toBe('short title')
+  const jp = 'データベースの接続をもっと速くして、ログに残すようにする'
+  const emoji = '🚀 launch 🎉 party 👨‍👩‍👧 family 🐛 bug fix 🔥🔥🔥🔥🔥🔥🔥🔥'
+  for (const t of [jp, emoji]) {
+    const c = cutTitle(t)
+    expect(textWidth(c)).toBeLessThanOrEqual(35)
+    expect(c.endsWith('…')).toBe(true)
+    expect(t.startsWith(c.slice(0, -1))).toBe(true)
+    expect(c).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]|\u200D…/)
+  }
+  const tasks = [task('T-1', { title: jp }, [[30, 8000]]), task('T-2', { title: emoji }, [[20, 4000]]), task('T-3', {}, [[10, 1000]])]
+  const text = statsReport({ tasks, nowMs: NOW })
+  expect(text).not.toContain('\uFFFD')
+  const rows = text.split('\n').filter(l => /^ {2}T-[123] /.test(l))
+  expect(rows.length).toBe(6)
+  for (const l of text.split('\n')) expect(textWidth(l)).toBeLessThanOrEqual(80)
+  // the bars start at the same screen column in every row
+  for (const l of rows) expect(textWidth(l.slice(0, l.indexOf('▇')))).toBe(2 + 6 + 1 + 35 + 1)
 })
