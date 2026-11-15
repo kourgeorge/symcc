@@ -214,7 +214,7 @@ export const viewKeys = (enter = true): KeyHint[] => [
   { key: 'c', word: 'settings' },
 ]
 
-/** The keys at the bottom of a task's page, the ones that matter most for its state first; "↑↓ scroll" and
+/** The keys at the bottom of a task's page, the ones that matter most for its state first; "y copy", "↑↓ scroll" and
  *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
  *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answer`: the keys of a
  *  waiting task's answer buttons (answerKeys); they then take the number keys instead of the reports. */
@@ -231,7 +231,7 @@ export function taskKeys(status: SymccStatus, worker = false, reports: readonly 
   if (answering) keys.push(...answer)
   const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
-  return [...keys, k('↑↓', 'scroll'), k('b', 'back')]
+  return [...keys, k('y', 'copy'), k('↑↓', 'scroll'), k('b', 'back')]
 }
 
 /** The answer buttons of a waiting task, keyed 1, 2, 3...: Allow / Don't allow / Answer… for a file
