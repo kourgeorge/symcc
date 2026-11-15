@@ -430,6 +430,13 @@ def scene_what(c, t, dur, q):
     # the arrows pull the logo word in: keep the word "symcc" on screen
     c.group(1 - intro, lambda cc: cc.text(W - 70, 112, "one lead · one board · many workers",
                                          font(17), MUTED, "ra"))
+    # focused context per worker, and the lead as project manager
+    c.group(ramp(t, q.s(6), 0.5), lambda cc: cc.text(
+        W / 2, 660, "each worker gets only what it needs: what, why, which files, how to check",
+        font(18), WORKER, "mm"))
+    c.group(ramp(t, q.s(9), 0.5), lambda cc: cc.text(
+        W / 2, 230, "the lead keeps the plan: priorities, order, updates, retries",
+        font(18, bold=True), ACCENT, "mm"))
 
 
 def scene_board(c, t, dur, q):
@@ -490,6 +497,15 @@ def scene_board(c, t, dur, q):
                 font(16, mono=True), TERM_TEXT, "lm")
 
     c.group(window(t, q.s(7), dur + 1), bubble)
+
+    def trace(cc):
+        cc.rect(240, 636, 1040, 700, r=12, fill=CARD_DARK, outline=ACCENT, width=1.5)
+        cc.text(262, 656, "T-3 search index", font(16, bold=True), TEXT, "lm")
+        cc.text(262, 682, "from: owner, \"add a search command...\"", font(15), MUTED, "lm")
+        cc.text(1018, 656, "2 tries · worker report", font(15), MUTED, "rm")
+        cc.text(1018, 682, "time and tokens in all", font(15), MUTED, "rm")
+
+    c.group(ramp(t, q.s(11), 0.5), trace)
 
 
 def scene_workers(c, t, dur, q):
@@ -724,7 +740,7 @@ def scene_scouts(c, t, dur, q):
 
     c.group(ramp(t, q.s(5) - 0.2, 0.5), mini)
     c.group(ramp(t, q.at(6, 0.3), 0.6), lambda cc: cc.text(
-        W - 70, 112, "keeps moving while you step away", font(19), MUTED, "ra"))
+        W - 70, 112, "autonomous: keeps working while you are away", font(19), MUTED, "ra"))
 
 
 def scene_request(c, t, dur, q):
@@ -737,7 +753,7 @@ def scene_request(c, t, dur, q):
              (q.s(2), "lead", "Making 3 tasks: T-1, T-2, T-3.", MUTED),
              (q.s(6), "lead", "Starting T-1 and T-3. T-2 waits for T-1.", MUTED),
              (q.s(8), "lead", "T-1 is ready for review.", REVIEW),
-             (s_app, "you", typed(t, s_app, q.e(9), "approve T-1"), TERM_TEXT),
+             (s_app, "lead", "You approved T-1 on the board.", MUTED),
              (q.at(10, 0.2), "lead", "T-1 merged. Starting T-2.", DONE)]
     chat_lines(c, t, x0 + 18, y0 + 52, x1 - 10, lines)
     bx0, by0, bx1, by1 = 480, 160, 1230, 610
@@ -768,17 +784,24 @@ def scene_request(c, t, dur, q):
 
     def diff(cc):
         dx0, dy0 = 560, 300
-        cc.rect(dx0, dy0, dx0 + 600, dy0 + 220, r=12, fill=CARD_DARK, outline=REVIEW, width=2)
+        cc.rect(dx0, dy0, dx0 + 600, dy0 + 230, r=12, fill=CARD_DARK, outline=REVIEW, width=2)
         cc.text(dx0 + 20, dy0 + 28, "T-1 search index: changes", font(17, bold=True), REVIEW, "lm")
         fm = font(15, mono=True)
         diff_lines = [("+ def build_index(files):", DONE), ("+     words = read_words(files)", DONE),
                       ("+     return Index(words)", DONE), ("  tests: 12 passed", MUTED)]
         for k, (ln, col) in enumerate(diff_lines):
             cc.text(dx0 + 20, dy0 + 72 + k * 34, ln, fm, col, "lm")
+        ap = t > s_app
+        cc.rect(dx0 + 20, dy0 + 172, dx0 + 190, dy0 + 208, r=18, fill=mix(CARD_DARK, DONE, 0.4 if ap else 0.12),
+                outline=DONE, width=2.5 if ap else 1.5)
+        cc.text(dx0 + 105, dy0 + 190, "approve", font(17, bold=True), DONE, "mm")
+        cc.rect(dx0 + 210, dy0 + 172, dx0 + 380, dy0 + 208, r=18, fill=mix(CARD_DARK, RED, 0.1),
+                outline=RED, width=1.5)
+        cc.text(dx0 + 295, dy0 + 190, "reject", font(17, bold=True), RED, "mm")
 
     c.group(window(t, q.s(9) + 0.1, merge, fade=0.4), diff)
     c.group(ramp(t, q.s(11), 0.5), lambda cc: cc.text(
-        bx1, 112, "no commands, just talking", font(20, bold=True), ACCENT, "ra"))
+        bx1, 112, "talk to the lead, approve on the board", font(20, bold=True), ACCENT, "ra"))
 
 
 def scene_get(c, t, dur, q):
@@ -821,6 +844,9 @@ def scene_get(c, t, dur, q):
             W / 2, 470, "github.com/kourgeorge/symcc", font(24, medium=True), TEXT, "mm"))
 
     c.group(ramp(t, last + 0.3, 0.6), end)
+    c.group(ramp(t, q.s(6), 0.6), lambda cc: cc.text(
+        W / 2, 540, "Autonomous coding that keeps working while you are away",
+        font(24), MUTED, "mm"))
 
 
 SCENE_FNS = [scene_problem, scene_what, scene_board, scene_workers, scene_scouts,
