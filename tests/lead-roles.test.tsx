@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { parseRole, roleChoices, rolesLeadText, checkRole } from '../hooks/board'
-import { S } from '../hooks/plugin/state'
+import { S, leadQueue, skippedRoles } from '../hooks/plugin/state'
 import { leadGuide, manual, runTool } from '../hooks/plugin/tools'
 
 const ROOT = '/proj'
@@ -60,6 +60,8 @@ function setup(mine: Record<string, string> = {}) {
       },
     },
     ui: { invalidate: () => undefined, toast: () => undefined, log: () => undefined, status: () => undefined },
+    // A skipped role file tells the lead (through a timer); nothing is sent here.
+    clock: { after: () => undefined },
   }
   S.root = ROOT
   S.roles = []
@@ -108,6 +110,25 @@ test('roles edit changes what it is given and keeps the rest; editing a built-in
   expect(parseRole('tester', mine['tester.md']!)).toMatchObject({ description: 'writes tests', model: 'sonnet', prompt: '- cover errors\n- no sleeps' })
   expect(await call($, {})).toContain('- tester (replaced): writes tests')
   expect(await call($, { action: 'edit', name: 'nope', description: 'x' })).toContain('no role named nope')
+})
+
+test('a broken role file of the owner is never written over by edit, off or on; reset still deletes it', async () => {
+  const broken = '---\nmodel: sonnet\n---\n- my own careful checklist\n- keep this\n'
+  const { $, mine, touched } = setup({ 'tester.md': broken })
+  for (const args of [{ action: 'edit', name: 'tester', checklist: '- other' }, { action: 'off', name: 'tester' }, { action: 'on', name: 'Tester' }]) {
+    const out = await call($, args)
+    expect(out).toContain(".symcc/roles/tester.md can't be read as a role: no description")
+    expect(out).toContain('Fix the file, or use reset to go back to the built-in.')
+    expect(out).not.toContain('copied the built-in')
+    expect(mine['tester.md']).toBe(broken)
+  }
+  expect(touched).toEqual([])
+  const reset = await call($, { action: 'reset', name: 'tester' })
+  expect(reset).toContain('tester is the built-in role again')
+  expect(reset).toContain('is deleted')
+  expect(mine['tester.md']).toBeUndefined()
+  leadQueue.splice(0)
+  skippedRoles.clear()
 })
 
 test('roles reset brings the built-in back; an added role says to use remove, which deletes it', async () => {
