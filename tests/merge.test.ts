@@ -2115,3 +2115,83 @@ test('a normal checking and merging step is untouched by the limit: merged, done
   for (let i = 0; i < 200; i++) await Promise.resolve()
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })
+
+// ---------------- an approve that never ends, and a given-up step still waiting for its merge turn (T-222) ----------------
+
+test('a stuck approve is given up after the limit: it stays in review with a note, the lead is told once, approving again merges; its late end changes nothing', async () => {
+  // main moved since review, so the approve runs the tests again; the first test command hangs until free()
+  const w = await inReview({ upToDate: false })
+  let free = () => {}
+  const gate = new Promise<void>(r => (free = r))
+  let hung = false
+  w.onRun(async cmd => {
+    if (hung || !/^\/bin\/sh -c /.test(cmd)) return
+    hung = true
+    await gate
+  })
+  const limits: (() => void)[] = []
+  ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
+    if (ms === FINISH_LIMIT_MS) limits.push(f)
+    return { cancel() {} }
+  }
+  let out: string | undefined
+  void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
+  await turns(w, () => hung)
+  expect(find(await load(w.$), 'T-1')!.note).toBe('approved; checking and merging')
+  expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe('T-1 is already being merged')
+  expect(limits.length).toBe(1)
+  limits[0]!()
+  await turns(w, () => out !== undefined)
+  expect(out).toBe('T-1 was not merged and stays in review: its checking and merging ran over 15 minutes and was given up. Approve it again.')
+  let t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.note).toBe('approved, but the merge ran over 15 min and was given up; approve it again')
+  expect(t.history.at(-1)).toBe('try 1: approved by the owner → its checking and merging ran over 15 min and was given up; nothing written, it stays in review')
+  expect(leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes')).length).toBe(1)
+  expect(w.git.main).toBe(M1)
+  // approving again works, and its merge into main goes on while the old one still hangs
+  const again = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(again).toBe(`T-1 approved and merged: merged into main (${H2.slice(0, 8)}); approved by the owner`)
+  expect(w.git.main).toBe(H2)
+  t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  // the old approve wakes up late, its tests passing: it merges nothing and writes nothing
+  const before = JSON.stringify(t)
+  const queued = leadQueue.length
+  const moves = w.calls.filter(c => c.includes('git update-ref')).length
+  free()
+  for (let i = 0; i < 5000; i++) await Promise.resolve()
+  await turns(w, () => true)
+  expect(JSON.stringify(find(await load(w.$), 'T-1')!)).toBe(before)
+  expect(w.calls.filter(c => c.includes('git update-ref')).length).toBe(moves)
+  expect(leadQueue.length).toBe(queued)
+})
+
+test('a finish step given up while it waits for its merge turn runs no git command and no test in its folder when its turn comes', async () => {
+  S.me = 'me'
+  const { w, limit } = stuckFinish()
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  // an earlier merge into main holds the turn until let go
+  let letGo = () => {}
+  const earlier = mergeTurn('main', () => new Promise<void>(r => (letGo = r)))
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  await turns(w, () => w.calls.some(c => c.includes('git diff --name-only')))
+  for (let i = 0; i < 200; i++) await Promise.resolve()
+  // queued behind the earlier merge: no test has run
+  expect(w.calls.some(c => c.startsWith('/bin/sh'))).toBe(false)
+  limit.fire!()
+  await turns(w, () => ended)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+  const seen = w.calls.length
+  letGo()
+  await earlier
+  for (let i = 0; i < 5000; i++) await Promise.resolve()
+  const late = w.calls.slice(seen)
+  expect(late.filter(c => c.startsWith('wt:') || c.startsWith('/bin/sh'))).toEqual([])
+  expect(late.some(c => c.includes('git update-ref'))).toBe(false)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+})

@@ -178,8 +178,12 @@ export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Pro
 
 /** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
 async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve', made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[]): Promise<{ result: CheckResult; raced?: boolean }> {
-  const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const res = (result: CheckResult) => ({ result })
+  // First, before touching the folder: a step stopped or given up while it waited for its merge
+  // turn does nothing, as the next try may already be using the folder.
+  const early = stopped()
+  if (early) return res(early)
+  const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
   let candidate = tip
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {

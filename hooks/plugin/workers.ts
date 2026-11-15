@@ -547,6 +547,43 @@ export async function approve($: $, id: string): Promise<string> {
   if (!(await gitReady($, b))) return `${t.id} stays in review: ${gitNote(S.gitState)}`
   if (await waitIfBranchGone($, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
+  // The same time limit as a finished worker's check (FINISH_LIMIT_MS): past it the approve is
+  // given up (approveRanOver), so it no longer holds the task, its id or the branch's merge turn.
+  // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
+  let gaveUp = false
+  let letGo = () => {}
+  const over = new Promise<'over'>(r => (letGo = () => r('over')))
+  const limit = afterMs($, FINISH_LIMIT_MS, () => ((gaveUp = true), letGo()))
+  const step = approveWork($, t, b, () => gaveUp, over)
+  const how = limit ? await Promise.race([step, over]) : await step
+  limit?.cancel()
+  if (how !== 'over') return how
+  step.catch(() => undefined)
+  approving.delete(t.id)
+  await endCheck($, t.id)
+  const out = await approveRanOver($, t.id)
+  void pump($)
+  return out
+}
+
+/**
+ * The owner's approve of task `id` ran over FINISH_LIMIT_MS and was given up: while it is still in
+ * review it stays there, with a note and a history line saying so; the lead is told once.
+ */
+async function approveRanOver($: $, id: string): Promise<string> {
+  const min = Math.round(FINISH_LIMIT_MS / 60_000)
+  const t = await change($, x => {
+    const cur = find(x, id)
+    if (cur?.status !== 'review') return [x, null] as [Board, null]
+    const y = patchTask(x, id, { note: `approved, but the merge ran over ${min} min and was given up; approve it again`, history: [...cur.history, `${tryLabel(cur)}: approved by the owner → its checking and merging ran over ${min} min and was given up; nothing written, it stays in review`] }, now())
+    return [y, cur] as [Board, BoardTask]
+  }).catch(() => null)
+  if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
+  return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
+}
+
+/** The body of approve, once the task is marked as being approved. `gaveUp`, `release`: as for finishWork. */
+async function approveWork($: $, t: SymccTask, b: Board, gaveUp: () => boolean, release: Promise<unknown>): Promise<string> {
   try {
     const dir = worktreeDir(t.id)
     if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, intoOf(t))
@@ -554,13 +591,17 @@ export async function approve($: $, id: string): Promise<string> {
     // earlier approve, kept as test_output): those are committed with the task and always tested.
     const edits = await ownerEdits($, t, dir).catch(() => [] as string[])
     const retest = edits.length > 0 || t.test_output !== undefined
+    if (gaveUp()) return ''
     await change($, x => {
       const cur = find(x, t.id)
-      if (cur?.status !== 'review') return x
+      if (cur?.status !== 'review' || gaveUp()) return x
       return patchTask(x, t.id, { note: 'approved; checking and merging', ...(edits.length ? { history: [...cur.history, ownerEditedLine(edits)] } : {}) }, now())
     })
     const made: string[] = []
-    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, () => stopAsked.get(t.id), retest).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
+    const r: CheckResult = await checkAndMerge($, t, dir, b, 'approve', made, stop, retest, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    // Given up meanwhile: approveRanOver already wrote its note; this late outcome is not written over it.
+    if (gaveUp()) return ''
     await recordCommits($, t.id, made, r.merged)
     const cur = find(await load($), t.id)
     if (r.merged) {
@@ -610,9 +651,12 @@ export async function approve($: $, id: string): Promise<string> {
     await settle($, cur, b, r, 'approved by the owner', dir)
     return r.ok ? `${t.id} approved and merged: ${r.detail}` : `${t.id} approved, but not merged: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
   } finally {
-    approving.delete(t.id)
-    await endCheck($, t.id)
-    void pump($) // after the check: a task sent back to "todo" (or resumed meanwhile) starts again
+    // Given up: approve already let go of the id (a new approve may hold it now) and ended the check.
+    if (!gaveUp()) {
+      approving.delete(t.id)
+      await endCheck($, t.id)
+      void pump($) // after the check: a task sent back to "todo" (or resumed meanwhile) starts again
+    }
   }
 }
 
