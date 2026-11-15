@@ -320,12 +320,33 @@ test('two workers finishing at the same moment: both checks really overlap, and 
   expect(t1.history.at(-1)).toMatch(/^try 1: changed a → /)
   expect(t2.history.at(-1)).toMatch(/^try 1: changed b → merged into main/)
   expect(t1.runs?.at(-1)?.ended).toBeDefined()
-  expect(t2.merged).toBe(w.git.state.main)
+  // T-2 moved main first; T-1 lost that race, brought T-2's work in and merged on top of it by itself
+  expect(w.git.onMain().some(m => /^T-1: bring up to date/.test(m))).toBe(true)
+  expect(t1.merged).toBe(w.git.state.main)
+  expect(t2.merged).toBeDefined()
   expect(w.board().next_id).toBe(nextId)
-  // KNOWN BUG (T-177): the check that loses the race to move main is marked "failed" ("main moved during the merge;
-  // try again") instead of being merged too. Once fixed, this should be:
-  //   expect([t1.status, t2.status]).toEqual(['done', 'done'])
-  //   expect(subjects(w)).toEqual([expect.stringMatching(/^T-1: Change 1/), expect.stringMatching(/^T-2: Change 2/)])
+  expect([t1.status, t2.status]).toEqual(['done', 'done'])
+  expect(subjects(w)).toEqual([expect.stringMatching(/^T-1: Change 1/), expect.stringMatching(/^T-2: Change 2/)])
+})
+
+test("an approve and a worker's merge at the same moment both land on main", async ($, on) => {
+  // T-1 waits in review (the owner approves it), T-2 is a worker finishing; T-1's commit waits until T-2's has run
+  const w = world(on, { work: { 'T-1': ['src/a.ts'], 'T-2': ['docs/b.md'] }, agents: [{ id: 'a2', type: 'symcc:worker' }], holdCommitOf: 'T-1' })
+  const b = doingBoard('auto', [{ agent: 'a1', files: ['src/'] }, { agent: 'a2', files: ['docs/'] }])
+  w.files.set(BOARD, JSON.stringify(patchTask(b, 'T-1', { status: 'review', note: 'ready for review', agent: undefined, runs: [{ started: ISO, ended: ISO }] } as never, ISO)))
+  w.files.set('/.symcc/worktrees/T-1/.git', 'gitdir: x')
+  await $.session.start({ cwd: ROOT } as never)
+  expect(w.task('T-1').status).toBe('review')
+  const approved = $.tool.call({ tool: 'mcp__symcc__approve', task: 'T-1' } as never)
+  const finished = finish($, 'a2', 'changed b')
+  await w.clock.settle()
+  w.release()
+  const [out] = await Promise.all([approved, finished])
+  await w.clock.settle()
+  expect(w.git.steps.slice(0, 2)).toEqual(['commit T-2', 'commit T-1'])
+  expect(String((out as { result?: string })?.result ?? out)).toMatch(/^T-1 approved and merged: merged into main/)
+  expect([w.task('T-1').status, w.task('T-2').status]).toEqual(['done', 'done'])
+  expect(subjects(w)).toEqual([expect.stringMatching(/^T-1: Change 1/), expect.stringMatching(/^T-2: Change 2/)])
 })
 
 // ---------------- a scout's report ----------------

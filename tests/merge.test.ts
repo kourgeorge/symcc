@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage } from '../hooks/board'
-import { checkAndMerge, changedFiles, changesText } from '../hooks/plugin/review'
+import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
@@ -384,18 +384,81 @@ test('checkAndMerge on a conflict with main aborts the merge and says it conflic
   expect(w.git.main).toBe(M1)
 })
 
-test('checkAndMerge when main moved during the merge leaves main where the other change put it', async () => {
+test('checkAndMerge when main moved during the merge brings it in, tests again and merges by itself', async () => {
+  let raced = false
   const w = world({
-    // another merge lands on main just before ours tries to move it
+    // another merge lands on main just before ours first tries to move it
     answer: a => {
-      if (a[0] === 'update-ref') w.git.main = M2
+      if (a[0] === 'update-ref' && !raced) {
+        raced = true
+        w.git.main = M2
+        w.git.upToDate = false
+      }
+      return undefined
+    },
+  })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made: string[] = []
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
+  expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
+  expect(made).toEqual([H1, H2])
+  // the other change was brought in (M2), then the tests ran again on top of it
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M2}`))).toBe(true)
+  expect(ranTests(w).length).toBe(2)
+  expect(w.git.main).toBe(H2)
+})
+
+test('checkAndMerge when main keeps moving during every merge gives up after a few tries and says so', async () => {
+  let n = 0
+  const w = world({
+    // main moves again just before each of our moves
+    answer: a => {
+      if (a[0] === 'update-ref') {
+        w.git.main = `d${++n}`.padEnd(40, '0')
+        w.git.upToDate = false
+      }
       return undefined
     },
   })
   const [b, t] = boardWith('auto')
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r).toEqual({ ok: false, detail: 'main moved during the merge; try again' })
+  expect(n).toBe(MAX_MERGE_RACES)
+  expect(w.git.main).toBe(`d${n}`.padEnd(40, '0'))
+})
+
+test('checkAndMerge that loses the race and then conflicts with the new main still fails as a conflict', async () => {
+  const w = world({
+    answer: a => {
+      if (a[0] === 'update-ref' && !w.git.conflict) {
+        w.git.main = M2
+        w.git.upToDate = false
+        w.git.conflict = true
+      }
+      return undefined
+    },
+  })
+  const [b, t] = boardWith('auto')
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, conflict: true, detail: 'conflicts with the latest main' })
   expect(w.git.main).toBe(M2)
+})
+
+test('mergeTurn runs merges into the same branch one after another, even when one fails; other branches do not wait', async () => {
+  const log: string[] = []
+  let open: () => void = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const a = mergeTurn('main', async () => (log.push('a start'), await gate, log.push('a end'), 'a'))
+  const b = mergeTurn('main', async () => (log.push('b'), Promise.reject(new Error('b broke'))))
+  const c = mergeTurn('main', async () => (log.push('c'), 'c'))
+  const d = mergeTurn('dev', async () => (log.push('d'), 'd'))
+  expect(await d).toBe('d')
+  expect(log).toEqual(['a start', 'd'])
+  open()
+  expect(await a).toBe('a')
+  await expect(b).rejects.toThrow('b broke')
+  expect(await c).toBe('c')
+  expect(log).toEqual(['a start', 'd', 'a end', 'b', 'c'])
 })
 
 test('checkAndMerge waits when the owner has main checked out with uncommitted changes', async () => {
