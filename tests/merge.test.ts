@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, FINISH_LIMIT_MS } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -1982,4 +1982,136 @@ test("a late report from a worker this copy lost in a reload is still taken when
   expect(workers.get('ag9')?.task).toBe('T-1')
   workers.delete('ag9')
   expect(await lateHandBack(w.$, 'someone-else')).toBe(false)
+})
+
+// ---------------- a checking and merging step that never ends (T-219) ----------------
+
+/**
+ * A world where T-1's worker has just finished and its first test command hangs until `free()`
+ * is called. The FINISH_LIMIT_MS timer is caught (`limit`), never fired by itself; other timers never fire.
+ */
+function stuckFinish(g: Partial<Git> = {}) {
+  const w = world(g)
+  let free = () => {}
+  const gate = new Promise<void>(r => (free = r))
+  let hung = false
+  w.onRun(async cmd => {
+    if (hung || !/^\/bin\/sh -c /.test(cmd)) return
+    hung = true
+    await gate
+  })
+  const limit: { fire?: () => void; ms?: number; cancelled: boolean } = { cancelled: false }
+  ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
+    if (ms !== FINISH_LIMIT_MS) return { cancel() {} }
+    limit.fire = f
+    limit.ms = ms
+    return { cancel: () => void (limit.cancelled = true) }
+  }
+  return { w, free, limit, hungNow: () => hung }
+}
+
+/** Promise turns only (no clock), until `done()` and the board lock is free. */
+async function turns(w: ReturnType<typeof world>, done: () => boolean) {
+  for (let i = 0; i < 20000 && !(done() && !w.files.has(LOCK)); i++) await Promise.resolve()
+  expect(done()).toBe(true)
+}
+
+test('a checking and merging step that never ends is sent back to todo after the limit; the lead is told once; its late end writes nothing', async () => {
+  S.me = 'me'
+  const { w, free, limit, hungNow } = stuckFinish()
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  await turns(w, hungNow)
+  // still within the limit: it stays "doing", being checked
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  expect(finishingSet.has('T-1')).toBe(true)
+  expect(ended).toBe(false)
+  expect(limit.ms).toBe(FINISH_LIMIT_MS)
+  expect(FINISH_LIMIT_MS).toBeGreaterThan(600_000)
+  limit.fire!()
+  await turns(w, () => ended)
+  let t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.finishing).toBeUndefined()
+  expect(t.session).toBeUndefined()
+  expect(t.history.at(-1)).toBe('try 1: restarted: its checking and merging ran over 15 min and was stopped')
+  expect(t.runs!.at(-1)!.ended_by).toBe('restarted')
+  expect(finishingSet.has('T-1')).toBe(false)
+  const told = leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes'))
+  expect(told.length).toBe(1)
+  expect(told[0]).toContain('sent it back to todo for a fresh try')
+  // its folder is kept
+  expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
+  // the old step wakes up late, its tests passing: it merges nothing and writes nothing over the task
+  const before = JSON.stringify(t)
+  const queued = leadQueue.length
+  free()
+  for (let i = 0; i < 5000; i++) await Promise.resolve()
+  await turns(w, () => true)
+  t = find(await load(w.$), 'T-1')!
+  expect(JSON.stringify(t)).toBe(before)
+  expect(w.calls.some(c => / git update-ref .*refs\/heads\/main/.test(c))).toBe(false)
+  expect(leadQueue.length).toBe(queued)
+})
+
+test('a step given up after the limit whose work already reached main is done, not sent back', async () => {
+  S.me = 'me'
+  const { w, free, limit, hungNow } = stuckFinish({ answer: (args) => {
+    if (args.join(' ') === 'rev-parse -q --verify refs/heads/symcc/T-1') return ok(H1)
+    if (args[0] === 'log' && args.at(-1) === H1) return ok(t1Commit(1))
+    if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return ok()
+    return undefined
+  } })
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  await turns(w, hungNow)
+  limit.fire!()
+  await turns(w, () => ended)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  expect(leadQueue.filter(x => x.includes('T-1') && x.includes('already merged')).length).toBe(1)
+  free()
+  for (let i = 0; i < 5000; i++) await Promise.resolve()
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+})
+
+test('a stuck merge step given up lets the next merge into the same branch go on', async () => {
+  let release = () => {}
+  const gone = new Promise<void>(r => (release = r))
+  const order: string[] = []
+  void mergeTurn('main', () => new Promise<void>(() => {}), gone)
+  const next = mergeTurn('main', async () => void order.push('next'))
+  for (let i = 0; i < 50; i++) await Promise.resolve()
+  expect(order).toEqual([])
+  release()
+  await next
+  expect(order).toEqual(['next'])
+})
+
+test('a normal checking and merging step is untouched by the limit: merged, done, and the limit timer cancelled', async () => {
+  S.me = 'me'
+  const { w, free, limit } = stuckFinish()
+  free()
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change', false)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(limit.cancelled).toBe(true)
+  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+  // the timer firing after the end changes nothing
+  limit.fire!()
+  for (let i = 0; i < 200; i++) await Promise.resolve()
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })

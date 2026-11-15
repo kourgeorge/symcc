@@ -73,6 +73,12 @@ export function ownedHere(t: BoardTask, me: string, live: string | null): boolea
 export const FINISH_BEAT_MS = 30_000
 /** a finishing mark older than this was left by a copy of the plugin that is gone */
 export const FINISH_STALE_MS = 3 * 60_000
+/**
+ * The longest a finished task's checking and merging may take in a live copy of the plugin (the
+ * 10-minute test run plus some minutes for git and the board). A step still running then is taken
+ * as stuck: its task goes back to "todo" (or is done, when its work already reached its branch).
+ */
+export const FINISH_LIMIT_MS = 15 * 60_000
 
 /** Whether task `t`'s work is being tested and merged right now by some copy of the plugin (its mark is fresh). */
 export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: number, staleMs = FINISH_STALE_MS): boolean {

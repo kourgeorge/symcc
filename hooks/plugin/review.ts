@@ -91,8 +91,9 @@ export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; tes
  * was dropped or paused meanwhile), nothing is merged and that reason is returned.
  * Merges into the same branch take turns (mergeTurn); when the branch still moved before ours
  * could move it, the task is brought up to date, tested and merged again by itself (MAX_MERGE_RACES at most).
+ * `release`: settles when the caller gave this check up as stuck, so later merges into the branch stop waiting for it.
  */
-export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false): Promise<CheckResult> {
+export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: 'finish' | 'approve' = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -124,7 +125,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
   // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
   for (let n = 1; ; n++) {
-    const r = await mergeTurn(target, () => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed))
+    const r = await mergeTurn(target, () => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return r.result
   }
 }
@@ -164,11 +165,12 @@ export const MAX_MERGE_RACES = 5
 /** The merge running now (or last) into each branch: the next one into that branch waits for it. */
 const mergeTurns = new Map<string, Promise<unknown>>()
 
-/** Runs `fn` once every earlier merge into branch `target` (through this function) has ended, whether it worked or not. */
-export function mergeTurn<T>(target: string, fn: () => Promise<T>): Promise<T> {
+/** Runs `fn` once every earlier merge into branch `target` (through this function) has ended, whether it worked or not, or was let go (`release`). */
+export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Promise<unknown>): Promise<T> {
   const prev = mergeTurns.get(target) ?? Promise.resolve()
   const mine = prev.then(fn, fn)
-  const tail = mine.catch(() => undefined)
+  // `release`: once it settles, the next merge no longer waits for this one (a step given up as stuck).
+  const tail = (release ? Promise.race([mine, release]) : mine).catch(() => undefined)
   mergeTurns.set(target, tail)
   void tail.then(() => { if (mergeTurns.get(target) === tail) mergeTurns.delete(target) })
   return mine
