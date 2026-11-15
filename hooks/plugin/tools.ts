@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
+import { allowFiles, refuseFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
@@ -98,9 +98,11 @@ export const MANUAL = (): Record<string, string> => ({
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
                        (several test commands: join them with " && "; "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-stats [7d|T-1..T-9]  time and token stats: the whole team (lead, workers, scouts), totals,
-                       averages per task and per try, outcomes, by role, origin and day (all tasks,
-                       the last N days, or an id range)
+  /${S.N.name}-stats [full] [7d|T-1..T-9]  time and token stats, with bar charts:
+                       tasks, worker time, tokens, the whole team (lead, workers, scouts),
+                       per task and per try, the biggest tasks, how tasks ended, by role,
+                       origin and day (all tasks, the last N days, or an id range);
+                       "full" adds the long explanations
   /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
@@ -305,7 +307,7 @@ export const TOOLS = () => [
     description: `List, add, edit, reset, remove, turn off or turn on the worker roles (built-in ones in the plugin's roles/ folder, the owner's own in ${S.N.dir}/roles/<name>.md). action "list" (the default): every role with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that role in full (front matter and checklist). "add": writes ${S.N.dir}/roles/<name>.md (name: letters, digits, - and _; description needed; optional model, skills, tools (only ${EXTRA_TOOLS.join(', ')}) and checklist); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in role is first copied to ${S.N.dir}/roles/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added role's file (confirm with the owner first). "off": the role is never picked and not offered on the task page (${DEFAULT_ROLE} can't be turned off; tasks that already have it keep it); "on" turns it back on. A change counts from the next worker on. Only change roles when the owner asks.`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'reset', 'remove', 'off', 'on'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The role, e.g. tester (letters, digits, - and _).' }, description: { type: 'string', description: 'For add / edit: what the role is for, in a few words (the lead reads it to choose).' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, skills: { type: 'array', items: { type: 'string' }, description: 'For add / edit: optional skills the worker should use.' }, tools: { type: 'array', items: { type: 'string' }, description: `For add / edit: optional extra tools (only ${EXTRA_TOOLS.join(', ')}); an empty list removes them.` }, checklist: { type: 'string', description: 'For add / edit: the checklist the worker follows (the file\'s body).' } } },
   },
-  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d").`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' } } } },
+  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
   {
     name: 'setup_git',
     description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
@@ -320,10 +322,12 @@ export const TOOLS = () => [
 
 /**
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
- * tasks and the archived ones. Read-only. A bad range gives the usage line.
+ * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
+ * `args` (or `full`) gives the full view with every explanation; else the summary view.
  */
-export async function statsText($: $, args: string): Promise<string> {
-  const range = parseStatsRange(args, S.N.name)
+export async function statsText($: $, args: string, full?: boolean): Promise<string> {
+  const words = parseStatsArgs(args)
+  const range = parseStatsRange(words.range, S.N.name)
   if (range.kind === 'bad') return range.message
   const b = await load($)
   const file = path(S.N.archiveFile)
@@ -334,7 +338,7 @@ export async function statsText($: $, args: string): Promise<string> {
   const team: TeamInput = { ...(await leadUsage($, range, nowMs)), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
-  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team })
+  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })
 }
 
 /**
@@ -602,7 +606,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'roles':
       return leadRoles($, a)
     case 'stats':
-      return statsText($, str(a.range) ?? '')
+      return statsText($, str(a.range) ?? '', a.short !== true)
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {

@@ -669,12 +669,20 @@ its read-only `stats` tool.
 
 - **Range:** `/symcc-stats` covers every task; `/symcc-stats 7d` the tasks changed in the last
   7 days; `/symcc-stats T-100..T-130` an id range.
+- **Summary and full:** `/symcc-stats` starts with one line (tasks done, hours of work, tokens,
+  share right on the first try), then short parts with plain bar charts (`▇`, with `▂` and `▅`
+  for a part of a block, so small numbers still show), each scaled to the biggest number in
+  that part, with the counts and percentages lined up. Every line fits in 80 columns. It keeps
+  every figure; the long explanations become short footnotes. `/symcc-stats full` (also with a
+  range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
+  are weighed, where the lead's tokens come from, and why waiting time is not shown. The lead's
+  `stats` tool gets the full text, unless it asks for the short one.
 - **Kinds of tokens:** symcc keeps four counts apart wherever it records tokens (each try,
   each scout run, the lead's calls): *input*, *output*, *cache write* (input saved to the
   prompt cache) and *cache read* (input read back from it). They cost very different amounts:
   a cache read costs about a tenth of normal input, so one plain sum makes the cost look much
   bigger than it is. The totals and the "Whole team" part show the kinds on the line under each
-  figure, plus a **billed-eq.** (billed-equivalent) figure: the kinds weighed by their usual
+  figure, plus a **billed** (billed-equivalent) figure ("292M in all, about 35M billed"): the kinds weighed by their usual
   price compared with input (input 1, cache write 1.25, cache read 0.1, output 5), i.e. how many
   plain input tokens would cost the same. It is an estimate: real prices depend on the model.
   Elsewhere (the board, the banner, a task's page, the per-task and per-day rows) one short
@@ -700,11 +708,14 @@ its read-only `stats` tool.
     Runs from before this was added are not counted.
   - *Dollars:* not shown, since symcc doesn't know the model prices. Where Claude Code
     reports one, the report adds this session's total so far, as `/cost` says.
-- **Parts:** totals (tasks by status, worker time, tokens in all, by kind and billed-equivalent); per task (average and median time
-  and tokens of done tasks, tries per task, the 5 biggest by tokens and by time); per try
-  (average time and tokens, share of tasks done on the first try); flow (time from made to
-  done); outcomes (merged on its own or approved by you, failed tries by reason: tests,
-  clash with main, scope, stopped, rejected); by role and by origin; the last 7 days with activity.
+- **Parts:** tasks by status (bars); work (worker time, tokens in all and about how many
+  billed, by kind); the whole team (bars); per done task (average and median time and
+  tokens, tries per task, share done on the first try, lead time: from made to done); per
+  try (average time and tokens); the 5 biggest tasks by tokens and by time (bars); how tasks
+  ended (merged on its own or approved by you, failed tries by reason: tests, clash with
+  main, files out of scope, stopped, rejected); by role and where tasks came from (lead,
+  you, all scouts with each scout on its own line under them, workers), each with its share,
+  average tokens and time; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
   lines have no times. The worker time is the same as the total on the board's banner.

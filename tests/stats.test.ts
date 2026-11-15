@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { addScoutRun, bar, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
@@ -29,14 +29,14 @@ test('stats: per-task averages leave out tasks with no try data, and say how man
   const tasks = [task('T-1', {}, [[10, 1000]]), task('T-2', {}, [[30, 3000]]), task('T-3', {}, [[20, 2000], [20, 2000]]), task('T-4')]
   const text = statsReport({ tasks, nowMs: NOW })
   expect(text).toContain('1 task with no try data')
-  expect(text).toContain('2. Per task (3 done tasks with data)')
+  expect(text).toContain('Per done task (3 done tasks with data)')
   // times 10m, 30m, 40m: avg 27m, median 30m; tokens 1k, 3k, 4k: avg 2.7k, median 3k
   expect(text).toMatch(/time\s+avg 27m · median 30m/)
   expect(text).toMatch(/tokens\s+avg 2\.7k · median 3k/)
   expect(text).toMatch(/tries\s+avg 1\.3 per task/)
   expect(text).toContain('67% of done tasks (2 of 3)')
   expect(text).not.toContain('Whole team')
-  expect(text).toContain('with data      3 of 4 tasks')
+  expect(text).toMatch(/with data\s+3 of 4 tasks/)
 })
 
 test('stats: archived tasks are included and said; a task on the board wins over its archived copy', () => {
@@ -61,7 +61,7 @@ test('stats: the range is days or an id range; anything else gives the usage lin
   expect(inRange(task('T-120'), { kind: 'ids', from: 100, to: 130 }, NOW)).toBe(true)
   expect(inRange(task('T-131'), { kind: 'ids', from: 100, to: 130 }, NOW)).toBe(false)
   const text = statsReport({ tasks: [task('T-1', {}, [[5, 10]]), task('T-2', {}, [[7, 10]]), task('T-3', {}, [[9, 10]])], range: { kind: 'ids', from: 2, to: 3 }, nowMs: NOW })
-  expect(text).toContain('stats: T-2..T-3 (2 tasks)')
+  expect(text).toContain('stats · T-2..T-3 (2 tasks)')
   expect(statsReport({ tasks: [old], range: { kind: 'days', days: 7 }, nowMs: NOW })).toContain('No tasks in this range.')
 })
 
@@ -90,12 +90,15 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
     task('T-2', { role: 'docs', history: ['try 1: approved by the owner → merged into main (2); approved by the owner'] }, [[5, 50]]),
   ]
   const text = statsReport({ tasks, nowMs: NOW })
-  expect(text).toContain('1 on its own · 1 approved by you')
-  expect(text).toContain('tests 1 · clash with main 0')
-  expect(text).toMatch(/owner\s+1 task · avg/)
-  expect(text).toMatch(/docs\s+1 task · avg/)
-  expect(text).toMatch(/Today\s+2 done/)
-  expect(text).toContain("time waiting for you can't be read reliably")
+  expect(text).toMatch(/merged on its own +▇+ +1 +50%/)
+  expect(text).toMatch(/approved by you +▇+ +1 +50%/)
+  expect(text).toMatch(/tests failed +▇+ +1\n/)
+  expect(text).toMatch(/clash with main +0\n/)
+  expect(text).toMatch(/♟ you +▇+ +1 +50%  avg +200 tok/)
+  expect(text).toMatch(/docs +▇+ +1 +50%  avg +50 tok/)
+  expect(text).toMatch(/Today +▇+ +2 +25m/)
+  expect(text).toContain('Time waiting for you is not shown')
+  expect(statsReport({ tasks, nowMs: NOW, full: true })).toContain("time waiting for you is not shown: history lines carry no times, so it")
 })
 
 test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
@@ -164,21 +167,23 @@ test('stats: the whole team adds up lead, workers and scouts, and gives tokens p
   const scouts = parseScoutUsage(addScoutRun(null, 'bugs', { endMs: NOW, ms: 60_000, tokens: { input: 2000 } }))
   const text = statsReport({ tasks, nowMs: NOW, team: { lead, leadSessions: 1, scouts, sessionUsd: 1.5 } })
   expect(text).toContain('Whole team (all time)')
-  expect(text).toMatch(/lead\s+94k tokens \(2 calls, from Claude Code's session logs, 1 session\)/)
-  expect(text).toMatch(/workers\s+5k tokens \(3 tries\)/)
-  expect(text).toMatch(/scouts\s+2k tokens \(1 run, 1m\)/)
-  expect(text).toMatch(/total\s+101k tokens/)
-  expect(text).toMatch(/per merged\s+50\.5k tokens in all per merged task \(2 merged\) · billed-eq\. 50\.5k/)
-  expect(text).toContain("symcc doesn't know the model prices (this session so far, as /cost says: $1.50")
+  expect(text).toMatch(/◆ lead +▇{16} +94k tokens · 2 calls · 1 session\n/)
+  expect(text).toMatch(/▸ workers +▇ +5k tokens · 3 tries/)
+  expect(text).toMatch(/⌕ scouts +▂ +2k tokens · 1 run · 1m/)
+  expect(text).toMatch(/total\s+101k in all, about 101k billed\*/)
+  expect(text).toMatch(/per merged\s+50\.5k in all, about 50\.5k billed per merged task \(2 merged\)/)
+  expect(text).toContain("symcc doesn't know the model prices (this session so")
+  expect(text).toContain('$1.50')
+  expect(statsReport({ tasks, nowMs: NOW, full: true, team: { lead, leadSessions: 1, scouts } })).toMatch(/1 session, from Claude\s+Code's session logs/)
   // the last 7 days: the lead's call 20 days ago is left out
   const week = statsReport({ tasks, range: { kind: 'days', days: 7 }, nowMs: NOW, team: { lead, scouts } })
   expect(week).toContain('Whole team (the last 7 days)')
-  expect(week).toMatch(/lead\s+4k tokens \(1 call/)
-  expect(week).toMatch(/total\s+11k tokens/)
+  expect(week).toMatch(/lead\s+▇{12}▅\s+4k tokens · 1 call/)
+  expect(week).toMatch(/total\s+11k in all/)
   // no logs: the lead is said to be left out, the rest still adds up
   const none = statsReport({ tasks, nowMs: NOW, team: { leadProblem: 'no session logs in ~/x' } })
   expect(none).toContain('not counted: no session logs in ~/x')
-  expect(none).toMatch(/total\s+5k tokens in all \(without the lead\)/)
+  expect(none).toMatch(/total\s+5k in all, about 5k billed\* \(without the lead\)/)
 })
 
 test('stats: an id range counts the lead and scouts over the time its tasks span', () => {
@@ -186,18 +191,26 @@ test('stats: an id range counts the lead and scouts over the time its tasks span
   const lead = leadCalls([logLine('old', 60 * 24 * 9.5, { i: 700 }), logLine('new', 10, { i: 9000 })].join('\n'))
   const text = statsReport({ tasks, range: { kind: 'ids', from: 1, to: 1 }, nowMs: NOW, team: { lead } })
   expect(text).toContain('Whole team (T-1..T-1; lead and scouts over the time these tasks span)')
-  expect(text).toMatch(/lead\s+700 tokens \(1 call/)
-  expect(text).toMatch(/total\s+1.7k tokens/)
+  expect(text).toMatch(/lead\s+▇+▂?\s+700 tokens · 1 call/)
+  expect(text).toMatch(/total\s+1.7k in all/)
 })
 
 test('stats: a worker try keeps its kinds apart, and the report shows them with a billed-equivalent estimate', () => {
   const t = task('T-1', { runs: [{ started: iso(60), ended: iso(50), tokens: { input: 1000, output: 2000, cache_write: 4000, cache_read: 100_000 } }] })
-  const text = statsReport({ tasks: [t], nowMs: NOW, team: { lead: leadCalls(logLine('a', 10, { i: 10, o: 20, cr: 1000, cc: 40 })) } })
-  expect(text).toMatch(/tokens\s+107k in all\n\s+input 1k · output 2k · cache write 4k · cache read 100k\n\s+billed-eq\.\s+26k \(an estimate: each kind weighed by its usual price compared with input \(input 1, cache write 1\.25, cache read 0\.1, output 5\)\)/)
-  // the whole team: each part and the total with their kinds, and the billed-equivalent of the total
-  expect(text).toMatch(/lead\s+1.1k tokens \(1 call.*\n\s+input 10 · output 20 · cache write 40 · cache read 1k/)
-  expect(text).toMatch(/workers\s+107k tokens \(1 try\)\n\s+input 1k · output 2k · cache write 4k · cache read 100k/)
-  expect(text).toMatch(/total\s+108.1k tokens in all\n\s+input 1k · output 2k · cache write 4k · cache read 101k\n\s+billed-eq\.\s+26\.3k \(an estimate/)
+  const team = { lead: leadCalls(logLine('a', 10, { i: 10, o: 20, cr: 1000, cc: 40 })) }
+  const text = statsReport({ tasks: [t], nowMs: NOW, team })
+  // the summary: tokens in plain words, the kinds on one line under, and a short footnote for billed
+  expect(text).toMatch(/tokens\s+107k in all, about 26k billed\*\n\s+input 1k · output 2k · cache write 4k · cache read 100k\n/)
+  expect(text).toContain('* billed (an estimate): input ×1, output ×5, cache write ×1.25, cache read ×0.1')
+  expect(text).not.toContain('an estimate: each kind weighed')
+  // the whole team: each part and the total with their kinds
+  expect(text).toMatch(/lead\s+▂\s+1.1k tokens · 1 call\n\s+input 10 · output 20 · cache write 40 · cache read 1k/)
+  expect(text).toMatch(/workers\s+▇{16}\s+107k tokens · 1 try\n\s+input 1k · output 2k · cache write 4k · cache read 100k/)
+  expect(text).toMatch(/total\s+108.1k in all, about 26\.3k billed\*\n\s+input 1k · output 2k · cache write 4k · cache read 101k/)
+  // the full view adds the long billed-equivalent lines
+  const fullText = statsReport({ tasks: [t], nowMs: NOW, team, full: true })
+  expect(fullText).toMatch(/billed-eq\.\s+26k \(an estimate: each kind weighed by its usual price compared\n\s+with input \(input 1, cache write 1\.25, cache read 0\.1, output 5\)\)/)
+  expect(fullText).toMatch(/billed-eq\.\s+26\.3k \(an estimate/)
 })
 
 test('stats: the billed-equivalent weighs input 1, cache write 1.25, cache read 0.1 and output 5, and leaves out unsplit tokens', () => {
@@ -218,7 +231,8 @@ test('stats: old saved runs with one number are migrated once, kept as-is and sh
   expect(r.board.archived!.tokens).toEqual({ unsplit: 300 })
   expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
   const text = statsReport({ tasks: r.board.tasks, nowMs: NOW })
-  expect(text).toMatch(/tokens\s+5k in all\n\s+input 10 · unsplit 5k\n\s+billed-eq\.\s+10 \(.*leaves out 5k unsplit tokens/)
+  expect(text).toMatch(/tokens\s+5k in all, about 10 billed\* \(leaves out 5k unsplit\)\n\s+input 10 · unsplit 5k\n/)
+  expect(statsReport({ tasks: r.board.tasks, nowMs: NOW, full: true })).toMatch(/billed-eq\.\s+10 \([^]*leaves out 5k unsplit tokens/)
   // archive.json: its tasks' tries too
   const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...old, status: 'done' }] }))
   expect(a.migrated).toBe(1)
@@ -231,4 +245,93 @@ test('stats: old saved runs with one number are migrated once, kept as-is and sh
   expect(migrateScoutUsage(moved)).toBe(null)
   expect(migrateScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } }))).toBe(null)
   expect(parseScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } })).bugs!.tokens).toEqual({ input: 1, unsplit: 900 })
+})
+
+test('stats: a bar is scaled to the biggest value, at most 16 blocks, and a small value still shows', () => {
+  expect(bar(16, 16)).toBe('▇'.repeat(16))
+  expect(bar(8, 16)).toBe('▇'.repeat(8))
+  expect(bar(1, 3)).toBe('▇▇▇▇▇▂') // 5.33 blocks
+  expect(bar(2, 3)).toBe('▇▇▇▇▇▇▇▇▇▇▅') // 10.67 blocks
+  expect(bar(1, 1000)).toBe('▂')
+  expect(bar(0, 10)).toBe('')
+  expect(bar(5, 0)).toBe('')
+  expect(bar(20, 10)).toBe('▇'.repeat(16))
+  expect(bar(3, 4, 8)).toBe('▇'.repeat(6))
+})
+
+test('stats: "full" anywhere in the words asks for the full view; the rest is the range', () => {
+  expect(parseStatsArgs('')).toEqual({ full: false, range: '' })
+  expect(parseStatsArgs('full')).toEqual({ full: true, range: '' })
+  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, range: '7d' })
+  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, range: 'T-1..T-9' })
+})
+
+test('stats: a long line is wrapped under its text, within 80 columns', () => {
+  const l = `  dollars      ${'word '.repeat(30)}`
+  const w = wrapLine(l)
+  expect(w.length).toBeGreaterThan(1)
+  for (const x of w) expect(x.length).toBeLessThanOrEqual(80)
+  expect(w[1]!.startsWith(' '.repeat(15) + 'word')).toBe(true)
+  expect(wrapLine('short')).toEqual(['short'])
+})
+
+/** Five tasks with known origins, roles, outcomes and days, for the bar charts. */
+function knownTasks(): SymccTask[] {
+  const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
+  const merged = { history: ['try 1: x → merged into main (1)'] }
+  return [
+    task('T-1', { ...merged, origin: { by: 'lead', why: '', at: '' } }, [[10, 1000]]),
+    task('T-2', { ...merged, origin: { by: 'lead', why: '', at: '' } }, [[20, 2000]]),
+    task('T-3', { ...merged, origin: { by: 'owner', why: '', at: '' }, role: 'docs' }, [[30, 4000]]),
+    task('T-4', { history: ['try 1: x → tests failed: y', 'try 2: approved by the owner → merged into main (2); approved by the owner'], ...scout('gaps-bot') }, [[40, 8000], [5, 0]]),
+    task('T-5', { status: 'todo', ...scout('test-gaps'), updated_at: iso(60 * 24 * 2) }),
+  ]
+}
+
+test('stats: the summary view shows bars with counts and percentages for a known set of tasks', () => {
+  const text = statsReport({ tasks: knownTasks(), nowMs: NOW, team: { leadProblem: 'no logs' } })
+  const lines = text.split('\n')
+  // the one-line summary
+  expect(lines[2]).toBe('4 done · 1h 45m of work · 15k tokens · 75% right first try')
+  // by status: 4 done is the biggest (16 blocks), 1 to do is a quarter (4 blocks)
+  expect(text).toContain(`  done         ${'▇'.repeat(16)}    4  80%`)
+  expect(text).toContain(`  to do        ${'▇'.repeat(4).padEnd(16)}    1  20%`)
+  // where tasks came from: lead 2, all scouts 2 (each scout on its own line), you 1
+  expect(text).toMatch(/◆ lead +▇{16} +2 +40%  avg +1\.5k tok · +15m/)
+  expect(text).toMatch(/⌕ all scouts +▇{16} +2 +40%/)
+  expect(text).toMatch(/\n {6}gaps-bot +▇{8} +1 +20%/)
+  expect(text).toMatch(/\n {6}test-gaps +▇{8} +1 +20%/)
+  expect(text).toMatch(/♟ you +▇{8} +1 +20%/)
+  // how tasks ended and failed tries
+  expect(text).toMatch(/merged on its own +▇{16} +3 +75%/)
+  expect(text).toMatch(/approved by you +▇{5}▂ +1 +25%/)
+  // the biggest tasks by tokens: T-4 biggest, T-1 an eighth
+  expect(text).toMatch(/Most tokens\n {2}T-4 +task T-4 +▇{16} +8k\n {2}T-3 +task T-3 +▇{8} +4k/)
+  expect(text).toMatch(/\n {2}T-1 +task T-1 +▇{2} +1k\n/)
+  // the days: oldest first, today last
+  expect(text).toMatch(/Today +▇{16} +4 +1h 45m · +15k tokens/)
+  for (const l of lines) expect(l.length).toBeLessThanOrEqual(80)
+})
+
+test('stats: the summary keeps every figure of the full view; full only adds the explanations', () => {
+  const lead = leadCalls([logLine('a', 10, { i: 4000, o: 10, cr: 90_000, cc: 50 })].join('\n'))
+  const scouts = parseScoutUsage(addScoutRun(null, 'gaps-bot', { endMs: NOW, ms: 60_000, tokens: { input: 2000 } }))
+  const input = { tasks: knownTasks(), nowMs: NOW, team: { lead, leadSessions: 3, scouts, sessionUsd: 2.25 } }
+  const short = statsReport(input)
+  const full = statsReport({ ...input, full: true })
+  for (const want of ['4 done', 'to do ', 'worker time  1h 45m', 'with data    4 of 5 tasks', '1 call · 3 sessions', '5 tries', '1 run · 1m', 'per merged', '$2.25',
+    'avg 26m · median 25m', 'avg 3.8k · median 3k (in all)', 'avg 1.3 per task', '75% of done tasks (3 of 4)', 'lead time    avg 1h 00m · median 1h 00m (made to done, 4 tasks)',
+    'avg 21m', 'avg 3k in all', 'Most time', 'input 4k · output 10 · cache write 50 · cache read 90k', 'Failed tries (1, from history)']) {
+    expect(short).toContain(want)
+    expect(full).toContain(want)
+  }
+  expect(full).toContain('billed-eq.')
+  expect(full).toMatch(/from Claude\s+Code's session logs/)
+  expect(short).toContain('Every detail: /symcc-stats full')
+  for (const l of [...short.split('\n'), ...full.split('\n')]) expect(l.length).toBeLessThanOrEqual(80)
+})
+
+test('stats: zero tasks shows a clear "no tasks yet" line, in both views', () => {
+  expect(statsReport({ tasks: [], nowMs: NOW })).toBe('symcc stats · all tasks (0 tasks)\n\nNo tasks yet.')
+  expect(statsReport({ tasks: [], nowMs: NOW, full: true })).toContain('No tasks yet.')
 })
