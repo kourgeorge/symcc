@@ -549,7 +549,8 @@ export async function approve($: $, id: string): Promise<string> {
     if (!r.ok && !r.conflict && r.testOutput === undefined) {
       // Not the work's fault (e.g. uncommitted changes on the target branch): it stays in review.
       await change($, x => patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}` }, now()))
-      return `${t.id} was not merged and stays in review: ${r.detail}. Fix that, then approve it again.`
+      // A blocked-by-your-files answer already says to approve again; anything else gets that advice here.
+      return `${t.id} was not merged and stays in review: ${r.detail}${/approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'}`
     }
     await settle($, cur, b, r, 'approved by the owner', dir)
     return r.ok ? `${t.id} approved and merged: ${r.detail}` : `${t.id} approved, but not merged: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`

@@ -531,10 +531,12 @@ test('approve when main moved runs the tests again; failing, nothing merges and 
 test('approve that is blocked by the owner\'s uncommitted changes keeps the task in review', async () => {
   const w = await inReview({ current: 'main', status: ' M README.md\0' })
   const out = await runTool(w.$, 'approve', { task: 'T-1' })
-  expect(out).toBe('T-1 was not merged and stays in review: you have uncommitted changes on main; commit or stash them, then say "retry T-1". Fix that, then approve it again.')
+  expect(out).toBe('T-1 was not merged and stays in review: you have uncommitted changes on main; commit or stash them, then approve T-1 again.')
+  expect(out).not.toContain('retry')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
   expect(t.note).toMatch(/^approved, but not merged: you have uncommitted changes on main/)
+  expect(t.note).not.toContain('retry')
   expect(w.git.main).toBe(M1)
 })
 
