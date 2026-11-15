@@ -113,13 +113,13 @@ async function changeRoleText($: $, a: LeadRoleInput): Promise<string | { ok: tr
     if (!b) return p || hasFile ? `${name} is your own role, not a built-in one: use action "remove" to delete it (ask the owner first)` : `no role named ${asked} (${have()})`
     if (!hasFile) return `${name} is already the built-in role`
     const err = await rm()
-    return err || await done(`${name} is the built-in role again (removed ${file})`)
+    return err || await done(`${name} is the built-in role again (your version ${file} is deleted)`)
   }
   if (action === 'remove') {
     if (b) return `${name} is a built-in role and can't be removed: use action "reset" to undo your changes, or "off" to turn it off`
     if (!hasFile) return `no role named ${asked} (${have()})`
     const err = await rm()
-    return err || await done(`removed role ${name} (${file})`)
+    return err || await done(`removed role ${name} (your file ${file} is deleted)`)
   }
   if (action === 'add') {
     if (cur || hasFile) return `a role named ${name} already exists; use action "edit" to change it`
@@ -131,8 +131,13 @@ async function changeRoleText($: $, a: LeadRoleInput): Promise<string | { ok: tr
     const err = await save({ description, ...(model ? { model } : {}), skills: listOf(a.skills) ?? [], ...(tools.length ? { tools } : {}), prompt: typeof a.checklist === 'string' ? a.checklist : '' })
     return err || await done(`added role ${name} (${file})`)
   }
-  // edit, off, on
-  if (!cur) return hasFile ? `${file} can't be read as a role (see the note about it): remove it and add it again` : `no role named ${asked} (${have()})`
+  // edit, off, on. The owner's file is there but can't be read: never write over it (not even with the built-in role).
+  if (hasFile && !p) {
+    const text = await $.fs.read(path(file)).catch(() => '')
+    const why = roleSkipReason(name, typeof text === 'string' ? text : '') ?? 'it can not be used'
+    return `${file} can't be read as a role: ${why}. Fix the file, or use ${b ? 'reset to go back to the built-in' : 'remove to delete it'}.`
+  }
+  if (!cur) return `no role named ${asked} (${have()})`
   const copied = !p && !!b ? ` (copied the built-in role to ${file} first)` : ''
   if (action === 'off' || action === 'on') {
     const off = action === 'off'
