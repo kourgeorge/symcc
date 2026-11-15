@@ -1,6 +1,6 @@
 // The board file itself: its shape, loading it safely, the lock, and finding a task.
 import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
-import { dataDir, namesFor } from '../name'
+import { dataDir } from '../name'
 import { cleanTokens } from './runs'
 import { parseStamp } from './text'
 
@@ -50,11 +50,8 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  */
 export type BoardTask = SymccTask & { session?: string; finishing?: string }
 
-/** The data folder for the default name; the paths below are for it too. For another name use namesFor(name). */
+/** The data folder for the default name. For another name use namesFor(name). */
 export const DATA_DIR = dataDir()
-export const BOARD_FILE = namesFor().boardFile
-/** held by one session while it reads, changes and writes the board */
-export const LOCK_FILE = namesFor().lockFile
 /** a lock older than this was left by a session that died, and may be taken over */
 export const LOCK_STALE_MS = 30_000
 

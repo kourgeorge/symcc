@@ -488,16 +488,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
-      const patch: Partial<SymccTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed' }
-      if (str(a.title)) patch.title = str(a.title)
-      if (str(a.details)) patch.details = str(a.details)
-      if (noted) patch.details = noted
-      if (list(a.files)) patch.files = list(a.files)
-      if (list(a.after)) patch.after = list(a.after)
-      if (typeof a.order === 'number') patch.order = a.order
-      if (typeof a.needs_review === 'boolean') patch.needs_review = a.needs_review
-      if (role) patch.role = role
-      if (into) patch.merge_into = into
+      const patch: Partial<SymccTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed', ...fields() }
       // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
       const answer = str(a.answer)?.trim()
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
@@ -553,15 +544,17 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     case 'pause': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done' || t.status === 'dropped') return `${t.id} is already ${t.status}`
+      const reason = str(a.reason)
+      const paused = `paused${reason ? `: ${reason}` : ''}`
       const checking = checkingNow(t.id)
       if (checking) {
         stopAsked.set(t.id, 'paused')
-        await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
+        await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
         return `${t.id} paused; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it is done); ${S.N.name} resume ${t.id} continues it`
       }
       const wasDoing = t.status === 'doing'
-      if (wasDoing) await stopWorker($, t.id, str(a.reason) ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`)] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', `paused${str(a.reason) ? `: ${str(a.reason)}` : ''}`) }, now()))
+      if (wasDoing) await stopWorker($, t.id, reason ?? 'the lead paused this task')
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, paused)] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }

@@ -87,7 +87,8 @@ export function scoutDraftError(d: { every: string; body: string }): string {
 
 // ---------------- the lead's scouts tool ----------------
 
-/** Why the lead's scouts tool can't use a scout name ('' when it can): lowercase letters, digits and dashes. */
+/** Why the lead's scouts tool can't add a scout with this name ('' when it can): lowercase letters, digits and
+ *  dashes. Only for add: list, run, edit and remove take any scout that is there (see safeScoutFile). */
 export function leadScoutNameError(name: string): string {
   const s = name.trim()
   if (!s) return 'give the scout a name'
@@ -347,8 +348,16 @@ export const sortScouts = <S extends SymccScout>(scouts: S[]): S[] => [...scouts
 /** A scout's file in the project: ".<plugin name>/scouts/<scout>.md". */
 export const scoutFile = (scout: string, name: string = DEFAULT_NAME) => `${namesFor(name).scouts}/${scout}.md`
 
-/** A scout name that is safe to put in a file path: letters, digits, - and _ only (no dots, slashes or spaces), 1 to 64 long. */
-export const SCOUT_FILE_NAME = /^[A-Za-z0-9_-]{1,64}$/
+/** A scout name that is safe to put in a file path: letters, digits, ., - and _ only (no slashes or spaces, and not
+ *  "." or ".."), 1 to 64 long. Any scout file the scouts folder can hold under such a name (e.g. "deps.v2.md") loads,
+ *  runs, pauses and edits the same way everywhere. */
+export const SCOUT_FILE_NAME = /^(?!\.\.?$)[A-Za-z0-9._-]{1,64}$/
+
+/** What is said when a scout name can't be a scout file's name. */
+export const SCOUT_FILE_NAME_RULE = 'use only letters, digits, ., - and _'
+
+/** What /<name>-scout and the panel's editor say when `name` can't be a scout file's name (see SCOUT_FILE_NAME). */
+export const scoutFileNameError = (name: string): string => `"${name}" is not a scout name: ${SCOUT_FILE_NAME_RULE}`
 
 /** `rel` with "." and ".." parts worked out and doubled or backward slashes made single forward ones. ".." above the start stays as "..". */
 export function resolveRel(rel: string): string {
