@@ -356,6 +356,9 @@ export const SCOUT_FILE_NAME = /^(?!\.\.?$)[A-Za-z0-9._-]{1,64}$/
 /** What is said when a scout name can't be a scout file's name. */
 export const SCOUT_FILE_NAME_RULE = 'use only letters, digits, ., - and _'
 
+/** What /<name>-scout and the panel's editor say when `name` can't be a scout file's name (see SCOUT_FILE_NAME). */
+export const scoutFileNameError = (name: string): string => `"${name}" is not a scout name: ${SCOUT_FILE_NAME_RULE}`
+
 /** `rel` with "." and ".." parts worked out and doubled or backward slashes made single forward ones. ".." above the start stays as "..". */
 export function resolveRel(rel: string): string {
   const out: string[] = []
