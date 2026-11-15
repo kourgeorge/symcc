@@ -144,7 +144,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   const s = stopped()
   if (s) return s
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
-  const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir })
+  const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok) return { ok: false, detail: moved.detail }
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.

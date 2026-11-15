@@ -2279,6 +2279,10 @@ test('a merge waits for uncommitted changes and for untracked files it would ove
   expect(blockedText('main', 'T-3', b)).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, then say "retry T-3"')
   expect(mergeBlockers(' M a.txt\0 M .symcc/x\0', ['b.txt'], '.symcc').dirty).toEqual(['a.txt'])
   expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toContain('uncommitted changes on main')
+  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] })).toBe('you have uncommitted changes on main; commit or stash them, then say "retry T-3"')
+  expect(blockedText('main', 'T-3', { dirty: ['a.txt'], untracked: [] }, 'approve')).toBe('you have uncommitted changes on main; commit or stash them, then approve T-3 again')
+  expect(blockedText('main', 'T-3', b, 'approve')).toBe('you have untracked files on main that T-3 would overwrite (new.txt, lib); move, rename or commit them, then approve T-3 again')
+  expect(blockedText('main', 'T-3', { dirty: [], untracked: [], ignored: ['x.log'] }, 'approve')).not.toContain('retry')
   expect(blockedText('main', 'T-3', mergeBlockers('?? other.txt\0', ['a.txt'], '.symcc'))).toBe('')
 })
 
@@ -2318,6 +2322,17 @@ test('a dry run that fails stops the merge before the branch moves', async () =>
   const r = await moveTarget(g.run, MOVE)
   expect(r).toEqual({ ok: false, detail: 'your files on main can\'t be updated (error: something in the way); fix that, then say "retry T-3"' })
   expect(g.calls.some(c => c[0] === 'update-ref')).toBe(false)
+})
+
+test('a merge blocked during an approve says to approve again, never "retry"', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0new.txt\0' }], status: [{ exitCode: 0, stdout: '?? new.txt\0' }] })
+  const r = await moveTarget(g.run, { ...MOVE, action: 'approve' })
+  expect(r.detail).toBe('you have untracked files on main that T-3 would overwrite (new.txt); move, rename or commit them, then approve T-3 again')
+  const dry = await moveTarget(fakeGit({ 'dry-run': [{ exitCode: 128, stderr: 'error: something in the way' }] }).run, { ...MOVE, action: 'approve' })
+  expect(dry.detail).toBe('your files on main can\'t be updated (error: something in the way); fix that, then approve T-3 again')
+  const back = await moveTarget(fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], 'read-tree': [{ exitCode: 128, stderr: 'error: boom' }] }).run, { ...MOVE, action: 'approve' })
+  expect(back.detail).toMatch(/Fix that, then approve T-3 again$/)
+  expect([r, dry, back].some(x => x.detail.includes('retry'))).toBe(false)
 })
 
 test('the normal merge moves the branch and updates the files; another branch checked out only moves the branch', async () => {

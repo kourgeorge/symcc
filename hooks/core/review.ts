@@ -202,11 +202,18 @@ const fileList = (files: readonly string[], n = 5) => {
   return f.length > n ? `${f.slice(0, n).join(', ')} and ${f.length - n} more` : f.join(', ')
 }
 
-/** Why a merge waits for the owner, or '' when nothing stops it. */
-export function blockedText(target: string, id: string, b: { dirty: readonly string[]; untracked: readonly string[]; ignored?: readonly string[] }): string {
-  if (b.dirty.length) return `you have uncommitted changes on ${target}; commit or stash them, then say "retry ${id}"`
-  if (b.untracked.length) return `you have untracked files on ${target} that ${id} would overwrite (${fileList(b.untracked)}); move, rename or commit them, then say "retry ${id}"`
-  if (b.ignored?.length) return `you have git-ignored files on ${target} that ${id} would overwrite (${fileList(b.ignored)}); move or rename them, then say "retry ${id}"`
+/** What the owner does once they fixed their files: a worker's finished work is retried, a blocked approve is approved again. */
+export type BlockedAction = 'retry' | 'approve'
+
+/** The end of a "fix your files" message: 'say "retry T-1"' or 'approve T-1 again'. */
+const thenDo = (action: BlockedAction, id: string) => action === 'approve' ? `approve ${id} again` : `say "retry ${id}"`
+
+/** Why a merge waits for the owner, or '' when nothing stops it. `action` is what they do after fixing it. */
+export function blockedText(target: string, id: string, b: { dirty: readonly string[]; untracked: readonly string[]; ignored?: readonly string[] }, action: BlockedAction = 'retry'): string {
+  const then = thenDo(action, id)
+  if (b.dirty.length) return `you have uncommitted changes on ${target}; commit or stash them, then ${then}`
+  if (b.untracked.length) return `you have untracked files on ${target} that ${id} would overwrite (${fileList(b.untracked)}); move, rename or commit them, then ${then}`
+  if (b.ignored?.length) return `you have git-ignored files on ${target} that ${id} would overwrite (${fileList(b.ignored)}); move or rename them, then ${then}`
   return ''
 }
 
@@ -223,8 +230,9 @@ const gitError = (r: { stdout: string; stderr: string }) => `${r.stderr}\n${r.st
  * the files fails after the branch moved, the branch is put back, so the owner's folder is left as it was.
  * `ok` only when the branch moved and (if checked out) the files were updated.
  */
-export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string }): Promise<{ ok: boolean; detail: string }> {
+export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string }> {
   const ref = `refs/heads/${o.target}`
+  const action = o.action ?? 'retry'
   if (o.checkedOut) {
     const diff = await run(['diff', '--name-only', '--no-renames', '-z', o.from, o.to])
     if (diff.exitCode !== 0) return { ok: false, detail: `could not list the changes to merge: ${gitError(diff)}` }
@@ -232,11 +240,11 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
     // file in it): read-tree overwrites ignored files without a word, so they must be checked here.
     const st = await run(['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
     if (st.exitCode !== 0) return { ok: false, detail: `could not check your files on ${o.target}: ${gitError(st)}` }
-    const why = blockedText(o.target, o.id, mergeBlockers(st.stdout, diff.stdout.split('\0').filter(Boolean), o.skipDir))
+    const why = blockedText(o.target, o.id, mergeBlockers(st.stdout, diff.stdout.split('\0').filter(Boolean), o.skipDir), action)
     if (why) return { ok: false, detail: why }
     // A dry run catches anything else that would stop the update, before the branch moves.
     const dry = await run(['read-tree', '-n', '-m', '-u', o.from, o.to])
-    if (dry.exitCode !== 0) return { ok: false, detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then say "retry ${o.id}"` }
+    if (dry.exitCode !== 0) return { ok: false, detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then ${thenDo(action, o.id)}` }
   }
   const cas = await run(['update-ref', '-m', o.note, ref, o.to, o.from])
   if (cas.exitCode !== 0) return { ok: false, detail: `${o.target} moved during the merge; try again` }
@@ -245,5 +253,5 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
   if (rt.exitCode === 0) return { ok: true, detail: '' }
   const back = await run(['update-ref', '-m', `${o.note} (undone)`, ref, o.from, o.to])
   const after = back.exitCode === 0 ? `${o.target} is back where it was and your files are unchanged` : `and putting ${o.target} back failed too (${gitError(back)}); run "git reset --soft ${o.from.slice(0, 12)}" on ${o.target} to undo it`
-  return { ok: false, detail: `not merged: your files on ${o.target} could not be updated (${gitError(rt)}); ${after}. Fix that, then say "retry ${o.id}"` }
+  return { ok: false, detail: `not merged: your files on ${o.target} could not be updated (${gitError(rt)}); ${after}. Fix that, then ${thenDo(action, o.id)}` }
 }
