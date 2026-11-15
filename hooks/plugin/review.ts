@@ -82,7 +82,7 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
 export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[] }
 
 /**
- * Commit the worker's changes, check scope, bring in the latest of the task's branch (intoOf), test, then move that branch forward.
+ * Commit the worker's changes, check scope (files outside the task are undone on the branch, see undoOutOfScope), bring in the latest of the task's branch (intoOf), test, then move that branch forward.
  * `mode` 'finish' (a worker just finished): when the task needs review (see needsReview), stop
  * after the tests, before merging, and return `review`. 'approve' (the owner approved a task in
  * review): the same checked merge, but the tests run again only if main had to be merged in,
@@ -119,13 +119,35 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     return { ok: false, detail: 'the worker made no change' }
   }
   const bad = outOfScope(changed, t.files, S.N.dir)
-  if (bad.length) return { ok: false, detail: outOfScopeText(bad, t.files) }
+  if (bad.length) {
+    const undo = await undoOutOfScope($, t, dir, base, bad, made)
+    return { ok: false, detail: outOfScopeText(bad, t.files) + undo }
+  }
   // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
   // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
   for (let n = 1; ; n++) {
     const r = await mergeTurn(target, () => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed))
     if (!r.raced || n >= MAX_MERGE_RACES) return r.result
   }
+}
+
+/**
+ * After a try failed the scope check: puts the files outside the task (`bad`) on the task's branch
+ * back to how they are at `base` (the merge base) and commits that, so the next try in the same
+ * folder starts clean and keeps the work inside the task's files. Returns '' when done, or a note
+ * to add to the failure when it could not be undone.
+ */
+async function undoOutOfScope($: $, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
+  const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
+  // :(literal): names are taken as they are, never as patterns.
+  for (let i = 0; i < bad.length; i += 100) {
+    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
+    if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`
+  }
+  const c = await git($, ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`, 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: undo changes outside the task` })], dir)
+  const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
+  if (c.exitCode === 0 && head && head !== before) made.push(head)
+  return ''
 }
 
 /** How many times checkAndMerge brings a task up to date and tries again when its branch moved during the merge. */

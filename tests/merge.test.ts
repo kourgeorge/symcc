@@ -362,6 +362,42 @@ test('checkAndMerge refuses a change to a file outside the task, before testing 
   expect(w.git.main).toBe(M1)
 })
 
+test('checkAndMerge undoes files outside the task on the branch, so the next try passes and keeps the work inside it', async () => {
+  // try 1 changes src/a.ts (inside) and docs/x.md (outside)
+  const w = world({ changed: ['src/a.ts', 'docs/x.md'] })
+  w.git.answer = (args, cwd) => {
+    if (args[0] !== 'restore') return undefined
+    // restoring docs/x.md from the merge base leaves only src/a.ts changed on the branch
+    if (cwd === WT && args.includes(`--source=${M1}`) && args.includes(':(literal)docs/x.md') && !args.some(a => a.includes('src/a.ts'))) {
+      w.git.changed = ['src/a.ts']
+      w.git.dirty = true
+      return ok()
+    }
+    return fail('bad restore')
+  }
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made1: string[] = []
+  const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', made1)
+  expect(r1).toEqual({ ok: false, detail: outOfScopeText(['docs/x.md'], ['src/']) })
+  expect(w.calls.some(c => c.startsWith('wt: git ') && c.includes(' commit ') && c.includes('T-1: undo changes outside the task'))).toBe(true)
+  expect(made1).toEqual([H1, H3])
+  expect(w.git.main).toBe(M1)
+  // try 2, in the same folder, changes only src/a.ts: it passes the scope check and merges, with try 1's src/a.ts work still on the branch
+  w.git.dirty = true
+  const r2 = await checkAndMerge(w.$, { ...t, attempts: 2 }, WT, b, 'finish', [])
+  expect(r2.ok).toBe(true)
+  expect(r2.detail).toContain('merged into main')
+  expect(w.git.changed).toEqual(['src/a.ts'])
+  expect(w.git.main).toBe(w.git.head)
+})
+
+test('checkAndMerge says so when it could not undo the files outside the task', async () => {
+  const w = world({ changed: ['src/a.ts', 'docs/x.md'], answer: args => (args[0] === 'restore' ? fail('restore broke') : undefined) })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: `${outOfScopeText(['docs/x.md'], ['src/'])}. Could not undo them on the task's branch: restore broke` })
+})
+
 test('checkAndMerge brings the branch up to date when main moved on, tests that, and merges it', async () => {
   const w = world({ upToDate: false })
   const [b, t] = boardWith('auto', ['npm test'])

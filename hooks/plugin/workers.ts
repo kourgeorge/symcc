@@ -25,7 +25,7 @@ Use absolute paths under that folder for every Read, Edit and Write. Never touch
 Task ${t.id}: ${t.title}
 ${t.details}
 ${roleSection(role)}
-Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; changes anywhere else are thrown away.
+Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 If you find you must change a file outside this list, do NOT change it. Stop at once and answer with just one line:
   NEED FILES: path/a, path/b — <one short reason>
 (You don't need to finish anything else first; what you already changed in your folder is kept for the next try.)` : 'whatever the task needs.'}
