@@ -1,12 +1,13 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
+import { loadPrompts, promptTemplate } from './prompts'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
@@ -17,40 +18,46 @@ import { sayDone, sayNeedsYou } from './voice'
 /** A task's history without the "created by ..." line: what earlier tries did. */
 export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith('created by '))
 
-export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => (kindOf(t) === 'investigation' ? INVESTIGATION_PROMPT(t, dir, role) : CHANGE_PROMPT(t, b, dir, role))
+/** The prompt a worker on task `t` is started with: its kind's prompt (the owner's .<name>/prompts/<kind>.md, else the built-in one; see
+ *  loadPrompts) with the placeholders filled in for this task. */
+export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => {
+  const kind = kindOf(t) === 'investigation' ? 'investigation' : 'change'
+  return fillPrompt(kind, promptTemplate(kind), kind === 'investigation' ? investigationValues(t, dir, role) : changeValues(t, b, dir, role))
+}
 
-/** How a worker asks the owner and what a refused edit means, shared by both prompts (see hooks/plugin/ask.ts). */
-const ASK_TEXT = () => `\n${ASK_LINE(S.N.tool(ASK_TOOL))}`
+/** The last tries, as the prompts list them. */
+const triesList = (t: SymccTask) => tries(t).slice(-5).map(line => `- ${line}`).join('\n')
 
-/** The prompt of an investigation's worker: find the answer and hand it back in full; nothing it changes is kept. */
-const INVESTIGATION_PROMPT = (t: BoardTask, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one investigation, then stop.
+/** The placeholders both prompts share. */
+const sharedValues = (t: SymccTask, dir: string, role?: RoleDef): Record<string, string> => ({
+  name: S.N.name,
+  task_id: t.id,
+  title: t.title,
+  details: t.details,
+  branch: taskBranch(t),
+  folder: dir,
+  role: roleSection(role),
+  // How a worker asks the owner and what a refused edit means (see hooks/plugin/ask.ts).
+  ask: ASK_LINE(S.N.tool(ASK_TOOL)),
+})
 
-This task is an investigation: your job is to find the answer and hand it back in full. Your hand-back is the result; the owner reads it. Nothing is committed, tested or merged.
-Your own copy of the project, on branch ${taskBranch(t)}, is this folder:
-  ${dir}
-Read whatever you need. You may run read-only commands and experiments, outside the project or in that folder, but any file changes you make in the project are not kept. Never touch the main project folder. Do not run git commit, push or merge.
+/** The placeholders of an investigation's prompt: find the answer and hand it back in full; nothing it changes is kept. */
+const investigationValues = (t: BoardTask, dir: string, role?: RoleDef): Record<string, string> => ({
+  ...sharedValues(t, dir, role),
+  earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\n` : '',
+  ask_more: askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : '',
+})
 
-Task ${t.id}: ${t.title}
-${t.details}
-${roleSection(role)}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\n` : ''}
-When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.${askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : ''}${ASK_TEXT()}`
-
-/** The prompt of a change's worker: change the files, which are then committed, tested and merged. */
-const CHANGE_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one task, then stop.
-
-Work ONLY inside this folder, your own copy of the project on branch ${taskBranch(t)}:
-  ${dir}
-Use absolute paths under that folder for every Read, Edit and Write. Never touch the main project folder.
-
-Task ${t.id}: ${t.title}
-${t.details}
-${roleSection(role)}
-Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
-An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}
-${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
-Do not run git commit, push or merge: ${S.N.name} commits, tests and merges your work.
-${t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
-When you are done, answer in one or two plain sentences: what you changed.${ASK_TEXT()}`
+/** The placeholders of a change's prompt: change the files, which are then committed, tested and merged. */
+const changeValues = (t: SymccTask, b: Board, dir: string, role?: RoleDef): Record<string, string> => ({
+  ...sharedValues(t, dir, role),
+  files: `Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
+An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}`,
+  test_command: b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.',
+  merge_main: t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : '',
+  test_output: t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
+  earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\nDon't repeat those mistakes.\n` : '',
+})
 
 export async function pump($: $) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
@@ -94,6 +101,8 @@ export async function startWorker($: $, id: string) {
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports($, t0!, dir).catch(() => [])
     const roles = await loadRoles($)
+    // the owner's prompt files are read again, so an edit counts from this worker on
+    await loadPrompts($).catch(() => undefined)
     const t = await change($, x => {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]

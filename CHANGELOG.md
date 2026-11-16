@@ -23,6 +23,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - An eval harness that compares plain Claude Code with symcc on scripted sessions, and research notes on how to show lower cost and better quality.
 - /symcc-stats gives a short summary with bar charts; `/symcc-stats full` shows all the numbers.
 - The lead has a `roles` tool (list, show, add, edit, reset, turn off or on), and Settings has a Roles page.
+- Editable worker prompts: the fixed text every worker gets is a file you can edit (Settings → Prompts, or the lead's `prompts` tool: list, edit, reset). Your `.symcc/prompts/change.md` or `investigation.md` is used instead of the built-in one, with placeholders like `{{files}}` and `{{test_command}}`; a missing `{{ask}}` or `{{details}}` is added back with a warning.
+- The default change prompt asks the worker to add or update a test for its change (unless it only touches docs) and to say which test covers it.
 - Press `y` on a task to copy its content to the clipboard.
 - A scout's edit page has the same sections as its view page, including "Runs every" and "Summary" boxes.
 - New projects start with the example scouts, all paused.

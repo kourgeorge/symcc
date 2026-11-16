@@ -3,7 +3,7 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout } from '../../types'
-import { type RoleDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
+import { type RoleDef, type PromptKind, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 
@@ -65,6 +65,8 @@ export const S = {
   enabledNow: true,
   /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
   roles: [] as RoleDef[],
+  /** the owner's worker prompts (.<name>/prompts/<kind>.md), read at each worker's start (see loadPrompts); a kind not here uses the built-in one */
+  prompts: {} as Partial<Record<PromptKind, string>>,
   /** the home folder, to shorten it to "~" where the project's path is shown */
   home: '',
   watchdog: null as { cancel(): void } | null,
@@ -145,6 +147,8 @@ export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_min
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
+/** the owner's prompt files already warned about (file -> what was wrong), so a warning is given once, again only when it changes */
+export const warnedPrompts = new Map<string, string>()
 /**
  * A running worker. What its try records for its hand-back (its ask_owner question, its refused edits) is kept
  * on its task on the board (try_question, try_refused), not here, so a reload doesn't lose it.

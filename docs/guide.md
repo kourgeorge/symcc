@@ -11,6 +11,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Tracing a task back](#tracing-a-task-back)
 - [Scouts](#scouts)
 - [Worker roles](#worker-roles)
+- [Worker prompts](#worker-prompts)
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
 - [Stats: time and tokens](#stats-time-and-tokens)
@@ -438,6 +439,13 @@ are about changes; under "How tasks ended" a read investigation shows as
   (`n`) asks for a name, makes `.symcc/roles/<name>.md` from a short template and opens it
   in the edit page. All of it uses the same checks as the lead's `roles` tool (see
   [Worker roles](#worker-roles)), and a toast says what changed.
+- Under Roles, the **Prompts** row says whether the worker prompts are the built-in ones or
+  yours (e.g. `change yours`). Enter on it opens the **Prompts** page: `change` and
+  `investigation`, each `built-in` or `yours` (with `⚠` when your copy has a problem). Enter
+  on one opens it in full: **File**, **Placeholders** and **Text**, with Back (`b`), Edit (`e`)
+  and Reset to built-in (`r`, only when it is yours). Edit opens the whole text in one box;
+  Save writes `.symcc/prompts/<kind>.md`, Cancel (`x`) leaves without saving. See
+  [Worker prompts](#worker-prompts).
 - Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`,
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
@@ -682,6 +690,57 @@ T-23  docs      Explain export in the user guide     (after T-20)
 T-21, T-22 and T-23 run at the same time, since they change different files. A small request stays
 one `general` task: each extra task costs a worker run, a test run and a merge.
 
+## Worker prompts
+
+Every worker starts with a fixed text, its prompt: which folder to work in, which files it may
+change, which tests must pass, the rule to add a test, how to ask you something, and what to
+hand back. There are two: `change` (for change tasks) and `investigation` (for investigations).
+You can change both.
+
+- The built-in prompts live in the plugin: `prompts/change.ts` and `prompts/investigation.ts`.
+- Your own copy goes in `.symcc/prompts/change.md` or `.symcc/prompts/investigation.md` in your
+  project. When it is there (and not empty) it is used instead of the built-in one, the same way
+  your `.symcc/roles/` files replace built-in roles.
+- The easy way: open the board panel's Settings (`c`), then the **Prompts** row. The Prompts page
+  lists both prompts (`built-in` or `yours`); Enter opens one in full, with its placeholders.
+  **Edit** opens the whole text in a box; **Save** writes your copy. **Reset to built-in**
+  deletes your copy, so the built-in prompt comes back.
+- Or ask the lead: "show me the worker prompt", "drop the test rule from the change prompt",
+  "reset the change prompt". It uses its `prompts` tool (`list`, `edit`, `reset`). `edit`
+  without a new text copies the prompt as it is now to `.symcc/prompts/<kind>.md`, so you can
+  edit the file in your own editor.
+- A change counts from the next worker on: the files are read again each time a worker starts.
+
+The default change prompt has this line, which you can edit or remove:
+
+```
+Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.
+```
+
+**Placeholders.** Words in double braces are filled in for each task. Keep them where you want
+that part to go:
+
+| Placeholder | Becomes |
+|---|---|
+| `{{name}}` | the plugin's name (`symcc`) |
+| `{{task_id}}`, `{{title}}` | the task's id and title |
+| `{{details}}` | the task's details (needed) |
+| `{{branch}}`, `{{folder}}` | the worker's branch (`symcc/T-3`) and its own folder |
+| `{{role}}` | the role's checklist, skills and web rule (empty for `general`) |
+| `{{files}}` | change only: the "Files you may change" lines |
+| `{{test_command}}` | change only: the "these must pass" line with your test commands, or "There is no test command" |
+| `{{merge_main}}` | change only: how to merge the moved branch first, only when it conflicts |
+| `{{test_output}}` | change only: the end of the failed tests' output, only after a try failed its tests |
+| `{{earlier_tries}}` | the last tries from the task's history, only when there were some |
+| `{{ask_more}}` | investigation only: after Ask more, "hand back the whole updated answer" |
+| `{{ask}}` | how the worker asks you (the `ask_owner` tool) and what a refused edit means (needed) |
+
+`{{details}}` and `{{ask}}` are needed: symcc depends on them. If your copy leaves one out, it
+is still added at the end of the prompt, and you get a warning once (a toast, and a note to the
+lead), for example `.symcc/prompts/change.md: {{ask}} is missing ...: it is added at the end`.
+A placeholder symcc doesn't know is left as written, with a warning; an empty file means the
+built-in prompt is used. The Prompts page and the lead's list show the same warnings.
+
 ---
 
 ## Which branch work goes into
@@ -892,6 +951,7 @@ your-project/
     ├── scouts/           your scout files (*.md)
     ├── scouts.json       each scout's last run and report, and whether it is paused
     ├── roles/            your own worker roles (*.md), see Worker roles
+    ├── prompts/          your own worker prompts (change.md, investigation.md), see Worker prompts
     ├── reports/          each try's full worker report (T-3-try-2.md)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
@@ -957,7 +1017,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`hooks/register.tsx`](../hooks/register.tsx) | Only the wiring: the `on(...)` calls that hand Claude Code events to the modules below |
 | [`hooks/core/`](../hooks/core/) | The board as plain data (`board-file.ts`, `task.ts`, `review.ts`, `banner.ts`, `scouts.ts`, ...). No Claude Code calls, so it's easy to test |
 | [`hooks/board.ts`](../hooks/board.ts) | A barrel: it only re-exports `hooks/core/*`, so tests and other files import from one place |
-| [`hooks/plugin/`](../hooks/plugin/) | The Claude Code side: the lead's tools (`tools.ts`), workers (`workers.ts`), git (`git.ts`), review and merge, scouts, roles. Shared state is the `S` object in `state.ts` |
+| [`hooks/plugin/`](../hooks/plugin/) | The Claude Code side: the lead's tools (`tools.ts`), workers (`workers.ts`), git (`git.ts`), review and merge, scouts, roles, worker prompts (`prompts.ts`; the built-in texts are in [`prompts/`](../prompts/)). Shared state is the `S` object in `state.ts` |
 | [`hooks/plugin/ui/`](../hooks/plugin/ui/) | The panel pages and the part above the prompt (`list.tsx`, `task-page.tsx`, `scouts-page.tsx`, `settings.tsx`, ...) |
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
