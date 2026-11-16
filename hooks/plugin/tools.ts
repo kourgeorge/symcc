@@ -501,14 +501,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (both) throw new Error(both)
       // Switching kind never deletes or sneaks in work. To an investigation: refused while its branch or folder
       // holds work from earlier tries (Done would delete it). To a change: an investigation's scratch edits are
-      // thrown away first (below, once its worker is stopped), so they are never committed.
+      // thrown away (below, once every refusal check has passed and its worker is stopped), so they are never committed.
+      // A refused call must leave the folder alone.
       const switching = kind !== undefined && kind !== kindOf(t)
       if (switching && kind === 'investigation') {
         const work = await taskWork($, t)
         if (work.commits !== 0 || work.dirty) throw new Error(`Nothing changed: ${t.id} has work from earlier tries on its branch${work.dirty ? ' or in its folder' : ''}; drop it or make a new task for the investigation`)
       }
       const scratchGone = switching && kind === 'change' ? () => resetScratch($, t.id) : async () => undefined
-      if (t.status !== 'doing') await scratchGone()
       // A note from the lead added to the details; the old text stays.
       const note = str(a.add_details)?.trim()
       const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
@@ -533,18 +533,20 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const wasRunning = t.status === 'doing'
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
-        if (wasRunning) await scratchGone()
+        await scratchGone()
         await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
       }
       if (a.backlog === false) {
         if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
+        await scratchGone()
         await change($, x => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} moved from the backlog to todo`
       }
       if (t.status === 'backlog') {
+        await scratchGone()
         await change($, x => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir))
         return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
@@ -555,7 +557,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
-      if (wasDoing) await scratchGone()
+      await scratchGone()
       // A paused task stays paused (only resume or retry starts it again); a dropped one stays dropped.
       const keep = t.status === 'dropped' || t.status === 'paused'
       const patch: Partial<BoardTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...fields() }
