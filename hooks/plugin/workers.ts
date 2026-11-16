@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, kindOf, ANSWER_MAX_CHARS } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -16,7 +16,23 @@ import { sayDone, sayNeedsYou } from './voice'
 /** A task's history without the "created by ..." line: what earlier tries did. */
 export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith('created by '))
 
-export const WORKER_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one task, then stop.
+export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => (kindOf(t) === 'investigation' ? INVESTIGATION_PROMPT(t, dir, role) : CHANGE_PROMPT(t, b, dir, role))
+
+/** The prompt of an investigation's worker: find the answer and hand it back in full; nothing it changes is kept. */
+const INVESTIGATION_PROMPT = (t: BoardTask, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one investigation, then stop.
+
+This task is an investigation: your job is to find the answer and hand it back in full. Your hand-back is the result; the owner reads it. Nothing is committed, tested or merged.
+Your own copy of the project, on branch ${t.branch ?? S.N.branch(t.id)}, is this folder:
+  ${dir}
+Read whatever you need. You may run read-only commands and experiments, outside the project or in that folder, but any file changes you make in the project are not kept. Never touch the main project folder. Do not run git commit, push or merge.
+
+Task ${t.id}: ${t.title}
+${t.details}
+${roleSection(role)}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\n` : ''}
+When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question; the task will wait for the owner's answer and a new try continues with it. If the owner can pick from a few answers, add one more line after it: "OPTIONS: a | b | c" (2 to 6 short choices, split by |).`
+
+/** The prompt of a change's worker: change the files, which are then committed, tested and merged. */
+const CHANGE_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one task, then stop.
 
 Work ONLY inside this folder, your own copy of the project on branch ${t.branch ?? S.N.branch(t.id)}:
   ${dir}
@@ -575,6 +591,9 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'QUESTION') }))) return
     sayNeedsYou($, b, t, question)
     tellLead($, workerQuestionText(t.id, question, options))
+  } else if (kindOf(t) === 'investigation') {
+    if (gaveUp()) return
+    await answered($, t, answer, summary)
   } else {
     if (gaveUp() || (await waitIfBranchGone($, b, t, 'merge'))) return
     await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
@@ -595,6 +614,21 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
         if (!r.ok || r.review || !r.merged || !(await doneAfterMerge($, t, r.merged).catch(() => false))) throw e
       })
   }
+}
+
+/** The note of an investigation that was answered and waits for the owner to read it. */
+export const ANSWERED_NOTE = 'answered; waiting for you to read it'
+
+/**
+ * Investigation `t`'s worker handed back `answer`: nothing is committed, tested or merged. The answer is
+ * kept on the task (cut to ANSWER_MAX_CHARS; the full text is in the report file) and the task waits in
+ * review for the owner to read it, in every board mode. Its folder stays as it is for now.
+ */
+async function answered($: $, t: SymccTask, answer: string, summary: string) {
+  const text = answer.trim() || '(no answer)'
+  const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
+  if (await writeIfSame($, t, cur => ({ status: 'review', note: ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, history: [...cur.history, `${tryLabel(t)}: answered: ${cutLine(summary, 300)}`], ...endedBy(cur, now(), 'finished', 'answered') }))) return
+  tellLead($, `${t.id} "${t.title}" is answered and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read.`)
 }
 
 /**
@@ -721,6 +755,8 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
 export async function approve($: $, id: string): Promise<string> {
   const b = await load($)
   const t = reviewTask(b, id, 'approve')
+  // An investigation's file changes are never kept: there is nothing to merge.
+  if (kindOf(t) === 'investigation') throw new Error(`${t.id} is an investigation: nothing is merged. Its answer is on the task (${S.N.name} board task ${t.id}); drop it once the owner has read it.`)
   return mergeFinished($, b, t, 'approve')
 }
 

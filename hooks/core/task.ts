@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, isKind, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -15,16 +15,19 @@ const cleanRole = (r: unknown): string => {
   return s.toLowerCase() === 'general' ? '' : s
 }
 
+/** The kind a task gets: `kind` when given, else "investigation" for a researcher, else "change". */
+export const kindFor = (kind: unknown, role: unknown): TaskKind => (isKind(kind) ? kind : cleanRole(role).toLowerCase() === 'researcher' ? 'investigation' : 'change')
+
 /**
  * A new task on board `b`. `merge_into` is the branch it merges into (and its worker's copy starts
  * from): the branch checked out in the project now; "main" when not given.
  */
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string; origin?: OriginInput; merge_into?: string }, now: string, dir: string = DATA_DIR): [Board, SymccTask] {
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string; kind?: unknown; origin?: OriginInput; merge_into?: string }, now: string, dir: string = DATA_DIR): [Board, BoardTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const origin = makeOrigin(f.origin, now, b)
   const after = (Array.isArray(f.after) ? f.after : []).map(x => normId(String(x))).filter(x => knownDep(b, x))
-  const t: SymccTask = {
+  const t: BoardTask = {
     id: `T-${b.next_id}`,
     title,
     details: clean(f.details ?? title, 8000),
@@ -43,6 +46,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     updated_at: now,
     ...(f.needs_review === true ? { needs_review: true } : {}),
     ...(cleanRole(f.role) ? { role: cleanRole(f.role) } : {}),
+    ...(kindFor(f.kind, f.role) === 'investigation' ? { kind: 'investigation' as const } : {}),
   }
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
@@ -70,6 +74,10 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
     const role = cleanRole(patch.role)
     if (role) next.role = role
     else delete next.role
+  }
+  if (patch.kind !== undefined) {
+    if (patch.kind === 'investigation') next.kind = 'investigation'
+    else delete next.kind
   }
   if (patch.needs_review !== undefined) {
     if (patch.needs_review === true) next.needs_review = true

@@ -1,12 +1,12 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, ANSWER_MAX_CHARS, kindOf } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
-import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT } from '../hooks/plugin/workers'
 import { claimLead } from '../hooks/plugin/lead'
 import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
@@ -3096,4 +3096,109 @@ test('an approve waiting in line behind two slow merges, then main moving under 
   expect(out).toBe(`T-1 approved and merged: merged into main (${H2.slice(0, 8)}); approved by the owner; tests passed`)
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+})
+
+// ---------------- investigations: the hand-back is the result ----------------
+
+/** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
+async function investigationAnswers(mode: 'auto' | 'review', answer: string) {
+  const w = world()
+  const [b] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', answer, false)
+  return { w, t: find(await load(w.$), 'T-1')! }
+}
+
+for (const mode of ['auto', 'review'] as const)
+  test(`an investigation's hand-back goes to review with its answer, and nothing is committed, tested or merged (mode ${mode})`, async () => {
+    const { w, t } = await investigationAnswers(mode, 'The cache is never cleared: src/cache.ts has no expiry.\nI checked by reading it.')
+    expect(t.status).toBe('review')
+    expect(t.note).toBe('answered; waiting for you to read it')
+    expect(t.answer).toBe('The cache is never cleared: src/cache.ts has no expiry.\nI checked by reading it.')
+    expect(t.history.at(-1)).toMatch(/^try 1: answered: The cache is never cleared/)
+    // the full hand-back is the report, as for any task
+    expect(w.files.get(REPORT1)).toContain('The cache is never cleared')
+    expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+    expect(w.git.dirty).toBe(true)
+    expect(ranTests(w)).toEqual([])
+    expect(movedMain(w)).toBe(false)
+    // its folder stays until the task ends
+    expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
+    expect(leadQueue.join('\n')).toContain('T-1 "Do it" is answered and waits for the owner to read it')
+  })
+
+test("a long investigation answer is cut on the task; the report keeps it all", async () => {
+  const long = 'x'.repeat(ANSWER_MAX_CHARS + 500)
+  const { w, t } = await investigationAnswers('auto', long)
+  expect(t.answer!.length).toBe(ANSWER_MAX_CHARS)
+  expect(t.answer!.endsWith('…')).toBe(true)
+  expect(w.files.get(REPORT1)).toContain(long)
+})
+
+test('an investigation worker that asks a QUESTION still waits for the owner', async () => {
+  const { t } = await investigationAnswers('auto', 'QUESTION: Which cache do you mean?')
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe('Which cache do you mean?')
+  expect(t.answer).toBeUndefined()
+})
+
+test('an investigation in review is not approved (there is nothing to merge)', async () => {
+  const { w } = await investigationAnswers('auto', 'The answer.')
+  await expect(runTool(w.$, 'approve', { task: 'T-1' })).rejects.toThrow(/is an investigation: nothing is merged/)
+  expect(movedMain(w)).toBe(false)
+})
+
+test('a researcher task added without kind is an investigation; with kind change it stays a change', () => {
+  const b0 = emptyBoard()
+  const [b1, a] = addTask(b0, { origin: { why: 'a test' }, title: 'Find out why', role: 'researcher' }, ISO)
+  expect(a.kind).toBe('investigation')
+  const [b2, c] = addTask(b1, { origin: { why: 'a test' }, title: 'Write the note', role: 'researcher', kind: 'change' }, ISO)
+  expect(c.kind).toBeUndefined()
+  expect(kindOf(c)).toBe('change')
+  const [, d] = addTask(b2, { origin: { why: 'a test' }, title: 'Look into it', kind: 'investigation' }, ISO)
+  expect(kindOf(d)).toBe('investigation')
+  const [, e] = addTask(b2, { origin: { why: 'a test' }, title: 'Plain task' }, ISO)
+  expect(e.kind).toBeUndefined()
+  // kept through the board file
+  expect(kindOf(find(parseBoard(JSON.stringify(b1)), a.id))).toBe('investigation')
+})
+
+test('change sets a task kind, and refuses an unknown one', async () => {
+  const w = world()
+  const [b] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'], backlog: true }, ISO)
+  await saveBoard(w.$, b)
+  await runTool(w.$, 'change', { task: 'T-1', kind: 'investigation' })
+  expect(kindOf(find(await load(w.$), 'T-1'))).toBe('investigation')
+  await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
+  expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow(/kind must be change or investigation/)
+})
+
+test('a researcher task of kind change is committed, tested and merged as today', async () => {
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'], { role: 'researcher', history: ['created by the lead'] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'wrote the note', false)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.answer).toBeUndefined()
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(movedMain(w)).toBe(true)
+})
+
+test('the worker prompt of an investigation asks for the answer in full and says file changes are not kept; a change keeps its prompt', () => {
+  const [b] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
+  const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
+  expect(p).toContain('This task is an investigation: your job is to find the answer and hand it back in full.')
+  expect(p).toContain('any file changes you make in the project are not kept')
+  expect(p).not.toContain('Files you may change')
+  expect(p).not.toContain('these must pass')
+  const [c] = boardWith('auto', ['npm test'])
+  const q = WORKER_PROMPT(c.tasks[0]!, c, WT)
+  expect(q).toContain('Files you may change: src/.')
+  expect(q).not.toContain('investigation')
 })

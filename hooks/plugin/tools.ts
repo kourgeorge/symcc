@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isKind, kindFor, TASK_KINDS } from '../board'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
@@ -278,6 +278,9 @@ ${rolesLeadText(S.roles, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off). An off role is never picked for a new task.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search) narrow it, e.g. status: ["done"], search: "notify"; with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).`
 
+/** The kind parameter of add and change. */
+const KIND_PARAM = { type: 'string', enum: ['change', 'investigation'], description: 'change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). A researcher task is an investigation unless you give kind; use change for a researcher when the owner wants a lasting document that later tasks will read.' }
+
 export const TOOLS = () => [
   {
     name: 'board',
@@ -287,12 +290,12 @@ export const TOOLS = () => [
   {
     name: 'add',
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: 'string', description: "For a scout finding: the scout's name." }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
+    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, order: { type: 'number', description: 'Lower runs first.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM, why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: 'string', description: "For a scout finding: the scout's name." }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
   },
   {
     name: 'change',
     description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review".', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker.' } } } },
@@ -404,9 +407,16 @@ export async function refuseAskedFiles($: $, id: string): Promise<string> {
 function alreadyAnsweredText(t: SymccTask, a: In): string {
   const earlier = [...t.history].reverse().find(l => l.startsWith('the owner answered: '))
   const quoted = earlier ? `, ${earlier}` : ''
-  const others = ['title', 'details', 'add_details', 'files', 'after', 'order', 'needs_review', 'backlog', 'role', 'merge_into'].filter(k => a[k] !== undefined)
+  const others = ['title', 'details', 'add_details', 'files', 'after', 'order', 'needs_review', 'backlog', 'role', 'kind', 'merge_into'].filter(k => a[k] !== undefined)
   const also = others.length ? ` The other changes (${others.join(', ')}) were not made either; send them again without answer.` : ''
   return `${t.id} was already answered (it is ${STATUS_WORD[t.status]} now${quoted}); nothing changed. To add something, use add_details.${also}`
+}
+
+/** The checked kind a tool call gives (undefined when not given); an unknown one is refused. */
+function kindIn(a: In): 'change' | 'investigation' | undefined {
+  if (a.kind === undefined) return undefined
+  if (!isKind(a.kind)) throw new Error(`Nothing changed: kind must be ${TASK_KINDS.join(' or ')}`)
+  return a.kind
 }
 
 /** The lead's tools that act on one task. */
@@ -437,6 +447,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
     }
     case 'add': {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
+      const kind = kindIn(a)
       if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')
       const said = { by: a.origin_by, scout: a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why }
       // it merges into the branch checked out now (on a detached checkout, the repo's main branch)
@@ -447,7 +458,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const o = makeOrigin(said, now(), b)
         // scout_findings backlog: a scout's finding goes to the backlog, whatever the lead asked
         forced = findingToBacklog(b, a.origin_by) && a.backlog !== true
-        const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
+        const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
         return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
       // told once, here: a task it waits for on another branch won't have its change in this one
@@ -470,6 +481,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
+      // A task given the researcher role becomes an investigation, unless kind is given too.
+      const kind = kindIn(a) ?? (role && role !== t.role && kindFor(undefined, role) === 'investigation' ? 'investigation' : undefined)
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
       let into = str(a.merge_into)?.trim()
       if (a.merge_into !== undefined && !(into && (await branchExists($, into)))) {
@@ -484,8 +497,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: [...(find(x, t.id) ?? t).history, noteAddedLine(note)] } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? t.question : null)
       if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
-      const fields = (): Partial<SymccTask> => {
-        const p: Partial<SymccTask> = {}
+      const fields = (): Partial<BoardTask> => {
+        const p: Partial<BoardTask> = {}
         if (str(a.title)) p.title = str(a.title)
         if (str(a.details)) p.details = str(a.details)
         if (noted) p.details = noted
@@ -494,6 +507,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         if (typeof a.order === 'number') p.order = a.order
         if (typeof a.needs_review === 'boolean') p.needs_review = a.needs_review
         if (role) p.role = role
+        if (kind) p.kind = kind
         if (into) p.merge_into = into
         return p
       }
@@ -515,14 +529,14 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir))
         return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'add_details', 'files', 'after', 'order', 'role', 'answer', 'merge_into'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'add_details', 'files', 'after', 'order', 'role', 'kind', 'answer', 'merge_into'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
-      const patch: Partial<SymccTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed', ...fields() }
+      const patch: Partial<BoardTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed', ...fields() }
       // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
       const answer = str(a.answer)?.trim()
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`

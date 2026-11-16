@@ -67,7 +67,19 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * or a merge that waited for the owner's files), with when that was last said (refreshed like `finishing`);
  * the board list shows the step instead of the time. Only while "doing", "review" or "waiting".
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; kind?: TaskKind; answer?: string }
+
+/**
+ * What a task is for: a "change" (the default) ends in a commit, tests and a merge; an "investigation"
+ * ends in its worker's hand-back (the answer), with nothing committed, tested or merged.
+ */
+export type TaskKind = 'change' | 'investigation'
+export const TASK_KINDS: readonly TaskKind[] = ['change', 'investigation']
+export const isKind = (k: unknown): k is TaskKind => TASK_KINDS.includes(k as TaskKind)
+/** A task's kind: "change" when it has none. */
+export const kindOf = (t: { kind?: unknown } | undefined): TaskKind => (t?.kind === 'investigation' ? 'investigation' : 'change')
+/** The most of an investigation's answer kept on the task (the full text stays in its report file). */
+export const ANSWER_MAX_CHARS = 4000
 
 /** The step of checking a task's finished work: "checking" (commit and scope check), "testing" (the test commands), "merging" (bringing it up to date and moving the branch). */
 export type CheckStep = 'checking' | 'testing' | 'merging'
@@ -244,6 +256,8 @@ function cleanTask(t: unknown): BoardTask | null {
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
   for (const k of ['asked_files', 'options']) if (k in x && !strings(x[k])) delete x[k]
+  if ('kind' in x && x.kind !== 'investigation') delete x.kind
+  if ('answer' in x && typeof x.answer !== 'string') delete x.answer
   if ('merge_wait' in x) {
     const mw = asBlockers(x.merge_wait)
     if (mw) x.merge_wait = mw
