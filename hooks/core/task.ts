@@ -6,6 +6,9 @@ import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
 import { clean, num } from './text'
 
+/** The most a task's details may hold (addTask and patchTask cut the rest). */
+const DETAILS_MAX = 8000
+
 /** Whether `id` may stand in a task's `after`: on the board, or archived as done (it then counts as done). */
 const knownDep = (b: Board, id: string) => !!find(b, id) || (b.archived_done ?? []).includes(id)
 
@@ -30,7 +33,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
   const t: BoardTask = {
     id: `T-${b.next_id}`,
     title,
-    details: clean(f.details ?? title, 8000),
+    details: clean(f.details ?? title, DETAILS_MAX),
     files: cleanFiles(f.files, dir),
     status: f.backlog === true ? 'backlog' : 'todo',
     note: '',
@@ -70,7 +73,7 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
     else delete next.origin
   }
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
-  if (patch.details !== undefined) next.details = clean(patch.details, 8000)
+  if (patch.details !== undefined) next.details = clean(patch.details, DETAILS_MAX)
   if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
   if (patch.role !== undefined) {
     const role = cleanRole(patch.role)
@@ -323,10 +326,13 @@ export function investigationDone(b: Board, id: string, now: string, kept?: stri
   return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: [...t.history, line] }, now)
 }
 
+/** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
 /** The file name part of a research note for a task titled `title`: "why-is-the-cache-slow" (at most 60 characters; `id` in lower case, "t-123", when nothing is left). */
 export function noteTopic(title: string, id = ''): string {
-  const s = String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  return s.slice(0, 60).replace(/-+$/, '') || id.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'answer'
+  const s = slug(String(title ?? ''))
+  return s.slice(0, 60).replace(/-+$/, '') || slug(id) || 'answer'
 }
 
 /** The docs/research files an open task on board `b` (not done or dropped) is to write, so a new note doesn't pick them too. */
@@ -351,7 +357,7 @@ export function keepNoteTask(t: BoardTask, answer: string, report?: string, take
   const file = noteFile(t, taken)
   const head = `Write ${file}: a research note that keeps the answer of ${t.id} ("${t.title}"), so later tasks can read it. Use the answer below as it is: tidy it into a short note with a title, the question, the answer and how it was found. Don't look into the question again.`
   const where = report ? `\n\nThe full answer is in ${report}.` : ''
-  const room = 8000 - head.length - where.length - 40
+  const room = DETAILS_MAX - head.length - where.length - 40
   const body = answer.trim() || t.answer?.trim() || '(no answer saved)'
   const text = body.length > room ? `${body.slice(0, Math.max(0, room - 1))}…` : body
   return {
@@ -364,8 +370,6 @@ export function keepNoteTask(t: BoardTask, answer: string, report?: string, take
   }
 }
 
-/** The most a task's details may hold (patchTask cuts the rest). */
-const DETAILS_MAX = 8000
 /** How each part Ask more adds to a task's details starts. */
 const ASK_MARK = '\n\nFollow-up question (owner, '
 
@@ -409,7 +413,7 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const head = `\n\nFollow-up question (owner, ${day}): ${q}\nThe earlier answer (try ${t.attempts})`
   const where = report ? ` is in ${report}` : ''
   const body = answer.trim() || t.answer?.trim() || ''
-  const fits = body && t.details.length + head.length + body.length + where.length + 40 <= 8000
+  const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
   return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: the owner asked more: ${q}`] }, now)
 }

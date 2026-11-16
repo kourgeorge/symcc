@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS } from '../board'
-import { gitOk, git, worktreeDir, asSymcc } from './git'
+import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
 import { tellLead } from './tell'
@@ -8,7 +8,7 @@ import { tellLead } from './tell'
 // ---------------- a task's changes, for review ----------------
 
 /** The changes of a task: from where its work branch left the branch it merges into (the merge base) to the branch's tip. */
-export const diffRange = (target: string, t: Pick<SymccTask, 'id' | 'branch'>) => `${target}...${t.branch ?? S.N.branch(t.id)}`
+export const diffRange = (target: string, t: Pick<SymccTask, 'id' | 'branch'>) => `${target}...${taskBranch(t)}`
 
 export function gitDiff($: $, target: string, t: SymccTask, opts: string[], file = ''): Promise<string> {
   const key = `${t.id}|${t.updated_at}|${target}|${opts.join(' ')}|${file}`
@@ -287,7 +287,7 @@ async function onTarget($: $, id: string, sha: string, target: string, tryNo?: n
  */
 export async function alreadyMerged($: $, t: Pick<SymccTask, 'id' | 'branch' | 'merge_into' | 'attempts'>): Promise<string | null> {
   if (!(t.attempts > 0)) return null
-  const tip = (await git($, ['rev-parse', '-q', '--verify', `refs/heads/${t.branch ?? S.N.branch(t.id)}`])).stdout.trim()
+  const tip = (await git($, ['rev-parse', '-q', '--verify', `refs/heads/${taskBranch(t)}`])).stdout.trim()
   return tip && (await onTarget($, t.id, tip, intoOf(t), t.attempts)) ? tip : null
 }
 
