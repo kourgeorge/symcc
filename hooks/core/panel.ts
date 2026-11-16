@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
@@ -72,13 +72,16 @@ export function withCrew(build: (workers: string, scouts: string) => string, cre
   return tries.find(t => t.length <= width) ?? tries[tries.length - 1]!
 }
 
+/** The short word the board list shows for each check step. */
+const STEP_WORD: Record<CheckStep, string> = { checking: 'check', testing: 'test', merging: 'merge' }
+
 /** The short status column of a task row in the board list: the step while symcc checks its finished work
- *  ("checking", "testing", "merging", see checkStepNow), else the time of the running try ("4m") for a task being
+ *  ("check", "test", "merge", the short words for checkStepNow's steps), else the time of the running try ("4m") for a task being
  *  worked on, "review", "waiting", "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
 export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>, nowMs: number, since?: number | string): string {
   const step = checkStepNow(t, nowMs)
-  if (step) return step
+  if (step) return STEP_WORD[step]
   if (t.status === 'doing') {
     const last = t.runs?.[t.runs.length - 1]
     if (last && !last.ended) return fmtDuration(runMs(last, nowMs))

@@ -1939,14 +1939,14 @@ test("the lead's board tool with a task shows its latest report and lists the ol
 
 // ---------------- the step shown in the list while a finished task is checked (T-238) ----------------
 
-test('a finishing task\'s row says "testing" while its tests run and "merging" while main is moved; the step is gone once it is done', async () => {
+test('a finishing task\'s row says "test" while its tests run and "merge" while main is moved; the step is gone once it is done', async () => {
   const cell = async (w: ReturnType<typeof world>) => statusCell(find(await load(w.$), 'T-1')!, Date.now())
   const a = await finishing(cell)
-  expect(a.said[0]).toBe('testing')
+  expect(a.said[0]).toBe('test')
   expect(a.t.status).toBe('done')
   expect(a.t.checking).toBeUndefined()
   const b = await finishing(cell, {}, /git update-ref/)
-  expect(b.said[0]).toBe('merging')
+  expect(b.said[0]).toBe('merge')
   expect(b.t.checking).toBeUndefined()
 })
 
@@ -1956,14 +1956,14 @@ test('the check step is cleared when the tests fail', async () => {
   expect(t.checking).toBeUndefined()
 })
 
-test('approve shows "merging" while it moves main, and the step is gone once it is done', async () => {
+test('approve shows "merge" while it moves main, and the step is gone once it is done', async () => {
   const w = await inReview()
   let seen = ''
   w.onRun(async cmd => {
     if (!seen && /git update-ref/.test(cmd)) seen = statusCell(find(await load(w.$), 'T-1')!, Date.now())
   })
   await runTool(w.$, 'approve', { task: 'T-1' })
-  expect(seen).toBe('merging')
+  expect(seen).toBe('merge')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.checking).toBeUndefined()
@@ -2399,7 +2399,7 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   await turns(w, () => hung)
   expect(find(await load(w.$), 'T-1')!.note).toBe('approved; checking and merging')
   // the list row says which step the approve is in
-  expect(statusCell(find(await load(w.$), 'T-1')!, Date.now())).toBe('testing')
+  expect(statusCell(find(await load(w.$), 'T-1')!, Date.now())).toBe('test')
   expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe('T-1 is already being merged')
   expect(limits.length).toBe(1)
   limits[0]!()

@@ -2177,9 +2177,9 @@ test('task rows: a short status column and a subtle extra; the extra goes first 
   expect(statusCell({ ...base, runs: [] }, now)).toBe('')
   // while symcc checks the finished work, the step shows instead of the time; a stale step (its copy is gone) does not
   const stamp = new Date(now - 10_000).toISOString()
-  expect(statusCell({ status: 'doing', runs: [{ started: new Date(now - 240_000).toISOString(), ended: stamp }], checking: { step: 'testing', at: stamp } }, now)).toBe('testing')
-  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'merging', at: stamp } }, now)).toBe('merging')
-  expect(statusCell({ status: 'review', checking: { step: 'testing', at: stamp } }, now)).toBe('testing')
+  expect(statusCell({ status: 'doing', runs: [{ started: new Date(now - 240_000).toISOString(), ended: stamp }], checking: { step: 'testing', at: stamp } }, now)).toBe('test')
+  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'merging', at: stamp } }, now)).toBe('merge')
+  expect(statusCell({ status: 'review', checking: { step: 'testing', at: stamp } }, now)).toBe('test')
   expect(statusCell({ status: 'review', checking: { step: 'testing', at: new Date(now - 3_600_000).toISOString() } }, now)).toBe('review')
   // a task with a running worker still shows its time
   expect(statusCell(base, now)).toBe('4m')
