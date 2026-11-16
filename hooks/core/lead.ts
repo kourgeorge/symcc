@@ -102,6 +102,15 @@ export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: 
   return Number.isFinite(at) && isFresh(at, nowMs, staleMs)
 }
 
+/**
+ * Whether task `t`'s worker has already handed back its try: it is "doing" and has a finishing mark,
+ * or its last try has an end time (set at the hand-back). Its agent may still be listed (idle), but it
+ * no longer works on the task: it must not be tracked as a worker again, nor timed by max_minutes.
+ */
+export function handedBack(t: Pick<BoardTask, 'status' | 'finishing' | 'runs'>): boolean {
+  return t.status === 'doing' && (!!t.finishing || !!t.runs?.[t.runs.length - 1]?.ended)
+}
+
 /** Whether task `t` has a finishing mark that is no longer refreshed (the copy that merged it is gone). */
 export const finishingStale = (t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: number, staleMs = FINISH_STALE_MS) => t.status === 'doing' && !!t.finishing && !finishingNow(t, nowMs, staleMs)
 
@@ -129,7 +138,7 @@ export function mergedDone(t: BoardTask, sha: string, when: string, now: string)
  * At session start the driver sends "doing" tasks whose worker is gone back to "todo":
  * those of this session, of a dead session, or with no session recorded. `leadBefore`
  * is lead.json as it was before this session wrote its own heartbeat. Tasks in `keep`
- * (an old worker of theirs is still alive) stay "doing" until that worker has ended, and so
+ * (an old worker of theirs is still alive and has not handed back, see handedBack) stay "doing" until that worker has ended, and so
  * do tasks whose work is being tested and merged right now (see finishingNow). A task whose
  * try already merged (see mergedThisTry) is done instead.
  */
@@ -138,7 +147,8 @@ export function resetDoing(b: Board, me: string, leadBefore: string | null, nowM
   return {
     ...b,
     tasks: b.tasks.map(t => {
-      if (t.status !== 'doing' || !ownedHere(t, me, live) || keep.includes(t.id) || finishingNow(t, nowMs)) return t
+      // A live agent keeps its task only while it still works on it (not once it handed back).
+      if (t.status !== 'doing' || !ownedHere(t, me, live) || (keep.includes(t.id) && !handedBack(t)) || finishingNow(t, nowMs)) return t
       const sha = mergedThisTry(t)
       return sha ? mergedDone(t, sha, 'sent back to todo', now) : backToTodo(t, note, now)
     }),

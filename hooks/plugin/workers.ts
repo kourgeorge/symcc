@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -67,8 +67,9 @@ export async function startWorker($: $, id: string) {
     const b = await load($)
     const t0 = find(b, id)
     if (!mayStart(t0, agents, S.N.name)) return
-    // A reload sent it back after its try had already merged: it is done, not tried again.
-    if (await mergedBeforeRestart($, t0!)) return
+    // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
+    // the owner retried it after it was wrongly failed): it is done, not tried again.
+    if (await mergedBeforeStart($, t0!)) return
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone($, b, t0!, 'start')) return
     const { dir, branch } = await prepareWorktree($, t0!, intoOf(t0!))
@@ -116,11 +117,12 @@ export async function startWorker($: $, id: string) {
 }
 
 /**
- * Whether todo task `t`'s last try was ended by a restart (a reload) after its work had already
- * merged (see alreadyMerged): then it is marked done here, and the lead is told, instead of a new try.
+ * Whether todo task `t`'s last try's work is already on the branch it merges into (see mergedThisTry
+ * and alreadyMerged), whatever ended that try (a reload, a timeout, a retry): then it is marked done
+ * here, and the lead is told, instead of starting a new try.
  */
-async function mergedBeforeRestart($: $, t: BoardTask): Promise<boolean> {
-  if (t.runs?.[t.runs.length - 1]?.ended_by !== 'restarted') return false
+async function mergedBeforeStart($: $, t: BoardTask): Promise<boolean> {
+  if (!(t.attempts > 0)) return false
   const sha = mergedThisTry(t) ?? (await alreadyMerged($, t).catch(() => null))
   if (!sha) return false
   const done = await change($, x => {
@@ -128,7 +130,7 @@ async function mergedBeforeRestart($: $, t: BoardTask): Promise<boolean> {
     if (!cur || cur.status !== 'todo' || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     return [{ ...x, tasks: x.tasks.map(y => (y.id === t.id ? mergedDone(cur, sha, 'tried again', now()) : y)) }, true] as [Board, boolean]
   })
-  if (done) tellLead($, `✓ ${t.id} "${t.title}" is done: its work was already merged (${sha.slice(0, 8)}) before the restart, so no new try starts.`)
+  if (done) tellLead($, `✓ ${t.id} "${t.title}" is done: its work (${tryLabel(t)}) was already merged into ${intoOf(t)} (${sha.slice(0, 8)}), so no new try starts.`)
   return done
 }
 
@@ -354,7 +356,8 @@ export async function lateHandBack($: $, agentId: string): Promise<boolean> {
   if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId)) return false
   const b = await load($).catch(() => null)
   const t = b?.tasks.find(x => x.agent === agentId)
-  if (!t || t.status !== 'doing' || t.session !== S.me || finishing.has(t.id) || starting.has(t.id) || finishingNow(t, Date.now())) return false
+  // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
+  if (!t || t.status !== 'doing' || t.session !== S.me || finishing.has(t.id) || starting.has(t.id) || handedBack(t)) return false
   if ([...workers.values()].some(w => w.task === t.id)) return false
   const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
   workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: t.branch ?? S.N.branch(t.id), since: Number.isFinite(started) ? started : Date.now() })
@@ -555,8 +558,27 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     }
     await recordCommits($, t.id, made, r.merged)
     if (r.blocked) await holdForFiles($, t, b, r, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`, w.worktree, agentId)
-    else await settle($, t, b, r, summary, w.worktree, agentId)
+    else
+      await settle($, t, b, r, summary, w.worktree, agentId).catch(async (e: unknown) => {
+        // Merged, but the outcome could not be written: the work is on its branch, so it still ends done.
+        if (!r.ok || r.review || !r.merged || !(await doneAfterMerge($, t, r.merged).catch(() => false))) throw e
+      })
   }
+}
+
+/**
+ * Task `t`'s try merged `sha`, but settle could not write that: it is marked done now (unless it
+ * already is), whatever happened to it meanwhile. Returns whether the board says done afterwards.
+ */
+async function doneAfterMerge($: $, t: SymccTask, sha: string): Promise<boolean> {
+  const done = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur) return [x, false] as [Board, boolean]
+    if (cur.status === 'done') return [x, true] as [Board, boolean]
+    return [{ ...x, tasks: x.tasks.map(y => (y.id === t.id ? mergedDone({ ...cur, runs: addCommits(cur.runs, [sha]) }, sha, 'marked done', now()) : y)) }, true] as [Board, boolean]
+  })
+  if (done) tellLead($, `✓ ${t.id} "${t.title}" merged into ${intoOf(t)} (${sha.slice(0, 8)}); it is done.`)
+  return done
 }
 
 /**
@@ -984,6 +1006,9 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
       if (m.move === 'leave') continue
       if (m.move === 'adopt') {
         const t = find(b, m.task)!
+        // Its worker already handed back (the agent is only idle): nothing to track or stop. The
+        // task's check is still running, or the regular check recovers it (done when merged).
+        if (handedBack(t)) continue
         const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
         workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: t.branch ?? S.N.branch(t.id), since: Number.isFinite(started) ? started : Date.now() })
         if (t.agent !== a.id) await change($, x => (find(x, t.id)?.status === 'doing' && find(x, t.id)?.session === S.me ? patchTask(x, t.id, { agent: a.id }, now()) : x)).catch((e: Error) => $.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
@@ -1040,6 +1065,27 @@ export async function cleanLeftoverTmp($: $) {
   if (fresh.length) $.ui.toast(S.N.toast(`couldn't remove leftover temp files in ${S.N.dir}/: ${fresh.join('; ')}`))
 }
 
+/**
+ * Task `id`'s worker ran over `max` minutes (`minutes`) and was stopped: while it is still "doing" on
+ * the same try (`t`, as the check read it), it fails; but when that try's work is already on its
+ * branch, it is done instead. The lead is told what happened.
+ */
+async function timedOut($: $, id: string, t: BoardTask | undefined, max: number, minutes: number) {
+  const same = (cur: BoardTask | undefined): cur is BoardTask => cur?.status === 'doing' && (!t || cur.attempts === t.attempts)
+  const before = find(await load($), id)
+  if (!same(before)) return
+  const sha = mergedThisTry(before) ?? (S.gitState === 'ok' ? await alreadyMerged($, before).catch(() => null) : null)
+  const out = await change($, x => {
+    const cur = find(x, id)
+    if (!same(cur)) return [x, null] as [Board, null]
+    const next = sha ? mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now()) : { ...cur, status: 'failed' as const, note: `stopped: ran over ${max} min`, updated_at: now(), history: [...cur.history, `${tryLabel(cur)}: stopped after ${Math.round(minutes)} min (over the limit)`], ...endedBy(cur, now(), 'timed out', `ran over ${max} min`) }
+    return [{ ...x, tasks: x.tasks.map(y => (y.id === id ? next : y)) }, cur] as [Board, BoardTask]
+  })
+  if (!out) return
+  if (sha) tellLead($, `✓ ${id} "${out.title}" is done: its worker ran over ${max} minutes and was stopped, but its work was already merged (${sha.slice(0, 8)}).`)
+  else tellLead($, `${id} "${out.title}": the worker ran over ${max} minutes, so I stopped it. Retry it (${S.N.name} retry), split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
+}
+
 /** workers whose agent a check saw ended without a hand-back: failed on the next check if still not handed back */
 export const seenEnded = new Set<string>()
 
@@ -1059,12 +1105,21 @@ export async function check($: $) {
     const minutes = (nowMs - w.since) / 60_000
     const info = agents?.find(a => a.id === agentId)
     const t = find(b, w.task)
+    // Its worker already handed back (its work is being, or was, checked and merged): this entry is
+    // left over. Only the merge's own time limit applies now, never max_minutes.
+    if (finishing.has(w.task) || (t && handedBack(t))) {
+      const cur = find(await load($), w.task)
+      if (finishing.has(w.task) || (cur && handedBack(cur))) {
+        if (workers.get(agentId) === w) workers.delete(agentId)
+        seenEnded.delete(agentId)
+        continue
+      }
+    }
     // Running too long: stop it and let the lead decide.
     if (minutes > b.max_minutes) {
       workers.delete(agentId)
       await halt($, agentId, `it ran longer than ${b.max_minutes} minutes`)
-      await change($, x => patchTask(x, w.task, { status: 'failed', note: `stopped: ran over ${b.max_minutes} min`, history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: stopped after ${Math.round(minutes)} min (over the limit)`], ...endedBy(find(x, w.task), now(), 'timed out', `ran over ${b.max_minutes} min`) }, now()))
-      tellLead($, `${w.task} "${t?.title ?? ''}": the worker ran over ${b.max_minutes} minutes, so I stopped it. Retry it (${S.N.name} retry), split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
+      await timedOut($, w.task, t, b.max_minutes, minutes)
       continue
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
@@ -1092,7 +1147,8 @@ export async function check($: $) {
     const mine = new Set([...workers.values()].map(w => w.task))
     const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
     const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !finishingNow(t, Date.now())
-    const idle = (await load($)).tasks.filter(t => free(t) && (t.session === S.me || finishingStale(t, Date.now())) && ownedHere(t, S.me, live) && !liveWorkersFor(t, agents as AgentInfo[], S.N.name).length)
+    // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
+    const idle = (await load($)).tasks.filter(t => free(t) && (t.session === S.me || finishingStale(t, Date.now())) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, agents as AgentInfo[], S.N.name).length))
     const merged = new Map<string, string>()
     for (const t of idle) {
       const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)

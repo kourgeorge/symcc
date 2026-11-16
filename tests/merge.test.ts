@@ -2072,6 +2072,145 @@ test("a late report from a worker this copy lost in a reload is still taken when
   expect(await lateHandBack(w.$, 'someone-else')).toBe(false)
 })
 
+// ---------------- a try whose work merged must end done, never timed out (T-237) ----------------
+
+/** The fake git answers for a branch symcc/T-1 whose tip H1 is T-1's try-1 commit, on main when `merged`. */
+const t1Merged = (merged = true) => (args: string[]) => {
+  if (args.join(' ') === 'rev-parse -q --verify refs/heads/symcc/T-1') return ok(H1)
+  if (args[0] === 'log' && args.at(-1) === H1) return ok(t1Commit(1))
+  if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return merged ? ok() : fail()
+  return undefined
+}
+/** Makes the agent list show the handed-back worker ag1 as still there, only idle (not ended). */
+const idleAgent = (w: ReturnType<typeof world>) => void ((w.$ as unknown as { agent: Record<string, unknown> }).agent.list = async () => [{ id: 'ag1', type: 'symcc:worker', status: 'waiting', description: 'T-1' }])
+
+test('T-228: a try that merged but was left "doing" (its copy of the plugin stopped before writing done) ends done; max_minutes never stops it and nothing starts again', async () => {
+  S.me = 'me'
+  for (const mark of ['stale', 'none'] as const) {
+    for (const via of ['check', 'reload'] as const) {
+      const w = world({ answer: t1Merged() })
+      idleAgent(w)
+      const sent: string[] = []
+      let spawned = 0
+      const a = (w.$ as unknown as { agent: Record<string, unknown>; session: Record<string, unknown> })
+      a.agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+      a.session.send = async (m: { text: string }) => void sent.push(m.text)
+      // started long ago (far over max_minutes), handed back, merged and recorded; but never marked done
+      const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], merged: H1, runs: [{ started: ISO, ended: ISO, commits: [H1] }], ...(mark === 'stale' ? { finishing: new Date(Date.now() - 10 * 60_000).toISOString() } : {}) })
+      await saveBoard(w.$, b)
+      S.driving = true
+      if (via === 'reload') {
+        w.put(LEAD, leadText('me', Date.now()))
+        await claimLead(w.$, true)
+      }
+      await check(w.$)
+      await check(w.$)
+      S.driving = false
+      const t = find(await load(w.$), 'T-1')!
+      expect(workers.has('ag1')).toBe(false)
+      expect(t.status).toBe('done')
+      expect(t.merged).toBe(H1)
+      expect(t.attempts).toBe(1)
+      expect(t.history.join('\n')).not.toMatch(/over the limit/)
+      expect(t.runs!.at(-1)!.ended_by).toBe('finished')
+      expect(t.runs!.at(-1)!.ended_note).toBe('merged')
+      expect(spawned).toBe(0)
+      // the idle worker is never stopped for running too long (once done, it is only let go as a leftover)
+      expect(sent.some(m => /ran longer than/.test(m))).toBe(false)
+    }
+  }
+})
+
+test('T-237: a worker hands back, the merge takes a while and the clock passes max_minutes (a reload meanwhile): the regular check does not stop it, and it ends done', async () => {
+  S.me = 'me'
+  const sent: string[] = []
+  const r = await tryEnds(async w => {
+    idleAgent(w)
+    ;(w.$ as unknown as { session: Record<string, unknown> }).session.send = async (m: { text: string }) => void sent.push(m.text)
+    let once = false
+    w.onRun(async cmd => {
+      if (once || !/^\/bin\/sh -c /.test(cmd)) return
+      once = true
+      // while the tests run: the plugin reloads (this copy forgets what it is checking), and the
+      // regular check runs, long after the try started (its run started on ISO, days ago)
+      forget()
+      S.driving = true
+      w.put(LEAD, leadText('me', Date.now()))
+      await claimLead(w.$, true)
+      await check(w.$)
+      expect(workers.has('ag1')).toBe(false)
+      expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+    })
+    await workerFinished(w.$, 'ag1', 'made the change', false)
+    // after the merge, the regular check again: still nothing stops it
+    await check(w.$)
+    S.driving = false
+  }, { extra: { session: 'me', agent: 'ag1', branch: 'symcc/T-1' } })
+  expect(r.t.status).toBe('done')
+  expect(r.t.merged).toBe(H1)
+  expect(r.end).toEqual(['finished', 'merged'])
+  expect(r.t.history.join('\n')).not.toMatch(/over the limit|too late|restarted/)
+  expect(r.t.attempts).toBe(1)
+  expect(sent.some(m => /ran longer than/.test(m))).toBe(false)
+})
+
+test('T-237: a task changed while its work is being merged (sent back or asked meanwhile) still ends done, with its merged commit', async () => {
+  for (const to of ['todo', 'waiting'] as const) {
+    const r = await tryEnds(async w => {
+      let once = false
+      w.onRun(async cmd => {
+        if (once || !/ git update-ref .*refs\/heads\/main/.test(cmd)) return
+        once = true
+        // right as main moves: the owner's Allow (or the lead's change) writes the task
+        await change(w.$, x => patchTask(x, 'T-1', { status: to, files: ['src/', 'tests/'], history: [...find(x, 'T-1')!.history, 'files widened: + tests/'] }, ISO))
+      })
+      await workerFinished(w.$, 'ag1', 'made the change', false)
+    })
+    expect(r.t.status).toBe('done')
+    expect(r.t.merged).toBe(H1)
+    expect(r.end).toEqual(['finished', 'merged'])
+    expect(r.t.history.at(-1)).toMatch(/the work was already merged, so it stays done$/)
+  }
+})
+
+test('T-237: a merge whose done could not be written (settle failed) is still marked done', async () => {
+  const r = await tryEnds(async w => {
+    // the first save of the board with T-1 done (settle's write) fails once
+    const save = (w.$ as unknown as { process: { run: (a: string[], o?: object) => Promise<Res> } }).process
+    const run = save.run
+    let failed = false
+    save.run = async (argv, o) => {
+      if (!failed && argv[0] === 'mv' && argv.at(-1) === BOARD && find(JSON.parse(w.files.get(argv.at(-2)!) ?? '{"tasks":[]}') as Board, 'T-1')?.status === 'done') {
+        failed = true
+        return fail('disk full')
+      }
+      return run(argv, o)
+    }
+    await workerFinished(w.$, 'ag1', 'made the change', false)
+    expect(failed).toBe(true)
+  })
+  expect(r.t.status).toBe('done')
+  expect(r.t.merged).toBe(H1)
+})
+
+test('T-237: retrying a task whose last try is already on its branch marks it done instead of starting a worker', async () => {
+  S.me = 'me'
+  const w = world({ answer: t1Merged() })
+  let spawned = 0
+  ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+  // failed by the timeout although its try had merged (as T-228 was); no merge recorded on the board
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'stopped: ran over 45 min', branch: 'symcc/T-1', history: ['created by the lead', 'try 1: stopped after 47 min (over the limit)'], runs: [{ started: ISO, ended: ISO, ended_by: 'timed out', ended_note: 'ran over 45 min' }] })
+  await saveBoard(w.$, b)
+  await runTool(w.$, 'retry', { task: 'T-1' })
+  await startWorker(w.$, 'T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(spawned).toBe(0)
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  expect(t.attempts).toBe(1)
+  expect(leadQueue.some(x => x.includes('T-1') && x.includes('no new try starts'))).toBe(true)
+})
+
 // ---------------- a checking and merging step that never ends (T-219) ----------------
 
 /**
