@@ -5,6 +5,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
+import { statsUsage } from '../hooks/core/stats'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -345,4 +346,50 @@ test('/symcc-mode auto with a task in review says it still waits for approve or 
   expect(r.text).not.toContain('work starts again')
   await w.clock.advance(2000)
   expect(w.board().tasks.find(t => t.id === 'T-1')!.status).toBe('review')
+})
+
+// ---------------- /symcc-stats errors (T-231) ----------------
+
+const stats = ($: Eng, args: string) => $.command.run({ command: 'symcc-stats', args, origin: { kind: 'composer' }, presentation: 'text' } as never) as Promise<{ text?: string; isTextDisplayOnly?: boolean }>
+
+test("/symcc-stats with a board.json that isn't JSON says it could not build the stats because board.json can't be read, and leaves the file alone", async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, '{ not json')
+  const r = await stats($, '')
+  expect(r.text?.startsWith('Could not build the stats:')).toBe(true)
+  expect(r.text).toContain("board.json can't be read")
+  expect(r.isTextDisplayOnly).toBe(true)
+  expect(w.files.get(BOARD)).toBe('{ not json')
+})
+
+test('/symcc-stats 7x answers with the usage line for a bad range, and the board is not changed', async ($, on) => {
+  const w = world(on)
+  const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Done one', files: ['src/'], merge_into: 'main' }, ISO)
+  const before = JSON.stringify(patchTask(b, 'T-1', { status: 'done' }, ISO))
+  w.files.set(BOARD, before)
+  const r = await stats($, '7x')
+  expect(r.text).toBe(statsUsage('symcc'))
+  expect(r.isTextDisplayOnly).toBe(true)
+  expect(w.files.get(BOARD)).toBe(before)
+})
+
+// ---------------- a lead tool that throws (T-231) ----------------
+
+test('mcp__symcc__change for a task not on the board answers "error: ..." naming it, and the board is not changed', async ($, on) => {
+  const w = world(on)
+  const before = JSON.stringify(emptyBoard())
+  w.files.set(BOARD, before)
+  const r = (await $.tool.call({ tool: 'mcp__symcc__change', task: 'T-99', title: 'x' } as never)) as { result?: string }
+  expect(r.result?.startsWith('error: ')).toBe(true)
+  expect(r.result).toContain('T-99')
+  expect(w.files.get(BOARD)).toBe(before)
+})
+
+test('mcp__symcc__approve for a task to do answers "error: T-1 is not ready for review", and T-1 stays to do', async ($, on) => {
+  const w = world(on)
+  const [b] = addTask({ ...emptyBoard(), mode: 'review' }, { origin: { why: 'a test' }, title: 'Change b', files: ['src/'], merge_into: 'main' }, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  const r = (await $.tool.call({ tool: 'mcp__symcc__approve', task: 'T-1' } as never)) as { result?: string }
+  expect(r.result).toBe('error: T-1 is not ready for review (it is to do); only a task in review can be approved')
+  expect(w.board().tasks[0]!.status).toBe('todo')
 })
