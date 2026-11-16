@@ -65,8 +65,8 @@ test('the panel shows the board, newest task first, with their question', async 
 
 test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^  All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('subtle')
-  expect((await ui.find({ type: 'Text', text: /^  Tell the lead what you want next\.$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^  All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('inactive')
+  expect((await ui.find({ type: 'Text', text: /^  Tell the lead what you want next\.$/ }))?.props.color).toBe('inactive')
   expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^━{50}$/ }))).toBeDefined()
   await ui.unmount()
@@ -289,13 +289,13 @@ test('the Done row shows just the count, at any width', async ($, on) => {
   }
 })
 
-test('with nothing to do, need or run, two subtle "All clear" lines sit above the folded groups', async ($, on) => {
+test('with nothing to do, need or run, two dimmer (inactive) "All clear" lines sit above the folded groups', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser', { updated_at: new Date().toISOString() }), task('T-2', 'backlog', 'Dark mode')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const line = texts.findIndex(t => t === '  All clear. Nothing running or waiting.')
   expect(line).toBeGreaterThan(-1)
-  expect((await ui.find({ type: 'Text', text: /All clear/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /All clear/ }))?.props.color).toBe('inactive')
   expect(texts[line + 1]).toBe('  Tell the lead what you want next.')
   expect(texts[line + 2]).toBe(' ')
   expect(line).toBeLessThan(texts.findIndex(t => /^  ▸ Backlog  1$/.test(t)))
@@ -618,7 +618,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
   }
 })
 
-test('a scout\'s page shows its summary as the subheader, else the first line of its instructions in the subtle colour', async ($, on) => {
+test('a scout\'s page shows its summary as the subheader, else the first line of its instructions in the inactive colour', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { summary: 'Crash hunter', prompt: 'Look for crashes.\nAnd leaks.' }), scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const sub = await ui.find({ type: 'Text', text: /^Crash hunter$/ })
@@ -632,10 +632,10 @@ test('a scout\'s page shows its summary as the subheader, else the first line of
   await ui.unmount()
 })
 
-test('with no summary, a scout\'s page shows the first line of its instructions in the subtle colour', async ($, on) => {
+test('with no summary, a scout\'s page shows the first line of its instructions in the inactive colour', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'docs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const first = (await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'subtle')
+  const first = (await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'inactive')
   expect(first).toBeDefined()
   await ui.unmount()
 })
@@ -718,7 +718,7 @@ test('a task in review is listed near the top as "review" with its keys, and the
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^ ◆ review\s*$/ }))?.props.color).toBe('warning')
-  expect((await ui.find({ type: 'Text', text: /^\s*Enter to review$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^\s*Enter to review$/ }))?.props.color).toBe('inactive')
   // a and x only work on the task's own page, so the list never offers them
   expect(await ui.find({ type: 'Text', text: /a approve|x reject|a\/x/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /^⏸ review merge $/ })).toBeDefined()
@@ -872,12 +872,12 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its role and try at the right end in a subtle color; general shows only the try', async ($, on) => {
+test('a running task shows its role and try at the right end in the inactive color; general shows only the try', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
   const mark = await ui.find({ type: 'Text', text: /^ +tester · try 1$/ })
   expect(mark).toBeDefined()
-  expect(mark?.props.color).toBe('subtle')
+  expect(mark?.props.color).toBe('inactive')
   expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
   expect(await ui.find({ type: 'Text', text: /^ +try 2$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
@@ -971,7 +971,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
   expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
   const seenPiece = await ui.find({ type: 'Text', text: /^last owner prompt/ })
-  expect(seenPiece?.props.color).toBe('subtle')
+  expect(seenPiece?.props.color).toBe('inactive')
   const who = await ui.find({ type: 'Text', text: /^owner$/ })
   expect(who?.props.color).toBe('claude')
   expect(L.some(l => /^Branch:\s+symcc\/T-3$/.test(l))).toBe(true)
@@ -1213,13 +1213,13 @@ for (const width of [50, 90]) {
         '  ◎ test-gaps       every 4 hours   next in 3h 59m',
         '  ○ simplify        every 10 hours  paused',
       ])
-    // icon colors: running blue, waiting plain, paused subtle; a finding in the warning color
+    // icon colors: running blue, waiting plain, paused inactive; a finding in the warning color
     expect((await ui.findAll({ type: 'Text', text: /^  ◉ $/ }))[0]?.props.color).toBe('ide')
     expect((await ui.findAll({ type: 'Text', text: /^  ◎ $/ }))[0]?.props.color).toBe('text')
-    expect((await ui.findAll({ type: 'Text', text: /^  ○ $/ }))[0]?.props.color).toBe('subtle')
+    expect((await ui.findAll({ type: 'Text', text: /^  ○ $/ }))[0]?.props.color).toBe('inactive')
     if (width === 90) {
       expect((await ui.find({ type: 'Text', text: /last: found 1/ }))?.props.color).toBe('warning')
-      expect((await ui.find({ type: 'Text', text: /last: nothing/ }))?.props.color).toBe('subtle')
+      expect((await ui.find({ type: 'Text', text: /last: nothing/ }))?.props.color).toBe('inactive')
     }
     // a name for screen readers, "+ New scout" on top, and one hint line, no old help line
     expect((await ui.find({ key: 'scout:simplify' }))?.props.label).toBe('simplify: paused')
@@ -1271,7 +1271,7 @@ test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched
   expect(files['/scouts/bugs.md']).toBe('---\nevery_minutes: 30\n---\nLook for crashes.\n')
   expect(toasts.some(t => /bugs paused: it doesn't run until you resume it/.test(t))).toBe(true)
   expect(await ui.find({ type: 'Text', text: /^○ paused$/ })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^○ paused$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^○ paused$/ }))?.props.color).toBe('inactive')
   expect(await ui.find({ type: 'Text', text: /p resume/ })).toBeDefined()
   expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Resume')
   // run now is refused while it is paused

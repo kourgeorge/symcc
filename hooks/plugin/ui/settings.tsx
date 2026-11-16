@@ -29,8 +29,8 @@ function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
         <Text>
           <Text bold color={C('claude')}>{d.role}</Text> <Text bold color={C('warning')}>editing</Text>
         </Text>
-        <Text color={C('subtle')}>save writes {roleFileOf(d.role)}{source === 'built-in' ? ' (a copy of the built-in role; Reset to built-in undoes it)' : ''}</Text>
-        <Text color={C('subtle')}>the name is the file's name: to rename the role, rename {roleFileOf(d.role)}</Text>
+        <Text color={C('inactive')}>save writes {roleFileOf(d.role)}{source === 'built-in' ? ' (a copy of the built-in role; Reset to built-in undoes it)' : ''}</Text>
+        <Text color={C('inactive')}>the name is the file's name: to rename the role, rename {roleFileOf(d.role)}</Text>
       </Box>
       <Box flexDirection="row" gap={1}>
         <Button key="role-save" label="Save" onPress={act(async () => {
@@ -68,15 +68,15 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
   const section = (title: string, value: string | undefined, none: string) => (
     <Box flexDirection="column">
       {heading(title)}
-      {value ? <Text color={C('text')}>{`  ${value}`}</Text> : <Text color={C('subtle')}>{`  ${none}`}</Text>}
+      {value ? <Text color={C('text')}>{`  ${value}`}</Text> : <Text color={C('inactive')}>{`  ${none}`}</Text>}
     </Box>
   )
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
         <Text>
-          <Text bold color={C(r.off ? 'subtle' : 'claude')}>{r.name}</Text>
-          <Text color={C(r.off ? 'warning' : 'subtle')}> · {roleSourceLabel(source, r.off)}</Text>
+          <Text bold color={C(r.off ? 'inactive' : 'claude')}>{r.name}</Text>
+          <Text color={C(r.off ? 'warning' : 'inactive')}> · {roleSourceLabel(source, r.off)}</Text>
         </Text>
         <Text bold color={C('text')}>{r.description}</Text>
         {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
@@ -102,7 +102,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
       {section('Tools', (r.tools ?? []).join(', '), '(none: the base tools only)')}
       <Box flexDirection="column">
         {heading('Checklist')}
-        {r.prompt.trim() ? paragraphs(r.prompt.trim()) : <Text color={C('subtle')}>(none: a plain worker)</Text>}
+        {r.prompt.trim() ? paragraphs(r.prompt.trim()) : <Text color={C('inactive')}>(none: a plain worker)</Text>}
       </Box>
       <Box flexDirection="column">
         {heading('File')}
@@ -135,7 +135,7 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenRole, builtIn: RoleDef[]
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
         <Text>
-          <Text bold color={C('subtle')}>{b.name}</Text>
+          <Text bold color={C('inactive')}>{b.name}</Text>
           <Text color={C('error')}> · {brokenRoleLabel(b)}</Text>
         </Text>
         <Text color={C('text')}>Fix the file by hand: {b.file}{out ? `; or ${out}` : ''}.</Text>
@@ -176,7 +176,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
   /** A role whose file can't be read: "tester — your file can't be read: no description". */
   const brokenRow = (b: BrokenRole, first: boolean) => (
     <Button key={`roleRow:${b.name}`} label={`${b.name} — ${brokenRoleLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
-      <Text bold color={C('subtle')}>{`  ${b.name.padEnd(nameW)}`}</Text>
+      <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
       <Text color={C('error')}>{` — ${brokenRoleLabel(b)}`}</Text>
     </Button>
   )
@@ -199,7 +199,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         />
         {roleView.naming.error ? <Text color={C('error')}>{roleView.naming.error}</Text> : null}
         <Button key="role-new-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
-        <Text color={C('subtle')}>{boxHint(`Enter makes ${S.N.dir}/roles/<name>.md and opens it`)}</Text>
+        <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/roles/<name>.md and opens it`)}</Text>
       </Box>
     ) : (
       <Button key="role-new" label="+ New role" hotkey="n" onPress={() => ((roleView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
@@ -216,16 +216,16 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         const source = roleSource(r.name, builtIn, project)!
         return (
           <Button key={`roleRow:${r.name}`} label={`${r.name}: ${roleSourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
-            <Text bold={!r.off} color={C(r.off ? 'subtle' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
-            <Text color={C(r.off ? 'warning' : 'subtle')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
-            <Text color={C(r.off ? 'subtle' : 'text')}>{` · ${r.description}`}</Text>
+            <Text bold={!r.off} color={C(r.off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
+            <Text color={C(r.off ? 'warning' : 'inactive')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
+            <Text color={C(r.off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
             {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
           </Button>
         )
       })}
       {broken.filter(b => !roleNamed(roles, b.name)).map((b, i) => brokenRow(b, !roles.length && i === 0))}
       {newRoleBox()}
-      <Text color={C('subtle')}>Enter opens a role · n makes a new one · or tell the lead</Text>
+      <Text color={C('inactive')}>Enter opens a role · n makes a new one · or tell the lead</Text>
       <Text key="roles-page-blank"> </Text>
       <Button key="roles-back" label="Back (b)" hotkey="b" onPress={() => ((roleView.list = false), (roleView.naming = null), $.ui.invalidate('ui.render'))} />
       {footer(rolesKeys(), 'roles-keys')}
@@ -297,8 +297,8 @@ export async function settingsPage($: $, pane: PaneParts) {
         />
         {ed.error ? <Text color={C('error')}>{ed.error}</Text> : null}
         {cancelButton}
-        {info.kind === 'commands' ? <Text color={C('subtle')}>join commands with " && " · none clears them</Text> : null}
-        <Text color={C('subtle')}>{boxHint('Enter saves')}</Text>
+        {info.kind === 'commands' ? <Text color={C('inactive')}>join commands with " && " · none clears them</Text> : null}
+        <Text color={C('inactive')}>{boxHint('Enter saves')}</Text>
       </Box>
     )
   }
@@ -313,7 +313,7 @@ export async function settingsPage($: $, pane: PaneParts) {
           </Button>
         ))}
         {cancelButton}
-        <Text color={C('subtle')}>{pickHint('x')}</Text>
+        <Text color={C('inactive')}>{pickHint('x')}</Text>
       </Box>
     )
   }
@@ -325,16 +325,16 @@ export async function settingsPage($: $, pane: PaneParts) {
           <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
           <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
           {x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
-          <Text color={C('subtle')}> · default {x.default} · {x.range} · {x.meaning}</Text>
+          <Text color={C('inactive')}> · default {x.default} · {x.range} · {x.meaning}</Text>
         </Button>,
         ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
       ])}
-      <Text color={C('subtle')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
+      <Text color={C('inactive')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
       <Text key="roles-blank"> </Text>
       <Button key="settings-roles" label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>
         <Text bold color={C('claude')}>{'Roles'.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {rolesCount}</Text>
-        <Text color={C('subtle')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>
+        <Text color={C('inactive')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>
       </Button>
       <Text key="settings-blank"> </Text>
       <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
