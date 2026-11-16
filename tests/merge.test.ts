@@ -3567,6 +3567,46 @@ test('Keep as a note after two tries lists both reports, oldest first, and asks 
   expect(one.details).not.toContain('combine')
 })
 
+test('a keep-note task after two tries reads both answers inside its own folder, and its commit holds only the note (T-284)', async () => {
+  const w = world({ changed: ['docs/research/do-it.md'], current: 'main' })
+  const runs = [
+    { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
+    { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
+  ]
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
+  w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
+  w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
+  await runTool(w.$, 'approve', { task: 'T-1', keep_note: true })
+  const n = find(await load(w.$), 'T-2')!
+  expect(n.details).toContain('copied into your own folder at the same path when you start (git-ignored, never committed): read them there, not in the main project folder.')
+  // the docs worker starts: both reports are copied into its folder, at the paths its details name
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  let prompt = ''
+  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  x.agent.spawn = async (e: { prompt: string }) => ((prompt = e.prompt), { agentId: 'ag9' })
+  x.plugin = { root: '/plugin' }
+  x.fs.list = async () => []
+  await startWorker(w.$, 'T-2')
+  const wt = `${ROOT}/.symcc/worktrees/T-2`
+  expect(find(await load(w.$), 'T-2')!.status).toBe('doing')
+  expect(prompt).toContain(wt)
+  expect(prompt).toContain('.symcc/reports/T-1-try-1.md, .symcc/reports/T-1-try-2.md')
+  expect(w.files.get(`${wt}/.symcc/reports/T-1-try-1.md`)).toBe('The full first draft.')
+  expect(w.files.get(`${wt}/.symcc/reports/T-1-try-2.md`)).toBe('Change point 2. Everything else is the same as try 1.')
+  // the copies are git-ignored in the folder, so git add -A leaves them out: the commit has only the note
+  expect(w.files.get(`${wt}/.symcc/.gitignore`)).toBe('*\n')
+  workers.clear()
+  const [b2, t2] = [await load(w.$), find(await load(w.$), 'T-2')! as SymccTask]
+  const r = await checkAndMerge(w.$, t2, wt, b2)
+  expect(r.ok).toBe(true)
+  expect(w.calls).toContain(`${wt}: git add -A -- .`)
+  expect(t2.files).toEqual(['docs/research/do-it.md'])
+})
+
 test('the investigation worker prompt after Ask more asks for the complete answer, not only what changed', () => {
   const [b0] = boardWith('auto', [], { kind: 'investigation', status: 'review' } as Partial<BoardTask>)
   expect(WORKER_PROMPT(b0.tasks[0]!, b0, WT)).not.toContain('complete answer')
