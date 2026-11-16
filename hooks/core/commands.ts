@@ -111,10 +111,17 @@ export function statText(id: string, files: DiffFile[], name: string = DEFAULT_N
 /** Where the review/waiting/failed tasks go in the panel's list: those first (in this order), the rest after. */
 export const NEEDS_YOU: SymccStatus[] = ['review', 'waiting', 'failed']
 
-/** For the panel: tasks that need the owner (NEEDS_YOU) first, the rest keep their order. */
-export function needsYouFirst<T extends Pick<SymccTask, 'status'>>(tasks: T[]): T[] {
+/** A task being worked on whose worker ran over its time limit while the owner is asked "give it more time?" (time_ask set). */
+export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => t.status === 'doing' && !!t.time_ask
+
+/** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time. */
+export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => NEEDS_YOU.includes(t.status) || asksMoreTime(t)
+
+/** For the panel: tasks that need the owner (see needsYou) first, the rest keep their order. A task asking for
+ *  more time sorts with the waiting ones (both wait for an answer). */
+export function needsYouFirst<T extends Pick<SymccTask, 'status'> & { time_ask?: string }>(tasks: T[]): T[] {
   const rank = (t: T) => {
-    const i = NEEDS_YOU.indexOf(t.status)
+    const i = NEEDS_YOU.indexOf(asksMoreTime(t) ? 'waiting' : t.status)
     return i < 0 ? NEEDS_YOU.length : i
   }
   return tasks.map((t, i) => [t, i] as const).sort(([a, i], [b, j]) => rank(a) - rank(b) || i - j).map(([t]) => t)

@@ -1,10 +1,11 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
 import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
-import { NEEDS_YOU, needsYouFirst } from './commands'
+import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
 import { originOf } from './origin'
+import { overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
@@ -72,16 +73,21 @@ export function withCrew(build: (workers: string, scouts: string) => string, cre
   return tries.find(t => t.length <= width) ?? tries[tries.length - 1]!
 }
 
+/** The status column of a task whose worker ran over its time limit while the owner is asked for more time. */
+export const MORE_TIME_CELL = 'more time?'
+
 /** The short word the board list shows for each check step. */
 const STEP_WORD: Record<CheckStep, string> = { checking: 'check', testing: 'test', merging: 'merge' }
 
 /** The short status column of a task row in the board list: the step while symcc checks its finished work
  *  ("check", "test", "merge", the short words for checkStepNow's steps), else the time of the running try ("4m") for a task being
- *  worked on, "review", "waiting", "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
+ *  worked on ("more time?" while its worker, over its time limit, waits for the owner's answer), "review", "waiting",
+ *  "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
-export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>, nowMs: number, since?: number | string): string {
+export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask'>, nowMs: number, since?: number | string): string {
   const step = checkStepNow(t, nowMs)
   if (step) return STEP_WORD[step]
+  if (asksMoreTime(t)) return MORE_TIME_CELL
   if (t.status === 'doing') {
     const last = t.runs?.[t.runs.length - 1]
     if (last && !last.ended) return fmtDuration(runMs(last, nowMs))
@@ -91,21 +97,24 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTas
   return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
 }
 
-/** The secondary-color (inactive) text at the right end of a task row: "tester · try 1" for a task being worked on, "after T-3" for
+/** The secondary-color (inactive) text at the right end of a task row: "tester · try 1" for a task being worked on (its
+ *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "after T-3" for
  *  one waiting on unfinished tasks (else its role), "Enter to review" in review (a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked
- *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean. */
-export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = ''): string {
+ *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean.
+ *  `maxMinutes`: the board's max_minutes, for the time limit in the more-time question. */
+export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes): string {
   const into = intoOf(t)
   const other = here && into !== here ? `→ ${into}` : ''
-  const rest = fileWaitText(t) || rowExtraOf(t, tasks)
+  const rest = fileWaitText(t) || rowExtraOf(t, tasks, maxMinutes)
   return [other, rest].filter(Boolean).join(' · ')
 }
 
-function rowExtraOf(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): string {
+function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], maxMinutes: number): string {
   switch (t.status) {
     case 'doing':
+      if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
       return [roleMark(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')
     case 'todo':
     case 'paused': {
@@ -399,8 +408,8 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([day, ts]) => ({ day, label: dayLabel(day, today), done: ts.length, dropped: 0, tasks: ts }))
   return {
-    needsYou: needsYouFirst(s.open.filter(t => NEEDS_YOU.includes(t.status))),
-    doing: s.open.filter(t => t.status === 'doing'),
+    needsYou: needsYouFirst(s.open.filter(needsYou)),
+    doing: s.open.filter(t => t.status === 'doing' && !asksMoreTime(t)),
     todo: waitOrder(s.open.filter(t => t.status === 'todo' || t.status === 'paused'), (x, y) => +(x.status === 'paused') - +(y.status === 'paused') || runOrder(x, y)),
     backlog: s.backlog,
     done,

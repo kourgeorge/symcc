@@ -2106,6 +2106,10 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   const s = panelSections(tasks, NOW, 0)
   expect(s.needsYou.map(t => t.id)).toEqual(['T-6', 'T-5'])
   expect(s.doing.map(t => t.id)).toEqual(['T-7'])
+  // a task asking for more time waits for the owner: under NEEDS YOU (with the waiting ones), not with the running ones
+  const asking = panelSections(tasks.map(t => (t.id === 'T-7' ? { ...t, time_ask: '2026-11-11T11:00:00Z' } : t)), NOW, 0)
+  expect(asking.needsYou.map(t => t.id)).toEqual(['T-6', 'T-7', 'T-5'])
+  expect(asking.doing.map(t => t.id)).toEqual([])
   expect(s.todo.map(t => t.id)).toEqual(['T-4', 'T-2', 'T-3'])
   expect(s.backlog.map(t => t.id)).toEqual(['T-11'])
   expect(s.done.map(t => t.id)).toEqual(['T-8', 'T-1'])
@@ -2214,6 +2218,11 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
   expect(rowExtra(tasks[2]!, tasks)).toBe('')
+  // a worker over its time limit asking the owner for more time: "more time?" and the question, not its time and try
+  const asking = { ...base, time_ask: '2026-11-11T11:59:00Z', extra_minutes: 10 }
+  expect(statusCell(asking, now)).toBe('more time?')
+  expect(rowExtra(asking, tasks, '', 45)).toBe('T-5 has run 55 min. Give it more time?')
+  expect(rowExtra({ ...asking, extra_minutes: undefined }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
   // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
   const wide = fitRow(20, 'Secrets scout example', 'frontend · try 1', 60)
   expect(20 + wide.title.length + wide.pad.length + wide.extra.length).toBe(60)

@@ -248,15 +248,19 @@ export const OVERTIME_NOTE = 'over time; asked the owner'
 export const WRAP_UP_TEXT = "Time is up: write down what you have done and found, save notes into your task's files, and hand back now (answer with what you did, what you found and what is left)."
 
 /**
- * The owner's answer to the over-time question: { add: N } for "+N min" (or a plain number of minutes,
- * 1-600), { stop: true } for "Stop it", or undefined when it is neither.
+ * The owner's answer to the over-time question: { add: N } for "+N min" (or a plain number of minutes;
+ * "+1 hour" / "2 h" count 60 minutes each; 1-600 minutes in all), { stop: true } for "Stop it", or undefined when it
+ * is neither or the number has another unit ("3 days").
  */
 export function parseOvertimeAnswer(answer: string): { add: number } | { stop: true } | undefined {
   const a = String(answer ?? '').trim().toLowerCase()
   if (/^(stop|no\b|end|fail)/.test(a)) return { stop: true }
-  const m = /^\+?\s*(\d{1,3})\s*(m|min|mins|minutes?)?\b/.exec(a) ?? /\+\s*(\d{1,3})\s*(m|min|mins|minutes?)?\b/.exec(a)
+  const num = /^\+?\s*(\d{1,3})(?:\s*([a-z]+))?/
+  const m = num.exec(a) ?? /\+\s*(\d{1,3})(?:\s*([a-z]+))?/.exec(a)
   if (!m) return undefined
-  const n = Number(m[1])
+  const unit = m[2] ?? ''
+  const per = /^(h|hr|hrs|hours?)$/.test(unit) ? 60 : /^(|m|min|mins|minutes?)$/.test(unit) ? 1 : 0
+  const n = Number(m[1]) * per
   return n >= 1 && n <= 600 ? { add: n } : undefined
 }
 

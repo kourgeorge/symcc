@@ -146,7 +146,7 @@ export function listPage($: $, pane: PaneParts) {
         const x = r.task
         const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
         const lead = r.indent + idWidth + 3 + cellWidth + 2
-        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? ''), width)
+        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), width)
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
             <Text>{' '.repeat(r.indent)}</Text>
