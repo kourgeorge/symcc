@@ -225,7 +225,7 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 
 Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
 The Settings tab (`c` in the panel) has one row per setting; Enter flips an on/off
-setting, opens a pick list for `mode` and `notify`, or an edit box for numbers and
+setting, opens a pick list for `mode`, `notify` and `scout_findings`, or an edit box for numbers and
 `test_commands`. A value over its limit is cut to it, and the answer says so.
 
 | Setting | Default | Allowed | Meaning |
@@ -237,6 +237,7 @@ setting, opens a pick list for `mode` and `notify`, or an edit box for numbers a
 | `archive_days` | 14 | 0–3650 (0 = never) | Done and dropped tasks older than this move from `board.json` to `.symcc/archive.json` |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
 | `notify` | `voice` where this computer can speak, else `sound`, else `off` | `off` / `sound` / `voice` | What plays when a task is merged or a worker asks you something: `sound` a short chime, `voice` says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project folder's name first). Only choices this computer can play can be picked (see below) |
+| `scout_findings` | `auto` | `auto` / `backlog` | Where tasks from a scout's finding go. `auto`: the lead decides, and a finding it adds goes to `todo` and runs. `backlog`: every task added from a scout finding goes to the backlog, whatever the lead asks, and starts only when you move it to `todo` (the lead still tells you what was found) |
 | `mode` | `auto` | `off` / `review` / `auto` | See Modes above |
 | `enabled` | on | on / off | The whole plugin on or off, same as `/symcc-on` and `/symcc-off` |
 

@@ -1,8 +1,9 @@
 // The board panel's Settings view.
-import { SETTINGS, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError } from '../../board'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
+import { load } from '../store'
 import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../roles'
 import type { PaneParts } from './parts'
 
@@ -236,7 +237,9 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
  *  Enter on an empty edit box cancels it too; Back (b) goes to the board list. None of it needs Esc, which
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, v, act, C, header, footer } = pane
+  const { Box, Text, Button, Input, act, C, header, footer } = pane
+  // scout_findings is not in the panel's view of the board: read it from the board file
+  const v = { ...pane.v, scout_findings: (await load($).catch(() => null))?.scout_findings }
   const { builtIn, project, broken } = await roleLists($)
   const roles = mergeRoles(builtIn, project)
   const openedBroken = roleView.open ? broken.find(b => b.name === roleView.open) : undefined
@@ -258,7 +261,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     $.ui.toast(S.N.toast(r))
     $.ui.invalidate('ui.render')
   })
-  /** Enter on a row: on/off flips, mode and notify open a pick list, the rest an edit box. */
+  /** Enter on a row: on/off flips, mode, notify and scout_findings open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
     const info = SETTINGS.find(x => x.name === name)!
     const now = settingValue(v, name)
@@ -266,6 +269,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     S.settingEdit = null
     S.settingPick = null
     if (info.kind === 'mode') S.settingPick = { name, options: ['off', 'review', 'auto'] }
+    else if (info.kind === 'findings') S.settingPick = { name, options: [...SCOUT_FINDINGS_CHOICES] }
     // only what this machine can play (off always)
     else if (info.kind === 'notify') S.settingPick = { name, options: v.notify_choices?.length ? v.notify_choices : ['off'] }
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
