@@ -2023,6 +2023,25 @@ test('the owner\'s answer to "more time?": +N min or stop, anything else is refu
   expect(parseOvertimeAnswer('45 minutes')).toEqual({ add: 45 })
   expect(parseOvertimeAnswer('3 days')).toBeUndefined()
   expect(parseOvertimeAnswer('+20 hours')).toBeUndefined()
+  // decimals, rounded up to whole minutes
+  expect(parseOvertimeAnswer('1.5 hours')).toEqual({ add: 90 })
+  expect(parseOvertimeAnswer('0.5 h')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('2.5 min')).toEqual({ add: 3 })
+  // filler words between the number and the unit, and around the answer
+  expect(parseOvertimeAnswer('30 more minutes')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('+30 more min')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('+30 extra minutes')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('45 more')).toEqual({ add: 45 })
+  expect(parseOvertimeAnswer('1 more hour')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('+1 extra hour')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('give it 30 more minutes')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('another 20 min please')).toEqual({ add: 20 })
+  expect(parseOvertimeAnswer('please give it 10 additional minutes.')).toEqual({ add: 10 })
+  // other units and left-over words are refused, not skipped
+  expect(parseOvertimeAnswer('2 weeks')).toBeUndefined()
+  expect(parseOvertimeAnswer('3 more days')).toBeUndefined()
+  expect(parseOvertimeAnswer('30 min then stop')).toBeUndefined()
+  expect(parseOvertimeAnswer('1.5.2 hours')).toBeUndefined()
 })
 
 test('a worker whose agent ended is failed only on a later check, unless its report arrived in between', async () => {

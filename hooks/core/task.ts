@@ -257,18 +257,22 @@ export const WRAP_UP_TEXT = "Time is up: write down what you have done and found
 
 /**
  * The owner's answer to the over-time question: { add: N } for "+N min" (or a plain number of minutes;
- * "+1 hour" / "2 h" count 60 minutes each; 1-600 minutes in all), { stop: true } for "Stop it", or undefined when it
- * is neither or the number has another unit ("3 days").
+ * "+1 hour" / "1.5 h" count 60 minutes each, rounded up to whole minutes; 1-600 minutes in all), { stop: true } for
+ * "Stop it", or undefined when it is neither, the number has another unit ("3 days") or other words are left over.
+ * Filler words are skipped: "give it 30 more minutes", "+1 extra hour", "45 more", "another 20 min please".
  */
 export function parseOvertimeAnswer(answer: string): { add: number } | { stop: true } | undefined {
-  const a = String(answer ?? '').trim().toLowerCase()
+  let a = String(answer ?? '').trim().toLowerCase()
   if (/^(stop|no\b|end|fail)/.test(a)) return { stop: true }
-  const num = /^\+?\s*(\d{1,3})(?:\s*([a-z]+))?/
-  const m = num.exec(a) ?? /\+\s*(\d{1,3})(?:\s*([a-z]+))?/.exec(a)
+  a = a.replace(/[.,!?]+$/, '').replace(/^(please\s*,?\s+)?(give\s+it\s+)?(please\s+)?/, '')
+  const num = /^(?:(?:another|an?|extra|additional|more)\s+)?\+?\s*(\d{0,3}\.\d+|\d{1,3})(?![\d.])\s*(.*)$/
+  const m = num.exec(a) ?? num.exec(a.slice(Math.max(0, a.indexOf('+'))))
   if (!m) return undefined
-  const unit = m[2] ?? ''
+  const words = m[2].split(/[\s,]+/).filter(w => w && !/^(more|extra|another|additional|please)$/.test(w))
+  if (words.length > 1) return undefined
+  const unit = words[0] ?? ''
   const per = /^(h|hr|hrs|hours?)$/.test(unit) ? 60 : /^(|m|min|mins|minutes?)$/.test(unit) ? 1 : 0
-  const n = Number(m[1]) * per
+  const n = Math.ceil(Number(m[1]) * per)
   return n >= 1 && n <= 600 ? { add: n } : undefined
 }
 
