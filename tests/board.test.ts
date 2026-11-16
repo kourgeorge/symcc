@@ -1166,7 +1166,15 @@ test('agent names start with the plugin name', () => {
 
 test('a worker asking for more files is read from its answer', async () => {
   expect(parseNeedFiles('NEED FILES: README.md — the docs mention it')).toEqual({ files: ['README.md'], reason: 'the docs mention it' })
-  expect(parseNeedFiles('I looked around.\n  NEED FILES: README.md, tests/x.test.ts - both need the new name')).toEqual({ files: ['README.md', 'tests/x.test.ts'], reason: 'both need the new name' })
+  expect(parseNeedFiles('\nNEED FILES: README.md, tests/x.test.ts - both need the new name')).toEqual({ files: ['README.md', 'tests/x.test.ts'], reason: 'both need the new name' })
+  // only the first non-empty line, at the very start: indented, quoted or code examples later are not requests
+  expect(parseNeedFiles('I looked around.\n  NEED FILES: README.md, tests/x.test.ts - both need the new name')).toBeUndefined()
+  expect(parseNeedFiles('I looked around.\nNEED FILES: README.md — docs')).toBeUndefined()
+  expect(parseNeedFiles('    NEED FILES: path/a, path/b — <reason>')).toBeUndefined()
+  expect(parseNeedFiles('```\nNEED FILES: path/a, path/b — <reason>\n```')).toBeUndefined()
+  expect(parseNeedFiles('> NEED FILES: path/a — quoted')).toBeUndefined()
+  // details after the request line are fine
+  expect(parseNeedFiles('NEED FILES: a, b — reason\nDetails for the next try:\n- a needs the new name\n- b too')).toEqual({ files: ['a', 'b'], reason: 'reason' })
   expect(parseNeedFiles('NEED FILES: `src/my-file.ts`, `./docs/a.md` — rename')).toEqual({ files: ['src/my-file.ts', 'docs/a.md'], reason: 'rename' })
   expect(parseNeedFiles('NEED FILES:  a.js ,  b.js ')).toEqual({ files: ['a.js', 'b.js'], reason: '' })
   expect(parseNeedFiles('Done.\nNeed files: none')).toBeUndefined()

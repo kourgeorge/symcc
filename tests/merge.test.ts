@@ -1362,6 +1362,18 @@ test('NEED FILES still makes the task wait with its question', async () => {
   expect(sayQueue).toEqual(['?T-1'])
 })
 
+test('a NEED FILES first line followed by detail lines still waits for those files', async () => {
+  const { t } = await workerAnswers('NEED FILES: a, b — reason\nDetails for the next try:\n- a needs the new name\n- b too', { notify: 'off' })
+  expect(t.status).toBe('waiting')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a', 'b'])
+})
+
+test('a change report that mentions an indented or quoted NEED FILES line in its middle merges normally', async () => {
+  const { t } = await workerAnswers('I changed src/a.ts so a worker answers:\n    NEED FILES: path/a, path/b — <reason>\nand also `NEED FILES: x` in a quote.\n```\nNEED FILES: y\n```', { notify: 'off' })
+  expect(t.status).toBe('done')
+  expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+})
+
 test('a worker QUESTION with an OPTIONS line saves the options; without one, or with too few or too many, none', async () => {
   const { t } = await workerAnswers('QUESTION: Which colour?\nOPTIONS: red | blue | green', { notify: 'off' })
   expect(t.question).toBe('Which colour?')
@@ -1606,7 +1618,7 @@ test('a report longer than the cap is kept up to the cap, with a line saying it 
 })
 
 test("a QUESTION or NEED FILES try saves its text as the try's report too", async () => {
-  const { w, t } = await finishes('I looked around.\nNEED FILES: README.md — the docs mention it')
+  const { w, t } = await finishes('NEED FILES: README.md — the docs mention it\nI looked around.')
   expect(t.status).toBe('waiting')
   expect(t.runs![0]!.report).toBe('.symcc/reports/T-1-try-1.md')
   expect(w.files.get(REPORT1)).toContain('NEED FILES: README.md')
@@ -3376,6 +3388,19 @@ test('an investigation hand-back that restates the question ("Question: ... / An
   expect(t.note).toBe('answered; waiting for you to read it')
   expect(t.answer).toBe(body)
   expect(t.question ?? undefined).toBeUndefined()
+})
+
+test('an investigation answer with an indented NEED FILES example goes to review as answered', async () => {
+  const body = 'Workers ask for files like this:\n    NEED FILES: path/a, path/b — <reason>\nThat is all.'
+  const { t } = await investigationAnswers('auto', body)
+  expect(t.status).toBe('review')
+  expect(t.answer).toBe(body)
+  expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+})
+
+test('an investigation never waits for files, even when its answer starts with NEED FILES', async () => {
+  const { t } = await investigationAnswers('auto', 'NEED FILES: path/a — example')
+  expect(t.status).toBe('review')
 })
 
 test('an investigation worker that asks a QUESTION still waits for the owner', async () => {

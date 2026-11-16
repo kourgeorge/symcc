@@ -161,10 +161,13 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
  * A worker that must change files outside its list stops and answers
  * `NEED FILES: path/a, path/b — reason`. Returns the files and the reason (may be empty), or
  * undefined when the answer is not that. Spaces and backticks around the paths are fine.
- * "NEED FILES" must be in capitals (a report line like "Need files: none" is not a request).
+ * "NEED FILES" must be in capitals (a report line like "Need files: none" is not a request), and it must
+ * be the FIRST non-empty line, at the very start of the line: an indented, quoted or code-block example
+ * later in a report is not a request. Lines after it (details for the next try) are fine.
  */
 export function parseNeedFiles(answer: string): { files: string[]; reason: string } | undefined {
-  const m = /^[\s`*]*NEED\s+FILES\s*:\s*(.*)$/m.exec(answer)
+  const first = answer.split(/\r?\n/).find(l => l.trim()) ?? ''
+  const m = /^NEED\s+FILES\s*:\s*(.*)$/.exec(first.trimEnd())
   if (!m) return undefined
   const rest = m[1]!.trim()
   const cut = /\s+(?:—|–|--|-)\s+|\s*[—–]\s*/.exec(rest)

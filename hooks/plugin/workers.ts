@@ -588,7 +588,8 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     return
   }
   const q = parseQuestion(answer)
-  const need = parseNeedFiles(answer)
+  // Investigations never ask for files (they have no file list): a NEED FILES line in one is part of its answer.
+  const need = kindOf(t) === 'investigation' ? undefined : parseNeedFiles(answer)
   if (aborted) {
     if (await writeIfSame($, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
     tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
