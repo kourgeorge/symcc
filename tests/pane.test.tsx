@@ -53,7 +53,7 @@ test('the panel shows the board, newest task first, with their question', async 
     expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
     // every line of the clef drawing is drawn, in the accent color, all the same width so the text beside it lines up
     // (a line with only the drawing matches twice: the whole line, and the colored drawing in it)
-    const art = await Promise.all(ICON_ART.map(async l => (await ui.findAll({ type: 'Text', text: new RegExp(`^${esc(l)}  $`) })).find(t => t.props.color === 'ide')))
+    const art = await Promise.all(ICON_ART.map(async l => (await ui.findAll({ type: 'Text', text: new RegExp(`^ ${esc(l)}  $`) })).find(t => t.props.color === 'ide')))
     expect(art.every(t => t !== undefined)).toBe(true)
     expect(new Set(art.map(t => t!.text.length)).size).toBe(1)
     expect((await ui.find({ type: 'Text', text: /^tests: npm test$/ }))).toBeDefined()
