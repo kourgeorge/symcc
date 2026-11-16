@@ -6,7 +6,7 @@ import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCo
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, scoutPausedAnswer, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -2299,11 +2299,11 @@ test('a paused scout is saved in scouts.json and read back; old files without it
   expect(parseScoutMemory(scoutPausedText({ x: { last_run: null, paused: true } }, 'x', false))).toEqual({})
 })
 
-test('a paused scout is not run by its timer or by run now', () => {
+test('a pause does not stop run now (only the timer checks it)', () => {
   const ok = { driving: true, gitOk: true, mode: 'auto' as const, on: true }
   expect(scoutMayRun({ running: false }, ok)).toBe(true)
   expect(scoutMayRun({ running: false, paused: false }, ok)).toBe(true)
-  expect(scoutMayRun({ running: false, paused: true }, ok)).toBe(false)
+  expect(scoutMayRun({ running: false, paused: true }, ok)).toBe(true)
   expect(scoutMayRun({ running: true }, ok)).toBe(false)
   expect(scoutMayRun({ running: false }, { ...ok, driving: false })).toBe(false)
   expect(scoutMayRun({ running: false }, { ...ok, gitOk: false })).toBe(false)
@@ -2313,7 +2313,7 @@ test('a paused scout is not run by its timer or by run now', () => {
   const why = (s: { running: boolean; paused?: boolean }, o = ok) => scoutWhyNot({ name: 'gaps-bot', ...s }, o)
   expect(why({ running: false })).toBe('')
   expect(why({ running: true })).toBe('gaps-bot is already running')
-  expect(why({ running: false, paused: true })).toBe('gaps-bot is paused; resume it first (p on its page, or /symcc-scout gaps-bot resume)')
+  expect(why({ running: false, paused: true })).toBe('')
   expect(why({ running: false }, { ...ok, driving: false })).toBe('scouts run in the session that drives the board; run /symcc-scout gaps-bot there')
   expect(why({ running: false }, { ...ok, gitOk: false })).toBe("git isn't set up in this folder yet (no repo or no commit); nothing runs until it is")
   expect(why({ running: false }, { ...ok, on: false })).toBe('symcc is off. The owner can turn it on with /symcc-on.')
@@ -2321,14 +2321,13 @@ test('a paused scout is not run by its timer or by run now', () => {
   for (const s of [{ running: false }, { running: true }, { running: false, paused: true }])
     for (const o of [ok, { ...ok, driving: false }, { ...ok, gitOk: false }, { ...ok, on: false }, { ...ok, mode: 'off' as const }])
       expect(why(s, o) === '').toBe(scoutMayRun(s, o))
-  expect(scoutPausedAnswer('gaps-bot')).toBe('gaps-bot is paused; resume it first (p on its page, or /symcc-scout gaps-bot resume)')
   // the status strip's next scout skips a paused one
   const at = Date.parse('2026-11-12T10:00:00.000Z')
   const iso = (m: number) => new Date(at + m * 60_000).toISOString()
   expect(nextScoutText([{ name: 'a', running: false, next_run: iso(5), paused: true }, { name: 'b', running: false, next_run: iso(30) }], at)).toBe('next: b in 30m')
   expect(nextScoutText([{ name: 'a', running: false, next_run: iso(5), paused: true }], at)).toBe('')
-  // the lead hears that a scout paused during its run won't run again
-  expect(scoutLeadMessage('a', '1. bug', true)).toContain('The owner has paused "a": it doesn\'t run again until the owner resumes it.')
+  // the lead hears that a paused scout won't run on its timer
+  expect(scoutLeadMessage('a', '1. bug', true)).toContain('The owner has paused "a": it doesn\'t run on its timer until the owner resumes it (run now still runs it once).')
   expect(scoutLeadMessage('a', '1. bug')).not.toContain('paused')
 })
 

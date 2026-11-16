@@ -211,7 +211,7 @@ export function everyText(minutes: number): string {
   return `every ${m} min`
 }
 
-/** What a scout is doing: "running now…", "paused", "next in 12m", "due now", or '' when no run is planned (as
+/** What a scout is doing: "running now…", "paused" (its timer is stopped; run now still runs it), "next in 12m", "due now", or '' when no run is planned (as
  *  for a scout that runs only on demand). A scout paused while it runs finishes that run, so it still says
  *  "running now…". */
 export function scoutStateText(s: Pick<SymccScout, 'running' | 'next_run' | 'paused'> & { every_minutes?: number }, nowMs: number): string {
@@ -248,8 +248,9 @@ export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run' |
   return a.name.localeCompare(b.name)
 }
 
-/** True when scout `s` may start a run now (on its timer, or run now): not running already, not paused, in the
- *  session that drives the board, with a usable git repo, the board on and not in mode off. */
+/** True when scout `s` may start a run now: not running already, in the session that drives the board, with a
+ *  usable git repo, the board on and not in mode off. A pause doesn't matter here: it only stops the timer (the
+ *  timer checks it itself), so "run now" still runs a paused scout. */
 export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean }): boolean {
   return scoutWhyNot({ name: '', ...s }, o) === ''
 }
@@ -257,7 +258,6 @@ export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driv
 /** Why scout `s` can't start a run now ('' when it can): one clear message for each thing scoutMayRun checks. */
 export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean; plan?: boolean }, name: string = DEFAULT_NAME): string {
   if (s.running) return `${s.name} is already running`
-  if (s.paused) return scoutPausedAnswer(s.name, name)
   if (!o.driving) return `scouts run in the session that drives the board; run /${name}-scout ${s.name} there`
   if (!o.gitOk) return "git isn't set up in this folder yet (no repo or no commit); nothing runs until it is"
   if (!o.on) return offAnswer(name)
@@ -276,10 +276,6 @@ export function scoutNotReady(message: string, name: string = DEFAULT_NAME): boo
 
 /** How long to wait before trying a scout again whose type wasn't ready yet. */
 export const SCOUT_RETRY_MS = 5_000
-
-/** What "run now" says for a paused scout. */
-export const scoutPausedAnswer = (scout: string, name: string = DEFAULT_NAME): string =>
-  `${scout} is paused; resume it first (p on its page, or /${name}-scout ${scout} resume)`
 
 /** A scout's state icon (one column wide): ◉ running, ○ paused, ◎ waiting for its next run or for "run now" (a
  *  scout that runs only on demand). */
@@ -477,7 +473,7 @@ export function scoutLeadMessage(scout: string, answer: string | undefined, paus
   if (isNothing(answer)) return null
   const n = countFindings(answer)
   const found = n ? `found ${n} thing${n > 1 ? 's' : ''}` : 'found something'
-  const note = paused ? `\nThe owner has paused "${scout}": it doesn't run again until the owner resumes it.` : ''
+  const note = paused ? `\nThe owner has paused "${scout}": it doesn't run on its timer until the owner resumes it (run now still runs it once).` : ''
   return `Scout "${scout}" ${found} (its report is the scout's own message to you). Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`
 }
 

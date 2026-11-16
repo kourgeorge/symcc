@@ -86,7 +86,7 @@ export const MANUAL = (): Record<string, string> => ({
   /${S.N.name}-reject T-5 REASON   send it back to "todo" with the reason
   /${S.N.name}-diff T-5 [FILE]     the files it changed (+/- lines), or one file's diff
   /${S.N.name}-scout NAME          run a scout now
-  /${S.N.name}-scout NAME pause    pause a scout: it doesn't run until you resume it
+  /${S.N.name}-scout NAME pause    pause a scout's timer (run now still runs it)
   /${S.N.name}-scout NAME resume   resume a paused scout (p on its page does both)
   /${S.N.name}-mode [off|review|auto]  set the board mode; no word switches review and auto
                        (from off, no word goes to review)
@@ -209,8 +209,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   every_minutes: 0 means only on demand: it never runs on the timer, only with run now
   or /${S.N.name}-scout NAME. A value that is not a whole number (like -5) also means only
   on demand, and the scout shows a warning until the file is fixed.
-  Pause one with p on its page or /${S.N.name}-scout NAME pause: it doesn't run (not on its
-  timer, not with run now) until you resume it. A run going on finishes first. The pause
+  Pause one with p on its page or /${S.N.name}-scout NAME pause: it doesn't run on its timer
+  until you resume it, but run now still runs it once (it stays paused). A run going on finishes first. The pause
   is kept in ${S.N.dir}/scouts.json, so its file is not changed.
   Examples: examples/scouts/ in the plugin.`,
   safety: `Safety
@@ -274,7 +274,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
 - Manage scouts with ${S.N.name} scouts, never by writing ${S.N.dir}/scouts/ files by hand: action list (the default) shows each scout (how often, paused, running, next and last run, the start of its last report), list with name shows one in full; add / edit with name (lowercase letters, digits, dashes), every_minutes (0 = only on demand), optional model and prompt; remove deletes one (ask the owner first); run runs one now, like the owner's "run now".
-- The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
+- The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run on its timer until the owner resumes it, but "run now" (the owner's, or your scouts run) still runs it once and it stays paused. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. The scout_findings setting (${S.N.name} settings): "auto" (the default) lets you decide where a scout finding goes; "backlog" puts every task you add with origin_by scout in the backlog, whatever you ask (the answer says "scout_findings is backlog: added to the backlog"); it starts only when the owner moves it to todo (or you do, on the owner's word). With backlog, still tell the owner what the scout found, so they can decide. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
 - Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
@@ -311,7 +311,7 @@ export const TOOLS = () => [
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   {
     name: 'scouts',
-    description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt and whole last report). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (refused with the reason when it is paused, already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
+    description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt and whole last report). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'remove', 'run'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The scout, e.g. docs-check (lowercase letters, digits and dashes).' }, every_minutes: { type: 'number', description: 'For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand.' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, prompt: { type: 'string', description: 'For add / edit: what the scout looks for, in plain words.' } } },
   },
   {

@@ -154,7 +154,7 @@ a wide enough terminal; if not, run `/symcc`. The status line starts with the mo
 1. **Install** symcc (see above).
 2. **Keep the board local:** `echo ".symcc/" >> .gitignore`
 3. **Set your tests:** tell the lead "set the test command to `npm test`". Without one, changes merge without tests.
-4. **Optional, a scout:** a new project starts with the example scouts from [`examples/scouts/`](examples/scouts/) ([`bugs.md`](examples/scouts/bugs.md), [`test-gaps.md`](examples/scouts/test-gaps.md), [`deps.md`](examples/scouts/deps.md), [`secrets.md`](examples/scouts/secrets.md), [`recent-changes.md`](examples/scouts/recent-changes.md), [`gaps.md`](examples/scouts/gaps.md), [`docs-check.md`](examples/scouts/docs-check.md), [`simplify.md`](examples/scouts/simplify.md)), all paused. To turn one on, press `p` on its page in the panel's Scouts view, or run `/symcc-scout <name> resume`. You can also make your own there.
+4. **Optional, a scout:** a new project starts with the example scouts from [`examples/scouts/`](examples/scouts/) ([`bugs.md`](examples/scouts/bugs.md), [`test-gaps.md`](examples/scouts/test-gaps.md), [`deps.md`](examples/scouts/deps.md), [`secrets.md`](examples/scouts/secrets.md), [`recent-changes.md`](examples/scouts/recent-changes.md), [`gaps.md`](examples/scouts/gaps.md), [`docs-check.md`](examples/scouts/docs-check.md), [`simplify.md`](examples/scouts/simplify.md)), all paused (their timers are stopped). To try one once, press `r` (Run now) on its page in the panel's Scouts view, or run `/symcc-scout <name>`; it stays paused. To turn its timer on, press `p` on its page, or run `/symcc-scout <name> resume`. You can also make your own there.
 5. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
 ## Things you can say
@@ -214,7 +214,7 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason (an answered investigation: Ask more, the reason is your follow-up question) |
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
 | `/symcc-scout <name>` | Run a scout now |
-| `/symcc-scout <name> pause` / `resume` | Pause a scout (it doesn't run, on its timer or with run now, until you resume it), or resume it. `p` on the scout's page in the panel does the same |
+| `/symcc-scout <name> pause` / `resume` | Pause a scout's timer (it doesn't run on its timer until you resume it; run now still runs it once and it stays paused), or resume it. `p` on the scout's page in the panel does the same |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`, `/symcc-settings test_commands "npm test"` |
 | `/symcc-stats [full] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations |

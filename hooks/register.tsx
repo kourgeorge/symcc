@@ -134,7 +134,7 @@ export const register: Register = on => {
       await Promise.race([lead, waits])
       startWait.mark = null
       if (!(await $.fs.exists(path(S.N.boardFile)))) await publish($, await load($))
-      // A new project (no scouts folder yet) gets the plugin's example scouts, all paused; never stops the start.
+      // A new project (no scouts folder yet) gets the plugin's example scouts, all paused (no timer runs them; run now still does); never stops the start.
       await seedExampleScouts($).catch(() => undefined)
       await scheduleScouts($)
       await loadRoles($).catch(() => undefined)

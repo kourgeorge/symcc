@@ -527,9 +527,9 @@ has examples that work in most code projects:
 
 A new project starts with these example scouts. The first time symcc starts in a project with
 no `.symcc/scouts/` folder yet, it copies every example there and marks each one paused (in
-`.symcc/scouts.json`), so they show in the Scouts view but never run, not on their timer and
-not on "run now", until you resume one: press `p` on its page, or run
-`/symcc-scout <name> resume`. If the folder is already there (even empty, e.g. you removed
+`.symcc/scouts.json`), so they show in the Scouts view but never run on their timer until you resume
+one: press `p` on its page, or run `/symcc-scout <name> resume`. To try one first, press `r`
+(Run now) on its page or run `/symcc-scout <name>`: it runs once and stays paused. If the folder is already there (even empty, e.g. you removed
 every scout), nothing is copied, and a scout file is never overwritten or added back. If the
 copy fails, symcc says so once and starts as usual.
 
@@ -553,8 +553,8 @@ like "every 2 days" or "on demand", whether it is paused or running, its next an
 and the first lines of its last report), show one in full (its instructions and whole last
 report), add or change one (name of lowercase letters, digits and dashes, every_minutes with
 0 for only on demand, an optional model, and the instructions), remove one (it checks with
-you first) and run one now, just like "run now" (refused, with the reason, when the scout is
-paused, already running, or git isn't set up). Every change shows on the board at once. Only
+you first) and run one now, just like "run now" (a paused scout runs too, once, and stays paused;
+refused, with the reason, when the scout is already running or git isn't set up). Every change shows on the board at once. Only
 you pause or resume scouts; the lead can't.
 
 ### Scouts that run only on demand
@@ -574,12 +574,14 @@ refuses such a value.
 ### Pausing a scout
 
 To stop one scout for a while without deleting it, press `p` on its page in the panel, or
-run `/symcc-scout <name> pause`. A paused scout doesn't run: not on its timer, and "run now"
-answers "<name> is paused; resume it first". If it is running when you pause it, that run
-finishes and reports as usual; the next one doesn't start. Press `p` again, or run
-`/symcc-scout <name> resume`, to start it again. The pause is kept in `.symcc/scouts.json`
+run `/symcc-scout <name> pause`. A pause only stops the timer: a paused scout doesn't run on
+its own, but "run now" (`r` on its page, `/symcc-scout <name>`, or the lead's scouts tool)
+still runs it once. It stays paused afterwards, and its last run and report are saved as
+usual. If it is running when you pause it, that run finishes and reports as usual; the timer
+doesn't start another. Press `p` again, or run `/symcc-scout <name> resume`, to start its
+timer again. The pause is kept in `.symcc/scouts.json`
 (next to each scout's last run), so it survives a restart and your scout file is never
-changed. Only you can pause or resume a scout; the lead is told a paused scout doesn't run.
+changed. Only you can pause or resume a scout; the lead is told a paused scout doesn't run on its timer.
 
 ---
 

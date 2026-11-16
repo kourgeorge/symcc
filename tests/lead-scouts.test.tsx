@@ -99,10 +99,13 @@ test('scouts remove deletes the file and takes it off the board', async ($, on) 
   expect(await call($, {})).toContain('no scouts yet')
 })
 
-test('scouts run is refused for a paused scout; pause and resume are for the owner only', async ($, on) => {
+test('scouts run is not refused for a paused scout; pause and resume are for the owner only', async ($, on) => {
   const files = { ...base(), '/scouts.json': JSON.stringify({ scouts: { bugs: { last_run: null, paused: true } } }) }
   setup(on, files)
-  expect(await call($, { action: 'run', name: 'bugs' })).toContain('bugs is paused')
+  // a pause only stops the timer: run goes on to the other checks (this session doesn't drive the board)
+  const run = await call($, { action: 'run', name: 'bugs' })
+  expect(run).not.toContain('paused')
+  expect(run).toBe('scouts run in the session that drives the board; run /symcc-scout bugs there')
   expect(await call($, {})).toContain('bugs: every 30 min · paused')
   expect(await call($, { action: 'pause', name: 'bugs' })).toBe('only the owner pauses or resumes scouts')
   expect(await call($, { action: 'resume', name: 'bugs' })).toBe('only the owner pauses or resumes scouts')

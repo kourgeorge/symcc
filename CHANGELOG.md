@@ -32,6 +32,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - git's real error is shown when symcc's own commit, git add, bring-up-to-date merge or moving main fails.
 
 ### Changed
+- Pausing a scout now only stops its timer: "run now" (`r` on its page, `/symcc-scout <name>`, or the lead's `scouts run`) still runs a paused scout once, and it stays paused. You can try an example scout without resuming it.
 - The `target_branch` setting is gone. Each task now merges into the branch you were on when you asked for it.
 - No Esc needed in the panel: every text box and pick list has another way out, and Esc hints are removed from the footers.
 - Panel look: each page has its own footer, tabs are bold and blue when selected, "workers · scouts" sits above the prompt, and the banner text is dimmer and readable in dark mode.

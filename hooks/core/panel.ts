@@ -351,8 +351,8 @@ export const scoutListKeys = (): KeyHint[] => [
   { key: 'b', word: 'back' },
 ]
 
-/** The keys at the bottom of a scout's page; p pauses it, or resumes it when `paused`. No "r run now" while
- *  the scout is `running` (like the button). */
+/** The keys at the bottom of a scout's page; p pauses its timer, or resumes it when `paused`. "r run now" shows
+ *  for a paused scout too (run now still runs it), but not while the scout is `running` (like the button). */
 export const scoutKeys = (paused = false, running = false): KeyHint[] => [
   ...(running ? [] : [{ key: 'r', word: 'run now' }]),
   { key: 'e', word: 'edit' },

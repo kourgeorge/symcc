@@ -106,12 +106,22 @@ test('the example scouts do not run on their timer, even well past every timer',
   expect(scoutSpawns(w.spawned)).toEqual([])
 })
 
-test('run now on an example scout is refused because it is paused', async ($, on) => {
+test('run now on an example scout runs it once, and it stays paused (a pause only stops the timer)', async ($, on) => {
   const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) } })
   await start($)
-  const r = (await $.tool.call({ tool: 'mcp__symcc__scouts', action: 'run', name: 'bugs' } as never)) as { result?: string } | string
-  expect(typeof r === 'string' ? r : String(r.result)).toContain('bugs is paused')
+  await w.clock.advance(PAST_EVERY_TIMER)
   expect(scoutSpawns(w.spawned)).toEqual([])
+  const r = (await $.tool.call({ tool: 'mcp__symcc__scouts', action: 'run', name: 'bugs' } as never)) as { result?: string } | string
+  // the scout is spawned (the test kit hands back no agent id, so the plugin calls it a failed start; what
+  // matters here is that run now is not refused for the pause and the scout's agent is asked to start)
+  expect(typeof r === 'string' ? r : String(r.result)).not.toContain('paused')
+  expect(scoutSpawns(w.spawned).length).toBe(1)
+  expect(scoutSpawns(w.spawned)[0]).toContain('bugs')
+  expect(paused(w.files)).toEqual(EXAMPLES)
+  // the other examples still don't run on their timer
+  await w.clock.advance(PAST_EVERY_TIMER)
+  expect(scoutSpawns(w.spawned).length).toBe(1)
+  expect(paused(w.files)).toEqual(EXAMPLES)
 })
 
 test('a second start (the scouts folder is there now) adds no examples and says nothing', async ($, on) => {

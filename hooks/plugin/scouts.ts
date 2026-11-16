@@ -22,7 +22,7 @@ export async function loadScouts($: $): Promise<ScoutDef[]> {
 /**
  * The first time symcc sets up a project (no <dir>/scouts/ folder yet), copies the plugin's example scouts
  * (examples/scouts/*.md) into it, each marked paused in scouts.json first, so they show in the Scouts view but
- * never run until the owner resumes one. A scouts folder that is there (even empty) gets nothing. Never throws:
+ * never run on their timer until the owner resumes one (run now still runs one once). A scouts folder that is there (even empty) gets nothing. Never throws:
  * when the examples can't be read or a copy fails, the owner is told once in a toast and symcc starts as usual.
  * Returns the names copied.
  */
@@ -39,7 +39,7 @@ export async function seedExampleScouts($: $): Promise<string[]> {
       examples.push({ name, text: await $.fs.read(`${from}/${f.name}`) })
     }
     if (!examples.length) return []
-    // Paused first: a scout file never lands without its pause, so none can run before the owner resumes it.
+    // Paused first: a scout file never lands without its pause, so no timer runs one before the owner resumes it.
     await changeScoutMemory($, old => {
       let text = old ?? ''
       for (const e of examples) text = scoutPausedText(parseScoutMemory(text), e.name, true)
@@ -48,7 +48,7 @@ export async function seedExampleScouts($: $): Promise<string[]> {
     const r = await $.process.run(['mkdir', '-p', dir])
     if (r.exitCode !== 0) throw new Error(r.stderr || r.stdout || `mkdir exit ${r.exitCode}`)
     for (const e of examples) await $.fs.write(`${dir}/${e.name}.md`, e.text)
-    $.ui.toast(S.N.toast(`added ${examples.length} example scouts, all paused: resume one with p on its page or /${S.N.name}-scout <name> resume`))
+    $.ui.toast(S.N.toast(`added ${examples.length} example scouts, all paused: try one with Run now (r on its page) or /${S.N.name}-scout <name>, or resume its timer with p or /${S.N.name}-scout <name> resume`))
     return examples.map(e => e.name)
   } catch (e) {
     $.ui.toast(S.N.toast(`couldn't add the example scouts: ${String((e as Error)?.message ?? e).slice(0, 200)}`))
@@ -71,7 +71,8 @@ const startWarned = new Set<string>()
 export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
   const st = scoutState.get(s.name)
   if (!st) return `no scout named ${s.name}`
-  // scouts.json is where a pause is kept (any session may pause one): a paused scout doesn't run
+  // A pause only stops the timer (armScout checks it), so a paused scout still runs here when asked to run now;
+  // st.paused is brought up to date from scouts.json so the board and the lead's note show it.
   if (!st.running) await pausedNow($, st)
   const b = await load($)
   const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b), plan: inPlan(S.plan) }, S.N.name)
@@ -166,7 +167,7 @@ export async function pausedNow($: $, st: SymccScout): Promise<boolean> {
 /**
  * Pauses (or resumes) scout `name` for the owner (p on its page, /<name>-scout <scout> pause|resume); says what
  * happened. Only the pause flag in scouts.json changes, never the scout's file. A run going on now is not
- * stopped: it finishes and reports, and the next one doesn't start.
+ * stopped: it finishes and reports, and its timer doesn't start another. Run now still runs a paused scout.
  */
 export async function setScoutPaused($: $, name: string, paused: boolean): Promise<string> {
   if (!SCOUT_FILE_NAME.test(name)) return scoutFileNameError(name)
@@ -181,13 +182,13 @@ export async function setScoutPaused($: $, name: string, paused: boolean): Promi
   })
   if (already) {
     st.paused = paused
-    return paused ? `${name} is already paused; resume it with p on its page or /${S.N.name}-scout ${name} resume` : `${name} is not paused`
+    return paused ? `${name} is already paused; resume its timer with p on its page or /${S.N.name}-scout ${name} resume` : `${name} is not paused`
   }
   st.paused = paused
   await publish($, await load($))
   $.ui.invalidate('ui.render')
   if (!paused) return onDemand(st) ? `${name} resumed: it runs only on demand (run now, or /${S.N.name}-scout ${name})` : `${name} resumed: it runs ${everyText(st.every_minutes)} again`
-  return `${name} paused: it doesn't run until you resume it${st.running ? ' (the run going now finishes first)' : ''}`
+  return `${name} paused: it doesn't run on its timer until you resume it (run now still runs it)${st.running ? '; the run going now finishes first' : ''}`
 }
 
 /** Adds one run of scout `name` (its tokens and time) to the running totals in scouts.json, for /<name>-stats. */
@@ -307,7 +308,8 @@ export async function scheduleScouts($: $) {
   return defs
 }
 
-/** Runs scout `name` now (/<name>-scout <scout>, or "run now" in the panel); says what happened. */
+/** Runs scout `name` now (/<name>-scout <scout>, "run now" in the panel, or the lead's scouts run); says what
+ *  happened. A paused scout runs too, once, and stays paused (its timer stays stopped). */
 export async function runScoutNow($: $, name: string): Promise<string> {
   if (!SCOUT_FILE_NAME.test(name)) return scoutFileNameError(name)
   const defs = await scheduleScouts($)
