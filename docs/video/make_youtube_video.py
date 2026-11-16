@@ -84,9 +84,9 @@ FADE = 0.5        # cross-fade between scenes
 # ---------------------------------------------------------------- narration
 
 
-def load_scenes():
-    """[(title, [sentence, ...]), ...] from narration.md."""
-    with open(NARRATION, encoding="utf-8") as fh:
+def load_scenes(path=None):
+    """[(title, [sentence, ...]), ...] from narration.md (or another script like it)."""
+    with open(path or NARRATION, encoding="utf-8") as fh:
         text = fh.read().split("\n---")[0]
     scenes = []
     for part in re.split(r"^## Scene \d+: ", text, flags=re.M)[1:]:
@@ -158,16 +158,19 @@ def say(sentence):
 # ---------------------------------------------------------------- timeline
 
 
-def build_timeline():
+def build_timeline(path=None, count=None):
     """Make (or load) the audio and work out when every scene and sentence happens.
 
-    Returns (scenes, audio, rate). Each scene is a dict with start, dur, and cues: one
+    path is the narration file (default narration.md), count the number of scenes the
+    script draws (default len(SCENE_FNS)). Returns (scenes, audio, rate). Each scene is a dict with start, dur, and cues: one
     (start, end, text) per sentence, in seconds from the scene start.
     """
     scenes, chunks, rate, start = [], [], None, 0.0
-    parsed = load_scenes()
-    if len(parsed) != len(SCENE_FNS):
-        sys.exit("narration.md has %d scenes, the script draws %d" % (len(parsed), len(SCENE_FNS)))
+    parsed = load_scenes(path)
+    count = len(SCENE_FNS) if count is None else count
+    if len(parsed) != count:
+        sys.exit("%s has %d scenes, the script draws %d"
+                 % (os.path.basename(path or NARRATION), len(parsed), count))
     for i, (title, sentences) in enumerate(parsed):
         print("  voice: scene %d (%s)" % (i + 1, title), flush=True)
         cues, t, clip = [], LEAD_IN, []
@@ -780,7 +783,11 @@ def louder(src, dst):
     print("loudness: %s LUFS -> %s LUFS" % (m["input_i"], LOUDNESS), flush=True)
 
 
-def build(scenes, audio, rate):
+def build(scenes, audio, rate, mp4=None, frame=None, init=None, size=None):
+    """Write the video: frame(i) gives frame i's RGB bytes in a worker process that was
+    set up with init(scenes). The defaults build this script's YouTube video."""
+    mp4, frame, init = mp4 or MP4, frame or _frame_bytes, init or _init
+    out_w, out_h = size or (OUT_W, OUT_H)
     os.makedirs(OUT_DIR, exist_ok=True)
     raw = os.path.join(OUT_DIR, "narration_raw.wav")
     wav = os.path.join(OUT_DIR, "narration.wav")
@@ -791,23 +798,23 @@ def build(scenes, audio, rate):
     n = int(math.ceil(total * FPS))
     print("video length: %d:%04.1f, %d frames" % (total // 60, total % 60, n), flush=True)
     cmd = [ffmpeg_bin(), "-y", "-loglevel", "error",
-           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (OUT_W, OUT_H),
+           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (out_w, out_h),
            "-r", str(FPS), "-i", "-", "-i", wav,
            "-c:v", "libx264", "-preset", "medium", "-tune", "animation", "-crf", "18",
            "-pix_fmt", "yuv420p", "-profile:v", "high", "-g", str(FPS * 2),
            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-           "-movflags", "+faststart", "-shortest", MP4]
+           "-movflags", "+faststart", "-shortest", mp4]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    with Pool(max(1, (os.cpu_count() or 2) - 1), initializer=_init, initargs=(scenes,)) as pool:
-        for i, frame in enumerate(pool.imap(_frame_bytes, range(n), chunksize=8)):
+    with Pool(max(1, (os.cpu_count() or 2) - 1), initializer=init, initargs=(scenes,)) as pool:
+        for i, data in enumerate(pool.imap(frame, range(n), chunksize=8)):
             if i % (FPS * 10) == 0:
                 print("  frames %5.1fs / %.1fs" % (i / FPS, total), flush=True)
-            p.stdin.write(frame)
+            p.stdin.write(data)
     p.stdin.close()
     if p.wait() != 0:
         sys.exit("ffmpeg failed")
     os.remove(wav)
-    print(MP4)
+    print(mp4)
 
 
 def main(argv):
