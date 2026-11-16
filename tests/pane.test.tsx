@@ -364,7 +364,7 @@ test('a waiting task opens with a box to answer it', async ($, on) => {
 
 test("a task waiting only for the owner's files shows them and a Merge now button, with no answer box and no \"needs you\" sound", async ($, on) => {
   sayQueue.splice(0)
-  const t = task('T-2', 'waiting', 'Search mode', { merge_wait: ['src/a.ts', 'README.md'], note: 'waiting for your files on main: src/a.ts, README.md; commit or stash them' })
+  const t = task('T-2', 'waiting', 'Search mode', { merge_wait: { dirty: ['src/a.ts', 'README.md'], untracked: [], ignored: [] }, note: 'waiting for your files on main: src/a.ts, README.md; commit or stash them' })
   stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', notify: 'voice', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^waiting for your files on main: src\/a\.ts, README\.md; commit or stash them, it merges on its own$/ })).toBeDefined()

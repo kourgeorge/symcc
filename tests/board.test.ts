@@ -555,7 +555,7 @@ test('the board list shows "→ branch" only for a task that merges into another
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
   const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
-  const files = { ...base, merge_wait: ['a.ts'], merge_into: 'dev' } as SymccTask
+  const files = { ...base, merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] }, merge_into: 'dev' } as SymccTask
   expect(fileWaitText(files)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(rowExtra(files, [files])).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(fileWaitText({ ...files, status: 'review' } as SymccTask)).toContain('commit or stash them')

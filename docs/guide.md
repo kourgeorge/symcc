@@ -165,8 +165,11 @@ This is where symcc keeps your branch safe. Step by step:
    is taken as stuck and given up: a finished worker's task goes back to `todo` for a
    fresh try (its folder and branch are kept); if the try before was given up the same
    way, the task is marked `failed` instead ("ran over … twice in a row"), so it never
-   loops, and the lead is told. An approve, or a merge waiting for your files, that runs
-   over stays as it was (approve it again, or retry it). If a given-up step still ends
+   loops, and the lead is told. An approve that runs over stays in review (approve it
+   again). A merge waiting for your files that runs over keeps waiting: the regular check
+   tries it again on its own once your files are out of the way (or "retry T-3" at once);
+   if that merge runs over too, twice in a row, the task is marked `failed` instead and is
+   not started again on its own, and the lead is told once. If a given-up step still ends
    later and its work did reach the branch after all, the task is marked done with that
    commit (when nothing else happened to it meanwhile), or the lead is told it landed.
 7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear

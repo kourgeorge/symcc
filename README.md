@@ -79,7 +79,7 @@ app and no issue-tracker link. When two changes clash, a new worker sorts out th
 3. **Build.** Workers start in parallel, each in its own worktree.
 4. **Check.** symcc runs the scope check and the test gate, and retries on failure.
 5. **Review.** In review mode you approve or reject. You can also edit the task's files in `.symcc/worktrees/T-x` and then approve: your edits go in, and the tests run again first.
-6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests, merges, and the lead tells you. Your own uncommitted edits on that branch are kept; only an edit in a file the task changes holds the merge back (the task waits for you, then merges by itself once that file is committed or undone).
+6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests, merges, and the lead tells you. Your own uncommitted edits on that branch are kept; only your files with the same name as a file the task changes hold the merge back: an uncommitted edit (commit or stash it), an untracked file (move, rename or commit it), or a git-ignored file (move or rename it). The task waits for you, then merges by itself once those files are out of the way.
 
 Here is the planning step in the chat:
 

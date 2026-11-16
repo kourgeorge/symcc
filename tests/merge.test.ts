@@ -2375,7 +2375,7 @@ test('an approve blocked by the owner\'s files is merged by the regular check on
   }
 })
 
-test('merge_wait is kept only while the task stays waiting or in review; an old plain list reads as uncommitted changes', () => {
+test('merge_wait is kept only while the task stays waiting or in review', () => {
   const [b] = boardWith('auto')
   const mw = { dirty: [], untracked: [], ignored: ['a.txt'] }
   const w = patchTask(b, 'T-1', { status: 'waiting', merge_wait: mw, note: 'waiting for your files' } as Partial<BoardTask>, ISO)
@@ -2385,8 +2385,6 @@ test('merge_wait is kept only while the task stays waiting or in review; an old 
   expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).merge_wait).toEqual(mw)
   const done = { ...w, tasks: w.tasks.map(t => ({ ...t, status: 'done' as const })) }
   expect((find(parseBoard(JSON.stringify(done)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
-  const old = { ...w, tasks: w.tasks.map(t => ({ ...t, merge_wait: ['a.txt'] })) }
-  expect((find(parseBoard(JSON.stringify(old)), 'T-1') as BoardTask).merge_wait).toEqual({ dirty: ['a.txt'], untracked: [], ignored: [] })
   const bad = { ...w, tasks: w.tasks.map(t => ({ ...t, merge_wait: { dirty: [1] } })) }
   expect((find(parseBoard(JSON.stringify(bad)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
 })
@@ -2445,6 +2443,60 @@ test("a merge waiting for the owner's files that runs over keeps waiting for the
     expect(spawned).toEqual([])
     free()
     for (let i = 0; i < 5000; i++) await Promise.resolve()
+  } finally {
+    cleanUp()
+  }
+})
+
+test("a merge waiting for the owner's files that runs over twice in a row is failed, not started again on its own; one give-up is retried", async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
+    expect((await t()).status).toBe('waiting')
+    // the files are clear and main moved, so each merge tests again; every test hangs
+    w.git.status = ''
+    w.git.main = M2
+    w.git.upToDate = false
+    let hangs = 0
+    w.onRun(async cmd => {
+      if (!/^\/bin\/sh -c /.test(cmd)) return
+      hangs++
+      await new Promise<void>(() => {})
+    })
+    const limits: (() => void)[] = []
+    ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
+      if (ms === finishLimitMs(1)) limits.push(f)
+      return { cancel() {} }
+    }
+    // the regular check merges it on its own; that merge runs over and is given up once
+    void check(w.$)
+    await turns(w, () => hangs === 1)
+    expect(limits.length).toBe(1)
+    limits[0]!()
+    await turns(w, () => leadQueue.some(m => m.includes('T-1') && m.includes('ran over 15 minutes')))
+    let x = await t()
+    expect(x.status).toBe('waiting')
+    expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+    // one give-up: the next regular check still tries the merge again on its own
+    void check(w.$)
+    await turns(w, () => hangs === 2)
+    expect(limits.length).toBe(2)
+    limits[1]!()
+    await turns(w, () => leadQueue.some(m => m.includes('T-1') && m.includes('twice in a row')))
+    x = await t()
+    expect(x.status).toBe('failed')
+    expect(x.merge_wait).toBeUndefined()
+    expect(x.note).toBe('its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
+    expect(x.history.at(-1)).toBe('try 1: merging once your files were out of the way → its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
+    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('twice in a row')).length).toBe(1)
+    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(2)
+    // a third regular check starts nothing: no merge, no worker, the lead is not told again
+    await check(w.$)
+    for (let i = 0; i < 2000; i++) await Promise.resolve()
+    expect(hangs).toBe(2)
+    expect(limits.length).toBe(2)
+    expect((await t()).status).toBe('failed')
+    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(2)
+    expect(spawned).toEqual([])
   } finally {
     cleanUp()
   }
