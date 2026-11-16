@@ -25,6 +25,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Press `y` on a task to copy its content to the clipboard.
 - A scout's edit page has the same sections as its view page, including "Runs every" and "Summary" boxes.
 - New projects start with the example scouts, all paused.
+- New example scouts that work in most projects: recent-changes, gaps, docs-check and simplify. The test-gaps example now names concrete test cases to add.
 - A merge has a time limit: 10 minutes per test command, plus 5. Time spent waiting in line does not count. When it runs over, symcc gives up that step and does not restart it forever.
 - A task stuck in "checking and merging" is noticed and sent back to todo; if it gets stuck a second time in a row, it fails.
 - git's real error is shown when symcc's own commit, git add, bring-up-to-date merge or moving main fails.

@@ -5,7 +5,7 @@ import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
 
 const T0 = 1_800_000_000_000
-const EXAMPLES = ['bugs', 'deps', 'secrets', 'test-gaps']
+const EXAMPLES = ['bugs', 'deps', 'docs-check', 'gaps', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
 const EVERY_MINUTES = 5
 const example = (n: string) => `---\nevery_minutes: ${EVERY_MINUTES}\n---\nExample ${n}.\n`
 type Res = { exitCode: number; stdout: string; stderr: string }
