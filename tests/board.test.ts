@@ -5,7 +5,8 @@ import type { SymccScout, SymccStatus, SymccTask } from '../types'
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
-import { cleanFiles, taskCopyText, copyToast } from '../hooks/board'
+import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
+import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
@@ -1216,6 +1217,63 @@ test("an edit inside the project but outside the worker's own folder is refused;
   expect(blockedEdit('Edit', { file_path: 'src/a.ts' }, wt, ['src/'], '.symcc')).toBeUndefined()
   expect(resolvePath('/a/b', '../c//./d')).toBe('/a/c/d')
   expect(resolvePath('/a', '../../..')).toBe('/')
+})
+
+test("an edit is judged by where symbolic links really lead (T-303)", async () => {
+  const root = '/tmp/x1/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const disk = fakeDisk({
+    '/tmp': '-> /private/tmp',
+    '/private': 'dir',
+    '/private/tmp': 'dir',
+    '/private/tmp/x1': 'dir',
+    '/private/tmp/x1/repo': 'dir',
+    '/private/tmp/x1/repo/README.md': 'file',
+    '/private/tmp/x1/repo/.symcc': 'dir',
+    '/private/tmp/x1/repo/.symcc/worktrees': 'dir',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5': 'dir',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/README.md': 'file',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/src': 'dir',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/link': `-> ${root}`,
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/up': '-> ../..',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/scratch': '-> /private/tmp/x1/other',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/inner': '-> src',
+    '/private/tmp/x1/repo/.symcc/worktrees/T-5/broken': '-> /private/tmp/x1/repo/NEW.md',
+    '/private/tmp/x1/other': 'dir',
+  })
+  const realWt = `/private${wt}`
+  const realRoot = `/private${root}`
+  const real = (p: string) => realPathOf(wt, p, disk)
+  const check = async (p: string, files = ['src/']) => {
+    const [file, w, top] = [await real(p), await realPathOf('/', wt, disk), await realPathOf('/', root, disk)]
+    if (file === null) return 'broken link'
+    const input = { file_path: file }
+    return editOutsideFolder('Edit', input, w!, top!) ?? blockedEdit('Edit', input, w!, files, '.symcc')
+  }
+  // a link in the worker's folder that leads to the project root (or up to it): refused as the owner's copy
+  expect(await real(`${wt}/link/README.md`)).toBe(`${realRoot}/README.md`)
+  expect(await check(`${wt}/link/README.md`)).toBe('README.md')
+  expect(await check('link/README.md')).toBe('README.md')
+  expect(await check('up/board.json')).toBe('.symcc/board.json')
+  // ".." after a link goes up from where the link leads, as the system does
+  expect(await check(`${wt}/scratch/../repo/README.md`)).toBe('README.md')
+  // a link to a folder outside the project stays allowed
+  expect(await real(`${wt}/scratch/notes.txt`)).toBe('/private/tmp/x1/other/notes.txt')
+  expect(await check(`${wt}/scratch/notes.txt`)).toBeUndefined()
+  // own-folder edits as before: in scope, out of scope, a new file in a new folder, a link to its own src/
+  expect(await check(`${wt}/src/a.ts`)).toBeUndefined()
+  expect(await check(`${wt}/README.md`)).toBe('README.md')
+  expect(await real(`${wt}/src/new/deeper/b.ts`)).toBe(`${realWt}/src/new/deeper/b.ts`)
+  expect(await check(`${wt}/src/new/deeper/b.ts`)).toBeUndefined()
+  expect(await check(`${wt}/docs/new.md`)).toBe('docs/new.md')
+  expect(await check(`${wt}/inner/a.ts`)).toBeUndefined()
+  // a link that leads nowhere can't be placed, so it is not let through
+  expect(await real(`${wt}/broken`)).toBeNull()
+  expect(await check(`${wt}/broken`)).toBe('broken link')
+  // nothing found on disk: the caller keeps the path as written
+  expect(await realPathOf(wt, 'a.ts', { real: async () => undefined, isLink: async () => false })).toBeUndefined()
+  expect(await realPathOf(wt, 'a.ts', { real: async () => { throw new Error('no') }, isLink: async () => false })).toBeUndefined()
+  expect(brokenLinkText('x')).toMatch(/^Refused: x goes through a symbolic link/)
 })
 
 test("a worker's shell command naming the owner's copy of the project is refused; its own folder and /tmp are not (T-302)", () => {

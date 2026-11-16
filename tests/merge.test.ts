@@ -15,6 +15,7 @@ import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../ho
 import { archiveOld } from '../hooks/plugin/archive'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
+import { fakeDisk } from './fake-disk'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -2332,6 +2333,45 @@ test("a worker's edit in the owner's copy of the project is refused without a fi
   // inside its own folder: in scope is allowed, out of scope is still a file request
   expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/src/a.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'src/b.ts' })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  workers.clear()
+})
+
+test("a worker's edit through a symbolic link into the owner's copy is refused; links elsewhere are judged by where they lead (T-303)", async () => {
+  S.me = 'me'
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
+  const disk = fakeDisk({
+    [ROOT]: 'dir',
+    [`${ROOT}/README.md`]: 'file',
+    [`${ROOT}/.symcc`]: 'dir',
+    [`${ROOT}/.symcc/worktrees`]: 'dir',
+    [wt5]: 'dir',
+    [`${wt5}/src`]: 'dir',
+    [`${wt5}/link`]: `-> ${ROOT}`,
+    [`${wt5}/scratch`]: '-> /tmp/x2',
+    [`${wt5}/broken`]: `-> ${ROOT}/NEW.md`,
+    '/tmp': 'dir',
+    '/tmp/x2': 'dir',
+  })
+  const fs = (f.$ as unknown as { fs: Record<string, unknown> }).fs
+  const plainStat = fs.stat as (p: string) => Promise<unknown>
+  fs.stat = async (p: string, o?: { resolve?: boolean }) => {
+    if (!o?.resolve) return plainStat(p)
+    const realPath = await disk.real(p)
+    if (realPath === undefined) throw new Error(`ENOENT ${p}`)
+    return { kind: 'file', size: 0, mtimeMs: 0, isLink: false, realPath }
+  }
+  fs.list = async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 }))
+  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/link/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'link/.symcc/board.json' })).toMatch(/^Refused: \.symcc\/board\.json is in the owner's copy/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/broken` })).toMatch(/^Refused: .*broken goes through a symbolic link that leads to nothing/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/scratch/notes.txt` })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/src/new/b.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
   workers.clear()
