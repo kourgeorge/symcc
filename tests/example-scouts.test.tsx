@@ -5,8 +5,9 @@ import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
 
 const T0 = 1_800_000_000_000
-const EXAMPLES = ['bugs', 'deps', 'secrets', 'test-gaps']
-const example = (n: string) => `---\nevery_minutes: 30\n---\nExample ${n}.\n`
+const EXAMPLES = ['bugs', 'deps', 'docs-check', 'gaps', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
+const EVERY_MINUTES = 5
+const example = (n: string) => `---\nevery_minutes: ${EVERY_MINUTES}\n---\nExample ${n}.\n`
 type Res = { exitCode: number; stdout: string; stderr: string }
 const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
 
@@ -77,22 +78,45 @@ const paused = (files: Map<string, string>) => {
   return Object.keys(m.scouts).filter(n => m.scouts[n]!.paused === true).sort()
 }
 const scoutFiles = (files: Map<string, string>) => [...files.keys()].filter(f => f.startsWith('/.symcc/scouts/')).sort()
+// open_on_start off: drawing the board panel at every start is what made these tests slow (over 5 s), and
+// none of them is about the panel.
+const board = (extra: Record<string, unknown> = {}) => JSON.stringify({ tasks: [], open_on_start: false, ...extra })
+const scoutSpawns = (spawned: string[]) => spawned.filter(n => /scout/i.test(n))
+// scouts.ts checks a paused scout again this long after its timer fires (PAUSED_RECHECK_MS, not exported)
+const PAUSED_RECHECK_MS = 60_000
+// Past every scout's first timer (spread apart) and one paused recheck after it; a paused scout keeps its time,
+// so later ticks only repeat that recheck. Kept short on purpose: every 30 s of fake time also fires the lead
+// heartbeat (and more), and jumping an hour or so made these tests run over 5 s on a busy machine.
+const PAST_EVERY_TIMER = SCOUT_SOON_MS + SCOUT_SPREAD_MS * EXAMPLES.length + PAUSED_RECHECK_MS
 
-test('a project with no scouts folder gets the example scouts, all paused; none runs on its timer or on run now', async ($, on) => {
-  const w = world(on, { files: { '/.symcc/board.json': JSON.stringify({ tasks: [], mode: 'auto' }) } })
+test('a project with no scouts folder gets all the example scouts, all paused, and is told once', async ($, on) => {
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) } })
   await start($)
   expect(scoutFiles(w.files)).toEqual(EXAMPLES.map(n => `/.symcc/scouts/${n}.md`))
   expect(w.files.get('/.symcc/scouts/bugs.md')).toBe(example('bugs'))
   expect(paused(w.files)).toEqual(EXAMPLES)
   expect(w.toasts.filter(t => t.includes('example scouts')).length).toBe(1)
-  // well past every timer: nothing starts
-  await w.clock.advance(SCOUT_SOON_MS + SCOUT_SPREAD_MS * 5 + 60 * 60_000)
-  expect(w.spawned.filter(n => /scout/i.test(n))).toEqual([])
-  // run now is refused
+})
+
+test('the example scouts do not run on their timer, even well past every timer', async ($, on) => {
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) } })
+  await start($)
+  expect(paused(w.files)).toEqual(EXAMPLES)
+  await w.clock.advance(PAST_EVERY_TIMER)
+  expect(scoutSpawns(w.spawned)).toEqual([])
+})
+
+test('run now on an example scout is refused because it is paused', async ($, on) => {
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) } })
+  await start($)
   const r = (await $.tool.call({ tool: 'mcp__symcc__scouts', action: 'run', name: 'bugs' } as never)) as { result?: string } | string
   expect(typeof r === 'string' ? r : String(r.result)).toContain('bugs is paused')
-  expect(w.spawned.filter(n => /scout/i.test(n))).toEqual([])
-  // a second start (the folder is there now) adds nothing and says nothing
+  expect(scoutSpawns(w.spawned)).toEqual([])
+})
+
+test('a second start (the scouts folder is there now) adds no examples and says nothing', async ($, on) => {
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) } })
+  await start($)
   w.files.delete('/.symcc/scouts/deps.md')
   await start($)
   expect(scoutFiles(w.files)).not.toContain('/.symcc/scouts/deps.md')
@@ -100,7 +124,7 @@ test('a project with no scouts folder gets the example scouts, all paused; none 
 })
 
 test('a project with an empty scouts folder gets nothing new', async ($, on) => {
-  const w = world(on, { files: { '/.symcc/board.json': JSON.stringify({ tasks: [] }) }, dirs: ['/.symcc/scouts'] })
+  const w = world(on, { files: { '/.symcc/board.json': board() }, dirs: ['/.symcc/scouts'] })
   await start($)
   expect(scoutFiles(w.files)).toEqual([])
   expect(paused(w.files)).toEqual([])
@@ -109,15 +133,23 @@ test('a project with an empty scouts folder gets nothing new', async ($, on) => 
 
 test('a project with its own scouts gets nothing new and its scout file is left as it is', async ($, on) => {
   const mine = '---\nevery_minutes: 60\n---\nMy own bugs scout.\n'
-  const w = world(on, { files: { '/.symcc/board.json': JSON.stringify({ tasks: [] }), '/.symcc/scouts/bugs.md': mine }, dirs: ['/.symcc/scouts'] })
+  const w = world(on, { files: { '/.symcc/board.json': board(), '/.symcc/scouts/bugs.md': mine }, dirs: ['/.symcc/scouts'] })
   await start($)
   expect(scoutFiles(w.files)).toEqual(['/.symcc/scouts/bugs.md'])
   expect(w.files.get('/.symcc/scouts/bugs.md')).toBe(mine)
   expect(paused(w.files)).toEqual([])
 })
 
+test('control: a scout that is not paused does run on its timer in this fake world', async ($, on) => {
+  const mine = `---\nevery_minutes: ${EVERY_MINUTES}\n---\nMy own bugs scout.\n`
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }), '/.symcc/scouts/bugs.md': mine }, dirs: ['/.symcc/scouts'] })
+  await start($)
+  await w.clock.advance(PAST_EVERY_TIMER)
+  expect(scoutSpawns(w.spawned).length).toBeGreaterThan(0)
+})
+
 test('examples that cannot be read: symcc still starts, and the owner is told once', async ($, on) => {
-  const w = world(on, { files: { '/.symcc/board.json': JSON.stringify({ tasks: [] }) }, failExamples: true })
+  const w = world(on, { files: { '/.symcc/board.json': board() }, failExamples: true })
   await start($)
   expect(scoutFiles(w.files)).toEqual([])
   expect(w.toasts.filter(t => t.includes("couldn't add the example scouts")).length).toBe(1)
@@ -128,11 +160,11 @@ test('examples that cannot be read: symcc still starts, and the owner is told on
 })
 
 test('a copy that fails: symcc still starts, the owner is told once, and what was copied stays paused', async ($, on) => {
-  const w = world(on, { files: { '/.symcc/board.json': JSON.stringify({ tasks: [] }) }, failWrite: 'scouts/deps.md' })
+  const w = world(on, { files: { '/.symcc/board.json': board() }, failWrite: 'scouts/deps.md' })
   await start($)
   expect(scoutFiles(w.files)).toEqual(['/.symcc/scouts/bugs.md'])
   expect(paused(w.files)).toEqual(EXAMPLES)
   expect(w.toasts.filter(t => t.includes("couldn't add the example scouts")).length).toBe(1)
-  await w.clock.advance(SCOUT_SOON_MS + SCOUT_SPREAD_MS * 5 + 60 * 60_000)
-  expect(w.spawned.filter(n => /scout/i.test(n))).toEqual([])
+  await w.clock.advance(PAST_EVERY_TIMER)
+  expect(scoutSpawns(w.spawned)).toEqual([])
 })
