@@ -360,3 +360,37 @@ test('stats: wide titles (Japanese, emoji) are cut and padded by screen width, n
   // the bars start at the same screen column in every row
   for (const l of rows) expect(textWidth(l.slice(0, l.indexOf('▇')))).toBe(2 + 6 + 1 + 35 + 1)
 })
+
+test('stats: investigations end "answered", are counted on their own, and stay out of the done, first-try and merge figures', () => {
+  const inv = (id: string, over: Partial<SymccTask>, tries: [number, number?][]) => {
+    const t = task(id, { kind: 'investigation', role: 'researcher', ...over } as Partial<SymccTask>, tries)
+    return { ...t, runs: t.runs?.map(r => ({ ...r, ended_by: 'finished' as const, ended_note: 'answered' })) }
+  }
+  expect(mergedHow({ kind: 'investigation', history: ['try 1: the owner read the answer → done (nothing merged)'] })).toBe('answered')
+  const tasks = [
+    ...knownTasks(),
+    inv('T-6', { history: ['try 1: answered: x', 'try 1: the owner read the answer → done (nothing merged)'] }, [[10, 3000], [20, 5000]]),
+    inv('T-7', { status: 'review', history: ['try 1: answered: y'] }, [[30, 2000]]),
+  ]
+  for (const full of [false, true]) {
+    const text = statsReport({ tasks, nowMs: NOW, full, team: { leadProblem: 'no logs' } })
+    // the summary: still 4 done change tasks, 75% right first try (T-6 took two tries but is not counted)
+    expect(text.split('\n')[2]).toBe('4 done · 2 answered · 2h 45m of work · 25k tokens · 75% right first try')
+    expect(text).toContain('Investigations (2, 2 answered; not in done, first-try or merge figures)')
+    expect(text).toContain('  answered     2 of 2 (1 read by you, 1 waiting to be read)')
+    expect(text).toContain('  time         1h 00m in all · avg 30m per investigation')
+    expect(text).toContain('  tokens       10k in all · avg 5k per investigation')
+    expect(text).toContain('  tries        3 in all · avg 1.5 per investigation')
+    expect(text).toContain('75% of done tasks (3 of 4)')
+    expect(text).toContain('Per done task (4 done tasks with data, investigations left out)')
+    expect(text).toMatch(/How tasks ended \(5 done tasks\)/)
+    expect(text).toMatch(/answered \(investigation\) +[▇▅▂]+ +1 +20%/)
+    expect(text).not.toContain('not clear from history')
+    // the most tokens list is of change tasks only
+    expect(text).not.toMatch(/Most tokens[^]*T-6/)
+    for (const l of text.split('\n')) expect(l.length).toBeLessThanOrEqual(80)
+  }
+  const none = statsReport({ tasks: knownTasks(), nowMs: NOW })
+  expect(none).toContain('Investigations (0, 0 answered;')
+  expect(none.split('\n')[2]).toBe('4 done · 1h 45m of work · 15k tokens · 75% right first try')
+})

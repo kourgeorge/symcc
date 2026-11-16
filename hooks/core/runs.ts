@@ -28,8 +28,15 @@ export function endedBy(t: Pick<SymccTask, 'status' | 'runs'> | undefined, now: 
   return { runs: withEnd(endRun(t.runs, now), by, note) }
 }
 
-/** The short outcome of a finished try's check: "merged", "ready for review", "tests failed", "clash with main", "out of scope", ... */
-export function finishedNote(r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean }): string {
+/** The outcome of an investigation's try that handed back an answer (nothing committed, tested or merged). */
+export const ANSWERED = 'answered'
+
+/** Whether try `r` was an investigation's try that ended with an answer ("finished: answered", or "answered; ran over ..." when time ran out). */
+export const isAnsweredRun = (r: Pick<SymccRun, 'ended_note'>): boolean => /^answered\b/.test(r.ended_note ?? '')
+
+/** The short outcome of a finished try's check: "answered" (an investigation), "merged", "ready for review", "tests failed", "clash with main", "out of scope", ... */
+export function finishedNote(r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; answered?: boolean }): string {
+  if (r.answered) return ANSWERED
   if (r.review) return 'ready for review'
   if (r.ok) return 'merged'
   if (r.conflict) return 'clash with main'

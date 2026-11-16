@@ -5,6 +5,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## Unreleased
 
 ### Added
+- Investigation tasks: a task kind for questions ("is it possible…", "should we…", "how does X work?"). The worker hands back an answer; nothing is committed, tested or merged, and it always waits for you to read it, even in `auto`. Then Done, Keep as a note (a docs task saves it as `docs/research/<topic>.md`) or Ask more. Researcher tasks are investigations by default. The board shows `◆ answer` and `[investigation]`; `/symcc-stats` counts investigations on their own with the outcome "answered", and leaves them out of the first-try and merge numbers.
 - Plan mode: while Claude Code is in plan mode, nothing starts and new tasks go to the backlog.
 - Search the board: press `f` and type to filter tasks.
 - `notify` setting: off, sound or voice. It works on Windows too, and it will not turn on something this machine cannot play.

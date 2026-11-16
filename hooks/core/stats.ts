@@ -3,10 +3,10 @@
 // Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in.
 import type { SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { STATUS_WORD } from './board-file'
+import { kindOf, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
-import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, PRICE_WEIGHT, runMs, sumTokens, tokenCount } from './runs'
+import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount } from './runs'
 
 // ---------------- the range ----------------
 
@@ -98,8 +98,12 @@ export function failReason(line: string): FailReason | null {
   return null
 }
 
-/** How a done task got merged: on its own, approved by the owner, or null when its history doesn't say. */
-export function mergedHow(t: Pick<SymccTask, 'history'>): 'own' | 'approved' | null {
+/**
+ * How a done task ended: merged on its own, approved by the owner, "answered" for an investigation
+ * (nothing is merged), or null when its history doesn't say.
+ */
+export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | null {
+  if (kindOf(t as { kind?: unknown }) === 'investigation') return 'answered'
   const merged = t.history.filter(l => / → merged into /.test(l))
   if (!merged.length) return null
   return merged.some(l => /approved by the owner/.test(l)) ? 'approved' : 'own'
@@ -111,6 +115,13 @@ export function originKey(t: Pick<SymccTask, 'origin'>): string {
   if (!o?.by) return 'unknown'
   return o.by === 'scout' && o.scout ? `scout ${o.scout}` : o.by
 }
+
+/**
+ * Whether investigation `t` has been answered: read by the owner (done), waiting to be read
+ * (review), or a try of it handed back an answer.
+ */
+export const isAnsweredInvestigation = (t: Pick<SymccTask, 'status' | 'runs'> & { kind?: unknown }): boolean =>
+  kindOf(t as { kind?: unknown }) === 'investigation' && (t.status === 'done' || t.status === 'review' || (t.runs ?? []).some(isAnsweredRun))
 
 // ---------------- the report ----------------
 
@@ -260,12 +271,18 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const totalMs = withData.reduce((s, t) => s + F(t).ms, 0)
   const tokKnown = withData.filter(t => F(t).tokens !== undefined)
   const totalTok = sumTokens(tokKnown.map(t => F(t).tokens))
-  const doneAll = all.filter(t => t.status === 'done')
-  const done = withData.filter(t => t.status === 'done')
+  // Investigations hand back an answer and merge nothing: they are counted on their own, not in the
+  // done, first-try and merge figures (those are for change tasks).
+  const isInv = (t: SymccTask) => kindOf(t as { kind?: unknown }) === 'investigation'
+  const inv = all.filter(isInv)
+  const answered = inv.filter(isAnsweredInvestigation)
+  const finished = all.filter(t => t.status === 'done')
+  const doneAll = finished.filter(t => !isInv(t))
+  const done = withData.filter(t => t.status === 'done' && !isInv(t))
   const first = done.filter(t => F(t).tries === 1).length
 
   // The one-line summary
-  out.push('', [`${doneAll.length} done`, `${fmtDuration(totalMs)} of work`, ...(tokKnown.length ? [`${fmtTokens(tokenCount(totalTok))} tokens`] : []), ...(done.length ? [`${pct(first, done.length)} right first try`] : [])].join(' · '))
+  out.push('', [`${doneAll.length} done`, ...(inv.length ? [`${answered.length} answered`] : []), `${fmtDuration(totalMs)} of work`, ...(tokKnown.length ? [`${fmtTokens(tokenCount(totalTok))} tokens`] : []), ...(done.length ? [`${pct(first, done.length)} right first try`] : [])].join(' · '))
   if (noData) out.push(`(${plural(noData, 'task')} with no try data ${noData === 1 ? 'is' : 'are'} left out of averages)`)
 
   // Tasks by status
@@ -282,6 +299,20 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   if (full && tokKnown.length) out.push(row('billed-eq.', billedText(totalTok)))
   out.push(row('with data', `${withData.length} of ${all.length} tasks`))
 
+  // Investigations: how many, how many answered, their time and tokens
+  const invData = inv.filter(t => F(t).hasData)
+  const invMs = invData.reduce((s, t) => s + F(t).ms, 0)
+  const invTokKnown = invData.filter(t => F(t).tokens !== undefined)
+  const invTok = sumTokens(invTokKnown.map(t => F(t).tokens))
+  out.push('', `Investigations (${inv.length}, ${answered.length} answered; not in done, first-try or merge figures)`)
+  if (inv.length) {
+    out.push(row('answered', `${answered.length} of ${inv.length} (${finished.filter(isInv).length} read by you, ${inv.filter(t => t.status === 'review').length} waiting to be read)`))
+    out.push(row('time', invData.length ? `${fmtDuration(invMs)} in all · avg ${avgDur(invData.map(t => F(t).ms))} per investigation` : '-'))
+    out.push(row('tokens', invTokKnown.length ? `${fmtTokens(tokenCount(invTok))} in all · avg ${avgTok(invTokKnown.map(t => F(t).tok!))} per investigation` : '-'))
+    if (invTokKnown.length) out.push(...kindsRow(invTok))
+    out.push(row('tries', invData.length ? `${invData.reduce((s, t) => s + F(t).tries, 0)} in all · avg ${(mean(invData.map(t => F(t).tries)) ?? 0).toFixed(1)} per investigation` : '-'))
+  } else out.push('  none')
+
   // Whole team: the lead and the scouts too, not only the workers
   if (input.team) {
     const tries = withData.reduce((s, t) => s + F(t).tries, 0)
@@ -296,7 +327,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const runs = withData.flatMap(t => t.runs ?? [])
   const runTok = runs.filter(r => r.tokens !== undefined).map(r => tokenCount(r.tokens))
   const lead = doneAll.map(t => Date.parse(t.updated_at) - Date.parse(t.created_at)).filter(ms => Number.isFinite(ms) && ms >= 0)
-  out.push('', `Per done task (${plural(done.length, 'done task')} with data)`)
+  out.push('', `Per done task (${plural(done.length, 'done task')} with data${inv.length ? ', investigations left out' : ''})`)
   if (done.length) {
     out.push(row('time', `avg ${avgDur(doneMs)} · median ${fmtDuration(median(doneMs)!)}`))
     out.push(row('tokens', doneTok.length ? `avg ${avgTok(doneTok)} · median ${fmtTokens(median(doneTok)!)} (in all)` : '-'))
@@ -318,24 +349,25 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   top('Most tokens', t => F(t).tok, fmtTokens)
   top('Most time', t => F(t).ms, fmtDuration)
 
-  // How tasks ended
-  const how = doneAll.map(mergedHow)
+  // How tasks ended: merged changes, and investigations answered (read by the owner)
+  const how = finished.map(mergedHow)
   const own = how.filter(h => h === 'own').length
   const approved = how.filter(h => h === 'approved').length
-  const unclear = doneAll.length - own - approved
+  const answeredDone = how.filter(h => h === 'answered').length
+  const unclear = finished.length - own - approved - answeredDone
   const reasons: Record<FailReason, number> = { tests: 0, clash: 0, scope: 0, stopped: 0, rejected: 0 }
   for (const t of all) for (const l of t.history) {
     const r = failReason(l)
     if (r) reasons[r]++
   }
-  const ended: [string, number][] = [['merged on its own', own], ['approved by you', approved], ...(unclear ? [['not clear from history', unclear] as [string, number]] : [])]
-  out.push('', `How tasks ended (${plural(doneAll.length, 'done task')})`)
+  const ended: [string, number][] = [['merged on its own', own], ['approved by you', approved], ...(answeredDone ? [['answered (investigation)', answeredDone] as [string, number]] : []), ...(unclear ? [['not clear from history', unclear] as [string, number]] : [])]
+  out.push('', `How tasks ended (${plural(finished.length, 'done task')})`)
   const maxEnd = Math.max(...ended.map(([, n]) => n))
-  for (const [k, n] of ended) out.push(barRow(k, 22, n, maxEnd, doneAll.length))
+  for (const [k, n] of ended) out.push(barRow(k, 24, n, maxEnd, finished.length))
   const failed: [string, number][] = [['tests failed', reasons.tests], ['clash with main', reasons.clash], ['files out of scope', reasons.scope], ['stopped', reasons.stopped], ['rejected by you', reasons.rejected]]
   const maxFail = Math.max(...failed.map(([, n]) => n))
   out.push(`  Failed tries (${Object.values(reasons).reduce((s, n) => s + n, 0)}, from history)`)
-  for (const [k, n] of failed) out.push(barRow(`  ${k}`, 22, n, maxFail, null))
+  for (const [k, n] of failed) out.push(barRow(`  ${k}`, 24, n, maxFail, null))
 
   // By role and by origin: tasks, share, avg tokens and avg time per group
   const figsOf = (ts: SymccTask[]) => {
@@ -369,7 +401,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   // Done per day
   const days = new Map<string, { done: number; ms: number; tokens: number }>()
   const at = (d: string) => days.get(d) ?? (days.set(d, { done: 0, ms: 0, tokens: 0 }), days.get(d)!)
-  for (const t of doneAll) {
+  for (const t of finished) {
     const d = dayOf(Date.parse(t.updated_at || ''), off)
     if (d) at(d).done++
   }
