@@ -63,8 +63,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'doing' || !next.session) delete next.session
   // the "being tested and merged" mark only means something while the task is "doing"
   if (next.status !== 'doing' || !next.finishing) delete next.finishing
-  // the over-time marks belong to one try while it runs
-  for (const k of ['extra_minutes', 'time_ask', 'wrap_up'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
+  // the over-time marks, and what the try recorded for its hand-back, belong to one try while it runs
+  for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'try_question', 'try_refused'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
   // the step of a check only means something while the task stays as it was when checked
   if (!next.checking || next.status !== t.status || next.attempts !== t.attempts) delete next.checking
   // Where a task came from never changes once it is made.

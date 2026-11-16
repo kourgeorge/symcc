@@ -23,7 +23,7 @@ export type SymccRun = {
    */
   commits?: string[]
   /**
-   * The file with this try's full final answer (the worker's report, or its NEED FILES / QUESTION text),
+   * The file with this try's full final answer (the worker's hand-back: its report, or an investigation's answer),
    * relative to the project, e.g. ".symcc/reports/T-3-try-2.md". Missing on old boards and when it could not be saved.
    */
   report?: string
@@ -112,9 +112,9 @@ export type SymccTask = {
   branch: string | null
   /** the agent id of the last worker started on this task */
   agent?: string
-  /** the files a worker asked for with NEED FILES while the task waits (the owner can allow them from the board); only while waiting */
+  /** the files a worker asked for (its edits refused as outside the task's files) while the task waits (the owner can allow them from the board); only while waiting */
   asked_files?: string[]
-  /** the choices a worker gave with its QUESTION (OPTIONS: a | b), shown as buttons; only while waiting */
+  /** the choices a worker gave with its ask_owner question, shown as buttons; only while waiting */
   options?: string[]
   created_at: string
   updated_at: string

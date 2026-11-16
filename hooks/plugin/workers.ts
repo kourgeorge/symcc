@@ -580,12 +580,12 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
  * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
  * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
- * What happens is decided from what the try recorded and why its turn ended, never from the hand-back's text (which
+ * What happens is decided from what the try recorded on the board (try_question, try_refused) and why its turn ended, never from the hand-back's text (which
  * stays its report, an investigation's answer), in this order: a question (ask_owner) → waiting with it; edits refused
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
  * an API error or a refusal → failed with the reason; else done: checked and merged (an investigation: its answer).
  */
-export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch' | 'question' | 'requested'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
+export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
   const b = await load($)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
@@ -604,8 +604,8 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     tellLead($, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
     return
   }
-  const q = w.question
-  const need = kindOf(t) === 'investigation' ? [] : (w.requested ?? [])
+  const q = t.try_question
+  const need = kindOf(t) === 'investigation' ? [] : (t.try_refused ?? [])
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
     const { question, options } = q
