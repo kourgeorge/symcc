@@ -27,6 +27,7 @@ import { playable } from './plugin/voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { openPane, takeKeysBack } from './plugin/ui/open'
+import { arrowMove, noteFocus } from './plugin/ui/arrows'
 import { escBack } from './plugin/ui/esc'
 import { renderPane } from './plugin/ui/pane'
 import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, setSymcc, setBoardMode } from './plugin/workers'
@@ -420,5 +421,16 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     useName($)
     return renderPane($, e, next)
+  })
+
+  // ↑↓ on the board panel's lists move the focus to the row above or below (Claude Code makes them scroll the
+  // panel once its page is taller than the panel); see ui/arrows.ts.
+  on('ui.focus', { component: 'Pane' }, async ($, e, next) => {
+    useName($)
+    return noteFocus($, e, next)
+  })
+  on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
+    useName($)
+    return arrowMove($, e, next)
   })
 }

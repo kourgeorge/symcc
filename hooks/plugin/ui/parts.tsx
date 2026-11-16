@@ -6,6 +6,7 @@ import { setupGit } from '../git'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
 import { noteForLead, brief } from '../tell'
 import { setBoardMode } from '../workers'
+import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from './open'
 
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
@@ -114,6 +115,7 @@ export async function paneParts($: $, e: PaneEvent) {
    *  its [m] button (and `extra`, the Tasks page's [f] search button), then the page's key hints. It comes right after the page's content. Off the Tasks page there is
    *  no [m] button, so m does nothing there. */
   const footer = (hints: KeyHint[], name: string, withMode = false, extra: unknown = null) => (
+    (arrows.move = saysArrowsMove(hints)),
     <Box key={`${name}-footer`} flexDirection="column">
       <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {withMode ? (

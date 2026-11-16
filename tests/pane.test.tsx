@@ -1,7 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { hintLines, hintLineText, listKeys, taskKeys, type KeyHint } from '../hooks/board'
+import { hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
+import { arrowTarget, focusStops, isArrow, saysArrowsMove } from '../hooks/plugin/ui/arrows'
 import { sayQueue } from '../hooks/plugin/state'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -586,7 +587,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     // 50 columns: the model and "last:" columns don't fit, so they are left out
     expect(await ui.find({ type: 'Text', text: /sonnet/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /last:/ })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter open · t s c views · b back$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t s c views · b back$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Enter opens a scout/ })).toBeUndefined()
     expect(await ui.find({ key: 'scout-new' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
@@ -784,7 +785,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const tab = texts.findIndex(t => t === '[t]: Tasks (1)')
     const rule = texts.findIndex(t => /^━{50}$/.test(t))
-    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · t s c views · b back$/).test(t))
+    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · ↑↓ move · t s c views · b back$/).test(t))
     const row = texts.findIndex(t => (view === 'tasks' ? /Write it up/ : /^bugs/).test(t))
     expect(tab).toBeGreaterThan(-1)
     expect(rule).toBeGreaterThan(tab)
@@ -1224,7 +1225,7 @@ for (const width of [50, 90]) {
     expect((await ui.find({ key: 'scout:simplify' }))?.props.label).toBe('simplify: paused')
     expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · t s c views · b back'])
+    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · ↑↓ move · t s c views · b back'])
     expect(texts.some(t => /run now \/ edit on its page/.test(t))).toBe(false)
     await ui.unmount()
   })
@@ -1559,7 +1560,7 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
 const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
   ['task page', { opened: 'T-5' }, null, taskKeys('review')],
   ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
-  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
+  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
   ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
   ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Cancel', word: 'leaves without saving' }]],
   ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
@@ -1610,5 +1611,49 @@ test('Copy (y) on a task page puts the task on the clipboard as plain text and s
   await ui.press({ key: 'copy' })
   expect(copied.length).toBe(2)
   expect(toasts.some(t => /couldn't copy: this terminal has no clipboard access/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+test('↑↓ move between the elements Tab walks, in order; past the first or last they scroll; the wheel and page keys scroll', () => {
+  const stops = ['tab-tasks', 'T-1', 'T-2', 'mode']
+  expect(arrowTarget(stops, 'T-1', 1)).toBe('T-2')
+  expect(arrowTarget(stops, 'T-2', -1)).toBe('T-1')
+  expect(arrowTarget(stops, 'mode', 1)).toBeUndefined()
+  expect(arrowTarget(stops, 'tab-tasks', -1)).toBeUndefined()
+  expect(arrowTarget(stops, undefined, 1)).toBeUndefined()
+  expect(arrowTarget(stops, 'gone', 1)).toBeUndefined()
+  const person = { kind: 'person' }
+  expect(isArrow({ origin: person, by: 1 })).toBe(true)
+  expect(isArrow({ origin: person, by: -1 })).toBe(true)
+  expect(isArrow({ origin: person, by: 1, pointer: { column: 0, row: 0 } })).toBe(false)
+  expect(isArrow({ origin: person, by: 20 })).toBe(false)
+  expect(isArrow({ origin: { kind: 'plugin' }, by: 1 })).toBe(false)
+  expect(saysArrowsMove(listKeys())).toBe(true)
+  expect(saysArrowsMove(scoutListKeys())).toBe(true)
+  expect(saysArrowsMove(settingsKeys())).toBe(true)
+  expect(saysArrowsMove(rolesKeys())).toBe(true)
+  expect(saysArrowsMove(taskKeys('todo'))).toBe(false)
+  expect(saysArrowsMove(scoutKeys())).toBe(false)
+})
+
+test('the focus stops of a drawn page are its Buttons and Inputs in order, without the hidden hotkey Buttons', () => {
+  const el = (type: string, props: Record<string, unknown>, ...children: unknown[]) => ({ type, props, children })
+  const tree = el('Box', {}, [el('Box', { key: 'tabs' }, el('Button', { key: 'tab-tasks' }), el('Box', { display: 'none' }, el('Button', { key: 'tab-key-tasks' })))], el('Input', { key: 'search' }), [el('Button', { key: 'T-1' }, el('Text', {}, 'T-1')), null, 'x'], el('Box', {}, el('Button', { key: 'mode' })))
+  expect(focusStops(tree)).toEqual(['tab-tasks', 'search', 'T-1', 'mode'])
+})
+
+test('every list page says "↑↓ move" in its key line; a task page says "↑↓ scroll"', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One')], working: [], scouts: [scout('a')], mode: 'auto', test_commands: [] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t s c views$/ })).toBeDefined()
+  await ui.press({ key: 'tab-scouts' })
+  expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t s c views · b back$/ })).toBeDefined()
+  await ui.press({ key: 'tab-settings' })
+  expect(await ui.find({ type: 'Text', text: /^Enter change · ↑↓ move · t s c views · b back$/ })).toBeDefined()
+  await ui.press({ key: 'tab-tasks' })
+  await ui.press({ key: 'T-1' })
+  expect(await ui.find({ type: 'Text', text: /↑↓ scroll/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↑↓ move/ })).toBeUndefined()
   await ui.unmount()
 })

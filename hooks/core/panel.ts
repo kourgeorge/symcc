@@ -319,6 +319,7 @@ export const scoutEditKeys = (): KeyHint[] => [
 /** The keys under the Scouts list. */
 export const scoutListKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
+  { key: '↑↓', word: 'move' },
   { key: 't s c', word: 'views' },
   { key: 'b', word: 'back' },
 ]

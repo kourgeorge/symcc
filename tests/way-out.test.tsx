@@ -45,7 +45,7 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
   for (const l of lines) expect(l.length).toBeLessThanOrEqual(50)
   expect(hintLineText(settingsKeys())).toBe('Enter change · ↑↓ move · t s c views · b back')
   expect(hintLineText(rolesKeys())).toBe('Enter open · n new role · ↑↓ move · t s c views · b back')
-  expect(hintLineText(scoutListKeys())).toBe('Enter open · t s c views · b back')
+  expect(hintLineText(scoutListKeys())).toBe('Enter open · ↑↓ move · t s c views · b back')
   expect(hintLineText(scoutEditKeys())).toBe('↑↓ move between boxes · Cancel leaves without saving')
   for (const keys of [settingsKeys(), rolesKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
 })
