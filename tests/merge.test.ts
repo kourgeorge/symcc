@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse } from '../hooks/board'
+import { parseNeedFiles, parseQuestion, parseOptions } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -1381,6 +1382,45 @@ test('a change report that mentions an indented or quoted NEED FILES line in its
   const { t } = await workerAnswers('I changed src/a.ts so a worker answers:\n    NEED FILES: path/a, path/b — <reason>\nand also `NEED FILES: x` in a quote.\n```\nNEED FILES: y\n```', { notify: 'off' })
   expect(t.status).toBe('done')
   expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+})
+
+test('a short change report ending "NEED FILES: none" (or n/a, -, nothing, no) is not a request and the task merges', async () => {
+  for (const answer of ['Changed a.ts.\nNEED FILES: none', 'Changed a.ts.\nNEED FILES: n/a', 'Changed a.ts.\nNEED FILES: -', 'Changed a.ts.\nNEED FILES: nothing', 'Changed a.ts.\nNEED FILES: No — all inside my list', 'Changed a.ts.\nNEED FILES: none needed']) {
+    const { w, t } = await workerAnswers(answer, { notify: 'off' })
+    expect(t.status).toBe('done')
+    expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+    expect(movedMain(w)).toBe(true)
+  }
+})
+
+test("every NEED FILES / QUESTION / OPTIONS example line in the worker prompts is flush left and parses when copied as is", () => {
+  const [c] = boardWith('auto', ['npm test'])
+  const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
+  const prompts = [WORKER_PROMPT(c.tasks[0]!, c, WT), WORKER_PROMPT(i.tasks[0]!, i, WT)]
+  const seen = { need: 0, question: 0, options: 0 }
+  for (const p of prompts) {
+    const lines = p.split('\n')
+    // no example line is indented (the parsers skip indented lines)
+    expect(lines.filter(l => /^\s+[`*]*(NEED FILES|QUESTION|OPTIONS)\s*:/.test(l))).toEqual([])
+    for (const l of lines) {
+      if (/^NEED FILES:/.test(l)) {
+        seen.need++
+        expect(parseNeedFiles(l)).toEqual({ files: ['path/a', 'path/b'], reason: '<one short reason>' })
+        expect(parseNeedFiles(`I need two more files.\n${l}`)).toBeDefined()
+      }
+      if (/^QUESTION:/.test(l)) {
+        seen.question++
+        expect(parseQuestion(l)).toBeDefined()
+        const opts = lines.find(o => /^OPTIONS:/.test(o))!
+        expect(parseQuestion(`${l}\n${opts}`)).toBe(parseQuestion(l))
+      }
+      if (/^OPTIONS:/.test(l)) {
+        seen.options++
+        expect(parseOptions(l)).toEqual(['a', 'b', 'c'])
+      }
+    }
+  }
+  expect(seen).toEqual({ need: 1, question: 2, options: 2 })
 })
 
 test('a worker QUESTION with an OPTIONS line saves the options; without one, or with too few or too many, none', async () => {

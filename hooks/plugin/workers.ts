@@ -18,6 +18,15 @@ export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith
 
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => (kindOf(t) === 'investigation' ? INVESTIGATION_PROMPT(t, dir, role) : CHANGE_PROMPT(t, b, dir, role))
 
+/**
+ * How a worker asks the owner, shared by both prompts. Its example lines are flush left, so a worker
+ * that copies one exactly gives a line parseQuestion / parseOptions accept (they skip indented lines).
+ */
+const ASK_TEXT = ` If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question, like this:
+QUESTION: <your question>
+The task will wait for the owner's answer and a new try continues with it. If the owner can pick from a few answers, add one more line after it, with 2 to 6 short choices split by |, like this:
+OPTIONS: a | b | c`
+
 /** The prompt of an investigation's worker: find the answer and hand it back in full; nothing it changes is kept. */
 const INVESTIGATION_PROMPT = (t: BoardTask, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one investigation, then stop.
 
@@ -29,7 +38,7 @@ Read whatever you need. You may run read-only commands and experiments, outside 
 Task ${t.id}: ${t.title}
 ${t.details}
 ${roleSection(role)}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\n` : ''}
-When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question; the task will wait for the owner's answer and a new try continues with it. If the owner can pick from a few answers, add one more line after it: "OPTIONS: a | b | c" (2 to 6 short choices, split by |).`
+When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.${ASK_TEXT}`
 
 /** The prompt of a change's worker: change the files, which are then committed, tested and merged. */
 const CHANGE_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one task, then stop.
@@ -43,12 +52,12 @@ ${t.details}
 ${roleSection(role)}
 Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 If you find you must change a file outside this list, do NOT change it. Stop at once and answer with just one line:
-  NEED FILES: path/a, path/b — <one short reason>
+NEED FILES: path/a, path/b — <one short reason>
 (You don't need to finish anything else first; what you already changed in your folder is kept for the next try.)` : 'whatever the task needs.'}
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${S.N.name} commits, tests and merges your work.
 ${t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
-When you are done, answer in one or two plain sentences: what you changed. If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question; the task will wait for the owner's answer and a new try continues with it. If the owner can pick from a few answers, add one more line after it: "OPTIONS: a | b | c" (2 to 6 short choices, split by |).`
+When you are done, answer in one or two plain sentences: what you changed.${ASK_TEXT}`
 
 export async function pump($: $) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end

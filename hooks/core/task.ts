@@ -157,6 +157,9 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
   return changed.filter(f => f.startsWith(dir + '/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
+/** Words a NEED FILES list may hold that name no file ("none", "n/a", ...). */
+const NO_FILES = /^(?:none|n\/a|na|-+|nothing|no|nil|\.{3}|…)\.?$/i
+
 /**
  * A worker that must change files outside its list stops and answers
  * `NEED FILES: path/a, path/b — reason`. Returns the files and the reason (may be empty), or
@@ -167,6 +170,7 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
  * must be short (at most QUESTION_EXTRA_LINES lines and QUESTION_EXTRA_CHARS characters), so
  * "I need two more files.\nNEED FILES: ..." asks while a long report with such a line does not.
  * Lines after it (details for the next try) are fine, however long.
+ * A list with no real path (empty, or starting with "none", "n/a", "-", "nothing" or "no") is not a request.
  */
 export function parseNeedFiles(answer: string): { files: string[]; reason: string } | undefined {
   const lines = answer.split(/\r?\n/)
@@ -194,6 +198,8 @@ export function parseNeedFiles(answer: string): { files: string[]; reason: strin
   const list = cut ? rest.slice(0, cut.index) : rest
   const reason = cut ? rest.slice(cut.index + cut[0].length).trim() : ''
   const files = [...new Set(list.split(/[,\s]+/).map(f => f.replace(/[`'"]/g, '').trim().replace(/^\.\//, '')).filter(Boolean))]
+  // "none", "n/a", "no files needed", ...: no real path, so not a request
+  if (files.length && NO_FILES.test(files[0]!)) return undefined
   return files.length ? { files, reason } : undefined
 }
 
