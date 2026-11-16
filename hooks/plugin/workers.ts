@@ -3,7 +3,7 @@ import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
@@ -91,6 +91,8 @@ export async function startWorker($: $, id: string) {
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone($, b, t0!, 'start')) return
     const { dir, branch } = await prepareWorktree($, t0!, intoOf(t0!))
+    // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
+    await copyReports($, t0!, dir).catch(() => [])
     const roles = await loadRoles($)
     const t = await change($, x => {
       const cur = find(x, id)

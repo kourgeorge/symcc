@@ -1,8 +1,8 @@
 import type { SymccTask } from '../../types'
-import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText } from '../board'
+import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
 import { publish } from './lead'
 import { type $, S, workers, starting, finishing, approving, keptDirty } from './state'
-import { load, change } from './store'
+import { load, change, path } from './store'
 import { tellLead, noteForLead, brief } from './tell'
 import { pump, agentsNow } from './workers'
 
@@ -149,6 +149,31 @@ export async function prepareWorktree($: $, t: SymccTask, target: string) {
   if (has) await gitOk($, ['worktree', 'add', dir, branch])
   else await gitOk($, ['worktree', 'add', '-b', branch, dir, target])
   return { dir, branch }
+}
+
+/**
+ * Copies the report files task `t`'s details name (<data dir>/reports/<id>-try-<N>.md, e.g. a keep-note task's
+ * earlier answers) from the main project into its folder `dir`, at the same path: the data dir is git-ignored, so a
+ * new worktree has none, and its worker may not read the main project folder. A .gitignore of "*" in the copied data
+ * dir keeps them out of the commit even where the project's .gitignore lacks it. Returns the files copied; a report
+ * that can't be read is skipped.
+ */
+export async function copyReports($: $, t: Pick<SymccTask, 'details'>, dir: string): Promise<string[]> {
+  const files = namedReports(t.details, S.N.dir)
+  if (!files.length) return []
+  const copied: string[] = []
+  for (const f of files) {
+    const text = await Promise.resolve().then(() => $.fs.read(path(f))).then(x => String(x), () => null)
+    if (text === null) continue
+    if (!copied.length) {
+      const mk = await $.process.run(['mkdir', '-p', `${dir}/${S.N.dir}/reports`])
+      if (mk.exitCode !== 0) return []
+      await $.fs.write(`${dir}/${S.N.dir}/.gitignore`, '*\n')
+    }
+    await $.fs.write(`${dir}/${f}`, text)
+    copied.push(f)
+  }
+  return copied
 }
 
 /**
