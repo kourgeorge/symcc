@@ -70,7 +70,7 @@ export type BoardTask = SymccTask & { session?: string; finishing?: string; merg
 export type Blockers = { dirty: string[]; untracked: string[]; ignored: string[] }
 
 /** All the owner's files in `b`, in the order dirty, untracked, ignored. */
-export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...(b.ignored ?? [])]
+export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...b.ignored]
 
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string')
 
