@@ -1,10 +1,11 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { type BoardTask, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { finishingNow } from './lead'
 import { originOf } from './origin'
+import { waitFilesNote } from './review'
 import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs } from './runs'
@@ -120,12 +121,10 @@ function rowExtraOf(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]): st
 
 /** What a task whose finished work waits only for the owner's files (BoardTask.merge_wait) says, in the board list,
  *  on its page and above the prompt: "waiting for your files on main: a.ts, b.ts; commit or stash them, it merges on
- *  its own". '' for any other task. */
+ *  its own" (or "move or rename them" for untracked or ignored files, as the task's note says). '' for any other task. */
 export function fileWaitText(t: Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>): string {
   if (!waitsForFiles(t)) return ''
-  const f = t.merge_wait!
-  const list = f.length > 5 ? `${f.slice(0, 5).join(', ')} and ${f.length - 5} more` : f.join(', ')
-  return `waiting for your files on ${intoOf(t)}: ${list}; commit or stash them, it merges on its own`
+  return `${waitFilesNote(intoOf(t), asBlockers(t.merge_wait)!)}, it merges on its own`
 }
 
 /** Cuts text to `n` columns, ending with "…" when cut. */

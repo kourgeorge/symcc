@@ -652,7 +652,7 @@ test('approve that is blocked by the owner\'s uncommitted changes in a file it c
   let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
   expect(t.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
-  expect((t as BoardTask).merge_wait).toEqual(['src/a.ts'])
+  expect((t as BoardTask).merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
   expect(w.git.main).toBe(M1)
   // once the file is committed, approving again only merges it
   w.git.status = ''
@@ -2265,7 +2265,7 @@ test('an uncommitted change in a file the task changes: the task waits with a no
     let x = await t()
     expect(x.status).toBe('waiting')
     expect(x.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
-    expect(x.merge_wait).toEqual(['src/a.ts'])
+    expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
     expect(x.question).toBeNull()
     expect(x.runs!.at(-1)!.ended_note).toBe('waiting for your files')
     expect(w.git.main).toBe(M1)
@@ -2375,15 +2375,79 @@ test('an approve blocked by the owner\'s files is merged by the regular check on
   }
 })
 
-test('merge_wait is kept only while the task stays waiting or in review', () => {
+test('merge_wait is kept only while the task stays waiting or in review; an old plain list reads as uncommitted changes', () => {
   const [b] = boardWith('auto')
-  const w = patchTask(b, 'T-1', { status: 'waiting', merge_wait: ['a.txt'], note: 'waiting for your files' }, ISO)
-  expect((find(w, 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
-  expect((find(patchTask(w, 'T-1', { note: 'x' }, ISO), 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
+  const mw = { dirty: [], untracked: [], ignored: ['a.txt'] }
+  const w = patchTask(b, 'T-1', { status: 'waiting', merge_wait: mw, note: 'waiting for your files' } as Partial<BoardTask>, ISO)
+  expect((find(w, 'T-1') as BoardTask).merge_wait).toEqual(mw)
+  expect((find(patchTask(w, 'T-1', { note: 'x' }, ISO), 'T-1') as BoardTask).merge_wait).toEqual(mw)
   expect((find(patchTask(w, 'T-1', { status: 'todo' }, ISO), 'T-1') as BoardTask).merge_wait).toBeUndefined()
-  expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).merge_wait).toEqual(['a.txt'])
+  expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).merge_wait).toEqual(mw)
   const done = { ...w, tasks: w.tasks.map(t => ({ ...t, status: 'done' as const })) }
   expect((find(parseBoard(JSON.stringify(done)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
+  const old = { ...w, tasks: w.tasks.map(t => ({ ...t, merge_wait: ['a.txt'] })) }
+  expect((find(parseBoard(JSON.stringify(old)), 'T-1') as BoardTask).merge_wait).toEqual({ dirty: ['a.txt'], untracked: [], ignored: [] })
+  const bad = { ...w, tasks: w.tasks.map(t => ({ ...t, merge_wait: { dirty: [1] } })) }
+  expect((find(parseBoard(JSON.stringify(bad)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
+})
+
+test("a merge waiting for the owner's files that runs over keeps waiting for them: it merges on its own once they are clear, and a retry only merges", async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
+    expect((await t()).status).toBe('waiting')
+    // the owner commits their change (main moves), so the merge tests again; that test hangs until free()
+    w.git.status = ''
+    w.git.main = M2
+    w.git.upToDate = false
+    let free = () => {}
+    const gate = new Promise<void>(r => (free = r))
+    let hung = false
+    w.onRun(async cmd => {
+      if (hung || !/^\/bin\/sh -c /.test(cmd)) return
+      hung = true
+      await gate
+    })
+    const limits: (() => void)[] = []
+    ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
+      if (ms === finishLimitMs(1)) limits.push(f)
+      return { cancel() {} }
+    }
+    let out: string | undefined
+    void runTool(w.$, 'retry', { task: 'T-1' }).then(x => (out = String(x)))
+    await turns(w, () => hung)
+    expect(limits.length).toBe(1)
+    limits[0]!()
+    await turns(w, () => out !== undefined)
+    expect(out).toBe('T-1 was not merged and keeps waiting: its checking and merging ran over 15 minutes and was given up. Retry it.')
+    let x = await t()
+    expect(x.status).toBe('waiting')
+    expect(x.question).toBeNull()
+    expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+    expect(x.note).toBe('the merge ran over 15 min and was given up; symcc retry T-1')
+    expect(x.history.at(-1)).toBe('try 1: merging once your files were out of the way → its checking and merging ran over 15 min and was given up; nothing written, it stays waiting')
+    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(1)
+    expect(leadQueue.some(m => m.includes('ran over 15 minutes') && m.includes('merges on its own'))).toBe(true)
+    expect(w.git.main).toBe(M2)
+    // the owner changed src/a.ts again: a retry only tries the merge (no worker) and it keeps waiting
+    w.git.status = ' M src/a.ts\0'
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toContain('T-1 was not merged and keeps waiting: you have uncommitted changes on main')
+    expect((await t()).status).toBe('waiting')
+    await check(w.$)
+    expect((await t()).status).toBe('waiting')
+    expect(spawned).toEqual([])
+    // once the file is clear, the regular check merges it on its own, with no worker
+    w.git.status = ''
+    await check(w.$)
+    x = await t()
+    expect(x.status).toBe('done')
+    expect(x.merge_wait).toBeUndefined()
+    expect(x.attempts).toBe(1)
+    expect(spawned).toEqual([])
+    free()
+    for (let i = 0; i < 5000; i++) await Promise.resolve()
+  } finally {
+    cleanUp()
+  }
 })
 
 // ---------------- the limit grows with the test commands, two give-ups in a row fail, work that landed late (T-224) ----------------

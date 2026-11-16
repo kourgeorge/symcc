@@ -1,7 +1,7 @@
 // The board modes (review before merge) and looking at a task's changes.
 import type { SymccMode, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, type BoardTask, find, isMode, modeOf, STATUS_WORD } from './board-file'
+import { type Board, type BoardTask, type Blockers, blockerFiles, find, isMode, modeOf, STATUS_WORD } from './board-file'
 import { patchTask } from './task'
 import { clean } from './text'
 
@@ -173,9 +173,6 @@ const clashes = (a: string, b: string) => {
   return x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`)
 }
 
-/** The owner's files that stop a merge: uncommitted changes (`dirty`), untracked and git-ignored files, each only where the merge changes files. */
-export type Blockers = { dirty: string[]; untracked: string[]; ignored: string[] }
-
 /**
  * What stops a merge from updating the owner's files, from
  * `git status --porcelain -z --untracked-files=all --ignored=matching`, given `incoming` (the paths
@@ -195,9 +192,6 @@ export function mergeBlockers(statusZ: string, incoming: readonly string[], skip
   return out
 }
 
-/** All the owner's files in `b`, in the order dirty, untracked, ignored. */
-export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...(b.ignored ?? [])]
-
 /** A path made safe to show: control characters (newlines, terminal escapes) become "?". */
 const shown = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
 
@@ -207,13 +201,16 @@ const fileList = (files: readonly string[], n = 5) => {
   return f.length > n ? `${f.slice(0, n).join(', ')} and ${f.length - n} more` : f.join(', ')
 }
 
-/** What the owner does about blocking files: commit or stash changes, move untracked or ignored files out of the way. */
-const fixText = (b: Blockers) => {
+/** What the owner does about blocking files, without "them": "commit or stash" changes, "move or rename" untracked or ignored files (git stash leaves ignored files where they are). */
+export const fixWays = (b: Blockers) => {
   const ways: string[] = []
   if (b.dirty.length) ways.push('commit or stash')
   if (b.untracked.length || b.ignored?.length) ways.push(b.untracked.length ? 'move, rename or commit' : 'move or rename')
-  return `${[...new Set(ways)].join(', or ')} them`
+  return [...new Set(ways)].join(', or ')
 }
+
+/** What the owner does about blocking files: "commit or stash them", "move or rename them", ... */
+const fixText = (b: Blockers) => `${fixWays(b)} them`
 
 /** What the owner does once they fixed their files: a worker's finished work is retried, a blocked approve is approved again. */
 export type BlockedAction = 'retry' | 'approve'

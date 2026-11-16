@@ -52,10 +52,32 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * the way); only while "waiting" (a finished worker's try) or "review" (an approve). The regular
  * check, a retry or an approve then only merges it, with no new worker.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; merge_wait?: string[] }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; merge_wait?: Blockers }
+
+/** The owner's files that stop a merge: uncommitted changes (`dirty`), untracked and git-ignored files, each only where the merge changes files. */
+export type Blockers = { dirty: string[]; untracked: string[]; ignored: string[] }
+
+/** All the owner's files in `b`, in the order dirty, untracked, ignored. */
+export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...(b.ignored ?? [])]
+
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string')
+
+/** `v` as Blockers when it is one (an old plain list of names counts as uncommitted changes), else undefined. */
+export function asBlockers(v: unknown): Blockers | undefined {
+  if (strings(v)) return { dirty: v, untracked: [], ignored: [] }
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const pick = (k: string) => (o[k] === undefined ? [] : strings(o[k]) ? (o[k] as string[]) : null)
+  const dirty = pick('dirty'), untracked = pick('untracked'), ignored = pick('ignored')
+  return dirty && untracked && ignored ? { dirty, untracked, ignored } : undefined
+}
 
 /** Whether task `t` only waits for the owner's files before its finished work is merged (see BoardTask.merge_wait). */
-export const waitsForFiles = (t: { status?: unknown; merge_wait?: unknown } | undefined): boolean => !!t && (t.status === 'waiting' || t.status === 'review') && Array.isArray(t.merge_wait) && t.merge_wait.length > 0
+export const waitsForFiles = (t: { status?: unknown; merge_wait?: unknown } | undefined): boolean => {
+  if (!t || (t.status !== 'waiting' && t.status !== 'review')) return false
+  const b = asBlockers(t.merge_wait)
+  return !!b && blockerFiles(b).length > 0
+}
 
 /** The data folder for the default name. For another name use namesFor(name). */
 export const DATA_DIR = dataDir()
@@ -192,7 +214,12 @@ function cleanTask(t: unknown): BoardTask | null {
   if (x.question !== null && typeof x.question !== 'string') x.question = null
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
-  for (const k of ['asked_files', 'options', 'merge_wait']) if (k in x && !(Array.isArray(x[k]) && (x[k] as unknown[]).every(v => typeof v === 'string'))) delete x[k]
+  for (const k of ['asked_files', 'options']) if (k in x && !strings(x[k])) delete x[k]
+  if ('merge_wait' in x) {
+    const mw = asBlockers(x.merge_wait)
+    if (mw) x.merge_wait = mw
+    else delete x.merge_wait
+  }
   if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
   const { session, finishing, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'

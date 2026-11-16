@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, waitFilesNote, stillBlocks } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -568,8 +568,8 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
  * into its history that first time. Written only while the task is still as it was.
  */
 async function holdForFiles($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
-  const files = blockerFiles(r.blocked!)
-  const note = waitFilesNote(intoOf(t), r.blocked!)
+  const files = { dirty: r.blocked!.dirty, untracked: r.blocked!.untracked, ignored: r.blocked!.ignored ?? [] }
+  const note = waitFilesNote(intoOf(t), files)
   const res = await change($, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, 'gone'] as [Board, 'gone']
@@ -606,7 +606,7 @@ export async function retryFileWaits($: $) {
         if (st.exitCode !== 0) return
         status = st.stdout
       }
-      if (stillBlocks(status, t.merge_wait ?? [], S.N.dir)) continue
+      if (stillBlocks(status, blockerFiles(asBlockers(t.merge_wait) ?? { dirty: [], untracked: [], ignored: [] }), S.N.dir)) continue
     }
     await mergeWaiting($, t.id).catch(() => undefined)
     // that merge may have changed the owner's files: look again for the next one
@@ -717,7 +717,9 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
 /**
  * The merge of task `id` (an approve, or a merge waiting for the owner's files) ran over
  * its limit (`limitMs`, see finishLimitMs) and was given up: while it is still `status` it stays
- * there, with a note and a history line saying so; the lead is told once. Should it still land
+ * there, with a note and a history line saying so; the lead is told once. A merge waiting for the
+ * owner's files (`kind` 'merge') keeps its merge_wait: it still waits for them, merges on its own
+ * once they are clear, and a retry only merges it. Should it still land
  * later, landedLate marks it done.
  */
 async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
@@ -727,7 +729,7 @@ async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind:
   const t = await change($, x => {
     const cur = find(x, id)
     if (cur?.status !== status) return [x, null] as [Board, null]
-    const y = patchTask(x, id, { note: `${kind === 'approve' ? 'approved, but the' : 'the'} merge ran over ${min} min and was given up; ${again}`, merge_wait: undefined, history: [...cur.history, `${tryLabel(cur)}: ${what} → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`] }, now())
+    const y = patchTask(x, id, { note: `${kind === 'approve' ? 'approved, but the' : 'the'} merge ran over ${min} min and was given up; ${again}`, ...(kind === 'approve' ? { merge_wait: undefined } : {}), history: [...cur.history, `${tryLabel(cur)}: ${what} → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`] }, now())
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
   const late = t ? null : find(await load($).catch(() => null) ?? emptyBoard(), id)
@@ -736,7 +738,7 @@ async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind:
     if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
     return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
   }
-  if (t) tellLead($, `${id} "${t.title}": its merge ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It keeps waiting; ${S.N.name} retry ${id} tries the merge again.`)
+  if (t) tellLead($, `${id} "${t.title}": its merge ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It keeps waiting for the owner's files and merges on its own at the next regular check once they are out of the way; ${S.N.name} retry ${id} tries the merge again at once.`)
   return `${id} was not merged and keeps waiting: its checking and merging ran over ${min} minutes and was given up. Retry it.`
 }
 

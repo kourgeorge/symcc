@@ -378,6 +378,16 @@ test("a task waiting only for the owner's files shows them and a Merge now butto
   await ui.unmount()
 })
 
+test("a task waiting for the owner's git-ignored file says move or rename it on its page, not commit or stash", async ($, on) => {
+  const t = task('T-2', 'waiting', 'Search mode', { merge_wait: { dirty: [], untracked: [], ignored: ['.env'] }, note: 'waiting for your files on main: .env; move or rename them' })
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', notify: 'voice', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^waiting for your files on main: \.env; move or rename them, it merges on its own$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /commit or stash/ })).toBeUndefined()
+  expect(await ui.find({ key: 'answer' })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on keys 1-3; Allow widens the files and sends it back', async ($, on) => {
   const board = { tasks: [task('T-2', 'waiting', 'Search mode', { files: ['src/'], question: 'T-2 needs to change files outside its list: README.md. Allow them?', asked_files: ['README.md'] })] }
   stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })

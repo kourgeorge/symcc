@@ -560,6 +560,14 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
   expect(rowExtra(files, [files])).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(fileWaitText({ ...files, status: 'review' } as SymccTask)).toContain('commit or stash them')
   expect(fileWaitText({ ...files, status: 'todo' } as SymccTask)).toBe('')
+  // untracked or git-ignored files: move or rename them (git stash leaves ignored files where they are), as the note says
+  const ignored = { ...files, merge_wait: { dirty: [], untracked: [], ignored: ['.env'] } } as SymccTask
+  expect(fileWaitText(ignored)).toBe('waiting for your files on dev: .env; move or rename them, it merges on its own')
+  expect(rowExtra(ignored, [ignored])).toBe('waiting for your files on dev: .env; move or rename them, it merges on its own')
+  const untracked = { ...files, merge_wait: { dirty: [], untracked: ['b.ts'], ignored: [] } } as SymccTask
+  expect(fileWaitText(untracked)).toBe('waiting for your files on dev: b.ts; move, rename or commit them, it merges on its own')
+  const tracked = { ...files, merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } } as SymccTask
+  expect(fileWaitText(tracked)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   const asked = { ...base, question: 'Which one?' }
   expect(fileWaitText(asked)).toBe('')
   expect(rowExtra(asked, [asked])).toBe('Which one?')
