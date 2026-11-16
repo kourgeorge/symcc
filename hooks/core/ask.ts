@@ -67,6 +67,40 @@ export function resolvePath(base: string, p: string): string {
   return `/${out.join('/')}`
 }
 
+/** How realPathOf looks at the disk; plugin/ask.ts answers it with $.fs. */
+export interface PathLookup {
+  /** Where existing path `abs` really is (symbolic links followed), or undefined when it is not there. */
+  real(abs: string): Promise<string | undefined>
+  /** Whether entry `name` in folder `dir` is a symbolic link (asked only when it leads nowhere). */
+  isLink(dir: string, name: string): Promise<boolean>
+}
+
+/**
+ * Where path `p` (relative paths taken from `base`) really lands once symbolic links are followed: the longest part
+ * of it that exists is looked up on disk (".." after a link goes up from where the link leads, as the system does),
+ * and the rest, which may not exist yet, is added after it. Null when the first missing part is a symbolic link that
+ * leads nowhere (writing there would create its target, wherever that is); undefined when nothing can be looked up,
+ * so the caller keeps the path as written.
+ */
+export async function realPathOf(base: string, p: string, look: PathLookup): Promise<string | null | undefined> {
+  const full = p.startsWith('/') ? p : `${base}/${p}`
+  if (!full.startsWith('/')) return undefined
+  const parts = full.split('/').filter(x => x && x !== '.')
+  for (let n = parts.length; n >= 0; n--) {
+    const real = await look.real(`/${parts.slice(0, n).join('/')}`).catch(() => undefined)
+    if (real === undefined) continue
+    if (!real.startsWith('/')) return undefined
+    const next = parts[n]
+    if (next !== undefined && next !== '..' && (await look.isLink(real, next).catch(() => false))) return null
+    return resolvePath('/', [real, ...parts.slice(n)].join('/'))
+  }
+  return undefined
+}
+
+/** The reason a worker reads when its edit of `path` is refused for going through a symbolic link that leads nowhere. */
+export const brokenLinkText = (path: string) =>
+  `Refused: ${path} goes through a symbolic link that leads to nothing yet, so where the edit would land can't be checked. Edit a real file in your own folder instead.`
+
 /** `abs` relative to folder `dir` (both clean absolute paths), or undefined when it is not inside it. Case-sensitive when `exact`. */
 function inside(abs: string, dir: string, exact: boolean): string | undefined {
   const [a, d] = exact ? [abs, dir] : [abs.toLowerCase(), dir.toLowerCase()]

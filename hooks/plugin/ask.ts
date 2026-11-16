@@ -4,7 +4,7 @@
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, find, kindOf, patchTask } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, find, kindOf, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
 import { S, type $, type Worker, scoutRuns } from './state'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -45,6 +45,28 @@ export async function askCall($: $, agentId: string | undefined, a: Record<strin
 }
 
 /**
+ * An edit call's path, the worker's folder `worktree` and the project folder `root` with symbolic links followed
+ * (realPathOf), so a link in the worker's folder that leads into the owner's copy is judged by where it leads.
+ * When any of the three can't be looked up, all three stay as written (the checks then work as before T-303).
+ * Null when the path goes through a link that leads nowhere.
+ */
+async function realEdit($: $, tool: string, input: unknown, worktree: string, root: string): Promise<{ input: unknown; worktree: string; root: string } | null> {
+  const asIs = { input, worktree, root }
+  const field = EDIT_PATH_FIELD[tool]
+  const p = field && input && typeof input === 'object' ? (input as Record<string, unknown>)[field] : undefined
+  if (typeof p !== 'string' || !p.trim() || !worktree.startsWith('/') || !root.startsWith('/')) return asIs
+  // a failed lookup (even one that throws at once) answers "not there" / "not a link", so nothing is refused for it
+  const look: PathLookup = {
+    real: q => Promise.resolve().then(() => $.fs.stat(q, { resolve: true })).then(st => st.realPath, () => undefined),
+    isLink: (dir, name) => Promise.resolve().then(() => $.fs.list(dir)).then(es => es.some(e => e.name === name && e.isLink), () => false),
+  }
+  const [file, wt, top] = await Promise.all([realPathOf(worktree, p.trim(), look), realPathOf('/', worktree, look), realPathOf('/', root, look)])
+  if (file === null) return null
+  if (!file || !wt || !top) return asIs
+  return { input: { ...(input as Record<string, unknown>), [field!]: file }, worktree: wt, root: top }
+}
+
+/**
  * The tool.check hook's part: for a running worker, an edit inside the project but outside its own folder (the owner's
  * copy, the board, another worker's folder) is always refused, with no file request (the worker should edit its own copy).
  * On a change task, an edit in its folder outside the task's files is refused (the reason the worker reads) and its path
@@ -63,12 +85,14 @@ export async function checkEdit($: $, agentId: string | undefined, tool: string,
     const rel = S.root ? bashOutsideFolder(cmd, w.worktree, S.root, S.home || undefined) : undefined
     return rel !== undefined ? bashOutsideText(rel, w.worktree) : undefined
   }
-  const outside = S.root ? editOutsideFolder(tool, input, w.worktree, S.root) : undefined
+  const real = await realEdit($, tool, input, w.worktree, S.root)
+  if (real === null) return brokenLinkText(String((input as Record<string, unknown>)[EDIT_PATH_FIELD[tool]!]).trim())
+  const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
   if (outside !== undefined) return outsideFolderText(outside, w.worktree)
   const b = await load($).catch(() => null)
   const t = b ? find(b, w.task) : undefined
   if (!t || kindOf(t) === 'investigation') return undefined
-  const path = blockedEdit(tool, input, w.worktree, t.files, S.N.dir)
+  const path = blockedEdit(tool, real.input, real.worktree, t.files, S.N.dir)
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
