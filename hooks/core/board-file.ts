@@ -27,6 +27,11 @@ export type Board = {
   enabled: boolean
   /** done and dropped tasks older than this many days move to archive.json (0 = never) */
   archive_days: number
+  /**
+   * where tasks added from a scout finding go: auto (the default; absent = auto) lets the lead decide,
+   * so a finding goes to todo and runs; backlog puts every scout-origin task in the backlog
+   */
+  scout_findings?: ScoutFindings
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
   archived?: ArchivedTotals
@@ -38,6 +43,13 @@ export type Board = {
 export type Notify = 'off' | 'sound' | 'voice'
 export const NOTIFY_CHOICES: Notify[] = ['off', 'sound', 'voice']
 export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
+
+/** Where tasks added from a scout finding go: auto (the lead decides) or backlog (always the backlog). */
+export type ScoutFindings = 'auto' | 'backlog'
+export const SCOUT_FINDINGS_CHOICES: ScoutFindings[] = ['auto', 'backlog']
+export const isScoutFindings = (x: unknown): x is ScoutFindings => SCOUT_FINDINGS_CHOICES.includes(x as ScoutFindings)
+/** The scout_findings setting in use: the board's choice, else auto. */
+export const scoutFindingsOf = (b: { scout_findings?: unknown } | null | undefined): ScoutFindings => (isScoutFindings(b?.scout_findings) ? b!.scout_findings as ScoutFindings : 'auto')
 
 /** The running totals of archived tasks: how many were done and dropped, and their tries' time, tokens and cost. */
 export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: SymccTokens; cost?: number }
@@ -51,14 +63,31 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * files of the owner on the branch it merges into (uncommitted changes, untracked or ignored files in
  * the way); only while "waiting" (a finished worker's try) or "review" (an approve). The regular
  * check, a retry or an approve then only merges it, with no new worker.
+ * `checking`: the step symcc is in while it checks the task's finished work (a finished try, an approve
+ * or a merge that waited for the owner's files), with when that was last said (refreshed like `finishing`);
+ * the board list shows the step instead of the time. Only while "doing", "review" or "waiting".
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; merge_wait?: Blockers }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers }
+
+/** The step of checking a task's finished work: "checking" (commit and scope check), "testing" (the test commands), "merging" (bringing it up to date and moving the branch). */
+export type CheckStep = 'checking' | 'testing' | 'merging'
+export type Checking = { step: CheckStep; at: string }
+export const CHECK_STEPS: readonly CheckStep[] = ['checking', 'testing', 'merging']
+/** The statuses a task may be checked in: a finished try ("doing"), an approve ("review"), a merge waiting for the owner's files ("waiting"). */
+export const CHECKED_STATUSES: readonly SymccStatus[] = ['doing', 'review', 'waiting']
+
+/** `c` when it is a proper checking step, else undefined. */
+export function asChecking(c: unknown): Checking | undefined {
+  if (!c || typeof c !== 'object') return undefined
+  const { step, at } = c as Checking
+  return CHECK_STEPS.includes(step) && typeof at === 'string' && at ? { step, at } : undefined
+}
 
 /** The owner's files that stop a merge: uncommitted changes (`dirty`), untracked and git-ignored files, each only where the merge changes files. */
 export type Blockers = { dirty: string[]; untracked: string[]; ignored: string[] }
 
 /** All the owner's files in `b`, in the order dirty, untracked, ignored. */
-export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...(b.ignored ?? [])]
+export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untracked, ...b.ignored]
 
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string')
 
@@ -176,6 +205,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   notify: v => isNotify(v),
   enabled: v => typeof v === 'boolean',
   archive_days: v => isNum(v) && v >= 0,
+  scout_findings: v => isScoutFindings(v),
 }
 
 /**
@@ -220,9 +250,10 @@ function cleanTask(t: unknown): BoardTask | null {
     else delete x.merge_wait
   }
   if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
-  const { session, finishing, ...rest } = cleanCommitFields(x) as BoardTask
+  const { session, finishing, checking: rawChecking, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'
-  return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}) } as BoardTask
+  const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined
+  return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}), ...(checking ? { checking } : {}) } as BoardTask
 }
 
 /** The branch a task merges into (see SymccTask.merge_into); "main" for a task that has none (made by hand or in a test). */

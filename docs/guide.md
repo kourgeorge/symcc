@@ -453,13 +453,27 @@ change anything. Changes only go through board tasks. It also sees the open task
 doesn't suggest them again.
 
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
-tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message. The
+tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message.
+The `scout_findings` setting says where the tasks it adds go: `auto` (the default) lets the
+lead decide, so a finding it adds goes to `todo` and runs; `backlog` puts every task added
+from a scout finding in the backlog, whatever the lead asks, until you (or the lead, on your
+word) move it to `todo`. The lead still tells you what the scout found. Change it with
+`/symcc-settings scout_findings backlog`, in the Settings view, or by telling the lead. The
 last report shows on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
-has examples: [`bugs.md`](../examples/scouts/bugs.md),
-[`test-gaps.md`](../examples/scouts/test-gaps.md),
-[`deps.md`](../examples/scouts/deps.md), which checks the web for new versions and
-security notices, and [`secrets.md`](../examples/scouts/secrets.md), which looks for keys,
-tokens and passwords that are in git or could end up there.
+has examples that work in most code projects:
+- [`bugs.md`](../examples/scouts/bugs.md): wrong logic, such as bad conditions and off-by-one errors.
+- [`test-gaps.md`](../examples/scouts/test-gaps.md): risky code no test checks, with test cases to add.
+- [`deps.md`](../examples/scouts/deps.md): checks the web for new versions and security notices.
+- [`secrets.md`](../examples/scouts/secrets.md): keys, tokens and passwords that are in git or
+  could end up there.
+- [`recent-changes.md`](../examples/scouts/recent-changes.md): problems the latest commits brought
+  in; it also runs the tests.
+- [`gaps.md`](../examples/scouts/gaps.md): what the docs and help promise but the code doesn't do,
+  and errors that aren't handled.
+- [`docs-check.md`](../examples/scouts/docs-check.md): docs that disagree with each other or with
+  the code, and broken links.
+- [`simplify.md`](../examples/scouts/simplify.md): code that could be simpler without changing what
+  it does.
 
 A new project starts with these example scouts. The first time symcc starts in a project with
 no `.symcc/scouts/` folder yet, it copies every example there and marks each one paused (in

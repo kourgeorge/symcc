@@ -56,6 +56,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'doing' || !next.session) delete next.session
   // the "being tested and merged" mark only means something while the task is "doing"
   if (next.status !== 'doing' || !next.finishing) delete next.finishing
+  // the step of a check only means something while the task stays as it was when checked
+  if (!next.checking || next.status !== t.status || next.attempts !== t.attempts) delete next.checking
   // Where a task came from never changes once it is made.
   if ('origin' in patch) {
     if (t.origin) next.origin = t.origin

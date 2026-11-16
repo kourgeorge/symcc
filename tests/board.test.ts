@@ -1324,7 +1324,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, scout_findings, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
   expect(bad('notify loud')).toBe('notify must be off, sound or voice')
@@ -1358,7 +1358,7 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'mode', 'enabled'])
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'mode', 'enabled'])
   const b = { ...emptyBoard(), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
   expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
   expect(settingValue(b, 'notify')).toBe('off')
@@ -2175,6 +2175,19 @@ test('task rows: a short status column and a subtle extra; the extra goes first 
   expect(statusCell(base, now)).toBe('4m')
   expect(statusCell({ ...base, runs: [] }, now, now - 60_000)).toBe('1m')
   expect(statusCell({ ...base, runs: [] }, now)).toBe('')
+  // while symcc checks the finished work, the step shows instead of the time; a stale step (its copy is gone) does not
+  const stamp = new Date(now - 10_000).toISOString()
+  expect(statusCell({ status: 'doing', runs: [{ started: new Date(now - 240_000).toISOString(), ended: stamp }], checking: { step: 'testing', at: stamp } }, now)).toBe('testing')
+  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'merging', at: stamp } }, now)).toBe('merging')
+  expect(statusCell({ status: 'review', checking: { step: 'testing', at: stamp } }, now)).toBe('testing')
+  expect(statusCell({ status: 'review', checking: { step: 'testing', at: new Date(now - 3_600_000).toISOString() } }, now)).toBe('review')
+  // a task with a running worker still shows its time
+  expect(statusCell(base, now)).toBe('4m')
+  // the step goes when the task leaves the status it was checked in
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'x' }, new Date(now).toISOString())
+  const b1 = patchTask(patchTask(b0, 'T-1', { status: 'review' }, stamp), 'T-1', { checking: { step: 'testing', at: stamp } }, stamp)
+  expect(b1.tasks[0]!.checking).toEqual({ step: 'testing', at: stamp })
+  expect(patchTask(b1, 'T-1', { status: 'done' }, stamp).tasks[0]!.checking).toBeUndefined()
   expect(['review', 'waiting', 'failed', 'paused', 'todo', 'done'].map(status => statusCell({ status: status as never }, now))).toEqual(['review', 'waiting', 'failed', 'paused', '', ''])
   expect(rowExtra(base, tasks)).toBe('frontend · try 1')
   expect(rowExtra({ ...base, role: 'general' }, tasks)).toBe('try 1')

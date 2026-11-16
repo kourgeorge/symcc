@@ -3,7 +3,7 @@ import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
 import { asBlockers, type BoardTask, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { NEEDS_YOU, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
-import { finishingNow } from './lead'
+import { checkStepNow, finishingNow } from './lead'
 import { originOf } from './origin'
 import { waitFilesNote } from './review'
 import { roleMark, roleOf } from './roles'
@@ -72,10 +72,13 @@ export function withCrew(build: (workers: string, scouts: string) => string, cre
   return tries.find(t => t.length <= width) ?? tries[tries.length - 1]!
 }
 
-/** The short status column of a task row in the board list: the time of the running try ("4m") for a task being
+/** The short status column of a task row in the board list: the step while symcc checks its finished work
+ *  ("checking", "testing", "merging", see checkStepNow), else the time of the running try ("4m") for a task being
  *  worked on, "review", "waiting", "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
-export function statusCell(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number, since?: number | string): string {
+export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>, nowMs: number, since?: number | string): string {
+  const step = checkStepNow(t, nowMs)
+  if (step) return step
   if (t.status === 'doing') {
     const last = t.runs?.[t.runs.length - 1]
     if (last && !last.ended) return fmtDuration(runMs(last, nowMs))
