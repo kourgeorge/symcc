@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings } from '../board'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
@@ -108,13 +108,13 @@ export const MANUAL = (): Record<string, string> => ({
   /${S.N.name}-on                  turn it back on, in the mode the board had
   /${S.N.help} [TOPIC]           this manual
 On the board: t tasks · s scouts · c settings · m switch review / auto.
-In the settings view: Enter on a row changes it: on/off flips, mode and notify
+In the settings view: Enter on a row changes it: on/off flips, mode, notify and scout_findings
   open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
   search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
-  · k stash to the backlog (a task to do, paused or failed)
+  · y copy the task's content · k stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
 In a backlog task: o move to todo · x drop · l role.
 On the board list a task's role shows at the right end of its row, with the try number ("tester · try 2"); general shows nothing. A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
@@ -136,7 +136,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     paused           stopped on purpose; resume to continue
     waiting for you  a question for you; answer it in the board panel or tell the lead
                      (asked by the lead, or by a worker: QUESTION, or NEED FILES for files
-                     outside its list); with notify on you hear "T-5 needs you" (or a chime)
+                     outside its list); with notify on you hear "symcc: T-5 needs you" (or a chime)
     ready for review the worker is done and the checks passed; nothing is merged until you
                      approve it (or reject it with a reason, which sends it back to "todo")
     failed           tests failed, files outside its list changed, or the worker stopped
@@ -163,9 +163,11 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   after failing tests, 2 by default), archive_days (done and dropped tasks older than this
   many days move to the archive, 14 by default, 0 = never), open_on_start (open the board panel when a
   session starts, on by default), notify (off, sound or voice: when a task is merged or a worker
-  asks you something, play a chime, or say "T-3 done" / "T-5 needs you" out loud; only the
+  asks you something, play a chime, or say "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project's name first); only the
   session driving the board plays; voice by default where this machine can speak, else sound,
-  else off; a choice this machine can't play is refused), mode (off stops every
+  else off; a choice this machine can't play is refused), scout_findings (auto, the default:
+  the lead decides and a scout finding it adds goes to todo and runs; backlog: every task
+  added from a scout finding goes to the backlog and waits for you), mode (off stops every
   worker and scout and starts nothing new; review makes every finished task wait for
   your approve or reject; auto, the default, merges a finished task that passes at once),
   enabled (off makes the whole plugin rest; only you can change it, with /${S.N.name}-off and /${S.N.name}-on).
@@ -260,7 +262,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - A worker that needs files outside its task's files stops and answers "NEED FILES: ..."; the task then waits for the owner. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you only hear of it in a "Meanwhile" line) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files without asking fails its try.
-- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "T-5 needs you" (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
+- A worker that needs the owner to decide something stops and answers "QUESTION: ..." (maybe with "OPTIONS: a | b", which the board shows as buttons); the task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
@@ -269,7 +271,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Manage scouts with ${S.N.name} scouts, never by writing ${S.N.dir}/scouts/ files by hand: action list (the default) shows each scout (how often, paused, running, next and last run, the start of its last report), list with name shows one in full; add / edit with name (lowercase letters, digits, dashes), every_minutes (0 = only on demand), optional model and prompt; remove deletes one (ask the owner first); run runs one now, like the owner's "run now".
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run, not on its timer and not with "run now", until the owner resumes it. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
-- Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
+- Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. The scout_findings setting (${S.N.name} settings): "auto" (the default) lets you decide where a scout finding goes; "backlog" puts every task you add with origin_by scout in the backlog, whatever you ask (the answer says "scout_findings is backlog: added to the backlog"); it starts only when the owner moves it to todo (or you do, on the owner's word). With backlog, still tell the owner what the scout found, so they can decide. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
 - Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
 - ${S.N.name} checks every two minutes on its own: it starts ready tasks, stops a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
@@ -317,8 +319,8 @@ export const TOOLS = () => [
   },
   {
     name: 'settings',
-    description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line (notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "T-3 done" / "T-5 needs you" out loud; only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
-    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
+    description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line (notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), max_parallel (workers at once), max_minutes (a worker running longer is stopped), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project name first); only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), scout_findings ("auto", the default: you decide, and a scout finding you add goes to todo and runs; "backlog": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), mode ("off": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from off to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, scout_findings: { type: 'string', enum: ['auto', 'backlog'], description: 'auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog.' }, mode: { type: 'string', enum: ['off', 'review', 'auto'] } } },
   },
 ]
 
@@ -439,10 +441,13 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       const said = { by: a.origin_by, scout: a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why }
       // it merges into the branch checked out now (on a detached checkout, the repo's main branch)
       const merge_into = await homeBranch($)
+      let forced = false
       const [t, all] = await change($, b => {
         // check what the lead said first, then add the plugin's own evidence next to it
         const o = makeOrigin(said, now(), b)
-        const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
+        // scout_findings backlog: a scout's finding goes to the backlog, whatever the lead asked
+        forced = findingToBacklog(b, a.origin_by) && a.backlog !== true
+        const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
         return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
       // told once, here: a task it waits for on another branch won't have its change in this one
@@ -453,6 +458,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         return planAddText(t.id, t.title) + notes
       }
       void pump($)
+      if (forced && t.status === 'backlog') return `scout_findings is backlog: added to the backlog: ${t.id} ${t.title} (it starts only when the owner moves it to todo; still tell the owner what the scout found)${notes}`
       return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}${notes}`
     }
     case 'change': {
@@ -632,6 +638,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
  */
 export async function saveSettings($: $, a: SettingsInput, who: string): Promise<{ error?: string; changes: SettingChange[]; mode?: string }> {
   if (a.mode !== undefined && !isMode(a.mode)) return { error: `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`, changes: [] }
+  if (a.scout_findings !== undefined && !isScoutFindings(a.scout_findings)) return { error: `scout_findings must be "auto" or "backlog" (got ${JSON.stringify(a.scout_findings)})`, changes: [] }
   if (a.notify !== undefined) {
     if (!isNotify(a.notify)) return { error: `notify must be "off", "sound" or "voice" (got ${JSON.stringify(a.notify)})`, changes: [] }
     const refused = notifyRefusal(a.notify, await playable($))

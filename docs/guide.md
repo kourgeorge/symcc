@@ -453,7 +453,12 @@ change anything. Changes only go through board tasks. It also sees the open task
 doesn't suggest them again.
 
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
-tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message. The
+tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message.
+The `scout_findings` setting says where the tasks it adds go: `auto` (the default) lets the
+lead decide, so a finding it adds goes to `todo` and runs; `backlog` puts every task added
+from a scout finding in the backlog, whatever the lead asks, until you (or the lead, on your
+word) move it to `todo`. The lead still tells you what the scout found. Change it with
+`/symcc-settings scout_findings backlog`, in the Settings view, or by telling the lead. The
 last report shows on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
 has examples: [`bugs.md`](../examples/scouts/bugs.md),
 [`test-gaps.md`](../examples/scouts/test-gaps.md),

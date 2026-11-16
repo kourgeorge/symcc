@@ -20,6 +20,14 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Roles can grant extra tools; the researcher gets web search and fetch.
 - A narrated 1080p YouTube explainer video (script and build steps are in `docs/video`).
 - An eval harness that compares plain Claude Code with symcc on scripted sessions, and research notes on how to show lower cost and better quality.
+- /symcc-stats gives a short summary with bar charts; `/symcc-stats full` shows all the numbers.
+- The lead has a `roles` tool (list, show, add, edit, reset, turn off or on), and Settings has a Roles page.
+- Press `y` on a task to copy its content to the clipboard.
+- A scout's edit page has the same sections as its view page, including "Runs every" and "Summary" boxes.
+- New projects start with the example scouts, all paused.
+- A merge has a time limit: 10 minutes per test command, plus 5. Time spent waiting in line does not count. When it runs over, symcc gives up that step and does not restart it forever.
+- A task stuck in "checking and merging" is noticed and sent back to todo; if it gets stuck a second time in a row, it fails.
+- git's real error is shown when symcc's own commit, git add, bring-up-to-date merge or moving main fails.
 
 ### Changed
 - The `target_branch` setting is gone. Each task now merges into the branch you were on when you asked for it.
@@ -33,6 +41,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - The video voice is as loud as a normal YouTube video, and the narration shows approving on the board.
 - README is shorter and clearer, and shows the demo first.
 - Small tests and tidy-ups (merge, scouts, session start and end, turn complete) and one shared scout-name check.
+- Spoken notices start with the project's name, for example "symcc: T-5 done".
+- A worker's question is always asked again by the lead in the chat, with the options as choices.
+- A task waiting on your files keeps waiting (even if its merge runs over) and tells you the right fix for each kind of file: commit or stash, remove an untracked file, or deal with an ignored one.
 
 ### Fixed
 - Merge: the owner's branch is no longer left half-updated by a clashing untracked file, and git-ignored files are not silently overwritten.

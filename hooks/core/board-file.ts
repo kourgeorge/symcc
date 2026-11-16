@@ -27,6 +27,11 @@ export type Board = {
   enabled: boolean
   /** done and dropped tasks older than this many days move to archive.json (0 = never) */
   archive_days: number
+  /**
+   * where tasks added from a scout finding go: auto (the default; absent = auto) lets the lead decide,
+   * so a finding goes to todo and runs; backlog puts every scout-origin task in the backlog
+   */
+  scout_findings?: ScoutFindings
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
   archived?: ArchivedTotals
@@ -38,6 +43,13 @@ export type Board = {
 export type Notify = 'off' | 'sound' | 'voice'
 export const NOTIFY_CHOICES: Notify[] = ['off', 'sound', 'voice']
 export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
+
+/** Where tasks added from a scout finding go: auto (the lead decides) or backlog (always the backlog). */
+export type ScoutFindings = 'auto' | 'backlog'
+export const SCOUT_FINDINGS_CHOICES: ScoutFindings[] = ['auto', 'backlog']
+export const isScoutFindings = (x: unknown): x is ScoutFindings => SCOUT_FINDINGS_CHOICES.includes(x as ScoutFindings)
+/** The scout_findings setting in use: the board's choice, else auto. */
+export const scoutFindingsOf = (b: { scout_findings?: unknown } | null | undefined): ScoutFindings => (isScoutFindings(b?.scout_findings) ? b!.scout_findings as ScoutFindings : 'auto')
 
 /** The running totals of archived tasks: how many were done and dropped, and their tries' time, tokens and cost. */
 export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: SymccTokens; cost?: number }
@@ -176,6 +188,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   notify: v => isNotify(v),
   enabled: v => typeof v === 'boolean',
   archive_days: v => isNum(v) && v >= 0,
+  scout_findings: v => isScoutFindings(v),
 }
 
 /**
