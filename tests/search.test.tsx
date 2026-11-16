@@ -1,4 +1,5 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccTask } from '../types'
 import { taskMatches, searchLine, searchBoxHint } from '../hooks/board'

@@ -1,7 +1,8 @@
 // T-154: nothing in the board panel needs Esc to get out (Esc from a text box or pick list often never reaches
 // the panel). Each box and pick list has Enter on empty and/or a Cancel button, each page a Back button, and the
 // hints say so.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { boxHint, pickHint, scoutEditKeys, scoutListKeys, settingsKeys, rolesKeys, hintLineText } from '../hooks/board'
 import { inProject } from './project'

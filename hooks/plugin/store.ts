@@ -78,6 +78,12 @@ export function oneAtATime<T>(key: string, fn: () => Promise<T>): Promise<T> {
 /** board.json texts already reported (broken, or with skipped entries or bad settings), and the copy kept of each */
 const reported = new Map<string, string>()
 
+/** Forgets the job queues and the board texts already reported (what a reload starts with); for the tests' resetPlugin() only. */
+export function resetStore() {
+  queues.clear()
+  reported.clear()
+}
+
 /**
  * Keep a copy of board.json's text beside it (board.json.<what>-<time>) and tell the owner
  * (a toast) and the lead, once per distinct text. Returns the copy's name ('' if it couldn't be written).

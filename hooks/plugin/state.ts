@@ -56,8 +56,8 @@ export function updateView($: $, change: (value: SymccView) => SymccView) {
 // A hot reload starts these over: the board itself is always on disk, and a task
 // whose worker was lost to a reload goes back to "todo" at session.start.
 
-/** Every value of the plugin that is set again while it runs; the other modules use S.<name>, never a copy. */
-export const S = {
+/** S's values as a load starts them (a fresh object each call); also used by the tests' resetPlugin(). */
+export const startS = () => ({
   N: namesFor(DEFAULT_NAME),
   named: false,
   root: '',
@@ -131,7 +131,10 @@ export const S = {
    * keeps its own; only the driving session's counts for starting work. on null = not seen yet: behave as before.
    */
   plan: emptyPlan() as PlanState,
-}
+})
+
+/** Every value of the plugin that is set again while it runs; the other modules use S.<name>, never a copy. */
+export const S = startS()
 
 /** Takes the plugin's name from plugin.json (via $.plugin.name), once; DEFAULT_NAME if it has none. */
 export function useName($: $) {

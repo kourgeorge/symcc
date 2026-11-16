@@ -1,7 +1,8 @@
 // Editable worker prompts (T-286): the built-in prompts with their placeholders filled in, the owner's
 // .symcc/prompts/<kind>.md over them, reset, the warning for a missing {{ask}}, the lead's prompts tool and
 // the Prompts page in Settings.
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccTask } from '../types'
 import { addTask, emptyBoard, patchTask, fillPrompt, promptProblems, BUILT_IN_PROMPTS, PROMPT_PLACEHOLDERS, type Board } from '../hooks/board'

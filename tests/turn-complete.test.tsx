@@ -4,7 +4,8 @@
 // finish at the same moment must both be merged and neither one's board save may be lost.
 // The plugin runs as loaded by the test kit; files, git and agents are the fake world below. The hook starts its
 // work without waiting for it, so each test lets that work finish with the fake clock's settle(), never a real wait.
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
 

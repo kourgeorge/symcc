@@ -2,7 +2,8 @@
 // register.tsx). The test kit can't hand the plugin the agent id $.agent.spawn returns, so these tests set up the
 // scout run themselves (scoutRuns and scoutState, as runScout leaves them) and call scoutFinished directly, the way
 // tests/merge.test.ts calls workerFinished. Files are in memory; the lead's 1.5 s timer is fired by hand.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import type { SymccScout } from '../types'
 import { SCOUT_REPORT_CHARS, emptyBoard } from '../hooks/board'
 import { scoutFinished } from '../hooks/plugin/scouts'

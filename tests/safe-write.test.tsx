@@ -1,11 +1,12 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import { changeScoutMemory, recordScoutRun } from '../hooks/plugin/scouts'
 import { tmpFor } from '../hooks/plugin/store'
 import { parseScoutMemory, parseScoutUsage } from '../hooks/board'
 import { setRoot } from './project'
 
-// these call the plugin's code directly, so the project folder is set here (path() refuses an empty one)
-setRoot()
+// these call the plugin's code directly, so each test sets the project folder (path() refuses an empty one,
+// and the reset test() empties it before each test)
 
 const tick = () => new Promise(r => setTimeout(r, 5))
 
@@ -43,6 +44,7 @@ function fakeFiles(files: Map<string, string>) {
 }
 
 test('two overlapping saves of scouts.json both succeed and both changes are kept', async () => {
+  setRoot()
   const files = new Map<string, string>()
   const { $, temps } = fakeFiles(files)
   const T = new Date(Date.now() - 60_000).toISOString()
@@ -66,6 +68,7 @@ test('two overlapping saves of scouts.json both succeed and both changes are kep
 })
 
 test('a save that fails does not stop the next one in the queue', async () => {
+  setRoot()
   const files = new Map<string, string>()
   const { $ } = fakeFiles(files)
   const bad = changeScoutMemory($, () => {
@@ -79,6 +82,7 @@ test('a save that fails does not stop the next one in the queue', async () => {
 })
 
 test('temp file names are new for every save', () => {
+  setRoot()
   const names = Array.from({ length: 50 }, () => tmpFor('/p/.symcc/scouts.json'))
   expect(new Set(names).size).toBe(50)
   for (const n of names) expect(n).toMatch(/^\/p\/\.symcc\/scouts\.json\.[\w-]+\.[\w-]+\.tmp$/)

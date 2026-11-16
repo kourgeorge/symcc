@@ -1,4 +1,5 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import type { SymccScout, SymccStatus, SymccTask } from '../types'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
