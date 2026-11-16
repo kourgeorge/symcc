@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { fileToolHits } from '../hooks/plugin/scouts'
+import { inProject } from './project'
 
 /**
  * Fake files for the scouts and roles folders: `files` maps the end of a path to its text (null = no file).
@@ -26,6 +27,7 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
   })
   on('ui.status', () => ({ value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  inProject(on)
   mock.clock(on, { now: Date.now() })
   return { views, listed }
 }

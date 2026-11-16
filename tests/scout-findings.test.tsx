@@ -2,6 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
 import { applySettings, emptyBoard, findingToBacklog, parseSettingsCommand, readBoard, settingValue } from '../hooks/board'
+import { inProject } from './project'
 
 /** A fake board.json: a save (write to a temp file, then mv over it) is kept, so the next read sees it. */
 function setup(on: On, board: Record<string, unknown>) {
@@ -25,7 +26,7 @@ function setup(on: On, board: Record<string, unknown>) {
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   // the project folder (tool calls need it, see findRoot)
-  on('session.root', () => ({ value: '/proj' }) as never)
+  inProject(on)
   mock.clock(on, { now: Date.now() })
   return files
 }

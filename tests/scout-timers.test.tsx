@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
+import { inProject } from './project'
 
 const MIN = 60_000
 
@@ -28,6 +29,7 @@ function setup(on: On, files: Record<string, string | null>) {
     if (a.tool === 'Write') files[a.file_path!.slice(a.file_path!.indexOf('/.symcc/'))] = a.content ?? ''
     return { result: 'ok' }
   })
+  inProject(on)
   const clock = mock.clock(on, { now: Date.now() })
   return { views, clock }
 }

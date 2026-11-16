@@ -86,6 +86,8 @@ export async function registerAll($: $) {
 function filesChanged($: $, hit: { scouts: boolean; roles: boolean }) {
   if (!hit.scouts && !hit.roles) return
   void (async () => {
+    // before session.start (a plugin reload): learn the project folder first; unknown, change nothing
+    if (!(await findRoot($))) return
     if (hit.scouts) await scheduleScouts($)
     if (hit.roles) await loadRoles($).catch(() => undefined)
     await publish($, await load($))
@@ -195,6 +197,8 @@ export const register: Register = on => {
   on('prompt.compose', async ($, e, next) => {
     useName($)
     const r = await next(e)
+    // Before session.start set the project folder (a plugin reload): learn it first; unknown, add nothing.
+    if (!(await findRoot($))) return r
     // Read on every render (prompt.compose is not cached), so /<name>-off and /<name>-on count from the next message.
     if (!(await isOn($))) return r
     return { sections: [...r.sections, { id: `${S.N.name}:lead`, text: leadGuide(), scope: 'session' as const }] }
@@ -258,11 +262,13 @@ export const register: Register = on => {
   // panel, /<name>-<word> does one thing. Registered under the plugin's name, so matched here.
   on('command.run', async ($, e, next) => {
     useName($)
-    // Before session.start set the project folder (a plugin reload): learn it from the session first.
-    await findRoot($)
+    const isStats = e.command === `${S.N.name}-stats`
+    if (!isStats && !commandNames(S.N.name).includes(e.command)) return next(e)
+    // Before session.start set the project folder (a plugin reload): learn it from the session first;
+    // if it still isn't known, answer and write nothing (never a board or lock path from "/").
+    if (!(await findRoot($))) return { text: startingText(), isTextDisplayOnly: true }
     // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
-    if (e.command === `${S.N.name}-stats`) return { text: await statsText($, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
-    if (!commandNames(S.N.name).includes(e.command)) return next(e)
+    if (isStats) return { text: await statsText($, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
     // A broken board.json makes load throw (it is never written over): the commands that don't need the
     // board (help, opening the panel, a usage line) still work; the others answer with the reason.
     const loaded = await load($).then(
@@ -385,6 +391,7 @@ export const register: Register = on => {
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     useName($)
+    await findRoot($)
     return renderAbovePrompt($, e, next)
   })
 
@@ -425,6 +432,7 @@ export const register: Register = on => {
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     useName($)
+    await findRoot($)
     return renderPane($, e, next)
   })
 

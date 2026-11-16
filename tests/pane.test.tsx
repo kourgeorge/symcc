@@ -4,6 +4,7 @@ import { ICON, ICON_ART } from '../hooks/name'
 import { hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/plugin/ui/arrows'
 import { sayQueue } from '../hooks/plugin/state'
+import { inProject } from './project'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -11,6 +12,8 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
+  // the project folder (the plugin's paths need it, see findRoot)
+  inProject(on)
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
 }
 
@@ -863,7 +866,7 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
   on('ui.status', () => ({ value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
   // the project folder (tool calls need it, see findRoot)
-  on('session.root', () => ({ value: '/proj' }) as never)
+  inProject(on)
   return written
 }
 
@@ -1252,6 +1255,7 @@ function scoutFiles(on: On, memory: string | null, more: Record<string, string> 
   })
   on('ui.status', () => ({ value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  inProject(on)
   mock.clock(on, { now: Date.now() })
   return files
 }
@@ -1543,7 +1547,7 @@ test('/symcc-task shows the latest report, or its first 40 lines and where the f
 test('plan mode: add puts the task in the backlog and says so; leaving plan mode tells the lead once with the list', async ($, on) => {
   const clock = mock.clock(on, { now: Date.now() })
   const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks: [task('T-1', 'done', 'Old')] }), '/board.lock': null }
-  on('session.root', () => ({ value: '/proj' }) as never)
+  inProject(on)
   // the plugin writes board.json to a temp file, then moves it in place with mv: keep the fake board in step
   const temp: Record<string, string> = {}
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))

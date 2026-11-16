@@ -2,6 +2,10 @@ import { expect, test } from 'claude-code/testing'
 import { changeScoutMemory, recordScoutRun } from '../hooks/plugin/scouts'
 import { tmpFor } from '../hooks/plugin/store'
 import { parseScoutMemory, parseScoutUsage } from '../hooks/board'
+import { setRoot } from './project'
+
+// these call the plugin's code directly, so the project folder is set here (path() refuses an empty one)
+setRoot()
 
 const tick = () => new Promise(r => setTimeout(r, 5))
 

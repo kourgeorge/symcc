@@ -4,11 +4,14 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { boxHint, pickHint, scoutEditKeys, scoutListKeys, settingsKeys, rolesKeys, hintLineText } from '../hooks/board'
+import { inProject } from './project'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
+  // the project folder (the plugin's paths need it, see findRoot)
+  inProject(on)
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
 }
 

@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
+import { inProject } from './project'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -69,7 +70,7 @@ function fakeRoles(on: On, mine: Record<string, string>) {
   // the session start gives the plugin its project folder (/proj), where .symcc/roles is
   on('session.start', (_, e) => ({ cwd: e.cwd }) as never)
   on('session.repo', () => ({ value: { root: '/proj' } }) as never)
-  on('session.root', () => ({ value: '/proj' }) as never)
+  inProject(on)
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   on('agent.list', () => ({ value: [] }) as never)

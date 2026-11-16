@@ -2,6 +2,8 @@
 // reload before session.start ran, must never build a path from "/" (it once tried /.symcc/board.lock).
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
+import { path } from '../hooks/plugin/store'
+import { S } from '../hooks/plugin/state'
 
 /** Records every write and every command, wherever it points; the files hold just a board under /repo. */
 function watch(on: On) {
@@ -46,4 +48,29 @@ test('before session.start ran, a board tool learns the project folder from the 
   expect(w.writes.length).toBeGreaterThan(0)
   expect(w.writes.every(p => p.startsWith('/repo/'))).toBe(true)
   expect(w.runs.flat().filter(a => a.includes('.symcc')).every(a => a.startsWith('/repo/.symcc/'))).toBe(true)
+})
+
+// T-274: a slash command run before the project folder is known gets the same answer and writes nothing.
+test('a slash command run before the project folder is known answers "still starting" and writes nothing', async ($, on) => {
+  const w = watch(on)
+  on('session.repo', () => ({ value: null }) as never)
+  on('session.root', () => ({ value: '' }) as never)
+  for (const [command, args] of [['symcc-off', ''], ['symcc-scouts', ''], ['symcc-stats', ''], ['symcc', '']] as const) {
+    const r = (await $.command.run({ command, args } as never)) as { text?: string }
+    expect(r?.text).toBe('symcc is still starting, try again in a moment')
+  }
+  expect(w.writes).toEqual([])
+  expect(w.runs).toEqual([])
+})
+
+test('path() refuses an empty project folder, so nothing is ever built at the disk root', () => {
+  const was = S.root
+  try {
+    S.root = ''
+    expect(() => path('.symcc/board.lock')).toThrow(/project folder is not known/)
+    S.root = '/repo'
+    expect(path('.symcc/board.lock')).toBe('/repo/.symcc/board.lock')
+  } finally {
+    S.root = was
+  }
 })

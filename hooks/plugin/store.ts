@@ -10,8 +10,14 @@ export const now = () => new Date().toISOString()
 /** What a tool answers while the project folder (S.root) is not known yet, e.g. during a plugin reload. */
 export const startingText = () => `${S.N.name} is still starting, try again in a moment`
 
-/** A path inside the project. The hooks that can run before session.start (tool.call, command.run) call findRoot first (T-271). */
-export const path = (rel: string) => `${S.root}/${rel}`
+/**
+ * A path inside the project. The hooks that can run before session.start (tool.call, command.run) call findRoot first (T-271).
+ * Throws while the project folder is unknown, so nothing is ever read or written from the disk root (T-274).
+ */
+export const path = (rel: string) => {
+  if (!S.root) throw new Error(`the project folder is not known yet, so ${rel} has no place`)
+  return `${S.root}/${rel}`
+}
 
 /**
  * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does.

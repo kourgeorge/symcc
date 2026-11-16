@@ -2,6 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { parseScout, safeScoutFile, resolveRel, SCOUT_FILE_NAME } from '../hooks/board'
 import { runScoutNow, setScoutPaused } from '../hooks/plugin/scouts'
+import { inProject } from './project'
 
 /**
  * Fake scouts folder, scouts.json and board: `files` maps the end of a path to its text (null = no file).
@@ -38,7 +39,7 @@ function setup(on: On, files: Record<string, string | null>) {
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   // the project folder (tool calls need it, see findRoot)
-  on('session.root', () => ({ value: '/proj' }) as never)
+  inProject(on)
   mock.clock(on, { now: Date.now() })
   return { views, touched }
 }
