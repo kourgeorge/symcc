@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
@@ -84,7 +84,7 @@ const STEP_WORD: Record<CheckStep, string> = { checking: 'check', testing: 'test
  *  worked on ("more time?" while its worker, over its time limit, waits for the owner's answer), "review", "waiting",
  *  "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
-export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask'>, nowMs: number, since?: number | string): string {
+export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string {
   const step = checkStepNow(t, nowMs)
   if (step) return STEP_WORD[step]
   if (asksMoreTime(t)) return MORE_TIME_CELL
@@ -94,12 +94,24 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTas
     const at = typeof since === 'number' ? since : Date.parse(since ?? '')
     return Number.isFinite(at) ? fmtDuration(Math.max(0, nowMs - at)) : ''
   }
+  // an answered investigation waits for the owner to read its answer, not to review a change
+  if (t.status === 'review' && kindOf(t) === 'investigation') return ANSWER_CELL
   return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
 }
 
+/** The status column of an answered investigation in review (see statusCell). */
+export const ANSWER_CELL = 'answer'
+
+/** The tag of an investigation in the board list: "[investigation]"; '' for a change task. */
+export const kindTag = (t: { kind?: unknown }): string => (kindOf(t) === 'investigation' ? '[investigation]' : '')
+
+/** The role part of a task row: its kind tag (see kindTag) and its role (see roleMark), e.g. "[investigation] researcher". */
+const roleTag = (t: BoardTask): string => [kindTag(t), roleMark(t)].filter(Boolean).join(' ')
+
 /** The secondary-color (inactive) text at the right end of a task row: "tester · try 1" for a task being worked on (its
  *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "after T-3" for
- *  one waiting on unfinished tasks (else its role), "Enter to review" in review (a and x only work on the task's
+ *  one waiting on unfinished tasks (else its role; an investigation's starts with "[investigation]"), "Enter to review"
+ *  in review ("[investigation]" for an answered investigation, whose status column says "answer"; a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked
  *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean.
@@ -115,14 +127,14 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
   switch (t.status) {
     case 'doing':
       if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
-      return [roleMark(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')
+      return [roleTag(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')
     case 'todo':
     case 'paused': {
       const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))
-      return open.length ? `after ${open.join(', ')}` : roleMark(t)
+      return open.length ? `after ${open.join(', ')}` : roleTag(t)
     }
     case 'review':
-      return 'Enter to review'
+      return kindOf(t) === 'investigation' ? kindTag(t) : 'Enter to review'
     case 'waiting':
       return t.question ?? ''
     case 'failed':
@@ -246,11 +258,13 @@ export const viewKeys = (enter = true): KeyHint[] => [
  *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
  *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answer`: the keys of a
  *  waiting task's answer buttons (answerKeys); they then take the number keys instead of the reports. `fileWait`:
- *  its finished work waits only for the owner's files (fileWaitText), so r merges it now. */
-export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answer: readonly KeyHint[] = [], fileWait = false): KeyHint[] {
+ *  its finished work waits only for the owner's files (fileWaitText), so r merges it now. `investigation`: the task is an investigation (in review: a done · k keep as a note · x ask more). */
+export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answer: readonly KeyHint[] = [], fileWait = false, investigation = false): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = []
-  if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
+  // an answered investigation: Done, Keep as a note, Ask more instead of approve and reject
+  if (status === 'review' && investigation) keys.push(k('a', 'done'), k('k', 'keep as a note'), k('x', 'ask more'))
+  else if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
   if (status === 'backlog') keys.push(k('o', 'move to todo'), k('x', 'drop'))
   if (fileWait) keys.push(k('r', 'merge now'))
   if (worker) keys.push(k('w', 'watch worker'))

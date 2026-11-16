@@ -1,11 +1,11 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, kindOf } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
 import { path } from '../store'
-import { noteForLead, brief } from '../tell'
+import { noteForLead, brief, tellLead } from '../tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
 import type { PaneParts } from './parts'
 
@@ -17,28 +17,38 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const target = intoOf(t)
   const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
   const inReview = t.status === 'review'
+  // An answered investigation in review: nothing to merge; Done, Keep as a note and Ask more instead of Approve and Reject.
+  const answered = isAnswered(t as BoardTask)
   const showDiff = (file: string) => () => ((S.diffOpen = { task: t.id, file }), $.ui.invalidate('ui.render'))
   const approveIt = act(async () => {
     const r = await runTool($, 'approve', { task: t.id })
     S.diffOpen = null
     S.rejecting = null
     $.ui.toast(S.N.toast(r))
-    noteForLead(`The owner approved ${t.id}: ${brief(r)}`)
+    noteForLead(answered ? `The owner read the answer of ${t.id} and marked it done: ${brief(r)}` : `The owner approved ${t.id}: ${brief(r)}`)
+  })
+  const keepNote = act(async () => {
+    const r = await runTool($, 'approve', { task: t.id, keep_note: true })
+    S.rejecting = null
+    $.ui.toast(S.N.toast(r))
+    tellLead($, `The owner kept the answer of ${t.id} as a note: ${brief(r)}`)
   })
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
   const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
-  const reviewButtons = inReview
-    ? [<Button key="approve" label="Approve" hotkey="a" onPress={approveIt} />, <Button key="reject" label="Reject" hotkey="x" onPress={askReason} />]
-    : []
+  const reviewButtons = answered
+    ? [<Button key="done" label="Done (a)" hotkey="a" onPress={approveIt} />, <Button key="keep-note" label="Keep as a note (k)" hotkey="k" onPress={keepNote} />, <Button key="ask-more" label="Ask more (x)" hotkey="x" onPress={askReason} />]
+    : inReview
+      ? [<Button key="approve" label="Approve" hotkey="a" onPress={approveIt} />, <Button key="reject" label="Reject" hotkey="x" onPress={askReason} />]
+      : []
   /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button (c), leaves it: Esc
    *  doesn't reach the panel from a text box. */
   const rejectBox =
     inReview && S.rejecting?.task === t.id ? (
-      <Box flexDirection="column" borderStyle="round" borderColor={C('error')} paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={C(answered ? 'warning' : 'error')} paddingX={1}>
         <Input
           key="reject-reason"
-          label="Reason to reject"
-          placeholder="what to change, for the next worker; Enter sends it back"
+          label={answered ? 'Your follow-up question' : 'Reason to reject'}
+          placeholder={answered ? 'what else to find out; Enter sends it for a fresh try' : 'what to change, for the next worker; Enter sends it back'}
           value={S.rejecting.reason}
           autoFocus
           onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
@@ -50,7 +60,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               S.rejecting = null
               S.diffOpen = null
               $.ui.toast(S.N.toast(r))
-              noteForLead(`The owner rejected ${t.id} ("${brief(why)}"): ${brief(r)}`)
+              noteForLead(answered ? `The owner asked more on ${t.id} ("${brief(why)}"): ${brief(r)}` : `The owner rejected ${t.id} ("${brief(why)}"): ${brief(r)}`)
             })()
           }
         />
@@ -58,7 +68,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         <Text color={C('inactive')}>{boxHint('Enter sends it to todo')}</Text>
       </Box>
     ) : null
-  if (inReview && S.diffOpen?.task === t.id) {
+  if (inReview && !answered && S.diffOpen?.task === t.id) {
     // The changes themselves: the folder as it is now (the owner's edits too) against the merge base, colored line by line.
     const d = S.diffOpen
     const got = await folderDiff($, target, t, [], d.file).then(
@@ -135,7 +145,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       </Box>
     ) : null
   // A task in review: the files it changed, each opening its diff.
-  const changes = inReview
+  const changes = inReview && !answered
     ? await changedFiles($, target, t).then(
         files => ({ files, error: '' }),
         (err: Error) => ({ files: [] as DiffFile[], error: err.message }),
@@ -180,6 +190,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const at = picked >= 0 ? picked : reports.length - 1
   const shown = reports[at]
   const reportBody = shown ? await $.fs.read(path(shown.file)).then(x => String(x), () => null) : null
+  // An investigation's answer: the full text from its latest report, else the answer saved on the task.
+  const answerShown = showsAnswer(t as BoardTask)
+  const answerFrom = answerShown ? reports[reports.length - 1] : undefined
+  const answerReport = !answerFrom ? null : answerFrom === shown ? reportBody : await $.fs.read(path(answerFrom.file)).then(x => String(x), () => null)
+  const answer = answerShown ? answerText(t as BoardTask, answerReport).trimEnd() : ''
   const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
   // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
   const asked = t as BoardTask
@@ -223,7 +238,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       <Box flexDirection="column">
         {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
         <Text>
-          <Text bold color={C(STATUS_BADGE[t.status])}>{`[${STATUS_MARK[t.status]} ${word[t.status]}]`}</Text>
+          <Text bold color={C(STATUS_BADGE[t.status])}>{`[${STATUS_MARK[t.status]} ${answered ? 'answered: read it' : word[t.status]}]`}</Text>
           {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
         </Text>
       </Box>
@@ -231,7 +246,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {buttonRows([
         <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await updateOpened($, () => '')))} />,
         ...reviewButtons,
-        inReview && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
+        inReview && !answered && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
         agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />,
         (t.status === 'doing' || t.status === 'todo') && (
           <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool($, 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))} />
@@ -272,6 +287,17 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
 
       {rejectBox}
       {roleBox}
+
+      {answerShown && (
+        <Box flexDirection="column">
+          {heading(answerFrom ? `Answer (try ${answerFrom.try})` : 'Answer')}
+          {answerFrom ? <Text color={C('inactive')}>  {answerFrom.file}</Text> : null}
+          {!answer ? <Text color={C('inactive')}>  (no answer saved)</Text> : null}
+          {answer
+            .split('\n')
+            .flatMap((l, i) => (l.trim() ? wrapSegs([{ text: l, color: 'text' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `answer-${i}-${j}`)) : answer ? [<Text key={`answer-${i}`}> </Text>] : []))}
+        </Box>
+      )}
 
       <Box flexDirection="column">
         {heading('Details')}
@@ -338,7 +364,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {(reports.length > 0 || t.attempts > 0) && (
+      {/* An answered investigation with one try: its report is the Answer above, so it is not shown twice. */}
+      {(reports.length > 0 || t.attempts > 0) && !(answerShown && answerFrom && reports.length === 1) && (
         <Box flexDirection="column">
           {heading(shown ? `Report (try ${shown.try}${reports.length > 1 ? `, ${at + 1} of ${reports.length}` : ''})` : 'Report')}
           {!shown ? <Text color={C('inactive')}>  no saved report</Text> : null}
@@ -369,7 +396,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait), 'task-keys')}
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait, kindOf(t) === 'investigation'), 'task-keys')}
     </Box>
   )
 }

@@ -1419,6 +1419,56 @@ test('the task page shows the latest try\'s full report, and a try\'s number key
   await ui.unmount()
 })
 
+const answeredTask = (extra: Record<string, unknown> = {}) =>
+  task('T-1', 'review', 'Why is the cache slow', { kind: 'investigation', role: 'researcher', attempts: 1, note: 'answered; waiting for you to read it', answer: 'Saved short answer.', runs: [{ started: '', ended: '', report: R1 }], history: ['try 1: answered: The cache is never cleared.'], ...extra })
+
+test('an answered investigation opens with its full answer and Done, Keep as a note and Ask more instead of Approve and Reject', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-1.md': `The cache is never cleared.\n\n${'It grows with every request and is never trimmed. '.repeat(4)}\nChecked in src/cache.ts.\n` })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [answeredTask()], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L.some(l => /^▍Answer \(try 1\)$/.test(l))).toBe(true)
+  expect(L.some(l => /The cache is never cleared\./.test(l))).toBe(true)
+  expect(L.some(l => /Checked in src\/cache\.ts\./.test(l))).toBe(true)
+  // the full answer from the report, not the short saved one; wrapped to the panel width
+  expect(L.some(l => /Saved short answer/.test(l))).toBe(false)
+  for (const l of L.filter(x => /grows with every request/.test(x))) expect(l.length).toBeLessThanOrEqual(50)
+  expect((await ui.find({ key: 'done' }))?.props.hotkey).toBe('a')
+  expect((await ui.find({ key: 'keep-note' }))?.props.hotkey).toBe('k')
+  expect((await ui.find({ key: 'ask-more' }))?.props.hotkey).toBe('x')
+  expect(await ui.find({ key: 'approve' })).toBeUndefined()
+  expect(await ui.find({ key: 'reject' })).toBeUndefined()
+  expect(await ui.find({ key: 'show-changes' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Changes \(/ })).toBeUndefined()
+  expect(L.some(l => /^a done · k keep as a note · x ask more/.test(l))).toBe(true)
+  expect(L.some(l => /^Kind:\s+investigation — nothing is merged$/.test(l))).toBe(true)
+  expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(true)
+  // one try: its report is the answer, so it is not shown twice
+  expect(L.filter(l => /Checked in src\/cache\.ts\./.test(l)).length).toBe(1)
+  // Ask more opens a box for the follow-up question
+  expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
+  await ui.press({ key: 'ask-more' })
+  expect((await ui.find({ key: 'reject-reason' }))?.props.label).toBe('Your follow-up question')
+  await ui.unmount()
+})
+
+test('an answered investigation without a readable report shows the answer saved on the task', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [answeredTask({ runs: [] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L.some(l => /^▍Answer$/.test(l))).toBe(true)
+  expect(L.some(l => /Saved short answer\./.test(l))).toBe(true)
+  await ui.unmount()
+})
+
+test('the board list shows an answered investigation with ◆ "answer" and [investigation]; a change task in review still says review', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [answeredTask({ title: 'Cache slow?' }), task('T-2', 'review', 'Blue button')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'T-1' }))!.text).toMatch(/^  T-1\s+◆ answer\s+Cache slow\?\s+\[investigation\]$/)
+  expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^  T-2\s+◆ review\s+Blue button\s+Enter to review$/)
+  await ui.unmount()
+})
+
 test('an old task without saved reports still opens and says "no saved report"', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Old one', { attempts: 1, runs: [{ started: '', ended: '' }], history: ['try 1: did it → merged into main'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })

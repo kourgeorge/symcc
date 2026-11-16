@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -645,7 +645,7 @@ async function answered($: $, t: SymccTask, answer: string, summary: string, lim
   const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
   const late = limit !== undefined
   if (await writeIfSame($, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: [...cur.history, `${tryLabel(t)}: answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`], ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `answered; ran over ${limit} min` : 'answered') }))) return
-  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read.`)
+  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
 }
 
 /**
@@ -768,13 +768,43 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
-/** The owner approved task `id` (in "review"): the same checked merge as for a finished worker. */
-export async function approve($: $, id: string): Promise<string> {
+/**
+ * The owner approved task `id` (in "review"): the same checked merge as for a finished worker. An answered
+ * investigation has nothing to merge: approve is its Done (see endInvestigation), and `keepNote` its Keep as a note.
+ */
+export async function approve($: $, id: string, keepNote = false): Promise<string> {
   const b = await load($)
   const t = reviewTask(b, id, 'approve')
-  // An investigation's file changes are never kept: there is nothing to merge.
-  if (kindOf(t) === 'investigation') throw new Error(`${t.id} is an investigation: nothing is merged. Its answer is on the task (${S.N.name} board task ${t.id}); drop it once the owner has read it.`)
+  if (kindOf(t) === 'investigation') return endInvestigation($, t, keepNote)
+  if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
   return mergeFinished($, b, t, 'approve')
+}
+
+/** The full answer of investigation `t`: its latest saved report (and that file), else the answer kept on the task. */
+export async function fullAnswer($: $, t: BoardTask): Promise<{ text: string; file?: string }> {
+  const last = taskReports(t).at(-1)
+  const text = last ? await $.fs.read(path(last.file)).then(x => String(x), () => null) : null
+  return text?.trim() ? { text: text.trim(), file: last!.file } : { text: t.answer?.trim() ?? '', ...(last ? { file: last.file } : {}) }
+}
+
+/**
+ * Done on answered investigation `t`: it ends done (note "answered"), nothing merged, and its folder and branch
+ * are removed as after a merge (the branch with -D: nothing on it was ever kept). With `keepNote` (Keep as a
+ * note) a new small docs task is added too, made by the owner as a follow-up of `t`, that writes
+ * docs/research/<topic>.md from the saved answer and merges as usual.
+ */
+async function endInvestigation($: $, t: BoardTask, keepNote: boolean): Promise<string> {
+  const full = keepNote ? await fullAnswer($, t) : { text: '' }
+  const merge_into = keepNote ? await homeBranch($) : undefined
+  const added = await change($, x => {
+    if (!keepNote) return [investigationDone(x, t.id, now()), undefined] as [Board, BoardTask | undefined]
+    const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, full.file), merge_into }, now(), S.N.dir)
+    return [investigationDone(y, t.id, now(), n.id), n] as [Board, BoardTask | undefined]
+  })
+  if (await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => false)) await git($, ['branch', '-D', t.branch ?? S.N.branch(t.id)])
+  void pump($)
+  if (!added) return `${t.id} done: the answer was read; nothing was merged`
+  return `${t.id} done: the answer was read; nothing was merged. Added ${added.id} "${added.title}": it writes ${added.files[0]} from the answer and merges as usual`
 }
 
 /**

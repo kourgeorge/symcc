@@ -1,6 +1,6 @@
 // The task page: its labelled rows and wrapping them to the panel width.
 import type { SymccStatus, SymccTask } from '../../types'
-import { intoOf, STATUS_WORD } from './board-file'
+import { type BoardTask, intoOf, kindOf, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
@@ -52,6 +52,7 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')
   R.push({ label: 'Role', segs: [{ text: r?.name ?? name, color: 'ide', bold: true }, ...(more ? [{ text: ` — ${more}`, color: 'inactive' }] : [])] })
+  if (kindOf(t) === 'investigation') R.push({ label: 'Kind', segs: [{ text: 'investigation', color: 'suggestion', bold: true }, { text: ' — nothing is merged', color: 'inactive' }] })
   R.push({ label: 'From', segs: originSegs(t) })
   const og = originOf(t)
   if (og?.why) R.push({ label: 'Why', segs: [{ text: squash(og.why), color: 'text' }] })
@@ -90,6 +91,17 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
   R.push({ label: 'Tries', segs: tries })
   return R
 }
+
+/**
+ * The text of an investigation's Answer section on the task page: the full answer from its latest report file
+ * (`report`, when it could be read), else the answer saved on the task (cut to ANSWER_MAX_CHARS); '' when there is none.
+ */
+export function answerText(t: Pick<BoardTask, 'answer'>, report: string | null | undefined): string {
+  return report?.trim() || t.answer?.trim() || ''
+}
+
+/** Whether the task page shows an Answer section for `t`: an investigation with an answer (in review, or done after it was read). */
+export const showsAnswer = (t: Pick<BoardTask, 'kind' | 'answer' | 'status'>): boolean => kindOf(t) === 'investigation' && (!!t.answer?.trim() || t.status === 'review')
 
 /** The width of the label column on the task page: the longest label, its colon and a space. */
 export const DETAIL_LABEL_WIDTH = 'Research: '.length

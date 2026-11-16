@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -3322,10 +3322,97 @@ test('an investigation worker that asks a QUESTION still waits for the owner', a
   expect(t.answer).toBeUndefined()
 })
 
-test('an investigation in review is not approved (there is nothing to merge)', async () => {
+test('Done (approve) on an answered investigation ends it done with nothing merged, and removes its folder and branch', async () => {
   const { w } = await investigationAnswers('auto', 'The answer.')
-  await expect(runTool(w.$, 'approve', { task: 'T-1' })).rejects.toThrow(/is an investigation: nothing is merged/)
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe('T-1 done: the answer was read; nothing was merged')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.note).toBe('answered')
+  expect(t.merged).toBeUndefined()
+  expect(t.history.at(-1)).toBe('try 1: the owner read the answer → done (nothing merged)')
   expect(movedMain(w)).toBe(false)
+  expect(ranTests(w)).toEqual([])
+  expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+  expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
+  expect(w.calls).toContain('root: git branch -D symcc/T-1')
+  // no new task
+  expect((await load(w.$)).tasks.length).toBe(1)
+})
+
+test('Keep as a note (approve with keep_note) ends it like Done and adds a docs task that writes docs/research/<topic>.md from the full answer', async () => {
+  const { w } = await investigationAnswers('auto', 'The cache is never cleared.\nI read src/cache.ts.', { runs: startRun([], ISO) })
+  const out = await runTool(w.$, 'approve', { task: 'T-1', keep_note: true })
+  expect(out).toContain('T-1 done: the answer was read; nothing was merged. Added T-2')
+  const b = await load(w.$)
+  const t = find(b, 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.note).toBe('answered; kept as a note by T-2')
+  expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
+  expect(movedMain(w)).toBe(false)
+  const n = find(b, 'T-2')!
+  expect(n.status).toBe('todo')
+  expect(n.role).toBe('docs')
+  expect(kindOf(n)).toBe('change')
+  expect(n.files).toEqual(['docs/research/do-it.md'])
+  expect(n.origin).toMatchObject({ by: 'owner', task: 'T-1', how: 'follow-up' })
+  expect(n.details).toContain('Write docs/research/do-it.md')
+  expect(n.details).toContain('The cache is never cleared.\nI read src/cache.ts.')
+  expect(n.details).toContain('.symcc/reports/T-1-try-1.md')
+})
+
+test('Ask more (reject) on an answered investigation sends it back to todo with the follow-up and the earlier answer in its details', async () => {
+  const { w } = await investigationAnswers('auto', 'The cache is never cleared.', { runs: startRun([], ISO) })
+  const out = await runTool(w.$, 'reject', { task: 'T-1', reason: 'And how big does it get?' })
+  expect(out).toContain('T-1 asked more: back to "todo"')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.note).toBe('asked more: And how big does it get?')
+  expect(t.answer).toBeUndefined()
+  expect(t.details).toContain('Follow-up question (owner, ')
+  expect(t.details).toContain('And how big does it get?')
+  expect(t.details).toContain('The earlier answer (try 1)')
+  expect(t.details).toContain('The cache is never cleared.')
+  expect(t.details).toContain('.symcc/reports/T-1-try-1.md')
+  expect(t.history.at(-1)).toBe('try 1: the owner asked more: And how big does it get?')
+  expect(movedMain(w)).toBe(false)
+  await expect(runTool(w.$, 'reject', { task: 'T-1', reason: 'again' })).rejects.toThrow(/not ready for review/)
+})
+
+test('Ask more needs a follow-up question; keep_note is refused on a change task', async () => {
+  const { w } = await investigationAnswers('auto', 'The answer.')
+  await expect(runTool(w.$, 'reject', { task: 'T-1', reason: '  ' })).rejects.toThrow(/follow-up question/)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+  const w2 = world()
+  const [b] = boardWith('review', [], { status: 'review' })
+  await saveBoard(w2.$, b)
+  await expect(runTool(w2.$, 'approve', { task: 'T-1', keep_note: true })).rejects.toThrow(/keep_note is only for an answered investigation/)
+  expect(find(await load(w2.$), 'T-1')!.status).toBe('review')
+})
+
+test('Ask more without a saved report points to the answer kept on the task; a long answer that does not fit points to the report', () => {
+  const [b0] = boardWith('auto', [], { kind: 'investigation', status: 'review', answer: 'short answer' } as Partial<BoardTask>)
+  const b1 = askMoreTask(b0, 'T-1', 'more please', '', undefined, ISO)
+  expect(find(b1, 'T-1')!.details).toContain('The earlier answer (try 1):\nshort answer')
+  const [b2] = boardWith('auto', [], { kind: 'investigation', status: 'review', details: 'd'.repeat(7000) } as Partial<BoardTask>)
+  const b3 = askMoreTask(b2, 'T-1', 'more please', 'x'.repeat(3000), '.symcc/reports/T-1-try-1.md', ISO)
+  expect(find(b3, 'T-1')!.details.endsWith('The earlier answer (try 1) is in .symcc/reports/T-1-try-1.md.')).toBe(true)
+})
+
+test('the board list shows an answered investigation as "answer" with [investigation]; a change task in review is unchanged', () => {
+  const [b] = boardWith('auto', [], { kind: 'investigation', status: 'review' } as Partial<BoardTask>)
+  const t = b.tasks[0]!
+  expect(statusCell(t, Date.now())).toBe('answer')
+  expect(rowExtra(t, b.tasks)).toBe('[investigation]')
+  const [c] = boardWith('auto', [], { status: 'review' })
+  expect(statusCell(c.tasks[0]!, Date.now())).toBe('review')
+  expect(rowExtra(c.tasks[0]!, c.tasks)).toBe('Enter to review')
+  expect(rowExtra(find(patchTask(b, 'T-1', { status: 'todo' }, ISO), 'T-1')!, b.tasks)).toBe('[investigation]')
+})
+
+test('the task keys of an answered investigation are done, keep as a note and ask more; a change task in review keeps approve and reject', () => {
+  expect(taskKeys('review', false, [], [], false, true).map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a done', 'k keep as a note', 'x ask more'])
+  expect(taskKeys('review').map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a approve', 'x reject', 'd show changes'])
 })
 
 test('a researcher task added without kind is an investigation; with kind change it stays a change', () => {

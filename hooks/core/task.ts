@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, isKind, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -274,3 +274,72 @@ export function parseOvertimeAnswer(answer: string): { add: number } | { stop: t
 
 /** The failed note of a task whose worker ran out of time and was stopped. */
 export const outOfTimeNote = (limit: number) => `stopped: ran over ${limit} min; the work so far is in its folder and report, and a retry continues from there`
+
+// ---------------- an answered investigation: Done, Keep as a note, Ask more ----------------
+
+/** Whether `t` is an investigation whose answer waits in review for the owner to read it. */
+export const isAnswered = (t: Pick<BoardTask, 'status' | 'kind'> | undefined): boolean => t?.status === 'review' && kindOf(t) === 'investigation'
+
+/** Task `id` on board `b`, which must be an answered investigation (see isAnswered); throws otherwise. `what` is said in the error. */
+function answeredTask(b: Board, id: string, what: string): BoardTask {
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (!isAnswered(t)) throw new Error(`${t.id} is not an answered investigation (it is ${STATUS_WORD[t.status]}${kindOf(t) === 'investigation' ? '' : ', a change task'}); only an answered investigation can be ${what}`)
+  return t
+}
+
+/**
+ * "Done" on answered investigation `id`: it ends done with the note "answered"; nothing is merged.
+ * `kept`: the id of the docs task that keeps its answer as a note (Keep as a note), said in its history.
+ */
+export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
+  const t = answeredTask(b, id, 'marked done')
+  const line = `try ${t.attempts}: the owner read the answer → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: [...t.history, line] }, now)
+}
+
+/** The file name part of a research note for a task titled `title`: "why-is-the-cache-slow" (at most 60 characters; "answer" when nothing is left). */
+export function noteTopic(title: string): string {
+  const s = String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return s.slice(0, 60).replace(/-+$/, '') || 'answer'
+}
+
+/**
+ * The new docs task that keeps answered investigation `t`'s answer as a research note, as addTask takes it:
+ * it writes docs/research/<topic>.md from the saved answer (`answer`, the full report when there is one; `report`:
+ * that report's file) and merges as usual. Made by the owner, as a follow-up of `t`.
+ */
+export function keepNoteTask(t: BoardTask, answer: string, report?: string): { title: string; details: string; files: string[]; role: string; kind: TaskKind; origin: OriginInput } {
+  const file = `docs/research/${noteTopic(t.title)}.md`
+  const head = `Write ${file}: a research note that keeps the answer of ${t.id} ("${t.title}"), so later tasks can read it. Use the answer below as it is: tidy it into a short note with a title, the question, the answer and how it was found. Don't look into the question again.`
+  const where = report ? `\n\nThe full answer is in ${report}.` : ''
+  const room = 8000 - head.length - where.length - 40
+  const body = answer.trim() || t.answer?.trim() || '(no answer saved)'
+  const text = body.length > room ? `${body.slice(0, Math.max(0, room - 1))}…` : body
+  return {
+    title: `Keep ${t.id}'s answer as a note: ${t.title}`.slice(0, 200),
+    details: `${head}${where}\n\nThe answer:\n${text}`,
+    files: [file],
+    role: 'docs',
+    kind: 'change',
+    origin: { by: 'owner', task: t.id, how: 'follow-up', why: `the owner kept the answer of ${t.id} as a research note` },
+  }
+}
+
+/**
+ * "Ask more" on answered investigation `id`: it goes back to "todo" for a fresh try, with the owner's follow-up
+ * `question` and the earlier answer added to its details. The answer is `answer` (the full report, else the saved one)
+ * when it fits; else (or when there is none) a pointer to its report file `report`.
+ */
+export function askMoreTask(b: Board, id: string, question: string, answer: string, report: string | undefined, now: string): Board {
+  const t = answeredTask(b, id, 'asked more')
+  const q = clean(question, 1000)
+  if (!q) throw new Error('give the follow-up question, so the next try knows what to look into')
+  const day = now.slice(0, 10)
+  const head = `\n\nFollow-up question (owner, ${day}): ${q}\nThe earlier answer (try ${t.attempts})`
+  const where = report ? ` is in ${report}` : ''
+  const body = answer.trim() || t.answer?.trim() || ''
+  const fits = body && t.details.length + head.length + body.length + where.length + 40 <= 8000
+  const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: `${t.details.trimEnd()}${added}`, answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: the owner asked more: ${q}`] }, now)
+}
