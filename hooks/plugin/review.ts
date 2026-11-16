@@ -99,8 +99,10 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * Merges into the same branch take turns (mergeTurn); when the branch still moved before ours
  * could move it, the task is brought up to date, tested and merged again by itself (MAX_MERGE_RACES at most).
  * `release`: settles when the caller gave this check up as stuck, so later merges into the branch stop waiting for it.
+ * `turn`: the caller's time limit. `turn(false)` when this check has to wait in line for its merge turn (or tries
+ * again after the branch moved), `turn(true)` when that turn begins: waiting in line and earlier goes don't count.
  */
-export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>): Promise<CheckResult> {
+export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -132,7 +134,11 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
   // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
   for (let n = 1; ; n++) {
-    const r = await mergeTurn(target, () => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed), release)
+    // The time limit stops while this waits behind an earlier merge (that one has its own limit and
+    // `release`, so the line keeps moving) and starts again from zero when its own go begins.
+    const restart = n > 1 || mergeTurns.has(target)
+    if (restart) turn?.(false)
+    const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed)), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return r.result
   }
 }

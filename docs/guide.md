@@ -157,8 +157,12 @@ This is where symcc keeps your branch safe. Step by step:
    a new try as usual.
    **Time limit.** Each test command may run up to 10 minutes. The whole checking and
    merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
-   and the board: 15 minutes with one test command, 35 with three. A step still running
-   then is taken as stuck and given up: a finished worker's task goes back to `todo` for a
+   and the board: 15 minutes with one test command, 35 with three. Only the task's own
+   work counts: the clock stops while it waits in line behind other merges into the same
+   branch (each of those has its own limit, so the line keeps moving), and starts again
+   from zero when its turn begins, and again each time it is brought up to date and
+   tested again because the branch moved meanwhile. A step still running past the limit
+   is taken as stuck and given up: a finished worker's task goes back to `todo` for a
    fresh try (its folder and branch are kept); if the try before was given up the same
    way, the task is marked `failed` instead ("ran over … twice in a row"), so it never
    loops, and the lead is told. An approve, or a merge waiting for your files, that runs

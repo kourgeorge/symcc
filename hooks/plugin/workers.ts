@@ -214,9 +214,9 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
     let gaveUp = false
     let letGo = () => {}
     const over = new Promise<'over'>(r => (letGo = () => r('over')))
-    const limit = tryNo === undefined ? null : afterMs($, limitMs, () => ((gaveUp = true), letGo()))
-    const step = finishWork($, agentId, w, answer, aborted, () => gaveUp, over).then(() => 'done' as const)
-    const how = limit ? await Promise.race([step, over]) : await step
+    const limit = tryNo === undefined ? null : stepLimit($, limitMs, () => ((gaveUp = true), letGo()))
+    const step = finishWork($, agentId, w, answer, aborted, () => gaveUp, over, limit?.turn).then(() => 'done' as const)
+    const how = limit?.on ? await Promise.race([step, over]) : await step
     limit?.cancel()
     if (how === 'over') {
       step.catch(() => undefined)
@@ -232,6 +232,21 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
     await endCheck($, w.task)
   }
   await pump($)
+}
+
+/**
+ * The time limit of a checking and merging step: `over` runs once, `ms` after the start (`on`: false
+ * when this Claude Code has no timer). `turn(false)` stops the clock while the step waits in line for
+ * its merge turn (the merge in front has its own limit); `turn(true)` starts it again from zero when
+ * the step's own go begins (see checkAndMerge), so only the task's own work counts.
+ */
+function stepLimit($: $, ms: number, over: () => void) {
+  let fired = false
+  const fire = () => void (fired || ((fired = true), over()))
+  let timer = afterMs($, ms, fire)
+  const on = timer !== null
+  const cancel = () => void (timer?.cancel(), (timer = null))
+  return { on, cancel, turn: (go: boolean) => void (cancel(), go && on && !fired && (timer = afterMs($, ms, fire))) }
 }
 
 /** A one-time timer, if this Claude Code has one ($.clock.after); null when it has none. */
@@ -500,8 +515,9 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
 /**
  * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
+ * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
  */
-export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean, gaveUp: () => boolean = () => false, release?: Promise<unknown>) {
+export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
   const b = await load($)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
@@ -529,7 +545,7 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: the task was already sent back (or found merged); this late outcome is not
     // written over it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
@@ -685,10 +701,10 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
   let letGo = () => {}
   const over = new Promise<'over'>(r => (letGo = () => r('over')))
   const limitMs = finishLimitMs(b.test_commands.length)
-  const limit = afterMs($, limitMs, () => ((gaveUp = true), letGo()))
-  const step = mergeWork($, t, b, kind, () => gaveUp, over)
-  const how = limit ? await Promise.race([step, over]) : await step
-  limit?.cancel()
+  const limit = stepLimit($, limitMs, () => ((gaveUp = true), letGo()))
+  const step = mergeWork($, t, b, kind, () => gaveUp, over, limit.turn)
+  const how = limit.on ? await Promise.race([step, over]) : await step
+  limit.cancel()
   if (how !== 'over') return how
   step.catch(() => undefined)
   approving.delete(t.id)
@@ -727,8 +743,8 @@ async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind:
 /** How a status is said in a history line: "in review", "waiting". */
 const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)
 
-/** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`: as for finishWork. */
-async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>): Promise<string> {
+/** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`, `turn`: as for finishWork. */
+async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, turn?: (go: boolean) => void): Promise<string> {
   const status = t.status
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   const by = kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
@@ -747,7 +763,7 @@ async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge'
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge($, t, dir, b, kind, made, stop, retest, release).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge($, t, dir, b, kind, made, stop, retest, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
     // it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {

@@ -2561,3 +2561,180 @@ test('a finish step given up while it moves main, which then lands, ends with th
   expect(t.runs!.at(-1)!.ended_note).toBe('merged')
   expect(leadQueue.filter(m => m.includes('T-1') && m.includes('done after all')).length).toBe(1)
 })
+
+// ---------------- waiting in line to merge, and retests after main moved, don't count toward the limit (T-226) ----------------
+
+/**
+ * A fake clock for the merge time limit: timers of at least a minute fire once `pass` moves the time
+ * past them (a cancelled one never fires); the short ones (the lead's) never fire. `live`: the limit timers still running.
+ */
+function limitClock(w: ReturnType<typeof world>) {
+  let at = 0
+  const timers: { due: number; ms: number; f: () => void; off: boolean }[] = []
+  ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
+    if (ms < 60_000) return { cancel() {} }
+    const x = { due: at + ms, ms, f, off: false }
+    timers.push(x)
+    return { cancel: () => void (x.off = true) }
+  }
+  const pass = (ms: number) => {
+    at += ms
+    for (const x of timers) if (!x.off && x.due <= at) (x.off = true), x.f()
+  }
+  return { pass, timers, live: () => timers.filter(x => !x.off) }
+}
+
+/** Every test command takes `ms` on the clock. */
+function slowTests(w: ReturnType<typeof world>, pass: (ms: number) => void, ms: number) {
+  w.onRun(async cmd => void (cmd.startsWith('/bin/sh -c ') && pass(ms)))
+}
+
+/** Promise turns until the step waits in line for its merge turn: its limit was started, then stopped. */
+const inLine = (w: ReturnType<typeof world>, c: ReturnType<typeof limitClock>) => turns(w, () => c.timers.length > 0 && !c.live().length)
+
+/** `n` earlier merges into main (other tasks finishing at the same time), one after another, each holding its turn until let go. */
+function earlierMerges(n: number) {
+  const free: (() => void)[] = []
+  const ran: number[] = []
+  const all = Array.from({ length: n }, (_, i) => mergeTurn('main', () => new Promise<void>(r => (ran.push(i), (free[i] = r)))))
+  return { free, ran, all }
+}
+
+const MIN = 60_000
+
+for (const [ahead, mins] of [[1, 8], [2, 6]] as const) {
+  test(`${ahead + 1} tasks finishing together on one branch with a ${mins} min test command all merge: waiting in line is not counted`, async () => {
+    S.me = 'me'
+    const w = world()
+    const c = limitClock(w)
+    const { pass, timers } = c
+    slowTests(w, pass, mins * MIN)
+    await aboutToFinish(w)
+    // the other tasks' merges are first in line; each takes as long as its tests
+    const { free, ran, all } = earlierMerges(ahead)
+    let ended = false
+    void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+    await inLine(w, c)
+    for (let i = 0; i < ahead; i++) {
+      await turns(w, () => ran.length === i + 1)
+      expect(ranTests(w)).toEqual([])
+      pass(mins * MIN)
+      free[i]!()
+      await all[i]
+    }
+    await turns(w, () => ended)
+    // its wait in line and its own tests: over the limit together, well under it on its own
+    expect((ahead + 1) * mins * MIN).toBeGreaterThan(finishLimitMs(1))
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('done')
+    expect(t.merged).toBe(H1)
+    expect(w.git.main).toBe(H1)
+    expect(ranTests(w).length).toBe(1)
+    expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+    expect(timers.every(x => x.ms === finishLimitMs(1))).toBe(true)
+  })
+}
+
+test('a task whose merge races with main moving, and is tested again, still merges when each go is under the limit', async () => {
+  S.me = 'me'
+  let races = 0
+  const w = world({
+    // another merge lands on main just before ours tries to move it, twice
+    answer: a => {
+      if (a[0] === 'update-ref' && races < 2) {
+        races++
+        w.git.main = races === 1 ? M2 : `d${races}`.padEnd(40, '0')
+        w.git.upToDate = false
+      }
+      return undefined
+    },
+  })
+  const { pass } = limitClock(w)
+  // 10 min per go: 30 min in all, twice the 15 min limit
+  slowTests(w, pass, 10 * MIN)
+  await aboutToFinish(w)
+  await workerFinished(w.$, 'ag1', 'made the change', false)
+  expect(races).toBe(2)
+  expect(ranTests(w).length).toBe(3)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H2)
+  expect(w.git.main).toBe(H2)
+  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+})
+
+test('a step really stuck in its own merge turn is still given up after the limit, and the next one in line then goes on', async () => {
+  S.me = 'me'
+  const w = world()
+  const c = limitClock(w)
+  const { pass, live } = c
+  // its test command hangs
+  let hung = false
+  w.onRun(async cmd => {
+    if (!cmd.startsWith('/bin/sh -c ')) return
+    hung = true
+    await new Promise<void>(() => {})
+  })
+  await aboutToFinish(w)
+  // one merge in front of it, 12 min long
+  const { free, ran, all } = earlierMerges(1)
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  // waiting in line: no limit running
+  await inLine(w, c)
+  expect(ran.length).toBe(1)
+  // the next merge into main is in line after it
+  let next = false
+  const after = mergeTurn('main', async () => void (next = true))
+  pass(12 * MIN)
+  free[0]!()
+  await all[0]
+  await turns(w, () => hung)
+  expect(live().length).toBe(1)
+  // stuck in its own turn: still there just before the limit, given up at it
+  pass(finishLimitMs(1) - 1)
+  for (let i = 0; i < 500; i++) await Promise.resolve()
+  expect(ended).toBe(false)
+  expect(next).toBe(false)
+  pass(1)
+  await turns(w, () => ended)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes')).length).toBe(1)
+  await after
+  expect(next).toBe(true)
+  expect(w.git.main).toBe(M1)
+})
+
+test('an approve waiting in line behind two slow merges, then main moving under it, still merges: neither the wait nor the first go counts', async () => {
+  let raced = false
+  const w = await inReview({ upToDate: false })
+  // main moves just before the approve's first move
+  w.git.answer = a => {
+    if (a[0] === 'update-ref' && !raced) {
+      raced = true
+      w.git.main = M2
+    }
+    return undefined
+  }
+  const c = limitClock(w)
+  const { pass } = c
+  slowTests(w, pass, 10 * MIN)
+  const { free, ran, all } = earlierMerges(2)
+  let out: string | undefined
+  void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
+  await inLine(w, c)
+  for (let i = 0; i < 2; i++) {
+    await turns(w, () => ran.length === i + 1)
+    pass(6 * MIN)
+    free[i]!()
+    await all[i]
+  }
+  await turns(w, () => out !== undefined)
+  // 12 min in line, then two goes of 10 min each
+  expect(raced).toBe(true)
+  expect(ranTests(w).length).toBe(2)
+  expect(out).toBe(`T-1 approved and merged: merged into main (${H2.slice(0, 8)}); approved by the owner; tests passed`)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+})
