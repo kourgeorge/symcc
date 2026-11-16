@@ -2,7 +2,7 @@ import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, noteFilesInUse, ANSWERED } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
@@ -22,7 +22,7 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
 const INVESTIGATION_PROMPT = (t: BoardTask, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one investigation, then stop.
 
 This task is an investigation: your job is to find the answer and hand it back in full. Your hand-back is the result; the owner reads it. Nothing is committed, tested or merged.
-Your own copy of the project, on branch ${t.branch ?? S.N.branch(t.id)}, is this folder:
+Your own copy of the project, on branch ${taskBranch(t)}, is this folder:
   ${dir}
 Read whatever you need. You may run read-only commands and experiments, outside the project or in that folder, but any file changes you make in the project are not kept. Never touch the main project folder. Do not run git commit, push or merge.
 
@@ -34,7 +34,7 @@ When you are done, hand back the full answer: what you found, how you know (the 
 /** The prompt of a change's worker: change the files, which are then committed, tested and merged. */
 const CHANGE_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one task, then stop.
 
-Work ONLY inside this folder, your own copy of the project on branch ${t.branch ?? S.N.branch(t.id)}:
+Work ONLY inside this folder, your own copy of the project on branch ${taskBranch(t)}:
   ${dir}
 Use absolute paths under that folder for every Read, Edit and Write. Never touch the main project folder.
 
@@ -354,7 +354,7 @@ async function landedLate($: $, t: SymccTask, sha: string, made: readonly string
   if (!r) return
   if (r.done) {
     tellLead($, `✓ ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}).`)
-    if (await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)]).catch(() => undefined)
+    if (await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => false)) await git($, ['branch', '-d', taskBranch(t)]).catch(() => undefined)
     void pump($)
     return
   }
@@ -408,7 +408,7 @@ export async function lateHandBack($: $, agentId: string): Promise<boolean> {
   if (!t || t.status !== 'doing' || t.session !== S.me || finishing.has(t.id) || starting.has(t.id) || handedBack(t)) return false
   if ([...workers.values()].some(w => w.task === t.id)) return false
   const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
-  workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: t.branch ?? S.N.branch(t.id), since: Number.isFinite(started) ? started : Date.now() })
+  workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
   return true
 }
 
@@ -520,12 +520,12 @@ async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, li
   }
   if (off) {
     sayDone($, b, t.id)
-    if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+    if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', taskBranch(t)])
     tellLead($, `✓ ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`)
     return
   }
   sayDone($, b, t.id)
-  if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', taskBranch(t)])
   tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
@@ -737,7 +737,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   }
   if (r.review) {
     if (!(await write(cur => ({ status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" is ready for review. The change is on branch ${t.branch ?? S.N.branch(t.id)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
+    tellLead($, `${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
   const tries = t.conflict_tries ?? 0
@@ -762,7 +762,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
   if (r.ok) sayDone($, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
-  if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', t.branch ?? S.N.branch(t.id)])
+  if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', taskBranch(t)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
   tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
@@ -805,7 +805,7 @@ async function endInvestigation($: $, t: BoardTask, keepNote: boolean): Promise<
     const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, full.file, [...notes, ...noteFilesInUse(x)]), merge_into }, now(), S.N.dir)
     return [investigationDone(y, t.id, now(), n.id), n] as [Board, BoardTask | undefined]
   })
-  const branch = t.branch ?? S.N.branch(t.id)
+  const branch = taskBranch(t)
   await resetScratch($, t.id).catch(() => undefined)
   const { commits } = await taskWork($, t).catch(() => ({ commits: null }))
   const keep = commits !== 0
@@ -1136,7 +1136,7 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
         // task's check is still running, or the regular check recovers it (done when merged).
         if (handedBack(t)) continue
         const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
-        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: t.branch ?? S.N.branch(t.id), since: Number.isFinite(started) ? started : Date.now() })
+        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
         if (t.agent !== a.id) await change($, x => (find(x, t.id)?.status === 'doing' && find(x, t.id)?.session === S.me ? patchTask(x, t.id, { agent: a.id }, now()) : x)).catch((e: Error) => $.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue
       }

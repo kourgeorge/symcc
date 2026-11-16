@@ -3594,6 +3594,20 @@ test("switching an investigation with scratch edits to a change throws them away
   expect(w.calls.some(c => / git (commit|add)/.test(c))).toBe(false)
 })
 
+test('a refused switch of an investigation to a change leaves its scratch edits alone', async () => {
+  const w = world({ wtStatus: ' M src/a.ts' })
+  w.git.answer = args => (args[0] === 'reset' ? ((w.git.dirty = false), (w.git.wtStatus = ''), ok()) : undefined)
+  const [b] = boardWith('auto', [], { kind: 'investigation', status: 'review', answer: 'The answer.' } as Partial<BoardTask>)
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'change', backlog: true })).rejects.toThrow('only a task that is to do, paused or failed can go to the backlog')
+  const t = find(await load(w.$), 'T-1')!
+  expect(kindOf(t)).toBe('investigation')
+  expect(t.status).toBe('review')
+  expect(w.calls.some(c => /git (reset|clean)/.test(c))).toBe(false)
+  expect(w.git.wtStatus).toBe(' M src/a.ts')
+})
+
 test('a researcher task of kind change is committed, tested and merged as today', async () => {
   const w = world()
   const [b] = boardWith('auto', ['npm test'], { role: 'researcher', history: ['created by the lead'] })

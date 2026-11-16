@@ -137,9 +137,12 @@ export async function setupGit($: $, who: string): Promise<string> {
 
 export const worktreeDir = (id: string) => `${S.root}/${S.N.worktrees}/${id}`
 
+/** The branch task `t` works on: its own, or the usual one for its id. */
+export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S.N.branch(t.id)
+
 export async function prepareWorktree($: $, t: SymccTask, target: string) {
   const dir = worktreeDir(t.id)
-  const branch = t.branch ?? S.N.branch(t.id)
+  const branch = taskBranch(t)
   if (await $.fs.exists(`${dir}/.git`)) return { dir, branch }
   await git($, ['worktree', 'prune'])
   const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`])).exitCode === 0
@@ -154,7 +157,7 @@ export async function prepareWorktree($: $, t: SymccTask, target: string) {
  * its folder has uncommitted changes (false when it has no folder).
  */
 export async function taskWork($: $, t: SymccTask): Promise<{ commits: number | null; dirty: boolean }> {
-  const branch = t.branch ?? S.N.branch(t.id)
+  const branch = taskBranch(t)
   let commits: number | null = 0
   if (await branchExists($, branch)) {
     const r = await git($, ['rev-list', '--count', `refs/heads/${intoOf(t)}..refs/heads/${branch}`]).catch(() => null)
