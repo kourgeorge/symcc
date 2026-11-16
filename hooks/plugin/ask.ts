@@ -2,11 +2,21 @@
 // - a question: the workers' ask_owner tool (mcp__<name>__ask_owner), served in the tool.call hook;
 // - more files: an Edit, Write or NotebookEdit outside the task's files is refused in the tool.check hook,
 //   and the path is recorded as a request to the owner.
-// Both are kept on the worker (workers map) until its hand-back arrives; finishWork (workers.ts) decides from them.
-import { ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, EDIT_PATH_FIELD, find, kindOf } from '../board'
-import { S, type $, workers, scoutRuns } from './state'
-import { load } from './store'
+// Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
+// before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, EDIT_PATH_FIELD, find, kindOf, patchTask } from '../board'
+import { S, type $, type Worker, workers, scoutRuns } from './state'
+import { load, change, now } from './store'
 import { lateHandBack } from './workers'
+
+/** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
+function recordOnTry($: $, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
+  return change($, (b: Board) => {
+    const cur = find(b, w.task)
+    const p = cur && cur.status === 'doing' && cur.attempts === attempts ? patch(cur) : null
+    return p ? ([patchTask(b, w.task, p, now()), true] as [Board, boolean]) : ([b, false] as [Board, boolean])
+  })
+}
 
 /** The workers' question tool as registered with $.tool.register. */
 export const ASK_TOOL_DEF = () => ({
@@ -18,7 +28,7 @@ export const ASK_TOOL_DEF = () => ({
 /**
  * An ask_owner call from agent `agentId` with input `a`: the reply the caller sees. Taken only from a running
  * worker whose task is still "doing" (a worker this copy lost in a reload is found again from the board, see
- * lateHandBack); the question is kept on the worker (a later call replaces it). Everyone else is refused.
+ * lateHandBack); the question is written to its try on the board (a later call replaces it). Everyone else is refused.
  */
 export async function askCall($: $, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
   const tool = S.N.tool(ASK_TOOL)
@@ -31,13 +41,13 @@ export async function askCall($: $, agentId: string | undefined, a: Record<strin
   if (!t || t.status !== 'doing') return `Refused: your task ${w.task} is not running any more${t ? ` (it is ${t.status})` : ''}. Stop and hand back.`
   const q = parseAsk(a)
   if (typeof q === 'string') return `Refused: ${q}. Nothing was sent; call ${tool} again with a valid question.`
-  w.question = q
+  if (!(await recordOnTry($, w, t.attempts, () => ({ try_question: q })))) return `Refused: your task ${w.task} is not running any more. Stop and hand back.`
   return ASK_SENT
 }
 
 /**
  * The tool.check hook's part: for a running worker on a change task, an edit outside the task's files is refused
- * (the reason the worker reads) and its path recorded on the worker. Undefined: not ours to decide. An investigation
+ * (the reason the worker reads) and its path recorded on its try on the board. Undefined: not ours to decide. An investigation
  * has no file list, so its edits are never refused (they are not kept anyway); the merge-time scope check stays the
  * backstop for files written through Bash.
  */
@@ -50,6 +60,6 @@ export async function checkEdit($: $, agentId: string | undefined, tool: string,
   if (!t || kindOf(t) === 'investigation') return undefined
   const path = blockedEdit(tool, input, w.worktree, t.files, S.N.dir)
   if (!path) return undefined
-  if (!w.requested?.includes(path)) w.requested = [...(w.requested ?? []), path]
+  if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
 }

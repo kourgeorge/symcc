@@ -1,10 +1,10 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, type WorkerQuestion } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
-import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns, type Worker } from '../hooks/plugin/state'
-import { askCall } from '../hooks/plugin/ask'
+import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
+import { askCall, checkEdit } from '../hooks/plugin/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
 import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, type TurnEnd } from '../hooks/plugin/workers'
@@ -13,6 +13,8 @@ import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
+// test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
+import { test } from './reset'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -216,6 +218,11 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
 }
 
 /** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
+/** What a try recorded for its hand-back: an ask_owner call (`question`) and edits refused as outside its files (`requested`). */
+type Rec = { question?: WorkerQuestion; requested?: string[] }
+/** Board `b` with T-1's current try holding `rec`, as ask_owner and the tool.check hook write it. */
+const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { ...(rec.question ? { try_question: rec.question } : {}), ...(rec.requested ? { try_refused: rec.requested } : {}) }, ISO) : b)
+
 function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<SymccTask> = {}): [Board, SymccTask] {
   const [b, t] = addTask({ ...emptyBoard(), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
   const b2 = patchTask(b, t.id, { status: 'doing', attempts: 1, ...extra }, ISO)
@@ -1324,14 +1331,14 @@ test('an archived task can still be looked up, is read-only, and an archived dro
  * T-1's worker (files src/; its folder holds edits in src/a.ts) hands back `answer`. `ask` / `requested`: what its
  * try recorded (an ask_owner call, edits refused as outside its files); `end`: why its turn ended.
  */
-async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git>; ask?: Worker['question']; requested?: string[]; end?: TurnEnd } = {}) {
+async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git>; ask?: WorkerQuestion; requested?: string[]; end?: TurnEnd } = {}) {
   const w = world(o.git)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'] })
-  await saveBoard(w.$, { ...b0, notify: o.notify ?? 'voice' })
+  await saveBoard(w.$, recorded({ ...b0, notify: o.notify ?? 'voice' }, { question: o.ask, requested: o.requested }))
   w.put(`${WT}/.git`, 'gitdir: x')
   S.driving = o.driving ?? true
   sayQueue.splice(0)
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0, question: o.ask, requested: o.requested })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   await workerFinished(w.$, 'ag1', answer, o.end)
   S.driving = false
   return { w, t: find(await load(w.$), 'T-1')! }
@@ -1415,7 +1422,7 @@ test('a stopped turn (aborted) still fails the task as stopped, and nothing is m
   expect(movedMain(w)).toBe(false)
 })
 
-test('ask_owner from a scout is refused; from a running worker it is kept on the worker (the last call wins)', async () => {
+test("ask_owner from a scout is refused; from a running worker it is written to its try on the board (the last call wins)", async () => {
   const w = world()
   const [b] = boardWith('auto', ['npm test'])
   await saveBoard(w.$, b)
@@ -1425,8 +1432,53 @@ test('ask_owner from a scout is refused; from a running worker it is kept on the
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   expect(await askCall(w.$, 'ag1', { question: 'First?' })).toBe('Sent to the owner. Stop now and hand back.')
   expect(await askCall(w.$, 'ag1', { question: 'Which?', options: ['a', 'b'] })).toBe('Sent to the owner. Stop now and hand back.')
-  expect(workers.get('ag1')!.question).toEqual({ question: 'Which?', options: ['a', 'b'] })
+  expect((find(await load(w.$), 'T-1') as BoardTask).try_question).toEqual({ question: 'Which?', options: ['a', 'b'] })
   workers.delete('ag1')
+})
+
+test("a question and a refused edit survive a plugin reload before the hand-back: the task then waits with them", async () => {
+  // the question: recorded, then the plugin reloads (its memory starts over), then the late hand-back arrives
+  S.me = 'me'
+  const q = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(q.$, b)
+  q.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await askCall(q.$, 'ag1', { question: 'Red or blue?', options: ['red', 'blue'] })).toBe('Sent to the owner. Stop now and hand back.')
+  workers.clear()
+  expect(await lateHandBack(q.$, 'ag1')).toBe(true)
+  await workerFinished(q.$, 'ag1', 'I asked the owner.')
+  const asked = find(await load(q.$), 'T-1') as BoardTask
+  expect(asked).toMatchObject({ status: 'waiting', question: 'Red or blue?', options: ['red', 'blue'] })
+  expect(asked.try_question).toBeUndefined()
+  expect(movedMain(q)).toBe(false)
+  // a refused edit: the same, through the tool.check hook's part
+  const f = world()
+  await saveBoard(f.$, b)
+  f.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  workers.clear()
+  expect(await lateHandBack(f.$, 'ag1')).toBe(true)
+  await workerFinished(f.$, 'ag1', 'README.md was refused.')
+  const files = find(await load(f.$), 'T-1') as BoardTask
+  expect(files).toMatchObject({ status: 'waiting', asked_files: ['README.md'] })
+  expect(files.try_refused).toBeUndefined()
+  expect(movedMain(f)).toBe(false)
+  workers.clear()
+})
+
+test('what a try recorded for its hand-back is cleared when a new try starts, and when the task leaves "doing"', () => {
+  const [b] = boardWith('auto')
+  const rec = recorded(b, { question: { question: 'Which?' }, requested: ['README.md'] })
+  expect(find(rec, 'T-1')).toMatchObject({ try_question: { question: 'Which?' }, try_refused: ['README.md'] })
+  for (const next of [patchTask(rec, 'T-1', { attempts: 2 }, ISO), patchTask(rec, 'T-1', { status: 'todo' }, ISO)]) {
+    expect(find(next, 'T-1')).not.toHaveProperty('try_question')
+    expect(find(next, 'T-1')).not.toHaveProperty('try_refused')
+  }
+  // a change on the same try keeps them
+  expect(find(patchTask(rec, 'T-1', { note: 'x' }, ISO), 'T-1')).toMatchObject({ try_refused: ['README.md'] })
 })
 
 test('the worker prompts say how to ask and what a refused edit means, with no QUESTION / OPTIONS / NEED FILES wording', () => {
@@ -1618,12 +1670,12 @@ test('change on a paused task keeps it paused with the change saved, and resume 
 const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
 
 /** T-1 is "doing" (try 1, one run) with worker ag1, which then answers `answer`; the fake git and the task as given. */
-async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<SymccTask> = {}, rec: Pick<Worker, 'question' | 'requested'> = {}) {
+async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<SymccTask> = {}, rec: Rec = {}) {
   const w = world(g)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...extra })
-  await saveBoard(w.$, b0)
+  await saveBoard(w.$, recorded(b0, rec))
   w.put(`${WT}/.git`, 'gitdir: x')
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0, ...rec })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   await workerFinished(w.$, 'ag1', answer)
   return { w, t: find(await load(w.$), 'T-1')! }
 }
@@ -1896,7 +1948,7 @@ async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, 
   const r = t.runs!.at(-1)!
   return { t, r, end: [r.ended_by, r.ended_note] }
 }
-const answers = (answer: string, end?: TurnEnd, rec: Pick<Worker, 'question' | 'requested'> = {}) => (w: ReturnType<typeof world>) => (Object.assign(workers.get('ag1')!, rec), workerFinished(w.$, 'ag1', answer, end))
+const answers = (answer: string, end?: TurnEnd, rec: Rec = {}) => async (w: ReturnType<typeof world>) => (await change(w.$, b => recorded(b, rec)), workerFinished(w.$, 'ag1', answer, end))
 
 test('a finished try ends with the outcome of its check', async () => {
   const merged = await tryEnds(answers('made the change'))
@@ -3364,14 +3416,14 @@ test('an approve waiting in line behind two slow merges, then main moving under 
 // ---------------- investigations: the hand-back is the result ----------------
 
 /** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
-async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Pick<Worker, 'question' | 'requested'> = {}) {
+async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Rec = {}) {
   const w = world()
   const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
   // set after the try started: a new try (attempts changing) clears the time fields
   const b = Object.keys(extra).length ? patchTask(b0, 'T-1', extra, ISO) : b0
-  await saveBoard(w.$, b)
+  await saveBoard(w.$, recorded(b, rec))
   w.put(`${WT}/.git`, 'gitdir: x')
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0, ...rec })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   await workerFinished(w.$, 'ag1', answer)
   return { w, t: find(await load(w.$), 'T-1')! }
 }
@@ -3565,6 +3617,46 @@ test('Keep as a note after two tries lists both reports, oldest first, and asks 
   const one = keepNoteTask(find(await load(w.$), 'T-1')!, 'a', ['.symcc/reports/T-1-try-1.md'])
   expect(one.details).toContain('The full answer is in .symcc/reports/T-1-try-1.md.')
   expect(one.details).not.toContain('combine')
+})
+
+test('a keep-note task after two tries reads both answers inside its own folder, and its commit holds only the note (T-284)', async () => {
+  const w = world({ changed: ['docs/research/do-it.md'], current: 'main' })
+  const runs = [
+    { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
+    { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
+  ]
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
+  w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
+  w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
+  await runTool(w.$, 'approve', { task: 'T-1', keep_note: true })
+  const n = find(await load(w.$), 'T-2')!
+  expect(n.details).toContain('copied into your own folder at the same path when you start (git-ignored, never committed): read them there, not in the main project folder.')
+  // the docs worker starts: both reports are copied into its folder, at the paths its details name
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  let prompt = ''
+  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  x.agent.spawn = async (e: { prompt: string }) => ((prompt = e.prompt), { agentId: 'ag9' })
+  x.plugin = { root: '/plugin' }
+  x.fs.list = async () => []
+  await startWorker(w.$, 'T-2')
+  const wt = `${ROOT}/.symcc/worktrees/T-2`
+  expect(find(await load(w.$), 'T-2')!.status).toBe('doing')
+  expect(prompt).toContain(wt)
+  expect(prompt).toContain('.symcc/reports/T-1-try-1.md, .symcc/reports/T-1-try-2.md')
+  expect(w.files.get(`${wt}/.symcc/reports/T-1-try-1.md`)).toBe('The full first draft.')
+  expect(w.files.get(`${wt}/.symcc/reports/T-1-try-2.md`)).toBe('Change point 2. Everything else is the same as try 1.')
+  // the copies are git-ignored in the folder, so git add -A leaves them out: the commit has only the note
+  expect(w.files.get(`${wt}/.symcc/.gitignore`)).toBe('*\n')
+  workers.clear()
+  const [b2, t2] = [await load(w.$), find(await load(w.$), 'T-2')! as SymccTask]
+  const r = await checkAndMerge(w.$, t2, wt, b2)
+  expect(r.ok).toBe(true)
+  expect(w.calls).toContain(`${wt}: git add -A -- .`)
+  expect(t2.files).toEqual(['docs/research/do-it.md'])
 })
 
 test('the investigation worker prompt after Ask more asks for the complete answer, not only what changed', () => {

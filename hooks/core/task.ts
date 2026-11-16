@@ -63,8 +63,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'doing' || !next.session) delete next.session
   // the "being tested and merged" mark only means something while the task is "doing"
   if (next.status !== 'doing' || !next.finishing) delete next.finishing
-  // the over-time marks belong to one try while it runs
-  for (const k of ['extra_minutes', 'time_ask', 'wrap_up'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
+  // the over-time marks, and what the try recorded for its hand-back, belong to one try while it runs
+  for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'try_question', 'try_refused'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
   // the step of a check only means something while the task stays as it was when checked
   if (!next.checking || next.status !== t.status || next.attempts !== t.attempts) delete next.checking
   // Where a task came from never changes once it is made.
@@ -332,18 +332,28 @@ export function keepNoteTask(t: BoardTask, answer: string, reports: string | rea
   const where = many
     ? `\n\nThis investigation had ${files.length} tries (the owner asked more), and each try's answer is in its report, oldest first: ${files.join(', ')}. A later try's answer may give only changes to an earlier one ("everything else is the same"). Read them all and combine them: write the final, complete answer, applying each later try's changes to the earlier answers, not only the last answer.`
     : files.length ? `\n\nThe full answer is in ${files[0]}.` : ''
+  const copied = files.length ? ` ${many ? 'These report files are' : 'That report file is'} copied into your own folder at the same path when you start (git-ignored, never committed): read ${many ? 'them' : 'it'} there, not in the main project folder.` : ''
   const label = many ? `The latest answer (try ${tryOf(files.at(-1)!)})` : 'The answer'
-  const room = DETAILS_MAX - head.length - where.length - label.length - 40
+  const room = DETAILS_MAX - head.length - where.length - copied.length - label.length - 40
   const body = answer.trim() || t.answer?.trim() || '(no answer saved)'
   const text = body.length > room ? `${body.slice(0, Math.max(0, room - 1))}…` : body
   return {
     title: `Keep ${t.id}'s answer as a note: ${t.title}`.slice(0, 200),
-    details: `${head}${where}\n\n${label}:\n${text}`,
+    details: `${head}${where}${copied}\n\n${label}:\n${text}`,
     files: [file],
     role: 'docs',
     kind: 'change',
     origin: { by: 'owner', task: t.id, how: 'follow-up', why: `the owner kept the answer of ${t.id} as a research note` },
   }
+}
+
+/**
+ * The report files (<dir>/reports/<id>-try-<N>.md) task details `details` name, each once, in the order they come:
+ * a keep-note task's earlier answers, copied into its folder when it starts (see copyReports).
+ */
+export function namedReports(details: string, dir: string = DATA_DIR): string[] {
+  const esc = dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return [...new Set(String(details ?? '').match(new RegExp(`${esc}/reports/[A-Za-z0-9_-]+-try-\\d+\\.md`, 'g')) ?? [])]
 }
 
 /** The try number in a report file's name (…-try-<N>.md), 0 when there is none. */

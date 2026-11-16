@@ -3,7 +3,7 @@ import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
@@ -91,6 +91,8 @@ export async function startWorker($: $, id: string) {
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone($, b, t0!, 'start')) return
     const { dir, branch } = await prepareWorktree($, t0!, intoOf(t0!))
+    // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
+    await copyReports($, t0!, dir).catch(() => [])
     const roles = await loadRoles($)
     const t = await change($, x => {
       const cur = find(x, id)
@@ -580,12 +582,12 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
  * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
  * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
- * What happens is decided from what the try recorded and why its turn ended, never from the hand-back's text (which
+ * What happens is decided from what the try recorded on the board (try_question, try_refused) and why its turn ended, never from the hand-back's text (which
  * stays its report, an investigation's answer), in this order: a question (ask_owner) → waiting with it; edits refused
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
  * an API error or a refusal → failed with the reason; else done: checked and merged (an investigation: its answer).
  */
-export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch' | 'question' | 'requested'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
+export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
   const b = await load($)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
@@ -604,8 +606,8 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     tellLead($, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
     return
   }
-  const q = w.question
-  const need = kindOf(t) === 'investigation' ? [] : (w.requested ?? [])
+  const q = t.try_question
+  const need = kindOf(t) === 'investigation' ? [] : (t.try_refused ?? [])
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
     const { question, options } = q
