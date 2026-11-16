@@ -247,8 +247,9 @@ export function taskKeys(status: SymccStatus, worker = false, reports: readonly 
   if (worker) keys.push(k('w', 'watch worker'))
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
   if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
-  // A waiting task's answer buttons (Allow, Don't allow, Answer… or the worker's options) take the number keys.
-  const answering = status === 'waiting' && answer.length > 0
+  // A waiting task's answer buttons (Allow, Don't allow, Answer… or the worker's options), or a running one's
+  // "more time?" buttons, take the number keys.
+  const answering = (status === 'waiting' || status === 'doing') && answer.length > 0
   if (answering) keys.push(...answer)
   const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))

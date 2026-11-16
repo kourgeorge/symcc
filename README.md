@@ -61,7 +61,7 @@ behind it: you keep talking, and the work keeps moving.
 
 symcc works while your Claude Code session is open; work stops when you close it and
 picks up next time. Every two minutes it checks the board by itself, starts ready tasks,
-and stops a worker that runs longer than `max_minutes` (45 by default). There is no extra
+and asks you for more time when a worker runs longer than `max_minutes` (45 by default). There is no extra
 app and no issue-tracker link. When two changes clash, a new worker sorts out the clash.
 
 ## How it works
@@ -232,7 +232,7 @@ setting, opens a pick list for `mode`, `notify` and `scout_findings`, or an edit
 |---|---|---|---|
 | `test_commands` | none | up to 5, joined with ` && ` | Shell commands that must pass before anything is merged. Each may run 10 minutes; the whole check and merge may take 10 minutes per command plus 5, not counting time waiting in line behind other merges (a stuck one goes back to `todo`, and fails the second time in a row) |
 | `max_parallel` | 3 | 1–8 | How many workers at once |
-| `max_minutes` | 45 | 5–600 | A worker running longer is stopped |
+| `max_minutes` | 45 | 5–600 | A worker running longer keeps working while you are asked "Give it more time?" (+30 min, +60 min or Stop it). Stop it, or no answer by twice the limit, lets the worker write down and hand back what it has (about 3 min), then stops it; the task fails with its work kept in its folder, branch and report, so a retry continues from there |
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |
 | `archive_days` | 14 | 0–3650 (0 = never) | Done and dropped tasks older than this move from `board.json` to `.symcc/archive.json` |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
