@@ -75,3 +75,13 @@ export async function logoIdle($: $): Promise<void> {
   if (isPlaying(logo.play, logo.t) || !swayDue(null, logo.last, Date.now())) return
   await playLogo($, 'sway', await readView($))
 }
+
+/** Stops a running move's frame timer and puts the logo's memory back to its start values (what a reload starts with); for the tests' resetPlugin() only. */
+export function resetLogo() {
+  try {
+    logo.ticker?.()
+  } catch {
+    // already gone
+  }
+  Object.assign(logo, { play: null, t: 0, last: Date.now(), before: undefined, width: 0, ticker: null })
+}

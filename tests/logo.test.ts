@@ -1,4 +1,5 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import { ICON_ART } from '../hooks/name'
 import { logo, logoNow, logoOnPublish, noteLogoWidth, playLogo } from '../hooks/plugin/logo'
 import { BANNER_NARROW, applySettings, bannerLines, bannerText, emptyBoard, isNothing, parseBoard, readBoard, parseSettingsCommand, settingValue } from '../hooks/board'
@@ -146,7 +147,8 @@ function fake$(shown = true) {
   }
   return $
 }
-const reset = () => Object.assign(logo, { play: null, t: 0, before: undefined, width: 80, ticker: null })
+/** resetPlugin() (via the reset test) clears the logo; the player tests also need a panel wide enough to show it. */
+const reset = () => noteLogoWidth(80)
 
 test('the player: a worker start plays the robot once on the frame timer, then the timer stops and the logo rests', async () => {
   reset()
@@ -178,6 +180,4 @@ test('the player plays nothing with logo_motion off, a narrow or hidden panel, a
   expect(await playLogo($ as never, 'sing', v)).toBe(false)
   expect(logo.play?.move).toBe('check')
   expect($.timers()).toBe(1)
-  logo.ticker?.()
-  reset()
 })

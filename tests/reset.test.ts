@@ -5,6 +5,7 @@ import { test, resetPlugin } from './reset'
 import { S, startS, timers, warnedPrompts } from '../hooks/plugin/state'
 import { oneAtATime } from '../hooks/plugin/store'
 import { mergeTurn } from '../hooks/plugin/review'
+import { logo, playLogo, resetLogo } from '../hooks/plugin/logo'
 
 const never = () => new Promise<never>(() => undefined)
 
@@ -77,4 +78,48 @@ test('a test that leaves S.me and S.driving set (the next test checks they are g
 test('the reset test() starts with S.me and S.driving as a fresh load has them', () => {
   expect(S.me).toBe('')
   expect(S.driving).toBe(false)
+})
+
+/** A stand-in $ for the logo player: a shown, placed board pane and a frame timer ticked by hand. */
+function logo$() {
+  const ticks: (() => void)[] = []
+  return {
+    ui: { panes: async () => [{ id: 'symcc-board', title: '', isShown: true, isFocused: false, isPlaced: true }], invalidate: () => undefined },
+    clock: { every: (_ms: number, f: () => void) => (ticks.push(f), { cancel: () => void ticks.splice(ticks.indexOf(f), 1) }) },
+    ticks,
+  }
+}
+
+test('resetPlugin puts every logo field back to its start value and stops a running frame timer', async () => {
+  const $ = logo$()
+  logo.width = 80
+  expect(await playLogo($ as never, 'check', { logo_motion: true, enabled: true, mode: 'auto' })).toBe(true)
+  $.ticks.slice().forEach(f => f())
+  logo.last = 1
+  logo.before = { tasks: [{ id: 'T-1', status: 'doing' as never }], scouts: [] }
+  expect(logo.ticker).not.toBe(null)
+  expect($.ticks.length).toBe(1)
+  const t0 = Date.now()
+  resetPlugin()
+  expect(logo.play).toBe(null)
+  expect(logo.t).toBe(0)
+  expect(logo.last).toBeGreaterThanOrEqual(t0)
+  expect(logo.before).toBe(undefined)
+  expect(logo.width).toBe(0)
+  expect(logo.ticker).toBe(null)
+  // the frame timer was cancelled: nothing is left to fire
+  expect($.ticks.length).toBe(0)
+})
+
+test('resetLogo with nothing playing leaves the logo at its start values', () => {
+  resetLogo()
+  expect(logo).toEqual({ play: null, t: 0, last: logo.last, before: undefined, width: 0, ticker: null })
+})
+
+test('resetLogo goes on when the frame timer fails to stop', () => {
+  logo.ticker = () => { throw new Error('gone') }
+  logo.t = 500
+  resetLogo()
+  expect(logo.ticker).toBe(null)
+  expect(logo.t).toBe(0)
 })
