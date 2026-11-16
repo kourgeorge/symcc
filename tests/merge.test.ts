@@ -3522,6 +3522,78 @@ test('change sets a task kind, and refuses an unknown one', async () => {
   await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow(/kind must be change or investigation/)
 })
 
+/** Commits on T-1's branch that main doesn't have, in the fake git (`git rev-list --count main..branch`). */
+const aheadBy = (n: number) => (args: string[]) => (args[0] === 'rev-list' && args[1] === '--count' ? ok(`${n}\n`) : undefined)
+
+test('switching a failed change task with commits on its branch to an investigation is refused', async () => {
+  const w = world({ answer: aheadBy(2) })
+  const [b] = boardWith('auto', [], { status: 'failed' })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'investigation' })).rejects.toThrow('Nothing changed: T-1 has work from earlier tries on its branch; drop it or make a new task for the investigation')
+  const t = find(await load(w.$), 'T-1')!
+  expect(kindOf(t)).toBe('change')
+  expect(t.status).toBe('failed')
+  expect(w.calls.some(c => /worktree remove|branch -D|reset/.test(c))).toBe(false)
+})
+
+test('switching a failed change task with uncommitted work in its folder to an investigation is refused', async () => {
+  const w = world({ wtStatus: ' M src/a.ts' })
+  const [b] = boardWith('auto', [], { status: 'failed' })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'investigation' })).rejects.toThrow(/T-1 has work from earlier tries on its branch or in its folder/)
+  expect(kindOf(find(await load(w.$), 'T-1')!)).toBe('change')
+})
+
+test('switching a backlog task with no folder or commits to an investigation still works', async () => {
+  const w = world()
+  const [b] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'], backlog: true }, ISO)
+  await saveBoard(w.$, b)
+  await runTool(w.$, 'change', { task: 'T-1', kind: 'investigation' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(kindOf(t)).toBe('investigation')
+  expect(t.status).toBe('backlog')
+})
+
+test('Done on an investigation whose branch has commits from a change try keeps the branch and says so', async () => {
+  const { w } = await investigationAnswers('auto', 'The answer.')
+  w.git.answer = aheadBy(1)
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toContain('T-1 done: the answer was read; nothing was merged')
+  expect(out).toContain('Its branch symcc/T-1 was kept: it has 1 commit from an earlier change try that main doesn\'t have')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
+  expect(w.calls.some(c => /branch -D/.test(c))).toBe(false)
+  expect(leadQueue.join('\n')).toContain('Its branch symcc/T-1 was kept')
+})
+
+test('Done on an investigation throws its scratch edits away before removing its folder', async () => {
+  const { w } = await investigationAnswers('auto', 'The answer.')
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  const reset = w.calls.indexOf('wt: git reset -q --hard')
+  expect(reset).toBeGreaterThan(-1)
+  expect(w.calls).toContain('wt: git clean -fdq')
+  expect(reset).toBeLessThan(w.calls.indexOf(`root: git worktree remove --force ${WT}`))
+  expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+})
+
+test("switching an investigation with scratch edits to a change throws them away, so they are never committed", async () => {
+  const w = world({ wtStatus: ' M src/a.ts' })
+  // the fake git: a reset clears the folder's changes
+  w.git.answer = args => (args[0] === 'reset' ? ((w.git.dirty = false), (w.git.wtStatus = ''), ok()) : undefined)
+  const [b] = boardWith('auto', [], { kind: 'investigation', status: 'review', answer: 'The answer.' } as Partial<BoardTask>)
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(kindOf(t)).toBe('change')
+  expect(w.calls).toContain('wt: git reset -q --hard')
+  expect(w.calls).toContain('wt: git clean -fdq')
+  expect(w.git.dirty).toBe(false)
+  expect(w.calls.some(c => / git (commit|add)/.test(c))).toBe(false)
+})
+
 test('a researcher task of kind change is committed, tested and merged as today', async () => {
   const w = world()
   const [b] = boardWith('auto', ['npm test'], { role: 'researcher', history: ['created by the lead'] })

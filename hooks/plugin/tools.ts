@@ -1,8 +1,8 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isKind, kindFor, TASK_KINDS, isAnswered, askMoreTask } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isKind, kindFor, TASK_KINDS, isAnswered, askMoreTask, kindOf } from '../board'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
-import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch } from './git'
+import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
@@ -499,6 +499,16 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const both = detailsBothRefusal(a)
       if (both) throw new Error(both)
+      // Switching kind never deletes or sneaks in work. To an investigation: refused while its branch or folder
+      // holds work from earlier tries (Done would delete it). To a change: an investigation's scratch edits are
+      // thrown away first (below, once its worker is stopped), so they are never committed.
+      const switching = kind !== undefined && kind !== kindOf(t)
+      if (switching && kind === 'investigation') {
+        const work = await taskWork($, t)
+        if (work.commits !== 0 || work.dirty) throw new Error(`Nothing changed: ${t.id} has work from earlier tries on its branch${work.dirty ? ' or in its folder' : ''}; drop it or make a new task for the investigation`)
+      }
+      const scratchGone = switching && kind === 'change' ? () => resetScratch($, t.id) : async () => undefined
+      if (t.status !== 'doing') await scratchGone()
       // A note from the lead added to the details; the old text stays.
       const note = str(a.add_details)?.trim()
       const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
@@ -523,6 +533,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         const wasRunning = t.status === 'doing'
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
+        if (wasRunning) await scratchGone()
         await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
@@ -544,6 +555,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
+      if (wasDoing) await scratchGone()
       // A paused task stays paused (only resume or retry starts it again); a dropped one stays dropped.
       const keep = t.status === 'dropped' || t.status === 'paused'
       const patch: Partial<BoardTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...fields() }

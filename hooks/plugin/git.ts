@@ -149,6 +149,36 @@ export async function prepareWorktree($: $, t: SymccTask, target: string) {
 }
 
 /**
+ * What task `t` already has from earlier tries: `commits`, the commits on its branch that the branch it
+ * merges into doesn't have (0 when it has no branch; null when git could not tell), and `dirty`, whether
+ * its folder has uncommitted changes (false when it has no folder).
+ */
+export async function taskWork($: $, t: SymccTask): Promise<{ commits: number | null; dirty: boolean }> {
+  const branch = t.branch ?? S.N.branch(t.id)
+  let commits: number | null = 0
+  if (await branchExists($, branch)) {
+    const r = await git($, ['rev-list', '--count', `refs/heads/${intoOf(t)}..refs/heads/${branch}`]).catch(() => null)
+    const n = r && r.exitCode === 0 ? Number(r.stdout.trim() || '0') : NaN
+    commits = Number.isFinite(n) ? n : null
+  }
+  const dir = worktreeDir(t.id)
+  let dirty = false
+  if (await $.fs.exists(`${dir}/.git`)) {
+    const st = await git($, ['status', '--porcelain'], dir).catch(() => null)
+    dirty = !st || st.exitCode !== 0 || !!st.stdout.trim()
+  }
+  return { commits, dirty }
+}
+
+/** Throws away the uncommitted changes in task `id`'s folder (an investigation's scratch edits), if it has one. Commits stay. */
+export async function resetScratch($: $, id: string): Promise<void> {
+  const dir = worktreeDir(id)
+  if (!(await $.fs.exists(`${dir}/.git`))) return
+  await gitOk($, ['reset', '-q', '--hard'], dir)
+  await gitOk($, ['clean', '-fdq'], dir)
+}
+
+/**
  * Removes a task's worktree, but never while a live agent may still use it (`except` = the
  * worker that just finished there), and never while its work is being checked or approved and
  * merged there, unless that check itself is done with it (`ownCheck`). Returns whether it was removed.
