@@ -138,7 +138,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
   { name: 'archive_days', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
-  { name: 'notify', kind: 'notify', default: 'voice (else sound, else off)', range: 'off / sound / voice', meaning: 'when a task is merged or a worker asks you something: a chime (sound), or "T-3 done" / "T-5 needs you" out loud (voice)' },
+  { name: 'notify', kind: 'notify', default: 'voice (else sound, else off)', range: 'off / sound / voice', meaning: 'when a task is merged or a worker asks you something: a chime (sound), or "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice)' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
 ]
