@@ -94,6 +94,43 @@ export function editOutsideFolder(tool: string, input: unknown, worktree: string
 export const outsideFolderText = (rel: string, worktree: string) =>
   `Refused: ${rel || 'that path'} is in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: edit ${worktree.replace(/\/+$/, '')}/${rel || '...'} instead.`
 
+/** Characters that split a shell command into the words checked by bashOutsideFolder: spaces, quotes, operators, `$(...)`, `=` and `:`. */
+const SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/
+
+/**
+ * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
+ * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. A word counts as a path when
+ * it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part; relative words are taken from the
+ * worker's folder. A ".." word is also tried from the worker's folder with its leading "/" dropped, so `$(pwd)/../..`
+ * is caught too. Any mention is refused, reading included: telling a safe read from a write in a shell line is not
+ * reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a worker has its own copy of every file to read.
+ * Like editOutsideFolder, the project check ignores letter case. A best effort, not a sandbox: a path built at run time
+ * (variables, base64) gets through, and the merge-time scope check stays the backstop for the worker's folder.
+ */
+export function bashOutsideFolder(command: unknown, worktree: string, root: string, home?: string): string | undefined {
+  if (typeof command !== 'string' || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
+  const wt = resolvePath('/', worktree)
+  const top = resolvePath('/', root)
+  const check = (abs: string) => (inside(abs, wt, true) !== undefined ? undefined : inside(abs, top, false))
+  for (const word of command.split(SHELL_SPLIT)) {
+    const w = word.replace(/\\/g, '')
+    const climbs = w.split('/').includes('..')
+    const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
+    if (!w.startsWith('/') && !homeWord && !climbs) continue
+    const tries = [homeWord ? resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.') : resolvePath(wt, w)]
+    if (climbs && w.startsWith('/')) tries.push(resolvePath(wt, w.replace(/^\/+/, '')))
+    for (const abs of tries) {
+      const rel = check(abs)
+      if (rel !== undefined) return rel
+    }
+  }
+  return undefined
+}
+
+/** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree`. */
+export const bashOutsideText = (rel: string, worktree: string) =>
+  `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
+
 /**
  * The project path (relative to the worker's folder `worktree`) an Edit, Write or NotebookEdit call of `tool`
  * with `input` would change, when it lies outside `files` (the same matching as the merge-time scope check,

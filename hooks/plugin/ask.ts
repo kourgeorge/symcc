@@ -4,7 +4,7 @@
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, EDIT_PATH_FIELD, find, kindOf, patchTask } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, find, kindOf, patchTask } from '../board'
 import { S, type $, type Worker, scoutRuns } from './state'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -49,14 +49,20 @@ export async function askCall($: $, agentId: string | undefined, a: Record<strin
  * copy, the board, another worker's folder) is always refused, with no file request (the worker should edit its own copy).
  * On a change task, an edit in its folder outside the task's files is refused (the reason the worker reads) and its path
  * recorded on its try on the board. Undefined: not ours to decide. An investigation
- * has no file list, so its edits are never refused (they are not kept anyway); the merge-time scope check stays the
- * backstop for files written through Bash.
+ * has no file list, so its edits are never refused (they are not kept anyway). A worker's Bash command that names a path
+ * in the project outside its own folder is refused too (bashOutsideFolder); the merge-time scope check stays the backstop
+ * for files written through Bash inside its folder.
  */
 export async function checkEdit($: $, agentId: string | undefined, tool: string, input: unknown): Promise<string | undefined> {
-  if (!agentId || !EDIT_PATH_FIELD[tool]) return undefined
+  if (!agentId || (!EDIT_PATH_FIELD[tool] && tool !== 'Bash')) return undefined
   // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
   const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
+  if (tool === 'Bash') {
+    const cmd = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined
+    const rel = S.root ? bashOutsideFolder(cmd, w.worktree, S.root, S.home || undefined) : undefined
+    return rel !== undefined ? bashOutsideText(rel, w.worktree) : undefined
+  }
   const outside = S.root ? editOutsideFolder(tool, input, w.worktree, S.root) : undefined
   if (outside !== undefined) return outsideFolderText(outside, w.worktree)
   const b = await load($).catch(() => null)

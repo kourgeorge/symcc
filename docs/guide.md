@@ -160,7 +160,12 @@ happens, never the words in its hand-back:
    An edit (by any worker) that lands in your own copy of the project, outside the worker's own
    folder (for example your README.md, `.symcc/board.json` or another worker's folder), is always
    refused, without a file request: the worker is told to edit the file in its own folder instead.
-   Paths outside the project, such as `/tmp`, are not checked.
+   The same goes for a worker's shell command (Bash) that names such a path, either in full
+   (`echo x > /your/project/README.md`, `cd /your/project && git commit ...`) or by climbing out of
+   its folder (`../../README.md`): it is refused, even if it only reads, because a shell line that
+   only reads can't be told apart reliably from one that writes, and the worker has its own copy of
+   every file. This is a best effort: a path put together while the command runs (for example from a
+   variable) is not seen. Paths outside the project, such as `/tmp`, are not checked, and the lead is never refused.
 3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).

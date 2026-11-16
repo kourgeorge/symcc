@@ -2320,6 +2320,25 @@ test("a worker's edit in the owner's copy of the project is refused without a fi
   workers.clear()
 })
 
+test("a worker's Bash command reaching the owner's copy is refused; its own folder, /tmp and the lead are not (T-302)", async () => {
+  S.me = 'me'
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
+  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
+  const bash = (agent: string | undefined, command: string) => checkEdit(f.$, agent, 'Bash', { command })
+  for (const c of [`echo x > ${ROOT}/README.md`, `cp a ${ROOT}/.symcc/board.json`, `cd ${ROOT} && git commit -m x`, 'echo x > ../../README.md'])
+    expect(await bash('ag1', c)).toMatch(/^Refused: this command names .* outside your own folder/)
+  for (const c of ['echo x > /tmp/a', 'echo x > src/a.ts', 'bun test', `cat ${wt5}/src/a.ts`]) expect(await bash('ag1', c)).toBeUndefined()
+  // no file request was recorded for any of them
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  // the lead (no agent) and an agent that is not a worker are never refused
+  expect(await bash(undefined, `echo x > ${ROOT}/README.md`)).toBeUndefined()
+  expect(await bash('nobody', `echo x > ${ROOT}/README.md`)).toBeUndefined()
+  workers.clear()
+})
+
 test('after a reload (no worker in memory), an edit outside the files is still refused and recorded, found from the board (T-293)', async () => {
   S.me = 'me'
   workers.clear()

@@ -7,7 +7,7 @@ import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCo
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -1216,6 +1216,40 @@ test("an edit inside the project but outside the worker's own folder is refused;
   expect(blockedEdit('Edit', { file_path: 'src/a.ts' }, wt, ['src/'], '.symcc')).toBeUndefined()
   expect(resolvePath('/a/b', '../c//./d')).toBe('/a/c/d')
   expect(resolvePath('/a', '../../..')).toBe('/')
+})
+
+test("a worker's shell command naming the owner's copy of the project is refused; its own folder and /tmp are not (T-302)", () => {
+  const root = '/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const home = '/home/me'
+  const no = (c: string) => bashOutsideFolder(c, wt, root, home)
+  // writes, copies, git and a ".." way out: refused
+  expect(no('echo x > /repo/README.md')).toBe('README.md')
+  expect(no('cp a /repo/.symcc/board.json')).toBe('.symcc/board.json')
+  expect(no('cd /repo && git commit -m x')).toBe('')
+  expect(no('echo x > ../../README.md')).toBe('.symcc/README.md')
+  expect(no("sed -i 's/a/b/' /repo/src/x.ts")).toBe('src/x.ts')
+  expect(no('echo x >/repo/a')).toBe('a')
+  expect(no('git -C "/repo" status')).toBe('')
+  expect(no('cd .. && ls')).toBe('.symcc/worktrees')
+  expect(no('echo x > $(pwd)/../../../a')).toBe('a')
+  expect(no('make --prefix=../../../src')).toBe('src')
+  expect(no('cat /REPO/README.md')).toBe('README.md')
+  expect(no('ls /repo/.symcc/worktrees/T-6')).toBe('.symcc/worktrees/T-6')
+  expect(no('ls /repo/.symcc/worktrees/T-55')).toBe('.symcc/worktrees/T-55')
+  expect(bashOutsideFolder('echo x > ~/README.md', wt, root, '/repo')).toBe('README.md')
+  // outside the project, in its own folder, plain commands: allowed
+  expect(no('echo x > /tmp/a')).toBeUndefined()
+  expect(no('echo x > src/a.ts')).toBeUndefined()
+  expect(no('bun test')).toBeUndefined()
+  expect(no(`sed -i s/a/b/ ${wt}/src/a.ts`)).toBeUndefined()
+  expect(no(`cd ${wt} && ls ./src/../tests`)).toBeUndefined()
+  expect(no('ls /repository/x ~/notes')).toBeUndefined()
+  expect(no("sed 's/../x/' a.ts")).toBeUndefined()
+  // not a string, or no project folder known: nothing to judge
+  expect(bashOutsideFolder(undefined, wt, root)).toBeUndefined()
+  expect(bashOutsideFolder('echo x > /repo/a', wt, '')).toBeUndefined()
+  expect(bashOutsideText('README.md', wt)).toBe(`Refused: this command names README.md in the owner's copy of the project, outside your own folder. Work only in your own folder ${wt}: use paths inside it (relative paths start there), never the owner's copy, even to read.`)
 })
 
 test('the waiting question and the failure note for files outside the list', async () => {

@@ -256,7 +256,8 @@ export const register: Register = on => {
   })
 
   // A worker's edit (Edit, Write, NotebookEdit) outside its change task's files is refused, and the path is
-  // recorded as a request to the owner (see checkEdit). Everything else is decided as usual.
+  // recorded as a request to the owner; an edit or Bash command reaching the owner's copy outside the worker's
+  // folder is refused (see checkEdit). Everything else is decided as usual.
   on('tool.check', async ($, e, next) => {
     useName($)
     const deny = e.agentId ? await checkEdit($, e.agentId, e.tool, e.input).catch(() => undefined) : undefined
