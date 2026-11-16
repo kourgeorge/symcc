@@ -13,7 +13,7 @@ the story, edit the scene functions and the `SCENES` list. Use
 
 ## YouTube video with a voice
 
-`make_youtube_video.py` builds the narrated explainer for YouTube (about 3 minutes 15
+`make_youtube_video.py` builds the narrated explainer for YouTube (about 1 minute 50
 seconds, 1920x1080, 30 fps, H.264 video with AAC sound). It reads the words from
 `narration.md`, so change the story there. Each scene lasts as long as its spoken words,
 plus a short pause. The sound is turned up to about -14 LUFS (as loud as most YouTube videos, peaks under -1 dBTP).

@@ -314,7 +314,7 @@ def chat_lines(c, t, x0, y0, x1, lines, who_w=58):
 
 
 def title(c, step, s):
-    header(c, step, total=7)
+    header(c, step, total=6)
     c.text(70, 112, s, font(34, bold=True), TEXT, "la")
 
 
@@ -323,51 +323,49 @@ def title(c, step, s):
 
 
 def scene_problem(c, t, dur, q):
-    title(c, 0, "The problem")
-    x0, y0, x1, y1 = 90, 170, 600, 560
-    terminal(c, x0, y0, x1, y1, "claude · ~/my-app")
-    msg = "add a search command"
-    lines = [(q.s(0), "you", typed(t, q.s(0) + 0.1, q.at(0, 0.45), msg), TERM_TEXT)]
-    if t > q.at(0, 0.55):
-        dots = "." * (1 + int(t * 2.5) % 3)
-        lines.append((q.at(0, 0.55), "agent", "working on it" + dots, MUTED))
-    steps = ["reading 214 files", "planning the change", "editing src/search.js",
-             "editing src/cli.js", "running the tests"]
-    for k, s in enumerate(steps):
-        lines.append((q.at(0, 0.7) + k * 1.6, "", "  " + s, DIM))
-    chat_lines(c, t, x0 + 18, y0 + 52, x1 - 10, lines)
-    if t > q.at(0, 0.55):
-        prog = clamp(0.04 + 0.025 * (t - q.at(0, 0.55)), 0, 0.62)
-        c.rect(x0 + 20, y1 - 40, x1 - 20, y1 - 30, r=5, fill=(0x21, 0x26, 0x2D))
-        c.rect(x0 + 20, y1 - 40, x0 + 20 + (x1 - x0 - 40) * prog, y1 - 30, r=5, fill=RUNNING)
-        mins = int(3 + (t - q.at(0, 0.55)) * 1.5)
-        c.text(x1 - 20, y1 - 56, "busy for %d min" % mins, font(14), MUTED, "rs")
-    # ideas pile up beside it
-    ideas = ["fix the login bug", "rename the API", "add dark mode", "tests for search",
-             "update the docs", "nicer errors"]
-    spots = [(690, 190), (930, 215), (720, 290), (960, 320), (700, 395), (940, 425)]
-    slipped = {1, 3, 4}
-    span = q.e(1) - q.s(1)
-    for i, (s, (x, y)) in enumerate(zip(ideas, spots)):
-        a = ramp(t, q.s(1) + span * (0.15 + 0.13 * i), 0.35)
-        fall = ramp(t, q.at(2, 0.55) + 0.25 * (i % 3), 1.0) if i in slipped else 0.0
+    title(c, 0, "Three problems with Claude Code today")
+    cw, top, bot = 340, 175, 600
+    xs = [70, 470, 870]
+    heads = ["1  One task at a time", "2  You cannot see inside", "3  It stops when you stop"]
+    subs = ["you wait", "who does what, and why?", "nothing moves while you are away"]
+    for k in range(3):
+        a = ramp(t, q.s(k + 1), 0.5)
 
-        def note(cc, s=s, x=x, y=y + fall * 30, fall=fall):
-            f = font(17, bold=True)
-            w = cc.width_of(s, f) + 28
-            cc.rect(x + 3, y + 4, x + w + 3, y + 44, r=6, fill=(0x14, 0x16, 0x1E))
-            cc.rect(x, y, x + w, y + 40, r=6, fill=REVIEW)
-            cc.text(x + 14, y + 20, s, f, CARD_DARK, "lm")
-            if fall > 0.3:
-                cc.line([(x + 8, y + 20), (x + w - 8, y + 20)], RED, 2.5)
+        def card(cc, k=k):
+            x = xs[k]
+            cc.rect(x, top, x + cw, bot, r=14, fill=CARD, outline=RED, width=1.8)
+            cc.text(x + 24, top + 34, heads[k], font(22, bold=True), TEXT, "lm")
+            cc.text(x + 24, top + 70, subs[k], font(17), RED, "lm")
+            if k == 0:
+                terminal(cc, x + 24, top + 110, x + cw - 24, top + 250, "claude")
+                cc.text(x + 42, top + 160, "working" + "." * (1 + int(t * 2.5) % 3),
+                        font(16, mono=True), TERM_TEXT, "lm")
+                prog = clamp(0.1 + 0.04 * (t - q.s(1)), 0, 0.7)
+                cc.rect(x + 42, top + 215, x + cw - 42, top + 225, r=5, fill=(0x21, 0x26, 0x2D))
+                cc.rect(x + 42, top + 215, x + 42 + (cw - 84) * prog, top + 225, r=5, fill=RUNNING)
+                for i, s in enumerate(["fix the login bug", "add dark mode", "nicer errors"]):
+                    cc.rect(x + 24, top + 275 + i * 44, x + 24 + 200, top + 311 + i * 44, r=6,
+                            fill=REVIEW)
+                    cc.text(x + 38, top + 293 + i * 44, s, font(16, bold=True), CARD_DARK, "lm")
+                cc.text(x + 240, top + 330, "waiting...", font(17), MUTED, "lm")
+            elif k == 1:
+                box(cc, x + 90, top + 110, x + 250, top + 170, ACCENT, "Claude", None, tint=0.15)
+                for i in range(3):
+                    bx = x + 24 + i * 100
+                    cc.arrow(x + 170, top + 172, bx + 46, top + 232, MUTED, width=2, dash=(6, 5))
+                    box(cc, bx, top + 235, bx + 92, top + 295, WORKER, "agent", None, tint=0.1)
+                    cc.text(bx + 46, top + 325, "?", font(30, bold=True), RED, "mm")
+                cc.text(x + cw / 2, top + 380, "how was the work split?", font(17), MUTED, "mm")
+            else:
+                cc.circle(x + cw / 2, top + 190, 56, outline=MUTED, width=3)
+                cc.text(x + cw / 2, top + 190, "zzz", font(34, bold=True), MUTED, "mm")
+                cc.text(x + cw / 2, top + 300, "you close the laptop", font(18), MUTED, "mm")
+                cc.text(x + cw / 2, top + 335, "the project stands still", font(18, bold=True),
+                        RED, "mm")
 
-        c.group(a * (1 - 0.65 * fall), note)
-    # interrupt?
-    c.group(window(t, q.s(2), q.at(2, 0.5)), lambda cc: (
-        cc.rect(240, 578, 450, 614, r=18, fill=mix(CARD, RED, 0.25), outline=RED, width=1.5),
-        cc.text(345, 596, "interrupt it?", font(17, bold=True), RED, "mm")))
-    c.group(ramp(t, q.at(2, 0.8), 0.5), lambda cc: cc.text(
-        690, 530, "One thing at a time. Ideas slip.", font(24, bold=True), RED, "la"))
+        c.group(a, card)
+    c.group(ramp(t, q.s(0), 0.5), lambda cc: cc.text(
+        W - 70, 112, "plain Claude Code", font(19), MUTED, "ra"))
 
 
 def scene_what(c, t, dur, q):
@@ -382,7 +380,7 @@ def scene_what(c, t, dur, q):
     c.group(intro * ramp(t, 0.1, 0.7), logo)
     if intro >= 1:
         return
-    c.group(1 - intro, lambda cc: title(cc, 1, "What symcc is"))
+    c.group(1 - intro, lambda cc: title(cc, 1, "symcc in one breath"))
     # you + lead
     a_you = ramp(t, q.s(2), 0.5)
 
@@ -404,8 +402,8 @@ def scene_what(c, t, dur, q):
         span = q.e(3) - q.s(3)
         names = ["search index", "search cmd", "nicer errors"]
         for k, nm in enumerate(names):
-            ap = ramp(t, q.s(3) + span * (0.45 + 0.15 * k), 0.4)
-            col = ramp(t, q.at(4, 0.4) + 0.3 * k, 0.6) if k != 1 else 0.0
+            ap = ramp(t, q.s(3) + span * (0.25 + 0.2 * k), 0.4)
+            col = ramp(t, q.e(3) + 0.2 + 0.3 * k, 0.6) if k != 1 else 0.0
             x = colx[0] + 6 + col * colw
             cc.group(ap, lambda c2, x=x, k=k, nm=nm, col=col: task_card(
                 c2, x, 270 + k * 62, colw - 12, "T-%d" % (k + 1), "", COLS4[int(round(col))][1],
@@ -415,17 +413,17 @@ def scene_what(c, t, dur, q):
     # workers
     for k in range(3):
         wx = 380 + k * 270
-        a = ramp(t, q.s(4) + 0.3 * k, 0.5)
+        a = ramp(t, q.e(3) + 0.6 + 0.3 * k, 0.5)
 
         def wk(cc, wx=wx, k=k):
             cc.arrow(900 - 40 + k * 40, 474, wx + 110, 528, WORKER, width=2, dash=(7, 5))
             box(cc, wx, 530, wx + 220, 610, WORKER, "Worker %d" % (k + 1), None, tint=0.12)
-            cc.group(ramp(t, q.s(5) + 0.3 * k, 0.5), lambda c2: c2.text(
+            cc.group(ramp(t, q.e(3) + 1.0 + 0.3 * k, 0.5), lambda c2: c2.text(
                 wx + 110, 596, "own copy · own branch", font(13), MUTED, "mm"))
 
         c.group(a, wk)
     # your branch stays untouched
-    c.group(ramp(t, q.at(5, 0.45), 0.5), lambda cc: (
+    c.group(ramp(t, q.e(3) + 1.4, 0.5), lambda cc: (
         cc.rect(70, 540, 330, 600, r=12, fill=CARD_DARK, outline=DONE, width=1.5),
         cc.check(96, 570, 16, DONE, 3),
         cc.text(118, 560, "your branch", font(16, bold=True), TEXT, "lm"),
@@ -433,99 +431,9 @@ def scene_what(c, t, dur, q):
     # the arrows pull the logo word in: keep the word "symcc" on screen
     c.group(1 - intro, lambda cc: cc.text(W - 70, 112, "one lead · one board · many workers",
                                          font(17), MUTED, "ra"))
-    # focused context per worker, and the lead as project manager
-    c.group(ramp(t, q.s(6), 0.5), lambda cc: cc.text(
-        W / 2, 660, "each worker gets only what it needs: what, why, which files, how to check",
-        font(18), WORKER, "mm"))
-    c.group(ramp(t, q.s(9), 0.5), lambda cc: cc.text(
-        W / 2, 230, "the lead keeps the plan: priorities, order, updates, retries",
-        font(18, bold=True), ACCENT, "mm"))
 
 
-def scene_board(c, t, dur, q):
-    title(c, 2, "The board")
-    x0, y0, x1, y1 = 90, 160, 1190, 620
-    span = q.e(1) - q.s(1)
-    shown = [ramp(t, q.s(1) + span * f, 0.35) for f in (0.3, 0.5, 0.68, 0.84)]
-    c.group(ramp(t, 0.1, 0.6), lambda cc: board(cc, x0, y0, x1, y1, shown=shown))
-    colx, colw = (x0 + 20 + i * (x1 - x0 - 40) / 4 for i in range(4)), (x1 - x0 - 40) / 4
-    colx = list(colx)
-    top = y0 + 108
-    s2 = q.s(2)
-    t5_wait = q.s(4)
-    t7_note = q.s(5)
-    t8_go = q.at(6, 0.4)
-    t6_go = q.e(8) - 0.2
-
-    def note_t5(tt, st):
-        if st == 0 and tt > t5_wait:
-            return ("waits for T-3", REVIEW, None)
-        return ("waiting", DIM, None)
-
-    def note_t7(tt, st):
-        if tt > t7_note:
-            return ("same files as T-4: after it", REVIEW, None)
-        return ("waiting", DIM, None)
-
-    def doing(start):
-        return lambda tt, st: ("worker · running", WORKER, (tt - start) * 0.06) if st == 1 else None
-
-    cards = [
-        ("T-1", "login fix", s2, [(0, (3, 0))], lambda tt, st: ("tests passed · merged", DONE, None)),
-        ("T-2", "rename API", s2 + 0.2, [(0, (2, 0))], lambda tt, st: ("needs you: approve?", REVIEW, None)),
-        ("T-3", "search index", s2 + 0.4, [(0, (1, 0))], doing(s2 - 3)),
-        ("T-4", "dark mode", s2 + 0.6, [(0, (1, 1))], doing(s2 - 6)),
-        ("T-5", "search command", s2 + 0.8, [(0, (0, 0))], note_t5),
-        ("T-6", "update docs", s2 + 1.0, [(0, (0, 1)), (t6_go, (1, 3))], doing(t6_go)),
-        ("T-7", "theme colors", s2 + 1.2, [(0, (0, 2)), (t6_go + 0.2, (0, 1))], note_t7),
-        ("T-8", "export CSV", s2 + 1.4, [(0, (0, 3)), (t8_go, (1, 2))],
-         lambda tt, st: doing(t8_go)(tt, st) or ("waiting", DIM, None)),
-    ]
-    board_cards(c, t, colx, colw, top, cards)
-    # T-5 waits for T-3: dashed arrow
-    c.group(window(t, t5_wait, q.s(6)), lambda cc: cc.arrow(
-        colx[0] + colw - 8, top + 29, colx[1] + 8, top + 29, REVIEW, width=2, dash=(6, 5), head=9))
-    # T-7 and T-4 change the same files
-    c.group(window(t, t7_note, q.s(6) + 0.2), lambda cc: cc.arrow(
-        colx[0] + colw - 8, top + 2 * 68 + 29, colx[1] + 8, top + 68 + 40, REVIEW, width=2,
-        dash=(6, 5), head=9))
-    # "do task six first"
-    msg = "do T-6 first"
-
-    def bubble(cc):
-        bx0, by0 = 880, 520
-        cc.rect(bx0, by0, bx0 + 290, by0 + 50, r=14, fill=(0x13, 0x16, 0x1E), outline=ACCENT, width=1.5)
-        cc.text(bx0 + 18, by0 + 25, "you", font(16, bold=True, mono=True), ACCENT, "lm")
-        cc.text(bx0 + 70, by0 + 25, typed(t, q.s(8), q.at(8, 0.85), msg),
-                font(16, mono=True), TERM_TEXT, "lm")
-
-    c.group(window(t, q.s(7), dur + 1), bubble)
-
-    def trace(cc):
-        cc.rect(240, 636, 1040, 700, r=12, fill=CARD_DARK, outline=ACCENT, width=1.5)
-        cc.text(262, 656, "T-3 search index", font(16, bold=True), TEXT, "lm")
-        cc.text(262, 682, "from: owner, \"add a search command...\"", font(15), MUTED, "lm")
-        cc.text(1018, 656, "2 tries · worker report", font(15), MUTED, "rm")
-        cc.text(1018, 682, "time and tokens in all", font(15), MUTED, "rm")
-
-    c.group(ramp(t, q.s(11), 0.5), trace)
-
-
-def scene_workers(c, t, dur, q):
-    title(c, 3, "Workers")
-    phases = [q.s(0), q.s(3), q.s(5), q.s(7), q.s(10), dur + 5]
-    subtitles = ["each in its own folder", "allowed files", "tests before every merge",
-                 "how much you trust it", "questions wait for you"]
-    for i in range(5):
-        a = window(t, phases[i] - (0 if i == 0 else 0.15), phases[i + 1] + 0.15, fade=0.45)
-        if a <= 0:
-            continue
-        c.group(a, lambda cc, i=i: (
-            cc.text(W - 70, 112, subtitles[i], font(19), MUTED, "ra"),
-            [workers_a, workers_b, workers_c, workers_d, workers_e][i](cc, t, q)))
-
-
-def workers_a(c, t, q):
+def workers_a(c, t, q, pill_note=True):
     ly = 520
     c.group(ramp(t, 0.2, 0.5), lambda cc: (
         cc.line([(80, ly), (1200, ly)], BORDER, 3),
@@ -551,132 +459,74 @@ def workers_a(c, t, q):
             cc.rect(x0 + 20, 366, x0 + 20 + 290 * prog, 374, r=4, fill=RUNNING)
 
         c.group(a, panel)
-    c.group(ramp(t, q.at(2, 0.3), 0.5), lambda cc: pill(
-        cc, W / 2, 590, "3 workers at once (you can change it)", ACCENT, w=360))
+    if pill_note:
+        c.group(ramp(t, q.at(2, 0.3), 0.5), lambda cc: pill(
+            cc, W / 2, 590, "3 workers at once (you can change it)", ACCENT, w=360))
 
 
-def workers_b(c, t, q):
-    def task(cc):
-        cc.rect(110, 180, 560, 470, r=14, fill=CARD, outline=LINE, width=1.5)
-        cc.text(134, 214, "T-3", font(20, bold=True), TEXT, "lm")
-        cc.text(180, 214, "search index", font(20), TEXT, "lm")
-        cc.text(134, 262, "may change:", font(16), MUTED, "lm")
-        for k, f in enumerate(("src/search/", "tests/search/")):
-            cc.rect(134, 288 + k * 48, 420, 324 + k * 48, r=8, fill=CARD_DARK, outline=BORDER)
-            cc.text(150, 306 + k * 48, f, font(16, mono=True), TERM_TEXT, "lm")
-
-    c.group(ramp(t, q.s(3), 0.5), task)
-    c.group(ramp(t, q.at(3, 0.5), 0.5), lambda cc: cc.text(
-        660, 200, "the worker changed:", font(18, bold=True), TEXT, "lm"))
-    rows = [("src/search/index.js", True, q.at(3, 0.6)),
-            ("tests/search/index.test.js", True, q.at(3, 0.8)),
-            ("src/app/config.js", False, q.at(4, 0.25))]
-    for k, (f, ok, st) in enumerate(rows):
-        y = 240 + k * 58
-
-        def row(cc, f=f, ok=ok, y=y):
-            col = DONE if ok else RED
-            cc.rect(660, y, 1170, y + 44, r=8, fill=CARD_DARK, outline=col if not ok else BORDER)
-            cc.text(680, y + 22, f, font(16, mono=True), TERM_TEXT, "lm")
-            if ok:
-                cc.check(1140, y + 22, 16, DONE, 3)
-            else:
-                cross(cc, 1140, y + 22, 14, RED, 3)
-                cc.text(1118, y + 22, "not on the list", font(14), RED, "rm")
-
-        c.group(ramp(t, st, 0.4), row)
-    c.group(ramp(t, q.at(4, 0.65), 0.5), lambda cc: (
-        cc.rect(660, 440, 900, 490, r=25, fill=mix(CARD, RED, 0.25), outline=RED, width=2),
-        cc.text(780, 465, "not merged", font(20, bold=True), RED, "mm")))
 
 
-def workers_c(c, t, q):
-    x0, y0, x1, y1 = 200, 180, 1080, 480
-    c.group(ramp(t, q.s(5), 0.5), lambda cc: terminal(cc, x0, y0, x1, y1, "tests"))
-    lines = [(q.at(5, 0.15), "worker 1", "run your tests before the merge", MUTED),
-             (q.at(5, 0.55), "tests", "41 passed, 1 failed: search finds nothing", RED),
-             (q.at(6, 0.3), "worker 4", "reads the error, fixes it, tries again", WORKER),
-             (q.at(6, 0.75), "tests", "42 passed", DONE)]
-    if t > q.s(5):
-        chat_lines(c, t, x0 + 24, y0 + 56, x1 - 20, lines, who_w=100)
-    c.group(ramp(t, q.at(6, 0.8), 0.5), lambda cc: (
-        cc.rect(W / 2 - 120, 520, W / 2 + 120, 576, r=28, fill=mix(CARD, DONE, 0.22),
+def scene_parallel(c, t, dur, q):
+    title(c, 2, "Problem 1 solved: no more waiting")
+    c.group(ramp(t, 0.2, 0.5), lambda cc: cc.text(
+        W - 70, 112, "tasks run side by side", font(19), MUTED, "ra"))
+    workers_a(c, t, q, pill_note=False)
+    c.group(ramp(t, q.s(2), 0.5), lambda cc: (
+        cc.rect(W / 2 - 330, 560, W / 2 - 60, 616, r=28, fill=mix(CARD, DONE, 0.22),
                 outline=DONE, width=2.5),
-        cc.check(W / 2 - 72, 548, 20, DONE, 3.5),
-        cc.text(W / 2 + 14, 548, "tests pass", font(22, bold=True), DONE, "mm")))
+        cc.check(W / 2 - 282, 588, 20, DONE, 3.5),
+        cc.text(W / 2 - 190, 588, "tests pass", font(22, bold=True), DONE, "lm"),
+        cc.text(W / 2 - 30, 588, "then merge", font(20), MUTED, "lm")))
+    c.group(ramp(t, q.s(3), 0.5), lambda cc: (
+        task_card(cc, 330, 640, 300, "T-6", "search command", TODO, "waits for T-3", REVIEW, h=58),
+        cc.arrow(640, 669, 760, 669, REVIEW, width=2, dash=(6, 5), head=9),
+        cc.text(780, 669, "the lead orders tasks that depend on each other", font(17),
+                MUTED, "lm")))
 
 
-def workers_d(c, t, q):
-    def card(cc, x0, col, name, active):
-        cc.rect(x0, 180, x0 + 500, 560, r=16, fill=CARD, outline=col if active else LINE, width=2)
-        cc.text(x0 + 250, 220, name, font(28, bold=True), col, "mm")
+def scene_see(c, t, dur, q):
+    title(c, 3, "Problem 2 solved: you can see everything")
+    # one task page
+    x0, y0, x1, y1 = 70, 160, 700, 640
+    c.group(ramp(t, q.s(0), 0.5), lambda cc: (
+        cc.rect(x0, y0, x1, y1, r=14, fill=CARD, outline=LINE, width=1.5),
+        cc.text(x0 + 24, y0 + 34, "T-3", font(24, bold=True), TEXT, "lm"),
+        cc.text(x0 + 90, y0 + 34, "search index", font(24), TEXT, "lm")))
+    rows = [("what", "build a search index", q.at(1, 0.15)),
+            ("why", "the search command needs it", q.at(1, 0.4)),
+            ("files", "src/search/, tests/search/", q.at(1, 0.65)),
+            ("from", "you: \"add a search command\"", q.at(1, 0.9)),
+            ("tries", "2 tries, the second passed", q.at(2, 0.2)),
+            ("report", "what the worker did and found", q.at(2, 0.5)),
+            ("cost", "12 min, 84k tokens", q.at(2, 0.8))]
+    for k, (a, b, st) in enumerate(rows):
+        y = y0 + 90 + k * 54
+        c.group(ramp(t, st, 0.4), lambda cc, a=a, b=b, y=y: (
+            cc.text(x0 + 30, y, a, font(16, bold=True), ACCENT, "lm"),
+            cc.text(x0 + 130, y, b, font(18, mono=True), TERM_TEXT, "lm")))
+    # review or auto, and questions
+    def modes(cc):
+        for i, (name, col, line) in enumerate((
+                ("Review mode", REVIEW, "open the task, approve or reject"),
+                ("Auto mode", DONE, "tests pass: merged right away"))):
+            y = 170 + i * 120
+            cc.rect(760, y, 1210, y + 100, r=14, fill=CARD, outline=col, width=2)
+            cc.text(784, y + 34, name, font(22, bold=True), col, "lm")
+            cc.text(784, y + 72, line, font(17), MUTED, "lm")
 
-    a8 = t > q.s(8)
-    a9 = t > q.s(9)
-    c.group(ramp(t, q.s(7), 0.5), lambda cc: (card(cc, 110, DONE, "Auto mode", a8),
-                                              card(cc, 670, REVIEW, "Review mode", a9)))
+    c.group(ramp(t, q.s(3), 0.5), modes)
 
-    def auto(cc):
-        text_block(cc, 360, 260, "tests pass: merged right away", font(18), MUTED, 420, 26, "ma")
-        m = ramp(t, q.at(8, 0.4), 1.0)
-        cc.line([(150, 470), (570, 470)], BORDER, 3)
-        cc.text(150, 496, "main", font(14, bold=True, mono=True), MUTED, "lm")
-        y = 330 + m * 112
-        task_card(cc, 250, y - 29, 220, "T-3", "search index", DONE if m > 0.9 else RUNNING,
-                  "merged" if m > 0.9 else "tests pass", DONE)
-        if m > 0.9:
-            cc.circle(360, 470, 8, fill=DONE)
+    def ask(cc):
+        cc.rect(760, 430, 1210, 600, r=14, fill=CARD, outline=REVIEW, width=2)
+        cc.text(784, 462, "needs you", font(22, bold=True), REVIEW, "lm")
+        task_card(cc, 784, 490, 402, "T-5", "date picker", REVIEW,
+                  "question: which date format?", REVIEW, h=58)
 
-    c.group(ramp(t, q.s(8), 0.5), auto)
-
-    def review(cc):
-        x0 = 710
-        cc.rect(x0, 260, x0 + 420, 400, r=10, fill=CARD_DARK, outline=BORDER)
-        fm = font(15, mono=True)
-        diff = [("  def search(q):", MUTED), ("-     return []", RED),
-                ("+     return index.find(q)", DONE), ("+ # search, finally", DONE)]
-        for k, (ln, col) in enumerate(diff):
-            cc.text(x0 + 16, 286 + k * 30, ln, fm, col, "lm")
-        ap = t > q.at(9, 0.5)
-        cc.rect(x0, 420, x0 + 190, 470, r=25, fill=mix(CARD, DONE, 0.35 if ap else 0.12),
-                outline=DONE, width=2.5 if ap else 1.5)
-        cc.text(x0 + 95, 445, "approve", font(20, bold=True), DONE, "mm")
-        rj = t > q.at(9, 0.72)
-        cc.rect(x0 + 230, 420, x0 + 420, 470, r=25, fill=mix(CARD, RED, 0.3 if rj else 0.1),
-                outline=RED, width=2.5 if rj else 1.5)
-        cc.text(x0 + 325, 445, "reject", font(20, bold=True), RED, "mm")
-        cc.group(ramp(t, q.at(9, 0.82), 0.4), lambda c2: c2.text(
-            x0 + 210, 510, "reason: \"please add a test\"", font(16), MUTED, "mm"))
-
-    c.group(ramp(t, q.s(9), 0.5), review)
-
-
-def workers_e(c, t, q):
-    def lists(cc):
-        cc.rect(110, 180, 600, 520, r=14, fill=CARD, outline=REVIEW, width=2)
-        cc.text(134, 214, "needs you", font(22, bold=True), REVIEW, "lm")
-        cc.rect(680, 180, 1170, 520, r=14, fill=CARD, outline=LINE, width=1.5)
-        cc.text(704, 214, "doing", font(22, bold=True), RUNNING, "lm")
-        task_card(cc, 704, 330, 440, "T-4", "dark mode", RUNNING, "worker 2 · running", WORKER, 0.5)
-
-    c.group(ramp(t, q.s(10), 0.5), lists)
-    go = q.at(10, 0.3)
-    back = q.at(11, 0.7)
-    x, y = keyed(t, [(0, (704, 250)), (go, (134, 250)), (back, (704, 410))], 0.9)
-    asking = go + 0.5 < t < back + 0.2
-    c.group(ramp(t, q.s(10) + 0.2, 0.5), lambda cc: task_card(
-        cc, x, y, 440, "T-5", "date picker", REVIEW if asking else RUNNING,
-        "question: which date format?" if asking else
-        ("going on" if t > back else "worker 3 · running"), REVIEW if asking else WORKER))
-    c.group(ramp(t, q.s(11), 0.4), lambda cc: (
-        cc.rect(134, 340, 576, 390, r=14, fill=(0x13, 0x16, 0x1E), outline=ACCENT, width=1.5),
-        cc.text(152, 365, "you", font(16, bold=True, mono=True), ACCENT, "lm"),
-        cc.text(204, 365, typed(t, q.s(11) + 0.1, q.at(11, 0.55), "use dates like 2026-11-15"),
-                font(16, mono=True), TERM_TEXT, "lm")))
+    c.group(ramp(t, q.s(4), 0.5), ask)
 
 
 def scene_scouts(c, t, dur, q):
-    title(c, 4, "Scouts")
+    title(c, 4, "Problem 3 solved: it keeps going while you are away")
     x0, y0, x1, y1 = 80, 160, 640, 560
 
     def panel(cc):
@@ -688,7 +538,7 @@ def scene_scouts(c, t, dur, q):
 
     c.group(ramp(t, 0.1, 0.5), panel)
     # clock
-    c.group(ramp(t, q.s(1), 0.5), lambda cc: (
+    c.group(ramp(t, q.s(1) - 0.3, 0.5), lambda cc: (
         cc.circle(x1 - 50, y0 + 30, 18, outline=SCOUT, width=2.5),
         cc.line([(x1 - 50, y0 + 30), (x1 - 50 + 13 * math.sin(t * 1.6),
                                       y0 + 30 - 13 * math.cos(t * 1.6))], SCOUT, 2.5),
@@ -698,10 +548,10 @@ def scene_scouts(c, t, dur, q):
               ("dependency check", "looks for old dependencies", "every week")]
     for k, (name, what, when) in enumerate(scouts):
         y = y0 + 76 + k * 86
-        hi = q.at(2, 0.25 + 0.25 * k)
-        due = q.at(1, 0.6) if k == 1 else 1e9
-        run = q.at(2, 0.9) if k == 1 else 1e9
-        fin = q.at(4, 0.3) if k == 1 else 1e9
+        hi = q.at(1, 0.15 + 0.2 * k)
+        due = q.at(1, 0.35) if k == 1 else 1e9
+        run = q.at(1, 0.85) if k == 1 else 1e9
+        fin = q.at(2, 0.3) if k == 1 else 1e9
         status = ("done", DONE) if t > fin else ("running", RUNNING) if t > run else \
             ("due now", REVIEW) if t > due else ("waiting", TODO)
 
@@ -714,16 +564,16 @@ def scene_scouts(c, t, dur, q):
             pill(cc, x1 - 90, y + 38, status[0], status[1], w=100)
 
         c.group(ramp(t, 0.4 + 0.2 * k, 0.5), row)
-    c.group(ramp(t, q.s(3), 0.5), lambda cc: (
+    c.group(ramp(t, q.at(1, 0.5), 0.5), lambda cc: (
         cc.rect(x0 + 20, y1 - 62, x1 - 20, y1 - 18, r=10, fill=CARD_DARK, outline=SCOUT),
         cc.text((x0 + x1) / 2, y1 - 40, "read only: scouts never change your files",
                 font(16, bold=True), SCOUT, "mm")))
     # lead and a small board
-    c.group(ramp(t, q.s(4) - 0.3, 0.5), lambda cc: box(cc, 760, 170, 1100, 260, ACCENT, "Lead",
+    c.group(ramp(t, q.s(2) - 0.3, 0.5), lambda cc: box(cc, 760, 170, 1100, 260, ACCENT, "Lead",
                                                        "turns findings into tasks", tint=0.2))
-    if t > q.s(4):
-        m = ease((t - q.at(4, 0.3)) / 1.4)
-        c.group(ramp(t, q.s(4), 0.4), lambda cc: cc.arrow(
+    if t > q.s(2):
+        m = ease((t - q.at(2, 0.1)) / 1.4)
+        c.group(ramp(t, q.s(2), 0.4), lambda cc: cc.arrow(
             x1 + 6, y0 + 175, 756, 230, SCOUT, dash=(8, 6)))
         if 0 < m < 1:
             bx = x1 + 20 + (640 - x1 + 120) * m
@@ -734,89 +584,30 @@ def scene_scouts(c, t, dur, q):
 
     def mini(cc):
         colx, colw = board(cc, 740, 300, 1200, 560, COLS4[:2], "Board")
-        st = ramp(t, q.at(5, 0.6), 0.7)
-        ap = ramp(t, q.at(5, 0.15), 0.4)
+        st = ramp(t, q.at(2, 0.8), 0.7)
+        ap = ramp(t, q.at(2, 0.4), 0.4)
         cc.group(ap, lambda c2: task_card(
             c2, colx[0] + 8 + st * colw, 410, colw - 16, "T-9", "search tests",
             RUNNING if st > 0.5 else TODO, "worker 2 · running" if st > 0.5 else "from a scout",
-            WORKER if st > 0.5 else SCOUT, (t - q.at(5, 0.6)) * 0.08 if st > 0.5 else None))
+            WORKER if st > 0.5 else SCOUT, (t - q.at(2, 0.8)) * 0.08 if st > 0.5 else None))
 
-    c.group(ramp(t, q.s(5) - 0.2, 0.5), mini)
-    c.group(ramp(t, q.at(6, 0.3), 0.6), lambda cc: cc.text(
-        W - 70, 112, "autonomous: keeps working while you are away", font(19), MUTED, "ra"))
+    c.group(ramp(t, q.at(2, 0.3), 0.5), mini)
+    c.group(ramp(t, q.s(3), 0.6), lambda cc: cc.text(
+        W - 70, 112 + 0, "autonomous: keeps working while you are away", font(19), MUTED, "ra"))
 
 
-def scene_request(c, t, dur, q):
-    title(c, 5, "One request, start to merge")
-    x0, y0, x1, y1 = 50, 160, 450, 610
-    terminal(c, x0, y0, x1, y1, "claude · ~/my-app")
-    msg = "add a search command, and make the errors friendlier"
-    s_app = q.at(9, 0.6)
-    lines = [(q.s(1), "you", typed(t, q.s(1) + 0.1, q.e(1), msg), TERM_TEXT),
-             (q.s(2), "lead", "Making 3 tasks: T-1, T-2, T-3.", MUTED),
-             (q.s(6), "lead", "Starting T-1 and T-3. T-2 waits for T-1.", MUTED),
-             (q.s(8), "lead", "T-1 is ready for review.", REVIEW),
-             (s_app, "lead", "You approved T-1 on the board.", MUTED),
-             (q.at(10, 0.2), "lead", "T-1 merged. Starting T-2.", DONE)]
-    chat_lines(c, t, x0 + 18, y0 + 52, x1 - 10, lines)
-    bx0, by0, bx1, by1 = 480, 160, 1230, 610
-    colx, colw = board(c, bx0, by0, bx1, by1)
-    top = by0 + 108
-    go = q.at(6, 0.35)
-    rev = q.at(8, 0.4)
-    merge = q.at(10, 0.15)
-    t2go = q.at(10, 0.6)
-
-    def n1(tt, st):
-        return [("waiting", DIM, None), ("worker 1" if tt < q.at(7, 0.5) else "tests running...",
-                                         WORKER if tt < q.at(7, 0.5) else REVIEW, (tt - go) * 0.12),
-                ("needs you", REVIEW, None), ("merged", DONE, None)][st]
-
-    def n2(tt, st):
-        return ("waits for T-1", REVIEW, None) if st == 0 else ("worker 2", WORKER, (tt - t2go) * 0.1)
-
-    def n3(tt, st):
-        return ("waiting", DIM, None) if st == 0 else (
-            "worker 3" if tt < q.at(7, 0.6) else "tests running...",
-            WORKER if tt < q.at(7, 0.6) else REVIEW, (tt - go) * 0.09)
-
-    cards = [("T-1", "index", q.s(3), [(0, (0, 0)), (go, (1, 0)), (rev, (2, 0)), (merge, (3, 0))], n1),
-             ("T-2", "command", q.s(4), [(0, (0, 1)), (t2go, (1, 0))], n2),
-             ("T-3", "errors", q.s(5), [(0, (0, 2)), (go + 0.2, (1, 1))], n3)]
-    board_cards(c, t, colx, colw, top, cards)
-
-    def diff(cc):
-        dx0, dy0 = 560, 300
-        cc.rect(dx0, dy0, dx0 + 600, dy0 + 230, r=12, fill=CARD_DARK, outline=REVIEW, width=2)
-        cc.text(dx0 + 20, dy0 + 28, "T-1 search index: changes", font(17, bold=True), REVIEW, "lm")
-        fm = font(15, mono=True)
-        diff_lines = [("+ def build_index(files):", DONE), ("+     words = read_words(files)", DONE),
-                      ("+     return Index(words)", DONE), ("  tests: 12 passed", MUTED)]
-        for k, (ln, col) in enumerate(diff_lines):
-            cc.text(dx0 + 20, dy0 + 72 + k * 34, ln, fm, col, "lm")
-        ap = t > s_app
-        cc.rect(dx0 + 20, dy0 + 172, dx0 + 190, dy0 + 208, r=18, fill=mix(CARD_DARK, DONE, 0.4 if ap else 0.12),
-                outline=DONE, width=2.5 if ap else 1.5)
-        cc.text(dx0 + 105, dy0 + 190, "approve", font(17, bold=True), DONE, "mm")
-        cc.rect(dx0 + 210, dy0 + 172, dx0 + 380, dy0 + 208, r=18, fill=mix(CARD_DARK, RED, 0.1),
-                outline=RED, width=1.5)
-        cc.text(dx0 + 295, dy0 + 190, "reject", font(17, bold=True), RED, "mm")
-
-    c.group(window(t, q.s(9) + 0.1, merge, fade=0.4), diff)
-    c.group(ramp(t, q.s(11), 0.5), lambda cc: cc.text(
-        bx1, 112, "talk to the lead, approve on the board", font(20, bold=True), ACCENT, "ra"))
 
 
 def scene_get(c, t, dur, q):
-    last = q.s(4) - 0.2
+    last = q.s(2) - 0.2
     body = 1 - ramp(t, last, 0.6)
 
     def main_part(cc):
         draw_logo(cc, W / 2, 150, 0.7)
         for k, s in enumerate(("free", "open source", "MIT license")):
-            cc.group(ramp(t, q.at(0, 0.15 + 0.25 * k), 0.4), lambda c2, k=k, s=s: pill(
+            cc.group(ramp(t, q.at(0, 0.45 + 0.15 * k), 0.4), lambda c2, k=k, s=s: pill(
                 c2, W / 2 - 190 + k * 190, 262, s, ACCENT_LIGHT, w=160))
-        cc.group(ramp(t, q.at(1, 0.2), 0.4), lambda c2: c2.text(
+        cc.group(ramp(t, q.at(1, 0.1), 0.4), lambda c2: c2.text(
             W / 2, 312, "you need Claude Code and git", font(20), MUTED, "mm"))
 
         def install(c2):
@@ -829,10 +620,10 @@ def scene_get(c, t, dur, q):
             c2.text(ix0 + 36 + c2.width_of("$ ", f), 406, cmd, f, TERM_TEXT, "lm")
             c2.text(W / 2, 478, "steps: github.com/kourgeorge/symcc", font(18), MUTED, "mm")
 
-        cc.group(ramp(t, q.at(2, 0.1), 0.5), install)
+        cc.group(ramp(t, q.at(1, 0.3), 0.5), install)
         steps = ["set your test command", "ask for something", "watch the board"]
         for k, s in enumerate(steps):
-            cc.group(ramp(t, q.at(3, 0.05 + 0.32 * k), 0.4), lambda c2, k=k, s=s: (
+            cc.group(ramp(t, q.at(1, 0.6 + 0.12 * k), 0.4), lambda c2, k=k, s=s: (
                 c2.circle(260 + k * 330, 550, 16, fill=ACCENT),
                 c2.text(260 + k * 330, 550, str(k + 1), font(16, bold=True), CARD_DARK, "mm"),
                 c2.text(286 + k * 330, 550, s, font(19), TEXT, "lm")))
@@ -841,19 +632,19 @@ def scene_get(c, t, dur, q):
 
     def end(cc):
         draw_logo(cc, W / 2, 260, 1.1)
-        cc.group(ramp(t, q.s(5), 0.6), lambda c2: c2.text(
+        cc.group(ramp(t, q.s(2) + 0.2, 0.6), lambda c2: c2.text(
             W / 2, 400, "Many agents, one board.", font(40, bold=True), ACCENT, "mm"))
-        cc.group(ramp(t, q.s(5) + 0.6, 0.6), lambda c2: c2.text(
+        cc.group(ramp(t, q.s(2) + 0.8, 0.6), lambda c2: c2.text(
             W / 2, 470, "github.com/kourgeorge/symcc", font(24, medium=True), TEXT, "mm"))
 
     c.group(ramp(t, last + 0.3, 0.6), end)
-    c.group(ramp(t, q.s(6), 0.6), lambda cc: cc.text(
+    c.group(ramp(t, q.s(2) + 1.6, 0.6), lambda cc: cc.text(
         W / 2, 540, "Autonomous coding that keeps working while you are away",
         font(24), MUTED, "mm"))
 
 
-SCENE_FNS = [scene_problem, scene_what, scene_board, scene_workers, scene_scouts,
-             scene_request, scene_get]
+SCENE_FNS = [scene_problem, scene_what, scene_parallel, scene_see, scene_scouts,
+             scene_get]
 
 # ---------------------------------------------------------------- frames
 
@@ -1049,3 +840,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
