@@ -255,25 +255,46 @@ export const OVERTIME_NOTE = 'over time; asked the owner'
 /** What a worker is told when its time is up: write down what it has and hand back now. */
 export const WRAP_UP_TEXT = "Time is up: write down what you have done and found, save notes into your task's files, and hand back now (answer with what you did, what you found and what is left)."
 
+/** The whole answers that stop a worker (lower case, punctuation dropped): stopping can't be undone, so only these count. */
+const STOP_ANSWERS = new Set(['stop', 'stop it', 'stop now', 'no', 'no more', 'no more time', 'end it', 'fail it'])
+
 /**
  * The owner's answer to the over-time question: { add: N } for "+N min" (or a plain number of minutes;
- * "+1 hour" / "1.5 h" count 60 minutes each, rounded up to whole minutes; 1-600 minutes in all), { stop: true } for
- * "Stop it", or undefined when it is neither, the number has another unit ("3 days") or other words are left over.
- * Filler words are skipped: "give it 30 more minutes", "+1 extra hour", "45 more", "another 20 min please".
+ * "+1 hour" / "1.5 h" count 60 minutes each, rounded up to whole minutes; "an hour" / "another hour" 60, "half an hour" 30;
+ * 1-600 minutes in all), { stop: true } only for a whole stop answer ("Stop it", "stop", "no", "no more time", "end it", ...;
+ * case and punctuation ignored), or undefined when it is neither, the number has another unit ("3 days"), other words are
+ * left over, or a stop word comes with an amount ("stop in 30 min"). Filler words are skipped: "give it 30 more minutes",
+ * "+1 extra hour", "45 more", "another 20 min please", and a leading clause: "no rush, give it another hour".
  */
 export function parseOvertimeAnswer(answer: string): { add: number } | { stop: true } | undefined {
   let a = String(answer ?? '').trim().toLowerCase()
-  if (/^(stop|no\b|end|fail)/.test(a)) return { stop: true }
-  a = a.replace(/[.,!?]+$/, '').replace(/^(please\s*,?\s+)?(give\s+it\s+)?(please\s+)?/, '')
-  const num = /^(?:(?:another|an?|extra|additional|more)\s+)?\+?\s*(\d{0,3}\.\d+|\d{1,3})(?![\d.])\s*(.*)$/
-  const m = num.exec(a) ?? num.exec(a.slice(Math.max(0, a.indexOf('+'))))
+  if (STOP_ANSWERS.has(a.replace(/[^a-z]+/g, ' ').trim())) return { stop: true }
+  a = a
+    .replace(/\bhalf\s+an?\s+hour\b/g, '30 min')
+    .replace(/\b(?:an|another|one)\s+(?:(?:more|extra|additional)\s+)?hour\b/g, '60 min')
+  // a stop word with anything else is unclear: refuse it rather than stop or go on
+  if (/\b(stop|end\s+it|fail\s+it)\b/.test(a)) return undefined
+  a = a.replace(/[.,!?]+$/, '')
+  // the amount may follow a leading clause: "no problem, +30 min", "ending soon? give it 20 min"
+  const starts = [0, ...[...a.matchAll(/[,;:!?+]|\.\s/g)].map(m => (m[0] === '+' ? m.index : m.index + m[0].length))]
+  for (const at of starts) {
+    const add = amountOf(a.slice(at).trim())
+    if (add !== undefined) return { add }
+  }
+  return undefined
+}
+
+/** The minutes in an answer that is only an amount with filler words ("give it +30 more min"), or undefined. */
+function amountOf(a: string): number | undefined {
+  a = a.replace(/^(please\s*,?\s+)?(give\s+it\s+)?(please\s+)?/, '')
+  const m = /^(?:(?:another|an?|extra|additional|more)\s+)?\+?\s*(\d{0,3}\.\d+|\d{1,3})(?![\d.])\s*(.*)$/.exec(a)
   if (!m) return undefined
   const words = m[2].split(/[\s,]+/).filter(w => w && !/^(more|extra|another|additional|please)$/.test(w))
   if (words.length > 1) return undefined
   const unit = words[0] ?? ''
   const per = /^(h|hr|hrs|hours?)$/.test(unit) ? 60 : /^(|m|min|mins|minutes?)$/.test(unit) ? 1 : 0
   const n = Math.ceil(Number(m[1]) * per)
-  return n >= 1 && n <= 600 ? { add: n } : undefined
+  return n >= 1 && n <= 600 ? n : undefined
 }
 
 /** The failed note of a task whose worker ran out of time and was stopped. */

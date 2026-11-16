@@ -2042,6 +2042,23 @@ test('the owner\'s answer to "more time?": +N min or stop, anything else is refu
   expect(parseOvertimeAnswer('3 more days')).toBeUndefined()
   expect(parseOvertimeAnswer('30 min then stop')).toBeUndefined()
   expect(parseOvertimeAnswer('1.5.2 hours')).toBeUndefined()
+  // only a whole stop answer stops the worker (case and punctuation ignored)
+  for (const s of ['stop', 'Stop!', 'stop it', 'STOP NOW.', 'no', 'No.', 'no more', 'no more time', 'end it', 'fail it', 'Stop it'])
+    expect(parseOvertimeAnswer(s)).toEqual({ stop: true })
+  // a stop-like word inside a longer answer does not stop: the amount counts
+  expect(parseOvertimeAnswer('no rush, give it another hour')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('no problem, +30 min')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('ending soon? give it 20 min')).toEqual({ add: 20 })
+  expect(parseOvertimeAnswer('an hour')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('another hour')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('give it half an hour')).toEqual({ add: 30 })
+  // a stop phrase with an amount, or neither, is refused
+  expect(parseOvertimeAnswer('stop in 30 min')).toBeUndefined()
+  expect(parseOvertimeAnswer('give it an hour then stop')).toBeUndefined()
+  expect(parseOvertimeAnswer('no rush')).toBeUndefined()
+  expect(parseOvertimeAnswer('endless')).toBeUndefined()
+  expect(parseOvertimeAnswer('not yet')).toBeUndefined()
+  expect(parseOvertimeAnswer('nope, stop it')).toBeUndefined()
 })
 
 test('a worker whose agent ended is failed only on a later check, unless its report arrived in between', async () => {
