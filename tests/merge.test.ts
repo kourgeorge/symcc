@@ -1368,6 +1368,15 @@ test('a NEED FILES first line followed by detail lines still waits for those fil
   expect((t as { asked_files?: string[] }).asked_files).toEqual(['a', 'b'])
 })
 
+test('a change worker with half-done edits that says a short sentence, then NEED FILES, waits for files and nothing is merged', async () => {
+  // world(): the task's folder holds edits in src/a.ts, inside the task's files (src/)
+  const { w, t } = await workerAnswers('I need two more files.\nNEED FILES: a, b — reason', { notify: 'off' })
+  expect(t.status).toBe('waiting')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a', 'b'])
+  expect(t.question).toBe('T-1 needs to change files outside its list: a, b — reason. Allow them?')
+  expect(movedMain(w)).toBe(false)
+})
+
 test('a change report that mentions an indented or quoted NEED FILES line in its middle merges normally', async () => {
   const { t } = await workerAnswers('I changed src/a.ts so a worker answers:\n    NEED FILES: path/a, path/b — <reason>\nand also `NEED FILES: x` in a quote.\n```\nNEED FILES: y\n```', { notify: 'off' })
   expect(t.status).toBe('done')

@@ -161,14 +161,34 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
  * A worker that must change files outside its list stops and answers
  * `NEED FILES: path/a, path/b — reason`. Returns the files and the reason (may be empty), or
  * undefined when the answer is not that. Spaces and backticks around the paths are fine.
- * "NEED FILES" must be in capitals (a report line like "Need files: none" is not a request), and it must
- * be the FIRST non-empty line, at the very start of the line: an indented, quoted or code-block example
- * later in a report is not a request. Lines after it (details for the next try) are fine.
+ * "NEED FILES" must be in capitals (a report line like "Need files: none" is not a request), at the very
+ * start of a line (it may be wrapped in backticks or **), not indented, not quoted with ">" and not inside
+ * a ``` block: such examples in a report are not requests. Like parseQuestion, the text before that line
+ * must be short (at most QUESTION_EXTRA_LINES lines and QUESTION_EXTRA_CHARS characters), so
+ * "I need two more files.\nNEED FILES: ..." asks while a long report with such a line does not.
+ * Lines after it (details for the next try) are fine, however long.
  */
 export function parseNeedFiles(answer: string): { files: string[]; reason: string } | undefined {
-  const first = answer.split(/\r?\n/).find(l => l.trim()) ?? ''
-  const m = /^NEED\s+FILES\s*:\s*(.*)$/.exec(first.trimEnd())
+  const lines = answer.split(/\r?\n/)
+  let inCode = false
+  let at = -1
+  let m: RegExpExecArray | null = null
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!
+    if (/^\s*```/.test(l)) {
+      inCode = !inCode
+      continue
+    }
+    if (inCode) continue
+    m = /^(?:`|\*\*)?NEED\s+FILES\s*:(?:`|\*\*)?\s*(.*?)(?:`|\*\*)?$/.exec(l.trimEnd())
+    if (m) {
+      at = i
+      break
+    }
+  }
   if (!m) return undefined
+  const before = lines.slice(0, at).map(l => l.trim()).filter(Boolean)
+  if (before.length > QUESTION_EXTRA_LINES || before.join('\n').length > QUESTION_EXTRA_CHARS) return undefined
   const rest = m[1]!.trim()
   const cut = /\s+(?:—|–|--|-)\s+|\s*[—–]\s*/.exec(rest)
   const list = cut ? rest.slice(0, cut.index) : rest
