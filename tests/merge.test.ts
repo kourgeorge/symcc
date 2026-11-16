@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -3433,6 +3433,51 @@ test('Ask more without a saved report points to the answer kept on the task; a l
   const [b2] = boardWith('auto', [], { kind: 'investigation', status: 'review', details: 'd'.repeat(7000) } as Partial<BoardTask>)
   const b3 = askMoreTask(b2, 'T-1', 'more please', 'x'.repeat(3000), '.symcc/reports/T-1-try-1.md', ISO)
   expect(find(b3, 'T-1')!.details.endsWith('The earlier answer (try 1) is in .symcc/reports/T-1-try-1.md.')).toBe(true)
+})
+
+test('Ask more on long details keeps the new question and the report path, and stays within 8000 characters', () => {
+  const [b0] = boardWith('auto', [], { kind: 'investigation', status: 'review', details: 'd'.repeat(7950) } as Partial<BoardTask>)
+  const d = find(askMoreTask(b0, 'T-1', 'how big?', 'x'.repeat(500), '.symcc/reports/T-1-try-1.md', ISO), 'T-1')!.details
+  expect(d.length).toBeLessThanOrEqual(8000)
+  expect(d).toContain('): how big?\nThe earlier answer (try 1)')
+  expect(d.endsWith('The earlier answer (try 1) is in .symcc/reports/T-1-try-1.md.')).toBe(true)
+})
+
+test('two Ask mores in a row after a long answer keep the second question and the try-2 report; the first answer becomes its report path', () => {
+  const [b0] = boardWith('auto', [], { kind: 'investigation', status: 'review' } as Partial<BoardTask>)
+  const b1 = askMoreTask(b0, 'T-1', 'first?', 'y'.repeat(7800), '.symcc/reports/T-1-try-1.md', ISO)
+  expect(find(b1, 'T-1')!.details).toContain('y'.repeat(7800))
+  const b2 = patchTask(b1, 'T-1', { status: 'review', attempts: 2 }, ISO)
+  const d = find(askMoreTask(b2, 'T-1', 'second?', 'z'.repeat(3000), '.symcc/reports/T-1-try-2.md', ISO), 'T-1')!.details
+  expect(d.length).toBeLessThanOrEqual(8000)
+  expect(d).toContain('): first?\nThe earlier answer (try 1) is in .symcc/reports/T-1-try-1.md.')
+  expect(d).toContain('): second?\nThe earlier answer (try 2)')
+  expect(d).toContain('.symcc/reports/T-1-try-2.md')
+  expect(d).not.toContain('yyy')
+})
+
+test('Keep as a note never overwrites an existing research note: it picks <topic>-2.md', async () => {
+  const { w } = await investigationAnswers('auto', 'Esc closes the panel.', { title: 'Esc in panels' })
+  w.put(`${ROOT}/docs/research/esc-in-panels.md`, '# old note')
+  ;(w.$ as unknown as { fs: Record<string, unknown> }).fs.list = async (dir: string) =>
+    [...w.files.keys()].filter(p => p.startsWith(`${dir}/`) && !p.slice(dir.length + 1).includes('/')).map(p => ({ name: p.slice(dir.length + 1), kind: 'file' }))
+  await runTool(w.$, 'approve', { task: 'T-1', keep_note: true })
+  const n = find(await load(w.$), 'T-2')!
+  expect(n.files).toEqual(['docs/research/esc-in-panels-2.md'])
+  expect(n.details).toContain('Write docs/research/esc-in-panels-2.md')
+})
+
+test('two investigations with no Latin letters in their titles kept as notes get two different files, named after their ids', () => {
+  let b: Board = emptyBoard()
+  for (let i = 0; i < 2; i++) [b] = addTask(b, { origin: { why: 'a test' }, title: '为什么慢', kind: 'investigation' }, ISO)
+  b = patchTask(patchTask(b, 'T-1', { status: 'review', attempts: 1 }, ISO), 'T-2', { status: 'review', attempts: 1 }, ISO)
+  const n1 = keepNoteTask(find(b, 'T-1')!, 'slow because a', undefined, noteFilesInUse(b))
+  ;[b] = addTask(b, n1, ISO)
+  const n2 = keepNoteTask(find(b, 'T-2')!, 'slow because b', undefined, noteFilesInUse(b))
+  expect(n1.files).toEqual(['docs/research/t-1.md'])
+  expect(n2.files).toEqual(['docs/research/t-2.md'])
+  // the same file name taken by an open task gets -2
+  expect(keepNoteTask({ ...find(b, 'T-1')!, title: 'Do it' }, 'a', undefined, ['docs/research/do-it.md']).files).toEqual(['docs/research/do-it-2.md'])
 })
 
 test('the board list shows an answered investigation as "answer" with [investigation]; a change task in review is unchanged', () => {

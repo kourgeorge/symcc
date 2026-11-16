@@ -323,19 +323,32 @@ export function investigationDone(b: Board, id: string, now: string, kept?: stri
   return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: [...t.history, line] }, now)
 }
 
-/** The file name part of a research note for a task titled `title`: "why-is-the-cache-slow" (at most 60 characters; "answer" when nothing is left). */
-export function noteTopic(title: string): string {
+/** The file name part of a research note for a task titled `title`: "why-is-the-cache-slow" (at most 60 characters; `id` in lower case, "t-123", when nothing is left). */
+export function noteTopic(title: string, id = ''): string {
   const s = String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  return s.slice(0, 60).replace(/-+$/, '') || 'answer'
+  return s.slice(0, 60).replace(/-+$/, '') || id.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'answer'
+}
+
+/** The docs/research files an open task on board `b` (not done or dropped) is to write, so a new note doesn't pick them too. */
+export const noteFilesInUse = (b: Board): string[] => b.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped').flatMap(t => t.files.filter(f => f.startsWith('docs/research/')))
+
+/** docs/research/<topic>.md for task `t`, with -2, -3… added when `taken` (files that exist or open tasks write) has it. */
+export function noteFile(t: Pick<BoardTask, 'id' | 'title'>, taken: readonly string[] = []): string {
+  const topic = noteTopic(t.title, t.id)
+  const used = new Set(taken.map(f => f.replace(/^\.\//, '').toLowerCase()))
+  let file = `docs/research/${topic}.md`
+  for (let n = 2; used.has(file); n++) file = `docs/research/${topic}-${n}.md`
+  return file
 }
 
 /**
  * The new docs task that keeps answered investigation `t`'s answer as a research note, as addTask takes it:
  * it writes docs/research/<topic>.md from the saved answer (`answer`, the full report when there is one; `report`:
- * that report's file) and merges as usual. Made by the owner, as a follow-up of `t`.
+ * that report's file) and merges as usual. Made by the owner, as a follow-up of `t`. `taken`: files the note must
+ * not use (existing docs/research files and those open tasks write, see noteFilesInUse); -2, -3… is added then.
  */
-export function keepNoteTask(t: BoardTask, answer: string, report?: string): { title: string; details: string; files: string[]; role: string; kind: TaskKind; origin: OriginInput } {
-  const file = `docs/research/${noteTopic(t.title)}.md`
+export function keepNoteTask(t: BoardTask, answer: string, report?: string, taken: readonly string[] = []): { title: string; details: string; files: string[]; role: string; kind: TaskKind; origin: OriginInput } {
+  const file = noteFile(t, taken)
   const head = `Write ${file}: a research note that keeps the answer of ${t.id} ("${t.title}"), so later tasks can read it. Use the answer below as it is: tidy it into a short note with a title, the question, the answer and how it was found. Don't look into the question again.`
   const where = report ? `\n\nThe full answer is in ${report}.` : ''
   const room = 8000 - head.length - where.length - 40
@@ -351,10 +364,42 @@ export function keepNoteTask(t: BoardTask, answer: string, report?: string): { t
   }
 }
 
+/** The most a task's details may hold (patchTask cuts the rest). */
+const DETAILS_MAX = 8000
+/** How each part Ask more adds to a task's details starts. */
+const ASK_MARK = '\n\nFollow-up question (owner, '
+
+/** An earlier Ask more part with its answer replaced by the path to its report (or a word that it was cut). */
+function shortAsk(part: string): string {
+  const m = /^(\n\nFollow-up question \(owner, [\s\S]*?\nThe earlier answer \(try \d+\))(?: \(in full in (\S+)\))?:\n/.exec(part)
+  if (!m) return part
+  return `${m[1]}${m[2] ? ` is in ${m[2]}` : ' was cut to fit'}.`
+}
+
+/**
+ * `details` with `added` at its end, within DETAILS_MAX: `added` (the newest question) always stays whole; when it
+ * doesn't fit, the oldest text gives way first: earlier answers become their report paths (oldest first), then the
+ * task's own details are cut, then the oldest Ask more parts go.
+ */
+function withAsk(details: string, added: string): string {
+  const parts = details.split(ASK_MARK)
+  let base = parts[0]!
+  const asks = parts.slice(1).map(p => ASK_MARK + p)
+  const size = () => base.length + asks.reduce((n, p) => n + p.length, 0) + added.length
+  for (let i = 0; i < asks.length && size() > DETAILS_MAX; i++) asks[i] = shortAsk(asks[i]!)
+  if (size() > DETAILS_MAX) {
+    const room = DETAILS_MAX - (size() - base.length)
+    base = room > 1 ? `${base.slice(0, room - 1).trimEnd()}…` : ''
+  }
+  while (size() > DETAILS_MAX && asks.length) asks.shift()
+  return `${base}${asks.join('')}${added}`
+}
+
 /**
  * "Ask more" on answered investigation `id`: it goes back to "todo" for a fresh try, with the owner's follow-up
  * `question` and the earlier answer added to its details. The answer is `answer` (the full report, else the saved one)
- * when it fits; else (or when there is none) a pointer to its report file `report`.
+ * when it fits; else (or when there is none) a pointer to its report file `report`. The new question and that
+ * pointer always stay: when the details would pass 8000 characters, the oldest text is shortened instead (see withAsk).
  */
 export function askMoreTask(b: Board, id: string, question: string, answer: string, report: string | undefined, now: string): Board {
   const t = answeredTask(b, id, 'asked more')
@@ -366,5 +411,5 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const body = answer.trim() || t.answer?.trim() || ''
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= 8000
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
-  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: `${t.details.trimEnd()}${added}`, answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: the owner asked more: ${q}`] }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: the owner asked more: ${q}`] }, now)
 }
