@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -1937,6 +1937,38 @@ test("the lead's board tool with a task shows its latest report and lists the ol
   await expect(runTool(w.$, 'board', { status: ['nope'] })).rejects.toThrow('unknown status')
 })
 
+// ---------------- the step shown in the list while a finished task is checked (T-238) ----------------
+
+test('a finishing task\'s row says "testing" while its tests run and "merging" while main is moved; the step is gone once it is done', async () => {
+  const cell = async (w: ReturnType<typeof world>) => statusCell(find(await load(w.$), 'T-1')!, Date.now())
+  const a = await finishing(cell)
+  expect(a.said[0]).toBe('testing')
+  expect(a.t.status).toBe('done')
+  expect(a.t.checking).toBeUndefined()
+  const b = await finishing(cell, {}, /git update-ref/)
+  expect(b.said[0]).toBe('merging')
+  expect(b.t.checking).toBeUndefined()
+})
+
+test('the check step is cleared when the tests fail', async () => {
+  const { t } = await finishing(async () => undefined, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  expect(t.status).not.toBe('doing')
+  expect(t.checking).toBeUndefined()
+})
+
+test('approve shows "merging" while it moves main, and the step is gone once it is done', async () => {
+  const w = await inReview()
+  let seen = ''
+  w.onRun(async cmd => {
+    if (!seen && /git update-ref/.test(cmd)) seen = statusCell(find(await load(w.$), 'T-1')!, Date.now())
+  })
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(seen).toBe('merging')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.checking).toBeUndefined()
+})
+
 // ---------------- a plugin reload while a task's work is tested and merged (T-169) ----------------
 
 const LEAD = `${ROOT}/.symcc/lead.json`
@@ -2264,6 +2296,7 @@ test('a checking and merging step that never ends is sent back to todo after the
   let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('todo')
   expect(t.finishing).toBeUndefined()
+  expect(t.checking).toBeUndefined()
   expect(t.session).toBeUndefined()
   expect(t.history.at(-1)).toBe('try 1: restarted: its checking and merging ran over 15 min and was stopped')
   expect(t.runs!.at(-1)!.ended_by).toBe('restarted')
@@ -2365,6 +2398,8 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
   await turns(w, () => hung)
   expect(find(await load(w.$), 'T-1')!.note).toBe('approved; checking and merging')
+  // the list row says which step the approve is in
+  expect(statusCell(find(await load(w.$), 'T-1')!, Date.now())).toBe('testing')
   expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe('T-1 is already being merged')
   expect(limits.length).toBe(1)
   limits[0]!()
@@ -2372,6 +2407,8 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   expect(out).toBe('T-1 was not merged and stays in review: its checking and merging ran over 15 minutes and was given up. Approve it again.')
   let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
+  expect(t.checking).toBeUndefined()
+  expect(statusCell(t, Date.now())).toBe('review')
   expect(t.note).toBe('approved, but the merge ran over 15 min and was given up; approve it again')
   expect(t.history.at(-1)).toBe('try 1: approved by the owner → its checking and merging ran over 15 min and was given up; nothing written, it stays in review')
   expect(leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes')).length).toBe(1)

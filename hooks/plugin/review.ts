@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS } from '../board'
 import { gitOk, git, worktreeDir, asSymcc } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -109,6 +109,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   }
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
+  await markStep($, t, 'checking', stopped)
   const add = await git($, ['add', '-A', '--', '.'], dir)
   if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
   const committed = await commitTry($, t, dir, made)
@@ -205,6 +206,20 @@ export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Pro
   return mine
 }
 
+/**
+ * Says on the board which step of checking task `t` is going on now (BoardTask.checking), so the list
+ * shows it; only while the task is still as it was when the check began and the check was not
+ * stopped or given up. Never fails the check: a board that can't be written only misses the word.
+ */
+async function markStep($: $, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
+  if (stopped()) return
+  await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped() || cur.checking?.step === step) return x
+    return patchTask(x, t.id, { checking: { step, at: now() } }, cur.updated_at)
+  }).catch(() => undefined)
+}
+
 /** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
 async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[]): Promise<{ result: CheckResult; raced?: boolean }> {
   const res = (result: CheckResult) => ({ result })
@@ -215,6 +230,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
   let candidate = tip
+  await markStep($, t, 'merging', stopped)
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
     const m = await git($, [...asSymcc(), 'merge', '--no-edit', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
     if (m.exitCode !== 0) {
@@ -227,6 +243,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
     made.push(candidate)
   }
   const testsRun = mode === 'finish' || candidate !== head || retest
+  if (testsRun && b.test_commands.length) await markStep($, t, 'testing', stopped)
   for (const cmd of testsRun ? b.test_commands : []) {
     const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
@@ -241,6 +258,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
   if (s) return res(s)
+  await markStep($, t, 'merging', stopped)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }

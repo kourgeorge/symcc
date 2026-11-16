@@ -1,5 +1,5 @@
 // Who drives the board, and which session owns a running task.
-import { type Board, type BoardTask, isSha, intoOf } from './board-file'
+import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf } from './board-file'
 import { parseStamp } from './text'
 import { stoppedLine, stopEnd } from './history'
 import { tryLabel } from './roles'
@@ -102,6 +102,13 @@ export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: 
   return Number.isFinite(at) && isFresh(at, nowMs, staleMs)
 }
 
+/** The step symcc is in while it checks task `t`'s finished work ("checking", "testing", "merging"), or '' when none is going on (or its mark is stale). */
+export function checkStepNow(t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number, staleMs = FINISH_STALE_MS): CheckStep | '' {
+  if (!t.checking || !CHECKED_STATUSES.includes(t.status)) return ''
+  const at = Date.parse(t.checking.at)
+  return Number.isFinite(at) && isFresh(at, nowMs, staleMs) ? t.checking.step : ''
+}
+
 /**
  * Whether task `t`'s worker has already handed back its try: it is "doing" and has a finishing mark,
  * or its last try has an end time (set at the hand-back). Its agent may still be listed (idle), but it
@@ -129,7 +136,7 @@ export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merg
  * not be tried again or failed. Its last try ends as finished, merged.
  */
 export function mergedDone(t: BoardTask, sha: string, when: string, now: string): BoardTask {
-  const { session: _s, finishing: _f, test_output: _o, ...rest } = t
+  const { session: _s, finishing: _f, checking: _c, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${sha.slice(0, 8)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), alreadyMergedLine(t, sha, when)], ...(runs ? { runs } : {}) }
 }
@@ -169,6 +176,6 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
 
 /** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
 export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
-  const { session: _gone, finishing: _f, ...rest } = t
+  const { session: _gone, finishing: _f, checking: _c, ...rest } = t
   return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: [...(t.history ?? []), stoppedLine(t, note)], ...endedBy(t, now, ...stopEnd(note)) } : {}) }
 }

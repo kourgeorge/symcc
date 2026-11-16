@@ -63,8 +63,25 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * files of the owner on the branch it merges into (uncommitted changes, untracked or ignored files in
  * the way); only while "waiting" (a finished worker's try) or "review" (an approve). The regular
  * check, a retry or an approve then only merges it, with no new worker.
+ * `checking`: the step symcc is in while it checks the task's finished work (a finished try, an approve
+ * or a merge that waited for the owner's files), with when that was last said (refreshed like `finishing`);
+ * the board list shows the step instead of the time. Only while "doing", "review" or "waiting".
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; merge_wait?: Blockers }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers }
+
+/** The step of checking a task's finished work: "checking" (commit and scope check), "testing" (the test commands), "merging" (bringing it up to date and moving the branch). */
+export type CheckStep = 'checking' | 'testing' | 'merging'
+export type Checking = { step: CheckStep; at: string }
+export const CHECK_STEPS: readonly CheckStep[] = ['checking', 'testing', 'merging']
+/** The statuses a task may be checked in: a finished try ("doing"), an approve ("review"), a merge waiting for the owner's files ("waiting"). */
+export const CHECKED_STATUSES: readonly SymccStatus[] = ['doing', 'review', 'waiting']
+
+/** `c` when it is a proper checking step, else undefined. */
+export function asChecking(c: unknown): Checking | undefined {
+  if (!c || typeof c !== 'object') return undefined
+  const { step, at } = c as Checking
+  return CHECK_STEPS.includes(step) && typeof at === 'string' && at ? { step, at } : undefined
+}
 
 /** The owner's files that stop a merge: uncommitted changes (`dirty`), untracked and git-ignored files, each only where the merge changes files. */
 export type Blockers = { dirty: string[]; untracked: string[]; ignored: string[] }
@@ -233,9 +250,10 @@ function cleanTask(t: unknown): BoardTask | null {
     else delete x.merge_wait
   }
   if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
-  const { session, finishing, ...rest } = cleanCommitFields(x) as BoardTask
+  const { session, finishing, checking: rawChecking, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'
-  return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}) } as BoardTask
+  const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined
+  return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}), ...(checking ? { checking } : {}) } as BoardTask
 }
 
 /** The branch a task merges into (see SymccTask.merge_into); "main" for a task that has none (made by hand or in a test). */

@@ -303,7 +303,7 @@ async function finishRanOver($: $, id: string, tryNo: number, limitMs: number) {
 
 /** Task `t` failed with `note`, its running try ended as stopped (`end`): its checking and merging was given up a second time in a row. */
 function ranOverFailed(t: BoardTask, note: string, end: string): BoardTask {
-  const { session: _s, finishing: _f, ...rest } = t
+  const { session: _s, finishing: _f, checking: _c, ...rest } = t
   return { ...rest, status: 'failed' as const, note, updated_at: now(), history: [...(t.history ?? []), `${tryLabel(t)}: ${note}`], ...endedBy(t, now(), 'stopped', end) }
 }
 
@@ -356,14 +356,26 @@ function everyMs($: $, ms: number, f: () => void): { cancel(): void } | null {
   }
 }
 
-/** Refreshes (`on`) or removes task `id`'s "being tested and merged" mark, only while it is still "doing" with try `tryNo`. */
+/** Refreshes (`on`) or removes task `id`'s "being tested and merged" mark and its check step (BoardTask.checking), only while it is still "doing" with try `tryNo`. */
 async function markFinishing($: $, id: string, tryNo: number, on = true) {
   // nothing to remove (the task already left "doing", which drops the mark): don't write the board
-  if (!on && !find(await load($), id)?.finishing) return
+  if (!on && !hasMark(find(await load($), id))) return
   await change($, x => {
     const t = find(x, id)
-    if (t?.status !== 'doing' || t.attempts !== tryNo || (!on && !t.finishing)) return x
-    return patchTask(x, id, { finishing: on ? now() : undefined }, t.updated_at)
+    if (t?.status !== 'doing' || t.attempts !== tryNo || (!on && !hasMark(t))) return x
+    const at = now()
+    return patchTask(x, id, on ? { finishing: at, ...(t.checking ? { checking: { ...t.checking, at } } : {}) } : { finishing: undefined, checking: undefined }, t.updated_at)
+  })
+}
+const hasMark = (t: BoardTask | undefined) => !!(t?.finishing || t?.checking)
+
+/** Refreshes (`on`) or removes the check step of task `id` (an approve or a merge waiting for files), only while it is still `status` with try `tryNo`. */
+async function markChecking($: $, id: string, status: SymccTask['status'], tryNo: number, on = true) {
+  if (!find(await load($), id)?.checking) return
+  await change($, x => {
+    const t = find(x, id)
+    if (!t?.checking || t.status !== status || t.attempts !== tryNo) return x
+    return patchTask(x, id, { checking: on ? { ...t.checking, at: now() } : undefined }, t.updated_at)
   })
 }
 
@@ -739,13 +751,22 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
   // given up (mergeRanOver), so it no longer holds the task, its id or the branch's merge turn.
   // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
   const limitMs = finishLimitMs(b.test_commands.length)
-  const how = await withLimit($, limitMs, (gaveUp, over, turn) => mergeWork($, t, b, kind, gaveUp, over, turn))
-  if (how !== OVER) return how
-  approving.delete(t.id)
-  await endCheck($, t.id)
-  const out = await mergeRanOver($, t.id, t.status, kind, limitMs)
-  void pump($)
-  return out
+  // The step shown on the board (BoardTask.checking) is refreshed like a finishing mark, and removed when the merge ends or is given up.
+  const beat = everyMs($, FINISH_BEAT_MS, () => void markChecking($, t.id, t.status, t.attempts).catch(() => undefined))
+  try {
+    const how = await withLimit($, limitMs, (gaveUp, over, turn) => mergeWork($, t, b, kind, gaveUp, over, turn))
+    if (how !== OVER) return how
+    beat?.cancel()
+    await markChecking($, t.id, t.status, t.attempts, false).catch(() => undefined)
+    approving.delete(t.id)
+    await endCheck($, t.id)
+    const out = await mergeRanOver($, t.id, t.status, kind, limitMs)
+    void pump($)
+    return out
+  } finally {
+    beat?.cancel()
+    await markChecking($, t.id, t.status, t.attempts, false).catch(() => undefined)
+  }
 }
 
 /**
