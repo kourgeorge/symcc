@@ -2175,6 +2175,19 @@ test('task rows: a short status column and a subtle extra; the extra goes first 
   expect(statusCell(base, now)).toBe('4m')
   expect(statusCell({ ...base, runs: [] }, now, now - 60_000)).toBe('1m')
   expect(statusCell({ ...base, runs: [] }, now)).toBe('')
+  // while symcc checks the finished work, the step shows instead of the time; a stale step (its copy is gone) does not
+  const stamp = new Date(now - 10_000).toISOString()
+  expect(statusCell({ status: 'doing', runs: [{ started: new Date(now - 240_000).toISOString(), ended: stamp }], checking: { step: 'testing', at: stamp } }, now)).toBe('testing')
+  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'merging', at: stamp } }, now)).toBe('merging')
+  expect(statusCell({ status: 'review', checking: { step: 'testing', at: stamp } }, now)).toBe('testing')
+  expect(statusCell({ status: 'review', checking: { step: 'testing', at: new Date(now - 3_600_000).toISOString() } }, now)).toBe('review')
+  // a task with a running worker still shows its time
+  expect(statusCell(base, now)).toBe('4m')
+  // the step goes when the task leaves the status it was checked in
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'x' }, new Date(now).toISOString())
+  const b1 = patchTask(patchTask(b0, 'T-1', { status: 'review' }, stamp), 'T-1', { checking: { step: 'testing', at: stamp } }, stamp)
+  expect(b1.tasks[0]!.checking).toEqual({ step: 'testing', at: stamp })
+  expect(patchTask(b1, 'T-1', { status: 'done' }, stamp).tasks[0]!.checking).toBeUndefined()
   expect(['review', 'waiting', 'failed', 'paused', 'todo', 'done'].map(status => statusCell({ status: status as never }, now))).toEqual(['review', 'waiting', 'failed', 'paused', '', ''])
   expect(rowExtra(base, tasks)).toBe('frontend · try 1')
   expect(rowExtra({ ...base, role: 'general' }, tasks)).toBe('try 1')

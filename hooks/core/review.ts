@@ -205,7 +205,7 @@ const fileList = (files: readonly string[], n = 5) => {
 export const fixWays = (b: Blockers) => {
   const ways: string[] = []
   if (b.dirty.length) ways.push('commit or stash')
-  if (b.untracked.length || b.ignored?.length) ways.push(b.untracked.length ? 'move, rename or commit' : 'move or rename')
+  if (b.untracked.length || b.ignored.length) ways.push(b.untracked.length ? 'move, rename or commit' : 'move or rename')
   return [...new Set(ways)].join(', or ')
 }
 
