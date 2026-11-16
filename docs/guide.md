@@ -212,12 +212,11 @@ happens, never the words in its hand-back:
 ### A code change with no test
 
 Before a change task is merged, symcc looks at the files its
-commit changed. If it edits code but no test file (a test file is under `tests/`, `test/` or
-`__tests__/`, or has `test` or `spec` in its name), the `tests_with_changes` setting decides:
+commit changed. If it edits code but no test file (a test file is in a `test/`, `tests/`, `__tests__/` or `spec/` folder, or has `test` or `spec` as a name part split by `.` or `_` (`a.test.ts`, `a_test.py`, `test_a.py`); a name that only contains those letters (`latest.ts`, `run-tests.sh`) is not a test), the `tests_with_changes` setting decides:
 `ask` (the default) merges it and tells the lead "T-3 changed code but no test", so the lead
 can add a test task or ask you; `review` makes the task wait for your review instead of
-merging (like `needs_review`), with that note; `off` does nothing. A change to docs only
-(`README*`, `docs/`, `*.md`) is never flagged. Set it with `/symcc-settings tests_with_changes
+merging (like `needs_review`), with that note; `off` does nothing. A change to docs only is never flagged
+(docs are `.md`/`.mdx` files, README / CHANGELOG / LICENSE-style names (no extension or a text one), images, video, audio, fonts and subtitles anywhere, and non-code files under `docs/`; code under `docs/` (`docs/build.ts`) or with a docs-style name (`Notice.tsx`) is code). Set it with `/symcc-settings tests_with_changes
 review`, in the Settings view, or by telling the lead. The lead also writes in every change
 task's details how it will be tested ("Done when: tests show …").
 
