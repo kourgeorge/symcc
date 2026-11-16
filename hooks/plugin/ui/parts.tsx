@@ -47,7 +47,7 @@ export async function paneParts($: $, e: PaneEvent) {
     return [
       ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
-          {l.art ? <Text color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
+          {l.art ? <Text bold color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
           {l.parts.map(p => (
             <Text bold={p.bold} color={C(tone[p.tone])}>{p.text}</Text>
           ))}

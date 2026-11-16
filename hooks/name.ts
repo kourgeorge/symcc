@@ -18,13 +18,15 @@ export const ICON = '\u{1D11E}'
 /**
  * The icon drawn for the banner at the top of the open board: a small treble clef, 4 lines
  * tall and 5 columns wide, every line padded to the same width. A loop at the top, the line
- * down through the middle, the curl around it, and a hook at the bottom.
+ * down through the middle, the curl around it, and a hook at the bottom. It uses the heavy
+ * box-drawing lines (and is drawn in bold) so it reads as a solid mark, not a thin sketch;
+ * heavy lines have no rounded corners, so the curves are square.
  */
 export const ICON_ART = [
-  '  ╭╮ ',
-  '╭─┼╯ ',
-  '╰─┼─╯',
-  ' ╰╯  ',
+  '  ┏┓ ',
+  '┏━╋┛ ',
+  '┗━╋━┛',
+  ' ┗┛  ',
 ]
 
 /** A usable plugin name: letters, digits, ".", "_" or "-"; anything else falls back to DEFAULT_NAME. */
