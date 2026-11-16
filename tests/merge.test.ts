@@ -1364,17 +1364,17 @@ test('NEED FILES still makes the task wait with its question', async () => {
 })
 
 test('a NEED FILES first line followed by detail lines still waits for those files', async () => {
-  const { t } = await workerAnswers('NEED FILES: a, b — reason\nDetails for the next try:\n- a needs the new name\n- b too', { notify: 'off' })
+  const { t } = await workerAnswers('NEED FILES: a.ts, b.ts — reason\nDetails for the next try:\n- a needs the new name\n- b too', { notify: 'off' })
   expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a', 'b'])
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a.ts', 'b.ts'])
 })
 
 test('a change worker with half-done edits that says a short sentence, then NEED FILES, waits for files and nothing is merged', async () => {
   // world(): the task's folder holds edits in src/a.ts, inside the task's files (src/)
-  const { w, t } = await workerAnswers('I need two more files.\nNEED FILES: a, b — reason', { notify: 'off' })
+  const { w, t } = await workerAnswers('I need two more files.\nNEED FILES: a.ts, b.ts — reason', { notify: 'off' })
   expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a', 'b'])
-  expect(t.question).toBe('T-1 needs to change files outside its list: a, b — reason. Allow them?')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a.ts', 'b.ts'])
+  expect(t.question).toBe('T-1 needs to change files outside its list: a.ts, b.ts — reason. Allow them?')
   expect(movedMain(w)).toBe(false)
 })
 
@@ -1385,7 +1385,7 @@ test('a change report that mentions an indented or quoted NEED FILES line in its
 })
 
 test('a short change report ending "NEED FILES: none" (or n/a, -, nothing, no) is not a request and the task merges', async () => {
-  for (const answer of ['Changed a.ts.\nNEED FILES: none', 'Changed a.ts.\nNEED FILES: n/a', 'Changed a.ts.\nNEED FILES: -', 'Changed a.ts.\nNEED FILES: nothing', 'Changed a.ts.\nNEED FILES: No — all inside my list', 'Changed a.ts.\nNEED FILES: none needed']) {
+  for (const answer of ['Changed a.ts.\nNEED FILES: none', 'Changed a.ts.\nNEED FILES: n/a', 'Changed a.ts.\nNEED FILES: -', 'Changed a.ts.\nNEED FILES: nothing', 'Changed a.ts.\nNEED FILES: No — all inside my list', 'Changed a.ts.\nNEED FILES: none needed', 'Changed a.ts.\nNEED FILES: (none)', 'Changed a.ts.\nNEED FILES: [none]', 'Changed a.ts.\nNEED FILES: (none — all inside the list)']) {
     const { w, t } = await workerAnswers(answer, { notify: 'off' })
     expect(t.status).toBe('done')
     expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
