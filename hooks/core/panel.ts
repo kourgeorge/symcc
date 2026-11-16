@@ -345,6 +345,26 @@ const finishedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
 /** Finished tasks, the one that finished last first (then the higher number). */
 const finishedFirst = (x: SymccTask, y: SymccTask) => (finishedMs(y) || 0) - (finishedMs(x) || 0) || num(y.id) - num(x.id)
 
+/** `tasks` in dependency order: each one after every task of `tasks` it waits for (its `after`), ties broken by
+ *  `tie` (lowest first). Waits on tasks not in `tasks` don't count. Tasks caught in a loop keep `tie` order at the end. */
+export function waitOrder<T extends SymccTask>(tasks: T[], tie: (x: T, y: T) => number): T[] {
+  const ids = new Set(tasks.map(t => t.id))
+  const waits = new Map(tasks.map(t => [t.id, new Set((t.after ?? []).filter(a => a !== t.id && ids.has(a)))]))
+  const left = [...tasks].sort(tie)
+  const out: T[] = []
+  const placed = new Set<string>()
+  for (let i = 0; i < left.length; ) {
+    const t = left[i]
+    if ([...waits.get(t.id)!].every(a => placed.has(a))) {
+      out.push(t)
+      placed.add(t.id)
+      left.splice(i, 1)
+      i = 0
+    } else i++
+  }
+  return [...out, ...left]
+}
+
 /** The board panel's list, top to bottom: what needs the owner, what runs, what waits to run, the backlog, then
  *  the finished work. `done` is split into `doneToday` (today's, and any whose day can't be read) and `doneDays`
  *  (older days, newest day first); `dropped` and the done lists put the task that finished last first. */
@@ -380,7 +400,7 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
   return {
     needsYou: needsYouFirst(s.open.filter(t => NEEDS_YOU.includes(t.status))),
     doing: s.open.filter(t => t.status === 'doing'),
-    todo: [...s.open.filter(t => t.status === 'todo').sort(runOrder), ...s.open.filter(t => t.status === 'paused').sort(runOrder)],
+    todo: waitOrder(s.open.filter(t => t.status === 'todo' || t.status === 'paused'), (x, y) => +(x.status === 'paused') - +(y.status === 'paused') || runOrder(x, y)),
     backlog: s.backlog,
     done,
     doneToday: done.filter(t => !isOld(t)),
