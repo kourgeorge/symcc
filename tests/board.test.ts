@@ -2119,6 +2119,25 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   expect(head).toBe('▸ Done     2')
 })
 
+test('the panel to-do list: each task after the open tasks it waits for, else by order then id; loops list every task once', () => {
+  const td = (id: string, order: number, after: string[] = [], status: SymccStatus = 'todo') => ({ ...at(id, status, '2026-11-11T10:00:00Z'), order, after })
+  const ids = (tasks: SymccTask[]) => panelSections(tasks, NOW, 0).todo.map(t => t.id)
+  // a low-order task waiting on a high-order one is listed after it
+  expect(ids([td('T-1', 1, ['T-2']), td('T-2', 9)])).toEqual(['T-2', 'T-1'])
+  // waiting on two tasks: after both; a task waiting on it after that; others keep order
+  expect(ids([td('T-1', 1, ['T-3', 'T-4']), td('T-2', 0, ['T-1']), td('T-3', 5), td('T-4', 7), td('T-5', 2)])).toEqual(['T-5', 'T-3', 'T-4', 'T-1', 'T-2'])
+  // independent tasks keep order then id
+  expect(ids([td('T-3', 2), td('T-1', 2), td('T-2', 1)])).toEqual(['T-2', 'T-1', 'T-3'])
+  // waits on done, dropped or archived tasks don't count
+  expect(ids([td('T-1', 1, ['T-9', 'T-8', 'T-40']), td('T-2', 2), td('T-9', 0, [], 'done'), td('T-8', 0, [], 'dropped')])).toEqual(['T-1', 'T-2'])
+  // paused tasks stay below to-do ones unless a to-do task waits on one
+  expect(ids([td('T-1', 5), td('T-2', 1, [], 'paused')])).toEqual(['T-1', 'T-2'])
+  expect(ids([td('T-1', 5, ['T-2']), td('T-2', 1, [], 'paused')])).toEqual(['T-2', 'T-1'])
+  // a loop: every task once, the loop in order/id after the rest
+  const loop = ids([td('T-1', 1, ['T-2']), td('T-2', 2, ['T-1']), td('T-3', 3)])
+  expect(loop).toEqual(['T-3', 'T-1', 'T-2'])
+})
+
 test('folded rows line up their counts; no brackets', () => {
   const rows = [foldedRow('Backlog', 3, false, 2), foldedRow('Done', 87, false, 2), foldedRow('Dropped', 3, true, 2)]
   expect(rows).toEqual(['▸ Backlog   3', '▸ Done     87', '▾ Dropped   3'])

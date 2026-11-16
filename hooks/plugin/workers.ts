@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged } from './git'
@@ -558,6 +558,13 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
   await saveReport($, t, answer)
   const summary = cutLine(answer, 600) || '(no summary)'
+  // Its time was up: what it handed back is its report; the task fails with its work kept, nothing is merged.
+  if (t.wrap_up) {
+    const limit = timeLimitOf(b.max_minutes, t)
+    if (await writeIfSame($, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: [...cur.history, `${tryLabel(t)}: out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`], ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return
+    tellLead($, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
+    return
+  }
   const q = /^\s*QUESTION:\s*(.+)$/im.exec(answer)
   const need = parseNeedFiles(answer)
   if (aborted) {
@@ -1098,9 +1105,9 @@ export async function cleanLeftoverTmp($: $) {
 }
 
 /**
- * Task `id`'s worker ran over `max` minutes (`minutes`) and was stopped: while it is still "doing" on
- * the same try (`t`, as the check read it), it fails; but when that try's work is already on its
- * branch, it is done instead. The lead is told what happened.
+ * Task `id`'s worker ran out of time (its limit `max` minutes, after `minutes`) and was stopped: while it
+ * is still "doing" on the same try (`t`, as the check read it), it fails, with a note that its work so far
+ * is kept; but when that try's work is already on its branch, it is done instead. The lead is told.
  */
 async function timedOut($: $, id: string, t: BoardTask | undefined, max: number, minutes: number) {
   const same = (cur: BoardTask | undefined): cur is BoardTask => cur?.status === 'doing' && (!t || cur.attempts === t.attempts)
@@ -1110,12 +1117,65 @@ async function timedOut($: $, id: string, t: BoardTask | undefined, max: number,
   const out = await change($, x => {
     const cur = find(x, id)
     if (!same(cur)) return [x, null] as [Board, null]
-    const next = sha ? mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now()) : { ...cur, status: 'failed' as const, note: `stopped: ran over ${max} min`, updated_at: now(), history: [...cur.history, `${tryLabel(cur)}: stopped after ${Math.round(minutes)} min (over the limit)`], ...endedBy(cur, now(), 'timed out', `ran over ${max} min`) }
+    const next = sha ? mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now()) : patchTask(x, id, { status: 'failed', note: outOfTimeNote(max), history: [...cur.history, `${tryLabel(cur)}: stopped after ${Math.round(minutes)} min (out of time); its work so far is kept in its folder and branch`], ...endedBy(cur, now(), 'timed out', `ran over ${max} min`) }, now()).tasks.find(y => y.id === id)!
     return [{ ...x, tasks: x.tasks.map(y => (y.id === id ? next : y)) }, cur] as [Board, BoardTask]
   })
   if (!out) return
   if (sha) tellLead($, `✓ ${id} "${out.title}" is done: its worker ran over ${max} minutes and was stopped, but its work was already merged (${sha.slice(0, 8)}).`)
-  else tellLead($, `${id} "${out.title}": the worker ran over ${max} minutes, so I stopped it. Retry it (${S.N.name} retry), split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
+  else tellLead($, `${id} "${out.title}": its time (${max} minutes) was up, so I stopped the worker and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
+}
+
+/** What the lead is told when task `id`'s worker runs over its limit of `limit` minutes and the owner is asked. */
+export const overtimeLeadText = (id: string, title: string, limit: number) =>
+  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.`
+
+/** Task `id`'s worker runs over its limit: the task keeps "doing" with the question, the owner hears "needs you", the lead is told. */
+async function askOvertime($: $, b: Board, id: string, limit: number) {
+  const t = await change($, x => {
+    const cur = find(x, id)
+    if (cur?.status !== 'doing' || cur.time_ask || cur.wrap_up) return [x, null] as [Board, null]
+    return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: [...cur.history, `${tryLabel(cur)}: ran ${limit} min, over its time limit; asked the owner for more time`] }, now()), cur] as [Board, BoardTask]
+  })
+  if (!t) return
+  sayNeedsYou($, b, t, overtimeQuestion(id, limit))
+  tellLead($, overtimeLeadText(id, t.title, limit))
+}
+
+/** Task `id`'s time is up (`why`): its worker is told to write down what it has and hand back; it is stopped WRAP_UP_GRACE_MS later. */
+async function wrapUp($: $, id: string, why: string) {
+  const t = await change($, x => {
+    const cur = find(x, id)
+    if (cur?.status !== 'doing' || cur.wrap_up) return [x, null] as [Board, null]
+    return [patchTask(x, id, { time_ask: undefined, wrap_up: now(), note: 'time is up: the worker was told to hand back', history: [...cur.history, `${tryLabel(cur)}: time is up (${why}); the worker was told to write down what it has and hand back`] }, now()), cur] as [Board, BoardTask]
+  })
+  if (!t) return false
+  for (const [agentId, w] of workers) if (w.task === id) await $.session.send({ to: { agentId }, text: WRAP_UP_TEXT }).catch(() => undefined)
+  return true
+}
+
+/**
+ * The owner's answer (`answer`) to task `id`'s over-time question (see overtimeQuestion): "+N min" moves its
+ * limit N minutes later and the worker goes on; "Stop it" tells the worker to wrap up. Returns what to say,
+ * or undefined when the task has no such question (the answer is then handled like any other).
+ */
+export async function answerOvertime($: $, id: string, answer: string): Promise<string | undefined> {
+  const b = await load($)
+  const t = find(b, id)
+  if (t?.status !== 'doing' || !t.time_ask) return undefined
+  const pick = parseOvertimeAnswer(answer)
+  if (!pick) throw new Error(`Nothing changed: ${t.id} asks for more time; answer one of ${OVERTIME_OPTIONS.join(', ')} (or "+N min").`)
+  if ('stop' in pick) {
+    await wrapUp($, t.id, 'the owner said stop')
+    return `${t.id}: its worker was told to write down what it has and hand back; it is stopped in ${WRAP_UP_GRACE_MS / 60_000} min at the latest, and the task fails with its work kept.`
+  }
+  const out = await change($, x => {
+    const cur = find(x, t.id)
+    if (cur?.status !== 'doing' || !cur.time_ask) return [x, null] as [Board, null]
+    const extra = (cur.extra_minutes ?? 0) + pick.add
+    return [patchTask(x, t.id, { extra_minutes: extra, time_ask: undefined, note: '', history: [...cur.history, `${tryLabel(cur)}: the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { extra_minutes: extra })} min)`] }, now()), timeLimitOf(x.max_minutes, { extra_minutes: extra })] as [Board, number]
+  })
+  if (out === null) return undefined
+  return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`
 }
 
 /** workers whose agent a check saw ended without a hand-back: failed on the next check if still not handed back */
@@ -1147,12 +1207,21 @@ export async function check($: $) {
         continue
       }
     }
-    // Running too long: stop it and let the lead decide.
-    if (minutes > b.max_minutes) {
-      workers.delete(agentId)
-      await halt($, agentId, `it ran longer than ${b.max_minutes} minutes`)
-      await timedOut($, w.task, t, b.max_minutes, minutes)
+    // Told its time is up: stopped once its short grace to hand back is over.
+    const limit = timeLimitOf(b.max_minutes, t)
+    if (t?.status === 'doing' && t.wrap_up) {
+      if (nowMs - Date.parse(t.wrap_up) >= WRAP_UP_GRACE_MS) {
+        workers.delete(agentId)
+        await halt($, agentId, `its time is up (it ran longer than ${limit} minutes)`)
+        await timedOut($, w.task, t, limit, minutes)
+      }
       continue
+    }
+    // Running too long: it keeps working while the owner is asked for more time; with no answer by the
+    // hard cap it is told to wrap up (and stopped after a short grace).
+    if (t?.status === 'doing' && minutes > limit) {
+      if (!t.time_ask) await askOvertime($, b, w.task, limit)
+      else if (minutes > hardCapOf(b.max_minutes, t)) await wrapUp($, w.task, `no answer from the owner after ${Math.round(minutes)} min`)
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
     // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so it is
