@@ -759,6 +759,12 @@ test('only real test and docs files count, not names that just contain the lette
   expect(untestedChange(['src/latest.ts', 'src/a.test.ts'])).toBe(false)
 })
 
+test('images, video, subtitles and non-code files under docs/ are not code', () => {
+  for (const f of ['docs/architecture.svg', 'docs/video/symcc.mp4', 'docs/video/symcc_youtube.srt', 'docs/video/demo.gif', 'assets/logo.png', 'docs/notes.txt']) expect(untestedChange([f])).toBe(false)
+  for (const f of ['docs/build.ts', 'src/latest.ts', 'src/readme_parser.ts', 'docs/scripts/make.py']) expect(untestedChange([f])).toBe(true)
+  expect(untestedChange(['assets/logo.png', 'src/x.ts'])).toBe(true)
+})
+
 // ---------------- approve and reject ----------------
 
 /** A world where T-1 waits in review: its work is committed (h1) in its worktree and the board is saved. */

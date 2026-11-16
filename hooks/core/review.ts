@@ -29,10 +29,20 @@ export function isTestFile(path: string): boolean {
   return parts.slice(0, -1).some(d => TEST_DIRS.has(d)) || stem.split(/[._]/).some(w => w === 'test' || w === 'tests' || w === 'spec')
 }
 
-/** Whether `path` is only docs: a .md / .mdx file, or a README / CHANGELOG / LICENSE-style name (README, README.txt). Code under docs/ is not docs. */
+const CODE_EXTS = new Set(['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'py', 'sh', 'bash', 'zsh', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'pl', 'lua', 'vue', 'svelte'])
+const MEDIA_EXTS = new Set(['svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'tif', 'tiff', 'ico', 'icns', 'mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'srt', 'vtt', 'ass', 'woff', 'woff2', 'ttf', 'otf', 'eot'])
+
+/**
+ * Whether `path` is only docs: a .md / .mdx file, a README / CHANGELOG / LICENSE-style name (README, README.txt),
+ * an image, video, audio, font or subtitle file anywhere, or any non-code file under a docs/ folder.
+ * Code under docs/ (docs/build.ts) is not docs.
+ */
 export function isDocFile(path: string): boolean {
-  const name = String(path ?? '').toLowerCase().split('/').at(-1) ?? ''
-  return /\.mdx?$/.test(name) || DOC_NAMES.has(name.split('.')[0] ?? '')
+  const parts = String(path ?? '').toLowerCase().split('/')
+  const name = parts.at(-1) ?? ''
+  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
+  if (/\.mdx?$/.test(name) || DOC_NAMES.has(name.split('.')[0] ?? '') || MEDIA_EXTS.has(ext)) return true
+  return parts.slice(0, -1).some(d => d === 'docs' || d === 'doc') && !CODE_EXTS.has(ext)
 }
 
 /** Whether changed files `changed` edit code (anything not docs and not a test) but no test file. */
