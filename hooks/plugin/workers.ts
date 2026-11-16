@@ -719,16 +719,21 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
  * its limit (`limitMs`, see finishLimitMs) and was given up: while it is still `status` it stays
  * there, with a note and a history line saying so; the lead is told once. A merge waiting for the
  * owner's files (`kind` 'merge') keeps its merge_wait: it still waits for them, merges on its own
- * once they are clear, and a retry only merges it. Should it still land
- * later, landedLate marks it done.
+ * once they are clear, and a retry only merges it. But when its merge before was given up the same
+ * way (mergeRanOverBefore), it is failed instead, so the regular check never starts it again on
+ * its own; the lead is told once. Should it still land later, landedLate marks it done.
  */
 async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
   const min = Math.round(limitMs / 60_000)
   const again = kind === 'approve' ? 'approve it again' : `${S.N.name} retry ${id}`
   const what = kind === 'approve' ? 'approved by the owner' : 'merging once your files were out of the way'
+  const twice = `its merge ran over ${min} min twice in a row and was given up both times; nothing was merged`
+  let secondTime = false
   const t = await change($, x => {
     const cur = find(x, id)
     if (cur?.status !== status) return [x, null] as [Board, null]
+    secondTime = kind === 'merge' && mergeRanOverBefore(cur)
+    if (secondTime) return [patchTask(x, id, { status: 'failed', note: twice, history: [...cur.history, `${tryLabel(cur)}: ${what} → ${twice}`] }, now()), cur] as [Board, BoardTask]
     const y = patchTask(x, id, { note: `${kind === 'approve' ? 'approved, but the' : 'the'} merge ran over ${min} min and was given up; ${again}`, ...(kind === 'approve' ? { merge_wait: undefined } : {}), history: [...cur.history, `${tryLabel(cur)}: ${what} → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`] }, now())
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
@@ -738,9 +743,20 @@ async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind:
     if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
     return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
   }
+  if (secondTime) {
+    if (t) tellLead($, `✗ ${id} "${t.title}" failed: its merge ran over ${min} minutes twice in a row and was given up both times, so it is not started again on its own. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
+    return `${id} was not merged and failed: its checking and merging ran over ${min} minutes twice in a row and was given up both times.`
+  }
   if (t) tellLead($, `${id} "${t.title}": its merge ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It keeps waiting for the owner's files and merges on its own at the next regular check once they are out of the way; ${S.N.name} retry ${id} tries the merge again at once.`)
   return `${id} was not merged and keeps waiting: its checking and merging ran over ${min} minutes and was given up. Retry it.`
 }
+
+/**
+ * Whether task `t`'s last merge (waiting for the owner's files) was given up for running over: its
+ * last try line says so (a line like "owner edited files before approving", which that merge may
+ * add, is skipped).
+ */
+const mergeRanOverBefore = (t: BoardTask) => /^try [^:]*: merging once your files were out of the way → its checking and merging ran over \d+ min and was given up\b/.test(t.history.findLast(h => /^try \d/.test(h)) ?? '')
 
 /** How a status is said in a history line: "in review", "waiting". */
 const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)

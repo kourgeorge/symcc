@@ -62,10 +62,9 @@ export const blockerFiles = (b: Blockers): string[] => [...b.dirty, ...b.untrack
 
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string')
 
-/** `v` as Blockers when it is one (an old plain list of names counts as uncommitted changes), else undefined. */
+/** `v` as Blockers when it is one, else undefined. */
 export function asBlockers(v: unknown): Blockers | undefined {
-  if (strings(v)) return { dirty: v, untracked: [], ignored: [] }
-  if (!v || typeof v !== 'object') return undefined
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
   const o = v as Record<string, unknown>
   const pick = (k: string) => (o[k] === undefined ? [] : strings(o[k]) ? (o[k] as string[]) : null)
   const dirty = pick('dirty'), untracked = pick('untracked'), ignored = pick('ignored')
