@@ -1334,7 +1334,7 @@ async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'vo
 
 test('a worker QUESTION makes the task wait for the owner with the question, not fail', async () => {
   saidNeedsYou.clear()
-  const { w, t } = await workerAnswers('I looked around.\nQUESTION: Should the button be red or blue?')
+  const { w, t } = await workerAnswers('QUESTION: Should the button be red or blue?\n')
   expect(t.status).toBe('waiting')
   expect(t.question).toBe('Should the button be red or blue?')
   expect(t.note).toBe('waiting for you')
@@ -1370,6 +1370,21 @@ test('a worker QUESTION with an OPTIONS line saves the options; without one, or 
   expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"')
   for (const bad of ['QUESTION: Which colour?', 'QUESTION: Which?\nOPTIONS: red', `QUESTION: Which?\nOPTIONS: ${'a b c d e f g'.split(' ').join(' | ')}`])
     expect((await workerAnswers(bad, { notify: 'off' })).t).not.toHaveProperty('options')
+})
+
+test('only a hand-back that is just the QUESTION line (and maybe OPTIONS) waits; a report with a "Question:" line merges normally', async () => {
+  const report = 'I changed src/a.ts to fix the colour.\nQuestion: should the button be red or blue?\nAnswer: blue, as the details say.\nTests pass.'
+  const { t } = await workerAnswers(report, { notify: 'off' })
+  expect(t.status).toBe('done')
+  expect(t.question ?? undefined).toBeUndefined()
+  for (const notQuestion of ['I looked around.\nQUESTION: Which colour?', 'question: which colour?', 'QUESTION: Which colour?\nI also changed src/a.ts.', 'QUESTION: Which?\nOPTIONS: red | blue\nmore text'])
+    expect((await workerAnswers(notQuestion, { notify: 'off' })).t.status).not.toBe('waiting')
+  const plain = await workerAnswers('\n  QUESTION: Which colour?  \n\n', { notify: 'off' })
+  expect(plain.t.status).toBe('waiting')
+  expect(plain.t.question).toBe('Which colour?')
+  const withOptions = await workerAnswers('QUESTION: Which colour?\n\nOPTIONS: red | blue\n', { notify: 'off' })
+  expect(withOptions.t.status).toBe('waiting')
+  expect((withOptions.t as { options?: string[] }).options).toEqual(['red', 'blue'])
 })
 
 /** A board where T-1 (files src/) waits after its worker asked for `files` with NEED FILES. */
@@ -3350,6 +3365,15 @@ for (const mode of ['auto', 'review'] as const)
     expect(movedMain(w)).toBe(false)
     expect(leadQueue.join('\n')).toContain('is answered (its time of')
   })
+
+test('an investigation hand-back that restates the question ("Question: ... / Answer: ...") goes to review as answered', async () => {
+  const body = 'Question: Which cache is never cleared?\nAnswer: the one in src/cache.ts; it has no expiry.'
+  const { t } = await investigationAnswers('auto', body)
+  expect(t.status).toBe('review')
+  expect(t.note).toBe('answered; waiting for you to read it')
+  expect(t.answer).toBe(body)
+  expect(t.question ?? undefined).toBeUndefined()
+})
 
 test('an investigation worker that asks a QUESTION still waits for the owner', async () => {
   const { t } = await investigationAnswers('auto', 'QUESTION: Which cache do you mean?')

@@ -161,9 +161,10 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
  * A worker that must change files outside its list stops and answers
  * `NEED FILES: path/a, path/b — reason`. Returns the files and the reason (may be empty), or
  * undefined when the answer is not that. Spaces and backticks around the paths are fine.
+ * "NEED FILES" must be in capitals (a report line like "Need files: none" is not a request).
  */
 export function parseNeedFiles(answer: string): { files: string[]; reason: string } | undefined {
-  const m = /^[\s`*]*NEED\s+FILES\s*:\s*(.*)$/im.exec(answer)
+  const m = /^[\s`*]*NEED\s+FILES\s*:\s*(.*)$/m.exec(answer)
   if (!m) return undefined
   const rest = m[1]!.trim()
   const cut = /\s+(?:—|–|--|-)\s+|\s*[—–]\s*/.exec(rest)
@@ -171,6 +172,19 @@ export function parseNeedFiles(answer: string): { files: string[]; reason: strin
   const reason = cut ? rest.slice(cut.index + cut[0].length).trim() : ''
   const files = [...new Set(list.split(/[,\s]+/).map(f => f.replace(/[`'"]/g, '').trim().replace(/^\.\//, '')).filter(Boolean))]
   return files.length ? { files, reason } : undefined
+}
+
+/**
+ * The question in a worker's hand-back, or undefined when it is a normal hand-back (an answer or a report).
+ * A hand-back is a question only when it is just the `QUESTION: ...` line, "QUESTION:" in capitals at
+ * its start, optionally followed by one `OPTIONS: ...` line (blank lines are fine). So an answer that
+ * restates the question ("Question: ... / Answer: ...") stays an answer.
+ */
+export function parseQuestion(answer: string): string | undefined {
+  const lines = answer.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  const m = /^QUESTION:\s*(.+)$/.exec(lines[0] ?? '')
+  if (!m || lines.length > 2 || (lines.length === 2 && !/^OPTIONS\s*:/.test(lines[1]!))) return undefined
+  return m[1]!.trim()
 }
 
 /** The question a task waits with after its worker asked for more files. */

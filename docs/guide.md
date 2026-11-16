@@ -313,7 +313,8 @@ The life of an investigation:
    answer in the chat, short and plain, and offers the three choices.
 4. You pick one of three buttons (on the task page, or tell the lead):
    - **Done** (`a`, "T-5 is done", tool `symcc approve`): the task ends `done` with the note
-     "answered". Nothing is merged; its folder and branch are removed.
+     "answered". Nothing is merged; its folder is removed, and its branch too, unless it
+     has commits from earlier tries: then the branch is kept (the reply says so).
    - **Keep as a note** (`k`, tool `symcc approve` with `keep_note: true`): Done, plus a
      new small docs task that writes the answer to `docs/research/<topic>.md`. That task is
      a normal change: tested and merged as usual.
