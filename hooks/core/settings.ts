@@ -3,6 +3,7 @@ import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { num } from './text'
+import { logoMotionOn } from './logo'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
 const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' => ((tries ?? 0) < max ? 'retry' : 'fail')
@@ -122,7 +123,7 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'logo_motion', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: off/review/auto; notify: off/sound/voice; findings: auto/backlog; untested: off/ask/review */
 export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
@@ -141,6 +142,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'notify', kind: 'notify', default: 'voice (else sound, else off)', range: 'off / sound / voice', meaning: 'when a task is merged or a worker asks you something: a chime (sound), or "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice)' },
   { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
   { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (docs-only changes are never flagged)' },
+  { name: 'logo_motion', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'the logo at the top of the board panel moves now and then: it sways when idle, turns into a check mark, robot or note when a task merges, a worker starts or a scout finds something, and sings when all is done' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
 ]
@@ -165,6 +167,8 @@ export function settingValue(b: Partial<Board>, name: SettingName): string {
       return scoutFindingsOf(b)
     case 'tests_with_changes':
       return testsWithChangesOf(b)
+    case 'logo_motion':
+      return logoMotionOn(b) ? 'on' : 'off'
     default:
       return String(b[name] ?? d[name])
   }
@@ -209,6 +213,7 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
   if (isNotify(a.notify)) ((y.notify = a.notify), add('notify', a.notify === 'voice' ? 'merged tasks and questions are said out loud' : a.notify === 'sound' ? 'a chime plays when a task is merged or a question waits' : 'nothing plays when a task is merged or a question waits'))
   if (isScoutFindings(a.scout_findings)) ((y.scout_findings = a.scout_findings), add('scout_findings', a.scout_findings === 'backlog' ? 'tasks from scout findings go to the backlog' : 'tasks from scout findings go where the lead decides (todo unless it says backlog)'))
   if (isTestsWithChanges(a.tests_with_changes)) ((y.tests_with_changes = a.tests_with_changes), add('tests_with_changes', a.tests_with_changes === 'review' ? 'a code change with no test file waits for review' : a.tests_with_changes === 'ask' ? 'a code change with no test file merges and the lead is told' : 'code changes with no test file are not flagged'))
+  if (typeof a.logo_motion === 'boolean') ((y.logo_motion = a.logo_motion), add('logo_motion', a.logo_motion ? 'the board logo moves now and then' : 'the board logo stays still'))
   return { board: y, changes }
 }
 

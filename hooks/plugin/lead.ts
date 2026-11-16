@@ -1,9 +1,11 @@
 import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { logoMotionOn } from '../core/logo'
 import { homeBranch } from './git'
 import { type $, S, workers, type PaneView, scoutState, updateView } from './state'
 import { path, locked, change, now, load, safeWrite } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
+import { logoIdle, logoOnPublish } from './logo'
 import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers } from './workers'
 
 // ---------------- who drives the board ----------------
@@ -56,6 +58,8 @@ export async function claimLead($: $, fresh = false): Promise<boolean> {
     await haltWorkers($, 'the task was changed on the board', w => find(b, w.task)?.status !== 'doing')
   }
   if (was !== S.driving || fresh) await publish($, await load($))
+  // the heartbeat (every 30 s) also looks whether the banner logo's idle sway is due
+  void logoIdle($).catch(() => undefined)
   return S.driving
 }
 
@@ -99,8 +103,10 @@ export async function publish($: $, b: Board) {
   const branch_note = gitNote(S.gitState)
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable($)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), logo_motion: logoMotionOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
   await updateView($, () => v)
+  // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
+  void logoOnPublish($, v).catch(() => undefined)
   // the line above the prompt, with the workers and scouts (redrawn every minute while scouts are timed, see refreshStatus)
   const crew = { max_parallel: b.max_parallel, tasks: b.tasks, scouts: v.scouts }
   showStatus($, () => (symccOn(b) ? statusLine(b, S.driving, branch_note, modeOf(b), inPlan(S.plan), crew, Date.now(), statusRoom(S.N.name)) : offStatusLine(S.N.name)))

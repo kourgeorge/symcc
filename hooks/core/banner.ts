@@ -11,6 +11,7 @@ import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches } from './panel'
 import { offStatusLine } from './settings'
+import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
 export function folderName(path: string): string {
@@ -88,7 +89,7 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, dri
 // ---------------- the banner at the top of the board panel ----------------
 
 /** Below this many columns the drawing is dropped and only the text lines are shown. */
-export const BANNER_NARROW = 50
+export const BANNER_NARROW = LOGO_MIN_WIDTH
 /** How a piece of banner text is drawn: accent (the 'ide' theme color), plain, dim or warning. */
 export type BannerTone = 'accent' | 'plain' | 'dim' | 'warning'
 export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
@@ -125,9 +126,10 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
  * The banner lines for the board panel: the name and folder (and a warning when nothing starts), where and who drives, the
  * settings, and (when there are tasks) the counts and total. With `width` of at least
  * BANNER_NARROW the drawing sits on the left; narrower, only the text, cut to fit.
- * The separator under it is `bannerRule(width)`.
+ * The separator under it is `bannerRule(width)`. `logo`: the drawing's frame now (see core/logo.ts; the logo at rest when not given),
+ * LOGO_AREA columns wide, so the text beside it never moves.
  */
-export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME): BannerLine[] {
+export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME, logo: LogoFrame = restFrame()): BannerLine[] {
   // Facts are plain (the panel draws them in the same color as the tabs that aren't selected,
   // which reads well on light and dark themes), not bold; only the " · " separators are dim.
   const sep: BannerPart = { text: ' · ', tone: 'dim' }
@@ -166,7 +168,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // stand alone, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
   if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, ICON_ART.length - 3) }, () => [] as BannerPart[]))
   return texts.map((parts, i) => {
-    const art = wide && ICON_ART[i] ? ` ${ICON_ART[i]}  ` : ''
+    const art = wide && logo[i] !== undefined ? `${logo[i]} ` : ''
     return { art, parts: cutParts(parts, w - art.length) }
   })
 }

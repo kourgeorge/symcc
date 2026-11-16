@@ -38,6 +38,8 @@ export type Board = {
    * it merges and the lead is told) or review (it waits for the owner's review instead of merging)
    */
   tests_with_changes?: TestsWithChanges
+  /** the banner logo's little moves in the board panel (sway, shapes on events, notes when all is done); on unless false (see core/logo.ts) */
+  logo_motion?: boolean
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
   archived?: ArchivedTotals
@@ -239,6 +241,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   archive_days: v => isNum(v) && v >= 0,
   scout_findings: v => isScoutFindings(v),
   tests_with_changes: v => isTestsWithChanges(v),
+  logo_motion: v => typeof v === 'boolean',
 }
 
 /**

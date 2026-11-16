@@ -3,6 +3,7 @@ import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
 import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
+import { logoNow, noteLogoWidth } from '../logo'
 import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
 import { noteForLead, brief } from '../tell'
 import { setBoardMode } from '../workers'
@@ -18,6 +19,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const v: PaneView = await readView($)
   const open = await readOpened($)
   const width = Math.max(20, e.props.bodyColumns ?? 60)
+  noteLogoWidth(width)
   // Theme colors, so the board reads well in both light and dark themes.
   const color: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
   const word: Record<string, string> = STATUS_WORD
@@ -45,7 +47,7 @@ export async function paneParts($: $, e: PaneEvent) {
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
-      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name).map((l, i) => (
+      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name, logoNow()).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
           {l.art ? <Text bold color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
           {l.parts.map(p => (
