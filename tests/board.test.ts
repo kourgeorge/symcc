@@ -1219,6 +1219,23 @@ test("an edit inside the project but outside the worker's own folder is refused;
   expect(resolvePath('/a', '../../..')).toBe('/')
 })
 
+test("a refused edit under .symcc/ says it is not the worker's to edit and suggests no path (T-307)", async () => {
+  const wt = '/repo/.symcc/worktrees/T-5'
+  const board = outsideFolderText('.symcc/board.json', wt)
+  expect(board).toBe(`Refused: .symcc/board.json is symcc's own data (the board, reports and such), not yours to edit. Work only on your task's files in your own folder ${wt}.`)
+  const other = outsideFolderText('.symcc/worktrees/T-55/x.ts', wt)
+  expect(other).toBe(`Refused: .symcc/worktrees/T-55/x.ts is another worker's copy of the project, not yours to edit. Work only on your task's files in your own folder ${wt}.`)
+  for (const text of [board, other, outsideFolderText('.SYMCC/Board.json', wt), outsideFolderText('.symcc', wt)]) {
+    expect(text).toContain('not yours to edit')
+    expect(text).not.toContain(`${wt}/`)
+    expect(text).not.toContain(' instead')
+  }
+  // a different data folder name is honored; other project paths keep the suggested path
+  expect(outsideFolderText('.data/board.json', wt, '.data')).toContain('not yours to edit')
+  expect(outsideFolderText('.symcc-notes/a.md', wt)).toContain(`edit ${wt}/.symcc-notes/a.md instead`)
+  expect(outsideFolderText('README.md', wt)).toContain(`edit ${wt}/README.md instead`)
+})
+
 test("an edit is judged by where symbolic links really lead (T-303)", async () => {
   const root = '/tmp/x1/repo'
   const wt = `${root}/.symcc/worktrees/T-5`

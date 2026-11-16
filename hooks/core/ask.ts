@@ -124,9 +124,20 @@ export function editOutsideFolder(tool: string, input: unknown, worktree: string
   return inside(abs, resolvePath('/', root), false)
 }
 
-/** The reason a worker reads when its edit of project path `rel` is refused for being outside its own folder `worktree`. */
-export const outsideFolderText = (rel: string, worktree: string) =>
-  `Refused: ${rel || 'that path'} is in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: edit ${worktree.replace(/\/+$/, '')}/${rel || '...'} instead.`
+/**
+ * The reason a worker reads when its edit of project path `rel` is refused for being outside its own folder `worktree`.
+ * A path under symcc's data folder `dataDir` (the board, reports, other workers' folders) gets no suggested path: that
+ * folder is git-ignored, so the same path inside the worker's folder would never be committed or merged.
+ */
+export const outsideFolderText = (rel: string, worktree: string, dataDir = '.symcc') => {
+  const data = dataDir.replace(/^\.\/+|\/+$/g, '').toLowerCase()
+  const r = rel.toLowerCase()
+  if (data && (r === data || r.startsWith(`${data}/`))) {
+    const what = r.startsWith(`${data}/worktrees/`) ? "another worker's copy of the project" : "symcc's own data (the board, reports and such)"
+    return `Refused: ${rel} is ${what}, not yours to edit. Work only on your task's files in your own folder ${worktree}.`
+  }
+  return `Refused: ${rel || 'that path'} is in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: edit ${worktree.replace(/\/+$/, '')}/${rel || '...'} instead.`
+}
 
 /** Characters that split a shell command into the words checked by bashOutsideFolder: spaces, quotes, operators, `$(...)`, `=` and `:`. */
 const SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/
