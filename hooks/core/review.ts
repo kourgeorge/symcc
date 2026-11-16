@@ -272,7 +272,14 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
     if (dry.exitCode !== 0) return { ok: false, detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then ${thenDo(action, o.id)}` }
   }
   const cas = await run(['update-ref', '-m', o.note, ref, o.to, o.from])
-  if (cas.exitCode !== 0) return { ok: false, raced: true, detail: `${o.target} moved during the merge; try again` }
+  if (cas.exitCode !== 0) {
+    // Raced only when the branch really is somewhere else now; otherwise (e.g. a stale lock file) trying again can't help.
+    const now = await run(['rev-parse', ref])
+    if (now.exitCode === 0 && now.stdout.trim() !== o.from) return { ok: false, raced: true, detail: `${o.target} moved during the merge; try again` }
+    const lock = /Unable to create '([^']+\.lock)'/.exec(`${cas.stderr}\n${cas.stdout}`)?.[1]
+    if (lock) return { ok: false, detail: `could not move ${o.target}: a git lock file is in the way: ${lock}; if no git is running, remove it, then ${thenDo(action, o.id)}` }
+    return { ok: false, detail: `could not move ${o.target}: ${gitError(cas)}; fix that, then ${thenDo(action, o.id)}` }
+  }
   if (!o.checkedOut) return { ok: true, detail: '' }
   const rt = await run(['read-tree', '-m', '-u', o.from, o.to])
   if (rt.exitCode === 0) return { ok: true, detail: '' }

@@ -145,6 +145,8 @@ a wide enough terminal; if not, run `/symcc`. The status line starts with the mo
 
 - **The panel doesn't open.** The terminal is too narrow. Make it wider, or run `/symcc`.
 - **Tests fail in a worker's copy because packages are missing.** `node_modules/` is not copied. Say in the task to install them first (e.g. `npm ci`), or make the test command do it.
+- **A task fails with "symcc could not commit the work: ... gpg failed to sign the data".** You sign commits (`commit.gpgsign=true`), and the signer can't ask for your key from a background process. Either turn signing off for this repo (`git config commit.gpgsign false`) or set up the signer so it works without a terminal (e.g. a cached key or agent), then retry the task.
+- **A merge fails with "a git lock file is in the way".** A git that crashed left a `.lock` file behind. If no git is running, delete the file it names, then retry.
 
 ## Quick start
 

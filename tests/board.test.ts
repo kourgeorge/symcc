@@ -2462,6 +2462,15 @@ test('the normal merge moves the branch and updates the files; another branch ch
   expect((await moveTarget(moved.run, { ...MOVE, checkedOut: false })).detail).toBe('main moved during the merge; try again')
 })
 
+test('a failed update-ref where the branch did not move is git\'s error, not a race', async () => {
+  const lock = fakeGit({ 'update-ref': [{ exitCode: 128, stderr: "fatal: cannot lock ref 'refs/heads/main': Unable to create '/r/.git/refs/heads/main.lock': File exists." }], 'rev-parse': [{ exitCode: 0, stdout: 'aaaa\n' }] })
+  expect(await moveTarget(lock.run, { ...MOVE, checkedOut: false })).toEqual({ ok: false, detail: 'could not move main: a git lock file is in the way: /r/.git/refs/heads/main.lock; if no git is running, remove it, then say "retry T-3"' })
+  const other = fakeGit({ 'update-ref': [{ exitCode: 128, stderr: 'fatal: disk full' }], 'rev-parse': [{ exitCode: 0, stdout: 'aaaa' }] })
+  const r = await moveTarget(other.run, { ...MOVE, checkedOut: false })
+  expect(r).toEqual({ ok: false, detail: 'could not move main: fatal: disk full; fix that, then say "retry T-3"' })
+  expect(r.raced).toBeUndefined()
+})
+
 // ---------------- a board.json that can't be read ----------------
 
 test('a board.json that is not valid JSON is broken, not an empty board', () => {
