@@ -2,7 +2,8 @@
 // session id, so everything keeps running and is handed over to the new id; a real end stops the timers and
 // lets go of lead.json. The plugin runs as loaded by the test kit, against the in-memory world below and the
 // kit's fake clock (no real waiting). The plugin is loaded fresh for every test.
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 

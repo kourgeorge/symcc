@@ -1,4 +1,5 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import { S } from '../hooks/plugin/state'
 import { type Players, playsFor, spokenProject, withProject, findPlayers, WIN_TEXT_VAR } from '../hooks/plugin/voice'
 

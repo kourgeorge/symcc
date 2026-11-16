@@ -196,6 +196,11 @@ export const MAX_MERGE_RACES = 5
 /** The merge running now (or last) into each branch: the next one into that branch waits for it. */
 const mergeTurns = new Map<string, Promise<unknown>>()
 
+/** Forgets the merges queued per branch (what a reload starts with); for the tests' resetPlugin() only. */
+export function resetMergeTurns() {
+  mergeTurns.clear()
+}
+
 /** Runs `fn` once every earlier merge into branch `target` (through this function) has ended, whether it worked or not, or was let go (`release`). */
 export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Promise<unknown>): Promise<T> {
   const prev = mergeTurns.get(target) ?? Promise.resolve()

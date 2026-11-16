@@ -1,6 +1,7 @@
 // A new project (no scouts folder yet) starts with the plugin's example scouts, all paused (T-221).
 // Files, git and agents are a fake world; time is the fake clock.
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
 

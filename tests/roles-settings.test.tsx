@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'

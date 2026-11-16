@@ -1,6 +1,7 @@
 // T-271: a board tool called before the plugin knows the project folder (S.root), as right after a plugin
 // reload before session.start ran, must never build a path from "/" (it once tried /.symcc/board.lock).
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { path } from '../hooks/plugin/store'
 import { S } from '../hooks/plugin/state'

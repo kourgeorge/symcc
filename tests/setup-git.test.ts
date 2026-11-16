@@ -3,7 +3,8 @@
 // the first commit, the commit itself, and the open tasks' merge_into. The test runtime can't run a real
 // git, so a small fake git below keeps a repo's state (is there a repo, HEAD, the index, the commits) and
 // answers the commands setupGit runs; the files live in memory.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../hooks/board'
 import { setupGit } from '../hooks/plugin/git'
 import { S, leadQueue, meanwhile } from '../hooks/plugin/state'

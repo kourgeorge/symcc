@@ -292,7 +292,7 @@ test('dropLock leaves alone a lock that is not its own', async () => {
 
 test('change() on a board.json that cannot be read refuses, keeps a copy, and never overwrites it', async () => {
   const w = world()
-  const text = '{"version":1,"tasks":[{"id":"T-1",}]} change-test'
+  const text = '{"version":1,"tasks":[{"id":"T-1",}]}'
   w.put(BOARD, text)
   let ran = false
   const err = await change(w.$, x => ((ran = true), x)).then(() => null, (e: Error) => e.message)
@@ -304,6 +304,16 @@ test('change() on a board.json that cannot be read refuses, keeps a copy, and ne
   expect(copies.map(([, t]) => t)).toEqual([text])
   expect(w.toasts.some(t => /board\.json can't be read/.test(t))).toBe(true)
   expect(w.files.has(LOCK)).toBe(false)
+})
+
+test('the same broken board.json text as the test above is reported again here: each test starts with nothing reported', async () => {
+  const w = world()
+  const text = '{"version":1,"tasks":[{"id":"T-1",}]}'
+  w.put(BOARD, text)
+  const err = await change(w.$, x => x).then(() => null, (e: Error) => e.message)
+  expect(err).toMatch(/board\.json can't be read/)
+  expect(w.toasts.some(t => /board\.json can't be read/.test(t))).toBe(true)
+  expect([...w.files.entries()].filter(([p]) => p.startsWith(`${BOARD}.broken-`)).map(([, t]) => t)).toEqual([text])
 })
 
 test('saveBoard says so when the board cannot be moved into place', async () => {

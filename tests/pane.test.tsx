@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'

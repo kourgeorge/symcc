@@ -63,6 +63,13 @@ const runStarted = new Map<string, number>()
 /** scouts whose failed start the owner was already told about (cleared once one starts) */
 const startWarned = new Set<string>()
 
+/** Empties this file's memory of scout runs (what a reload starts with); for the tests' resetPlugin() only. */
+export function resetScoutRuns() {
+  runBefore.clear()
+  runStarted.clear()
+  startWarned.clear()
+}
+
 /**
  * Starts a run of scout `s`. Returns '' when it started, else why not. last_run is only set once the spawn
  * worked, so a failed try doesn't hide the commits since the last real run. When the scout type isn't ready yet

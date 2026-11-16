@@ -2,7 +2,8 @@
 // the /symcc-diff, /symcc-approve and /symcc-reject commands, and which prompts count as the owner's request.
 // The plugin runs as loaded by the test kit; what lies beneath it (files, git, agents) is the fake world below.
 // The plugin is loaded fresh for every test, so its state (stopped agents, the owner's last prompt) starts empty.
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { statsUsage } from '../hooks/core/stats'

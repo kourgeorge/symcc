@@ -2,7 +2,8 @@
 // old workers it stopped to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (RELOAD_SETTLE_MS, 2 s).
 // session.start goes on without those waits; pump starts no work until they are over.
 // The plugin runs as loaded by the test kit; files, git and agents are the fake world below, time is the fake clock.
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { ORPHAN_WAIT_MS, RELOAD_SETTLE_MS } from '../hooks/plugin/workers'
