@@ -37,6 +37,8 @@ function setup(on: On, files: Record<string, string | null>) {
     }
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
+  // the project folder (tool calls need it, see findRoot)
+  on('session.root', () => ({ value: '/proj' }) as never)
   mock.clock(on, { now: Date.now() })
   return { views, touched }
 }

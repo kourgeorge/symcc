@@ -7,7 +7,23 @@ import { S, type $ } from './state'
 // ---------------- the board on disk ----------------
 
 export const now = () => new Date().toISOString()
+/** What a tool answers while the project folder (S.root) is not known yet, e.g. during a plugin reload. */
+export const startingText = () => `${S.N.name} is still starting, try again in a moment`
+
+/** A path inside the project. The hooks that can run before session.start (tool.call, command.run) call findRoot first (T-271). */
 export const path = (rel: string) => `${S.root}/${rel}`
+
+/**
+ * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does.
+ * A hook that runs before session.start (a plugin reload starts the module over) uses this; true once the root is known.
+ */
+export async function findRoot($: $): Promise<boolean> {
+  if (S.root) return true
+  const repo = await $.session.repo().catch(() => null)
+  const root = repo?.root || (await $.session.root().catch(() => '')) || ''
+  if (root && !S.root) S.root = root
+  return !!S.root
+}
 
 /** Counts this copy of the plugin's temp files, so each save gets its own (see tmpName). */
 let tmpCount = 0

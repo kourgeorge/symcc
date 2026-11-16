@@ -862,6 +862,8 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
   on('fs.write', (_, e) => ((written[e.path] = String(e.text)), { value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  // the project folder (tool calls need it, see findRoot)
+  on('session.root', () => ({ value: '/proj' }) as never)
   return written
 }
 
@@ -1536,6 +1538,7 @@ test('/symcc-task shows the latest report, or its first 40 lines and where the f
 test('plan mode: add puts the task in the backlog and says so; leaving plan mode tells the lead once with the list', async ($, on) => {
   const clock = mock.clock(on, { now: Date.now() })
   const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks: [task('T-1', 'done', 'Old')] }), '/board.lock': null }
+  on('session.root', () => ({ value: '/proj' }) as never)
   // the plugin writes board.json to a temp file, then moves it in place with mv: keep the fake board in step
   const temp: Record<string, string> = {}
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))

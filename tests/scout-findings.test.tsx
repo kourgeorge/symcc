@@ -24,6 +24,8 @@ function setup(on: On, board: Record<string, unknown>) {
     if (argv[0] === 'mv' && src! in temp && fileOf(dest!)) files[fileOf(dest!)!] = temp[src!]!
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
+  // the project folder (tool calls need it, see findRoot)
+  on('session.root', () => ({ value: '/proj' }) as never)
   mock.clock(on, { now: Date.now() })
   return files
 }

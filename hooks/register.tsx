@@ -20,7 +20,7 @@ import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
-import { path, load, isOn, now, saveMigrated, startWait } from './plugin/store'
+import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
 import { noteForLead, brief } from './plugin/tell'
 import { playable } from './plugin/voice'
@@ -232,6 +232,9 @@ export const register: Register = on => {
       filesChanged($, fileToolHits(e as unknown as Record<string, unknown>, S.N.scouts, `${S.N.dir}/roles`))
       return r
     }
+    // Before session.start set the project folder (e.g. right after a plugin reload), learn it from the
+    // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
+    if (!(await findRoot($))) return { result: startingText() }
     if (!(await isOn($))) return { result: offAnswer(S.N.name) }
     try {
       return { result: await runTool($, name, e as unknown as In) }
@@ -255,6 +258,8 @@ export const register: Register = on => {
   // panel, /<name>-<word> does one thing. Registered under the plugin's name, so matched here.
   on('command.run', async ($, e, next) => {
     useName($)
+    // Before session.start set the project folder (a plugin reload): learn it from the session first.
+    await findRoot($)
     // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
     if (e.command === `${S.N.name}-stats`) return { text: await statsText($, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
     if (!commandNames(S.N.name).includes(e.command)) return next(e)
