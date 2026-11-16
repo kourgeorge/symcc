@@ -3557,6 +3557,36 @@ test('two Ask mores in a row after a long answer keep the second question and th
   expect(d).not.toContain('yyy')
 })
 
+test('Keep as a note after two tries lists both reports, oldest first, and asks to combine them into the complete answer', async () => {
+  const w = world()
+  const runs = [
+    { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
+    { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
+  ]
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
+  w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
+  w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
+  await runTool(w.$, 'approve', { task: 'T-1', keep_note: true })
+  const d = find(await load(w.$), 'T-2')!.details
+  expect(d).toContain('oldest first: .symcc/reports/T-1-try-1.md, .symcc/reports/T-1-try-2.md.')
+  expect(d).toContain('combine them: write the final, complete answer, applying each later try\'s changes to the earlier answers')
+  expect(d).toContain('The latest answer (try 2):\nChange point 2. Everything else is the same as try 1.')
+  // one try: one report, as before
+  const one = keepNoteTask(find(await load(w.$), 'T-1')!, 'a', ['.symcc/reports/T-1-try-1.md'])
+  expect(one.details).toContain('The full answer is in .symcc/reports/T-1-try-1.md.')
+  expect(one.details).not.toContain('combine')
+})
+
+test('the investigation worker prompt after Ask more asks for the complete answer, not only what changed', () => {
+  const [b0] = boardWith('auto', [], { kind: 'investigation', status: 'review' } as Partial<BoardTask>)
+  expect(WORKER_PROMPT(b0.tasks[0]!, b0, WT)).not.toContain('complete answer')
+  const b1 = askMoreTask(b0, 'T-1', 'and point 2?', 'first draft', undefined, ISO)
+  const p = WORKER_PROMPT(find(b1, 'T-1')!, b1, WT)
+  expect(p).toContain('hand back your complete answer, the whole updated text')
+  expect(p).toContain('not only what changed')
+})
+
 test('Keep as a note never overwrites an existing research note: it picks <topic>-2.md', async () => {
   const { w } = await investigationAnswers('auto', 'Esc closes the panel.', { title: 'Esc in panels' })
   w.put(`${ROOT}/docs/research/esc-in-panels.md`, '# old note')

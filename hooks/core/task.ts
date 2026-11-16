@@ -399,20 +399,28 @@ export function noteFile(t: Pick<BoardTask, 'id' | 'title'>, taken: readonly str
 
 /**
  * The new docs task that keeps answered investigation `t`'s answer as a research note, as addTask takes it:
- * it writes docs/research/<topic>.md from the saved answer (`answer`, the full report when there is one; `report`:
- * that report's file) and merges as usual. Made by the owner, as a follow-up of `t`. `taken`: files the note must
- * not use (existing docs/research files and those open tasks write, see noteFilesInUse); -2, -3… is added then.
+ * it writes docs/research/<topic>.md from the saved answer (`answer`, the latest full report when there is one) and
+ * merges as usual. `reports`: every try's report file (a single file is taken too). After Ask more a later try's
+ * answer may be only changes to an earlier one, so with more than one report the details list them all, oldest first,
+ * and ask the docs worker to write the final, complete answer from them. Made by the owner, as a follow-up of `t`.
+ * `taken`: files the note must not use (existing docs/research files and those open tasks write, see
+ * noteFilesInUse); -2, -3… is added then.
  */
-export function keepNoteTask(t: BoardTask, answer: string, report?: string, taken: readonly string[] = []): { title: string; details: string; files: string[]; role: string; kind: TaskKind; origin: OriginInput } {
+export function keepNoteTask(t: BoardTask, answer: string, reports: string | readonly string[] = [], taken: readonly string[] = []): { title: string; details: string; files: string[]; role: string; kind: TaskKind; origin: OriginInput } {
   const file = noteFile(t, taken)
-  const head = `Write ${file}: a research note that keeps the answer of ${t.id} ("${t.title}"), so later tasks can read it. Use the answer below as it is: tidy it into a short note with a title, the question, the answer and how it was found. Don't look into the question again.`
-  const where = report ? `\n\nThe full answer is in ${report}.` : ''
-  const room = DETAILS_MAX - head.length - where.length - 40
+  const files = [...new Set(typeof reports === 'string' ? [reports] : reports)].sort((a, b) => tryOf(a) - tryOf(b))
+  const many = files.length > 1
+  const head = `Write ${file}: a research note that keeps the answer of ${t.id} ("${t.title}"), so later tasks can read it. Use the answer${many ? 's' : ''} below as ${many ? 'they are' : 'it is'}: tidy it into a short note with a title, the question, the answer and how it was found. Don't look into the question again.`
+  const where = many
+    ? `\n\nThis investigation had ${files.length} tries (the owner asked more), and each try's answer is in its report, oldest first: ${files.join(', ')}. A later try's answer may give only changes to an earlier one ("everything else is the same"). Read them all and combine them: write the final, complete answer, applying each later try's changes to the earlier answers, not only the last answer.`
+    : files.length ? `\n\nThe full answer is in ${files[0]}.` : ''
+  const label = many ? `The latest answer (try ${tryOf(files.at(-1)!)})` : 'The answer'
+  const room = DETAILS_MAX - head.length - where.length - label.length - 40
   const body = answer.trim() || t.answer?.trim() || '(no answer saved)'
   const text = body.length > room ? `${body.slice(0, Math.max(0, room - 1))}…` : body
   return {
     title: `Keep ${t.id}'s answer as a note: ${t.title}`.slice(0, 200),
-    details: `${head}${where}\n\nThe answer:\n${text}`,
+    details: `${head}${where}\n\n${label}:\n${text}`,
     files: [file],
     role: 'docs',
     kind: 'change',
@@ -420,8 +428,14 @@ export function keepNoteTask(t: BoardTask, answer: string, report?: string, take
   }
 }
 
+/** The try number in a report file's name (…-try-<N>.md), 0 when there is none. */
+const tryOf = (file: string) => Number(/-try-(\d+)\.md$/.exec(file)?.[1] ?? 0)
+
 /** How each part Ask more adds to a task's details starts. */
 const ASK_MARK = '\n\nFollow-up question (owner, '
+
+/** Whether the owner asked more on `t` (its details hold a follow-up question), so its next try follows an earlier answer. */
+export const askedMore = (t: Pick<BoardTask, 'details'>): boolean => t.details.includes(ASK_MARK)
 
 /** An earlier Ask more part with its answer replaced by the path to its report (or a word that it was cut). */
 function shortAsk(part: string): string {
