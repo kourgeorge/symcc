@@ -14,19 +14,26 @@ export function needsReview(b: { mode?: unknown }, t: Pick<SymccTask, 'needs_rev
 
 // ---------------- a code change with no test ----------------
 
-const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec'])
+const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec', 'e2e', 'cypress'])
 const DOC_NAMES = new Set(['readme', 'changelog', 'license', 'licence', 'copying', 'notice', 'authors', 'contributing'])
 
 /**
- * Whether `path` is a test file: under a test/, tests/, __tests__/ or spec/ folder, or with a "test" or
- * "spec" name part split by "." or "_" (a.test.ts, a.spec.ts, a_test.py, test_a.py). Names that only
- * contain those letters (latest.ts, inspect.ts, run-tests.sh) are not tests.
+ * Whether `path` is a test file: under a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder or a
+ * folder ending in .Test / .Tests (Foo.Tests/); with a "test" or "spec" name part split by "." or "_"
+ * (a.test.ts, a_test.py, test_a.py), a "test" or "spec" part split by "-" (a-test.ts, a-spec.ts), a .cy. part
+ * (a.cy.ts), or a CamelCase name ending in Test / Tests (FooTest.java, FooTests.cs). Names that only contain
+ * those letters (latest.ts, Contest.py, inspect.ts) are not tests, and neither is run-tests.sh (it runs tests).
  */
 export function isTestFile(path: string): boolean {
-  const parts = String(path ?? '').toLowerCase().split('/')
-  const name = parts.at(-1) ?? ''
+  const orig = String(path ?? '').split('/')
+  const parts = orig.map(p => p.toLowerCase())
+  const name = orig.at(-1) ?? ''
   const stem = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
-  return parts.slice(0, -1).some(d => TEST_DIRS.has(d)) || stem.split(/[._]/).some(w => w === 'test' || w === 'tests' || w === 'spec')
+  const low = stem.toLowerCase()
+  if (parts.slice(0, -1).some(d => TEST_DIRS.has(d) || d.endsWith('.tests') || d.endsWith('.test'))) return true
+  if (low.split(/[._]/).some(w => w === 'test' || w === 'tests' || w === 'spec' || w === 'cy')) return true
+  if (low.split(/[-._]/).some(w => w === 'test' || w === 'spec')) return true
+  return stem.split(/[-._]/).some(w => /(?:^|[a-z0-9])Tests?$/.test(w))
 }
 
 const CODE_EXTS = new Set(['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'py', 'sh', 'bash', 'zsh', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'pl', 'lua', 'vue', 'svelte'])

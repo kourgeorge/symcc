@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, type WorkerQuestion } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, type WorkerQuestion } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -768,6 +768,12 @@ test('images, video, subtitles and non-code files under docs/ are not code', () 
 test('code with a docs-style name (Notice.tsx, license.ts) is still code', () => {
   for (const f of ['src/components/Notice.tsx', 'src/license.ts', 'lib/authors.py', 'src/changelog.ts', 'hooks/core/contributing.js']) expect(untestedChange([f])).toBe(true)
   for (const f of ['README', 'README.md', 'README.txt', 'LICENSE', 'CHANGELOG.txt', 'NOTICE', 'docs/guide.mdx', 'CONTRIBUTING.rst', 'COPYING']) expect(untestedChange([f])).toBe(false)
+})
+
+test('dash, CamelCase, .Tests, Cypress and e2e test names count as tests', () => {
+  for (const f of ['src/a-test.ts', 'src/a-spec.ts', 'src/FooTest.java', 'Foo.Tests/FooTests.cs', 'Foo.Test/Bar.cs', 'cypress/e2e/a.cy.ts', 'src/a.cy.js', 'e2e/login.ts', 'src/Test.java']) expect(isTestFile(f)).toBe(true)
+  for (const f of ['src/latest.ts', 'src/Contest.py', 'src/inspect.ts', 'scripts/run-tests.sh', 'src/LATEST.ts', 'src/Attestation.java', 'src/protest-x.ts']) expect(isTestFile(f)).toBe(false)
+  expect(untestedChange(['src/Foo.java', 'src/FooTest.java'])).toBe(false)
 })
 
 // ---------------- approve and reject ----------------
