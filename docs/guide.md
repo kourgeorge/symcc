@@ -40,7 +40,7 @@ And the ideas that tie them together:
 | Term | What it means here |
 |---|---|
 | **Discovery → triage → implementation → review → merge** | A scout or you find work, the lead puts it on the board, a worker builds it, you review it, symcc merges it |
-| **Scope check** | Each task lists the files it may change (its scope); anything else is not merged; a worker that needs more answers `NEED FILES` |
+| **Scope check** | Each task lists the files it may change (its scope); anything else is not merged; a worker's edit outside it is refused and becomes a file request to you |
 | **Automatic retries** | Failing tests send the task back to a new worker with the failing test output, up to `auto_retries` times (2 by default) |
 | **Test gate** | Your test commands must pass before anything is merged |
 | **Approval before merge** | Human-in-the-loop review: modes `auto`, `review` or `off`; see the diff, approve, or reject with a reason; one task can be marked "needs review" |
@@ -62,8 +62,9 @@ picks up again next time.
    │         ├──▶ tests fail ──▶ back to todo with the      │
    │         │    failing output (up to 2 times by itself)  │
    │         ├──▶ still failing / out of time ──▶ failed ───┘
-   │         ├──▶ worker needs files outside its list ──▶ waiting (NEED FILES)
-   │         └──▶ worker has a question ──▶ waiting (QUESTION), "symcc: T-5 needs you"
+   │         ├──▶ worker's edit outside its list refused ──▶ waiting (file request)
+   │         ├──▶ worker asks (ask_owner tool) ──▶ waiting, "symcc: T-5 needs you"
+   │         └──▶ worker's run ends on an error or a refusal ──▶ failed (with the reason)
    │
    ├── review   (only in review mode) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
@@ -99,9 +100,12 @@ lower task number).
 
 ### When a worker needs you
 
-A worker that can't go on without a decision from you stops and answers
-`QUESTION: …`. (A worker that needs files outside its list answers `NEED FILES: …`; see
-the scope check below.) The task does not fail: it goes straight to `waiting` with the
+A worker that can't go on without a decision from you calls its `ask_owner` tool
+(a tool only workers have, since Claude Code gives subagents no way to ask you
+directly) with the question and, if it likes, 2 to 6 choices, and then stops. (A worker
+that tries to edit a file outside its list is refused, and that becomes a file request;
+see the scope check below.) symcc never reads a question or a file request out of what
+a worker writes in its hand-back: that text is only its report. The task does not fail: it goes straight to `waiting` with the
 question, shows under NEEDS YOU on the board, and with `notify` on you hear "symcc: T-5 needs you" (or a chime)
 (once per question, only in the session that drives the board). The lead is told too. It
 answers it itself only when you already clearly said the answer, and then tells you what it
@@ -113,13 +117,13 @@ changed is kept.
 
 **Answering a waiting task on the board.** Open the task (Enter on it under NEEDS YOU):
 
-- **A file request (`NEED FILES`)** shows three buttons, also on the number keys:
+- **A file request** (the worker's edits outside its list were refused) shows three buttons, also on the number keys:
   **1 Allow** adds the files to the task and sends it back to work in one step (its history
   says "the owner allowed files: + a, + b"; the lead hears of it later, it is not woken up).
   **2 Don't allow** keeps the task waiting with the note "files not allowed" and tells the
   lead at once, so it drops the task or narrows the plan. **3 Answer…** opens a text box.
-- **A question with choices.** A worker may add a line `OPTIONS: a | b | c` (2 to 6 choices)
-  after its `QUESTION:` line. Each choice is a button with its number key, plus **Answer…**
+- **A question with choices.** A worker may give 2 to 6 choices with its question.
+  Each choice is a button with its number key, plus **Answer…**
   for your own words. Picking one is your answer (history: the owner answered: “b”) and
   sends the task back to work.
 - **Any other question** has a text box: type the answer and press Enter.
@@ -128,15 +132,30 @@ changed is kept.
 
 ## What happens when a worker finishes
 
-This is where symcc keeps your branch safe. Step by step:
+This is where symcc keeps your branch safe. First, how the worker's run ended decides what
+happens, never the words in its hand-back:
+
+- it asked you (`ask_owner`) → the task waits with its question;
+- an edit outside its files was refused → the task waits for you to allow those files;
+- it was stopped → the task fails ("the worker was stopped");
+- its run ended on an API error (retries used up, the context limit) or the model refused →
+  the task fails with that reason, and nothing is checked or merged (its work stays in its
+  folder and branch, so a retry continues from there);
+- otherwise it is finished, and its work goes through these steps (an investigation goes to
+  review with its answer instead):
+
 
 1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
 2. **Scope check.** Every task lists the files it may change (its scope). If the worker changed
    anything else, nothing is merged (the note says which files; add them to `files` with
-   `change`, or split the task). A worker that sees it needs another file should not change
-   it: it stops and answers `NEED FILES: path/a, path/b — reason`, and the task waits for
-   you to allow those files (press Allow on its page, or tell the lead, who uses `change`) or drop it.
+   `change`, or split the task). When a worker tries to edit (Edit, Write or
+   NotebookEdit) a file outside its list, symcc refuses that edit, records the path, and tells
+   the worker to stop and hand back. Nothing is merged, even if it already made other edits
+   (they are kept in its folder for the next try), and the task waits for you to allow those
+   files (press Allow on its page, or tell the lead, who uses `change`) or drop it. Files
+   written another way (for example by a shell command) are still caught here, at the merge.
+   An investigation has no file list, so its edits are never refused (they are not kept anyway).
 3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).
@@ -184,7 +203,7 @@ This is where symcc keeps your branch safe. Step by step:
 
 The lead (the main chat) gets a "[symcc] Board update" message only when something needs it:
 a worker finished, failed or is ready for review, a task waits for you (a question or
-`NEED FILES`), a scout found something, a conflict or failing tests need a decision, or the
+a file request), a scout found something, a conflict or failing tests need a decision, or the
 board file is broken. The worker's or scout's own report already reaches the chat as that
 agent's message, so the board update gives just the outcome ("T-3 merged into main (abc12345);
 tests passed") and doesn't repeat it. A scout that answers `NOTHING` sends nothing.
@@ -307,7 +326,7 @@ The life of an investigation:
 2. The worker finds the answer and hands it back in full. Nothing is committed, tested or
    merged, and any file it wrote is not kept. If its time runs out, it hands back what it
    has so far (the note says "answered (time ran out)"). A worker that needs you to decide
-   something still asks a QUESTION, and the task waits for you as usual.
+   something still asks with its `ask_owner` tool, and the task waits for you as usual.
 3. The task goes to `review` with the note "answered; waiting for you to read it", **even in
    mode `auto`**: an answer is for you, so it never ends on its own. The lead tells you the
    answer in the chat, short and plain, and offers the three choices.
@@ -475,8 +494,8 @@ before this was kept show `from: unknown`.
   (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or `open` for
   everything not done, dropped or backlog) and `search` (words, matched the same way as the
   board panel's `f` search) narrow the list.
-- **The report files.** Every try's full final answer (its report, or its NEED FILES or
-  QUESTION text) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
+- **The report files.** Every try's full final answer (the worker's hand-back, also
+  when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
   Tasks from before this was kept say "no saved report".
 - **The research note.** When a task's merged work adds or changes a file under
   `docs/research/`, the task page shows it in Details as `Note: docs/research/<file>.md`.

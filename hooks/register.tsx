@@ -12,8 +12,9 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, isWorkerType, intoOf } from './board'
+import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, WEB_SAFETY_LINE, isWorkerType, intoOf, ASK_TOOL, EXTRA_TOOLS } from './board'
 import { findArchived, saveArchiveMigrated } from './plugin/archive'
+import { ASK_TOOL_DEF, askCall, checkEdit } from './plugin/ask'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
@@ -42,11 +43,11 @@ export async function registerAll($: $) {
   const ok = (p: Promise<unknown>) => p.catch(() => undefined)
   // One worker type for the base tools, and one more per set of extra tools a role can ask for
   // (e.g. "worker-web" for WebSearch and WebFetch); a task is spawned as the type its role needs.
-  for (const w of workerAgentTypes())
+  for (const w of workerAgentTypes(S.N.name))
     await ok($.agent.register({
       name: w.suffix,
-      description: `${S.N.name} worker${w.suffix === 'worker' ? '' : ` (with ${w.tools.slice(BASE_WORKER_TOOLS.length).join(', ')})`}: builds one task from the ${S.N.name} board in its own worktree. Started by ${S.N.name} only.`,
-      prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary.${w.suffix === 'worker' ? '' : ` ${WEB_SAFETY_LINE}`}`,
+      description: `${S.N.name} worker${w.suffix === 'worker' ? '' : ` (with ${w.tools.filter(t => EXTRA_TOOLS.includes(t)).join(', ')})`}: builds one task from the ${S.N.name} board in its own worktree. Started by ${S.N.name} only.`,
+      prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. To ask the owner something, call the ${S.N.tool(ASK_TOOL)} tool; if an edit is refused as outside your files, stop and hand back.${w.suffix === 'worker' ? '' : ` ${WEB_SAFETY_LINE}`}`,
       tools: w.tools,
       background: true,
       permissionMode: 'acceptEdits',
@@ -59,6 +60,8 @@ export async function registerAll($: $) {
     background: true,
   }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
+  // the workers' question tool, next to the lead's tools (only a running worker's call is taken; see askCall)
+  await ok($.tool.register({ ...ASK_TOOL_DEF(), isDeferred: false }))
   for (const c of [
     { name: S.N.name, description: `Open the ${S.N.name} board panel: tasks and scouts` },
     { name: `${S.N.name}-tasks`, description: `Open the ${S.N.name} board panel on the tasks view` },
@@ -226,10 +229,15 @@ export const register: Register = on => {
   // a worker or scout the plugin stopped can't do anything more, so every tool it tries is
   // refused; the lead's own tools, mcp__<name>__<tool>, run here; and writing, editing or deleting
   // a scout file (Write, Edit, MultiEdit, or rm and the like in Bash) reschedules the scouts, a role file reloads the roles.
+  // The workers' question tool, mcp__<name>__ask_owner, runs here too: it knows the calling worker from the agentId.
   const toolNames = TOOLS().map(t => t.name)
   on('tool.call', async ($, e, next) => {
     useName($)
     if (e.agentId && stopped.has(e.agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
+    if (e.tool === S.N.tool(ASK_TOOL)) {
+      if (!(await findRoot($))) return { result: startingText() }
+      return { result: await askCall($, e.agentId, e as unknown as Record<string, unknown>).catch((err: Error) => `error: ${err.message}`) }
+    }
     const name = toolNames.find(t => e.tool === S.N.tool(t))
     if (!name) {
       const r = await next(e)
@@ -247,14 +255,23 @@ export const register: Register = on => {
     }
   })
 
-  // A worker's or scout's run ended: its final answer arrives here.
+  // A worker's edit (Edit, Write, NotebookEdit) outside its change task's files is refused, and the path is
+  // recorded as a request to the owner (see checkEdit). Everything else is decided as usual.
+  on('tool.check', async ($, e, next) => {
+    useName($)
+    const deny = e.agentId ? await checkEdit($, e.agentId, e.tool, e.input).catch(() => undefined) : undefined
+    return deny ? { decision: 'deny', reason: deny } : next(e)
+  })
+
+  // A worker's or scout's run ended: its final answer arrives here, with why it ended (e.reason).
   on('turn.complete', async ($, e, next) => {
     useName($)
     const r = await next(e)
-    if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
+    const end = { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}) }
+    if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, end, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
-    else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, e.isAborted, usageTokens(e.usage)) : undefined)).catch(() => undefined)
+    else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, end, usageTokens(e.usage)) : undefined)).catch(() => undefined)
     return r
   })
 

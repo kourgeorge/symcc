@@ -120,8 +120,8 @@ export function sayDone($: $, b: Board, id: string) {
 export const saidNeedsYou = new Set<string>()
 
 /**
- * Says "symcc: T-5 needs you" (or chimes) when task `t`'s worker asked the owner something (QUESTION or
- * NEED FILES), once per waiting question, under the same rules and in the same queue as "T-3 done".
+ * Says "symcc: T-5 needs you" (or chimes) when task `t`'s worker asked the owner something (its ask_owner
+ * call, or files outside its list), once per waiting question, under the same rules and in the same queue as "T-3 done".
  */
 export function sayNeedsYou($: $, b: Board, t: Pick<SymccTask, 'id' | 'attempts'>, question = '') {
   const key = `${t.id}#${t.attempts}#${question}`

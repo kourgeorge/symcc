@@ -2,6 +2,7 @@
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { frontMatterLine, splitFrontMatter } from './text'
+import { ASK_TOOL } from './ask'
 
 // ---------------- worker roles ----------------
 
@@ -50,11 +51,15 @@ export function asBaseWorkers<A extends { type?: string }>(agents: A[], name: st
   return agents.map(a => (isWorkerType(a.type, name) && a.type !== `${name}:worker` ? { ...a, type: `${name}:worker` } : a))
 }
 
-/** Every worker agent type to register: the base one, and one per set of extra tools a role can ask for. */
-export function workerAgentTypes(): { suffix: string; tools: string[] }[] {
+/**
+ * Every worker agent type to register: the base one, and one per set of extra tools a role can ask for.
+ * Each also gets the workers' question tool (mcp__<name>__ask_owner), last, since Claude Code takes
+ * AskUserQuestion away from every subagent.
+ */
+export function workerAgentTypes(name: string = DEFAULT_NAME): { suffix: string; tools: string[] }[] {
   const sets: string[][] = [[]]
   for (const t of EXTRA_TOOLS) for (const s of [...sets]) sets.push([...s, t])
-  return sets.map(s => ({ suffix: workerTypeSuffix(s), tools: [...BASE_WORKER_TOOLS, ...EXTRA_TOOLS.filter(t => s.includes(t))] }))
+  return sets.map(s => ({ suffix: workerTypeSuffix(s), tools: [...BASE_WORKER_TOOLS, ...EXTRA_TOOLS.filter(t => s.includes(t)), namesFor(name).tool(ASK_TOOL)] }))
 }
 
 /** The role a task gets when none is set: today's plain worker. */

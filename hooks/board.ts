@@ -6,6 +6,7 @@
 export * from './core/board-file'
 export * from './core/origin'
 export * from './core/task'
+export * from './core/ask'
 export * from './core/review'
 export * from './core/commands'
 export * from './core/git-setup'

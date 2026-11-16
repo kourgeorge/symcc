@@ -3,7 +3,7 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout } from '../../types'
-import { type RoleDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
+import { type RoleDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, type WorkerQuestion } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 
@@ -145,7 +145,12 @@ export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_min
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
-export type Worker = { task: string; worktree: string; branch: string; since: number }
+/**
+ * A running worker. What its try recorded until its hand-back arrives, which finishWork then decides from (never
+ * from the hand-back's text): `question`, its ask_owner call (the last one wins); `requested`, the paths of
+ * its edits that were refused as outside its task's files.
+ */
+export type Worker = { task: string; worktree: string; branch: string; since: number; question?: WorkerQuestion; requested?: string[] }
 export const workers = new Map<string, Worker>() // agentId → work
 /** tasks this copy has claimed and is starting a worker for (not yet in `workers`) */
 export const starting = new Set<string>()

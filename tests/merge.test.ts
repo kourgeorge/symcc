@@ -1,13 +1,13 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse } from '../hooks/board'
-import { parseNeedFiles, parseQuestion, parseOptions } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
-import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
+import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns, type Worker } from '../hooks/plugin/state'
+import { askCall } from '../hooks/plugin/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
-import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, type TurnEnd } from '../hooks/plugin/workers'
 import { claimLead } from '../hooks/plugin/lead'
 import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
@@ -948,7 +948,7 @@ async function finishing(during: (w: ReturnType<typeof world>) => Promise<unknow
     said.push(await during(w).catch((e: Error) => `error: ${e.message}`))
   })
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', 'made the change', false)
+  await workerFinished(w.$, 'ag1', 'made the change')
   return { w, said, t: find(await load(w.$), 'T-1')! }
 }
 
@@ -1190,7 +1190,7 @@ test('a task dropped while its branch clashes with main does not go back to "tod
     await runTool(w.$, 'drop', { task: 'T-1' })
   })
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', 'made the change', false)
+  await workerFinished(w.$, 'ag1', 'made the change')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('dropped')
   expect(t.conflict_tries ?? 0).toBe(0)
@@ -1320,22 +1320,26 @@ test('an archived task can still be looked up, is read-only, and an archived dro
 // ---------------- a worker asks the owner ----------------
 
 /** T-1 is "doing" with worker ag1, which then answers `answer`; notify and driving as given. */
-async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git> } = {}) {
+/**
+ * T-1's worker (files src/; its folder holds edits in src/a.ts) hands back `answer`. `ask` / `requested`: what its
+ * try recorded (an ask_owner call, edits refused as outside its files); `end`: why its turn ended.
+ */
+async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git>; ask?: Worker['question']; requested?: string[]; end?: TurnEnd } = {}) {
   const w = world(o.git)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'] })
   await saveBoard(w.$, { ...b0, notify: o.notify ?? 'voice' })
   w.put(`${WT}/.git`, 'gitdir: x')
   S.driving = o.driving ?? true
   sayQueue.splice(0)
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', answer, false)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0, question: o.ask, requested: o.requested })
+  await workerFinished(w.$, 'ag1', answer, o.end)
   S.driving = false
   return { w, t: find(await load(w.$), 'T-1')! }
 }
 
-test('a worker QUESTION makes the task wait for the owner with the question, not fail', async () => {
+test("a worker's ask_owner question makes the task wait for the owner with the question, not fail", async () => {
   saidNeedsYou.clear()
-  const { w, t } = await workerAnswers('QUESTION: Should the button be red or blue?\n')
+  const { w, t } = await workerAnswers('I asked the owner.', { ask: { question: 'Should the button be red or blue?' } })
   expect(t.status).toBe('waiting')
   expect(t.question).toBe('Should the button be red or blue?')
   expect(t.note).toBe('waiting for you')
@@ -1345,127 +1349,96 @@ test('a worker QUESTION makes the task wait for the owner with the question, not
   expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
 })
 
-test('a worker QUESTION is cut to 1000 characters on the task', async () => {
-  const { t } = await workerAnswers(`QUESTION: ${'x'.repeat(1500)}`, { notify: 'off' })
+test("a worker's question with options saves the options, and the lead is told to offer them", async () => {
+  const { t } = await workerAnswers('', { notify: 'off', ask: { question: 'Which colour?', options: ['red', 'blue', 'green'] } })
   expect(t.status).toBe('waiting')
-  expect(t.question!.length).toBe(1000)
+  expect(t.question).toBe('Which colour?')
+  expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
+  expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
+  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"')
 })
 
-test('NEED FILES still makes the task wait with its question', async () => {
+test('a change worker whose edits outside its files were refused waits for those files, and nothing is merged even with half-done edits', async () => {
   saidNeedsYou.clear()
-  const { t } = await workerAnswers('NEED FILES: README.md — the docs mention it')
-  expect(t.status).toBe('waiting')
-  expect(t.question).toBe('T-1 needs to change files outside its list: README.md — the docs mention it. Allow them?')
-  expect(t.note).toBe('waiting for you')
-  expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md — the docs mention it')
-  expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md'])
-  expect(sayQueue).toEqual(['?T-1'])
-})
-
-test('a NEED FILES first line followed by detail lines still waits for those files', async () => {
-  const { t } = await workerAnswers('NEED FILES: a.ts, b.ts — reason\nDetails for the next try:\n- a needs the new name\n- b too', { notify: 'off' })
-  expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a.ts', 'b.ts'])
-})
-
-test('a change worker with half-done edits that says a short sentence, then NEED FILES, waits for files and nothing is merged', async () => {
   // world(): the task's folder holds edits in src/a.ts, inside the task's files (src/)
-  const { w, t } = await workerAnswers('I need two more files.\nNEED FILES: a.ts, b.ts — reason', { notify: 'off' })
+  const { w, t } = await workerAnswers('I changed src/a.ts; README.md was refused.', { requested: ['README.md', 'docs/a.md'] })
   expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['a.ts', 'b.ts'])
-  expect(t.question).toBe('T-1 needs to change files outside its list: a.ts, b.ts — reason. Allow them?')
+  expect(t.question).toBe('T-1 needs to change files outside its list: README.md, docs/a.md. Allow them?')
+  expect(t.note).toBe('waiting for you')
+  expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md, docs/a.md')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'docs/a.md'])
+  expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
+  expect(sayQueue).toEqual(['?T-1'])
   expect(movedMain(w)).toBe(false)
+  expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+  expect(ranTests(w)).toEqual([])
 })
 
-test('a change report that mentions an indented or quoted NEED FILES line in its middle merges normally', async () => {
-  const { t } = await workerAnswers('I changed src/a.ts so a worker answers:\n    NEED FILES: path/a, path/b — <reason>\nand also `NEED FILES: x` in a quote.\n```\nNEED FILES: y\n```', { notify: 'off' })
-  expect(t.status).toBe('done')
-  expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+test('a question wins over refused edits, and both win over how the turn ended', async () => {
+  const both = await workerAnswers('', { notify: 'off', ask: { question: 'Which?' }, requested: ['README.md'], end: { reason: 'aborted' } })
+  expect(both.t).toMatchObject({ status: 'waiting', question: 'Which?' })
+  const files = await workerAnswers('', { notify: 'off', requested: ['README.md'], end: { reason: 'error' } })
+  expect(files.t.status).toBe('waiting')
+  expect((files.t as { asked_files?: string[] }).asked_files).toEqual(['README.md'])
 })
 
-test('a change task handing back "NEED FILES: tests — reason" in a project with a tests folder waits for files ["tests"]', async () => {
-  const lsFiles = (args: string[], cwd: string) => (args[0] === 'ls-files' && cwd === WT ? ok('src/a.ts\0tests/merge.test.ts\0package.json\0') : undefined)
-  const { w, t } = await workerAnswers('NEED FILES: tests — the new test goes there', { notify: 'off', git: { answer: lsFiles } })
-  expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['tests'])
-  expect(movedMain(w)).toBe(false)
-  // a plain name the project has no file or folder for is still not a request
-  const { t: t2 } = await workerAnswers('Changed a.ts.\nNEED FILES: scripts', { notify: 'off', git: { answer: lsFiles } })
-  expect(t2.status).toBe('done')
-  // and "none" still isn't one, even with the project's names to check against
-  const { t: t3 } = await workerAnswers('Changed a.ts.\nNEED FILES: none', { notify: 'off', git: { answer: lsFiles } })
-  expect(t3.status).toBe('done')
-})
-
-test('a short change report ending "NEED FILES: none" (or n/a, -, nothing, no) is not a request and the task merges', async () => {
-  for (const answer of ['Changed a.ts.\nNEED FILES: none', 'Changed a.ts.\nNEED FILES: n/a', 'Changed a.ts.\nNEED FILES: -', 'Changed a.ts.\nNEED FILES: nothing', 'Changed a.ts.\nNEED FILES: No — all inside my list', 'Changed a.ts.\nNEED FILES: none needed', 'Changed a.ts.\nNEED FILES: (none)', 'Changed a.ts.\nNEED FILES: [none]', 'Changed a.ts.\nNEED FILES: (none — all inside the list)']) {
+test('a hand-back whose text says "QUESTION:" or "NEED FILES:", with no ask_owner call or refused edit, is checked and merged normally', async () => {
+  for (const answer of ['QUESTION: Should the button be red or blue?', 'NEED FILES: README.md — the docs mention it', 'I looked around.\nQUESTION: Which colour?\nOPTIONS: red | blue']) {
     const { w, t } = await workerAnswers(answer, { notify: 'off' })
     expect(t.status).toBe('done')
+    expect(t.question ?? undefined).toBeUndefined()
     expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
     expect(movedMain(w)).toBe(true)
   }
 })
 
-test("every NEED FILES / QUESTION / OPTIONS example line in the worker prompts is flush left and parses when copied as is", () => {
+test("a turn that ended on an API error or a refusal fails the task with the reason, and nothing is merged", async () => {
+  const err = await workerAnswers('half done', { notify: 'off', end: { reason: 'error' } })
+  expect(err.t.status).toBe('failed')
+  expect(err.t.note).toBe("the worker's turn ended on an error (retries used up or the context limit)")
+  expect(err.t.history.at(-1)).toBe("try 1: the worker's turn ended on an error (retries used up or the context limit); nothing was checked or merged")
+  expect(movedMain(err.w)).toBe(false)
+  expect(ranTests(err.w)).toEqual([])
+  expect(leadQueue.join('\n')).toContain('so nothing was checked or merged and the task failed')
+  const refused = await workerAnswers('', { notify: 'off', end: { reason: 'refusal', refusal: { category: 'cyber', explanation: 'not allowed here' } } })
+  expect(refused.t.status).toBe('failed')
+  expect(refused.t.note).toBe('the model refused to go on (cyber: not allowed here)')
+  expect(movedMain(refused.w)).toBe(false)
+  const bare = await workerAnswers('', { notify: 'off', end: { reason: 'refusal', refusal: { category: null, explanation: null } } })
+  expect(bare.t.note).toBe('the model refused to go on')
+})
+
+test('a stopped turn (aborted) still fails the task as stopped, and nothing is merged', async () => {
+  const { w, t } = await workerAnswers('', { notify: 'off', end: { reason: 'aborted' } })
+  expect(t.status).toBe('failed')
+  expect(t.note).toBe('the worker was stopped')
+  expect(movedMain(w)).toBe(false)
+})
+
+test('ask_owner from a scout is refused; from a running worker it is kept on the worker (the last call wins)', async () => {
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, b)
+  scoutRuns.set('s1', 'gaps')
+  expect(await askCall(w.$, 's1', { question: 'Which?' })).toMatch(/^Refused: .*not scouts/)
+  scoutRuns.delete('s1')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await askCall(w.$, 'ag1', { question: 'First?' })).toBe('Sent to the owner. Stop now and hand back.')
+  expect(await askCall(w.$, 'ag1', { question: 'Which?', options: ['a', 'b'] })).toBe('Sent to the owner. Stop now and hand back.')
+  expect(workers.get('ag1')!.question).toEqual({ question: 'Which?', options: ['a', 'b'] })
+  workers.delete('ag1')
+})
+
+test('the worker prompts say how to ask and what a refused edit means, with no QUESTION / OPTIONS / NEED FILES wording', () => {
   const [c] = boardWith('auto', ['npm test'])
   const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
-  const prompts = [WORKER_PROMPT(c.tasks[0]!, c, WT), WORKER_PROMPT(i.tasks[0]!, i, WT)]
-  const seen = { need: 0, question: 0, options: 0 }
-  for (const p of prompts) {
-    const lines = p.split('\n')
-    // no example line is indented (the parsers skip indented lines)
-    expect(lines.filter(l => /^\s+[`*]*(NEED FILES|QUESTION|OPTIONS)\s*:/.test(l))).toEqual([])
-    for (const l of lines) {
-      if (/^NEED FILES:/.test(l)) {
-        seen.need++
-        expect(parseNeedFiles(l)).toEqual({ files: ['path/a', 'path/b'], reason: '<one short reason>' })
-        expect(parseNeedFiles(`I need two more files.\n${l}`)).toBeDefined()
-      }
-      if (/^QUESTION:/.test(l)) {
-        seen.question++
-        expect(parseQuestion(l)).toBeDefined()
-        const opts = lines.find(o => /^OPTIONS:/.test(o))!
-        expect(parseQuestion(`${l}\n${opts}`)).toBe(parseQuestion(l))
-      }
-      if (/^OPTIONS:/.test(l)) {
-        seen.options++
-        expect(parseOptions(l)).toEqual(['a', 'b', 'c'])
-      }
-    }
+  for (const p of [WORKER_PROMPT(c.tasks[0]!, c, WT), WORKER_PROMPT(i.tasks[0]!, i, WT)]) {
+    expect(p).toContain('To ask the owner something, call the mcp__symcc__ask_owner tool. If an edit is refused as outside your files, stop and hand back.')
+    expect(p).not.toMatch(/QUESTION|OPTIONS|NEED FILES/)
   }
-  expect(seen).toEqual({ need: 1, question: 2, options: 2 })
 })
 
-test('a worker QUESTION with an OPTIONS line saves the options; without one, or with too few or too many, none', async () => {
-  const { t } = await workerAnswers('QUESTION: Which colour?\nOPTIONS: red | blue | green', { notify: 'off' })
-  expect(t.question).toBe('Which colour?')
-  expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
-  expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
-  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"')
-  for (const bad of ['QUESTION: Which colour?', 'QUESTION: Which?\nOPTIONS: red', `QUESTION: Which?\nOPTIONS: ${'a b c d e f g'.split(' ').join(' | ')}`])
-    expect((await workerAnswers(bad, { notify: 'off' })).t).not.toHaveProperty('options')
-})
-
-test('a hand-back with a capital QUESTION line and little else waits; a long report or a "Question:" line merges normally', async () => {
-  const report = 'I changed src/a.ts to fix the colour.\nQuestion: should the button be red or blue?\nAnswer: blue, as the details say.\nTests pass.'
-  const { t } = await workerAnswers(report, { notify: 'off' })
-  expect(t.status).toBe('done')
-  expect(t.question ?? undefined).toBeUndefined()
-  const long = `I changed src/a.ts to fix the colour.\n${'Another long line of the report about what changed.\n'.repeat(12)}QUESTION: Which colour?`
-  for (const notQuestion of ['question: which colour?', long])
-    expect((await workerAnswers(notQuestion, { notify: 'off' })).t.status).not.toBe('waiting')
-  for (const question of ['I looked around.\nQUESTION: Which colour?', 'QUESTION: Which colour?\nI also changed src/a.ts.'])
-    expect((await workerAnswers(question, { notify: 'off' })).t).toMatchObject({ status: 'waiting', question: 'Which colour?' })
-  const plain = await workerAnswers('\n  QUESTION: Which colour?  \n\n', { notify: 'off' })
-  expect(plain.t.status).toBe('waiting')
-  expect(plain.t.question).toBe('Which colour?')
-  const withOptions = await workerAnswers('I looked around.\nQUESTION: Which colour?\n\nOPTIONS: red | blue\n', { notify: 'off' })
-  expect(withOptions.t.status).toBe('waiting')
-  expect((withOptions.t as { options?: string[] }).options).toEqual(['red', 'blue'])
-})
-
-/** A board where T-1 (files src/) waits after its worker asked for `files` with NEED FILES. */
+/** A board where T-1 (files src/) waits after its worker's edits of `files` were refused. */
 async function askedForFiles(files: string[]) {
   const w = world()
   const [b] = boardWith('auto')
@@ -1511,16 +1484,16 @@ test('Allow or Don\'t allow on a task that does not wait for files is refused', 
 
 test('"T-1 needs you" is queued once per waiting question with notify on, and not with notify off or in another session', async () => {
   saidNeedsYou.clear()
-  await workerAnswers('QUESTION: which colour?')
+  await workerAnswers('', { ask: { question: 'which colour?' } })
   expect(sayQueue).toEqual(['?T-1'])
   expect(spokenLine(sayQueue)).toBe('T-1 needs you')
   // the same question again (same try): not said twice
-  await workerAnswers('QUESTION: which colour?')
+  await workerAnswers('', { ask: { question: 'which colour?' } })
   expect(sayQueue).toEqual([])
   saidNeedsYou.clear()
-  await workerAnswers('QUESTION: which colour?', { notify: 'off' })
+  await workerAnswers('', { notify: 'off', ask: { question: 'which colour?' } })
   expect(sayQueue).toEqual([])
-  await workerAnswers('QUESTION: which colour?', { driving: false })
+  await workerAnswers('', { driving: false, ask: { question: 'which colour?' } })
   expect(sayQueue).toEqual([])
 })
 
@@ -1546,11 +1519,11 @@ test('change on a running task adds a restart line naming the fields that change
 test("the owner's answer to a waiting task goes into its details and its history", async () => {
   const w = world()
   const [b] = boardWith('review')
-  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'NEED FILES: docs/a.md', note: 'waiting for you' }, ISO))
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'Which docs?', note: 'waiting for you' }, ISO))
   await runTool(w.$, 'change', { task: 'T-1', answer: 'ok' })
   const t = find(await load(w.$), 'T-1')!
   expect(t.history.at(-1)).toBe('the owner answered: “ok”')
-  expect(t.details).toContain('Owner\'s answer to "NEED FILES: docs/a.md": ok')
+  expect(t.details).toContain('Owner\'s answer to "Which docs?": ok')
   expect(t.history.some(l => l.includes('restarted'))).toBe(false)
 })
 
@@ -1645,13 +1618,13 @@ test('change on a paused task keeps it paused with the change saved, and resume 
 const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
 
 /** T-1 is "doing" (try 1, one run) with worker ag1, which then answers `answer`; the fake git and the task as given. */
-async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<SymccTask> = {}) {
+async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<SymccTask> = {}, rec: Pick<Worker, 'question' | 'requested'> = {}) {
   const w = world(g)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...extra })
   await saveBoard(w.$, b0)
   w.put(`${WT}/.git`, 'gitdir: x')
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', answer, false)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0, ...rec })
+  await workerFinished(w.$, 'ag1', answer)
   return { w, t: find(await load(w.$), 'T-1')! }
 }
 
@@ -1680,11 +1653,11 @@ test('a report longer than the cap is kept up to the cap, with a line saying it 
   expect(text).toContain('(cut here: the report was longer than 50 KB)')
 })
 
-test("a QUESTION or NEED FILES try saves its text as the try's report too", async () => {
-  const { w, t } = await finishes('NEED FILES: README.md — the docs mention it\nI looked around.')
+test("a try that asked the owner saves its text as the try's report too", async () => {
+  const { w, t } = await finishes('I looked around; README.md was refused.', {}, {}, { requested: ['README.md'] })
   expect(t.status).toBe('waiting')
   expect(t.runs![0]!.report).toBe('.symcc/reports/T-1-try-1.md')
-  expect(w.files.get(REPORT1)).toContain('NEED FILES: README.md')
+  expect(w.files.get(REPORT1)).toContain('README.md was refused')
 })
 
 test('a report that cannot be saved is told once and never blocks the task', async () => {
@@ -1698,7 +1671,7 @@ test('a report that cannot be saved is told once and never blocks the task', asy
     run.process.run = async (a, o) => (a[0] === 'mv' && String(a[2]).includes('/reports/') ? { exitCode: 1, stdout: '', stderr: 'disk full' } : real(a, o))
     leadQueue.splice(0)
     workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-    await workerFinished(w.$, 'ag1', 'Done.', false)
+    await workerFinished(w.$, 'ag1', 'Done.')
     const t = find(await load(w.$), 'T-1')!
     expect(t.status).toBe('done')
     expect(t.runs![0]!.report).toBeUndefined()
@@ -1923,7 +1896,7 @@ async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, 
   const r = t.runs!.at(-1)!
   return { t, r, end: [r.ended_by, r.ended_note] }
 }
-const answers = (answer: string, aborted = false) => (w: ReturnType<typeof world>) => workerFinished(w.$, 'ag1', answer, aborted)
+const answers = (answer: string, end?: TurnEnd, rec: Pick<Worker, 'question' | 'requested'> = {}) => (w: ReturnType<typeof world>) => (Object.assign(workers.get('ag1')!, rec), workerFinished(w.$, 'ag1', answer, end))
 
 test('a finished try ends with the outcome of its check', async () => {
   const merged = await tryEnds(answers('made the change'))
@@ -1935,10 +1908,11 @@ test('a finished try ends with the outcome of its check', async () => {
   expect((await tryEnds(answers('made the change'), { g: { changed: ['README.md'] } })).end).toEqual(['finished', 'out of scope'])
 })
 
-test('a try that asks ends as asked: QUESTION or NEED FILES; one stopped from Claude Code as stopped', async () => {
-  expect((await tryEnds(answers('QUESTION: red or blue?'))).end).toEqual(['asked', 'QUESTION'])
-  expect((await tryEnds(answers('NEED FILES: README.md — docs'))).end).toEqual(['asked', 'NEED FILES'])
-  expect((await tryEnds(answers('', true))).end).toEqual(['stopped', 'stopped from Claude Code'])
+test('a try that asks ends as asked (a question, or files outside its list); one stopped from Claude Code as stopped; an error as stopped with the reason', async () => {
+  expect((await tryEnds(answers('', undefined, { question: { question: 'red or blue?' } }))).end).toEqual(['asked', 'question'])
+  expect((await tryEnds(answers('', undefined, { requested: ['README.md'] }))).end).toEqual(['asked', 'files outside its list'])
+  expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from Claude Code'])
+  expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
 test('a try stopped by the lead says why: changed (which fields), paused, dropped, asked, backlog', async () => {
@@ -1962,7 +1936,7 @@ test('a try stopped by turning symcc or the board off says so, and so does a sto
       done = true
       await runTool(w.$, 'pause', { task: 'T-1' })
     })
-    await workerFinished(w.$, 'ag1', 'made the change', false)
+    await workerFinished(w.$, 'ag1', 'made the change')
   })
   expect(paused.t.status).toBe('paused')
   expect(paused.end).toEqual(['stopped', 'paused'])
@@ -2026,7 +2000,7 @@ test('"+30 min" moves the limit later: the worker goes on, is not asked again be
     expect(t.time_ask).toBeUndefined()
     expect(t.status).toBe('doing')
     expect(workers.has('ag1')).toBe(true)
-    await workerFinished(w.$, 'ag1', 'made the change', false)
+    await workerFinished(w.$, 'ag1', 'made the change')
   })
   expect(said).toBe('T-1 has 30 more minutes: its limit is now 75 min, and its worker goes on.')
   expect(r.t.history).toContain('try 1: the owner gave it 30 more min (limit now 75 min)')
@@ -2050,7 +2024,7 @@ test('"Stop it" tells the worker to wrap up; its hand-back is saved as the repor
     expect(t.time_ask).toBeUndefined()
     await check(w.$) // within the grace: not stopped yet
     expect(workers.has('ag1')).toBe(true)
-    await workerFinished(w.$, 'ag1', 'Did half of it; notes are in docs/notes.md. Left: the tests.', false)
+    await workerFinished(w.$, 'ag1', 'Did half of it; notes are in docs/notes.md. Left: the tests.')
   })
   expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
   expect(r.t.status).toBe('failed')
@@ -2092,7 +2066,7 @@ test('a worker that finishes before the limit is unchanged: never asked, merged 
     sent = s
     runFor(20)
     await check(w.$)
-    await workerFinished(w.$, 'ag1', 'made the change', false)
+    await workerFinished(w.$, 'ag1', 'made the change')
   })
   expect(sent).toEqual([])
   expect(r.t.status).toBe('done')
@@ -2176,7 +2150,7 @@ test('a worker whose agent ended is failed only on a later check, unless its rep
       ;(w.$ as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
       workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
       await check(w.$)
-      await workerFinished(w.$, 'ag1', 'made the change', false)
+      await workerFinished(w.$, 'ag1', 'made the change')
       await check(w.$)
     })
     expect(late.t.status).not.toBe('failed')
@@ -2462,7 +2436,7 @@ test('T-237: a worker hands back, the merge takes a while and the clock passes m
       expect(workers.has('ag1')).toBe(false)
       expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
     })
-    await workerFinished(w.$, 'ag1', 'made the change', false)
+    await workerFinished(w.$, 'ag1', 'made the change')
     // after the merge, the regular check again: still nothing stops it
     await check(w.$)
     S.driving = false
@@ -2485,7 +2459,7 @@ test('T-237: a task changed while its work is being merged (sent back or asked m
         // right as main moves: the owner's Allow (or the lead's change) writes the task
         await change(w.$, x => patchTask(x, 'T-1', { status: to, files: ['src/', 'tests/'], history: [...find(x, 'T-1')!.history, 'files widened: + tests/'] }, ISO))
       })
-      await workerFinished(w.$, 'ag1', 'made the change', false)
+      await workerFinished(w.$, 'ag1', 'made the change')
     })
     expect(r.t.status).toBe('done')
     expect(r.t.merged).toBe(H1)
@@ -2507,7 +2481,7 @@ test('T-237: a merge whose done could not be written (settle failed) is still ma
       }
       return run(argv, o)
     }
-    await workerFinished(w.$, 'ag1', 'made the change', false)
+    await workerFinished(w.$, 'ag1', 'made the change')
     expect(failed).toBe(true)
   })
   expect(r.t.status).toBe('done')
@@ -2572,7 +2546,7 @@ test('a checking and merging step that never ends is sent back to todo after the
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   let ended = false
-  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   await turns(w, hungNow)
   // still within the limit: it stays "doing", being checked
   expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
@@ -2620,7 +2594,7 @@ test('a step given up after the limit whose work already reached main is done, n
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   let ended = false
-  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   await turns(w, hungNow)
   limit.fire!()
   await turns(w, () => ended)
@@ -2654,7 +2628,7 @@ test('a normal checking and merging step is untouched by the limit: merged, done
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', 'made the change', false)
+  await workerFinished(w.$, 'ag1', 'made the change')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(limit.cancelled).toBe(true)
@@ -2731,7 +2705,7 @@ test('a finish step given up while it waits for its merge turn runs no git comma
   let letGo = () => {}
   const earlier = mergeTurn('main', () => new Promise<void>(r => (letGo = r)))
   let ended = false
-  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   await turns(w, () => w.calls.some(c => c.includes('git diff --name-only')))
   for (let i = 0; i < 200; i++) await Promise.resolve()
   // queued behind the earlier merge: no test has run
@@ -2771,7 +2745,7 @@ async function finishedOnDirtyMain(status: string, test_commands = ['npm test'])
   S.startupDone = true
   S.driving = true
   leadQueue.splice(0)
-  await workerFinished(w.$, 'ag1', 'made the change', false)
+  await workerFinished(w.$, 'ag1', 'made the change')
   return { w, spawned, t: async () => find(await load(w.$), 'T-1')! as BoardTask }
 }
 
@@ -3075,7 +3049,7 @@ test('a finish step with three slow but finishing test commands (8 min each) is 
     for (const x of timers) if (!x.off && x.ms <= spent) (x.off = true), x.f()
   })
   await aboutToFinish(w, ['npm test', 'npm run lint', 'npm run e2e'])
-  await workerFinished(w.$, 'ag1', 'made the change', false)
+  await workerFinished(w.$, 'ag1', 'made the change')
   // 24 minutes in all: over the one-command limit, within the three-command one
   expect(spent).toBeGreaterThan(finishLimitMs(1))
   expect(timers.map(x => x.ms)).toEqual([finishLimitMs(3)])
@@ -3109,7 +3083,7 @@ test('a task whose checking and merging is given up twice in a row ends failed w
     S.driving = true
     // try 1: given up, back to todo, and a second worker starts by itself
     let ended = false
-    void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+    void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
     await turns(w, () => hung === 1 && timers.length === 1)
     timers[0]!.f()
     await turns(w, () => ended && spawned.length === 1)
@@ -3120,7 +3094,7 @@ test('a task whose checking and merging is given up twice in a row ends failed w
     expect(workers.get('ag2')?.task).toBe('T-1')
     // try 2: given up again, so it fails instead of looping
     ended = false
-    void workerFinished(w.$, 'ag2', 'made the change again', false).then(() => (ended = true))
+    void workerFinished(w.$, 'ag2', 'made the change again').then(() => (ended = true))
     await turns(w, () => hung === 2 && timers.length === 2)
     timers[1]!.f()
     await turns(w, () => ended)
@@ -3189,7 +3163,7 @@ test('a finish step given up while it moves main, which then lands, ends with th
   const { free, moving } = hangOnMove(w)
   await aboutToFinish(w)
   let ended = false
-  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   await turns(w, () => ended)
   expect(moving()).toBe(true)
   // given up: sent back to todo, the move still running
@@ -3261,7 +3235,7 @@ for (const [ahead, mins] of [[1, 8], [2, 6]] as const) {
     // the other tasks' merges are first in line; each takes as long as its tests
     const { free, ran, all } = earlierMerges(ahead)
     let ended = false
-    void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+    void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
     await inLine(w, c)
     for (let i = 0; i < ahead; i++) {
       await turns(w, () => ran.length === i + 1)
@@ -3301,7 +3275,7 @@ test('a task whose merge races with main moving, and is tested again, still merg
   // 10 min per go: 30 min in all, twice the 15 min limit
   slowTests(w, pass, 10 * MIN)
   await aboutToFinish(w)
-  await workerFinished(w.$, 'ag1', 'made the change', false)
+  await workerFinished(w.$, 'ag1', 'made the change')
   expect(races).toBe(2)
   expect(ranTests(w).length).toBe(3)
   const t = find(await load(w.$), 'T-1')!
@@ -3327,7 +3301,7 @@ test('a step really stuck in its own merge turn is still given up after the limi
   // one merge in front of it, 12 min long
   const { free, ran, all } = earlierMerges(1)
   let ended = false
-  void workerFinished(w.$, 'ag1', 'made the change', false).then(() => (ended = true))
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   // waiting in line: no limit running
   await inLine(w, c)
   expect(ran.length).toBe(1)
@@ -3390,15 +3364,15 @@ test('an approve waiting in line behind two slow merges, then main moving under 
 // ---------------- investigations: the hand-back is the result ----------------
 
 /** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
-async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}) {
+async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Pick<Worker, 'question' | 'requested'> = {}) {
   const w = world()
   const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
   // set after the try started: a new try (attempts changing) clears the time fields
   const b = Object.keys(extra).length ? patchTask(b0, 'T-1', extra, ISO) : b0
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', answer, false)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0, ...rec })
+  await workerFinished(w.$, 'ag1', answer)
   return { w, t: find(await load(w.$), 'T-1')! }
 }
 
@@ -3453,21 +3427,22 @@ test('an investigation hand-back that restates the question ("Question: ... / An
   expect(t.question ?? undefined).toBeUndefined()
 })
 
-test('an investigation answer with an indented NEED FILES example goes to review as answered', async () => {
-  const body = 'Workers ask for files like this:\n    NEED FILES: path/a, path/b — <reason>\nThat is all.'
-  const { t } = await investigationAnswers('auto', body)
-  expect(t.status).toBe('review')
-  expect(t.answer).toBe(body)
-  expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+test('an investigation answer that starts with "NEED FILES:" or "QUESTION:" goes to review as answered', async () => {
+  for (const body of ['NEED FILES: path/a — example', 'QUESTION: Which cache do you mean?\nThat is all.']) {
+    const { t } = await investigationAnswers('auto', body)
+    expect(t.status).toBe('review')
+    expect(t.answer).toBe(body)
+    expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+  }
 })
 
-test('an investigation never waits for files, even when its answer starts with NEED FILES', async () => {
-  const { t } = await investigationAnswers('auto', 'NEED FILES: path/a — example')
+test('an investigation never waits for files', async () => {
+  const { t } = await investigationAnswers('auto', 'The answer.', {}, { requested: ['path/a'] })
   expect(t.status).toBe('review')
 })
 
-test('an investigation worker that asks a QUESTION still waits for the owner', async () => {
-  const { t } = await investigationAnswers('auto', 'QUESTION: Which cache do you mean?')
+test('an investigation worker that asks the owner (ask_owner) still waits for the owner', async () => {
+  const { t } = await investigationAnswers('auto', 'I need to know.', {}, { question: { question: 'Which cache do you mean?' } })
   expect(t.status).toBe('waiting')
   expect(t.question).toBe('Which cache do you mean?')
   expect(t.answer).toBeUndefined()
@@ -3759,7 +3734,7 @@ test('a researcher task of kind change is committed, tested and merged as today'
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  await workerFinished(w.$, 'ag1', 'wrote the note', false)
+  await workerFinished(w.$, 'ag1', 'wrote the note')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.answer).toBeUndefined()

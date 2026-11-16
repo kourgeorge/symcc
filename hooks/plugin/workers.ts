@@ -1,5 +1,6 @@
+import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, parseNeedFiles, tryLabel, needFilesQuestion, parseOptions, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, parseQuestion, keepNoteTask, noteFilesInUse, askedMore, ANSWERED } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch } from './git'
@@ -18,14 +19,8 @@ export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith
 
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => (kindOf(t) === 'investigation' ? INVESTIGATION_PROMPT(t, dir, role) : CHANGE_PROMPT(t, b, dir, role))
 
-/**
- * How a worker asks the owner, shared by both prompts. Its example lines are flush left, so a worker
- * that copies one exactly gives a line parseQuestion / parseOptions accept (they skip indented lines).
- */
-const ASK_TEXT = ` If you truly cannot continue without the owner deciding something, answer with one line starting "QUESTION:" and the question, like this:
-QUESTION: <your question>
-The task will wait for the owner's answer and a new try continues with it. If the owner can pick from a few answers, add one more line after it, with 2 to 6 short choices split by |, like this:
-OPTIONS: a | b | c`
+/** How a worker asks the owner and what a refused edit means, shared by both prompts (see hooks/plugin/ask.ts). */
+const ASK_TEXT = () => `\n${ASK_LINE(S.N.tool(ASK_TOOL))}`
 
 /** The prompt of an investigation's worker: find the answer and hand it back in full; nothing it changes is kept. */
 const INVESTIGATION_PROMPT = (t: BoardTask, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one investigation, then stop.
@@ -38,7 +33,7 @@ Read whatever you need. You may run read-only commands and experiments, outside 
 Task ${t.id}: ${t.title}
 ${t.details}
 ${roleSection(role)}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\n` : ''}
-When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.${askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : ''}${ASK_TEXT}`
+When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.${askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : ''}${ASK_TEXT()}`
 
 /** The prompt of a change's worker: change the files, which are then committed, tested and merged. */
 const CHANGE_PROMPT = (t: SymccTask, b: Board, dir: string, role?: RoleDef) => `You are a ${S.N.name} worker. Do exactly this one task, then stop.
@@ -51,13 +46,11 @@ Task ${t.id}: ${t.title}
 ${t.details}
 ${roleSection(role)}
 Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
-If you find you must change a file outside this list, do NOT change it. Stop at once and answer with just one line:
-NEED FILES: path/a, path/b — <one short reason>
-(You don't need to finish anything else first; what you already changed in your folder is kept for the next try.)` : 'whatever the task needs.'}
+An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}
 ${b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.'}
 Do not run git commit, push or merge: ${S.N.name} commits, tests and merges your work.
 ${t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : ''}${t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : ''}${tries(t).length ? `\nEarlier tries:\n${tries(t).slice(-5).map(line => `- ${line}`).join('\n')}\nDon't repeat those mistakes.\n` : ''}
-When you are done, answer in one or two plain sentences: what you changed.${ASK_TEXT}`
+When you are done, answer in one or two plain sentences: what you changed.${ASK_TEXT()}`
 
 export async function pump($: $) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
@@ -211,7 +204,11 @@ export async function waitEnded($: $, ids: string[], ms: number): Promise<AgentI
   }
 }
 
-export async function workerFinished($: $, agentId: string, answer: string, aborted: boolean, tokens?: SymccTokens) {
+/** Why a worker's turn ended (from turn.complete): answered, stopped, refused (with what the API said) or an API error. */
+export type TurnEnd = { reason: TurnCompleteReason; refusal?: TurnRefusal }
+
+/** A worker's hand-back `answer` arrived; `end`: why its turn ended. */
+export async function workerFinished($: $, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
@@ -238,7 +235,7 @@ export async function workerFinished($: $, agentId: string, answer: string, abor
     // The whole step has a time limit (finishLimitMs: it grows with the test commands): the heartbeat above keeps going even when
     // the step hangs, so without it a stuck step would keep its task "doing" forever. Past the limit
     // the step is given up: it may still wake up later, but then it writes nothing (gaveUp).
-    const how = await withLimit($, tryNo === undefined ? null : limitMs, (gaveUp, over, turn) => finishWork($, agentId, w, answer, aborted, gaveUp, over, turn))
+    const how = await withLimit($, tryNo === undefined ? null : limitMs, (gaveUp, over, turn) => finishWork($, agentId, w, answer, end, gaveUp, over, turn))
     if (how === OVER) {
       beat?.cancel()
       beat = null
@@ -538,7 +535,14 @@ async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, li
   tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
-/** What the lead is told when a worker stopped with a QUESTION and its task now waits for the owner. */
+/** Why a try whose turn ended on an API error or a refusal failed: "the worker's turn ended on an error", or "the model refused: <its explanation>". */
+export function endFailure(end: TurnEnd): string {
+  if (end.reason === 'error') return "the worker's turn ended on an error (retries used up or the context limit)"
+  const said = [end.refusal?.category, end.refusal?.explanation].filter(Boolean).join(': ')
+  return `the model refused to go on${said ? ` (${cutLine(said, 300)})` : ''}`
+}
+
+/** What the lead is told when a worker asked a question (ask_owner) and its task now waits for the owner. */
 export const workerQuestionText = (id: string, question: string, options?: readonly string[]) =>
   `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? ', offering the options as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"' : ', and say they can also answer on the board'}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.`
 
@@ -573,30 +577,15 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
 }
 
 /**
- * A check for parseNeedFiles: whether a plain name ("tests", "scripts", "Procfile") is a file or folder in
- * the task's folder (or the project root when that folder is missing). The names are read once: the
- * top-level entries plus every path git knows (tracked, or new and not ignored) and the folders above them.
- */
-async function projectNames($: $, worktree: string): Promise<(name: string) => boolean> {
-  const dir = worktree && (await $.fs.exists(`${worktree}/.git`).catch(() => false)) ? worktree : S.root
-  const names = new Set<string>()
-  const add = (p: string) => {
-    const parts = p.replace(/\/+$/, '').split('/').filter(Boolean)
-    for (let i = 1; i <= parts.length; i++) names.add(parts.slice(0, i).join('/'))
-  }
-  const top = await $.process.run(['ls', '-A'], { cwd: dir, timeoutMs: 10_000 }).catch(() => null)
-  if (top?.exitCode === 0) for (const l of top.stdout.split('\n')) if (l.trim()) add(l.trim())
-  const tracked = await git($, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], dir, 30_000).catch(() => null)
-  if (tracked?.exitCode === 0) for (const p of tracked.stdout.split('\0')) if (p) add(p)
-  return name => names.has(name.replace(/\/+$/, ''))
-}
-
-/**
  * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
  * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
+ * What happens is decided from what the try recorded and why its turn ended, never from the hand-back's text (which
+ * stays its report, an investigation's answer), in this order: a question (ask_owner) → waiting with it; edits refused
+ * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
+ * an API error or a refusal → failed with the reason; else done: checked and merged (an investigation: its answer).
  */
-export async function finishWork($: $, agentId: string, w: { task: string; worktree: string; branch: string }, answer: string, aborted: boolean, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
+export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch' | 'question' | 'requested'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
   const b = await load($)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
@@ -615,24 +604,26 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
     tellLead($, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
     return
   }
-  const q = parseQuestion(answer)
-  // Investigations never ask for files (they have no file list): a NEED FILES line in one is part of its answer.
-  const need = kindOf(t) === 'investigation' ? undefined : parseNeedFiles(answer, /NEED\s+FILES/.test(answer) ? await projectNames($, w.worktree) : undefined)
-  if (aborted) {
-    if (await writeIfSame($, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
-    tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
-  } else if (need) {
-    const question = needFilesQuestion(t.id, need)
-    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need.files, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.files.join(', ')}${need.reason ? ` — ${need.reason}` : ''}`], ...endedBy(cur, now(), 'asked', 'NEED FILES') }))) return
-    sayNeedsYou($, b, t, question)
-    tellLead($, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
-  } else if (q) {
-    // Straight to the owner, like NEED FILES: the task waits with the question; their answer sends it back to work.
-    const question = q
-    const options = parseOptions(answer)
-    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'QUESTION') }))) return
+  const q = w.question
+  const need = kindOf(t) === 'investigation' ? [] : (w.requested ?? [])
+  if (q) {
+    // Straight to the owner: the task waits with the question; their answer sends it back to work.
+    const { question, options } = q
+    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'question') }))) return
     sayNeedsYou($, b, t, question)
     tellLead($, workerQuestionText(t.id, question, options))
+  } else if (need.length) {
+    const question = needFilesQuestion(t.id, need)
+    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`], ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return
+    sayNeedsYou($, b, t, question)
+    tellLead($, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
+  } else if (end.reason === 'aborted') {
+    if (await writeIfSame($, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
+    tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
+  } else if (end.reason === 'error' || end.reason === 'refusal') {
+    const why = endFailure(end)
+    if (await writeIfSame($, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
+    tellLead($, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
   } else if (kindOf(t) === 'investigation') {
     if (gaveUp()) return
     await answered($, t, answer, summary)

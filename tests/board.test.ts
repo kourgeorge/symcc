@@ -6,7 +6,7 @@ import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCo
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast } from '../hooks/board'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, parseNeedFiles, needFilesQuestion, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, usageTokens, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, liveWorkersFor, mayStart, orphanMove, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, isNotReady, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, parseRole, roleSkipReason, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, roleSection, rolesLeadText, BUILT_IN_ROLES, EXTRA_TOOLS, BASE_WORKER_TOOLS, WEB_SAFETY_LINE, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -1164,50 +1164,34 @@ test('agent names start with the plugin name', () => {
   expect(mayStart(t, [{ id: 's', type: 'symcc:scout', status: 'running', name: 'symcc-scout-T-1', description: 'T-1' }])).toBe(true)
 })
 
-test('a worker asking for more files is read from its answer', async () => {
-  expect(parseNeedFiles('NEED FILES: README.md — the docs mention it')).toEqual({ files: ['README.md'], reason: 'the docs mention it' })
-  expect(parseNeedFiles('\nNEED FILES: README.md, tests/x.test.ts - both need the new name')).toEqual({ files: ['README.md', 'tests/x.test.ts'], reason: 'both need the new name' })
-  // a short sentence, then the request: still a request (like QUESTION); wrapped in backticks or ** too
-  expect(parseNeedFiles('I looked around.\nNEED FILES: README.md — docs')).toEqual({ files: ['README.md'], reason: 'docs' })
-  expect(parseNeedFiles('I need two more files to finish.\nNEED FILES: README.md, docs/guide.md — reason')).toEqual({ files: ['README.md', 'docs/guide.md'], reason: 'reason' })
-  expect(parseNeedFiles('`NEED FILES: README.md, docs/guide.md — reason`')).toEqual({ files: ['README.md', 'docs/guide.md'], reason: 'reason' })
-  expect(parseNeedFiles('Stopping.\n**NEED FILES:** a.ts, b.ts — reason')).toEqual({ files: ['a.ts', 'b.ts'], reason: 'reason' })
-  expect(parseNeedFiles('**NEED FILES: a.ts — reason**')).toEqual({ files: ['a.ts'], reason: 'reason' })
-  // a long report before the line is not a request
-  expect(parseNeedFiles(`${'I changed a line.\n'.repeat(6)}NEED FILES: a — reason`)).toBeUndefined()
-  expect(parseNeedFiles(`${'x'.repeat(501)}\nNEED FILES: a — reason`)).toBeUndefined()
-  // indented, quoted or code examples are not requests
-  expect(parseNeedFiles('I looked around.\n  NEED FILES: README.md, tests/x.test.ts - both need the new name')).toBeUndefined()
-  expect(parseNeedFiles('    NEED FILES: path/a, path/b — <reason>')).toBeUndefined()
-  expect(parseNeedFiles('```\nNEED FILES: path/a, path/b — <reason>\n```')).toBeUndefined()
-  expect(parseNeedFiles('> NEED FILES: path/a — quoted')).toBeUndefined()
-  // details after the request line are fine
-  expect(parseNeedFiles('NEED FILES: a.ts, b.ts — reason\nDetails for the next try:\n- a needs the new name\n- b too')).toEqual({ files: ['a.ts', 'b.ts'], reason: 'reason' })
-  expect(parseNeedFiles('NEED FILES: `src/my-file.ts`, `./docs/a.md` — rename')).toEqual({ files: ['src/my-file.ts', 'docs/a.md'], reason: 'rename' })
-  expect(parseNeedFiles('NEED FILES:  a.js ,  b.js ')).toEqual({ files: ['a.js', 'b.js'], reason: '' })
-  expect(parseNeedFiles('Done.\nNeed files: none')).toBeUndefined()
-  for (const none of ['none', 'None.', 'n/a', 'N/A', '-', 'nothing', 'no', 'none — all inside my list', 'none needed', '`none`', '', '(none)', '[none]', '"none"', '(none — all inside the list)', '(none) — all inside the list', '[n/a]', 'none, n/a'])
-    expect(parseNeedFiles(`Changed a.ts.\nNEED FILES: ${none}`)).toBeUndefined()
-  // brackets and quotes around paths are dropped; only entries that look like paths are kept
-  expect(parseNeedFiles('NEED FILES: (README.md), docs/guide.md — reason')).toEqual({ files: ['README.md', 'docs/guide.md'], reason: 'reason' })
-  expect(parseNeedFiles('NEED FILES: [src/], "a.ts" — reason')).toEqual({ files: ['src/', 'a.ts'], reason: 'reason' })
-  expect(parseNeedFiles('NEED FILES: Makefile — reason')).toEqual({ files: ['Makefile'], reason: 'reason' })
-  expect(parseNeedFiles('NEED FILES: README — reason')).toEqual({ files: ['README'], reason: 'reason' })
-  expect(parseNeedFiles('NEED FILES: scripts, and a.ts — reason')).toEqual({ files: ['a.ts'], reason: 'reason' })
-  // a plain name counts when the project has a file or folder by that name
-  expect(parseNeedFiles('NEED FILES: scripts — reason', n => n === 'scripts')).toEqual({ files: ['scripts'], reason: 'reason' })
-  expect(parseNeedFiles('NEED FILES: none — reason', () => true)).toBeUndefined()
-  expect(parseNeedFiles('NEED FILES: nonexistent.ts — x')).toEqual({ files: ['nonexistent.ts'], reason: 'x' })
-  expect(parseNeedFiles('I changed hooks/board.ts and added tests.')).toBeUndefined()
-  expect(parseNeedFiles('QUESTION: which colour?')).toBeUndefined()
-  expect(parseNeedFiles('NEED FILES: — no files named')).toBeUndefined()
+test("a worker's ask_owner call: a question, with 2 to 6 different options or none", async () => {
+  expect(parseAsk({ question: ' Red or blue? ' })).toEqual({ question: 'Red or blue?' })
+  expect(parseAsk({ question: 'Which?', options: ['red', ' blue ', 'red'] })).toEqual({ question: 'Which?', options: ['red', 'blue'] })
+  expect(parseAsk({ question: 'x'.repeat(1500) })).toEqual({ question: 'x'.repeat(1000) })
+  expect(typeof parseAsk({})).toBe('string')
+  expect(typeof parseAsk({ question: '  ' })).toBe('string')
+  expect(typeof parseAsk({ question: 'Which?', options: ['red'] })).toBe('string')
+  expect(typeof parseAsk({ question: 'Which?', options: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] })).toBe('string')
+  expect(typeof parseAsk({ question: 'Which?', options: 'red | blue' })).toBe('string')
+})
+
+test("an edit is blocked when its path is outside the task's files, with the merge-time matching", async () => {
+  const wt = '/repo/.symcc/worktrees/T-1'
+  expect(blockedEdit('Edit', { file_path: `${wt}/README.md` }, wt, ['src/'], '.symcc')).toBe('README.md')
+  expect(blockedEdit('Write', { file_path: `${wt}/src/a.ts` }, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEdit('Write', { file_path: `${wt}/src/a.ts` }, wt, ['src/*.ts'], '.symcc')).toBeUndefined()
+  expect(blockedEdit('NotebookEdit', { notebook_path: `${wt}/nb/x.ipynb` }, wt, ['src/'], '.symcc')).toBe('nb/x.ipynb')
+  // no file list: anywhere but the board's folder
+  expect(blockedEdit('Edit', { file_path: `${wt}/README.md` }, wt, [], '.symcc')).toBeUndefined()
+  expect(blockedEdit('Edit', { file_path: `${wt}/.symcc/board.json` }, wt, [], '.symcc')).toBe('.symcc/board.json')
+  // other tools, and paths outside the worker's folder, are not this check's to judge
+  expect(blockedEdit('Bash', { command: 'echo x > README.md' }, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEdit('Write', { file_path: '/tmp/scratch.txt' }, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEditText('README.md')).toBe("README.md is outside this task's files; it's recorded as a request to the owner. Stop and hand back.")
 })
 
 test('the waiting question and the failure note for files outside the list', async () => {
-  expect(needFilesQuestion('T-7', { files: ['README.md', 'tests/x.test.ts'], reason: 'docs' })).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts — docs. Allow them?')
-  expect(needFilesQuestion('T-7', { files: ['a.js'], reason: '' })).toBe('T-7 needs to change files outside its list: a.js. Allow them?')
-  // a reason that already ends with a period gets no second one
-  expect(needFilesQuestion('T-7', { files: ['a.js'], reason: 'use b.js instead.' })).toBe('T-7 needs to change files outside its list: a.js — use b.js instead. Allow them?')
+  expect(needFilesQuestion('T-7', ['README.md', 'tests/x.test.ts'])).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts. Allow them?')
   const note = outOfScopeText(['docs/x.md'], ['src/'])
   expect(note).toContain('docs/x.md')
   expect(note).toContain('add them to files with change, or split the task')
@@ -1524,8 +1508,10 @@ test('a researcher task spawns as the web worker type; other roles keep the base
   // the registered types: the base worker with the base tools, and one per set of extra tools
   const types = workerAgentTypes()
   expect(types.map(t => t.suffix)).toEqual(['worker', 'worker-websearch', 'worker-webfetch', 'worker-web'])
-  expect(types.find(t => t.suffix === 'worker')?.tools).toEqual([...BASE_WORKER_TOOLS])
-  expect(types.find(t => t.suffix === 'worker-web')?.tools).toEqual([...BASE_WORKER_TOOLS, 'WebSearch', 'WebFetch'])
+  // every worker type also gets the workers' question tool
+  expect(types.find(t => t.suffix === 'worker')?.tools).toEqual([...BASE_WORKER_TOOLS, 'mcp__symcc__ask_owner'])
+  expect(types.find(t => t.suffix === 'worker-web')?.tools).toEqual([...BASE_WORKER_TOOLS, 'WebSearch', 'WebFetch', 'mcp__symcc__ask_owner'])
+  expect(workerAgentTypes('crew')[0]!.tools.at(-1)).toBe('mcp__crew__ask_owner')
   // every role's type is one that is registered
   for (const r of roles) expect(types.map(t => `symcc:${t.suffix}`)).toContain(workerTypeFor(r))
   // a web worker still counts as a worker

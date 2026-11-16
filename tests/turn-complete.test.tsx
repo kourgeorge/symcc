@@ -145,6 +145,8 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
     return { value: ok() }
   })
   on('tool.call', () => ({ result: 'ran' }))
+  // beneath the plugin, every tool is allowed (the engine's own rules)
+  on('tool.check', () => ({ decision: 'allow' }) as never)
   on('prompt.submit', (_, e) => (prompts.push(e.text), { text: e.text }) as never)
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: ended.has(a.id) ? 'completed' : 'running' })) }) as never)
   on('session.send', (_, e) => {
@@ -178,9 +180,9 @@ function doingBoard(mode: 'auto' | 'review', tasks: { agent: string; files: stri
   return b
 }
 
-/** The hand-back of agent `agentId`, as the engine raises it when that agent's run ends. */
-const finish = ($: Eng, agentId: string, answer: string, isAborted = false) =>
-  $.turn.complete({ agentId, answer, isAborted, reason: isAborted ? 'aborted' : 'answer', durationMs: 1000, turnId: `turn-${agentId}` } as never)
+/** The hand-back of agent `agentId`, as the engine raises it when that agent's run ends (`end`: why it ended). */
+const finish = ($: Eng, agentId: string, answer: string, isAborted = false, end: Record<string, unknown> = { reason: isAborted ? 'aborted' : 'answer' }) =>
+  $.turn.complete({ agentId, answer, isAborted, ...end, durationMs: 1000, turnId: `turn-${agentId}` } as never)
 
 // ---------------- a report from a worker this copy lost in a reload ----------------
 
@@ -278,6 +280,102 @@ test("a tracked worker's report is taken once: the same report again changes not
   await w.clock.settle()
   expect(w.files.get(BOARD)).toBe(text)
   expect(w.git.state.main).toBe(main)
+})
+
+// ---------------- how a tracked worker's try ends: ask_owner, refused edits, the turn's end reason ----------------
+
+/** T-1 (files src/, auto mode) is "doing" for worker a1, which still runs at session start, so it is tracked. */
+async function trackedWorker($: Eng, on: On, o: { investigation?: boolean } = {}) {
+  const w = world(on, { work: { 'T-1': ['src/a.ts'] }, agents: [{ id: 'a1', type: 'symcc:worker' }] })
+  const b = doingBoard('auto', [{ agent: 'a1', files: ['src/'] }])
+  w.files.set(BOARD, JSON.stringify(o.investigation ? patchTask(b, 'T-1', { kind: 'investigation' } as never, ISO) : b))
+  await $.session.start({ cwd: ROOT } as never)
+  return w
+}
+const ask = ($: Eng, input: Record<string, unknown>) => $.tool.call({ tool: 'mcp__symcc__ask_owner', ...input } as never) as Promise<{ result?: string; deny?: string }>
+const check = ($: Eng, agentId: string, tool: string, input: Record<string, unknown>) => $.tool.check({ tool, input, agentId } as never) as Promise<{ decision: string; reason?: string }>
+const WT1 = `${ROOT}/.symcc/worktrees/T-1`
+
+test("a worker's ask_owner call is recorded, and when it hands back the task waits with its question and options; nothing is merged", async ($, on) => {
+  const w = await trackedWorker($, on)
+  const main = w.git.state.main
+  expect((await ask($, { agentId: 'a1', question: 'Which colour?', options: ['red', 'blue'] })).result).toBe('Sent to the owner. Stop now and hand back.')
+  await finish($, 'a1', 'I asked the owner.')
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe('Which colour?')
+  expect((t as { options?: string[] }).options).toEqual(['red', 'blue'])
+  expect(w.git.state.main).toBe(main)
+})
+
+test('ask_owner from the lead, from an agent that is not a worker, or with a bad input is refused and records nothing', async ($, on) => {
+  const w = await trackedWorker($, on)
+  expect((await ask($, { question: 'Which?' })).result).toMatch(/^Refused: mcp__symcc__ask_owner is only for symcc workers; the lead/)
+  expect((await ask($, { agentId: 'zz', question: 'Which?' })).result).toMatch(/^Refused: .*only for running symcc workers/)
+  expect((await ask($, { agentId: 'a1' })).result).toMatch(/^Refused: question is needed/)
+  expect((await ask($, { agentId: 'a1', question: 'Which?', options: ['red'] })).result).toMatch(/^Refused: options must hold 2 to 6/)
+  // nothing was recorded: the hand-back is checked and merged as usual
+  await finish($, 'a1', 'made the change')
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('done')
+})
+
+test("an Edit outside a worker's files is refused with the reason and recorded; one inside is left to the usual rules; the task then waits for that file", async ($, on) => {
+  const w = await trackedWorker($, on)
+  const main = w.git.state.main
+  const out = await check($, 'a1', 'Edit', { file_path: `${WT1}/README.md`, old_string: 'a', new_string: 'b' })
+  expect(out).toMatchObject({ decision: 'deny', reason: "README.md is outside this task's files; it's recorded as a request to the owner. Stop and hand back." })
+  expect((await check($, 'a1', 'NotebookEdit', { notebook_path: `${WT1}/nb/x.ipynb`, new_source: '' })).decision).toBe('deny')
+  expect((await check($, 'a1', 'Write', { file_path: `${WT1}/src/b.ts`, content: 'x' })).decision).toBe('allow')
+  // the lead (no agentId) and Bash are not judged here
+  expect((await $.tool.check({ tool: 'Edit', input: { file_path: `${WT1}/README.md` } } as never) as { decision: string }).decision).toBe('allow')
+  expect((await check($, 'a1', 'Bash', { command: 'echo x > README.md' })).decision).toBe('allow')
+  // half-done edits in src/a.ts are in its folder, but nothing is merged
+  await finish($, 'a1', 'Changed src/a.ts; README.md was refused.')
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('waiting')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'nb/x.ipynb'])
+  expect(w.git.state.main).toBe(main)
+})
+
+test("an investigation's edits are never refused (it has no file list), and its hand-back is its answer", async ($, on) => {
+  const w = await trackedWorker($, on, { investigation: true })
+  expect((await check($, 'a1', 'Write', { file_path: `${WT1}/README.md`, content: 'x' })).decision).toBe('allow')
+  await finish($, 'a1', 'The answer.')
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('review')
+})
+
+test('a turn that ended on an error or a refusal fails the task with the reason, through the hook; nothing is merged', async ($, on) => {
+  const w = await trackedWorker($, on)
+  const main = w.git.state.main
+  await finish($, 'a1', 'half way', false, { reason: 'error' })
+  await w.clock.settle()
+  expect(w.task('T-1')).toMatchObject({ status: 'failed', note: "the worker's turn ended on an error (retries used up or the context limit)" })
+  expect(w.git.state.main).toBe(main)
+})
+
+test('a refusal end fails the task with the refusal\'s explanation', async ($, on) => {
+  const w = await trackedWorker($, on)
+  await finish($, 'a1', '', false, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help with that' } })
+  await w.clock.settle()
+  expect(w.task('T-1')).toMatchObject({ status: 'failed', note: 'the model refused to go on (cannot help with that)' })
+})
+
+test('a hand-back that says "QUESTION:" and "NEED FILES:" with no ask_owner call or refused edit is merged normally', async ($, on) => {
+  const w = await trackedWorker($, on)
+  await finish($, 'a1', 'QUESTION: red or blue?\nNEED FILES: README.md — docs')
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('done')
+})
+
+test('an aborted end still stops the task, through the hook', async ($, on) => {
+  const w = await trackedWorker($, on)
+  await finish($, 'a1', '', true)
+  await w.clock.settle()
+  expect(w.task('T-1')).toMatchObject({ status: 'failed', note: 'the worker was stopped' })
 })
 
 // ---------------- two workers finishing at once ----------------

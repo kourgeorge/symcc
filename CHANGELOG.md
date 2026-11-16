@@ -32,6 +32,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - git's real error is shown when symcc's own commit, git add, bring-up-to-date merge or moving main fails.
 
 ### Changed
+- Workers ask you through a small `ask_owner` tool (a question and 2 to 6 choices), and an edit outside a task's files is refused and becomes a file request. symcc no longer reads `QUESTION:`, `OPTIONS:` or `NEED FILES:` lines out of a worker's hand-back, so a report that happens to contain them is merged normally.
 - Pausing a scout now only stops its timer: "run now" (`r` on its page, `/symcc-scout <name>`, or the lead's `scouts run`) still runs a paused scout once, and it stays paused. You can try an example scout without resuming it.
 - The `target_branch` setting is gone. Each task now merges into the branch you were on when you asked for it.
 - No Esc needed in the panel: every text box and pick list has another way out, and Esc hints are removed from the footers.
@@ -49,6 +50,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - A task waiting on your files keeps waiting (even if its merge runs over) and tells you the right fix for each kind of file: commit or stash, remove an untracked file, or deal with an ignored one.
 
 ### Fixed
+- A worker whose run ended on an API error or a refusal now fails its task with the reason, instead of being checked and merged as if it had finished.
 - Merge: the owner's branch is no longer left half-updated by a clashing untracked file, and git-ignored files are not silently overwritten.
 - A `board.json` that cannot be read is never overwritten, and a broken one is reported once without failing the hook.
 - Safe writes use a unique temp file, so two saves at once cannot break each other.

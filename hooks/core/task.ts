@@ -157,112 +157,9 @@ export function outOfScope(changed: string[], allowed: string[], dir: string = D
   return changed.filter(f => f.startsWith(dir + '/') || f.startsWith('.git/') || (allowed.length > 0 && !inside(f)))
 }
 
-/** Words a NEED FILES list may hold that name no file ("none", "n/a", ...). */
-const NO_FILES = /^(?:none|n\/a|na|-+|nothing|no|nil|\.{3}|…)\.?$/i
-
-/** Well-known project files with no "." or "/" in their name, which still count as paths in a NEED FILES list. */
-const PLAIN_FILES = /^(?:README|Makefile|GNUmakefile|LICEN[CS]E|COPYING|NOTICE|AUTHORS|CHANGELOG|CHANGES|CONTRIBUTING|Dockerfile|Containerfile|Gemfile|Rakefile|Procfile|Justfile|Vagrantfile|Brewfile|Jenkinsfile|Caddyfile|Pipfile|CODEOWNERS|VERSION)$/i
-
-/**
- * Whether an entry of a NEED FILES list looks like a file path: it has a "/" or a "." with letters
- * after it ("src/", "a.ts", "docs/guide.md"), is a well-known file like README or Makefile, or
- * `exists` says it is a file or folder in the project. Words like "none", "n/a" or "needed" are not.
- */
-function looksLikePath(f: string, exists?: (name: string) => boolean): boolean {
-  if (NO_FILES.test(f)) return false
-  return f.includes('/') || /\.[A-Za-z]/.test(f) || PLAIN_FILES.test(f) || !!exists?.(f)
-}
-
-/**
- * A worker that must change files outside its list stops and answers
- * `NEED FILES: path/a, path/b — reason`. Returns the files and the reason (may be empty), or
- * undefined when the answer is not that. Spaces and backticks around the paths are fine.
- * "NEED FILES" must be in capitals (a report line like "Need files: none" is not a request), at the very
- * start of a line (it may be wrapped in backticks or **), not indented, not quoted with ">" and not inside
- * a ``` block: such examples in a report are not requests. Like parseQuestion, the text before that line
- * must be short (at most QUESTION_EXTRA_LINES lines and QUESTION_EXTRA_CHARS characters), so
- * "I need two more files.\nNEED FILES: ..." asks while a long report with such a line does not.
- * Lines after it (details for the next try) are fine, however long.
- * Brackets, quotes and backticks around each entry are dropped, then only the entries that look like a
- * path are kept (see looksLikePath; `exists` may say which plain names are files or folders in the project).
- * A list with no such entry ("none", "(none)", "[none]", "n/a", "-", "none needed", ...) is not a request.
- */
-export function parseNeedFiles(answer: string, exists?: (name: string) => boolean): { files: string[]; reason: string } | undefined {
-  const lines = answer.split(/\r?\n/)
-  let inCode = false
-  let at = -1
-  let m: RegExpExecArray | null = null
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i]!
-    if (/^\s*```/.test(l)) {
-      inCode = !inCode
-      continue
-    }
-    if (inCode) continue
-    m = /^(?:`|\*\*)?NEED\s+FILES\s*:(?:`|\*\*)?\s*(.*?)(?:`|\*\*)?$/.exec(l.trimEnd())
-    if (m) {
-      at = i
-      break
-    }
-  }
-  if (!m) return undefined
-  const before = lines.slice(0, at).map(l => l.trim()).filter(Boolean)
-  if (before.length > QUESTION_EXTRA_LINES || before.join('\n').length > QUESTION_EXTRA_CHARS) return undefined
-  const rest = m[1]!.trim()
-  const cut = /\s+(?:—|–|--|-)\s+|\s*[—–]\s*/.exec(rest)
-  const list = cut ? rest.slice(0, cut.index) : rest
-  const reason = cut ? rest.slice(cut.index + cut[0].length).trim() : ''
-  const files = [
-    ...new Set(
-      list
-        .split(/[,\s]+/)
-        .map(f => f.replace(/[`'"()[\]{}<>“”‘’]/g, '').trim().replace(/^\.\//, ''))
-        .filter(f => f && looksLikePath(f, exists)),
-    ),
-  ]
-  // "none", "(none)", "n/a", "no files needed", ...: no real path, so not a request
-  return files.length ? { files, reason } : undefined
-}
-
-/** How much other text (lines, characters) a hand-back may have besides its QUESTION and OPTIONS lines and still be a question. */
-export const QUESTION_EXTRA_LINES = 5
-export const QUESTION_EXTRA_CHARS = 500
-
-/**
- * The question in a worker's hand-back, or undefined when it is a normal hand-back (an answer or a report).
- * A hand-back is a question when one of its lines starts with "QUESTION:" in capitals, and the rest
- * (besides that line and an `OPTIONS: ...` line) is short: at most QUESTION_EXTRA_LINES lines and
- * QUESTION_EXTRA_CHARS characters. So "I looked around.\nQUESTION: ..." waits, while an answer that
- * restates the question ("Question: ... / Answer: ...") or a long report with such a line stays an answer.
- */
-export function parseQuestion(answer: string): string | undefined {
-  const lines = answer.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
-  const at = lines.findIndex(l => /^QUESTION:\s*\S/.test(l))
-  if (at < 0) return undefined
-  const rest = lines.filter((l, i) => i !== at && !/^OPTIONS\s*:/.test(l))
-  if (rest.length > QUESTION_EXTRA_LINES || rest.join('\n').length > QUESTION_EXTRA_CHARS) return undefined
-  return lines[at]!.replace(/^QUESTION:\s*/, '').trim()
-}
-
-/** The question a task waits with after its worker asked for more files. */
-export function needFilesQuestion(id: string, need: { files: string[]; reason: string }): string {
-  const reason = need.reason.trim()
-  return `${id} needs to change files outside its list: ${need.files.join(', ')}${reason ? ` — ${reason}` : ''}${/[.?!]$/.test(reason) ? '' : '.'} Allow them?`
-}
-
-/** How many choices a worker's OPTIONS line may give. */
-export const OPTIONS_MIN = 2
-export const OPTIONS_MAX = 6
-
-/**
- * The choices on a worker's `OPTIONS: a | b | c` line (given after its QUESTION line), or
- * undefined when there is none or it gives fewer than 2 or more than 6.
- */
-export function parseOptions(answer: string): string[] | undefined {
-  const m = /^[\s`*]*OPTIONS\s*:\s*(.*)$/im.exec(answer)
-  if (!m) return undefined
-  const opts = [...new Set(m[1]!.split('|').map(o => o.replace(/[`*]+$/, '').trim().slice(0, 200)).filter(Boolean))]
-  return opts.length >= OPTIONS_MIN && opts.length <= OPTIONS_MAX ? opts : undefined
+/** The question a task waits with after its worker's edits of `files` (outside its list) were refused. */
+export function needFilesQuestion(id: string, files: readonly string[]): string {
+  return `${id} needs to change files outside its list: ${files.join(', ')}. Allow them?`
 }
 
 /** 'the owner allowed files: + a, + b': the history line when the owner allows a file request. */
@@ -271,7 +168,7 @@ export const filesAllowedLine = (files: readonly string[]) => `the owner allowed
 /** What the lead is told when the owner does not allow a waiting task's file request. */
 export const filesRefusedText = (id: string, files: readonly string[]) => `The owner didn't allow ${files.join(', ')} for ${id}: drop it or narrow the plan.`
 
-/** Task `id` waits with a file request (NEED FILES); throws otherwise. */
+/** Task `id` waits with a file request (its worker's edits outside its files were refused); throws otherwise. */
 function askedFilesOf(b: Board, id: string): [BoardTask, string[]] {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
