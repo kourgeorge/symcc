@@ -174,17 +174,24 @@ export function parseNeedFiles(answer: string): { files: string[]; reason: strin
   return files.length ? { files, reason } : undefined
 }
 
+/** How much other text (lines, characters) a hand-back may have besides its QUESTION and OPTIONS lines and still be a question. */
+export const QUESTION_EXTRA_LINES = 5
+export const QUESTION_EXTRA_CHARS = 500
+
 /**
  * The question in a worker's hand-back, or undefined when it is a normal hand-back (an answer or a report).
- * A hand-back is a question only when it is just the `QUESTION: ...` line, "QUESTION:" in capitals at
- * its start, optionally followed by one `OPTIONS: ...` line (blank lines are fine). So an answer that
- * restates the question ("Question: ... / Answer: ...") stays an answer.
+ * A hand-back is a question when one of its lines starts with "QUESTION:" in capitals, and the rest
+ * (besides that line and an `OPTIONS: ...` line) is short: at most QUESTION_EXTRA_LINES lines and
+ * QUESTION_EXTRA_CHARS characters. So "I looked around.\nQUESTION: ..." waits, while an answer that
+ * restates the question ("Question: ... / Answer: ...") or a long report with such a line stays an answer.
  */
 export function parseQuestion(answer: string): string | undefined {
   const lines = answer.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
-  const m = /^QUESTION:\s*(.+)$/.exec(lines[0] ?? '')
-  if (!m || lines.length > 2 || (lines.length === 2 && !/^OPTIONS\s*:/.test(lines[1]!))) return undefined
-  return m[1]!.trim()
+  const at = lines.findIndex(l => /^QUESTION:\s*\S/.test(l))
+  if (at < 0) return undefined
+  const rest = lines.filter((l, i) => i !== at && !/^OPTIONS\s*:/.test(l))
+  if (rest.length > QUESTION_EXTRA_LINES || rest.join('\n').length > QUESTION_EXTRA_CHARS) return undefined
+  return lines[at]!.replace(/^QUESTION:\s*/, '').trim()
 }
 
 /** The question a task waits with after its worker asked for more files. */

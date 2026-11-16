@@ -1372,17 +1372,20 @@ test('a worker QUESTION with an OPTIONS line saves the options; without one, or 
     expect((await workerAnswers(bad, { notify: 'off' })).t).not.toHaveProperty('options')
 })
 
-test('only a hand-back that is just the QUESTION line (and maybe OPTIONS) waits; a report with a "Question:" line merges normally', async () => {
+test('a hand-back with a capital QUESTION line and little else waits; a long report or a "Question:" line merges normally', async () => {
   const report = 'I changed src/a.ts to fix the colour.\nQuestion: should the button be red or blue?\nAnswer: blue, as the details say.\nTests pass.'
   const { t } = await workerAnswers(report, { notify: 'off' })
   expect(t.status).toBe('done')
   expect(t.question ?? undefined).toBeUndefined()
-  for (const notQuestion of ['I looked around.\nQUESTION: Which colour?', 'question: which colour?', 'QUESTION: Which colour?\nI also changed src/a.ts.', 'QUESTION: Which?\nOPTIONS: red | blue\nmore text'])
+  const long = `I changed src/a.ts to fix the colour.\n${'Another long line of the report about what changed.\n'.repeat(12)}QUESTION: Which colour?`
+  for (const notQuestion of ['question: which colour?', long])
     expect((await workerAnswers(notQuestion, { notify: 'off' })).t.status).not.toBe('waiting')
+  for (const question of ['I looked around.\nQUESTION: Which colour?', 'QUESTION: Which colour?\nI also changed src/a.ts.'])
+    expect((await workerAnswers(question, { notify: 'off' })).t).toMatchObject({ status: 'waiting', question: 'Which colour?' })
   const plain = await workerAnswers('\n  QUESTION: Which colour?  \n\n', { notify: 'off' })
   expect(plain.t.status).toBe('waiting')
   expect(plain.t.question).toBe('Which colour?')
-  const withOptions = await workerAnswers('QUESTION: Which colour?\n\nOPTIONS: red | blue\n', { notify: 'off' })
+  const withOptions = await workerAnswers('I looked around.\nQUESTION: Which colour?\n\nOPTIONS: red | blue\n', { notify: 'off' })
   expect(withOptions.t.status).toBe('waiting')
   expect((withOptions.t as { options?: string[] }).options).toEqual(['red', 'blue'])
 })
