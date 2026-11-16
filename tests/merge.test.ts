@@ -1522,6 +1522,31 @@ test('pause of a running task and resume both leave a history line', async () =>
   expect(t.history.slice(-2)).toEqual(['try 1: stopped: paused', 'resumed after a pause'])
 })
 
+test('change on a paused task keeps it paused with the change saved, and resume still starts it', async () => {
+  const w = world()
+  const [b0] = boardWith('review', [], { status: 'paused', note: 'paused' })
+  const [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Before it' }, ISO)
+  await saveBoard(w.$, b)
+  const changes: Record<string, unknown>[] = [
+    { title: 'New title' }, { details: 'new plan' }, { add_details: 'also the README' },
+    { files: ['src/', 'tests/'] }, { after: ['T-2'] }, { order: 7 },
+  ]
+  for (const c of changes) {
+    const said = await runTool(w.$, 'change', { task: 'T-1', ...c })
+    expect(String(said)).toMatch(/still paused/)
+    expect(find(await load(w.$), 'T-1')!.status).toBe('paused')
+  }
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.title).toBe('New title')
+  expect(t.details).toMatch(/^new plan\n\nNote \(lead, \d{4}-\d\d-\d\d\): also the README$/)
+  expect(t.files).toEqual(['src/', 'tests/'])
+  expect(t.after).toEqual(['T-2'])
+  expect(t.order).toBe(7)
+  expect(t.note).toBe('paused')
+  await runTool(w.$, 'resume', { task: 'T-1' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+})
+
 // ---------------- each try's full report ----------------
 
 const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
