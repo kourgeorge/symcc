@@ -573,6 +573,25 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
 }
 
 /**
+ * A check for parseNeedFiles: whether a plain name ("tests", "scripts", "Procfile") is a file or folder in
+ * the task's folder (or the project root when that folder is missing). The names are read once: the
+ * top-level entries plus every path git knows (tracked, or new and not ignored) and the folders above them.
+ */
+async function projectNames($: $, worktree: string): Promise<(name: string) => boolean> {
+  const dir = worktree && (await $.fs.exists(`${worktree}/.git`).catch(() => false)) ? worktree : S.root
+  const names = new Set<string>()
+  const add = (p: string) => {
+    const parts = p.replace(/\/+$/, '').split('/').filter(Boolean)
+    for (let i = 1; i <= parts.length; i++) names.add(parts.slice(0, i).join('/'))
+  }
+  const top = await $.process.run(['ls', '-A'], { cwd: dir, timeoutMs: 10_000 }).catch(() => null)
+  if (top?.exitCode === 0) for (const l of top.stdout.split('\n')) if (l.trim()) add(l.trim())
+  const tracked = await git($, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], dir, 30_000).catch(() => null)
+  if (tracked?.exitCode === 0) for (const p of tracked.stdout.split('\0')) if (p) add(p)
+  return name => names.has(name.replace(/\/+$/, ''))
+}
+
+/**
  * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
  * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
@@ -598,7 +617,7 @@ export async function finishWork($: $, agentId: string, w: { task: string; workt
   }
   const q = parseQuestion(answer)
   // Investigations never ask for files (they have no file list): a NEED FILES line in one is part of its answer.
-  const need = kindOf(t) === 'investigation' ? undefined : parseNeedFiles(answer)
+  const need = kindOf(t) === 'investigation' ? undefined : parseNeedFiles(answer, /NEED\s+FILES/.test(answer) ? await projectNames($, w.worktree) : undefined)
   if (aborted) {
     if (await writeIfSame($, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
     tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)

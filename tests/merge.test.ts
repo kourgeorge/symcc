@@ -1320,8 +1320,8 @@ test('an archived task can still be looked up, is read-only, and an archived dro
 // ---------------- a worker asks the owner ----------------
 
 /** T-1 is "doing" with worker ag1, which then answers `answer`; notify and driving as given. */
-async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean } = {}) {
-  const w = world()
+async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git> } = {}) {
+  const w = world(o.git)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'] })
   await saveBoard(w.$, { ...b0, notify: o.notify ?? 'voice' })
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -1382,6 +1382,20 @@ test('a change report that mentions an indented or quoted NEED FILES line in its
   const { t } = await workerAnswers('I changed src/a.ts so a worker answers:\n    NEED FILES: path/a, path/b — <reason>\nand also `NEED FILES: x` in a quote.\n```\nNEED FILES: y\n```', { notify: 'off' })
   expect(t.status).toBe('done')
   expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+})
+
+test('a change task handing back "NEED FILES: tests — reason" in a project with a tests folder waits for files ["tests"]', async () => {
+  const lsFiles = (args: string[], cwd: string) => (args[0] === 'ls-files' && cwd === WT ? ok('src/a.ts\0tests/merge.test.ts\0package.json\0') : undefined)
+  const { w, t } = await workerAnswers('NEED FILES: tests — the new test goes there', { notify: 'off', git: { answer: lsFiles } })
+  expect(t.status).toBe('waiting')
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['tests'])
+  expect(movedMain(w)).toBe(false)
+  // a plain name the project has no file or folder for is still not a request
+  const { t: t2 } = await workerAnswers('Changed a.ts.\nNEED FILES: scripts', { notify: 'off', git: { answer: lsFiles } })
+  expect(t2.status).toBe('done')
+  // and "none" still isn't one, even with the project's names to check against
+  const { t: t3 } = await workerAnswers('Changed a.ts.\nNEED FILES: none', { notify: 'off', git: { answer: lsFiles } })
+  expect(t3.status).toBe('done')
 })
 
 test('a short change report ending "NEED FILES: none" (or n/a, -, nothing, no) is not a request and the task merges', async () => {
