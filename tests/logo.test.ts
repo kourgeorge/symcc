@@ -96,14 +96,31 @@ test('a merge, a worker start, a scout finding and the board becoming all done p
   expect(pickMove(before, before, isNothing)).toBe(null)
   expect(pickMove(before, facts([['T-1', 'done'], ['T-2', 'todo']], before.scouts), isNothing)).toBe('check')
   expect(pickMove(before, facts([['T-1', 'doing'], ['T-2', 'doing']], before.scouts), isNothing)).toBe('robot')
-  expect(pickMove(before, facts([['T-1', 'doing'], ['T-2', 'todo']], [{ name: 'docs', last_run: '2026-11-16T10:00:00Z', last_report: '1. The README is out of date' }]), isNothing)).toBe('note')
+  // a scout's new report (it finished, last_run set at its start) plays the note
+  expect(pickMove(before, facts([['T-1', 'doing'], ['T-2', 'todo']], [{ name: 'docs', last_run: null, last_report: '1. The README is out of date' }]), isNothing)).toBe('note')
   // a scout that found nothing plays nothing
-  expect(pickMove(before, facts([['T-1', 'doing'], ['T-2', 'todo']], [{ name: 'docs', last_run: '2026-11-16T10:00:00Z', last_report: 'NOTHING' }]), isNothing)).toBe(null)
+  expect(pickMove(before, facts([['T-1', 'doing'], ['T-2', 'todo']], [{ name: 'docs', last_run: null, last_report: 'NOTHING' }]), isNothing)).toBe(null)
   // the last merge that leaves nothing to do sings
   expect(pickMove(facts([['T-1', 'review'], ['T-2', 'done']]), facts([['T-1', 'done'], ['T-2', 'done']]), isNothing)).toBe('sing')
   expect(allDone([{ status: 'done' }, { status: 'backlog' }, { status: 'failed' }])).toBe(true)
   expect(allDone([{ status: 'done' }, { status: 'waiting' }])).toBe(false)
   expect(allDone([])).toBe(false)
+})
+
+test('a scout run plays the note when its report arrives, not when it starts', () => {
+  const at = (scout: NonNullable<LogoFacts['scouts']>[number]): LogoFacts => ({ tasks: [{ id: 'T-1', status: 'doing' as never }], scouts: [scout] })
+  const old = at({ name: 'docs', last_run: '2026-11-16T09:00:00Z', last_report: '1. The README is out of date' })
+  // start: last_run changes, the old finding is still the report: no note
+  const started = at({ name: 'docs', last_run: '2026-11-16T10:00:00Z', last_report: '1. The README is out of date' })
+  expect(pickMove(old, started, isNothing)).toBe(null)
+  // finish with a new finding: the note
+  const found = at({ name: 'docs', last_run: '2026-11-16T10:00:00Z', last_report: '1. The install steps are wrong' })
+  expect(pickMove(started, found, isNothing)).toBe('note')
+  // finish with "nothing": no note
+  const none = at({ name: 'docs', last_run: '2026-11-16T10:00:00Z', last_report: 'NOTHING' })
+  expect(pickMove(started, none, isNothing)).toBe(null)
+  // a stopped run puts the old last_run back and keeps the old report: no note
+  expect(pickMove(started, old, isNothing)).toBe(null)
 })
 
 test('nothing plays with logo_motion off, a narrow panel, a panel not shown, or the board off', () => {

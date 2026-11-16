@@ -141,8 +141,11 @@ export type LogoFacts = { tasks: { id: string; status: SymccStatus }[]; scouts?:
 /**
  * The move an update of the board plays, from what it was (`before`) to what it is now (`after`); null for none.
  * The board becoming all done sings; a task that turned done (merged) shows the check mark; a scout that
- * reported a finding (a new run whose report is not "nothing", see `isNothing`) the note; a task that
+ * reported a finding (a new report, not "nothing", see `isNothing`) the note; a task that
  * started (turned doing) the robot. With no `before` (the first look) nothing plays.
+ * The note follows `last_report`, not `last_run`: a scout's run start publishes a new `last_run` with the old
+ * report still in place, and its finish publishes the new report with `last_run` unchanged. A stopped or failed
+ * run keeps the old report, so it plays nothing (and so does a new report with the very same text).
  */
 export function pickMove(before: LogoFacts | undefined, after: LogoFacts, isNothing: (report: string | undefined) => boolean): LogoMove | null {
   if (!before) return null
@@ -150,8 +153,8 @@ export function pickMove(before: LogoFacts | undefined, after: LogoFacts, isNoth
   const turned = (st: SymccStatus) => after.tasks.some(t => t.status === st && was.get(t.id) !== st)
   if (allDone(after.tasks) && !allDone(before.tasks)) return 'sing'
   if (turned('done')) return 'check'
-  const ran = new Map((before.scouts ?? []).map(s => [s.name, s.last_run ?? null]))
-  if ((after.scouts ?? []).some(s => s.last_run && ran.has(s.name) && ran.get(s.name) !== s.last_run && !isNothing(s.last_report))) return 'note'
+  const said = new Map((before.scouts ?? []).map(s => [s.name, s.last_report]))
+  if ((after.scouts ?? []).some(s => s.last_report !== undefined && said.has(s.name) && said.get(s.name) !== s.last_report && !isNothing(s.last_report))) return 'note'
   if (turned('doing')) return 'robot'
   return null
 }
