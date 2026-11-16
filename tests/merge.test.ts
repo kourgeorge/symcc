@@ -482,6 +482,73 @@ test('checkAndMerge that loses the race and then conflicts with the new main sti
   expect(w.git.main).toBe(M2)
 })
 
+test('checkAndMerge fails with git\'s error when git add fails, and commits nothing', async () => {
+  const w = world({ answer: a => (a[0] === 'add' ? fail('fatal: Unable to create \'/repo/.git/index.lock\': File exists.', 128) : undefined) })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: "symcc could not stage the work (git add): fatal: Unable to create '/repo/.git/index.lock': File exists." })
+  expect(w.calls.some(c => / git commit /.test(c) || c.includes(' commit -q '))).toBe(false)
+  expect(ranTests(w)).toEqual([])
+})
+
+test('checkAndMerge with a commit that fails (signing) gives git\'s error, not "no change"', async () => {
+  const w = world({ answer: a => (a.includes('commit') ? fail('error: gpg failed to sign the data\nfatal: failed to write commit object', 128) : undefined) })
+  w.git.changed = []
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made: string[] = []
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('symcc could not commit the work: error: gpg failed to sign the data | fatal: failed to write commit object')
+  expect(r.detail).toContain('git config commit.gpgsign false')
+  expect(r.detail).not.toContain('no change')
+  expect(made).toEqual([])
+  expect(movedMain(w)).toBe(false)
+})
+
+test('checkAndMerge with nothing to commit (and nothing changed) still says the worker made no change', async () => {
+  const w = world({ dirty: false, changed: [] })
+  w.git.answer = a => (a.includes('commit') ? { exitCode: 1, stdout: 'nothing to commit, working tree clean', stderr: '' } : undefined)
+  const [b, t] = boardWith('auto')
+  expect(await checkAndMerge(w.$, t, WT, b)).toEqual({ ok: false, detail: 'the worker made no change' })
+})
+
+test('checkAndMerge says the files outside the task were not undone when the undo commit fails', async () => {
+  const w = world({ changed: ['src/a.ts', 'docs/x.md'] })
+  w.git.answer = a => {
+    if (a[0] === 'restore') return (w.git.dirty = true, ok())
+    if (a.includes('commit') && a.some(x => x.includes('undo changes outside the task'))) return fail('error: gpg failed to sign the data', 128)
+    return undefined
+  }
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.detail.startsWith(`${outOfScopeText(['docs/x.md'], ['src/'])}. Could not undo them on the task's branch: error: gpg failed to sign the data`)).toBe(true)
+  expect(r.detail).not.toContain('were undone')
+})
+
+test('checkAndMerge when bringing in main fails for another reason than a conflict gives git\'s error, not a conflict', async () => {
+  const w = world({ upToDate: false, answer: a => (a.includes('merge') && a.includes('--no-edit') ? fail('error: gpg failed to sign the data\nfatal: failed to write commit object', 128) : undefined) })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.conflict).toBeUndefined()
+  expect(r.detail).toContain('symcc could not bring the work up to date with main (git merge): error: gpg failed to sign the data')
+  expect(r.detail).not.toContain('conflicts')
+  expect(w.calls).toContain('wt: git merge --abort')
+  expect(ranTests(w)).toEqual([])
+  expect(w.git.main).toBe(M1)
+})
+
+test('checkAndMerge when main is locked (a stale lock file) gives git\'s error once: no retries, no extra test runs', async () => {
+  let tries = 0
+  const w = world({ answer: a => (a[0] === 'update-ref' ? (tries++, fail("fatal: cannot lock ref 'refs/heads/main': Unable to create '/repo/.git/refs/heads/main.lock': File exists.", 128)) : undefined) })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: 'could not move main: a git lock file is in the way: /repo/.git/refs/heads/main.lock; if no git is running, remove it, then say "retry T-1"' })
+  expect(tries).toBe(1)
+  expect(ranTests(w).length).toBe(1)
+  expect(w.git.main).toBe(M1)
+})
+
 test('mergeTurn runs merges into the same branch one after another, even when one fails; other branches do not wait', async () => {
   const log: string[] = []
   let open: () => void = () => {}

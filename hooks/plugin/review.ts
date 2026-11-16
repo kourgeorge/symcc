@@ -109,8 +109,10 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   }
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
-  await git($, ['add', '-A', '--', '.'], dir)
-  await commitTry($, t, dir, made)
+  const add = await git($, ['add', '-A', '--', '.'], dir)
+  if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
+  const committed = await commitTry($, t, dir, made)
+  if (committed) return { ok: false, detail: `symcc could not commit the work: ${committed}` }
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
@@ -155,21 +157,35 @@ async function undoOutOfScope($: $, t: SymccTask, dir: string, base: string, bad
     const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
     if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`
   }
-  await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
-  return ''
+  const c = await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
+  return c ? `. Could not undo them on the task's branch: ${c}` : ''
+}
+
+/** Git's error in a few words: the first lines of its error output, plus a hint when it is about commit signing. */
+function gitFailText(r: { stdout: string; stderr: string }): string {
+  const lines = `${r.stderr}\n${r.stdout}`.split('\n').map(l => l.trim()).filter(Boolean)
+  const text = lines.slice(0, 3).join(' | ').slice(0, 300) || 'git failed'
+  const signing = /gpg|signing|failed to sign|ssh-keygen/i.test(r.stderr)
+  return signing ? `${text} (commit signing failed: run \`git config commit.gpgsign false\` in this repo, or fix the signer so it works without a terminal)` : text
 }
 
 /**
  * Commits what is staged in task `t`'s folder `dir` as symcc (no hooks), with the task's message
  * (see commitMessage; `subject` replaces its first line). Nothing to commit is fine (exit 1, HEAD
  * unchanged); only a new HEAD counts as a commit of this try and is added to `made`.
+ * Returns '' when fine, or git's error when the commit failed for another reason (e.g. signing).
  */
-async function commitTry($: $, t: SymccTask, dir: string, made: string[], subject?: string): Promise<void> {
+async function commitTry($: $, t: SymccTask, dir: string, made: string[], subject?: string): Promise<string> {
   const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   // The message ends with trailers (task, origin, why, try); see commitMessage.
   const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}) })], dir)
   const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
-  if (c.exitCode === 0 && head && head !== before) made.push(head)
+  if (head && head !== before) {
+    made.push(head)
+    return ''
+  }
+  if (c.exitCode === 0 || /nothing to commit|nothing added to commit|no changes added to commit/i.test(`${c.stdout}\n${c.stderr}`)) return ''
+  return gitFailText(c)
 }
 
 /** How many times checkAndMerge brings a task up to date and tries again when its branch moved during the merge. */
@@ -203,7 +219,9 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
     const m = await git($, [...asSymcc(), 'merge', '--no-edit', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
-      return res({ ok: false, detail: `conflicts with the latest ${target}`, conflict: true })
+      // Only a real conflict is one: any other failure (e.g. signing the merge commit) is git's error, and retrying on conflicts can't help it.
+      if (/^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`)) return res({ ok: false, detail: `conflicts with the latest ${target}`, conflict: true })
+      return res({ ok: false, detail: `symcc could not bring the work up to date with ${target} (git merge): ${gitFailText(m)}` })
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
