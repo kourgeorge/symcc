@@ -36,7 +36,7 @@ export function listPage($: $, pane: PaneParts) {
   const toggleDropped = () => ((S.droppedOpen = !S.droppedOpen), $.ui.invalidate('ui.render'))
   const showAllBacklog = () => ((S.backlogAll = true), $.ui.invalidate('ui.render'))
   /** A list row: a task (`indent`: 2 or 4 columns); a row one can press (`day`: 'backlog', 'done', 'dropped',
-   *  'backlog-more' or an older day of Done); a section label (`head`); a subtle line (`line`); or a blank line. */
+   *  'backlog-more' or an older day of Done); a section label (`head`); a secondary-color line (`line`); or a blank line. */
   type Row = { task: SymccTask; indent: number } | { day: string; label: string; extra?: string; indent: number } | { head: string } | { line: string } | { blank: true }
   const tasksOf = (ts: SymccTask[], indent: number): Row[] => ts.map(task => ({ task, indent }))
   // active work first (always open): NEEDS YOU under its label, then one untitled list of what runs and what
@@ -85,7 +85,7 @@ export function listPage($: $, pane: PaneParts) {
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
-  const tone: Record<string, string> = { backlog: 'subtle', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
+  const tone: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
   const redraw = () => $.ui.invalidate('ui.render')
   const openSearch = () => ((S.search = { text: S.search?.text ?? '', typing: true }), redraw())
@@ -104,7 +104,7 @@ export function listPage($: $, pane: PaneParts) {
           onInput={value => void ((S.search = { text: value, typing: true }), redraw())}
           onSubmit={value => void ((S.search = value.trim() ? { text: value.trim(), typing: false } : null), redraw())}
         />,
-        <Text key="search-count" wrap="truncate" color={C('subtle')}>{searchBoxHint(count)}</Text>,
+        <Text key="search-count" wrap="truncate" color={C('inactive')}>{searchBoxHint(count)}</Text>,
       ]
     : filtering
       ? [<Text key="search-line" wrap="truncate" bold color={C('warning')}>{searchLine(query, matching.length, v.tasks.length)}</Text>]
@@ -128,17 +128,17 @@ export function listPage($: $, pane: PaneParts) {
       {searchButtons}
       {list.map((r, i) => {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>
-        if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('subtle')}>{`  ${r.line}`}</Text>
+        if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('inactive')}>{`  ${r.line}`}</Text>
         if ('head' in r) return <Text key={`head:${r.head}`} bold color={C('text')}>{r.head}</Text>
         if (!('task' in r)) {
           const top = r.day === 'backlog' || r.day === 'done' || r.day === 'dropped'
           return (
             <Button key={`day:${r.day}`} plain autoFocus={i === firstButton ? true : undefined} onPress={pressDay(r.day)}>
-              <Text color={C(top ? 'text' : 'subtle')}>
+              <Text color={C(top ? 'text' : 'inactive')}>
                 {' '.repeat(r.indent)}
                 {r.label}
               </Text>
-              {r.extra ? <Text color={C('subtle')}>{`   ${r.extra}`}</Text> : null}
+              {r.extra ? <Text color={C('inactive')}>{`   ${r.extra}`}</Text> : null}
             </Button>
           )
         }
@@ -153,10 +153,10 @@ export function listPage($: $, pane: PaneParts) {
               {x.id.padEnd(idWidth)}
             </Text>
             <Text color={C(tone[x.status]!)}>{` ${mark[x.status]} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
-            <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'subtle' : 'text')}>
+            <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>
-            {fit.extra ? <Text color={C('subtle')}>{`${fit.pad}${fit.extra}`}</Text> : null}
+            {fit.extra ? <Text color={C('inactive')}>{`${fit.pad}${fit.extra}`}</Text> : null}
           </Button>
         )
       })}

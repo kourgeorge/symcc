@@ -1080,7 +1080,7 @@ test('diff lines are colored: added in success, removed in error, headers and hu
   const lines = ['diff --git a/x.ts b/x.ts', 'index 1..2 100644', '--- a/x.ts', '+++ b/x.ts', '@@ -1,3 +1,3 @@', ' same', '-old', '+new', '--- a line that starts with dashes', '\\ No newline at end of file', '… 3 more lines (see /symcc-diff T-5)']
   const kinds = diffKinds(lines)
   expect(kinds).toEqual(['header', 'header', 'header', 'header', 'hunk', 'context', 'remove', 'add', 'remove', 'context', 'note'])
-  expect(kinds.map(k => DIFF_COLOR[k])).toEqual(['subtle', 'subtle', 'subtle', 'subtle', 'ide', 'text', 'error', 'success', 'error', 'text', 'warning'])
+  expect(kinds.map(k => DIFF_COLOR[k])).toEqual(['inactive', 'inactive', 'inactive', 'inactive', 'ide', 'text', 'error', 'success', 'error', 'text', 'warning'])
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
@@ -1689,7 +1689,7 @@ test('isNothing: a first line of just NOTHING counts as nothing, whatever follow
   expect(isNothing('1. Found X')).toBe(false)
   expect(isNothing('Nothing serious, but X\nmore')).toBe(false)
   expect(scoutLeadMessage('secrets', 'NOTHING\n\nWhat I checked')).toBe(null)
-  expect(scoutLastText({ last_report: 'NOTHING\n\nWhat I checked' } as any)).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutLastText({ last_report: 'NOTHING\n\nWhat I checked' } as any)).toEqual({ text: 'last: nothing', tone: 'inactive' })
   expect(scoutReport('NOTHING\n\nWhat I checked')).toBe('NOTHING\n\nWhat I checked')
 })
 
@@ -2168,7 +2168,7 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   expect(nextScoutText([], now)).toBe('')
 })
 
-test('task rows: a short status column and a subtle extra; the extra goes first when the row is narrow', () => {
+test('task rows: a short status column and an inactive-colored extra; the extra goes first when the row is narrow', () => {
   const now = Date.parse('2026-11-11T12:00:00Z')
   const base = { ...at('T-5', 'doing', '2026-11-11T10:00:00Z'), title: 'Secrets scout example', role: 'frontend', attempts: 1, runs: [{ started: '2026-11-11T11:56:00Z' }] }
   const tasks = [base, { ...at('T-6', 'todo', '2026-11-11T10:00:00Z'), after: ['T-5', 'T-1'] }, at('T-1', 'done', '2026-11-11T10:00:00Z'), at('T-7', 'review', '2026-11-11T10:00:00Z')]
@@ -2315,13 +2315,13 @@ test('scout list: icons, "last:" and the order with paused ones last', () => {
   expect(scoutIcon({ running: true, paused: true })).toBe('◉')
   expect(scoutIcon({ running: false })).toBe('◎')
   expect(scoutIcon({ running: false, paused: true })).toBe('○')
-  expect([scoutTone({ running: true }), scoutTone({ running: false }), scoutTone({ running: false, paused: true })]).toEqual(['ide', 'text', 'subtle'])
+  expect([scoutTone({ running: true }), scoutTone({ running: false }), scoutTone({ running: false, paused: true })]).toEqual(['ide', 'text', 'inactive'])
   expect(countFindings('**1. Crash in parser**\nmore\n**2. Missing test**\n  1. step one\n## 3) Leak')).toBe(3)
   expect(countFindings('1. a\n2. b\n1. a again')).toBe(2)
   expect(countFindings('A crash in src/p.ts:3')).toBe(0)
-  expect(scoutLastText({ last_run: null })).toEqual({ text: 'never ran', tone: 'subtle' })
-  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' })).toEqual({ text: 'last: nothing', tone: 'subtle' })
-  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '' })).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutLastText({ last_run: null })).toEqual({ text: 'never ran', tone: 'inactive' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' })).toEqual({ text: 'last: nothing', tone: 'inactive' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '' })).toEqual({ text: 'last: nothing', tone: 'inactive' })
   expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '1. bug at a.ts:3' })).toEqual({ text: 'last: found 1', tone: 'warning' })
   expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'a bug at a.ts:3' })).toEqual({ text: 'last: found something', tone: 'warning' })
   const s = (name: string, extra: Partial<SymccScout> = {}): SymccScout => ({ name, every_minutes: 60, last_run: null, running: false, ...extra })

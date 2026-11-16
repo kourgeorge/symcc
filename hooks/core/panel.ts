@@ -25,7 +25,7 @@ export const backlogHeader = (n: number, opened = false): string => backlogLabel
 /** The line under the first BACKLOG_SHOWN backlog items when there are more. */
 export const backlogMoreLabel = (more: number): string => `… ${more} more (Enter to show all)`
 
-/** The two subtle lines shown in the board panel when nothing needs the owner, runs or waits to run. */
+/** The two secondary-color (inactive) lines shown in the board panel when nothing needs the owner, runs or waits to run. */
 export const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
 
 /** The bold label over the board panel's NEEDS YOU section; doing and to-do tasks follow as one untitled list. */
@@ -91,7 +91,7 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTas
   return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
 }
 
-/** The subtle text at the right end of a task row: "tester · try 1" for a task being worked on, "after T-3" for
+/** The secondary-color (inactive) text at the right end of a task row: "tester · try 1" for a task being worked on, "after T-3" for
  *  one waiting on unfinished tasks (else its role), "Enter to review" in review (a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked

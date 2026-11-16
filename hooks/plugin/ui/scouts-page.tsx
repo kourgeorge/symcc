@@ -22,10 +22,10 @@ export function scoutEditPage($: $, pane: PaneParts) {
         <Text>
           <Text bold color={C('claude')}>{d.scout}</Text>{' '}
           <Text bold color={C('warning')}>{d.isNew ? 'new scout' : 'editing'}</Text>
-          {r ? <Text color={C('subtle')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · {r.ran}</Text> : null}
+          {r ? <Text color={C('inactive')}> · {r.every}{r.model ? ` · ${r.model}` : ''} · {r.ran}</Text> : null}
         </Text>
-        <Text color={C('subtle')}>save writes {file} · other front matter keys are kept</Text>
-        <Text color={C('subtle')}>the name is the file's name: to rename the scout, rename {file}</Text>
+        <Text color={C('inactive')}>save writes {file} · other front matter keys are kept</Text>
+        <Text color={C('inactive')}>the name is the file's name: to rename the scout, rename {file}</Text>
       </Box>
 
       <Box flexDirection="row" gap={1}>
@@ -38,7 +38,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
       <Box flexDirection="column">
         {heading('Runs every')}
         <Input key="scout-every" value={d.every} placeholder="minutes: a whole number, 0 or more" autoFocus submitLabel="keep" onInput={value => void (d.every = value)} onSubmit={value => void (d.every = value)} />
-        <Text color={C('subtle')}>in minutes · 0 = only on demand</Text>
+        <Text color={C('inactive')}>in minutes · 0 = only on demand</Text>
       </Box>
 
       <Box flexDirection="column">
@@ -70,7 +70,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
     const report = scoutReport(sc.last_report)
-    // the subheader: the summary from the file's front matter, else the first line of the instructions (in the subtle colour)
+    // the subheader: the summary from the file's front matter, else the first line of the instructions (in the inactive colour)
     const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
     const title = sc.summary?.trim() || firstLine
     return (
@@ -82,14 +82,14 @@ export async function scoutsPage($: $, pane: PaneParts) {
               {scoutIcon(sc)} {r.state || 'waiting'}
               {sc.running && sc.paused ? ', then paused' : ''}
             </Text>
-            <Text color={C('subtle')}>
+            <Text color={C('inactive')}>
               {' · '}
               {r.every}
               {r.model ? ` · ${r.model}` : ''} · {r.ran}
             </Text>
           </Text>
           {title ? (
-            <Text bold={!!sc.summary?.trim()} color={C(sc.summary?.trim() ? 'text' : 'subtle')}>
+            <Text bold={!!sc.summary?.trim()} color={C(sc.summary?.trim() ? 'text' : 'inactive')}>
               {title}
             </Text>
           ) : null}
@@ -106,12 +106,12 @@ export async function scoutsPage($: $, pane: PaneParts) {
 
         <Box flexDirection="column">
           {heading('Instructions')}
-          {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('subtle')}>(not loaded yet: run /{S.N.name}-scouts)</Text>}
+          {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('inactive')}>(not loaded yet: run /{S.N.name}-scouts)</Text>}
         </Box>
 
         <Box flexDirection="column">
           {heading('Last report')}
-          {report === 'nothing found' ? <Text color={C('subtle')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : paragraphs(report)}
+          {report === 'nothing found' ? <Text color={C('inactive')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : paragraphs(report)}
         </Box>
 
         <Box flexDirection="column">
@@ -142,7 +142,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
         />
         {S.naming.error ? <Text color={C('error')}>{S.naming.error}</Text> : null}
         <Button key="scout-new-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit($)} />
-        <Text color={C('subtle')}>{boxHint('Enter goes on')}</Text>
+        <Text color={C('inactive')}>{boxHint('Enter goes on')}</Text>
       </Box>
     ) : (
       <Button key="scout-new" label="+ New scout" hotkey="n" autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((S.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
@@ -154,7 +154,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column">
       {header()}
-      {scouts.length === 0 && scoutHowTo(S.N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'subtle')}>{line}</Text>)}
+      {scouts.length === 0 && scoutHowTo(S.N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'inactive')}>{line}</Text>)}
       {newBox()}
       {scouts.length > 0 && <Text key="scouts-blank-top"> </Text>}
       {scouts.map((x, i) => {
@@ -162,11 +162,11 @@ export async function scoutsPage($: $, pane: PaneParts) {
         return (
           <Button key={`scout:${x.name}`} label={`${x.name}: ${scoutRow(x, nowMs).state || 'waiting'}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => updateScoutOpen($, () => x.name))}>
             <Text color={C(r.tone)}>{`  ${r.icon} `}</Text>
-            <Text bold={!x.paused} color={C(x.paused ? 'subtle' : 'claude')}>{r.name}</Text>
-            <Text color={C('subtle')}>{r.every}</Text>
+            <Text bold={!x.paused} color={C(x.paused ? 'inactive' : 'claude')}>{r.name}</Text>
+            <Text color={C('inactive')}>{r.every}</Text>
             <Text color={C(r.stateTone)}>{r.state}</Text>
             <Text color={C(r.lastTone)}>{r.last}</Text>
-            <Text color={C('subtle')}>{r.model}</Text>
+            <Text color={C('inactive')}>{r.model}</Text>
           </Button>
         )
       })}

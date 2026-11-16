@@ -55,7 +55,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           }
         />
         <Button key="reject-cancel" label="Cancel (c)" hotkey="c" onPress={cancelReject} />
-        <Text color={C('subtle')}>{boxHint('Enter sends it to todo')}</Text>
+        <Text color={C('inactive')}>{boxHint('Enter sends it to todo')}</Text>
       </Box>
     ) : null
   if (inReview && S.diffOpen?.task === t.id) {
@@ -74,7 +74,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             <Text bold color={C(color.review!)}>
               {mark.review} {word.review}
             </Text>
-            <Text color={C('subtle')}> · changes in {d.file || 'all files'}</Text>
+            <Text color={C('inactive')}> · changes in {d.file || 'all files'}</Text>
             {got.mine ? <Text color={C('warning')}> {YOUR_EDITS}</Text> : null}
           </Text>
           <Text bold color={C('text')}>
@@ -89,7 +89,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         {rejectBox}
         <Box flexDirection="column">
           {got.error ? <Text color={C('error')}>Could not read the changes: {got.error}</Text> : null}
-          {!got.error && !got.lines.length ? <Text color={C('subtle')}>no text changes</Text> : null}
+          {!got.error && !got.lines.length ? <Text color={C('inactive')}>no text changes</Text> : null}
           {got.lines.map((l, i) => (
             <Text key={`diff-${i}`} bold={kinds[i] === 'hunk' || (kinds[i] === 'header' && l.startsWith('diff '))} color={C(DIFF_COLOR[kinds[i]!])}>
               {l.replace(/\t/g, '    ') || ' '}
@@ -126,12 +126,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           return (
             <Button key={`role:${o}`} autoFocus={cur ? true : undefined} onPress={pickRole(o)}>
               <Text bold={cur} color={C(cur ? 'ide' : 'text')}>{cur ? `● ${o}` : `○ ${o}`}</Text>
-              {d ? <Text color={C('subtle')}> — {d}</Text> : null}
+              {d ? <Text color={C('inactive')}> — {d}</Text> : null}
             </Button>
           )
         })}
         <Button key="role-cancel" label="Cancel (c)" hotkey="c" onPress={() => ((S.rolePick = null), $.ui.invalidate('ui.render'))} />
-        <Text color={C('subtle')}>{pickHint('c')}</Text>
+        <Text color={C('inactive')}>{pickHint('c')}</Text>
       </Box>
     ) : null
   // A task in review: the files it changed, each opening its diff.
@@ -151,9 +151,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     const good = /merged into|^merged/i.test(result)
     return (
       <Text>
-        <Text color={C(bad ? 'error' : good ? 'success' : 'subtle')}>{bad ? '✗' : good ? '✓' : '•'}</Text>{' '}
-        {m && <Text bold color={C('subtle')}>{m[1]} </Text>}
-        <Text color={C('subtle')}>{said}</Text>
+        <Text color={C(bad ? 'error' : good ? 'success' : 'inactive')}>{bad ? '✗' : good ? '✓' : '•'}</Text>{' '}
+        {m && <Text bold color={C('inactive')}>{m[1]} </Text>}
+        <Text color={C('inactive')}>{said}</Text>
         {result && (
           <Text color={C(bad ? 'error' : good ? 'success' : 'text')}>
             {' '}→ {result}
@@ -224,7 +224,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
         <Text>
           <Text bold color={C(STATUS_BADGE[t.status])}>{`[${STATUS_MARK[t.status]} ${word[t.status]}]`}</Text>
-          {agentId ? <Text color={C('subtle')}> · a worker is on it now</Text> : null}
+          {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
         </Text>
       </Box>
 
@@ -281,14 +281,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {changes && (
         <Box flexDirection="column">
           {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})${changes.files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}`)}
-          <Text color={C('subtle')}>  folder: {S.N.dir}/worktrees/{t.id} · edit files there, then approve (the tests run again)</Text>
+          <Text color={C('inactive')}>  folder: {S.N.dir}/worktrees/{t.id} · edit files there, then approve (the tests run again)</Text>
           {changes.error ? <Text color={C('error')}>  Could not read the changes: {changes.error}</Text> : null}
-          {!changes.error && !changes.files.length ? <Text color={C('subtle')}>  no changes</Text> : null}
+          {!changes.error && !changes.files.length ? <Text color={C('inactive')}>  no changes</Text> : null}
           {changes.files.map(f => (
             <Button key={`file:${f.file}`} onPress={showDiff(f.file)}>
               <Text color={C('autoAccept')}>{f.file.padEnd(fileWidth)}</Text>
               {f.binary ? (
-                <Text color={C('subtle')}>  binary</Text>
+                <Text color={C('inactive')}>  binary</Text>
               ) : (
                 <Text>
                   {'  '}
@@ -298,14 +298,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               {f.edited ? <Text color={C('warning')}>  edited by you</Text> : null}
             </Button>
           ))}
-          <Text color={C('subtle')}>  Enter on a file shows its diff · d all files</Text>
+          <Text color={C('inactive')}>  Enter on a file shows its diff · d all files</Text>
         </Box>
       )}
 
       {fileWait && (
         <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
           <Text color={C('text')}>{fileWait}</Text>
-          <Text color={C('subtle')}>r merges it now</Text>
+          <Text color={C('inactive')}>r merges it now</Text>
         </Box>
       )}
 
@@ -322,13 +322,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             )}
           {typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => sendAnswer(value)()} />}
           {typing && choices.length > 0 && <Button key="answer-cancel" label="Cancel (c)" hotkey="c" onPress={cancelAnswer} />}
-          {typing && <Text color={C('subtle')}>{boxHint('Enter sends', choices.length ? 'cancels' : 'goes back')}</Text>}
+          {typing && <Text color={C('inactive')}>{boxHint('Enter sends', choices.length ? 'cancels' : 'goes back')}</Text>}
         </Box>
       )}
 
       <Box flexDirection="column">
         {heading('What to do')}
-        {t.details.trim() ? paragraphs(t.details.trimEnd()) : <Text color={C('subtle')}>(no details)</Text>}
+        {t.details.trim() ? paragraphs(t.details.trimEnd()) : <Text color={C('inactive')}>(no details)</Text>}
       </Box>
 
       {t.history.length > 0 && (
@@ -341,8 +341,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {(reports.length > 0 || t.attempts > 0) && (
         <Box flexDirection="column">
           {heading(shown ? `Report (try ${shown.try}${reports.length > 1 ? `, ${at + 1} of ${reports.length}` : ''})` : 'Report')}
-          {!shown ? <Text color={C('subtle')}>  no saved report</Text> : null}
-          {shown ? <Text color={C('subtle')}>  {shown.file}</Text> : null}
+          {!shown ? <Text color={C('inactive')}>  no saved report</Text> : null}
+          {shown ? <Text color={C('inactive')}>  {shown.file}</Text> : null}
           {shown && reportBody === null ? <Text color={C('error')}>  Could not read the report file.</Text> : null}
           {reportBody !== null
             ? reportBody
@@ -363,7 +363,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         <Box flexDirection="column">
           {heading('Runs (time and cost)')}
           {t.runs!.map((r, i) => (
-            <Text color={C(r.ended ? 'subtle' : 'success')}>{`  ${fmtRun(r, i, Date.now())}`}</Text>
+            <Text color={C(r.ended ? 'inactive' : 'success')}>{`  ${fmtRun(r, i, Date.now())}`}</Text>
           ))}
           <Text bold color={C('text')}>{`  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`}</Text>
         </Box>

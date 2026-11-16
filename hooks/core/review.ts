@@ -144,7 +144,7 @@ export function diffKinds(lines: string[]): DiffKind[] {
 }
 
 /** The theme color for each kind of diff line: added in the success color, removed in the error color. */
-export const DIFF_COLOR: Record<DiffKind, string> = { add: 'success', remove: 'error', hunk: 'ide', header: 'subtle', note: 'warning', context: 'text' }
+export const DIFF_COLOR: Record<DiffKind, string> = { add: 'success', remove: 'error', hunk: 'ide', header: 'inactive', note: 'warning', context: 'text' }
 
 // ---------------- moving the target branch (the last step of a merge) ----------------
 

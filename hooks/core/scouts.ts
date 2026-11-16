@@ -285,8 +285,8 @@ export const scoutPausedAnswer = (scout: string, name: string = DEFAULT_NAME): s
  *  scout that runs only on demand). */
 export const scoutIcon = (s: Pick<SymccScout, 'running' | 'paused'>): string => (s.running ? '◉' : s.paused ? '○' : '◎')
 
-/** The theme color of a scout's icon and state: running blue (ide), paused subtle, waiting plain text. */
-export const scoutTone = (s: Pick<SymccScout, 'running' | 'paused'>): string => (s.running ? 'ide' : s.paused ? 'subtle' : 'text')
+/** The theme color of a scout's icon and state: running blue (ide), paused inactive (readable, less bright), waiting plain text. */
+export const scoutTone = (s: Pick<SymccScout, 'running' | 'paused'>): string => (s.running ? 'ide' : s.paused ? 'inactive' : 'text')
 
 /** How many findings a report numbers ("1. …", "**2. …**", "## 3) …" at the start of a line, each number counted
  *  once); 0 when it numbers none. */
@@ -300,10 +300,10 @@ export function countFindings(report: string | undefined): number {
 }
 
 /** The "last:" column of a scout row: "found 2" (or "found something" when the report numbers nothing) in the
- *  warning color, "nothing" (subtle) for a NOTHING report, "never ran" when it has no last run. */
+ *  warning color, "nothing" (inactive) for a NOTHING report, "never ran" when it has no last run. */
 export function scoutLastText(s: Pick<SymccScout, 'last_run' | 'last_report'>): { text: string; tone: string } {
-  if (!s.last_run && s.last_report === undefined) return { text: 'never ran', tone: 'subtle' }
-  if (isNothing(s.last_report)) return { text: 'last: nothing', tone: 'subtle' }
+  if (!s.last_run && s.last_report === undefined) return { text: 'never ran', tone: 'inactive' }
+  if (isNothing(s.last_report)) return { text: 'last: nothing', tone: 'inactive' }
   const n = countFindings(s.last_report)
   return { text: n ? `last: found ${n}` : 'last: found something', tone: 'warning' }
 }
@@ -324,7 +324,7 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
     s,
     every: everyText(s.every_minutes),
     state: s.warning && !s.running && !s.paused ? BAD_EVERY_STATE : scoutStateText(s, nowMs),
-    last: s.running ? { text: '', tone: 'subtle' } : scoutLastText(s),
+    last: s.running ? { text: '', tone: 'inactive' } : scoutLastText(s),
     model: s.model ?? '',
   }))
   const w = (f: (r: (typeof raw)[number]) => string) => Math.max(0, ...raw.map(r => f(r).length))
