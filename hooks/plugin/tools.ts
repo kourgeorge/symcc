@@ -293,7 +293,7 @@ export const TOOLS = () => [
   },
   {
     name: 'change',
-    description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
+    description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
     inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review".', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
@@ -527,7 +527,9 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
-      const patch: Partial<SymccTask> = { status: t.status === 'dropped' ? 'dropped' : 'todo', note: wasDoing ? 'changed; restarting' : 'changed', ...fields() }
+      // A paused task stays paused (only resume or retry starts it again); a dropped one stays dropped.
+      const keep = t.status === 'dropped' || t.status === 'paused'
+      const patch: Partial<SymccTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...fields() }
       // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
       const answer = str(a.answer)?.trim()
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
@@ -538,7 +540,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
       })
       void pump($)
-      return `${t.id} ${note ? 'note added' : 'updated'}${wasDoing ? ` (restarting${note ? ' with the note' : ''})` : ''}${into ? `; it now merges into ${into}` : ''}`
+      return `${t.id} ${note ? 'note added' : 'updated'}${wasDoing ? ` (restarting${note ? ' with the note' : ''})` : ''}${t.status === 'paused' ? ` (still paused; ${S.N.name} resume ${t.id} continues it)` : ''}${into ? `; it now merges into ${into}` : ''}`
     }
     case 'retry': {
       const t = await taskOrThrow($, id)
