@@ -652,7 +652,8 @@ gets its own git worktree. It checks this when a session starts and before a wor
 Every two minutes symcc checks the board by itself. It:
 
 - starts tasks that are ready (up to `max_parallel`, 3 by default, at once),
-- stops a worker that runs too long (`max_minutes`, 45 by default) and marks the task failed,
+- asks you for more time when a worker runs too long (`max_minutes`, 45 by default; see
+  "A worker over its time limit" below),
 - notices a worker that ended without reporting back,
 - reminds the lead about a failed task nobody has dealt with for 10 minutes,
 - runs the board health check (see "How the lead keeps the board in order" below),
@@ -709,6 +710,25 @@ So `board.json` stays small, done and dropped tasks that have not changed for
   board as `todo`, with a history line.
 
 ---
+
+
+### A worker over its time limit
+
+When a worker runs past `max_minutes` (45 by default), symcc does not stop it. The task stays
+"doing" with the note "over time; asked the owner", you hear "needs you" (if notify is on), and
+the lead asks you in the chat, for example "T-5 has run 45 min. Give it more time?", with the
+choices **+30 min**, **+60 min** and **Stop it**. The same buttons are on the task's page in the
+board. The worker keeps working while you decide.
+
+- **+30 min / +60 min** (or any "+N min"): that task's limit moves N minutes later and the
+  worker goes on. If it runs past the new limit, you are asked again.
+- **Stop it**: the worker is told "time is up: write down what you have done and found, save
+  notes into your task's files, and hand back now". What it hands back is saved as the try's
+  report. After about 3 minutes at most it is stopped. The task fails with a note saying the
+  work so far is in its folder and report; its folder and branch are kept, so a retry
+  continues from there.
+- **No answer**: once the worker has run its limit plus `max_minutes` again (twice the limit when
+  no time was added), the same as Stop it happens.
 
 ## Stats: time and tokens
 
@@ -825,7 +845,8 @@ start with `symcc/` are never touched.
   the task (for example: link the main project's `node_modules`, and remove the link
   before finishing).
 - **Big tasks can run out of time.** A task that touches a lot of code may need more than
-  45 minutes; raise `max_minutes` or split the task.
+  45 minutes. symcc then asks you for more time (see "A worker over its time limit"); to stop
+  being asked, raise `max_minutes` or split the task.
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
 - **What workers and scouts can use.** Workers can't commit, push or merge. They use
   Read, Edit, Write, Glob, Grep and Bash, with edits accepted automatically, inside your

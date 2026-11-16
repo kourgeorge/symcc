@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { type $, S, workers, updateOpened } from '../state'
@@ -186,8 +186,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // Finished work that waits only for the owner's files: nothing to answer; it merges on its own once they are
   // committed or stashed, and r runs just the merge now.
   const fileWait = fileWaitText(asked)
-  const answerable = t.status === 'waiting' && !fileWait
-  const choices = answerable ? answerChoices(asked.asked_files, asked.options) : []
+  // A running worker over its time limit: "Give it more time?" with +30 min / +60 min / Stop it (see overtimeQuestion).
+  const overtime = t.status === 'doing' && !!asked.time_ask
+  const answerable = (t.status === 'waiting' && !fileWait) || overtime
+  const askedOptions = overtime ? [...OVERTIME_OPTIONS] : asked.options
+  const askedQuestion = overtime ? overtimeQuestion(t.id, (v.max_minutes ?? 45) + (asked.extra_minutes ?? 0)) : t.question
+  const choices = answerable ? answerChoices(overtime ? undefined : asked.asked_files, askedOptions) : []
   if (S.answering !== null && S.answering !== t.id) S.answering = null
   const typing = !choices.length || S.answering === t.id
   const cancelAnswer = () => ((S.answering = null), $.ui.invalidate('ui.render'))
@@ -199,11 +203,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool($, 'change', { task: t.id, answer: text.trim() })
-      noteForLead(`The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
+      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : `The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
-    if (asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles($, t.id) : await refuseAskedFiles($, t.id))))
+    if (!overtime && asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles($, t.id) : await refuseAskedFiles($, t.id))))
     return sendAnswer(choices[i]!)
   }
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
@@ -309,7 +313,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
           <Text>
             <Text bold color={C('warning')}>asks: </Text>
-            <Text color={C('text')}>{t.question ?? '(no question)'}</Text>
+            <Text color={C('text')}>{askedQuestion ?? '(no question)'}</Text>
           </Text>
           {choices.length > 0 &&
             buttonRows(
@@ -365,7 +369,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(asked.asked_files, asked.options) : [], !!fileWait), 'task-keys')}
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait), 'task-keys')}
     </Box>
   )
 }
