@@ -2304,6 +2304,28 @@ test('the merge-main-in try is marked when it starts, and the first end reason i
   expect(fmtRun({ ...once[0]!, ended: ISO }, 2)).toBe('try 3: 0s · merged main in (clash with main) · stopped: paused')
 })
 
+test("a worker's edit in the owner's copy of the project is refused without a file request; its own folder works as before (T-299)", async () => {
+  S.me = 'me'
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  f.put(`${WT}/.git`, 'gitdir: x')
+  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
+  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${ROOT}/.symcc/board.json` })).toMatch(/^Refused: \.symcc\/board\.json is in the owner's copy/)
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: '../../README.md' })).toMatch(/^Refused: .*outside your own folder/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: '/tmp/scratch.txt' })).toBeUndefined()
+  // none of these became a file request
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  // inside its own folder: in scope is allowed, out of scope is still a file request
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/src/a.ts` })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'src/b.ts' })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  workers.clear()
+})
+
 test('after a reload (no worker in memory), an edit outside the files is still refused and recorded, found from the board (T-293)', async () => {
   S.me = 'me'
   workers.clear()
