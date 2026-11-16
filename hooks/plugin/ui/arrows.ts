@@ -1,5 +1,6 @@
 // ↑ and ↓ on the board panel's lists (Tasks, Scouts, Settings, Roles): they move the focus to the row above or below,
-// as Shift+Tab and Tab do, but only between the list's rows (not onto the tabs, the mode, search or Back buttons). Claude Code turns the arrows into a scroll of the panel (`ui.scroll`) once the page is
+// as Shift+Tab and Tab do, but only between the list's rows (never onto the tabs, the mode, search or Back buttons:
+// those only by Tab). Claude Code turns the arrows into a scroll of the panel (`ui.scroll`) once the page is
 // taller than the panel; pane.tsx and the footer in parts.tsx note what the page drew, and register.tsx hooks `ui.scroll` and `ui.focus`
 // for the board panel and calls the two below.
 // Claude Code keeps the focused element in view on its own, so the panel still scrolls as the focus moves.
@@ -17,6 +18,10 @@ export const arrows = { move: false, rows: new Set<string>(), stops: [] as strin
 
 /** Marks a Button's key as a list row (a task or day row, a scout, a setting, a role), so ↑↓ stop on it; gives the key back. */
 export const row = (key: string) => (arrows.rows.add(key), key)
+
+/** The ↑↓ stops of a drawn page: its focus stops (in Tab order) that are list rows; the tabs, the mode, search and
+ *  Back buttons are left to Tab and Shift+Tab. */
+export const rowStops = (tree: unknown, rows: ReadonlySet<string>) => focusStops(tree).filter(k => rows.has(k))
 
 /** True when a page's key hints say ↑↓ moves (not "move between boxes", not "scroll"). */
 export const saysArrowsMove = (hints: readonly KeyHint[]) => hints.some(h => h.key === '↑↓' && h.word === 'move')
@@ -59,11 +64,11 @@ export const isArrow = (e: { origin: { kind: string }; pointer?: unknown; by: nu
  *  the banner and the key line can still be reached and the tab, mode and search buttons are only reached by Tab;
  *  so it does when Claude Code refuses the move. */
 export async function arrowMove($: $, e: Parameters<ScrollHook>[1], next: Parameters<ScrollHook>[2]) {
-  if (e.requestId !== S.N.pane || !arrows.move || !isArrow(e)) return next({ ...e, offset: 100 + (e.requestId !== S.N.pane ? 1 : 0) + (!arrows.move ? 2 : 0) + (!isArrow(e) ? 4 : 0) })
+  if (e.requestId !== S.N.pane || !arrows.move || !isArrow(e)) return next(e)
   const to = arrowTarget(arrows.stops, arrows.focused, e.by)
-  if (to === undefined) return next({ ...e, offset: 200 + arrows.stops.length * 10 + (arrows.focused === undefined ? 1 : 0) })
+  if (to === undefined) return next(e)
   const r = await $.ui.focus({ requestId: S.N.pane, key: to }).catch((err: Error) => ({ deny: err.message }))
-  if (r.deny) return next({ ...e, offset: 300 })
+  if (r.deny) return next(e)
   arrows.focused = to
   return {}
 }

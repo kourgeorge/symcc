@@ -304,9 +304,10 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
   it the tasks that need you or are running. When narrow, the `(next: …)` part goes first,
   then the scouts.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task. On the
-  lists (Tasks, Scouts, Settings, Roles) ↑↓ move from row to row, as Tab and Shift+Tab do,
-  and the panel scrolls to keep the row in view; past the first or last row they scroll
-  the panel (to see the banner or the key line). On a task's or a scout's page ↑↓ scroll. An
+  lists (Tasks, Scouts, Settings, Roles) ↑↓ move from row to row, and the panel scrolls to
+  keep the row in view; past the first or last row they scroll the panel (to see the banner
+  or the key line). ↑↓ never land on the tabs, the mode or search buttons or Back: Tab and
+  Shift+Tab reach those. On a task's or a scout's page ↑↓ scroll. An
   open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
