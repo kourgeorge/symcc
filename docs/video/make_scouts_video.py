@@ -45,10 +45,12 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont  # noqa: E402
 
 # ---------------------------------------------------------------- settings
 
+# Another story (make_swarm_video.py) sets these, SCENE_FNS and thumbnail, then calls main.
+NAME = "symcc_scouts"
 NARRATION = os.path.join(HERE, "scouts_narration.md")
-MP4 = os.path.join(yt.OUT_DIR, "symcc_scouts.mp4")
-SRT = os.path.join(HERE, "symcc_scouts.srt")
-THUMB = os.path.join(HERE, "symcc_scouts_thumbnail.png")
+MP4 = os.path.join(yt.OUT_DIR, NAME + ".mp4")
+SRT = os.path.join(HERE, NAME + ".srt")
+THUMB = os.path.join(HERE, NAME + "_thumbnail.png")
 
 # Drawing happens in 1080x1920 units on a 2x image, then halved for smooth edges.
 mv.S = S = 2
@@ -461,7 +463,7 @@ def heading(c, s, a=1.0, y=206):
     c.group(a, draw)
 
 
-def drop_cap(c, x, y, size, letter):
+def drop_cap(c, x, y, size, letter, kind="goth"):
     c.rect(x, y, x + size, y + size, r=4, fill=BLUE, outline=GOLD, width=5)
     c.rect(x + 10, y + 10, x + size - 10, y + size - 10, r=2, outline=GOLD_DARK, width=1.5)
     rng = random.Random(3)
@@ -469,7 +471,7 @@ def drop_cap(c, x, y, size, letter):
         c.circle(x + 18 + rng.random() * (size - 36), y + 18 + rng.random() * (size - 36),
                  2.5, fill=(200, 210, 240))
     vine(c, [(x + 14 + i * (size - 28) / 12, y + size - 26 + 6 * math.sin(i)) for i in range(13)], 1)
-    c.text(x + size / 2, y + size / 2 - 4, letter, font("goth", int(size * 0.82)), GOLD, "mm")
+    c.text(x + size / 2, y + size / 2 - 4, letter, font(kind, int(size * (0.82 if kind == "goth" else 0.7))), GOLD, "mm")
 
 
 def banner(c, cx, cy, w, h, s):
@@ -627,23 +629,23 @@ def robot(c, cx, cy, k=1.0, mood="happy", t=0.0, crown=False, quill=False):
 
 # ---------------------------------------------------------------- crack
 
-def _crack_points():
-    rng = random.Random(11)
-    pts, (x0, y0), (x1, y1) = [], (905, 300), (190, 1380)
-    n = 22
+def crack_points(seed=11, start=(905, 300), end=(190, 1380), n=22, jitter=34, at=(5, 11, 17)):
+    """A jagged crack from start to end (n pieces) and short branches at the points in at."""
+    rng = random.Random(seed)
+    pts, (x0, y0), (x1, y1) = [], start, end
     for i in range(n + 1):
         u = i / n
-        jit = 0 if i in (0, n) else rng.uniform(-34, 34)
+        jit = 0 if i in (0, n) else rng.uniform(-jitter, jitter)
         pts.append((x0 + (x1 - x0) * u + jit, y0 + (y1 - y0) * u + rng.uniform(-10, 10)))
     branches = []
-    for i in (5, 11, 17):
+    for i in at:
         x, y = pts[i]
         side = 1 if i % 2 else -1
         branches.append([(x, y), (x + side * 40, y + 24), (x + side * 70, y + 18 + rng.uniform(0, 30))])
     return pts, branches
 
 
-CRACK, CRACK_BRANCHES = _crack_points()
+CRACK, CRACK_BRANCHES = crack_points()
 
 
 def partial(pts, prog):
@@ -657,25 +659,33 @@ def partial(pts, prog):
     return list(pts[:i + 1]) + [(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f)]
 
 
-def crack(c, prog, heal=0.0):
+def crack(c, prog, heal=0.0, shape=None):
+    """Draw a crack (shape: (points, branches) from crack_points; default the big one) as
+    far as prog, healed with gold as far as heal."""
+    pts_all, branches = shape or (CRACK, CRACK_BRANCHES)
+    n = len(pts_all) - 1
+
+    def shown(k, p):
+        return p > pts_all.index(branches[k][0]) / n + 0.05
+
     if prog <= 0:
         return
-    pts = partial(CRACK, prog)
+    pts = partial(pts_all, prog)
     if len(pts) > 1:
         c.line(pts, (96, 64, 36), 7)
         c.line(pts, (34, 22, 14), 2.6)
-    for k, br in enumerate(CRACK_BRANCHES):
-        if prog > (5 + 6 * k) / 22 + 0.05:
+    for k, br in enumerate(branches):
+        if shown(k, prog):
             c.line(br, (96, 64, 36), 4)
             c.line(br, (34, 22, 14), 1.6)
     if heal > 0:
-        hp = partial(CRACK, heal)
+        hp = partial(pts_all, heal)
         if len(hp) > 1:
             c.line(hp, GOLD_DARK, 9)
             c.line(hp, GOLD, 5)
             c.line(hp, (250, 222, 140), 1.6)
-        for k, br in enumerate(CRACK_BRANCHES):
-            if heal > (5 + 6 * k) / 22 + 0.05:
+        for k, br in enumerate(branches):
+            if shown(k, heal):
                 c.line(br, GOLD_DARK, 6)
                 c.line(br, GOLD, 3)
         hx, hy = hp[-1]
@@ -1245,13 +1255,13 @@ def main(argv):
     _init(scenes)
     if "--frame" in argv:
         t = float(argv[argv.index("--frame") + 1])
-        out = "/tmp/symcc_scouts_frame_%05.1f.png" % t
+        out = "/tmp/%s_frame_%05.1f.png" % (NAME, t)
         render(t).save(out)
         print(out)
         return
     if "--clip" in argv:
         k = int(argv[argv.index("--clip") + 1])
-        out = "/tmp/symcc_scouts_scene%d.wav" % k
+        out = "/tmp/%s_scene%d.wav" % (NAME, k)
         yt.write_wav(out, scenes[k - 1]["clip"], rate)
         print(out)
         return
