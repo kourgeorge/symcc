@@ -166,7 +166,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // stand alone, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
   if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, ICON_ART.length - 3) }, () => [] as BannerPart[]))
   return texts.map((parts, i) => {
-    const art = wide && ICON_ART[i] ? `${ICON_ART[i]}  ` : ''
+    const art = wide && ICON_ART[i] ? ` ${ICON_ART[i]}  ` : ''
     return { art, parts: cutParts(parts, w - art.length) }
   })
 }

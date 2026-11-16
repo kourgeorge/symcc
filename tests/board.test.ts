@@ -414,8 +414,8 @@ test('the icon: one treble clef character for one-line spots, a small clef drawi
 test('the banner: the clef drawing beside the name, where, who drives and the settings', () => {
   const b = { ...emptyBoard(), branch: 'main', test_commands: ['claude plugin test .'] }
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 80)
-  const [a0, a1, a2, a3] = ICON_ART.map(l => `${l}  `)
-  expect(lines.map(l => l.art)).toEqual(ICON_ART.map(l => `${l}  `))
+  const [a0, a1, a2, a3] = ICON_ART.map(l => ` ${l}  `)
+  expect(lines.map(l => l.art)).toEqual(ICON_ART.map(l => ` ${l}  `))
   expect(lines.map(bannerText)).toEqual([
     `${a0}symcc board · symcc`,
     `${a1}~/repositories/symcc · main · this session drives`,
@@ -464,6 +464,7 @@ test('a narrow banner drops the drawing and cuts lines to fit', () => {
   expect(text[2]!.endsWith('…')).toBe(true)
   // a wide banner also never runs past the width
   expect(bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 55).every(l => bannerText(l).length <= 55)).toBe(true)
+  expect(bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 50).every(l => bannerText(l).length <= 50)).toBe(true)
 })
 
 test('another plugin name changes every path, branch, agent type and text made from it', () => {
