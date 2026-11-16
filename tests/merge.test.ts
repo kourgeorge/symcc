@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, type WorkerQuestion } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
@@ -13,6 +13,8 @@ import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
+// test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
+import { test } from './reset'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -1438,14 +1440,14 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   // the question: recorded, then the plugin reloads (its memory starts over), then the late hand-back arrives
   S.me = 'me'
   const q = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag7', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(q.$, b)
   q.put(`${WT}/.git`, 'gitdir: x')
-  workers.set('ag7', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  expect(await askCall(q.$, 'ag7', { question: 'Red or blue?', options: ['red', 'blue'] })).toBe('Sent to the owner. Stop now and hand back.')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await askCall(q.$, 'ag1', { question: 'Red or blue?', options: ['red', 'blue'] })).toBe('Sent to the owner. Stop now and hand back.')
   workers.clear()
-  expect(await lateHandBack(q.$, 'ag7')).toBe(true)
-  await workerFinished(q.$, 'ag7', 'I asked the owner.')
+  expect(await lateHandBack(q.$, 'ag1')).toBe(true)
+  await workerFinished(q.$, 'ag1', 'I asked the owner.')
   const asked = find(await load(q.$), 'T-1') as BoardTask
   expect(asked).toMatchObject({ status: 'waiting', question: 'Red or blue?', options: ['red', 'blue'] })
   expect(asked.try_question).toBeUndefined()
@@ -1454,12 +1456,12 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   const f = world()
   await saveBoard(f.$, b)
   f.put(`${WT}/.git`, 'gitdir: x')
-  workers.set('ag7', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  expect(await checkEdit(f.$, 'ag7', 'Edit', { file_path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
   workers.clear()
-  expect(await lateHandBack(f.$, 'ag7')).toBe(true)
-  await workerFinished(f.$, 'ag7', 'README.md was refused.')
+  expect(await lateHandBack(f.$, 'ag1')).toBe(true)
+  await workerFinished(f.$, 'ag1', 'README.md was refused.')
   const files = find(await load(f.$), 'T-1') as BoardTask
   expect(files).toMatchObject({ status: 'waiting', asked_files: ['README.md'] })
   expect(files.try_refused).toBeUndefined()

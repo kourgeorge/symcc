@@ -45,3 +45,25 @@ To change the voice, set `VOICE`, for example
 `bm_george`). `SPEED` changes how fast it speaks (default `0.9`). The voice says the
 name "symcc" the way `SPOKEN_NAME` spells it (default `"sim see see"`); the screen and the
 subtitles still show "symcc".
+
+## Short video: scouts, the owner and the pipeline
+
+`make_scouts_video.py` builds a vertical short (about 73 seconds, 1080x1920, 30 fps,
+H.264 with AAC sound) drawn like an illuminated manuscript: parchment, painted vine
+borders, blackletter headings, pinned notes with red ink stamps and threads, and a small
+brass robot. It shows how scouts and the owner turn problems into tasks, how a task goes
+through the pipeline, what a task holds, how the lead orders tasks and keeps each change
+traceable, and the holes that closed, with real tasks and numbers from this project's
+board. The words are in `scouts_narration.md` (each scene has Narration, On screen and
+Caption; the Caption line names the word shown in red). It shares the voice, timing,
+loudness, subtitles and encoding with `make_youtube_video.py`, so it needs the same setup
+as above, plus the macOS fonts Hoefler Text and Menlo. The blackletter font
+(UnifrakturMaguntia, SIL Open Font License) is downloaded once to
+`~/.cache/symcc-video/fonts`; without it the headings use Hoefler Text.
+
+    ~/.cache/symcc-video/venv/bin/python docs/video/make_scouts_video.py
+
+It writes `docs/video/out/symcc_scouts.mp4` (not committed), `docs/video/symcc_scouts.srt`
+and `docs/video/symcc_scouts_thumbnail.png` (1080x1920). The same checks work: `--times`
+(also counts the words), `--frame 12`, `--clip 2` and `--thumbnail`. `SPEED` defaults to
+`1.0` here.
