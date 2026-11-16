@@ -32,7 +32,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
       <Box flexDirection="row">
         <Text wrap="truncate">
           <Text bold color={'ide' as never}>{brand}</Text>
-          <Text dimColor>{facts}</Text>
+          <Text color={'inactive' as never}>{facts}</Text>
         </Text>
         <Button key="open-board" label="open board" dimColor onPress={() => void openPane($)} />
       </Box>
@@ -42,10 +42,10 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
             {t.id} {word[t.status]}
           </Text>
           <Text> {t.title}</Text>
-          <Text dimColor>{fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
+          <Text color={'inactive' as never}>{fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
         </Text>
       ))}
-      {live.length > rows && <Text dimColor>+{live.length - rows} more · /{S.N.name}</Text>}
+      {live.length > rows && <Text color={'inactive' as never}>+{live.length - rows} more · /{S.N.name}</Text>}
     </Box>
   )
 }

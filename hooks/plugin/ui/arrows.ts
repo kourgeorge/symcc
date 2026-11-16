@@ -1,5 +1,6 @@
 // ↑ and ↓ on the board panel's lists (Tasks, Scouts, Settings, Roles): they move the focus to the row above or below,
-// as Shift+Tab and Tab do. Claude Code turns the arrows into a scroll of the panel (`ui.scroll`) once the page is
+// as Shift+Tab and Tab do, but only between the list's rows (never onto the tabs, the mode, search or Back buttons:
+// those only by Tab). Claude Code turns the arrows into a scroll of the panel (`ui.scroll`) once the page is
 // taller than the panel; pane.tsx and the footer in parts.tsx note what the page drew, and register.tsx hooks `ui.scroll` and `ui.focus`
 // for the board panel and calls the two below.
 // Claude Code keeps the focused element in view on its own, so the panel still scrolls as the focus moves.
@@ -10,9 +11,17 @@ import { type $, S } from '../state'
 type ScrollHook = MatchedHook<'ui.scroll', { component: 'Pane' }>
 type FocusHook = MatchedHook<'ui.focus', { component: 'Pane' }>
 
-/** What the board panel drew last: whether its key line says "↑↓ move", the keys of its Buttons, Inputs and Selects
- *  in the order Tab walks them, and the one that holds the focus. */
-export const arrows = { move: false, stops: [] as string[], focused: undefined as string | undefined }
+/** What the board panel drew last: whether its key line says "↑↓ move", the keys of its list rows (`rows`, marked
+ *  with `row` while the page draws), the rows among its Buttons in the order Tab walks them (`stops`, the ↑↓ stops),
+ *  and the element that holds the focus. Tab still reaches every button; ↑↓ only the rows. */
+export const arrows = { move: false, rows: new Set<string>(), stops: [] as string[], focused: undefined as string | undefined }
+
+/** Marks a Button's key as a list row (a task or day row, a scout, a setting, a role), so ↑↓ stop on it; gives the key back. */
+export const row = (key: string) => (arrows.rows.add(key), key)
+
+/** The ↑↓ stops of a drawn page: its focus stops (in Tab order) that are list rows; the tabs, the mode, search and
+ *  Back buttons are left to Tab and Shift+Tab. */
+export const rowStops = (tree: unknown, rows: ReadonlySet<string>) => focusStops(tree).filter(k => rows.has(k))
 
 /** True when a page's key hints say ↑↓ moves (not "move between boxes", not "scroll"). */
 export const saysArrowsMove = (hints: readonly KeyHint[]) => hints.some(h => h.key === '↑↓' && h.word === 'move')
@@ -40,8 +49,8 @@ export async function noteFocus(_: $, e: Parameters<FocusHook>[1], next: Paramet
   return r
 }
 
-/** Where ↑ (`by` -1) or ↓ (`by` 1) takes the focus from `focused` among `stops`; undefined (scroll instead) when the
- *  focus is not on one of them, or already on the first (↑) or last (↓). */
+/** Where ↑ (`by` -1) or ↓ (`by` 1) takes the focus from `focused` among `stops` (the list rows); undefined (scroll
+ *  instead) when the focus is not on one of them, or already on the first (↑) or last (↓). */
 export function arrowTarget(stops: readonly string[], focused: string | undefined, by: number): string | undefined {
   const at = focused === undefined ? -1 : stops.indexOf(focused)
   return at < 0 || Math.abs(by) !== 1 ? undefined : stops[at + by]
@@ -50,9 +59,10 @@ export function arrowTarget(stops: readonly string[], focused: string | undefine
 /** True for a `ui.scroll` that is the person's ↑ or ↓ key: one row, not the wheel (which has a pointer), not a page key. */
 export const isArrow = (e: { origin: { kind: string }; pointer?: unknown; by: number }) => e.origin.kind === 'person' && !e.pointer && Math.abs(e.by) === 1
 
-/** `ui.scroll` on the board panel: a person's ↑ or ↓ on a list page moves the focus to the element above or below
- *  instead of scrolling. At the first or last element (or with no known focus) it scrolls as before, so the banner
- *  and the key line can still be reached; so it does when Claude Code refuses the move. */
+/** `ui.scroll` on the board panel: a person's ↑ or ↓ on a list page moves the focus to the row above or below
+ *  instead of scrolling. At the first or last row (or off the rows, or with no known focus) it scrolls as before, so
+ *  the banner and the key line can still be reached and the tab, mode and search buttons are only reached by Tab;
+ *  so it does when Claude Code refuses the move. */
 export async function arrowMove($: $, e: Parameters<ScrollHook>[1], next: Parameters<ScrollHook>[2]) {
   if (e.requestId !== S.N.pane || !arrows.move || !isArrow(e)) return next(e)
   const to = arrowTarget(arrows.stops, arrows.focused, e.by)

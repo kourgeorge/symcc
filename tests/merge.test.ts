@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, ANSWER_MAX_CHARS, kindOf } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile } from '../hooks/plugin/state'
@@ -1522,6 +1522,31 @@ test('pause of a running task and resume both leave a history line', async () =>
   expect(t.history.slice(-2)).toEqual(['try 1: stopped: paused', 'resumed after a pause'])
 })
 
+test('change on a paused task keeps it paused with the change saved, and resume still starts it', async () => {
+  const w = world()
+  const [b0] = boardWith('review', [], { status: 'paused', note: 'paused' })
+  const [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Before it' }, ISO)
+  await saveBoard(w.$, b)
+  const changes: Record<string, unknown>[] = [
+    { title: 'New title' }, { details: 'new plan' }, { add_details: 'also the README' },
+    { files: ['src/', 'tests/'] }, { after: ['T-2'] }, { order: 7 },
+  ]
+  for (const c of changes) {
+    const said = await runTool(w.$, 'change', { task: 'T-1', ...c })
+    expect(String(said)).toMatch(/still paused/)
+    expect(find(await load(w.$), 'T-1')!.status).toBe('paused')
+  }
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.title).toBe('New title')
+  expect(t.details).toMatch(/^new plan\n\nNote \(lead, \d{4}-\d\d-\d\d\): also the README$/)
+  expect(t.files).toEqual(['src/', 'tests/'])
+  expect(t.after).toEqual(['T-2'])
+  expect(t.order).toBe(7)
+  expect(t.note).toBe('paused')
+  await runTool(w.$, 'resume', { task: 'T-1' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+})
+
 // ---------------- each try's full report ----------------
 
 const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
@@ -1850,19 +1875,154 @@ test('a try stopped by turning symcc or the board off says so, and so does a sto
   expect(paused.end).toEqual(['stopped', 'paused'])
 })
 
-test('a try that ran over max_minutes ends as timed out', async () => {
+// ---------------- a worker over its time limit (T-251) ----------------
+
+/** Records what is sent to agents (halt's "Stop now", the wrap-up message). */
+const sentTo = (w: ReturnType<typeof world>) => {
+  const sent: { to: string; text: string }[] = []
+  ;(w.$ as unknown as { session: Record<string, unknown> }).session.send = async (e: { to: { agentId: string }; text: string }) => void sent.push({ to: e.to.agentId, text: e.text })
+  return sent
+}
+/** T-1's worker (ag1) as started `min` minutes ago. */
+const runFor = (min: number) => workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - min * 60_000 })
+/** Over-time tests drive the board (check only runs then); world() sets driving off again. */
+async function overTime(then: (w: ReturnType<typeof world>, sent: { to: string; text: string }[]) => Promise<unknown>) {
+  let sent: { to: string; text: string }[] = []
   try {
-    const over = await tryEnds(async w => {
-      S.driving = true // world() sets it to false
-      workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: -1e13 })
-      await check(w.$)
+    return await tryEnds(async w => {
+      S.driving = true
+      sent = sentTo(w)
+      await then(w, sent)
     })
-    expect(over.t.status).toBe('failed')
-    expect(over.end[0]).toBe('timed out')
-    expect(over.end[1]).toMatch(/^ran over \d+ min$/)
   } finally {
     S.driving = false
   }
+}
+
+test('at the time limit the worker is not stopped: the task stays doing and the owner is asked, once', async () => {
+  let sent: { to: string; text: string }[] = []
+  const r = await overTime(async (w, s) => {
+    sent = s
+    runFor(50)
+    await check(w.$)
+    expect(workers.has('ag1')).toBe(true)
+    await check(w.$) // asked once only
+  })
+  expect(r.t.status).toBe('doing')
+  expect(r.t.note).toBe('over time; asked the owner')
+  expect((r.t as BoardTask).time_ask).toBeDefined()
+  expect(r.r.ended).toBeUndefined()
+  expect(sent).toEqual([])
+  expect(r.t.history.filter(h => h.includes('asked the owner for more time'))).toEqual(['try 1: ran 45 min, over its time limit; asked the owner for more time'])
+  const told = leadQueue.filter(x => x.includes('T-1 has run 45 min. Give it more time?'))
+  expect(told.length).toBe(1)
+  expect(told[0]).toContain('+30 min | +60 min | Stop it')
+  expect(told[0]).toContain('change T-1 and answer')
+})
+
+test('"+30 min" moves the limit later: the worker goes on, is not asked again before it, and finishes normally', async () => {
+  let said = ''
+  const r = await overTime(async w => {
+    runFor(50)
+    await check(w.$)
+    said = await runTool(w.$, 'change', { task: 'T-1', answer: '+30 min' })
+    runFor(70) // past 45, not past 75
+    await check(w.$)
+    const t = find(await load(w.$), 'T-1') as BoardTask
+    expect(t.extra_minutes).toBe(30)
+    expect(t.time_ask).toBeUndefined()
+    expect(t.status).toBe('doing')
+    expect(workers.has('ag1')).toBe(true)
+    await workerFinished(w.$, 'ag1', 'made the change', false)
+  })
+  expect(said).toBe('T-1 has 30 more minutes: its limit is now 75 min, and its worker goes on.')
+  expect(r.t.history).toContain('try 1: the owner gave it 30 more min (limit now 75 min)')
+  expect(r.t.status).toBe('done')
+  expect(r.end).toEqual(['finished', 'merged'])
+  expect((r.t as BoardTask).extra_minutes).toBeUndefined()
+})
+
+test('"Stop it" tells the worker to wrap up; its hand-back is saved as the report and the task fails with its work kept', async () => {
+  let sent: { to: string; text: string }[] = []
+  let w0: ReturnType<typeof world> | undefined
+  const r = await overTime(async (w, s) => {
+    sent = s
+    w0 = w
+    runFor(50)
+    await check(w.$)
+    expect(await runTool(w.$, 'change', { task: 'T-1', answer: 'Stop it' })).toMatch(/^T-1: its worker was told to write down what it has and hand back/)
+    const t = find(await load(w.$), 'T-1') as BoardTask
+    expect(t.status).toBe('doing')
+    expect(t.wrap_up).toBeDefined()
+    expect(t.time_ask).toBeUndefined()
+    await check(w.$) // within the grace: not stopped yet
+    expect(workers.has('ag1')).toBe(true)
+    await workerFinished(w.$, 'ag1', 'Did half of it; notes are in docs/notes.md. Left: the tests.', false)
+  })
+  expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
+  expect(r.t.status).toBe('failed')
+  expect(r.t.note).toBe('stopped: ran over 45 min; the work so far is in its folder and report, and a retry continues from there')
+  expect(r.end).toEqual(['timed out', 'ran over 45 min'])
+  expect(r.r.report).toBe('.symcc/reports/T-1-try-1.md')
+  expect(String(w0!.files.get(REPORT1))).toContain('Did half of it; notes are in docs/notes.md.')
+  expect(w0!.git.main).toBe(M1) // nothing merged
+  expect(w0!.calls.some(c => c.includes('worktree remove'))).toBe(false)
+  expect(leadQueue.some(x => x.includes('T-1') && x.includes('Its work so far is kept'))).toBe(true)
+})
+
+test('no answer by the hard cap (twice the limit) does the same: wrap-up message, then after the grace it is stopped and fails', async () => {
+  let sent: { to: string; text: string }[] = []
+  const r = await overTime(async (w, s) => {
+    sent = s
+    runFor(50)
+    await check(w.$)
+    runFor(91) // past 45 + 45
+    await check(w.$)
+    expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
+    expect((find(await load(w.$), 'T-1') as BoardTask).status).toBe('doing')
+    // the grace is over: the worker is stopped
+    await change(w.$, x => patchTask(x, 'T-1', { wrap_up: new Date(Date.now() - 4 * 60_000).toISOString() }, ISO))
+    await check(w.$)
+    expect(workers.has('ag1')).toBe(false)
+  })
+  expect(sent.length).toBe(2)
+  expect(sent[1]!.text).toMatch(/^Stop now: its time is up/)
+  expect(r.t.status).toBe('failed')
+  expect(r.t.note).toBe('stopped: ran over 45 min; the work so far is in its folder and report, and a retry continues from there')
+  expect(r.end).toEqual(['timed out', 'ran over 45 min'])
+  expect(r.t.history.some(h => /^try 1: time is up \(no answer from the owner after \d+ min\)/.test(h))).toBe(true)
+})
+
+test('a worker that finishes before the limit is unchanged: never asked, merged as usual', async () => {
+  let sent: { to: string; text: string }[] = []
+  const r = await overTime(async (w, s) => {
+    sent = s
+    runFor(20)
+    await check(w.$)
+    await workerFinished(w.$, 'ag1', 'made the change', false)
+  })
+  expect(sent).toEqual([])
+  expect(r.t.status).toBe('done')
+  expect(r.end).toEqual(['finished', 'merged'])
+  expect(leadQueue.some(x => x.includes('Give it more time?'))).toBe(false)
+})
+
+test('the owner\'s answer to "more time?": +N min or stop, anything else is refused', () => {
+  expect(parseOvertimeAnswer('+30 min')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('+60 min')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('give it +15 minutes')).toEqual({ add: 15 })
+  expect(parseOvertimeAnswer('Stop it')).toEqual({ stop: true })
+  expect(parseOvertimeAnswer('maybe')).toBeUndefined()
+  // a unit after the number: hours count 60 min each, minutes or no unit as minutes, any other unit is refused
+  expect(parseOvertimeAnswer('+1 hour')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('2 hours')).toEqual({ add: 120 })
+  expect(parseOvertimeAnswer('+1h')).toEqual({ add: 60 })
+  expect(parseOvertimeAnswer('+2 hr')).toEqual({ add: 120 })
+  expect(parseOvertimeAnswer('+30')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('+30 min')).toEqual({ add: 30 })
+  expect(parseOvertimeAnswer('45 minutes')).toEqual({ add: 45 })
+  expect(parseOvertimeAnswer('3 days')).toBeUndefined()
+  expect(parseOvertimeAnswer('+20 hours')).toBeUndefined()
 })
 
 test('a worker whose agent ended is failed only on a later check, unless its report arrived in between', async () => {
@@ -3101,9 +3261,11 @@ test('an approve waiting in line behind two slow merges, then main moving under 
 // ---------------- investigations: the hand-back is the result ----------------
 
 /** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
-async function investigationAnswers(mode: 'auto' | 'review', answer: string) {
+async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}) {
   const w = world()
-  const [b] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  // set after the try started: a new try (attempts changing) clears the time fields
+  const b = Object.keys(extra).length ? patchTask(b0, 'T-1', extra, ISO) : b0
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -3136,6 +3298,22 @@ test("a long investigation answer is cut on the task; the report keeps it all", 
   expect(t.answer!.endsWith('…')).toBe(true)
   expect(w.files.get(REPORT1)).toContain(long)
 })
+
+for (const mode of ['auto', 'review'] as const)
+  test(`an investigation told to wrap up (time ran out) goes to review with its answer so far, not failed (mode ${mode})`, async () => {
+    const { w, t } = await investigationAnswers(mode, 'So far: the cache is never cleared.', { wrap_up: new Date().toISOString(), time_ask: new Date().toISOString() })
+    expect(t.status).toBe('review')
+    expect(t.note).toBe('answered (time ran out); waiting for you to read it')
+    expect(t.answer).toBe('So far: the cache is never cleared.')
+    expect(t.wrap_up).toBeUndefined()
+    expect(t.time_ask).toBeUndefined()
+    expect(t.history.at(-1)).toMatch(/^try 1: answered \(time ran out after \d+ min\): So far/)
+    expect(w.files.get(REPORT1)).toContain('So far: the cache is never cleared.')
+    expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+    expect(ranTests(w)).toEqual([])
+    expect(movedMain(w)).toBe(false)
+    expect(leadQueue.join('\n')).toContain('is answered (its time of')
+  })
 
 test('an investigation worker that asks a QUESTION still waits for the owner', async () => {
   const { t } = await investigationAnswers('auto', 'QUESTION: Which cache do you mean?')

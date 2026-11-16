@@ -19,7 +19,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const open = await readOpened($)
   const width = Math.max(20, e.props.bodyColumns ?? 60)
   // Theme colors, so the board reads well in both light and dark themes.
-  const color: Record<string, string> = { backlog: 'subtle', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
+  const color: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
   const word: Record<string, string> = STATUS_WORD
   const mark: Record<string, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
   const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(S.N.toast(err.message)))

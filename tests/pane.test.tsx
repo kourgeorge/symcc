@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
-import { arrowTarget, focusStops, isArrow, saysArrowsMove } from '../hooks/plugin/ui/arrows'
+import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/plugin/ui/arrows'
 import { sayQueue } from '../hooks/plugin/state'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -65,8 +65,8 @@ test('the panel shows the board, newest task first, with their question', async 
 
 test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^  All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('subtle')
-  expect((await ui.find({ type: 'Text', text: /^  Tell the lead what you want next\.$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^  All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('inactive')
+  expect((await ui.find({ type: 'Text', text: /^  Tell the lead what you want next\.$/ }))?.props.color).toBe('inactive')
   expect((await ui.find({ type: 'Text', text: /^symcc board$/ }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^━{50}$/ }))).toBeDefined()
   await ui.unmount()
@@ -289,13 +289,13 @@ test('the Done row shows just the count, at any width', async ($, on) => {
   }
 })
 
-test('with nothing to do, need or run, two subtle "All clear" lines sit above the folded groups', async ($, on) => {
+test('with nothing to do, need or run, two dimmer (inactive) "All clear" lines sit above the folded groups', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser', { updated_at: new Date().toISOString() }), task('T-2', 'backlog', 'Dark mode')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const line = texts.findIndex(t => t === '  All clear. Nothing running or waiting.')
   expect(line).toBeGreaterThan(-1)
-  expect((await ui.find({ type: 'Text', text: /All clear/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /All clear/ }))?.props.color).toBe('inactive')
   expect(texts[line + 1]).toBe('  Tell the lead what you want next.')
   expect(texts[line + 2]).toBe(' ')
   expect(line).toBeLessThan(texts.findIndex(t => /^  ▸ Backlog  1$/.test(t)))
@@ -618,7 +618,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
   }
 })
 
-test('a scout\'s page shows its summary as the subheader, else the first line of its instructions in the subtle colour', async ($, on) => {
+test('a scout\'s page shows its summary as the subheader, else the first line of its instructions in the inactive colour', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { summary: 'Crash hunter', prompt: 'Look for crashes.\nAnd leaks.' }), scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const sub = await ui.find({ type: 'Text', text: /^Crash hunter$/ })
@@ -632,10 +632,10 @@ test('a scout\'s page shows its summary as the subheader, else the first line of
   await ui.unmount()
 })
 
-test('with no summary, a scout\'s page shows the first line of its instructions in the subtle colour', async ($, on) => {
+test('with no summary, a scout\'s page shows the first line of its instructions in the inactive colour', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'docs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const first = (await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'subtle')
+  const first = (await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'inactive')
   expect(first).toBeDefined()
   await ui.unmount()
 })
@@ -718,7 +718,7 @@ test('a task in review is listed near the top as "review" with its keys, and the
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Busy'), task('T-2', 'todo', 'Later'), task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^ ◆ review\s*$/ }))?.props.color).toBe('warning')
-  expect((await ui.find({ type: 'Text', text: /^\s*Enter to review$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^\s*Enter to review$/ }))?.props.color).toBe('inactive')
   // a and x only work on the task's own page, so the list never offers them
   expect(await ui.find({ type: 'Text', text: /a approve|x reject|a\/x/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /^⏸ review merge $/ })).toBeDefined()
@@ -872,12 +872,12 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its role and try at the right end in a subtle color; general shows only the try', async ($, on) => {
+test('a running task shows its role and try at the right end in the inactive color; general shows only the try', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
   const mark = await ui.find({ type: 'Text', text: /^ +tester · try 1$/ })
   expect(mark).toBeDefined()
-  expect(mark?.props.color).toBe('subtle')
+  expect(mark?.props.color).toBe('inactive')
   expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
   expect(await ui.find({ type: 'Text', text: /^ +try 2$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
@@ -971,7 +971,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
   expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
   const seenPiece = await ui.find({ type: 'Text', text: /^last owner prompt/ })
-  expect(seenPiece?.props.color).toBe('subtle')
+  expect(seenPiece?.props.color).toBe('inactive')
   const who = await ui.find({ type: 'Text', text: /^owner$/ })
   expect(who?.props.color).toBe('claude')
   expect(L.some(l => /^Branch:\s+symcc\/T-3$/.test(l))).toBe(true)
@@ -1213,13 +1213,13 @@ for (const width of [50, 90]) {
         '  ◎ test-gaps       every 4 hours   next in 3h 59m',
         '  ○ simplify        every 10 hours  paused',
       ])
-    // icon colors: running blue, waiting plain, paused subtle; a finding in the warning color
+    // icon colors: running blue, waiting plain, paused inactive; a finding in the warning color
     expect((await ui.findAll({ type: 'Text', text: /^  ◉ $/ }))[0]?.props.color).toBe('ide')
     expect((await ui.findAll({ type: 'Text', text: /^  ◎ $/ }))[0]?.props.color).toBe('text')
-    expect((await ui.findAll({ type: 'Text', text: /^  ○ $/ }))[0]?.props.color).toBe('subtle')
+    expect((await ui.findAll({ type: 'Text', text: /^  ○ $/ }))[0]?.props.color).toBe('inactive')
     if (width === 90) {
       expect((await ui.find({ type: 'Text', text: /last: found 1/ }))?.props.color).toBe('warning')
-      expect((await ui.find({ type: 'Text', text: /last: nothing/ }))?.props.color).toBe('subtle')
+      expect((await ui.find({ type: 'Text', text: /last: nothing/ }))?.props.color).toBe('inactive')
     }
     // a name for screen readers, "+ New scout" on top, and one hint line, no old help line
     expect((await ui.find({ key: 'scout:simplify' }))?.props.label).toBe('simplify: paused')
@@ -1271,7 +1271,7 @@ test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched
   expect(files['/scouts/bugs.md']).toBe('---\nevery_minutes: 30\n---\nLook for crashes.\n')
   expect(toasts.some(t => /bugs paused: it doesn't run until you resume it/.test(t))).toBe(true)
   expect(await ui.find({ type: 'Text', text: /^○ paused$/ })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^○ paused$/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Text', text: /^○ paused$/ }))?.props.color).toBe('inactive')
   expect(await ui.find({ type: 'Text', text: /p resume/ })).toBeDefined()
   expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Resume')
   // run now is refused while it is paused
@@ -1655,5 +1655,87 @@ test('every list page says "↑↓ move" in its key line; a task page says "↑�
   await ui.press({ key: 'T-1' })
   expect(await ui.find({ type: 'Text', text: /↑↓ scroll/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /↑↓ move/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the ↑↓ stops of a drawn page are only its list rows: the tabs, search, mode and Back are left to Tab', () => {
+  const el = (type: string, props: Record<string, unknown>, ...children: unknown[]) => ({ type, props, children })
+  const tree = el('Box', {}, el('Box', { key: 'tabs' }, el('Button', { key: 'tab-tasks' }), el('Button', { key: 'tab-scouts' })), el('Button', { key: 'search-open' }), el('Button', { key: 'T-1' }), el('Button', { key: 'day:done' }), el('Button', { key: 'T-2' }), el('Button', { key: 'mode' }), el('Button', { key: 'scouts-back' }))
+  const stops = rowStops(tree, new Set(['T-1', 'T-2', 'day:done']))
+  expect(stops).toEqual(['T-1', 'day:done', 'T-2'])
+  expect(arrowTarget(stops, 'T-1', 1)).toBe('day:done')
+  expect(arrowTarget(stops, 'T-2', -1)).toBe('day:done')
+  // past the last row ↓ and past the first row ↑ scroll (no target): never onto [m] mode, search or a tab
+  expect(arrowTarget(stops, 'T-2', 1)).toBeUndefined()
+  expect(arrowTarget(stops, 'T-1', -1)).toBeUndefined()
+  // on a button that is not a row (Tab put the ring there), ↑↓ scroll
+  expect(arrowTarget(stops, 'mode', -1)).toBeUndefined()
+  expect(arrowTarget(stops, 'tab-tasks', 1)).toBeUndefined()
+})
+
+/** Drives the board panel's real `ui.focus` and `ui.scroll` hooks (noteFocus, arrowMove in register.tsx) as the
+ *  engine raises them for the person's Tab or click (`focus`) and ↑ or ↓ (`arrow`); what reaches the bottom (the
+ *  engine) is kept: where the ring is, and the scrolls. The test kit has no stand-in for the plugin's own
+ *  `$.ui.focus` call, so only the scrolls past the ends (and off the rows) are checked here; the moves between rows
+ *  are checked on arrowTarget and rowStops above. */
+function arrowKeys($: Parameters<Parameters<typeof test>[1]>[0], on: On) {
+  const seen = { focused: undefined as string | undefined, scrolls: [] as { by: number; offset: number }[] }
+  on('ui.focus', (_, e) => ((seen.focused = e.element), { value: undefined }))
+  on('ui.scroll', (_, e) => (seen.scrolls.push({ by: e.by, offset: e.offset }), {}))
+  on('ui.toast', () => ({ value: undefined }))
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, plugin: 'symcc', element, origin: { kind: 'person' } })
+  const arrow = (by: 1 | -1) => $.ui.scroll({ component: 'Pane', requestId: PANE.requestId, offset: 5 + by, by, bodyRows: 20, contentRows: 60, origin: { kind: 'person' } })
+  return { seen, focus, arrow }
+}
+
+/** The list rows' keys among the drawn Buttons, in order. */
+const rowKeys = async (ui: { findAll: (q: { type: string }) => Promise<{ key: string | undefined }[]> }, isRow: (k: string) => boolean) =>
+  (await ui.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(isRow)
+
+/** ↓ on the last row and ↑ on the first scroll the panel (the scroll reaches the engine as sent) and the ring stays
+ *  on the row; so do ↑↓ with the ring on a button that is not a row. */
+async function scrollsPastTheEnds(keys: ReturnType<typeof arrowKeys>, rows: string[], others: string[]) {
+  expect(rows.length).toBeGreaterThan(1)
+  const pressed = (by: 1 | -1, on: string) => async () => {
+    const before = keys.seen.scrolls.length
+    await keys.focus(on)
+    await keys.arrow(by)
+    expect(keys.seen.focused).toBe(on)
+    expect(keys.seen.scrolls.slice(before)).toEqual([{ by, offset: 5 + by }])
+  }
+  await pressed(1, rows.at(-1)!)()
+  await pressed(-1, rows[0]!)()
+  for (const k of others) {
+    await pressed(1, k)()
+    await pressed(-1, k)()
+  }
+}
+
+test('↑↓ on the Tasks list stop at the first and last task and scroll there: they never reach a tab, [m] mode or [f] search', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One'), task('T-2', 'todo', 'Two'), task('T-3', 'done', 'Three')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const keys = arrowKeys($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'mode' })).toBeDefined()
+  expect(await ui.find({ key: 'search-open' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↑↓ move/ })).toBeDefined()
+  const rows = await rowKeys(ui, k => /^T-\d+$/.test(k) || k.startsWith('day:'))
+  await scrollsPastTheEnds(keys, rows, ['mode', 'search-open', 'tab-tasks'])
+  await ui.unmount()
+})
+
+test('↑↓ on the Scouts, Settings and Roles lists stop at their first and last row: never onto a tab or Back', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One')], working: [], scouts: [scout('a'), scout('b')], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, ROLE_FILES)
+  const keys = arrowKeys($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-scouts' })
+  expect(await ui.find({ key: 'scouts-back' })).toBeDefined()
+  await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('scout:')), ['scouts-back', 'tab-scouts'])
+  await ui.press({ key: 'tab-settings' })
+  expect(await ui.find({ key: 'settings-back' })).toBeDefined()
+  await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('setting:') || k === 'settings-roles'), ['settings-back', 'tab-settings'])
+  await ui.press({ key: 'settings-roles' })
+  expect(await ui.find({ key: 'roles-back' })).toBeDefined()
+  await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('roleRow:')), ['roles-back'])
   await ui.unmount()
 })

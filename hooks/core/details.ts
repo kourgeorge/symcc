@@ -14,7 +14,7 @@ export type Seg = { text: string; color: string; bold?: boolean; italic?: boolea
 export type DetailRow = { label: string; segs: Seg[] }
 
 /** The status badge colors on the task page: doing blue, review and waiting yellow, done green, failed red, the rest dim. */
-export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'subtle', todo: 'subtle', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'subtle' }
+export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'inactive', todo: 'inactive', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'inactive' }
 export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
 
 /**
@@ -23,18 +23,18 @@ export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review
  */
 export function originSegs(t: { origin?: unknown }): Seg[] {
   const o = originOf(t)
-  if (!o) return [{ text: 'unknown', color: 'subtle' }]
+  if (!o) return [{ text: 'unknown', color: 'inactive' }]
   const segs = originWordSegs(o)
-  return [{ text: `${originMark(o)} `, color: segs[0]?.color ?? 'subtle' }, ...segs]
+  return [{ text: `${originMark(o)} `, color: segs[0]?.color ?? 'inactive' }, ...segs]
 }
 
 function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
   const how = o.how ?? (o.by === 'worker' ? 'worker report' : '')
-  const taskPart: Seg[] = o.task ? [{ text: o.task, color: 'claude', bold: true }, ...(how ? [{ text: ` (${how})`, color: 'subtle' }] : [])] : []
+  const taskPart: Seg[] = o.task ? [{ text: o.task, color: 'claude', bold: true }, ...(how ? [{ text: ` (${how})`, color: 'inactive' }] : [])] : []
   const then = (who: Seg[]) => (taskPart.length ? [...who, { text: ', ', color: 'subtle' }, ...taskPart] : who)
   if (o.by === 'owner') return then([{ text: 'owner', color: 'claude', bold: true }])
   if (o.by === 'scout') return then([{ text: `scout ${o.scout || '?'}`, color: 'suggestion', bold: true }])
-  if (o.by === 'lead' && o.task && !o.how) return [{ text: 'lead', color: 'success', bold: true }, { text: ', about ', color: 'subtle' }, ...taskPart]
+  if (o.by === 'lead' && o.task && !o.how) return [{ text: 'lead', color: 'success', bold: true }, { text: ', about ', color: 'inactive' }, ...taskPart]
   if (taskPart.length) return taskPart
   return [{ text: 'lead', color: 'success', bold: true }]
 }
@@ -46,19 +46,19 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
-  R.push({ label: 'Status', segs: [{ text: `${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'subtle' }] })
-  if (t.note) R.push({ label: 'Note', segs: [{ text: t.note, color: 'subtle', italic: true }] })
+  R.push({ label: 'Status', segs: [{ text: `${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
+  if (t.note) R.push({ label: 'Note', segs: [{ text: t.note, color: 'inactive', italic: true }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')
-  R.push({ label: 'Role', segs: [{ text: r?.name ?? name, color: 'ide', bold: true }, ...(more ? [{ text: ` — ${more}`, color: 'subtle' }] : [])] })
+  R.push({ label: 'Role', segs: [{ text: r?.name ?? name, color: 'ide', bold: true }, ...(more ? [{ text: ` — ${more}`, color: 'inactive' }] : [])] })
   R.push({ label: 'From', segs: originSegs(t) })
   const og = originOf(t)
   if (og?.why) R.push({ label: 'Why', segs: [{ text: squash(og.why), color: 'text' }] })
   if (og?.by === 'owner' && og.request?.trim()) R.push({ label: 'Request', segs: [{ text: `“${squash(og.request)}”`, color: 'text', italic: true }] })
-  if (og?.evidence) R.push({ label: 'Seen', segs: [{ text: squash(og.evidence), color: 'subtle' }] })
-  R.push({ label: 'Files', segs: t.files.length ? t.files.flatMap((f, i) => [...(i ? [{ text: ', ', color: 'subtle' }] : []), { text: f, color: 'autoAccept' }]) : [{ text: 'anywhere in the project', color: 'subtle' }] })
-  R.push({ label: 'Into', segs: [{ text: 'merges into: ', color: 'subtle' }, { text: intoOf(t), color: 'ide', bold: true }] })
+  if (og?.evidence) R.push({ label: 'Seen', segs: [{ text: squash(og.evidence), color: 'inactive' }] })
+  R.push({ label: 'Files', segs: t.files.length ? t.files.flatMap((f, i) => [...(i ? [{ text: ', ', color: 'subtle' }] : []), { text: f, color: 'autoAccept' }]) : [{ text: 'anywhere in the project', color: 'inactive' }] })
+  R.push({ label: 'Into', segs: [{ text: 'merges into: ', color: 'inactive' }, { text: intoOf(t), color: 'ide', bold: true }] })
   t.after.forEach((id, i) => {
     const dep = o.all.find(x => x.id === id)
     // a done task moved to archive.json counts as done
@@ -66,7 +66,7 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
     const state: Seg = dep ? { text: `${STATUS_MARK[dep.status]} ${STATUS_WORD[dep.status]}`, color: STATUS_BADGE[dep.status] } : gone ? { text: `${STATUS_MARK.done} ${STATUS_WORD.done} (archived)`, color: STATUS_BADGE.done } : { text: 'missing', color: 'error' }
     R.push({
       label: i ? '' : 'After',
-      segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, state, ...(dep ? [{ text: ` · ${dep.title}`, color: 'subtle' }] : [])],
+      segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, state, ...(dep ? [{ text: ` · ${dep.title}`, color: 'inactive' }] : [])],
     })
   })
   for (const n of crossBranchNotes(t, o.all)) R.push({ label: '', segs: [{ text: `⚠ ${n}`, color: 'warning' }] })
@@ -81,12 +81,12 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
       segs: commits.flatMap((c, i) => [
         ...(i ? [{ text: ', ', color: 'subtle' }] : []),
         { text: shortSha(c.sha), color: c.merged ? 'success' : 'ide', bold: c.merged },
-        ...(c.merged ? [{ text: ' (merged)', color: 'success' }] : c.try ? [{ text: ` (try ${c.try})`, color: 'subtle' }] : []),
+        ...(c.merged ? [{ text: ' (merged)', color: 'success' }] : c.try ? [{ text: ` (try ${c.try})`, color: 'inactive' }] : []),
       ]),
     })
   }
   const tries: Seg[] = [{ text: `${t.attempts} ${t.attempts === 1 ? 'try' : 'tries'}`, color: t.attempts > 2 ? 'warning' : 'text', bold: t.attempts > 2 }]
-  if (t.runs?.length) tries.push({ text: ` · ${fmtTotal(sumRuns(t.runs, o.nowMs))}`, color: 'subtle' })
+  if (t.runs?.length) tries.push({ text: ` · ${fmtTotal(sumRuns(t.runs, o.nowMs))}`, color: 'inactive' })
   R.push({ label: 'Tries', segs: tries })
   return R
 }

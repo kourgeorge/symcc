@@ -12,7 +12,7 @@ export type Board = {
   /** shell commands that must pass before a task's work is merged */
   test_commands: string[]
   max_parallel: number
-  /** a worker running longer than this is stopped and its task marked failed */
+  /** a worker running longer than this (plus its task's extra_minutes) makes symcc ask the owner for more time (see overtimeQuestion) */
   max_minutes: number
   /** how many new tries a task gets on its own after its tests fail, before it is marked failed */
   auto_retries: number
@@ -66,8 +66,12 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * `checking`: the step symcc is in while it checks the task's finished work (a finished try, an approve
  * or a merge that waited for the owner's files), with when that was last said (refreshed like `finishing`);
  * the board list shows the step instead of the time. Only while "doing", "review" or "waiting".
+ * Over time (a worker running past max_minutes, see overtimeQuestion), all only while "doing" on one try:
+ * `extra_minutes`: the minutes the owner added to this try's limit; `time_ask`: when the owner was asked
+ * for more time (the worker keeps working meanwhile); `wrap_up`: when the worker was told its time is up
+ * and to hand back (it is stopped WRAP_UP_GRACE_MS later).
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; kind?: TaskKind; answer?: string }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string }
 
 /**
  * What a task is for: a "change" (the default) ends in a commit, tests and a merge; an "investigation"

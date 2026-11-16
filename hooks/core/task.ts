@@ -60,6 +60,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'doing' || !next.session) delete next.session
   // the "being tested and merged" mark only means something while the task is "doing"
   if (next.status !== 'doing' || !next.finishing) delete next.finishing
+  // the over-time marks belong to one try while it runs
+  for (const k of ['extra_minutes', 'time_ask', 'wrap_up'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
   // the step of a check only means something while the task stays as it was when checked
   if (!next.checking || next.status !== t.status || next.attempts !== t.attempts) delete next.checking
   // Where a task came from never changes once it is made.
@@ -226,3 +228,49 @@ export function outOfScopeText(bad: string[], allowed: string[], undone = false)
   // approve: change sends a task in review back to work (a fresh worker runs); the edits stay committed on the task's branch
   return `${head}. To fix: add them to files with change, or split the task. Adding them with change sends the task back to work with these edits kept, and it comes back to review, where you approve it again`
 }
+
+// ---------------- a worker over its time limit ----------------
+
+/** The owner's choices when a worker runs past its time limit (see overtimeQuestion). */
+export const OVERTIME_OPTIONS = ['+30 min', '+60 min', 'Stop it'] as const
+
+/** How long a worker told its time is up (WRAP_UP_TEXT) gets to hand back before it is stopped. */
+export const WRAP_UP_GRACE_MS = 3 * 60_000
+
+/** The minutes task `t`'s worker may run now: max_minutes plus what the owner added for this try. */
+export const timeLimitOf = (max: number, t: { extra_minutes?: number } | undefined) => max + (t?.extra_minutes ?? 0)
+
+/**
+ * With no answer from the owner, a worker over its limit is told to wrap up once it ran this long:
+ * its limit plus max_minutes again (so twice max_minutes when no time was added).
+ */
+export const hardCapOf = (max: number, t: { extra_minutes?: number } | undefined) => timeLimitOf(max, t) + max
+
+/** The question a task shows while its worker runs over its limit of `limit` minutes. */
+export const overtimeQuestion = (id: string, limit: number) => `${id} has run ${limit} min. Give it more time?`
+
+/** The note of a task whose worker runs over time while the owner is asked. */
+export const OVERTIME_NOTE = 'over time; asked the owner'
+
+/** What a worker is told when its time is up: write down what it has and hand back now. */
+export const WRAP_UP_TEXT = "Time is up: write down what you have done and found, save notes into your task's files, and hand back now (answer with what you did, what you found and what is left)."
+
+/**
+ * The owner's answer to the over-time question: { add: N } for "+N min" (or a plain number of minutes;
+ * "+1 hour" / "2 h" count 60 minutes each; 1-600 minutes in all), { stop: true } for "Stop it", or undefined when it
+ * is neither or the number has another unit ("3 days").
+ */
+export function parseOvertimeAnswer(answer: string): { add: number } | { stop: true } | undefined {
+  const a = String(answer ?? '').trim().toLowerCase()
+  if (/^(stop|no\b|end|fail)/.test(a)) return { stop: true }
+  const num = /^\+?\s*(\d{1,3})(?:\s*([a-z]+))?/
+  const m = num.exec(a) ?? /\+\s*(\d{1,3})(?:\s*([a-z]+))?/.exec(a)
+  if (!m) return undefined
+  const unit = m[2] ?? ''
+  const per = /^(h|hr|hrs|hours?)$/.test(unit) ? 60 : /^(|m|min|mins|minutes?)$/.test(unit) ? 1 : 0
+  const n = Number(m[1]) * per
+  return n >= 1 && n <= 600 ? { add: n } : undefined
+}
+
+/** The failed note of a task whose worker ran out of time and was stopped. */
+export const outOfTimeNote = (limit: number) => `stopped: ran over ${limit} min; the work so far is in its folder and report, and a retry continues from there`

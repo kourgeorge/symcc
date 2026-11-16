@@ -1,6 +1,6 @@
 // The board panel: picks the page to draw (Settings, a scout, the Scouts list, a task, or the task list).
 import { type $, S } from '../state'
-import { arrows, focusStops } from './arrows'
+import { arrows, rowStops } from './arrows'
 import { listPage } from './list'
 import { type PaneEvent, type PaneHook, type PaneParts, paneParts } from './parts'
 import { scoutEditPage, scoutsPage } from './scouts-page'
@@ -11,9 +11,10 @@ import { taskPage } from './task-page'
 export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[2]) {
   if (e.requestId !== S.N.pane) return next(e)
   arrows.move = false // the page's footer sets it when its key line says "↑↓ move"
+  arrows.rows = new Set() // the page marks its list rows with row()
   const pane = await paneParts($, e)
   const tree = await page($, pane)
-  arrows.stops = focusStops(tree)
+  arrows.stops = rowStops(tree, arrows.rows)
   return tree
 }
 

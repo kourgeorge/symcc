@@ -1080,7 +1080,7 @@ test('diff lines are colored: added in success, removed in error, headers and hu
   const lines = ['diff --git a/x.ts b/x.ts', 'index 1..2 100644', '--- a/x.ts', '+++ b/x.ts', '@@ -1,3 +1,3 @@', ' same', '-old', '+new', '--- a line that starts with dashes', '\\ No newline at end of file', '… 3 more lines (see /symcc-diff T-5)']
   const kinds = diffKinds(lines)
   expect(kinds).toEqual(['header', 'header', 'header', 'header', 'hunk', 'context', 'remove', 'add', 'remove', 'context', 'note'])
-  expect(kinds.map(k => DIFF_COLOR[k])).toEqual(['subtle', 'subtle', 'subtle', 'subtle', 'ide', 'text', 'error', 'success', 'error', 'text', 'warning'])
+  expect(kinds.map(k => DIFF_COLOR[k])).toEqual(['inactive', 'inactive', 'inactive', 'inactive', 'ide', 'text', 'error', 'success', 'error', 'text', 'warning'])
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
@@ -1689,7 +1689,7 @@ test('isNothing: a first line of just NOTHING counts as nothing, whatever follow
   expect(isNothing('1. Found X')).toBe(false)
   expect(isNothing('Nothing serious, but X\nmore')).toBe(false)
   expect(scoutLeadMessage('secrets', 'NOTHING\n\nWhat I checked')).toBe(null)
-  expect(scoutLastText({ last_report: 'NOTHING\n\nWhat I checked' } as any)).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutLastText({ last_report: 'NOTHING\n\nWhat I checked' } as any)).toEqual({ text: 'last: nothing', tone: 'inactive' })
   expect(scoutReport('NOTHING\n\nWhat I checked')).toBe('NOTHING\n\nWhat I checked')
 })
 
@@ -2106,6 +2106,10 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   const s = panelSections(tasks, NOW, 0)
   expect(s.needsYou.map(t => t.id)).toEqual(['T-6', 'T-5'])
   expect(s.doing.map(t => t.id)).toEqual(['T-7'])
+  // a task asking for more time waits for the owner: under NEEDS YOU (with the waiting ones), not with the running ones
+  const asking = panelSections(tasks.map(t => (t.id === 'T-7' ? { ...t, time_ask: '2026-11-11T11:00:00Z' } : t)), NOW, 0)
+  expect(asking.needsYou.map(t => t.id)).toEqual(['T-6', 'T-7', 'T-5'])
+  expect(asking.doing.map(t => t.id)).toEqual([])
   expect(s.todo.map(t => t.id)).toEqual(['T-4', 'T-2', 'T-3'])
   expect(s.backlog.map(t => t.id)).toEqual(['T-11'])
   expect(s.done.map(t => t.id)).toEqual(['T-8', 'T-1'])
@@ -2117,6 +2121,25 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   expect(sectionHeader('Done', 42, true)).toBe('▾ Done (42)')
   const head = foldedRow('Done', 2, false)
   expect(head).toBe('▸ Done     2')
+})
+
+test('the panel to-do list: each task after the open tasks it waits for, else by order then id; loops list every task once', () => {
+  const td = (id: string, order: number, after: string[] = [], status: SymccStatus = 'todo') => ({ ...at(id, status, '2026-11-11T10:00:00Z'), order, after })
+  const ids = (tasks: SymccTask[]) => panelSections(tasks, NOW, 0).todo.map(t => t.id)
+  // a low-order task waiting on a high-order one is listed after it
+  expect(ids([td('T-1', 1, ['T-2']), td('T-2', 9)])).toEqual(['T-2', 'T-1'])
+  // waiting on two tasks: after both; a task waiting on it after that; others keep order
+  expect(ids([td('T-1', 1, ['T-3', 'T-4']), td('T-2', 0, ['T-1']), td('T-3', 5), td('T-4', 7), td('T-5', 2)])).toEqual(['T-5', 'T-3', 'T-4', 'T-1', 'T-2'])
+  // independent tasks keep order then id
+  expect(ids([td('T-3', 2), td('T-1', 2), td('T-2', 1)])).toEqual(['T-2', 'T-1', 'T-3'])
+  // waits on done, dropped or archived tasks don't count
+  expect(ids([td('T-1', 1, ['T-9', 'T-8', 'T-40']), td('T-2', 2), td('T-9', 0, [], 'done'), td('T-8', 0, [], 'dropped')])).toEqual(['T-1', 'T-2'])
+  // paused tasks stay below to-do ones unless a to-do task waits on one
+  expect(ids([td('T-1', 5), td('T-2', 1, [], 'paused')])).toEqual(['T-1', 'T-2'])
+  expect(ids([td('T-1', 5, ['T-2']), td('T-2', 1, [], 'paused')])).toEqual(['T-2', 'T-1'])
+  // a loop: every task once, the loop in order/id after the rest
+  const loop = ids([td('T-1', 1, ['T-2']), td('T-2', 2, ['T-1']), td('T-3', 3)])
+  expect(loop).toEqual(['T-3', 'T-1', 'T-2'])
 })
 
 test('folded rows line up their counts; no brackets', () => {
@@ -2168,7 +2191,7 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   expect(nextScoutText([], now)).toBe('')
 })
 
-test('task rows: a short status column and a subtle extra; the extra goes first when the row is narrow', () => {
+test('task rows: a short status column and an inactive-colored extra; the extra goes first when the row is narrow', () => {
   const now = Date.parse('2026-11-11T12:00:00Z')
   const base = { ...at('T-5', 'doing', '2026-11-11T10:00:00Z'), title: 'Secrets scout example', role: 'frontend', attempts: 1, runs: [{ started: '2026-11-11T11:56:00Z' }] }
   const tasks = [base, { ...at('T-6', 'todo', '2026-11-11T10:00:00Z'), after: ['T-5', 'T-1'] }, at('T-1', 'done', '2026-11-11T10:00:00Z'), at('T-7', 'review', '2026-11-11T10:00:00Z')]
@@ -2195,6 +2218,11 @@ test('task rows: a short status column and a subtle extra; the extra goes first 
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
   expect(rowExtra(tasks[2]!, tasks)).toBe('')
+  // a worker over its time limit asking the owner for more time: "more time?" and the question, not its time and try
+  const asking = { ...base, time_ask: '2026-11-11T11:59:00Z', extra_minutes: 10 }
+  expect(statusCell(asking, now)).toBe('more time?')
+  expect(rowExtra(asking, tasks, '', 45)).toBe('T-5 has run 55 min. Give it more time?')
+  expect(rowExtra({ ...asking, extra_minutes: undefined }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
   // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
   const wide = fitRow(20, 'Secrets scout example', 'frontend · try 1', 60)
   expect(20 + wide.title.length + wide.pad.length + wide.extra.length).toBe(60)
@@ -2315,13 +2343,13 @@ test('scout list: icons, "last:" and the order with paused ones last', () => {
   expect(scoutIcon({ running: true, paused: true })).toBe('◉')
   expect(scoutIcon({ running: false })).toBe('◎')
   expect(scoutIcon({ running: false, paused: true })).toBe('○')
-  expect([scoutTone({ running: true }), scoutTone({ running: false }), scoutTone({ running: false, paused: true })]).toEqual(['ide', 'text', 'subtle'])
+  expect([scoutTone({ running: true }), scoutTone({ running: false }), scoutTone({ running: false, paused: true })]).toEqual(['ide', 'text', 'inactive'])
   expect(countFindings('**1. Crash in parser**\nmore\n**2. Missing test**\n  1. step one\n## 3) Leak')).toBe(3)
   expect(countFindings('1. a\n2. b\n1. a again')).toBe(2)
   expect(countFindings('A crash in src/p.ts:3')).toBe(0)
-  expect(scoutLastText({ last_run: null })).toEqual({ text: 'never ran', tone: 'subtle' })
-  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' })).toEqual({ text: 'last: nothing', tone: 'subtle' })
-  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '' })).toEqual({ text: 'last: nothing', tone: 'subtle' })
+  expect(scoutLastText({ last_run: null })).toEqual({ text: 'never ran', tone: 'inactive' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' })).toEqual({ text: 'last: nothing', tone: 'inactive' })
+  expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '' })).toEqual({ text: 'last: nothing', tone: 'inactive' })
   expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: '1. bug at a.ts:3' })).toEqual({ text: 'last: found 1', tone: 'warning' })
   expect(scoutLastText({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'a bug at a.ts:3' })).toEqual({ text: 'last: found something', tone: 'warning' })
   const s = (name: string, extra: Partial<SymccScout> = {}): SymccScout => ({ name, every_minutes: 60, last_run: null, running: false, ...extra })
