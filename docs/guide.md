@@ -156,7 +156,11 @@ happens, never the words in its hand-back:
    (they are kept in its folder for the next try), and the task waits for you to allow those
    files (press Allow on its page, or tell the lead, who uses `change`) or drop it. Files
    written another way (for example by a shell command) are still caught here, at the merge.
-   An investigation has no file list, so its edits are never refused (they are not kept anyway).
+   An investigation has no file list, so its edits in its own folder are never refused (they are not kept anyway).
+   An edit (by any worker) that lands in your own copy of the project, outside the worker's own
+   folder (for example your README.md, `.symcc/board.json` or another worker's folder), is always
+   refused, without a file request: the worker is told to edit the file in its own folder instead.
+   Paths outside the project, such as `/tmp`, are not checked.
 3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
    If they clash, a new worker is started to sort out the clash (up to 2 times).
