@@ -6,6 +6,7 @@ The full details. For the short version, see the [README](../README.md).
 - [A task's life](#a-tasks-life)
 - [What happens when a worker finishes](#what-happens-when-a-worker-finishes)
 - [Approval before merge](#approval-before-merge)
+- [Investigation tasks](#investigation-tasks)
 - [Live status: seeing the board](#live-status-seeing-the-board)
 - [Tracing a task back](#tracing-a-task-back)
 - [Scouts](#scouts)
@@ -288,6 +289,50 @@ end of each turn, the mode passed to a new agent, and the "plan mode" reminders 
 adds to each request. So a switch is noticed at the next prompt, request or end of turn. Until
 symcc has seen the mode at all, it works as before. Each session tracks its own mode; only the
 session that drives the board starts work. (Background: `docs/research/plan-mode.md`.)
+
+---
+
+## Investigation tasks
+
+Not every task should change the project. When you want an answer, or input for a decision
+you will make ("is it possible to…", "should we…", "how does X work?", "why is Y slow?"),
+the lead adds an **investigation** instead of a **change** (the task's `kind`). When the
+answer should stay in the project as a lasting document that later tasks or people will
+read, the lead adds a change instead. Researcher tasks are investigations unless the lead
+says `kind: change`.
+
+The life of an investigation:
+
+1. It starts like any task: a worker in its own folder and branch, with the same time limit.
+2. The worker finds the answer and hands it back in full. Nothing is committed, tested or
+   merged, and any file it wrote is not kept. If its time runs out, it hands back what it
+   has so far (the note says "answered (time ran out)"). A worker that needs you to decide
+   something still asks a QUESTION, and the task waits for you as usual.
+3. The task goes to `review` with the note "answered; waiting for you to read it", **even in
+   mode `auto`**: an answer is for you, so it never ends on its own. The lead tells you the
+   answer in the chat, short and plain, and offers the three choices.
+4. You pick one of three buttons (on the task page, or tell the lead):
+   - **Done** (`a`, "T-5 is done", tool `symcc approve`): the task ends `done` with the note
+     "answered". Nothing is merged; its folder and branch are removed.
+   - **Keep as a note** (`k`, tool `symcc approve` with `keep_note: true`): Done, plus a
+     new small docs task that writes the answer to `docs/research/<topic>.md`. That task is
+     a normal change: tested and merged as usual.
+   - **Ask more** (`x`, tool `symcc reject` with your follow-up question): the task goes
+     back to `todo`, and a fresh try gets your question and the earlier answer in its
+     details.
+
+**On the board** an answered investigation shows `◆ answer` in the status column instead
+of `review`, and every investigation has `[investigation]` after its title. Its page says
+`Kind: investigation — nothing is merged` and shows the full answer in an **Answer**
+section (from the latest worker report, or the short answer saved on the task), with Done,
+Keep as a note and Ask more in place of Approve and Reject.
+
+**In the stats** (`/symcc-stats`, short and full) an investigation's outcome is
+**answered**. Investigations are counted on their own, in an "Investigations" part: how
+many, how many are answered (read by you or waiting to be read), their time, tokens and
+tries. They are left out of the "done", "right first try" and "per merged" figures, which
+are about changes; under "How tasks ended" a read investigation shows as
+`answered (investigation)`.
 
 ---
 
@@ -783,8 +828,10 @@ its read-only `stats` tool.
   billed, by kind); the whole team (bars); per done task (average and median time and
   tokens, tries per task, share done on the first try, lead time: from made to done); per
   try (average time and tokens); the 5 biggest tasks by tokens and by time (bars); how tasks
-  ended (merged on its own or approved by you, failed tries by reason: tests, clash with
-  main, files out of scope, stopped, rejected); by role and where tasks came from (lead,
+  ended (merged on its own, approved by you, or answered for an investigation; failed
+  tries by reason: tests, clash with main, files out of scope, stopped, rejected);
+  investigations on their own (how many, answered, time, tokens, tries; see
+  [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
   average tokens and time; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the

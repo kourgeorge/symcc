@@ -57,6 +57,7 @@ behind it: you keep talking, and the work keeps moving.
 | **Scope check** | Each task lists the files it may change. Changes outside that scope are not merged. |
 | **Test gate and retries** | Your test commands must pass before a merge. If they fail, a new worker gets the failing output and tries again (2 times by default). |
 | **Approval before merge** | In review mode, see the diff, then approve, or reject with a reason. |
+| **Task kinds** | A *change* (the default) edits files, which are tested and merged. An *investigation* answers a question ("is it possible…", "should we…", "how does X work?"): nothing is committed or merged, and it always waits for you to read the answer, then **Done**, **Keep as a note** (a docs task saves it as `docs/research/<topic>.md`) or **Ask more** (a follow-up question for a fresh try). Researcher tasks are investigations by default. See [investigation tasks](docs/guide.md#investigation-tasks). |
 | **Traceability** | Each task keeps who made it, why, your own words, and the history of its tries (time, tokens, failed test output). Each merge commit starts with the task ID (`T-58: ...`). |
 
 symcc works while your Claude Code session is open; work stops when you close it and
@@ -78,7 +79,7 @@ app and no issue-tracker link. When two changes clash, a new worker sorts out th
 2. **Plan.** The lead turns it into tasks, sets their order and the files each may change.
 3. **Build.** Workers start in parallel, each in its own worktree.
 4. **Check.** symcc runs the scope check and the test gate, and retries on failure.
-5. **Review.** In review mode you approve or reject. You can also edit the task's files in `.symcc/worktrees/T-x` and then approve: your edits go in, and the tests run again first.
+5. **Review.** In review mode you approve or reject. You can also edit the task's files in `.symcc/worktrees/T-x` and then approve: your edits go in, and the tests run again first. An answered investigation always waits for you (even in `auto`): read its answer, then Done, Keep as a note or Ask more.
 6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests, merges, and the lead tells you. Your own uncommitted edits on that branch are kept; only your files with the same name as a file the task changes hold the merge back: an uncommitted edit (commit or stash it), an untracked file (move, rename or commit it), or a git-ignored file (move or rename it). The task waits for you, then merges by itself once those files are out of the way.
 
 Here is the planning step in the chat:
@@ -209,14 +210,14 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-tasks` | Open the panel on the tasks view |
 | `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-task T-3` | Open one task |
-| `/symcc-approve T-5` | Merge a task that is ready for review |
-| `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason |
+| `/symcc-approve T-5` | Merge a task that is ready for review (an answered investigation: Done) |
+| `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason (an answered investigation: Ask more, the reason is your follow-up question) |
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
 | `/symcc-scout <name>` | Run a scout now |
 | `/symcc-scout <name> pause` / `resume` | Pause a scout (it doesn't run, on its timer or with run now, until you resume it), or resume it. `p` on the scout's page in the panel does the same |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`, `/symcc-settings test_commands "npm test"` |
-| `/symcc-stats [full] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations |
+| `/symcc-stats [full] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations |
 | `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-on` | Turn symcc back on, in the mode the board had |
 | `/symcc-help [topic]` | The built-in manual |
