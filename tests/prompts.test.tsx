@@ -90,11 +90,11 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
 })
 
 test('placeholders are filled in one pass: "{{files}}" in the task\'s details stays as written', () => {
-  const out = fillPrompt('change', 'A {{details}} B {{ask}}', { details: 'see {{files}}', files: 'NO', ask: 'ASK' })
+  const out = fillPrompt('change', 'A {{details}} B {{merge_main}}{{test_output}}{{ask}}', { details: 'see {{files}}', files: 'NO', merge_main: '', test_output: '', ask: 'ASK' })
   expect(out).toBe('A see {{files}} B ASK')
   // an unknown placeholder is left as written and named as a problem
-  expect(fillPrompt('change', '{{details}} {{nope}} {{ask}}', { details: 'd', ask: 'a' })).toBe('d {{nope}} a')
-  expect(promptProblems('change', '{{details}} {{nope}} {{ask}}')).toEqual(['{{nope}} is not a placeholder of the change prompt: it is left as written'])
+  expect(fillPrompt('change', '{{details}} {{nope}} {{merge_main}}{{test_output}}{{ask}}', { details: 'd', merge_main: '', test_output: '', ask: 'a' })).toBe('d {{nope}} a')
+  expect(promptProblems('change', '{{details}} {{nope}} {{merge_main}}{{test_output}}{{ask}}')).toEqual(['{{nope}} is not a placeholder of the change prompt: it is left as written'])
   expect(PROMPT_PLACEHOLDERS.change).toHaveProperty('test_command')
 })
 
@@ -115,7 +115,7 @@ test("the owner's .symcc/prompts/change.md is used instead of the built-in one; 
 })
 
 test('a prompt file without {{ask}} is warned about once (owner and lead), and the ask line is still added at the end', async () => {
-  const { $, toasts } = setup({ 'change.md': 'Do {{task_id}}: {{details}}\n' })
+  const { $, toasts } = setup({ 'change.md': 'Do {{task_id}}: {{details}}{{merge_main}}{{test_output}}\n' })
   await loadPrompts($ as never)
   expect(toasts.join('\n')).toContain('.symcc/prompts/change.md: {{ask}} is missing')
   expect(leadQueue.join('\n')).toContain("The owner's worker prompt .symcc/prompts/change.md: {{ask}} is missing")
@@ -125,11 +125,27 @@ test('a prompt file without {{ask}} is warned about once (owner and lead), and t
   await loadPrompts($ as never)
   expect(toasts.length).toBe(1)
   // {{details}} missing too: the task is added at the end
-  const out = fillPrompt('change', 'Hello.', { task_id: 'T-9', title: 'T', details: 'D', ask: 'A' })
+  const out = fillPrompt('change', 'Hello.', { task_id: 'T-9', title: 'T', details: 'D', merge_main: '', test_output: '', ask: 'A' })
   expect(out).toBe('Hello.\n\nTask T-9: T\nD\nA')
   // an empty file: the built-in prompt is used, with a warning
   expect(promptProblems('change', '  \n')).toEqual(['the file is empty, so the built-in prompt is used'])
   expect(fillPrompt('change', '', { ask: 'A' })).toContain('Add or update a test')
+})
+
+test('a change prompt without {{merge_main}} or {{test_output}} is warned about, and both are still added at the end', () => {
+  const both = '{{details}}\n{{merge_main}}{{test_output}}{{ask}}'
+  expect(promptProblems('change', both)).toEqual([])
+  expect(promptProblems('change', '{{details}}\n{{test_output}}{{ask}}')).toEqual(['{{merge_main}} is missing (how the worker merges the moved branch after a conflict): it is added at the end'])
+  expect(promptProblems('change', '{{details}}\n{{merge_main}}{{ask}}')).toEqual(['{{test_output}} is missing (why the last try failed its tests): it is added at the end'])
+  // the investigation prompt doesn't use them, so it doesn't need them
+  expect(promptProblems('investigation', '{{details}}\n{{ask}}')).toEqual([])
+  const values = { details: 'D', merge_main: '\nFirst, run `git merge main`.\n', test_output: '\nFAIL a.test\n', ask: 'ASK' }
+  const out = fillPrompt('change', '{{details}}\n{{ask}}', values)
+  expect(out).toContain('run `git merge main`')
+  expect(out).toContain('FAIL a.test')
+  expect(out).toBe('D\nASK\nFirst, run `git merge main`.\n\nFAIL a.test')
+  // when neither is needed (empty values) nothing shows
+  expect(fillPrompt('change', '{{details}}\n{{ask}}', { ...values, merge_main: '', test_output: '' })).toBe('D\nASK')
 })
 
 test("the lead's prompts tool lists both, shows one in full, edits (with text or as a copy) and refuses bad input", async () => {

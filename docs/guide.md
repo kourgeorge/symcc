@@ -749,13 +749,17 @@ that part to go:
 | `{{role}}` | the role's checklist, skills and web rule (empty for `general`) |
 | `{{files}}` | change only: the "Files you may change" lines |
 | `{{test_command}}` | change only: the "these must pass" line with your test commands, or "There is no test command" |
-| `{{merge_main}}` | change only: how to merge the moved branch first, only when it conflicts |
-| `{{test_output}}` | change only: the end of the failed tests' output, only after a try failed its tests |
+| `{{merge_main}}` | change only: how to merge the moved branch first, only when it conflicts (needed) |
+| `{{test_output}}` | change only: the end of the failed tests' output, only after a try failed its tests (needed) |
 | `{{earlier_tries}}` | the last tries from the task's history, only when there were some |
 | `{{ask_more}}` | investigation only: after Ask more, "hand back the whole updated answer" |
 | `{{ask}}` | how the worker asks you (the `ask_owner` tool) and what a refused edit means (needed) |
 
-`{{details}}` and `{{ask}}` are needed: symcc depends on them. If your copy leaves one out, it
+`{{details}}` and `{{ask}}` are needed in both prompts: symcc depends on them. The change
+prompt also needs `{{merge_main}}` and `{{test_output}}`. They are empty most of the time, but
+after a merge conflict `{{merge_main}}` is the only place a worker is told to run `git merge`
+(the prompt otherwise says not to merge), so without it every new try conflicts again; and after
+failed tests `{{test_output}}` is how the next try learns why. If your copy leaves one out, it
 is still added at the end of the prompt, and you get a warning once (a toast, and a note to the
 lead), for example `.symcc/prompts/change.md: {{ask}} is missing ...: it is added at the end`.
 A placeholder symcc doesn't know is left as written, with a warning; an empty file means the
