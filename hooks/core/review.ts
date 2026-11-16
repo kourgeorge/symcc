@@ -12,6 +12,29 @@ export function needsReview(b: { mode?: unknown }, t: Pick<SymccTask, 'needs_rev
   return modeOf(b) !== 'auto' || t.needs_review === true
 }
 
+// ---------------- a code change with no test ----------------
+
+/** Whether `path` is a test file: under tests/, test/ or __tests__/, or a name with "test" or "spec" in it. */
+export function isTestFile(path: string): boolean {
+  const parts = String(path ?? '').toLowerCase().split('/')
+  const name = parts.at(-1) ?? ''
+  return parts.slice(0, -1).some(d => d === 'tests' || d === 'test' || d === '__tests__') || /test|spec/.test(name)
+}
+
+/** Whether `path` is only docs: README*, anything under docs/, or a .md / .mdx file. */
+export function isDocFile(path: string): boolean {
+  const p = String(path ?? '').toLowerCase()
+  const name = p.split('/').at(-1) ?? ''
+  return name.startsWith('readme') || p.startsWith('docs/') || /\.mdx?$/.test(name)
+}
+
+/** Whether changed files `changed` edit code (anything not docs and not a test) but no test file. */
+export const untestedChange = (changed: readonly string[]): boolean =>
+  changed.some(f => !isDocFile(f) && !isTestFile(f)) && !changed.some(isTestFile)
+
+/** The note for a change task that edited code but no test file: "T-3 changed code but no test". */
+export const untestedText = (id: string) => `${id} changed code but no test`
+
 /**
  * The board in mode `m`. Tasks already in "review" stay there (going to "auto" does not merge
  * them); the new mode applies to tasks that finish from now on.

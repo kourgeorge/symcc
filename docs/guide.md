@@ -200,6 +200,18 @@ happens, never the words in its hand-back:
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
 
+### A code change with no test
+
+Before a change task is merged, symcc looks at the files its
+commit changed. If it edits code but no test file (a test file is under `tests/`, `test/` or
+`__tests__/`, or has `test` or `spec` in its name), the `tests_with_changes` setting decides:
+`ask` (the default) merges it and tells the lead "T-3 changed code but no test", so the lead
+can add a test task or ask you; `review` makes the task wait for your review instead of
+merging (like `needs_review`), with that note; `off` does nothing. A change to docs only
+(`README*`, `docs/`, `*.md`) is never flagged. Set it with `/symcc-settings tests_with_changes
+review`, in the Settings view, or by telling the lead. The lead also writes in every change
+task's details how it will be tested ("Done when: tests show …").
+
 ### What reaches the lead
 
 The lead (the main chat) gets a "[symcc] Board update" message only when something needs it:
@@ -416,8 +428,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start` and
-  `enabled` flip on/off; `mode` and `notify` open a pick list (off / review
-  / auto; only the notify choices this computer can play); numbers and `test_commands` open an edit box (several test
+  `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
+  / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (several test
   commands are joined with ` && `; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
