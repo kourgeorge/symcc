@@ -429,6 +429,12 @@ export async function lateHandBack($: $, agentId: string): Promise<boolean> {
   return true
 }
 
+/** The worker behind `agentId`: from memory, or (after a plugin reload) picked back up from the board by lateHandBack. Undefined when it can't be found. */
+export async function workerOf($: $, agentId: string): Promise<Worker | undefined> {
+  if (!workers.has(agentId)) await lateHandBack($, agentId).catch(() => false)
+  return workers.get(agentId)
+}
+
 // ---------------- a task changed while its work is checked ----------------
 // After a worker finishes, its task stays "doing" while the scope check, the tests and the merge
 // run (finishWork; for approve, the task stays "review"). The lead can drop, pause or ask about it

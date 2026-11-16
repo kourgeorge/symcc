@@ -2281,6 +2281,20 @@ test('the merge-main-in try is marked when it starts, and the first end reason i
   expect(fmtRun({ ...once[0]!, ended: ISO }, 2)).toBe('try 3: 0s · merged main in (clash with main) · stopped: paused')
 })
 
+test('after a reload (no worker in memory), an edit outside the files is still refused and recorded, found from the board (T-293)', async () => {
+  S.me = 'me'
+  workers.clear()
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  f.put(`${WT}/.git`, 'gitdir: x')
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  // an agent the board doesn't know: nothing refused, no failure
+  expect(await checkEdit(f.$, 'nobody', 'Edit', { file_path: `${WT}/README.md` })).toBeUndefined()
+  workers.clear()
+})
+
 test('a try sent back to todo after a reload ends as restarted, worded like its history line', () => {
   const [, t] = boardWith('auto', [], { history: [], runs: [{ started: ISO }] })
   const back = backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', '2026-11-13T00:05:00.000Z')

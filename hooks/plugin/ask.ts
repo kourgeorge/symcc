@@ -5,9 +5,9 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, EDIT_PATH_FIELD, find, kindOf, patchTask } from '../board'
-import { S, type $, type Worker, workers, scoutRuns } from './state'
+import { S, type $, type Worker, scoutRuns } from './state'
 import { load, change, now } from './store'
-import { lateHandBack } from './workers'
+import { workerOf } from './workers'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
 function recordOnTry($: $, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
@@ -28,14 +28,13 @@ export const ASK_TOOL_DEF = () => ({
 /**
  * An ask_owner call from agent `agentId` with input `a`: the reply the caller sees. Taken only from a running
  * worker whose task is still "doing" (a worker this copy lost in a reload is found again from the board, see
- * lateHandBack); the question is written to its try on the board (a later call replaces it). Everyone else is refused.
+ * workerOf); the question is written to its try on the board (a later call replaces it). Everyone else is refused.
  */
 export async function askCall($: $, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
   const tool = S.N.tool(ASK_TOOL)
   if (!agentId) return `Refused: ${tool} is only for ${S.N.name} workers; the lead (the main chat) never calls it (use ${S.N.tool('ask')} to make a task wait for the owner).`
   if (scoutRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not scouts. End with your report as usual.`
-  if (!workers.has(agentId)) await lateHandBack($, agentId).catch(() => false)
-  const w = workers.get(agentId)
+  const w = await workerOf($, agentId)
   if (!w) return `Refused: ${tool} is only for running ${S.N.name} workers, and you are not one (or your try already handed back).`
   const t = find(await load($), w.task)
   if (!t || t.status !== 'doing') return `Refused: your task ${w.task} is not running any more${t ? ` (it is ${t.status})` : ''}. Stop and hand back.`
@@ -53,7 +52,8 @@ export async function askCall($: $, agentId: string | undefined, a: Record<strin
  */
 export async function checkEdit($: $, agentId: string | undefined, tool: string, input: unknown): Promise<string | undefined> {
   if (!agentId || !EDIT_PATH_FIELD[tool]) return undefined
-  const w = workers.get(agentId)
+  // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
+  const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
   const b = await load($).catch(() => null)
   const t = b ? find(b, w.task) : undefined
