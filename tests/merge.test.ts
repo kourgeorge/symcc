@@ -752,6 +752,13 @@ test('a change with a test file is never flagged', async () => {
   expect(untestedChange(['src/x.ts', 'docs/a.md'])).toBe(true)
 })
 
+test('only real test and docs files count, not names that just contain the letters', () => {
+  for (const f of ['src/latest.ts', 'hooks/plugin/inspect.ts', 'src/special.ts', 'src/attestation.ts', 'src/contest.py', 'scripts/run-tests.sh', 'src/readme_parser.ts', 'docs/build.ts']) expect(untestedChange([f])).toBe(true)
+  for (const f of ['src/a.test.ts', 'src/a_test.py', 'src/test_a.py', 'src/c.spec.ts', 'tests/x.ts', 'spec/y.rb']) expect(untestedChange([f])).toBe(false)
+  for (const f of ['README.md', 'README', 'LICENSE', 'CHANGELOG.txt', 'docs/guide.mdx']) expect(untestedChange([f])).toBe(false)
+  expect(untestedChange(['src/latest.ts', 'src/a.test.ts'])).toBe(false)
+})
+
 // ---------------- approve and reject ----------------
 
 /** A world where T-1 waits in review: its work is committed (h1) in its worktree and the board is saved. */

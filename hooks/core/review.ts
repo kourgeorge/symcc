@@ -14,18 +14,25 @@ export function needsReview(b: { mode?: unknown }, t: Pick<SymccTask, 'needs_rev
 
 // ---------------- a code change with no test ----------------
 
-/** Whether `path` is a test file: under tests/, test/ or __tests__/, or a name with "test" or "spec" in it. */
+const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec'])
+const DOC_NAMES = new Set(['readme', 'changelog', 'license', 'licence', 'copying', 'notice', 'authors', 'contributing'])
+
+/**
+ * Whether `path` is a test file: under a test/, tests/, __tests__/ or spec/ folder, or with a "test" or
+ * "spec" name part split by "." or "_" (a.test.ts, a.spec.ts, a_test.py, test_a.py). Names that only
+ * contain those letters (latest.ts, inspect.ts, run-tests.sh) are not tests.
+ */
 export function isTestFile(path: string): boolean {
   const parts = String(path ?? '').toLowerCase().split('/')
   const name = parts.at(-1) ?? ''
-  return parts.slice(0, -1).some(d => d === 'tests' || d === 'test' || d === '__tests__') || /test|spec/.test(name)
+  const stem = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
+  return parts.slice(0, -1).some(d => TEST_DIRS.has(d)) || stem.split(/[._]/).some(w => w === 'test' || w === 'tests' || w === 'spec')
 }
 
-/** Whether `path` is only docs: README*, anything under docs/, or a .md / .mdx file. */
+/** Whether `path` is only docs: a .md / .mdx file, or a README / CHANGELOG / LICENSE-style name (README, README.txt). Code under docs/ is not docs. */
 export function isDocFile(path: string): boolean {
-  const p = String(path ?? '').toLowerCase()
-  const name = p.split('/').at(-1) ?? ''
-  return name.startsWith('readme') || p.startsWith('docs/') || /\.mdx?$/.test(name)
+  const name = String(path ?? '').toLowerCase().split('/').at(-1) ?? ''
+  return /\.mdx?$/.test(name) || DOC_NAMES.has(name.split('.')[0] ?? '')
 }
 
 /** Whether changed files `changed` edit code (anything not docs and not a test) but no test file. */
