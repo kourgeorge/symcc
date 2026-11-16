@@ -35,13 +35,13 @@ const MEDIA_EXTS = new Set(['svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 
 /**
  * Whether `path` is only docs: a .md / .mdx file, a README / CHANGELOG / LICENSE-style name (README, README.txt),
  * an image, video, audio, font or subtitle file anywhere, or any non-code file under a docs/ folder.
- * Code under docs/ (docs/build.ts) is not docs.
+ * Code under docs/ (docs/build.ts) is not docs, and neither is code with a docs-style name (Notice.tsx, license.ts).
  */
 export function isDocFile(path: string): boolean {
   const parts = String(path ?? '').toLowerCase().split('/')
   const name = parts.at(-1) ?? ''
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
-  if (/\.mdx?$/.test(name) || DOC_NAMES.has(name.split('.')[0] ?? '') || MEDIA_EXTS.has(ext)) return true
+  if (/\.mdx?$/.test(name) || (DOC_NAMES.has(name.split('.')[0] ?? '') && !CODE_EXTS.has(ext)) || MEDIA_EXTS.has(ext)) return true
   return parts.slice(0, -1).some(d => d === 'docs' || d === 'doc') && !CODE_EXTS.has(ext)
 }
 

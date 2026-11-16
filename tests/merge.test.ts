@@ -765,6 +765,11 @@ test('images, video, subtitles and non-code files under docs/ are not code', () 
   expect(untestedChange(['assets/logo.png', 'src/x.ts'])).toBe(true)
 })
 
+test('code with a docs-style name (Notice.tsx, license.ts) is still code', () => {
+  for (const f of ['src/components/Notice.tsx', 'src/license.ts', 'lib/authors.py', 'src/changelog.ts', 'hooks/core/contributing.js']) expect(untestedChange([f])).toBe(true)
+  for (const f of ['README', 'README.md', 'README.txt', 'LICENSE', 'CHANGELOG.txt', 'NOTICE', 'docs/guide.mdx', 'CONTRIBUTING.rst', 'COPYING']) expect(untestedChange([f])).toBe(false)
+})
+
 // ---------------- approve and reject ----------------
 
 /** A world where T-1 waits in review: its work is committed (h1) in its worktree and the board is saved. */
