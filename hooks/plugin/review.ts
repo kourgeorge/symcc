@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, kindOf, testsWithChangesOf, untestedChange, untestedText } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -79,10 +79,11 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
 }
 
 /**
- * What checking (and maybe merging) a task's work came to; `review`: the checks passed and it now waits for the owner;
+ * What checking (and maybe merging) a task's work came to; `untested`: the note "T-3 changed code but no test" when
+ * the setting tests_with_changes flagged it (see untestedChange); `review`: the checks passed and it now waits for the owner;
  * `blocked`: everything passed, only the owner's files on the target branch are in the way of the merge (nothing moved).
  */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers }
+export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string }
 
 /** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
 export type CheckMode = 'finish' | 'approve' | 'merge'
@@ -253,7 +254,11 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
     const s = stopped()
     if (s) return res(s)
   }
-  if (mode === 'finish' && needsReview(b, t)) return res({ ok: true, review: true, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet` })
+  // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
+  const flag = testsWithChangesOf(b)
+  const untested = mode !== 'approve' && flag !== 'off' && kindOf(t) === 'change' && untestedChange(changed) ? untestedText(t.id) : ''
+  const flagged = untested ? { untested } : {}
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
@@ -269,7 +274,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
     const n = await git($, ['diff', '--name-only', '--no-renames', '-z', '--diff-filter=AM', main, candidate])
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
-  return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
+  return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
 }
 
 /** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */

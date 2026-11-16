@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SCOUT_FINDINGS_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys } from '../../board'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
@@ -350,8 +350,9 @@ function promptsPage($: $, pane: PaneParts, own: Partial<Record<PromptKind, stri
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, header, footer } = pane
-  // scout_findings is not in the panel's view of the board: read it from the board file
-  const v = { ...pane.v, scout_findings: (await load($).catch(() => null))?.scout_findings }
+  // scout_findings and tests_with_changes are not in the panel's view of the board: read them from the board file
+  const file = await load($).catch(() => null)
+  const v = { ...pane.v, scout_findings: file?.scout_findings, tests_with_changes: file?.tests_with_changes }
   const { builtIn, project, broken } = await roleLists($)
   const roles = mergeRoles(builtIn, project)
   const openedBroken = roleView.open ? broken.find(b => b.name === roleView.open) : undefined
@@ -380,7 +381,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     $.ui.toast(S.N.toast(r))
     $.ui.invalidate('ui.render')
   })
-  /** Enter on a row: on/off flips, mode, notify and scout_findings open a pick list, the rest an edit box. */
+  /** Enter on a row: on/off flips, mode, notify, scout_findings and tests_with_changes open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
     const info = SETTINGS.find(x => x.name === name)!
     const now = settingValue(v, name)
@@ -389,6 +390,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     S.settingPick = null
     if (info.kind === 'mode') S.settingPick = { name, options: ['off', 'review', 'auto'] }
     else if (info.kind === 'findings') S.settingPick = { name, options: [...SCOUT_FINDINGS_CHOICES] }
+    else if (info.kind === 'untested') S.settingPick = { name, options: [...TESTS_WITH_CHANGES_CHOICES] }
     // only what this machine can play (off always)
     else if (info.kind === 'notify') S.settingPick = { name, options: v.notify_choices?.length ? v.notify_choices : ['off'] }
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }

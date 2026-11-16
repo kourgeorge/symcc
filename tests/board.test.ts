@@ -1338,13 +1338,15 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, scout_findings, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, scout_findings, tests_with_changes, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
   expect(bad('notify loud')).toBe('notify must be off, sound or voice')
   expect(bad('open_on_start maybe')).toBe('open_on_start must be on or off')
   expect(bad('mode later')).toBe('mode must be off, review or auto')
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
+  expect(bad('tests_with_changes maybe')).toBe('tests_with_changes must be off, ask or review')
+  expect(parseSettingValue('tests_with_changes', 'Review')).toEqual({ ok: true, input: { tests_with_changes: 'review' } })
 })
 
 test('settings keep their limits, and a value cut to its limit says so', () => {
@@ -1372,12 +1374,13 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'mode', 'enabled'])
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'mode', 'enabled'])
   const b = { ...emptyBoard(), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
   expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
   expect(settingValue(b, 'notify')).toBe('off')
   expect(settingValue(b, 'open_on_start')).toBe('on')
   expect(settingValue(b, 'mode')).toBe('auto')
+  expect(settingValue(b, 'tests_with_changes')).toBe('ask')
   expect(settingValue({}, 'max_parallel')).toBe('3')
   const text = settingsText(b, 'crew')
   expect(text).toContain('max_parallel')

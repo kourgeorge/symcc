@@ -33,6 +33,11 @@ export type Board = {
    * so a finding goes to todo and runs; backlog puts every scout-origin task in the backlog
    */
   scout_findings?: ScoutFindings
+  /**
+   * a change task whose commit edits code but no test file: off (nothing), ask (the default; absent = ask:
+   * it merges and the lead is told) or review (it waits for the owner's review instead of merging)
+   */
+  tests_with_changes?: TestsWithChanges
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
   archived?: ArchivedTotals
@@ -51,6 +56,13 @@ export const SCOUT_FINDINGS_CHOICES: ScoutFindings[] = ['auto', 'backlog']
 export const isScoutFindings = (x: unknown): x is ScoutFindings => SCOUT_FINDINGS_CHOICES.includes(x as ScoutFindings)
 /** The scout_findings setting in use: the board's choice, else auto. */
 export const scoutFindingsOf = (b: { scout_findings?: unknown } | null | undefined): ScoutFindings => (isScoutFindings(b?.scout_findings) ? b!.scout_findings as ScoutFindings : 'auto')
+
+/** What happens to a change task that edits code but no test file: off, ask (merge and tell the lead) or review (wait for the owner). */
+export type TestsWithChanges = 'off' | 'ask' | 'review'
+export const TESTS_WITH_CHANGES_CHOICES: TestsWithChanges[] = ['off', 'ask', 'review']
+export const isTestsWithChanges = (x: unknown): x is TestsWithChanges => TESTS_WITH_CHANGES_CHOICES.includes(x as TestsWithChanges)
+/** The tests_with_changes setting in use: the board's choice, else ask. */
+export const testsWithChangesOf = (b: { tests_with_changes?: unknown } | null | undefined): TestsWithChanges => (isTestsWithChanges(b?.tests_with_changes) ? b!.tests_with_changes as TestsWithChanges : 'ask')
 
 /** The running totals of archived tasks: how many were done and dropped, and their tries' time, tokens and cost. */
 export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: SymccTokens; cost?: number }
@@ -226,6 +238,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   enabled: v => typeof v === 'boolean',
   archive_days: v => isNum(v) && v >= 0,
   scout_findings: v => isScoutFindings(v),
+  tests_with_changes: v => isTestsWithChanges(v),
 }
 
 /**

@@ -767,8 +767,8 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
     return !moved
   }
   if (r.review) {
-    if (!(await write(cur => ({ status: 'review', note: 'ready for review: the checks passed, nothing merged yet', merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
+    if (!(await write(cur => ({ status: 'review', note: `ready for review: the checks passed, nothing merged yet${r.untested ? ` (${r.untested})` : ''}`, merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
+    tellLead($, `${r.untested ? `${r.untested}. ` : ''}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
   const tries = t.conflict_tries ?? 0
@@ -796,7 +796,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', taskBranch(t)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
-  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
+  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
 /**

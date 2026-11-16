@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, type WorkerQuestion } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, type WorkerQuestion } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -79,7 +79,7 @@ type Git = {
 
 /** Board file contents, the fake git, the commands run, and a `$` for the plugin code that uses them. */
 function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
-  const git: Git = { main: M1, head: H0, dirty: true, upToDate: true, conflict: false, changed: ['src/a.ts'], current: 'other', status: '', wtStatus: '', ...g }
+  const git: Git = { main: M1, head: H0, dirty: true, upToDate: true, conflict: false, changed: ['src/a.ts', 'src/a.test.ts'], current: 'other', status: '', wtStatus: '', ...g }
   const files = new Map<string, string>()
   const mtime = new Map<string, number>()
   const calls: string[] = []
@@ -681,6 +681,65 @@ test('checkAndMerge in mode review stops after the tests and merges nothing', as
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r).toEqual({ ok: true, review: true, detail: 'checks passed; tests passed; ready for review, nothing merged yet' })
   expect(movedMain(w)).toBe(false)
+})
+
+// ---------------- a code change with no test file (tests_with_changes) ----------------
+
+/** T-1's worker (agent ag1) finished with the files `changed`, on a board in mode auto with tests_with_changes `flag` (absent: the default). */
+async function finishedWith(changed: string[], flag?: 'off' | 'ask' | 'review') {
+  const w = world({ changed })
+  const [b] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, flag ? { ...b, tests_with_changes: flag } : b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  return { w, t: find(await load(w.$), 'T-1')!, told: leadQueue.join('\n') }
+}
+
+test('tests_with_changes ask (the default): a code change with no test file merges and the lead is told', async () => {
+  const { w, t, told } = await finishedWith(['src/a.ts'])
+  expect(t.status).toBe('done')
+  expect(w.git.main).toBe(H1)
+  expect(told).toContain('T-1 changed code but no test')
+  const asked = await finishedWith(['src/a.ts'], 'ask')
+  expect(asked.t.status).toBe('done')
+  expect(asked.told).toContain('T-1 changed code but no test')
+})
+
+test('tests_with_changes review: a code change with no test file waits for review instead of merging, with the note', async () => {
+  const { w, t, told } = await finishedWith(['src/a.ts'], 'review')
+  expect(t.status).toBe('review')
+  expect(t.note).toContain('T-1 changed code but no test')
+  expect(movedMain(w)).toBe(false)
+  expect(told).toContain('T-1 changed code but no test')
+  expect(told).toContain('is ready for review')
+})
+
+test('tests_with_changes off: a code change with no test file merges with nothing said about tests', async () => {
+  const { w, t, told } = await finishedWith(['src/a.ts'], 'off')
+  expect(t.status).toBe('done')
+  expect(w.git.main).toBe(H1)
+  expect(told).not.toContain('no test')
+})
+
+test('a docs-only change is never flagged, whatever tests_with_changes says', async () => {
+  for (const flag of ['ask', 'review'] as const) {
+    const { w, t, told } = await finishedWith(['src/README.md', 'src/notes.md'], flag)
+    expect(t.status).toBe('done')
+    expect(w.git.main).toBe(H1)
+    expect(told).not.toContain('no test')
+  }
+  expect(untestedChange(['README.md', 'docs/guide.md', 'CHANGELOG.md'])).toBe(false)
+})
+
+test('a change with a test file is never flagged', async () => {
+  for (const flag of ['ask', 'review'] as const) {
+    const { t, told } = await finishedWith(['src/a.ts', 'src/a.test.ts'], flag)
+    expect(t.status).toBe('done')
+    expect(told).not.toContain('no test')
+  }
+  for (const f of ['tests/a.ts', 'test/b.js', 'src/__tests__/c.ts', 'src/c.spec.ts']) expect(untestedChange(['src/x.ts', f])).toBe(false)
+  expect(untestedChange(['src/x.ts', 'docs/a.md'])).toBe(true)
 })
 
 // ---------------- approve and reject ----------------
