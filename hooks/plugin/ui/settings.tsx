@@ -176,7 +176,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
   const openRow = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))
   /** A role whose file can't be read: "tester — your file can't be read: no description". */
   const brokenRow = (b: BrokenRole, first: boolean) => (
-    <Button key={row(`roleRow:${b.name}`)} label={`${b.name} — ${brokenRoleLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
+    <Button key={row(`roleRow:${b.name}`)} plain label={`${b.name} — ${brokenRoleLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
       <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
       <Text color={C('error')}>{` — ${brokenRoleLabel(b)}`}</Text>
     </Button>
@@ -216,7 +216,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         if (bad) return brokenRow(bad, i === 0)
         const source = roleSource(r.name, builtIn, project)!
         return (
-          <Button key={row(`roleRow:${r.name}`)} label={`${r.name}: ${roleSourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
+          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${roleSourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
             <Text bold={!r.off} color={C(r.off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
             <Text color={C(r.off ? 'warning' : 'inactive')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
             <Text color={C(r.off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
@@ -322,7 +322,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     <Box flexDirection="column">
       {header()}
       {SETTINGS.flatMap((x, i) => [
-        <Button key={row(`setting:${x.name}`)} autoFocus={i === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={pressRow(x.name)}>
+        <Button key={row(`setting:${x.name}`)} plain autoFocus={i === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={pressRow(x.name)}>
           <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
           <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
           {x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
@@ -332,7 +332,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       ])}
       <Text color={C('inactive')}>Enter changes a setting (on/off flips) · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
       <Text key="roles-blank"> </Text>
-      <Button key={row('settings-roles')} label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>
+      <Button key={row('settings-roles')} plain label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>
         <Text bold color={C('claude')}>{'Roles'.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {rolesCount}</Text>
         <Text color={C('inactive')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>

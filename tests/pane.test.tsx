@@ -1797,3 +1797,30 @@ test('↑↓ on the Scouts, Settings and Roles lists stop at their first and las
   await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('roleRow:')), ['roles-back'])
   await ui.unmount()
 })
+
+test('the Scouts, Settings and Roles rows are plain Buttons like the task rows: no "[ ]" around them, and Enter still opens a scout', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One')], working: [], scouts: listScouts(), mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, ROLE_FILES)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const plainRows = async (isRow: (k: string) => boolean) => {
+    const rows = (await ui.findAll({ type: 'Button' })).filter(b => isRow(String(b.key)))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const b of rows) {
+      expect(b.props.plain).toBe(true)
+      expect(String(b.text)).not.toMatch(/[[\]]/)
+    }
+  }
+  await ui.press({ key: 'tab-scouts' })
+  await plainRows(k => k.startsWith('scout:'))
+  expect(String((await ui.find({ key: 'scout:gaps-bot' }))?.text).trimEnd()).toMatch(/^  ◎ gaps-bot\s+every hour/)
+  await ui.press({ key: 'tab-settings' })
+  await plainRows(k => k.startsWith('setting:') || k === 'settings-roles')
+  await ui.press({ key: 'settings-roles' })
+  await plainRows(k => k.startsWith('roleRow:'))
+  await ui.press({ key: 'roles-back' })
+  await ui.press({ key: 'tab-scouts' })
+  await ui.press({ key: 'scout:gaps-bot' })
+  expect(await ui.find({ key: 'scout-back' })).toBeDefined()
+  expect(await ui.find({ key: 'scout:secrets' })).toBeUndefined()
+  await ui.unmount()
+})
