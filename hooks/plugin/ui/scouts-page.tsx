@@ -3,6 +3,7 @@ import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scou
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
 import { type $, S, readScoutOpen, updateScoutOpen } from '../state'
 import type { PaneParts } from './parts'
+import { row } from './arrows'
 import { resetPane } from './open'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
@@ -160,7 +161,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
       {scouts.map((x, i) => {
         const r = rows[i]!
         return (
-          <Button key={`scout:${x.name}`} label={`${x.name}: ${scoutRow(x, nowMs).state || 'waiting'}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => updateScoutOpen($, () => x.name))}>
+          <Button key={row(`scout:${x.name}`)} label={`${x.name}: ${scoutRow(x, nowMs).state || 'waiting'}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => updateScoutOpen($, () => x.name))}>
             <Text color={C(r.tone)}>{`  ${r.icon} `}</Text>
             <Text bold={!x.paused} color={C(x.paused ? 'inactive' : 'claude')}>{r.name}</Text>
             <Text color={C('inactive')}>{r.every}</Text>

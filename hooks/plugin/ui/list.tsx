@@ -3,6 +3,7 @@ import type { SymccTask } from '../../../types'
 import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
+import { row } from './arrows'
 
 /** The Tasks view: the tasks (needs you under its label, then doing and to do as one list,
  *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead.
@@ -133,7 +134,7 @@ export function listPage($: $, pane: PaneParts) {
         if (!('task' in r)) {
           const top = r.day === 'backlog' || r.day === 'done' || r.day === 'dropped'
           return (
-            <Button key={`day:${r.day}`} plain autoFocus={i === firstButton ? true : undefined} onPress={pressDay(r.day)}>
+            <Button key={row(`day:${r.day}`)} plain autoFocus={i === firstButton ? true : undefined} onPress={pressDay(r.day)}>
               <Text color={C(top ? 'text' : 'inactive')}>
                 {' '.repeat(r.indent)}
                 {r.label}
@@ -147,7 +148,7 @@ export function listPage($: $, pane: PaneParts) {
         const lead = r.indent + idWidth + 3 + cellWidth + 2
         const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? ''), width)
         return (
-          <Button key={x.id} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
+          <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
             <Text>{' '.repeat(r.indent)}</Text>
             <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
               {x.id.padEnd(idWidth)}

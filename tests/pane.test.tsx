@@ -1657,3 +1657,77 @@ test('every list page says "↑↓ move" in its key line; a task page says "↑�
   expect(await ui.find({ type: 'Text', text: /↑↓ move/ })).toBeUndefined()
   await ui.unmount()
 })
+
+/** Drives the board panel's real `ui.focus` and `ui.scroll` hooks as the engine raises them for the person's Tab or
+ *  click (`focus`) and ↑ or ↓ (`arrow`); what reaches the bottom (the engine) is kept: where the ring is, and the scrolls. */
+function arrowKeys($: Parameters<Parameters<typeof test>[1]>[0], on: On) {
+  const seen = { focused: undefined as string | undefined, scrolls: [] as number[] }
+  on('ui.focus', (_, e) => ((seen.focused = e.element), {}))
+  on('ui.scroll', (_, e) => (seen.scrolls.push(e.by), {}))
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, plugin: 'symcc', element, origin: { kind: 'person' } })
+  const arrow = (by: 1 | -1) => $.ui.scroll({ component: 'Pane', requestId: PANE.requestId, offset: 5 + by, by, bodyRows: 20, contentRows: 60, origin: { kind: 'person' } })
+  return { seen, focus, arrow }
+}
+
+/** The list rows' keys among the drawn Buttons, in order. */
+const rowKeys = async (ui: { findAll: (q: { type: string }) => Promise<{ key: string | undefined }[]> }, isRow: (k: string) => boolean) =>
+  (await ui.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(isRow)
+
+/** ↓ walks every row of the list in order, then (on the last row) scrolls and keeps the focus there; ↑ walks back and
+ *  scrolls on the first row. No arrow ever lands on a tab, mode, search or Back button. */
+async function walkRows(keys: ReturnType<typeof arrowKeys>, rows: string[]) {
+  expect(rows.length).toBeGreaterThan(1)
+  await keys.focus(rows[0]!)
+  for (const k of rows.slice(1)) {
+    await keys.arrow(1)
+    expect(keys.seen.focused).toBe(k)
+  }
+  const scrolls = keys.seen.scrolls.length
+  await keys.arrow(1)
+  expect(keys.seen.focused).toBe(rows.at(-1))
+  expect(keys.seen.scrolls.length).toBe(scrolls + 1)
+  for (const k of rows.slice(0, -1).reverse()) {
+    await keys.arrow(-1)
+    expect(keys.seen.focused).toBe(k)
+  }
+  await keys.arrow(-1)
+  expect(keys.seen.focused).toBe(rows[0])
+  expect(keys.seen.scrolls.length).toBe(scrolls + 2)
+}
+
+test('↑↓ on the Tasks list stop at the first and last task and scroll there: they never reach a tab, [m] mode or [f] search', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One'), task('T-2', 'todo', 'Two'), task('T-3', 'done', 'Three')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const keys = arrowKeys($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'mode' })).toBeDefined()
+  expect(await ui.find({ key: 'search-open' })).toBeDefined()
+  const rows = await rowKeys(ui, k => /^T-\d+$/.test(k) || k.startsWith('day:'))
+  await walkRows(keys, rows)
+  // off the rows (Tab put the ring on [m]), ↑↓ scroll and leave the ring there
+  await keys.focus('mode')
+  await keys.arrow(-1)
+  expect(keys.seen.focused).toBe('mode')
+  await keys.focus('tab-tasks')
+  await keys.arrow(1)
+  expect(keys.seen.focused).toBe('tab-tasks')
+  await ui.unmount()
+})
+
+test('↑↓ on the Scouts, Settings and Roles lists stop at their first and last row: never onto a tab or Back', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One')], working: [], scouts: [scout('a'), scout('b')], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, ROLE_FILES)
+  on('ui.toast', () => ({ value: undefined }))
+  const keys = arrowKeys($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-scouts' })
+  expect(await ui.find({ key: 'scouts-back' })).toBeDefined()
+  await walkRows(keys, await rowKeys(ui, k => k.startsWith('scout:')))
+  await ui.press({ key: 'tab-settings' })
+  expect(await ui.find({ key: 'settings-back' })).toBeDefined()
+  await walkRows(keys, await rowKeys(ui, k => k.startsWith('setting:') || k === 'settings-roles'))
+  await ui.press({ key: 'settings-roles' })
+  expect(await ui.find({ key: 'roles-back' })).toBeDefined()
+  await walkRows(keys, await rowKeys(ui, k => k.startsWith('roleRow:')))
+  await ui.unmount()
+})

@@ -11,9 +11,10 @@ import { taskPage } from './task-page'
 export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[2]) {
   if (e.requestId !== S.N.pane) return next(e)
   arrows.move = false // the page's footer sets it when its key line says "↑↓ move"
+  arrows.rows = new Set() // the page marks its list rows with row()
   const pane = await paneParts($, e)
   const tree = await page($, pane)
-  arrows.stops = focusStops(tree)
+  arrows.stops = focusStops(tree).filter(k => arrows.rows.has(k))
   return tree
 }
 
