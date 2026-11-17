@@ -1,8 +1,7 @@
 # symcc reference
 
-The long lists and tables that don't fit on the [README](../README.md): every feature, the install details, modes, commands, settings and statuses. For how things work in detail, see the [guide](guide.md).
+The long lists and tables that don't fit on the [README](../README.md): the install details, modes, commands, settings and statuses. For how things work in detail, see the [guide](guide.md).
 
-- [All features](#all-features)
 - [How it works, step by step](#how-it-works-step-by-step)
 - [Install: other ways and fixes](#install-other-ways-and-fixes)
 - [Modes](#modes)
@@ -13,31 +12,6 @@ The long lists and tables that don't fit on the [README](../README.md): every fe
 - [For developers](#for-developers)
 
 ---
-
-## All features
-
-| Feature | What it does |
-|---|---|
-| **Lead** | Your normal Claude Code chat. It takes ideas at any time, splits them into tasks, supervises and reports. Change your mind any time: "do T-6 first", "drop T-2". |
-| **Task board** | One board for work you asked for and work scouts found: todo / doing / review / done, plus a backlog for ideas that never start until you move them to todo. |
-| **Workers** | Parallel agents (3 by default), each in its own git worktree and branch (`symcc/T-1`). Your branch is untouched until merge. |
-| **Worker roles** | The lead picks a role per task: general, docs, refactor, researcher, security, tester, or your own in `.symcc/roles/`. Each brings its own checklist, skills and model, and may add web tools (`tools: WebSearch, WebFetch`): only `researcher` has web access built in. |
-| **Worker prompts** | The fixed text every worker gets (its folder, its files, the tests, how to ask you) is a plain text file you can edit: Settings → **Prompts**, or ask the lead. Your copy in `.symcc/prompts/change.md` or `investigation.md` is used instead of the built-in one; Reset brings the built-in back. By default a change's worker is told to add or update a test for its change (unless it only touches docs) and say which test covers it. |
-| **Scouts** | Read-only background agents on a timer. They check for bugs, missing tests, outdated dependencies or security notices, and report; the lead puts the findings on the board. |
-| **Dependencies** | A task with `after: T-1` waits until T-1 is merged. Tasks that change the same files are put one after another. |
-| **Scope check** | Each task lists the files it may change. A worker's edit outside that scope is refused and asks you for the file; other changes outside it are not merged. |
-| **Test gate and retries** | Your test commands must pass before a merge. If they fail, a new worker gets the failing output and tries again (2 times by default). |
-| **Approval before merge** | In review mode, see the diff, then approve, or reject with a reason. |
-| **Workers ask you** | A worker that needs a decision asks with its `ask_owner` tool (with choices, if any) and its task waits for your answer. symcc never reads questions or file requests out of a worker's text. |
-| **Investigations** | Of the task kinds, a *change* (the default) edits files, which are tested and merged. An *investigation* answers a question ("is it possible…", "should we…", "how does X work?"): nothing is committed or merged, and it always waits for you to read the answer, then **Done**, **Keep as a note** (a docs task saves it as `docs/research/<topic>.md`) or **Ask more** (a follow-up question for a fresh try). Researcher tasks are investigations by default. See [investigation tasks](guide.md#investigation-tasks). |
-| **Task kinds** | Every task has a kind, a label with a description that says what it is for: `change` (the default), `bug`, `feature`, `refactor`, `docs` or `investigation`. The lead picks one ("make T-5 a bug" changes it); add your own in `.symcc/kinds/`. See [task kinds](guide.md#task-kinds). |
-| **Checker** | Off by default. With `checker` on, a fresh checker tries to break each change (not docs-only ones) after its tests pass and before it merges; problems go back to the worker. See [the checker](guide.md#the-checker). |
-| **Traceability** | Each task keeps who made it, why, your own words, and the history of its tries (time, tokens, failed test output). Each merge commit starts with the task ID (`T-58: ...`). |
-
-symcc works while your Claude Code session is open; work stops when you close it and
-picks up next time. Every two minutes it checks the board by itself, starts ready tasks,
-and asks you for more time when a worker runs longer than `max_minutes` (45 by default). There is no extra
-app and no issue-tracker link. When two changes clash, a new worker sorts out the clash.
 
 ## How it works, step by step
 
