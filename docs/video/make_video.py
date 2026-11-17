@@ -296,7 +296,7 @@ def draw_logo(c, cx, cy, k, staff=True, word=True):
 def header(c, step, total=4):
     draw_logo(c, 40, 40, 0.2, staff=False, word=False)
     c.text(62, 40, "symcc", font(20, bold=True, mono=True), TEXT, "lm")
-    c.text(136, 40, "Swarm Harness", font(17), MUTED, "lm")
+    c.text(136, 40, "A team, not a session", font(17), MUTED, "lm")
     for i in range(total):
         col = ACCENT if i == step else LINE
         c.circle(W - 40 - (total - 1 - i) * 22, 40, 5, fill=col)
@@ -350,7 +350,7 @@ def scene_title(c, t, dur):
     a2 = ramp(t, 1.4, 0.7)
 
     def sub(cc):
-        cc.text(W / 2, 352, "Swarm Harness", font(44, bold=True), ACCENT, "mm")
+        cc.text(W / 2, 352, "A team, not a session", font(44, bold=True), ACCENT, "mm")
         cc.line([(W / 2 - 60, 392), (W / 2 + 60, 392)], ACCENT, 2)
 
     c.group(a2, sub)
@@ -645,7 +645,7 @@ def scene_proactive(c, t, dur):
 
 def scene_end(c, t, dur):
     c.group(ramp(t, 0.2, 0.8), lambda cc: draw_logo(cc, W / 2, 175, 1.0))
-    c.group(ramp(t, 0.8, 0.6), lambda cc: cc.text(W / 2, 290, "Swarm Harness",
+    c.group(ramp(t, 0.8, 0.6), lambda cc: cc.text(W / 2, 290, "A team, not a session",
                                                   font(36, bold=True), ACCENT, "mm"))
 
     def install(cc):

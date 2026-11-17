@@ -90,7 +90,7 @@ def staff(s, x, y, w):
 # 1. Title
 s = new_slide()
 staff(s, 1.5, 1.2, 10.3)
-text(s, 0.8, 3.5, 11.7, 1.0, "symcc: Swarm Harness", 54, TEXT, True, PP_ALIGN.CENTER)
+text(s, 0.8, 3.5, 11.7, 1.0, "symcc: a team, not a session", 54, TEXT, True, PP_ALIGN.CENTER)
 text(s, 1.6, 4.7, 10.1, 1.6,
      "Turn a messy swarm of coding agents into an organized team: a lead that plans, "
      "workers that build, and you in charge, so the work keeps moving even when you're "

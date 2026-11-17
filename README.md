@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <b>Swarm Harness:</b> Turn a messy swarm of coding agents into an organized team: a lead that plans, workers that build, and you in charge, so the work keeps moving even when you're not pushing it.
+  <b>A team, not a session:</b> other tools run coding agents one chat at a time, with you as the manager. symcc gives them a lead that plans, a board everyone shares, and workers that build in parallel. You stay in charge, and the work keeps moving when you're not pushing it.
 </p>
 
 <p align="center">
@@ -68,6 +68,23 @@ symcc works while your Claude Code session is open; work stops when you close it
 picks up next time. Every two minutes it checks the board by itself, starts ready tasks,
 and asks you for more time when a worker runs longer than `max_minutes` (45 by default). There is no extra
 app and no issue-tracker link. When two changes clash, a new worker sorts out the clash.
+
+## How symcc is different
+
+**Coding agents** (Claude Code, Codex, OpenCode, Goose) run one agent you talk to. Their helper agents work inside your turn, and you wait for them. Nothing keeps a list of the work after the chat ends.
+→ symcc adds a team on top: a lead you talk to, a board that stays between sessions, workers that build in the background, and scouts that look for problems on their own.
+
+**Multi-agent apps** (claudecodeui, T3 Code, cmux and others) let you run several agents side by side, but *you* split the work, keep track of it, check it and merge it.
+→ In symcc the lead does that. It turns what you say into tasks, decides their order, starts the workers, runs your tests, merges what passes, and asks you only when the decision is really yours.
+
+**Put together, only in symcc:**
+- every task remembers who asked for it and why
+- each worker gets its own copy of the code and may change only its own files
+- nothing merges unless the tests pass; optionally, a checker tries to break each change first
+- questions come back as answers, and never as code changes
+- scouts, retries and a health check keep the work going without you pushing it
+
+**Today** symcc runs inside Claude Code. A standalone version that works with other coding agents too is being planned.
 
 ## How it works
 
