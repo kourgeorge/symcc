@@ -89,7 +89,7 @@ test('kinds list shows every kind and where it comes from; with name, one kind i
 test('kinds add writes a kind file; a taken name, a bad name or no description is refused', async () => {
   const { $, mine } = setup()
   expect(await call($, { action: 'add', name: 'chore', description: 'small upkeep', body: 'Keep it short.' })).toContain('added kind chore (.symcc/kinds/chore.md)')
-  expect(parseKind('chore', mine['chore.md']!)).toEqual({ name: 'chore', description: 'small upkeep', body: 'Keep it short.' })
+  expect(parseKind('chore', mine['chore.md']!)).toMatchObject({ name: 'chore', description: 'small upkeep', body: 'Keep it short.' })
   expect(checkKind(S.kinds, 'chore')).toBe('chore')
   expect(await call($, { action: 'add', name: 'chore', description: 'x' })).toContain('already exists')
   expect(await call($, { action: 'add', name: 'bug', description: 'x' })).toContain('already exists')
@@ -103,7 +103,7 @@ test('kinds edit keeps what it is not given; editing a built-in makes a copy fir
   const out = await call($, { action: 'edit', name: 'Bug', description: 'a defect' })
   expect(out).toContain('saved kind bug (.symcc/kinds/bug.md) (copied the built-in kind to .symcc/kinds/bug.md first)')
   expect(builtIn['bug.md']).toBe(before)
-  expect(parseKind('bug', mine['bug.md']!)).toEqual({ name: 'bug', description: 'a defect', body: 'With a test that fails first.' })
+  expect(parseKind('bug', mine['bug.md']!)).toMatchObject({ name: 'bug', description: 'a defect', body: 'With a test that fails first.' })
   expect(await call($, {})).toContain('- bug (replaced): a defect')
   expect(await call($, { action: 'edit', name: 'nope', description: 'x' })).toContain('no kind named nope')
 })

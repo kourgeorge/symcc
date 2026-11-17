@@ -1,14 +1,16 @@
 // Task kinds: what a task is for (change, bug, feature, refactor, docs, investigation, or the owner's own).
 // Like roles: a file `kinds/<name>.md` in the plugin, or `.<plugin name>/kinds/<name>.md` in the project,
 // which wins over a built-in one with the same name. Front matter: description (needed; the lead reads it
-// to choose) and off: true (optional: the kind is never picked for a new task). The body is free text for now.
-// Every kind runs like a change, except investigation.
+// to choose), off: true (optional: the kind is never picked for a new task), merges and merge_tests (optional, yes / no).
+// The body is the kind's stages (see stages.ts). For now every kind still runs like a change, except investigation.
 import { DEFAULT_NAME } from '../name'
 import { DEFAULT_KIND, INVESTIGATION, KIND_NAME, kindOf } from './board-file'
 import { frontMatterLine, splitFrontMatter } from './text'
+import { type Stage, parseStages, readKindRun } from './stages'
 
-/** A task kind, read from its file. Its name is always its file name (lowercase). */
-export type KindDef = { name: string; description: string; body: string; off?: boolean }
+/** A task kind, read from its file. Its name is always its file name (lowercase). `stages` is its workflow, read from the body
+ *  (ending with the merge step unless merges is false); merges / mergeTests are only set when the file says no. */
+export type KindDef = { name: string; description: string; body: string; off?: boolean; merges?: false; mergeTests?: false; stages: Stage[] }
 
 /** The kinds that come with the plugin (one file each in its kinds/ folder), in the order they are listed. */
 export const BUILT_IN_KINDS: readonly string[] = [DEFAULT_KIND, 'bug', 'feature', 'refactor', 'docs', INVESTIGATION]
@@ -21,14 +23,30 @@ export function readKind(name: string, text: string): KindDef | string {
   if (!fm.lines) return 'no front matter (it starts with a --- line, then description: ..., then ---)'
   let description = ''
   let off = false
+  const pairs: { key: string; value: string }[] = []
   for (const line of fm.lines) {
     const kv = frontMatterLine(line)
-    const value = kv ? kv.value.replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '').trim() : ''
-    if (kv?.key === 'description') description = value
-    if (kv?.key === 'off') off = /^(true|yes)$/i.test(value)
+    if (!kv) continue
+    const value = kv.value.replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '').trim()
+    pairs.push({ key: kv.key, value })
+    if (kv.key === 'description') description = value
+    if (kv.key === 'off') off = /^(true|yes)$/i.test(value)
   }
   if (!description) return 'no description'
-  return { name: n, description: description.slice(0, 200), body: fm.body.trim(), ...(off && !ALWAYS_ON_KINDS.includes(n) ? { off: true } : {}) }
+  const run = readKindRun(pairs)
+  if (typeof run === 'string') return run
+  const body = fm.body.trim()
+  const stages = parseStages(body, n, run.merges)
+  if (typeof stages === 'string') return stages
+  return {
+    name: n,
+    description: description.slice(0, 200),
+    body,
+    ...(off && !ALWAYS_ON_KINDS.includes(n) ? { off: true } : {}),
+    ...(run.merges ? {} : { merges: false as const }),
+    ...(run.mergeTests ? {} : { mergeTests: false as const }),
+    stages,
+  }
 }
 
 /** A kind file as a KindDef, or null when it can't be used (see kindSkipReason). */
@@ -117,10 +135,12 @@ export function kindNameError(name: string): string | null {
   return /^[A-Za-z0-9_-]{1,64}$/.test(name) ? null : `"${name}" is not a valid kind name: use letters, digits, - and _ only (no "/" or "..")`
 }
 
-/** A kind's file text: the front matter (description, then off when set), then the body. */
-export function kindFileText(k: Omit<KindDef, 'name'>): string {
+/** A kind's file text: the front matter (description, then off, merges and merge_tests when set), then the body. */
+export function kindFileText(k: Pick<KindDef, 'description' | 'body' | 'off' | 'merges' | 'mergeTests'>): string {
   const lines = [`description: ${k.description.replace(/\s+/g, ' ').trim()}`]
   if (k.off) lines.push('off: true')
+  if (k.merges === false) lines.push('merges: no')
+  if (k.mergeTests === false) lines.push('merge_tests: no')
   return `---\n${lines.join('\n')}\n---\n${k.body.trim() ? `${k.body.trim()}\n` : ''}`
 }
 
