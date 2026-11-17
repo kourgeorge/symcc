@@ -223,6 +223,15 @@ export function retryStage(stages: readonly Stage[], conflict = false): Stage | 
   return (check?.onFail && stages.find(s => s.name === check.onFail!.back)) || last
 }
 
+/** The stage a retried task (symcc retry, the board's retry) restarts at: the worker stage it was in or failed after (see workerStageFor). Its go-backs start over. */
+export const retriedStage = (stages: readonly Stage[], name?: string): string | undefined => workerStageFor(stages, name)?.name
+
+/** The stage a task rejected from review goes back to: the last worker stage before the merge step (the one whose code is merged). Its go-backs start over. */
+export function rejectedStage(stages: readonly Stage[]): string | undefined {
+  const m = stages.findIndex(s => s.type === 'merge')
+  return workerStages(m >= 0 ? stages.slice(0, m) : stages).at(-1)?.name ?? workerStages(stages).at(-1)?.name
+}
+
 /** The `on fail` a stage follows: its own, else (a check) back to the worker stage just before it, `retries` times. A worker stage has none. */
 export function onFailOf(stages: readonly Stage[], stage: Stage, retries: number): { back: string; times: number } | undefined {
   if (stage.onFail) return stage.onFail

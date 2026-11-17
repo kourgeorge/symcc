@@ -977,6 +977,8 @@ test('reject sends a task in review back to "todo" with the reason, and merges n
   expect(t.status).toBe('todo')
   expect(t.note).toBe('rejected: the name is wrong')
   expect(t.history.at(-1)).toBe('try 1: rejected by the owner: the name is wrong')
+  // a built-in kind: back at its one worker stage, its go-backs cleared (T-340)
+  expect([t.stage, t.backs]).toEqual(['code', undefined])
   // only looking: nothing committed, merged or moved
   expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q refs/remotes/origin/HEAD', 'root: git symbolic-ref --short -q HEAD', 'root: git for-each-ref --format=%(refname:short) refs/heads'])
   expect(w.git.main).toBe(M1)
@@ -1331,6 +1333,35 @@ test('a kind of two worker stages: a failing check between them goes back to its
     expect(t.status).toBe('failed')
     expect(t.note).toContain('stage check still failed after going back to code 1 time')
     expect(movedMain(w)).toBe(false)
+    // T-340: a retry starts its worker stage again with its go-backs back in full (its work in the folder is kept)
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 queued')
+    t = find(await load(w.$), 'T-1')!
+    expect([t.status, t.stage, t.backs]).toEqual(['todo', 'code', undefined])
+    await saveBoard(w.$, patchTask(await load(w.$), 'T-1', { status: 'doing', session: 'me', attempts: 3, runs: [...t.runs!, { started: ISO, stage: 'code' }] }, ISO))
+    w.git.dirty = true
+    workers.set('ag3', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+    await workerFinished(w.$, 'ag3', 'fixed it again')
+    t = find(await load(w.$), 'T-1')!
+    // the check fails again, but now it goes back once more instead of failing at once
+    expect([t.status, t.stage, t.backs?.check]).toEqual(['todo', 'code', 1])
+    expect(t.note).toBe('stage check failed; a new try goes back to stage code (1 of 1)')
+  } finally {
+    cleanUp()
+  }
+})
+
+test('T-340: a task of a two-worker kind rejected from review goes back to its last worker stage, with its go-backs cleared', async () => {
+  const KINDS = `${ROOT}/.symcc/kinds`
+  const w = await inReview({}, {}, ['npm test'], { kind: 'pair', stage: 'tests', backs: { check: 2, tests: 2 } })
+  const x = w.$ as unknown as { fs: Record<string, unknown> }
+  x.fs.list = async (dir: string) => (dir === KINDS ? [{ kind: 'file', name: 'pair.md' }] : [])
+  x.fs.exists = async (p: string) => p === KINDS || w.files.has(p)
+  w.put(`${KINDS}/pair.md`, PAIR_KIND)
+  await loadKinds(w.$)
+  try {
+    await runTool(w.$, 'reject', { task: 'T-1', reason: 'make it shorter' })
+    const t = find(await load(w.$), 'T-1')!
+    expect([t.status, t.stage, t.backs, t.test_tries, t.conflict_tries]).toEqual(['todo', 'review', undefined, 0, 0])
   } finally {
     cleanUp()
   }

@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { parseKind, kindSkipReason, kindFileText } from '../hooks/board'
-import { parseStages, defaultStages, readKindRun, type Stage, nextStage, workerStageFor, retryStage, migratedStage, manyWorkers, workerAfter } from '../hooks/core/stages'
+import { parseStages, defaultStages, readKindRun, type Stage, nextStage, workerStageFor, retryStage, migratedStage, manyWorkers, workerAfter, retriedStage, rejectedStage } from '../hooks/core/stages'
 import { S } from '../hooks/plugin/state'
 import { loadKinds } from '../hooks/plugin/kinds'
 import { BUILT_IN_KIND_TEXTS } from '../kinds'
@@ -144,4 +144,14 @@ test('the worker stage a task runs, where a merge-step failure goes back to, and
   expect(manyWorkers(change)).toBe(false)
   expect([migratedStage(change, 'todo'), migratedStage(change, 'doing'), migratedStage(change, 'review'), migratedStage(change, 'done')]).toEqual(['code', 'code', 'tests', undefined])
   expect(migratedStage(parseKind('investigation', BUILT_IN.investigation!)!.stages, 'review')).toBe('read')
+})
+
+test('T-340: a retried task restarts at the worker stage it was in; a rejected one at the last worker stage before the merge step', () => {
+  expect([retriedStage(PAIR, 'code'), retriedStage(PAIR, 'check'), retriedStage(PAIR, 'again'), retriedStage(PAIR, undefined)]).toEqual(['code', 'code', 'review', 'code'])
+  expect(rejectedStage(PAIR)).toBe('review')
+  const change = parseKind('change', BUILT_IN.change!)!.stages
+  expect([retriedStage(change, 'tests'), rejectedStage(change)]).toEqual(['code', 'code'])
+  // with its go-backs cleared, a check that had used them all goes back again
+  expect(nextStage(PAIR, { stage: 'check', backs: { check: 2 } }, 'failed').go).toBe('failed')
+  expect(nextStage(PAIR, { stage: 'check' }, 'failed').go).toBe('back')
 })

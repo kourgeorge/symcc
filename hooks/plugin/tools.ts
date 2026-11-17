@@ -10,7 +10,8 @@ import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
-import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, fullAnswer } from './workers'
+import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, fullAnswer, stagesOf } from './workers'
+import { retriedStage } from '../core/stages'
 
 // ---------------- the lead's tools ----------------
 
@@ -605,13 +606,13 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
       // Finished work that waited only for the owner's files: just the merge runs again, no worker.
       if (waitsForFiles(t)) return mergeWaiting($, t.id)
-      // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
+      // Its tries to merge main and its go-backs (backs) start over, and it restarts at the worker stage it was in or failed after (its work is kept); if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
       const fromDropped = t.status === 'dropped'
       await change($, x => {
         const cur = find(x, t.id)
         const history = fromDropped && cur ? [...cur.history, 'brought back from dropped'] : undefined
-        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, conflict_tries: 0, merge_main: clashed, ...(history ? { history } : {}) }, now())
+        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, conflict_tries: 0, merge_main: clashed, backs: undefined, stage: retriedStage(stagesOf(t), cur?.stage ?? t.stage), ...(history ? { history } : {}) }, now())
       })
       void pump($)
       return fromDropped ? `${t.id} brought back from dropped and queued` : `${t.id} queued${clashed ? '; its new worker merges the latest main first' : ''}`
@@ -676,7 +677,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
         void pump($)
         return `${t.id} asked more: back to "todo"; a fresh try gets the follow-up question and the earlier answer`
       }
-      await change($, x => rejectTask(x, id, reason, now()))
+      await change($, x => rejectTask(x, id, reason, now(), stagesOf(t)))
       void pump($)
       return `${find(await load($), id)?.id ?? id} rejected: back to "todo"; a fresh worker picks it up with the reason`
     }
