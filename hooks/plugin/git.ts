@@ -143,12 +143,41 @@ export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S
 export async function prepareWorktree($: $, t: SymccTask, target: string) {
   const dir = worktreeDir(t.id)
   const branch = taskBranch(t)
-  if (await $.fs.exists(`${dir}/.git`)) return { dir, branch }
-  await git($, ['worktree', 'prune'])
-  const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`])).exitCode === 0
-  if (has) await gitOk($, ['worktree', 'add', dir, branch])
-  else await gitOk($, ['worktree', 'add', '-b', branch, dir, target])
+  if (!(await $.fs.exists(`${dir}/.git`))) {
+    await git($, ['worktree', 'prune'])
+    const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`])).exitCode === 0
+    if (has) await gitOk($, ['worktree', 'add', dir, branch])
+    else await gitOk($, ['worktree', 'add', '-b', branch, dir, target])
+  }
+  await copyTypes($, dir).catch(() => false)
   return { dir, branch }
+}
+
+/** The generated, git-ignored types folder the project's tsconfig.json extends. */
+export const TYPES_DIR = '.claude-plugin/types'
+
+/**
+ * Gives the worker folder `dir` a fresh copy of the main folder's .claude-plugin/types (T-358): it is generated
+ * and git-ignored, so a new worktree lacks it and `tsc` there falls back to loose settings. A copy, not a link,
+ * so symcc's edit checks (which refuse links leading outside the folder) and git see plain files. Skipped quietly
+ * when the main folder has none, and when git in `dir` would not ignore it, so it never lands in the task's
+ * commit or scope check. Returns whether the folder has the copy.
+ */
+export async function copyTypes($: $, dir: string): Promise<boolean> {
+  const from = `${S.root}/${TYPES_DIR}`
+  const to = `${dir}/${TYPES_DIR}`
+  if (!(await $.fs.exists(from))) return false
+  // Only where git in `dir` ignores it (exit 0; tracked files are never "ignored"): else it could land in the
+  // task's commit or scope check, or the old copy removed below could be the project's own files.
+  if ((await git($, ['check-ignore', '-q', '--', `${TYPES_DIR}/tsconfig.json`], dir)).exitCode !== 0) return false
+  const run = async (argv: string[]) => (await $.process.run(argv, { cwd: dir })).exitCode === 0
+  if (!(await run(['rm', '-rf', to]))) return false
+  if (!(await run(['mkdir', '-p', `${dir}/.claude-plugin`]))) return false
+  if (!(await run(['cp', '-R', from, to]))) {
+    await run(['rm', '-rf', to])
+    return false
+  }
+  return true
 }
 
 /**
