@@ -83,6 +83,9 @@ test("a role's checklist may use the prompt's placeholders: {{files}} and {{test
   // an unknown {{word}}, and the prompt's own bigger parts, are left as written
   expect(p).toContain('- left: {{nope}} {{role}} {{ask}}')
   expect(fillRole('{{title}} / {{details}}', { title: 'T', details: 'D' })).toBe('T / {{details}}')
+  // names every JavaScript object has built in are unknown words too, so they stay as written
+  const builtIns = 'a {{constructor}} b {{toString}} c {{__proto__}} d {{hasOwnProperty}}'
+  expect(fillRole(builtIns, { files: 'F' })).toBe(builtIns)
   expect(ROLE_PLACEHOLDERS).not.toHaveProperty('role')
 })
 

@@ -48,7 +48,7 @@ const PLACEHOLDER = /\{\{\s*([A-Za-z_]+)\s*\}\}/g
 /** `text` with every placeholder named in `known` replaced by its value from `values`, in one pass (so a value that holds "{{...}}",
  *  e.g. in the task's details, is never filled again). Any other {{word}}, or one without a value, is left as written. */
 export function fillPlaceholders(text: string, known: Record<string, unknown>, values: Record<string, string>): string {
-  return text.replace(PLACEHOLDER, (all, p: string) => (p in known && p in values ? values[p]! : all))
+  return text.replace(PLACEHOLDER, (all, p: string) => (Object.hasOwn(known, p) && Object.hasOwn(values, p) ? values[p]! : all))
 }
 
 /** The text a worker is started with: the built-in prompt of `kind` with its placeholders filled in (see fillPlaceholders). */
