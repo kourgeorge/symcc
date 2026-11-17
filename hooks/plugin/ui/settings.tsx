@@ -293,7 +293,7 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: KindSou
   const canOff = !broken && !ALWAYS_ON_KINDS.includes(name)
   const canReset = broken ? okName && !!findKind(builtIn, name) : source === 'replaced'
   const canRemove = broken ? okName && !canReset : source === 'added'
-  const file = broken ? broken.file : source === 'built-in' ? `kinds/${name}.md (in the plugin; Edit copies it to ${kindFileOf(name)})` : kindFileOf(name)
+  const file = broken ? broken.file : source === 'built-in' ? `kinds/${name}.ts (in the plugin; Edit copies it to ${kindFileOf(name)})` : kindFileOf(name)
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">

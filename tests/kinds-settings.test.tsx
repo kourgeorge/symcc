@@ -120,6 +120,7 @@ test('a kind opens in full; Turn off / on, Reset and Remove write its file; chan
   expect(await ui.find({ key: 'kind-edit' })).toBeDefined()
   await ui.press({ key: 'kind-back' })
   await ui.press({ key: 'kindRow:bug' })
+  expect(await ui.find({ type: 'Text', text: /^kinds\/bug\.ts \(in the plugin; Edit copies it to \.symcc\/kinds\/bug\.md\)$/ })).toBeDefined()
   expect(await ui.find({ key: 'kind-reset' })).toBeUndefined()
   expect(await ui.find({ key: 'kind-remove' })).toBeUndefined()
   await ui.press({ key: 'kind-off' })

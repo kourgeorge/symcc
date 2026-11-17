@@ -49,7 +49,7 @@ confirm is marked **(guess)**.
 
 ## 1. The kind file format
 
-A kind is one Markdown file: `kinds/<name>.md` in the plugin, or `.symcc/kinds/<name>.md` in the
+A kind is one text: `kinds/<name>.ts` in the plugin (T-333; `kinds/index.ts` exports `BUILT_IN_KIND_TEXTS`), or the Markdown file `.symcc/kinds/<name>.md` in the
 project (the owner's copy wins, like roles; today's `kinds/` folder has `change`, `bug`,
 `feature`, `refactor`, `docs` and `investigation`, and `epic` is added by build step 8). The front matter is read by the lead to choose; the
 body is the list of stages.
@@ -98,7 +98,7 @@ the same way a broken role file is (`skippedRoleNote`, `roles.ts:96`).
 
 ### The built-in kinds, in full
 
-**`kinds/change.md`** (the default; today's flow exactly)
+**`kinds/change.ts`** (the default; today's flow exactly)
 
 ```markdown
 ---
@@ -113,7 +113,7 @@ check: tests
 on fail: back to code, 2 times
 ```
 
-**`kinds/bug.md`**
+**`kinds/bug.ts`**
 
 ```markdown
 ---
@@ -138,7 +138,7 @@ check: tests
 on fail: back to fix, 2 times
 ```
 
-**`kinds/feature.md`**
+**`kinds/feature.ts`**
 
 ```markdown
 ---
@@ -167,7 +167,7 @@ on fail: back to code, 2 times
 (`checker` is a new built-in role, `roles/checker.md`: "tries to break a change by writing
 tests; never changes code". It needs no web.)
 
-**`kinds/refactor.md`**
+**`kinds/refactor.ts`**
 
 ```markdown
 ---
@@ -186,7 +186,7 @@ check: tests
 on fail: back to code, 2 times
 ```
 
-**`kinds/docs.md`**
+**`kinds/docs.ts`**
 
 ```markdown
 ---
@@ -198,7 +198,7 @@ worker: docs
 Write or fix the docs the task is about.
 ```
 
-**`kinds/investigation.md`** (today's behavior)
+**`kinds/investigation.ts`** (today's behavior)
 
 ```markdown
 ---
@@ -213,7 +213,7 @@ Find the answer and hand it back in full.
 gate: owner
 ```
 
-**`kinds/epic.md`** (section 5 explains it)
+**`kinds/epic.ts`** (section 5 explains it)
 
 ```markdown
 ---
@@ -580,13 +580,13 @@ memory rule). Each step's tests run in `claude plugin test .`, the project's tes
 
 | # | Title | Files | After | How it is tested |
 |---|---|---|---|---|
-| 2 | Kinds: read stages from the kind file | new `hooks/core/stages.ts`, `hooks/core/kinds.ts` and `hooks/plugin/kinds.ts` (T-328's kinds parser), `kinds/*.md` (each still one worker stage + `tests`), `tests/` | T-328 | New `tests/stages.test.ts`: every built-in kind file parses into the expected stage list; files with an unknown key, a bad `on fail` target, `children:` outside epic are skipped with the right note; the merge step is added for `merges: yes` |
+| 2 | Kinds: read stages from the kind file | new `hooks/core/stages.ts`, `hooks/core/kinds.ts` and `hooks/plugin/kinds.ts` (T-328's kinds parser), `kinds/*.ts` (each still one worker stage + `tests`), `tests/` | T-328 | New `tests/stages.test.ts`: every built-in kind file parses into the expected stage list; files with an unknown key, a bad `on fail` target, `children:` outside epic are skipped with the right note; the merge step is added for `merges: yes` |
 | 3 | Multi-stage workflows: stage on the task, run stages in order, `on fail` go-backs | `hooks/core/board-file.ts` (`stage`, `stages`, `backs`, `check_output`, migration in `migrateTask`), `hooks/core/stages.ts` (`nextStage`), `hooks/plugin/workers.ts` (`finishWork`, `runStages`, `settle`, `WORKER_PROMPT`), `hooks/core/prompts.ts` + `prompts/*.ts` (`{{stage}}`, `{{earlier_stages}}`), `hooks/core/roles.ts` (`tryLabel`), `hooks/plugin/git.ts` (`copyReports` from stages), `tests/` | 2 | Unit tests of `nextStage` (pass, go-back with count, go-back used up → failed). A run test in the style of `tests/merge.test.ts` with a test-only two-worker kind: two fresh workers run in the same folder, the second prompt names the first report, there is one merge. Migration test in `tests/board.test.ts`: a `review` change and a `todo` change get the right `stage` |
 | 4 | Stages: per-stage time limit and retries | `hooks/core/task.ts` (`timeLimitOf`), `hooks/plugin/workers.ts` (`timedOut`, `askOvertime`), `hooks/core/settings.ts` (`onTestFail` takes the stage count), `tests/` | 3 | Tests: a stage with `minutes: 5` asks for more time at 5 minutes, not `max_minutes`; a `tests` check with `on fail … 1 time` fails on the second failure while `auto_retries` is 2 |
 | 5 | Gates: owner and lead, and the board mode as an added owner gate | `hooks/core/review.ts` (`needsReview` → `gatesFor`, `reviewTask`, `rejectTask`), `hooks/plugin/workers.ts` (`approve`), `hooks/plugin/tools.ts` (approve/reject text, lead rules), `hooks/core/panel.ts` (`statusCell`: `lead check`), `tests/` | 3 | Tests: a lead gate wakes the lead and doesn't show under NEEDS YOU; the lead's approve moves to the next stage; `review` mode adds exactly one owner gate before merge and none for investigation; reject goes back to the worker stage before the gate |
 | 6 | Built-in checks: tests, scope, no test files changed, new test fails on old code, run: | `hooks/plugin/review.ts` (pull `runTests` out of `upToDateTestMove`; new `checkStage`), `hooks/core/review.ts` (pure parts: which files are new tests, does the output name them), `hooks/plugin/git.ts` (throwaway worktree at base), `tests/` | 3 | Tests with a real git repo from `tests/project.ts`: a new test that passes on old code fails the check; one that fails passes it; a typo test that fails without naming its file fails it; a refactor diff that edits a test file fails `no test files changed`; the throwaway worktree is gone afterwards, also when the test command times out |
-| 7 | Built-in kinds with their real stages, and the checker and planner roles | `kinds/bug.md`, `kinds/feature.md`, `kinds/refactor.md`, `kinds/docs.md`, `roles/checker.md`, `roles/planner.md`, `hooks/core/roles.ts` (`BUILT_IN_ROLES`), `hooks/plugin/tools.ts` (when to pick which kind), `tests/` | 4, 5, 6 | Tests: each built-in kind parses as written in section 1; a `bug` task runs reproduce → fails-first → fix → tests → merge with fake workers; `docs` with only `.md` changes runs no tests, with a `.ts` change runs them; `tests/help-lead.test.ts` checks the lead's kind advice |
-| 8 | Epic kind: parent, epic branch, children stage, spec, acceptance | `kinds/epic.md`, `hooks/core/task.ts` (`parent` in `addTask` / `patchTask`, spec path), `hooks/core/board-file.ts` (`parent`), `hooks/plugin/workers.ts` (children stage, bring epic branch up to date), `hooks/plugin/git.ts`, `hooks/core/health.ts` (a failed child), `hooks/plugin/tools.ts` (`parent` on add/change, epic rules), `tests/` | 7 | Tests: a child gets `merge_into: symcc/T-n` and starts from it; build passes only when all children are done and at least one exists; a failed child tells the lead once; failing accept tests send the epic back to build and wake the lead; the epic merges its branch into the owner's branch at the end |
+| 7 | Built-in kinds with their real stages, and the checker and planner roles | `kinds/bug.ts`, `kinds/feature.ts`, `kinds/refactor.ts`, `kinds/docs.ts`, `roles/checker.md`, `roles/planner.md`, `hooks/core/roles.ts` (`BUILT_IN_ROLES`), `hooks/plugin/tools.ts` (when to pick which kind), `tests/` | 4, 5, 6 | Tests: each built-in kind parses as written in section 1; a `bug` task runs reproduce → fails-first → fix → tests → merge with fake workers; `docs` with only `.md` changes runs no tests, with a `.ts` change runs them; `tests/help-lead.test.ts` checks the lead's kind advice |
+| 8 | Epic kind: parent, epic branch, children stage, spec, acceptance | `kinds/epic.ts`, `hooks/core/task.ts` (`parent` in `addTask` / `patchTask`, spec path), `hooks/core/board-file.ts` (`parent`), `hooks/plugin/workers.ts` (children stage, bring epic branch up to date), `hooks/plugin/git.ts`, `hooks/core/health.ts` (a failed child), `hooks/plugin/tools.ts` (`parent` on add/change, epic rules), `tests/` | 7 | Tests: a child gets `merge_into: symcc/T-n` and starts from it; build passes only when all children are done and at least one exists; a failed child tells the lead once; failing accept tests send the epic back to build and wake the lead; the epic merges its branch into the owner's branch at the end |
 | 9 | Board view: stage strip, epic progress and fold (with backlog idea T-51) | `hooks/core/panel.ts` (`rowExtra`, `roleTag`, `statusCell`, fold), `hooks/plugin/ui/list.tsx`, `hooks/plugin/ui/task-page.tsx` (Stages section), `hooks/core/details.ts`, `tests/` | 3, 8 | `tests/pane.test.tsx`: the rows in section 6 render as shown, the strip shrinks to the current stage on a narrow panel, an epic folds and opens, children aren't listed twice |
 | 10 | Docs: kinds and workflows in the guide | `docs/guide.md`, `README.md`, `CHANGELOG.md` | 7, 8, 9 | Docs only; `tests/help-lead.test.ts` still passes |
 
@@ -601,8 +601,8 @@ Steps 4, 5 and 6 can run side by side once 3 is done if they keep to their files
 - Whether `claude plugin test .` prints the failing test's file name (needed for the "right
   reason" rule in section 3) and whether it can run a single file.
 
-T-328 is merged. Its real names: `hooks/core/kinds.ts`, `hooks/plugin/kinds.ts` and `kinds/*.md`
-(no `epic.md` yet).
+T-328 is merged. Its real names: `hooks/core/kinds.ts`, `hooks/plugin/kinds.ts` and the built-in kind files (now `kinds/<name>.ts`, since T-333)
+(no `epic` kind yet).
 
 ## Recommended next step
 
