@@ -10,6 +10,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Live status: seeing the board](#live-status-seeing-the-board)
 - [Tracing a task back](#tracing-a-task-back)
 - [Scouts](#scouts)
+- [Task kinds](#task-kinds)
 - [Worker roles](#worker-roles)
 - [Worker prompts](#worker-prompts)
 - [Which branch work goes into](#which-branch-work-goes-into)
@@ -336,7 +337,8 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
 
 Not every task should change the project. When you want an answer, or input for a decision
 you will make ("is it possible to…", "should we…", "how does X work?", "why is Y slow?"),
-the lead adds an **investigation** instead of a **change** (the task's `kind`). When the
+the lead adds an **investigation** instead of a **change**: these are two of the
+[task kinds](#task-kinds) (the task's `kind`). When the
 answer should stay in the project as a lasting document that later tasks or people will
 read, the lead adds a change instead. Researcher tasks are investigations unless the lead
 says `kind: change`.
@@ -638,6 +640,67 @@ doesn't start another. Press `p` again, or run `/symcc-scout <name> resume`, to 
 timer again. The pause is kept in `.symcc/scouts.json`
 (next to each scout's last run), so it survives a restart and your scout file is never
 changed. Only you can pause or resume a scout; the lead is told a paused scout doesn't run on its timer.
+
+---
+
+## Task kinds
+
+Each task has a **kind**: what the task is for. It is shown next to the task (`bug`,
+`investigation`); `change` shows nothing, because it is the default. A kind is one Markdown
+file, like a role (see [Worker roles](#worker-roles)). The worker is told its task's kind and
+what it means.
+
+The built-in kinds (the plugin's `kinds/` folder):
+
+| Kind | What it is for |
+|---|---|
+| `change` | A general change when no other kind fits (the default). |
+| `bug` | Something that works wrongly. The worker finds why and fixes it, with a test that fails before the fix and passes after. |
+| `feature` | New behavior for you, with tests that show it works. |
+| `refactor` | Cleaning up code without changing what it does; tests that passed still pass. |
+| `docs` | Documentation only (README, docs/, comments), not code. |
+| `investigation` | Find an answer and hand it back; nothing is merged. |
+
+**Two ways a task runs.** `investigation` is one of them: its worker hands back an answer,
+nothing is committed, tested or merged, and it waits for you to read it (see
+[Investigation tasks](#investigation-tasks)). Every other kind, `change` included, runs the
+same way: the worker changes files, which are committed, tested and merged (see
+[What happens when a worker finishes](#what-happens-when-a-worker-finishes)). So today a kind
+mainly tells the worker, and you, what the task is for.
+
+**How the lead picks one.** The lead reads each kind's description and chooses the one that
+fits when it adds a task; `change` when unsure. To override it, tell the lead: "make T-5 a
+bug" or "T-7 is an investigation". It changes the kind of a task that has not finished yet.
+
+**Your own kinds.** Put a file in `.symcc/kinds/<name>.md` in your project:
+
+```markdown
+---
+description: small upkeep work - dependency bumps, config tidying
+---
+Keep the change small and say what you updated.
+```
+
+`description` is required (the lead reads it to choose). The name uses letters, digits, `-`
+and `_`. A file with the name of a built-in kind replaces it. The text under the front matter
+is a free note about the kind. A file that can't be used is skipped, with a note.
+
+**Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the kinds", "add a
+`chore` kind for dependency bumps", "turn off the feature kind", "reset the bug kind". The lead
+uses its `kinds` tool (list, add, edit, reset, remove, off, on). Or use the board panel: the
+Settings view (`c`) has a **Kinds** row that opens the Kinds page, with the same keys as the
+Roles page (Enter opens a kind, `n` adds a new one, `b` goes back).
+
+- Each kind is shown as `built-in`, `replaced` (your file over a built-in), `added` (your
+  own) or `off`.
+- **Edit** on a built-in kind first copies it to `.symcc/kinds/`, then changes the copy.
+- **Reset** removes your file for a built-in name, so the built-in comes back. A kind you
+  added has nothing to go back to: the lead removes it instead (after asking you).
+- **Off** means the lead never picks the kind for a new task. A task that already has it keeps
+  it. `change` and `investigation` can't be turned off. **On** turns it back.
+
+Planned: a separate workflow for each kind (steps such as spec, tests and approvals). See
+[the design](research/task-kinds-and-workflows.md).
 
 ---
 
