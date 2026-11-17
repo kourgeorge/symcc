@@ -5,6 +5,7 @@ import type { SymccScout, SymccStatus, SymccTask } from '../types'
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
+import { putTask } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -25,6 +26,16 @@ test('tasks run in order, and a task waits for the ones it is after', async () =
   expect(ready(b).map(t => t.id)).toContain(c.id)
   expect(parseBoard(JSON.stringify(b)).tasks.length).toBe(3)
   expect(boardText(b)).toContain('T-1')
+})
+
+test('putTask swaps in the task with the same id and leaves the rest and the old board alone', () => {
+  const [b1, a] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
+  const [b2, c] = addTask(b1, { origin: W, title: 'C' }, T)
+  const b3 = putTask(b2, { ...a, title: 'A2' })
+  expect(b3.tasks.map(t => t.title)).toEqual(['A2', 'C'])
+  expect(b3.tasks[1]).toBe(c)
+  expect(b2.tasks[0].title).toBe('A')
+  expect(putTask(b2, { ...a, id: 'T-99' }).tasks).toEqual(b2.tasks)
 })
 
 test('a task can never be allowed to touch the board, Git internals or files outside the project', async () => {

@@ -94,8 +94,11 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   for (const k of ['asked_files', 'options'] as const) if (next.status !== 'waiting' || (patch.question !== undefined && !(k in patch)) || !next[k]?.length) delete next[k]
   // Waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again).
   if (!waitsForFiles(next) || (next.status !== t.status && !('merge_wait' in patch))) delete next.merge_wait
-  return { ...b, tasks: b.tasks.map(x => (x.id === t.id ? next : x)) }
+  return putTask(b, next)
 }
+
+/** Board `b` with the task of the same id as `t` swapped for `t`. */
+export const putTask = (b: Board, t: BoardTask): Board => ({ ...b, tasks: b.tasks.map(x => (x.id === t.id ? t : x)) })
 
 /** Tasks a worker could start now: to do (never backlog), and everything they wait for is done (an archived done task counts). */
 export function ready(b: Board): SymccTask[] {
