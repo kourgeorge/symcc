@@ -95,6 +95,8 @@ export type SymccTask = {
   origin?: SymccOrigin
   /** the worker role (a role file's name) the lead picked; missing = "general" */
   role?: string
+  /** the task's kind (a kind file's name, e.g. "bug" or "investigation") the lead picked; missing = "change" */
+  kind?: string
   /** wait for the owner's review before merging, even when the board's mode is "auto" */
   needs_review?: boolean
   /** one entry per worker try, oldest first */

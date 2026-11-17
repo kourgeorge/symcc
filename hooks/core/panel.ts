@@ -1,12 +1,13 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
 import { originOf } from './origin'
 import { overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
+import { kindMark } from './kinds'
 import { roleMark, roleOf } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs } from './runs'
@@ -95,18 +96,22 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTas
     return Number.isFinite(at) ? fmtDuration(Math.max(0, nowMs - at)) : ''
   }
   // an answered investigation waits for the owner to read its answer, not to review a change
-  if (t.status === 'review' && kindOf(t) === 'investigation') return ANSWER_CELL
+  if (t.status === 'review' && isInvestigation(t)) return ANSWER_CELL
   return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
 }
 
 /** The status column of an answered investigation in review (see statusCell). */
 export const ANSWER_CELL = 'answer'
 
-/** The tag of an investigation in the board list: "[investigation]"; '' for a change task. */
-export const kindTag = (t: { kind?: unknown }): string => (kindOf(t) === 'investigation' ? '[investigation]' : '')
+/** The tag of a task's kind in the board list: "[investigation]", "[bug]"; '' for a plain change (to keep lines short). */
+export const kindTag = (t: { kind?: unknown }): string => (kindMark(t) ? `[${kindMark(t)}]` : '')
 
-/** The role part of a task row: its kind tag (see kindTag) and its role (see roleMark), e.g. "[investigation] researcher". */
-const roleTag = (t: BoardTask): string => [kindTag(t), roleMark(t)].filter(Boolean).join(' ')
+/** The role part of a task row: its kind and its role (see roleMark), e.g. "[bug · tester]", "[investigation]", or just "tester" for a change. */
+export const roleTag = (t: { kind?: unknown; role?: string }): string => {
+  const kind = kindMark(t)
+  const role = roleMark(t)
+  return kind ? `[${[kind, role].filter(Boolean).join(' · ')}]` : role
+}
 
 /** The secondary-color (inactive) text at the right end of a task row: "tester · try 1" for a task being worked on (its
  *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "after T-3" for
@@ -134,7 +139,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
       return open.length ? `after ${open.join(', ')}` : roleTag(t)
     }
     case 'review':
-      return kindOf(t) === 'investigation' ? kindTag(t) : 'Enter to review'
+      return isInvestigation(t) ? kindTag(t) : 'Enter to review'
     case 'waiting':
       return t.question ?? ''
     case 'failed':
@@ -214,7 +219,7 @@ export function taskMatches(t: SymccTask, query: string): boolean {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (!words.length) return true
   const o = originOf(t)
-  const text = [t.title, t.details, roleOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? ''].join('\n').toLowerCase()
+  const text = [t.title, t.details, roleOf(t), kindOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? ''].join('\n').toLowerCase()
   const id = num(t.id)
   return words.every(w => {
     const asId = /^(?:t-?)?(\d+)$/.exec(w)

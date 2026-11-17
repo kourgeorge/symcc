@@ -10,7 +10,7 @@ Use absolute paths under that folder for every Read, Edit and Write. Never touch
 
 Task {{task_id}}: {{title}}
 {{details}}
-{{role}}
+{{kind}}{{role}}
 {{files}}
 {{test_command}}
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.

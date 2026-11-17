@@ -3,7 +3,7 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout } from '../../types'
-import { type RoleDef, type PromptKind, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
+import { type RoleDef, type KindDef, type PromptKind, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 
@@ -65,6 +65,8 @@ export const startS = () => ({
   enabledNow: true,
   /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
   roles: [] as RoleDef[],
+  /** the task kinds: the plugin's kinds/ with the project's .<name>/kinds/ over them (see loadKinds) */
+  kinds: [] as KindDef[],
   /** the owner's worker prompts (.<name>/prompts/<kind>.md), read at each worker's start (see loadPrompts); a kind not here uses the built-in one */
   prompts: {} as Partial<Record<PromptKind, string>>,
   /** the home folder, to shorten it to "~" where the project's path is shown */
@@ -150,6 +152,8 @@ export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_min
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
+/** the kind files already reported as skipped (file → reason), so the owner and the lead hear it once */
+export const skippedKinds = new Map<string, string>()
 /** the owner's prompt files already warned about (file -> what was wrong), so a warning is given once, again only when it changes */
 export const warnedPrompts = new Map<string, string>()
 /**

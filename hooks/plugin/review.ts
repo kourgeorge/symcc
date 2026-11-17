@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, kindOf, testsWithChangesOf, untestedChange, untestedText, shortSha } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -261,7 +261,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   }
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
-  const untested = mode !== 'approve' && flag !== 'off' && kindOf(t) === 'change' && untestedChange(changed) ? untestedText(t.id) : ''
+  const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
   if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their

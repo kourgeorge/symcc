@@ -5,6 +5,7 @@ import { type Board, modeOf, OPEN, STATUS_WORD } from './board-file'
 import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
+import { kindMark } from './kinds'
 import { roleMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
@@ -209,7 +210,9 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 function boardRow(t: SymccTask): string[] {
   const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
-  const role = roleMark(t) ? ` [${roleMark(t)}]` : ''
+  // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
+  const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')
+  const role = tag ? ` [${tag}]` : ''
   return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
 }
 

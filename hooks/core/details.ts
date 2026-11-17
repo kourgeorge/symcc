@@ -1,9 +1,10 @@
 // The task page: its labelled rows and wrapping them to the panel width.
 import type { SymccStatus, SymccTask } from '../../types'
-import { type BoardTask, intoOf, kindOf, STATUS_WORD } from './board-file'
+import { type BoardTask, intoOf, isInvestigation, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
+import { findKind, type KindDef, kindMark } from './kinds'
 import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
@@ -44,7 +45,7 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
-export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
+export function detailRows(t: SymccTask, o: { roles: RoleDef[]; kinds?: KindDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
   R.push({ label: 'Status', segs: [{ text: `${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   if (t.note) R.push({ label: 'Note', segs: [{ text: t.note, color: 'inactive', italic: true }] })
@@ -52,7 +53,10 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; all: SymccTask[]
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')
   R.push({ label: 'Role', segs: [{ text: r?.name ?? name, color: 'ide', bold: true }, ...(more ? [{ text: ` — ${more}`, color: 'inactive' }] : [])] })
-  if (kindOf(t) === 'investigation') R.push({ label: 'Kind', segs: [{ text: 'investigation', color: 'suggestion', bold: true }, { text: ' — nothing is merged', color: 'inactive' }] })
+  // the kind, next to the role (a plain change shows none): an investigation says nothing is merged, another kind what it is for
+  const kind = kindMark(t)
+  const about = isInvestigation(t) ? 'nothing is merged' : findKind(o.kinds ?? [], kind)?.description ?? ''
+  if (kind) R.push({ label: 'Kind', segs: [{ text: kind, color: 'suggestion', bold: true }, ...(about ? [{ text: ` — ${about}`, color: 'inactive' }] : [])] })
   R.push({ label: 'From', segs: originSegs(t) })
   const og = originOf(t)
   if (og?.why) R.push({ label: 'Why', segs: [{ text: squash(og.why), color: 'text' }] })
@@ -101,7 +105,7 @@ export function answerText(t: Pick<BoardTask, 'answer'>, report: string | null |
 }
 
 /** Whether the task page shows an Answer section for `t`: an investigation with an answer (in review, or done after it was read). */
-export const showsAnswer = (t: Pick<BoardTask, 'kind' | 'answer' | 'status'>): boolean => kindOf(t) === 'investigation' && (!!t.answer?.trim() || t.status === 'review')
+export const showsAnswer = (t: Pick<BoardTask, 'kind' | 'answer' | 'status'>): boolean => isInvestigation(t) && (!!t.answer?.trim() || t.status === 'review')
 
 /** The width of the label column on the task page: the longest label, its colon and a space. */
 export const DETAIL_LABEL_WIDTH = 'Research: '.length
@@ -164,7 +168,8 @@ export function taskCopyText(t: SymccTask, o: { roles?: RoleDef[]; report?: stri
   const role = findRole(o.roles ?? [], name)?.name ?? name
   const og = originOf(t)
   const from = og ? originWordSegs(og).map(s => s.text).join('') : 'unknown'
-  const L = [`${t.id}  ${t.title}`, `${STATUS_WORD[t.status]} · ${role} · from: ${from}`]
+  const kind = kindMark(t)
+  const L = [`${t.id}  ${t.title}`, `${STATUS_WORD[t.status]} · ${kind ? `${kind} · ` : ''}${role} · from: ${from}`]
   if (og?.why) L.push(`why: ${squash(og.why)}`)
   if (t.note) L.push(`note: ${t.note}`)
   L.push('What to do:', t.details.trim() ? t.details.trimEnd() : '(no details)')

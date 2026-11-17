@@ -90,14 +90,27 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
 export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[] }
 
 /**
- * What a task is for: a "change" (the default) ends in a commit, tests and a merge; an "investigation"
- * ends in its worker's hand-back (the answer), with nothing committed, tested or merged.
+ * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
+ * commit, tests and a merge like a "change" (the default), except "investigation", which ends in its worker's
+ * hand-back (the answer), with nothing committed, tested or merged. Stored only when it is not "change".
  */
-export type TaskKind = 'change' | 'investigation'
-export const TASK_KINDS: readonly TaskKind[] = ['change', 'investigation']
-export const isKind = (k: unknown): k is TaskKind => TASK_KINDS.includes(k as TaskKind)
-/** A task's kind: "change" when it has none. */
-export const kindOf = (t: { kind?: unknown } | undefined): TaskKind => (t?.kind === 'investigation' ? 'investigation' : 'change')
+export type TaskKind = string
+/** The kind a task has when none is set. */
+export const DEFAULT_KIND = 'change'
+/** The kind whose task hands back an answer and merges nothing. */
+export const INVESTIGATION = 'investigation'
+/** A kind's name: letters, digits, - and _ only (it is a file name), stored in lowercase. */
+export const KIND_NAME = /^[a-z0-9_-]{1,64}$/
+/** Whether `k` could be a kind's name (whether such a kind file exists is checked where the kinds are loaded). */
+export const isKind = (k: unknown): k is TaskKind => typeof k === 'string' && KIND_NAME.test(k.trim().toLowerCase())
+/** A task's kind, in lowercase: "change" when it has none. */
+export const kindOf = (t: { kind?: unknown } | undefined): TaskKind => {
+  const k = t?.kind
+  return isKind(k) ? k.trim().toLowerCase() : DEFAULT_KIND
+}
+/** Whether task `t` (or kind name `t`) is an investigation: it hands back an answer and nothing is merged. Every other kind runs as a change. */
+export const isInvestigation = (t: { kind?: unknown } | string | undefined): boolean =>
+  (typeof t === 'string' ? t.trim().toLowerCase() : kindOf(t)) === INVESTIGATION
 /** The most of an investigation's answer kept on the task (the full text stays in its report file). */
 export const ANSWER_MAX_CHARS = 4000
 
@@ -277,7 +290,10 @@ function cleanTask(t: unknown): BoardTask | null {
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
   for (const k of ['asked_files', 'options']) if (k in x && !strings(x[k])) delete x[k]
-  if ('kind' in x && x.kind !== 'investigation') delete x.kind
+  if ('kind' in x) {
+    if (kindOf(x) === DEFAULT_KIND) delete x.kind
+    else x.kind = kindOf(x)
+  }
   if ('answer' in x && typeof x.answer !== 'string') delete x.answer
   if ('merge_wait' in x) {
     const mw = asBlockers(x.merge_wait)

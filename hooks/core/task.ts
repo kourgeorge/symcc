@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -18,8 +18,8 @@ const cleanRole = (r: unknown): string => {
   return s.toLowerCase() === 'general' ? '' : s
 }
 
-/** The kind a task gets: `kind` when given, else "investigation" for a researcher, else "change". */
-export const kindFor = (kind: unknown, role: unknown): TaskKind => (isKind(kind) ? kind : cleanRole(role).toLowerCase() === 'researcher' ? 'investigation' : 'change')
+/** The kind a task gets: `kind` when given (in lowercase), else "investigation" for a researcher, else "change". */
+export const kindFor = (kind: unknown, role: unknown): TaskKind => (isKind(kind) ? kindOf({ kind }) : cleanRole(role).toLowerCase() === 'researcher' ? INVESTIGATION : DEFAULT_KIND)
 
 /**
  * A new task on board `b`. `merge_into` is the branch it merges into (and its worker's copy starts
@@ -49,7 +49,8 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     updated_at: now,
     ...(f.needs_review === true ? { needs_review: true } : {}),
     ...(cleanRole(f.role) ? { role: cleanRole(f.role) } : {}),
-    ...(kindFor(f.kind, f.role) === 'investigation' ? { kind: 'investigation' as const } : {}),
+    // "change" is the default, so it is never stored
+    ...(kindFor(f.kind, f.role) !== DEFAULT_KIND ? { kind: kindFor(f.kind, f.role) } : {}),
   }
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
@@ -81,7 +82,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
     else delete next.role
   }
   if (patch.kind !== undefined) {
-    if (patch.kind === 'investigation') next.kind = 'investigation'
+    const kind = kindOf(patch)
+    if (kind !== DEFAULT_KIND) next.kind = kind
     else delete next.kind
   }
   if (patch.needs_review !== undefined) {
@@ -277,13 +279,13 @@ export const outOfTimeNote = (limit: number) => `stopped: ran over ${limit} min;
 // ---------------- an answered investigation: Done, Keep as a note, Ask more ----------------
 
 /** Whether `t` is an investigation whose answer waits in review for the owner to read it. */
-export const isAnswered = (t: Pick<BoardTask, 'status' | 'kind'> | undefined): boolean => t?.status === 'review' && kindOf(t) === 'investigation'
+export const isAnswered = (t: Pick<BoardTask, 'status' | 'kind'> | undefined): boolean => t?.status === 'review' && isInvestigation(t)
 
 /** Task `id` on board `b`, which must be an answered investigation (see isAnswered); throws otherwise. `what` is said in the error. */
 function answeredTask(b: Board, id: string, what: string): BoardTask {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
-  if (!isAnswered(t)) throw new Error(`${t.id} is not an answered investigation (it is ${STATUS_WORD[t.status]}${kindOf(t) === 'investigation' ? '' : ', a change task'}); only an answered investigation can be ${what}`)
+  if (!isAnswered(t)) throw new Error(`${t.id} is not an answered investigation (it is ${STATUS_WORD[t.status]}${isInvestigation(t) ? '' : ', a change task'}); only an answered investigation can be ${what}`)
   return t
 }
 
