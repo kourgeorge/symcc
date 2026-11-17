@@ -646,11 +646,11 @@ changed. Only you can pause or resume a scout; the lead is told a paused scout d
 ## Task kinds
 
 Each task has a **kind**: what the task is for. It is shown next to the task (`bug`,
-`investigation`); `change` shows nothing, because it is the default. A kind is one Markdown
-file, like a role (see [Worker roles](#worker-roles)). The worker is told its task's kind and
+`investigation`); `change` shows nothing, because it is the default. A kind you add is one
+Markdown file, like a role (see [Worker roles](#worker-roles)). The worker is told its task's kind and
 what it means.
 
-The built-in kinds (the plugin's `kinds/` folder):
+The built-in kinds (in the plugin, one file each: `kinds/<name>.ts`):
 
 | Kind | What it is for |
 |---|---|
@@ -683,7 +683,7 @@ Keep the change small and say what you updated.
 
 `description` is required (the lead reads it to choose). The name uses letters, digits, `-`
 and `_`. A file with the name of a built-in kind replaces it. The text under the front matter
-is a free note about the kind. A file that can't be used is skipped, with a note.
+holds the kind's stages, each under a `## name` heading (the stages are read but don't run yet). A file that can't be used is skipped, with a note.
 
 **Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the kinds", "add a
 `chore` kind for dependency bumps", "turn off the feature kind", "reset the bug kind". The lead
