@@ -40,7 +40,6 @@ behind it: you keep talking, and the work keeps moving.
 
 ## Why symcc
 
-- **Work goes on without you.** The board and the team exist so work keeps moving when you are not there. Scouts find work on their own timers, the lead turns it into tasks and leads the workers, and you are asked only for real decisions.
 - **See everything.** A live board shows what is running, what is waiting and what needs you.
 - **Know why.** Every task and commit records who asked for it and why, so you can go from a line of code back to the request.
 - **Order handled for you.** The lead decides which tasks wait for others and which run in parallel. You think about the next question while the team works on the next task.
