@@ -1,7 +1,7 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, findKind, builtInStages } from '../board'
-import { type Stage, type StageResult, parseStages, workerStageFor, manyWorkers, workerAfter, retryStage, nextStage, roleOfStage, stageBuilt } from '../core/stages'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, overtimeAskedLine, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, findKind, builtInStages } from '../board'
+import { type Stage, type StageResult, parseStages, workerStageFor, manyWorkers, workerAfter, retryStage, nextStage, roleOfStage, stageBuilt, testRetriesOf } from '../core/stages'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -34,6 +34,25 @@ export function stagesOf(t: { kind?: unknown }): Stage[] {
   if (found?.length) return found
   const stages = parseStages('', kind, !isInvestigation(kind))
   return typeof stages === 'string' ? [] : stages
+}
+
+/** Whether task `t` merges nothing: an investigation, or a task whose kind file says `merges: no` (see loadKinds). Its hand-back
+ *  ends its try like an investigation's answer: nothing is committed, tested or merged, and it waits in review for the owner to read it. */
+export const mergesNothing = (t: { kind?: unknown }): boolean => isInvestigation(t) || findKind(S.kinds, kindOf(t))?.merges === false
+
+/** The worker stage task `t`'s worker runs now (its `minutes:` is that worker's time limit, see timeLimitOf). */
+export const workerStageOf = (t: { kind?: unknown; stage?: string } | undefined): Stage | undefined => (t ? workerStageFor(stagesOf(t), t.stage) : undefined)
+
+/**
+ * How many new tries task `t` gets on its own when the merge step's tests fail: the `on fail` count of its kind's last `tests` check
+ * (testRetriesOf), else the board's auto_retries. A built-in kind the owner didn't change keeps auto_retries, so that setting still counts.
+ */
+export function testRetriesFor(t: { kind?: unknown }, b: Pick<Board, 'auto_retries'>): number {
+  const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
+  const stages = stagesOf(t)
+  const builtIn = builtInStages(kindOf(t))
+  if (builtIn && JSON.stringify(builtIn) === JSON.stringify(stages)) return retries
+  return testRetriesOf(stages, retries)
 }
 
 /** {{stage}}: the stage this worker runs and its instructions; empty for a kind with only one worker stage (every built-in kind today). */
@@ -658,9 +677,9 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
   const summary = cutLine(answer, 600) || '(no summary)'
   // Its time was up: what it handed back is its report; the task fails with its work kept, nothing is merged.
   if (t.wrap_up) {
-    const limit = timeLimitOf(b.max_minutes, t)
-    // An investigation's hand-back is its answer so far: it still goes to review for the owner to read.
-    if (isInvestigation(t)) {
+    const limit = timeLimitOf(b.max_minutes, t, workerStageOf(t))
+    // An investigation's hand-back (or that of a kind that merges nothing) is its answer so far: it still goes to review for the owner to read.
+    if (mergesNothing(t)) {
       if (gaveUp()) return
       await answered($, t, answer, summary, limit)
       return
@@ -689,7 +708,7 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     const why = endFailure(end)
     if (await writeIfSame($, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
     tellLead($, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
-  } else if (isInvestigation(t)) {
+  } else if (mergesNothing(t)) {
     if (gaveUp()) return
     await answered($, t, answer, summary)
   } else {
@@ -818,7 +837,10 @@ async function answered($: $, t: SymccTask, answer: string, summary: string, lim
   const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
   const late = limit !== undefined
   if (await writeIfSame($, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: [...cur.history, `${tryLabel(t)}: answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`], ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
-  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
+  const then = isInvestigation(t)
+    ? `${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`
+    : `${S.N.name} approve ${t.id} is Done (it ends, nothing merged: its kind ${kindOf(t)} says merges: no, and its folder's edits are thrown away); ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker.`
+  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${then}`)
 }
 
 /**
@@ -924,7 +946,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
     tellLead($, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
     return
   }
-  const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
+  const retries = testRetriesFor(t, b)
   const testTries = t.test_tries ?? 0
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
     // Don't fail yet: a new worker gets the failing test output and fixes it.
@@ -953,6 +975,7 @@ export async function approve($: $, id: string, keepNote = false): Promise<strin
   const t = reviewTask(b, id, 'approve')
   if (isInvestigation(t)) return endInvestigation($, t, keepNote)
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
+  if (mergesNothing(t)) return endInvestigation($, t, false)
   return mergeFinished($, b, t, 'approve')
 }
 
@@ -966,8 +989,16 @@ export async function fullAnswer($: $, t: BoardTask): Promise<{ text: string; fi
 /** Every try's report file of `t` (oldest first), with `latest` (the one the full answer was read from) too. */
 const everyReport = (t: BoardTask, latest?: string): string[] => [...new Set([...taskReports(t).sort((a, b) => a.try - b.try).map(r => r.file), ...(latest ? [latest] : [])])]
 
+/** Done on task `id` of a kind that merges nothing (see mergesNothing), in review: it ends done, nothing merged. */
+function readDone(b: Board, id: string): Board {
+  const t = find(b, id)
+  if (!t) throw new Error(`${id} is not on the board`)
+  if (t.status !== 'review') throw new Error(`${t.id} is not waiting for you to read it (it is ${t.status})`)
+  return patchTask(b, t.id, { status: 'done', note: 'read; nothing merged', merge_main: false, test_output: undefined, history: [...t.history, `try ${t.attempts}: the owner read the result → done (nothing merged; its kind ${kindOf(t)} says merges: no)`] }, now())
+}
+
 /**
- * Done on answered investigation `t`: it ends done (note "answered"), nothing merged. Its folder's uncommitted
+ * Done on answered investigation `t` (or on a task of another kind that merges nothing, see mergesNothing): it ends done (note "answered"), nothing merged. Its folder's uncommitted
  * changes are its own scratch edits (a switch to an investigation is refused while the folder holds a change
  * try's work), so they are thrown away, and the folder is removed. Its branch is deleted too (with -D), unless it has
  * commits its target branch doesn't have (from an earlier change try): then it is kept and the lead is told. With `keepNote` (Keep as a
@@ -980,7 +1011,7 @@ async function endInvestigation($: $, t: BoardTask, keepNote: boolean): Promise<
   // notes already written: a new note never overwrites one (it gets -2, -3… instead)
   const notes = keepNote ? (await Promise.resolve().then(() => $.fs.list(path('docs/research'))).catch(() => [])).map(f => `docs/research/${f.name}`) : []
   const added = await change($, x => {
-    if (!keepNote) return [investigationDone(x, t.id, now()), undefined] as [Board, BoardTask | undefined]
+    if (!keepNote) return [isInvestigation(t) ? investigationDone(x, t.id, now()) : readDone(x, t.id), undefined] as [Board, BoardTask | undefined]
     const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into }, now(), S.N.dir)
     return [investigationDone(y, t.id, now(), n.id), n] as [Board, BoardTask | undefined]
   })
@@ -1400,7 +1431,7 @@ async function askOvertime($: $, b: Board, id: string, limit: number) {
   const t = await change($, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.time_ask || cur.wrap_up) return [x, null] as [Board, null]
-    return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: [...cur.history, `${tryLabel(cur)}: ran ${limit} min, over its time limit; asked the owner for more time`] }, now()), cur] as [Board, BoardTask]
+    return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: [...cur.history, `${tryLabel(cur)}: ${overtimeAskedLine(limit)}`] }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return
   sayNeedsYou($, b, t, overtimeQuestion(id, limit))
@@ -1438,7 +1469,8 @@ export async function answerOvertime($: $, id: string, answer: string): Promise<
     const cur = find(x, t.id)
     if (cur?.status !== 'doing' || !cur.time_ask) return [x, null] as [Board, null]
     const extra = (cur.extra_minutes ?? 0) + pick.add
-    return [patchTask(x, t.id, { extra_minutes: extra, time_ask: undefined, note: '', history: [...cur.history, `${tryLabel(cur)}: the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { extra_minutes: extra })} min)`] }, now()), timeLimitOf(x.max_minutes, { extra_minutes: extra })] as [Board, number]
+    const limit = timeLimitOf(x.max_minutes, { extra_minutes: extra }, workerStageOf(cur))
+    return [patchTask(x, t.id, { extra_minutes: extra, time_ask: undefined, note: '', history: [...cur.history, `${tryLabel(cur)}: the owner gave it ${pick.add} more min (limit now ${limit} min)`] }, now()), limit] as [Board, number]
   })
   if (out === null) return undefined
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`
@@ -1474,7 +1506,9 @@ export async function check($: $) {
       }
     }
     // Told its time is up: stopped once its short grace to hand back is over.
-    const limit = timeLimitOf(b.max_minutes, t)
+    // Its stage's minutes: when it has one, else max_minutes (plus what the owner added).
+    const stage = workerStageOf(t)
+    const limit = timeLimitOf(b.max_minutes, t, stage)
     if (t?.status === 'doing' && t.wrap_up) {
       if (nowMs - Date.parse(t.wrap_up) >= WRAP_UP_GRACE_MS) {
         workers.delete(agentId)
@@ -1487,7 +1521,7 @@ export async function check($: $) {
     // hard cap it is told to wrap up (and stopped after a short grace).
     if (t?.status === 'doing' && minutes > limit) {
       if (!t.time_ask) await askOvertime($, b, w.task, limit)
-      else if (minutes > hardCapOf(b.max_minutes, t)) await wrapUp($, w.task, `no answer from the owner after ${Math.round(minutes)} min`)
+      else if (minutes > hardCapOf(b.max_minutes, t, stage)) await wrapUp($, w.task, `no answer from the owner after ${Math.round(minutes)} min`)
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
     // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so it is

@@ -148,7 +148,7 @@ export function parseStages(body: string, kind: string, merges = true): Stage[] 
     }
     if (keys.has('on fail')) {
       const v = keys.get('on fail')!
-      const m = /^back to\s+([A-Za-z0-9-]+)\s*(?:,\s*(\d+)\s+times?)?$/.exec(v)
+      const m = /^back to\s+([A-Za-z0-9-]+)\s*(?:,?\s*(\d+)\s+times?)?$/.exec(v)
       if (!m) return `on fail: must be "back to <stage>, <N> times", not "${v}" in ${where}`
       if (!m[2]) return `on fail: in ${where} needs a count ("back to ${m[1]}, 2 times")`
       const times = Number(m[2])
@@ -239,6 +239,17 @@ export function onFailOf(stages: readonly Stage[], stage: Stage, retries: number
   const i = stages.indexOf(stage)
   const before = stages.slice(0, Math.max(0, i)).filter(s => s.type === 'worker').at(-1)
   return before && retries > 0 ? { back: before.name, times: retries } : undefined
+}
+
+/**
+ * How many new tries the merge step's failing tests get: the `on fail` count of the last `tests` check after the last worker stage
+ * (the one retryStage goes back from), else `retries` (the board's auto_retries) when that check has no `on fail` or there is none.
+ */
+export function testRetriesOf(stages: readonly Stage[], retries: number): number {
+  const last = workerStages(stages).at(-1)
+  const after = last ? stages.slice(stages.indexOf(last) + 1) : stages
+  const check = after.filter(s => s.type === 'check' && s.value === 'tests').at(-1)
+  return check?.onFail?.times ?? retries
 }
 
 /** What comes after a stage: the next stage (maybe the merge step), the end (a kind that doesn't merge), a go-back, or failed. */

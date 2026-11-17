@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { parseKind, kindSkipReason, kindFileText } from '../hooks/board'
-import { parseStages, defaultStages, readKindRun, type Stage, nextStage, workerStageFor, retryStage, migratedStage, manyWorkers, workerAfter, retriedStage, rejectedStage } from '../hooks/core/stages'
+import { parseStages, defaultStages, readKindRun, type Stage, nextStage, workerStageFor, retryStage, migratedStage, manyWorkers, workerAfter, retriedStage, rejectedStage, testRetriesOf } from '../hooks/core/stages'
 import { S } from '../hooks/plugin/state'
 import { loadKinds } from '../hooks/plugin/kinds'
 import { BUILT_IN_KIND_TEXTS } from '../kinds'
@@ -154,4 +154,12 @@ test('T-340: a retried task restarts at the worker stage it was in; a rejected o
   // with its go-backs cleared, a check that had used them all goes back again
   expect(nextStage(PAIR, { stage: 'check', backs: { check: 2 } }, 'failed').go).toBe('failed')
   expect(nextStage(PAIR, { stage: 'check' }, 'failed').go).toBe('back')
+})
+
+test('T-339: the merge step\'s tests get the last tests check\'s on fail count, else auto_retries; "back to code 1 time" needs no comma', () => {
+  const one = parseStages('## code\nworker: task\n\n## tests\ncheck: tests\non fail: back to code 1 time\n', 'x') as Stage[]
+  expect(one[1]!.onFail).toEqual({ back: 'code', times: 1 })
+  expect(testRetriesOf(one, 2)).toBe(1)
+  expect(testRetriesOf(parseStages('## code\nworker: task\n\n## tests\ncheck: tests\n', 'x') as Stage[], 3)).toBe(3)
+  expect(testRetriesOf(PAIR, 2)).toBe(1)
 })

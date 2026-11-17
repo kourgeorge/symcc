@@ -14,6 +14,7 @@ import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/sto
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
 import { loadKinds } from '../hooks/plugin/kinds'
+import { parseStages } from '../hooks/core/stages'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
@@ -2289,6 +2290,51 @@ test('at the time limit the worker is not stopped: the task stays doing and the 
   expect(told.length).toBe(1)
   expect(told[0]).toContain('+30 min | +60 min | Stop it')
   expect(told[0]).toContain('change T-1 and answer')
+})
+
+/** T-339: a kind "quick" whose code stage has `minutes: 5` and whose tests check goes back to code 1 time. */
+const quickKind = () => {
+  const stages = parseStages('## code\nworker: task\nminutes: 5\nDo it.\n\n## tests\ncheck: tests\non fail: back to code 1 time\n', 'quick')
+  if (typeof stages === 'string') throw new Error(stages)
+  S.kinds = [{ name: 'quick', description: 'a quick change', body: '', stages }]
+}
+
+test('T-339: a stage with minutes: 5 asks for more time at 5 minutes, not at max_minutes; +30 min moves it to 35', async () => {
+  let said = ''
+  const r = await overTime(async w => {
+    quickKind()
+    await change(w.$, b => patchTask(b, 'T-1', { kind: 'quick', stage: 'code' } as Partial<BoardTask>, ISO))
+    runFor(4)
+    await check(w.$)
+    expect(find(await load(w.$), 'T-1')!.time_ask).toBeUndefined()
+    runFor(6)
+    await check(w.$)
+    // the board panel's row asks about the stage's 5 minutes too, not max_minutes
+    const b = await load(w.$)
+    expect(b.max_minutes).not.toBe(5)
+    expect(rowExtra(find(b, 'T-1')!, b.tasks, '', b.max_minutes)).toBe('T-1 has run 5 min. Give it more time?')
+    said = await runTool(w.$, 'change', { task: 'T-1', answer: '+30 min' })
+  })
+  expect(r.t.history).toContain('try 1: ran 5 min, over its time limit; asked the owner for more time')
+  expect(leadQueue.some(x => x.includes('T-1 has run 5 min. Give it more time?'))).toBe(true)
+  expect(said).toBe('T-1 has 30 more minutes: its limit is now 35 min, and its worker goes on.')
+})
+
+test('T-339: a tests check with on fail: back to code 1 time fails on the second failure while auto_retries is 2; a built-in kind keeps auto_retries', async () => {
+  const failing = { 'npm test': { exitCode: 1, stdout: 'FAIL', stderr: '' } }
+  const run = async (extra: Partial<SymccTask>) => {
+    const r = await tryEnds(async w => {
+      expect((await load(w.$)).auto_retries).toBe(2)
+      quickKind()
+      await answers('made the change')(w)
+    }, { tests: failing, extra })
+    return [r.t.status, r.t.test_tries ?? 0, r.t.note]
+  }
+  expect(await run({ kind: 'quick', stage: 'code' } as Partial<SymccTask>)).toEqual(['todo', 1, 'tests failed; a new try will fix them (1 of 1)'])
+  const second = await run({ kind: 'quick', stage: 'code', test_tries: 1 } as Partial<SymccTask>)
+  expect(second.slice(0, 2)).toEqual(['failed', 1])
+  // the built-in feature kind says "2 times" too, but the board's auto_retries still counts for it
+  expect(await run({ kind: 'feature', test_tries: 1 } as Partial<SymccTask>)).toEqual(['todo', 2, 'tests failed; a new try will fix them (2 of 2)'])
 })
 
 test('"+30 min" moves the limit later: the worker goes on, is not asked again before it, and finishes normally', async () => {
