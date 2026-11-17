@@ -265,7 +265,7 @@ function amountOf(a: string): number | undefined {
   a = a.replace(/^(please\s*,?\s+)?(give\s+it\s+)?(please\s+)?/, '')
   const m = /^(?:(?:another|an?|extra|additional|more)\s+)?\+?\s*(\d{0,3}\.\d+|\d{1,3})(?![\d.])\s*(.*)$/.exec(a)
   if (!m) return undefined
-  const words = m[2].split(/[\s,]+/).filter(w => w && !/^(more|extra|another|additional|please)$/.test(w))
+  const words = (m[2] ?? '').split(/[\s,]+/).filter(w => w && !/^(more|extra|another|additional|please)$/.test(w))
   if (words.length > 1) return undefined
   const unit = words[0] ?? ''
   const per = /^(h|hr|hrs|hours?)$/.test(unit) ? 60 : /^(|m|min|mins|minutes?)$/.test(unit) ? 1 : 0

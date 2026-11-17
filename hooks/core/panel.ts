@@ -393,7 +393,7 @@ export function waitOrder<T extends SymccTask>(tasks: T[], tie: (x: T, y: T) => 
   const out: T[] = []
   const placed = new Set<string>()
   for (let i = 0; i < left.length; ) {
-    const t = left[i]
+    const t = left[i]!
     if ([...waits.get(t.id)!].every(a => placed.has(a))) {
       out.push(t)
       placed.add(t.id)

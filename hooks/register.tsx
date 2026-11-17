@@ -302,7 +302,7 @@ export const register: Register = on => {
     )
     const cmd = parseCommand(e.command, e.args, loaded.board ? modeOf(loaded.board) : undefined, S.N.name)
     if (!cmd) return next(e)
-    const say = (text: string) => ({ text, isTextDisplayOnly: true })
+    const say = (text: string) => ({ text, isTextDisplayOnly: true as const })
     if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
     const b = loaded.board!
     switch (cmd.kind) {
@@ -318,7 +318,7 @@ export const register: Register = on => {
         const defs = await scheduleScouts($)
         await publish($, await load($))
         // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
-        const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
+        const placed = await openPane($, { tab: 'scouts' }).then(r => r?.isPlaced ?? false).catch(() => false)
         const skipped = unreadableScoutsText()
         const withSkipped = (text: string) => (skipped ? `${text}\n${skipped}` : text)
         if (placed) return say(withSkipped(`Scouts opened: Enter opens a scout, t tasks, b goes back to the tasks.`))
@@ -333,7 +333,7 @@ export const register: Register = on => {
       case 'settings': {
         S.settingEdit = null
         S.settingPick = null
-        const placed = await openPane($, { tab: 'settings' }).then(r => r.isPlaced).catch(() => false)
+        const placed = await openPane($, { tab: 'settings' }).then(r => r?.isPlaced ?? false).catch(() => false)
         if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, b goes back to the tasks.`)
         return say(settingsText({ ...b, notify: notifyOf(b, await playable($)) }, S.N.name))
       }

@@ -518,11 +518,11 @@ export async function endCheck($: $, id: string) {
  * board has it now ('gone' when it is not on the board any more), and nothing is written.
  */
 async function writeIfSame($: $, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
-  return change($, x => {
+  return change<SymccTask | 'gone' | null>($, x => {
     const cur = find(x, t.id)
-    if (!cur) return [x, 'gone'] as [Board, 'gone']
-    if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur] as [Board, SymccTask]
-    return [patchTask(x, t.id, patch(cur), now()), null] as [Board, null]
+    if (!cur) return [x, 'gone']
+    if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur]
+    return [patchTask(x, t.id, patch(cur), now()), null]
   })
 }
 
@@ -744,14 +744,14 @@ async function doneAfterMerge($: $, t: SymccTask, sha: string): Promise<boolean>
 async function holdForFiles($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
   const files = r.blocked!
   const note = waitFilesNote(intoOf(t), files)
-  const res = await change($, x => {
+  const res = await change<SymccTask | 'gone' | boolean>($, x => {
     const cur = find(x, t.id)
-    if (!cur) return [x, 'gone'] as [Board, 'gone']
-    if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur] as [Board, SymccTask]
+    if (!cur) return [x, 'gone']
+    if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur]
     const first = !waitsForFiles(cur)
     const status = cur.status === 'review' ? 'review' : 'waiting'
     const y = patchTask(x, t.id, { status, merge_wait: files, note, ...(first ? { history: [...cur.history, line] } : {}), ...endedBy(cur, now(), 'finished', 'waiting for your files') }, now())
-    return [y, first] as [Board, boolean]
+    return [y, first]
   })
   if (res === 'gone') return
   if (typeof res !== 'boolean') return changedMeanwhile($, t, b, r, line, worktree, agentId)
@@ -1260,8 +1260,9 @@ export async function cleanLeftoverTmp($: $) {
     if (r.exitCode !== 0) failed.push(`${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`)
   }
   // Say it once per file, not every two minutes.
-  const fresh = failed.filter(f => !tmpWarned.has(f.split(':')[0]))
-  fresh.forEach(f => tmpWarned.add(f.split(':')[0]))
+  const nameOf = (f: string) => f.slice(0, f.indexOf(':'))
+  const fresh = failed.filter(f => !tmpWarned.has(nameOf(f)))
+  fresh.forEach(f => tmpWarned.add(nameOf(f)))
   if (fresh.length) $.ui.toast(S.N.toast(`couldn't remove leftover temp files in ${S.N.dir}/: ${fresh.join('; ')}`))
 }
 

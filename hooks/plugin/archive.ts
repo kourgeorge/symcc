@@ -9,7 +9,7 @@ import { tellLead } from './tell'
 // file stays small. The archive is written first; only then are the tasks taken off the board.
 
 /** archive.json as it is now: missing is an empty archive; `broken` (with its text) when it can't be read. */
-async function readArchiveFile($: $): Promise<{ archive: Archive; text: string | null; broken?: string }> {
+async function readArchiveFile($: $): Promise<{ archive: Archive; text: string | null; broken?: string; migrated?: number }> {
   const file = path(S.N.archiveFile)
   if (!(await $.fs.exists(file).catch(() => false))) return { archive: emptyArchive(), text: null }
   const text = await $.fs.read(file)
