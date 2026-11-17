@@ -237,10 +237,10 @@ export const BAD_LIST_MESSAGE = `that looks like a list but isn't valid JSON: us
 /**
  * A value meant as a list rather than a shell line: it starts with "[" and either has no space
  * after it (a shell "[" test always does), or has a comma between quoted parts, or is quoted
- * parts inside brackets. "[ -f a ] && npm test" is not.
+ * parts inside brackets. "[ -f a ] && npm test" and "[[ -f a ]] && npm test" (a bash test) are not.
  */
 const looksLikeList = (v: string) =>
-  v.startsWith('[') && (/^\[\S/.test(v) || /["']\s*,\s*["']/.test(v) || /^\[\s*["'][\s\S]*["']\s*\]$/.test(v))
+  v.startsWith('[') && !/^\[\[\s/.test(v) && (/^\[\S/.test(v) || /["']\s*,\s*["']/.test(v) || /^\[\s*["'][\s\S]*["']\s*\]$/.test(v))
 
 /** Typed test commands: a JSON list of strings is several commands, else each line is one whole command; null for a broken list. */
 function commandList(v: string): string[] | null {
