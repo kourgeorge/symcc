@@ -38,10 +38,13 @@ Key: Y = yes, P = partly, N = no, ? = not checked. "Lead" is the chat; "workers"
 | **Zed** v1.29.1-pre | Any ACP agent | WASM extensions: languages, themes, MCP servers, debuggers, snippets | P (MCP) | N | N | N | N (no custom panels listed) | N | 95k stars. "As of Zed v1.5.0, ACP extensions have been deprecated in favor of the ACP Registry" |
 | **Vibe Kanban** v0.1.46 (2026-11-15) | Over 10 agents | None; it has its own MCP server (`start_workspace`, `create_session`) | — | — | Y (its own) | — | — | — | Apache-2.0; company shut down, community-run |
 | **Conductor** | Claude Code, Codex, Cursor, OpenCode | None found. Beta cloud-only API, MCP server and CLI | — | — | (cloud workspaces) | — | — | — | Mac app; no license found |
+| **claudecodeui** (siteboon, now "CloudCLI UI"). Verdict: screen only, later. [Details](research-is-siteboon-claudecodeui-a-good-host-for-symcc.md) | Real Claude Code, Codex, Cursor and OpenCode (no ACP). Claude runs as a separate process for each turn, so symcc's timers, scouts and workers stop between turns | Plugins are only a tab | N | N (a plugin cannot see or wake the chat) | ? | ? | P a tab only | N between turns | AGPL-3.0 |
 | **Kilo Code** v7.2.x | Fork of OpenCode | Same plugins as OpenCode | as OpenCode | | | | | | MIT, active |
 | **Cline** v4.1.26 | Own agent; Claude Code and Codex as providers | Hooks, SDK | ? | ? | ? | **N for Claude Code and Codex:** hooks never fire, because those CLIs run tools themselves ([#13277](https://github.com/cline/cline/issues/13277)) | VS Code | | Apache-2.0 |
 | **Crush** | Own agent | Hooks only ("largely Claude Code-compatible"), MCP, skills | P (MCP) | N | N | Y `PreToolUse` (top-level agent only) | N | N | Charm license |
 | Toad v0.6.20 (2026-05-26), Claude Squad v1.0.20, Crystal v0.3.5 (deprecated → Nimbalyst), Roo Code (**archived**), Omnara (became a cloud agent platform) | various | No plugin API found | | | | | | | |
+
+**claudecodeui (added later, from T-354).** It is a web and phone screen for the real Claude Code, Codex, Cursor and OpenCode, without ACP. Its plugins are only a tab: they add no lead tools and cannot see or wake the chat. Claude runs as one process per turn, so symcc's timers, scouts and workers stop between turns. The license is AGPL-3.0. Verdict: not a host. Maybe later a web or phone screen on top of standalone symcc. Details: [research-is-siteboon-claudecodeui-a-good-host-for-symcc.md](research-is-siteboon-claudecodeui-a-good-host-for-symcc.md).
 
 ### ACP (Agent Client Protocol), v1.18.0 (2026-11-14)
 
