@@ -4,7 +4,7 @@ import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
-import { loadKinds } from './kinds'
+import { loadKinds, leadKinds } from './kinds'
 import { leadPrompts } from './prompts'
 import { S, type $, heard, workers } from './state'
 import { load, change, now, path } from './store'
@@ -156,7 +156,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   ${TOOLS().map(t => t.name).filter(n => n !== 'approve' && n !== 'reject').join(' · ')}
   approve · reject (only for a task ready for review)
   scouts lists, adds, changes, removes or runs scouts; roles lists, adds, edits, resets,
-  removes or turns off / on worker roles; prompts shows, edits or resets the worker prompts
+  removes or turns off / on worker roles; kinds does the same for the task kinds; prompts shows, edits or resets the worker prompts
   (yours in ${S.N.dir}/prompts/change.md and investigation.md); stats shows time and token use;
   setup_git sets up git in a folder without it (only after you say yes).
   board lists the open tasks and the backlog (done / dropped only as counts); it takes status
@@ -293,11 +293,12 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 ${rolesLeadText(S.roles, S.N.name)}
 ${kindsLeadText(S.kinds, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off). An off role is never picked for a new task.
+- Manage task kinds with ${S.N.name} kinds, never by writing ${S.N.dir}/kinds/ files by hand: action list (the default) shows each kind and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional body); edit changes what you give (a built-in kind is copied to ${S.N.dir}/kinds/ first); reset brings a built-in back; remove deletes an added kind (ask the owner first); off / on turns a kind off or on (change and investigation can't be turned off). An off kind is never picked for a new task, and ${S.N.name} add refuses it. Only change kinds when the owner asks.
 - The worker prompts (the fixed text every worker gets: its folder, its files, the tests, how to ask) are the built-in ones unless the owner has their own ${S.N.dir}/prompts/change.md or investigation.md. Manage them with ${S.N.name} prompts, never by writing those files by hand: action list (the default) shows both and where they come from, list with name shows one in full with its placeholders ({{files}}, {{test_command}}, {{ask}} and the rest); edit with name and text saves the whole new text (without text it copies the prompt to the owner's file to edit by hand); reset brings the built-in back. Only change them when the owner asks; a change counts from the next worker on.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search) narrow it, e.g. status: ["done"], search: "notify"; with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).`
 
 /** The kind parameter of add and change. */
-const KIND_PARAM = () => ({ type: 'string', description: `The kind of task: ${[...new Set([...BUILT_IN_KINDS, ...kindNames(S.kinds)])].join(', ')}, or the owner's own (see your instructions for what each is for); change when unsure. Every kind but investigation runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` })
+const KIND_PARAM = () => ({ type: 'string', description: `The kind of task: ${[...new Set([...BUILT_IN_KINDS.filter(n => !S.kinds.some(k => k.name === n && k.off)), ...kindNames(S.kinds)])].join(', ')}, or the owner's own (see your instructions for what each is for); change when unsure. Every kind but investigation runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` })
 
 export const TOOLS = () => [
   {
@@ -331,6 +332,11 @@ export const TOOLS = () => [
     name: 'roles',
     description: `List, add, edit, reset, remove, turn off or turn on the worker roles (built-in ones in the plugin's roles/ folder, the owner's own in ${S.N.dir}/roles/<name>.md). action "list" (the default): every role with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that role in full (front matter and checklist). "add": writes ${S.N.dir}/roles/<name>.md (name: letters, digits, - and _; description needed; optional model, skills, tools (only ${EXTRA_TOOLS.join(', ')}) and checklist); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in role is first copied to ${S.N.dir}/roles/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added role's file (confirm with the owner first). "off": the role is never picked and not offered on the task page (${DEFAULT_ROLE} can't be turned off; tasks that already have it keep it); "on" turns it back on. A change counts from the next worker on. Only change roles when the owner asks.`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'reset', 'remove', 'off', 'on'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The role, e.g. tester (letters, digits, - and _).' }, description: { type: 'string', description: 'For add / edit: what the role is for, in a few words (the lead reads it to choose).' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, skills: { type: 'array', items: { type: 'string' }, description: 'For add / edit: optional skills the worker should use.' }, tools: { type: 'array', items: { type: 'string' }, description: `For add / edit: optional extra tools (only ${EXTRA_TOOLS.join(', ')}); an empty list removes them.` }, checklist: { type: 'string', description: 'For add / edit: the checklist the worker follows (the file\'s body).' } } },
+  },
+  {
+    name: 'kinds',
+    description: `List, add, edit, reset, remove, turn off or turn on the task kinds (built-in ones in the plugin's kinds/ folder, the owner's own in ${S.N.dir}/kinds/<name>.md). action "list" (the default): every kind with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that kind in full (front matter and body). "add": writes ${S.N.dir}/kinds/<name>.md (name: letters, digits, - and _; description needed; optional body); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in kind is first copied to ${S.N.dir}/kinds/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added kind's file (confirm with the owner first). "off": the kind is never picked for a new task and add refuses it (change and investigation can't be turned off; tasks that already have it keep it); "on" turns it back on. Only change kinds when the owner asks.`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'reset', 'remove', 'off', 'on'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The kind, e.g. chore (letters, digits, - and _).' }, description: { type: 'string', description: 'For add / edit: what this kind of task is, in a few words (the lead reads it to choose).' }, body: { type: 'string', description: 'For add / edit: free text about the kind (the file\'s body).' } } },
   },
   {
     name: 'prompts',
@@ -678,6 +684,8 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       return leadScouts($, a)
     case 'roles':
       return leadRoles($, a)
+    case 'kinds':
+      return leadKinds($, a)
     case 'prompts':
       return leadPrompts($, a)
     case 'stats':

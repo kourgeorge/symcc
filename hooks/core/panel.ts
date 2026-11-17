@@ -325,6 +325,16 @@ export const rolesKeys = (): KeyHint[] => [
   { key: 'b', word: 'back' },
 ]
 
+/** The keys at the bottom of the Kinds page (opened from Settings): the same as the Roles page's. A kind's own page and
+ *  edit page use roleKeys and roleEditKeys. */
+export const kindsKeys = (): KeyHint[] => [
+  { key: 'Enter', word: 'open' },
+  { key: 'n', word: 'new kind' },
+  { key: '↑↓', word: 'move' },
+  { key: 't s c', word: 'views' },
+  { key: 'b', word: 'back' },
+]
+
 /** The keys at the bottom of a role's page; which ones depend on its buttons. */
 export function roleKeys(o: { canEdit?: boolean; canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean }): KeyHint[] {
   return [
