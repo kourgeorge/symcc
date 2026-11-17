@@ -777,6 +777,12 @@ test('dash, CamelCase, .Tests, Cypress and e2e test names count as tests', () =>
   expect(untestedChange(['src/Foo.java', 'src/FooTest.java'])).toBe(false)
 })
 
+test('UITests / APITests-style names and an e2e name part count as tests', () => {
+  for (const f of ['MyAppUITests/LoginUITests.swift', 'src/APITests.ts', 'src/IOTest.java', 'src/ABTest.java', 'src/login.e2e.ts', 'src/login_e2e.py', 'src/login-e2e.ts']) expect(isTestFile(f)).toBe(true)
+  for (const f of ['src/latest.ts', 'src/Contest.py', 'src/inspect.ts', 'scripts/run-tests.sh', 'src/LATEST.ts', 'src/LOGINTEST.ts', 'src/e2etools.ts']) expect(isTestFile(f)).toBe(false)
+  expect(untestedChange(['MyApp/Login.swift', 'MyAppUITests/LoginUITests.swift'])).toBe(false)
+})
+
 // ---------------- approve and reject ----------------
 
 /** A world where T-1 waits in review: its work is committed (h1) in its worktree and the board is saved. */

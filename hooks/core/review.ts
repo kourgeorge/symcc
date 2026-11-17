@@ -21,8 +21,10 @@ const DOC_NAMES = new Set(['readme', 'changelog', 'license', 'licence', 'copying
  * Whether `path` is a test file: under a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder or a
  * folder ending in .Test / .Tests (Foo.Tests/); with a "test" or "spec" name part split by "." or "_"
  * (a.test.ts, a_test.py, test_a.py), a "test" or "spec" part split by "-" (a-test.ts, a-spec.ts), a .cy. part
- * (a.cy.ts), or a CamelCase name ending in Test / Tests (FooTest.java, FooTests.cs). Names that only contain
- * those letters (latest.ts, Contest.py, inspect.ts) are not tests, and neither is run-tests.sh (it runs tests).
+ * (a.cy.ts), an "e2e" part (login.e2e.ts, login_e2e.py), or a CamelCase name ending in Test / Tests with a
+ * capital T (FooTest.java, FooTests.cs, LoginUITests.swift, APITests.ts). Names that only contain those letters
+ * (latest.ts, Contest.py, inspect.ts) are not tests, and neither is run-tests.sh (it runs tests). All-capital
+ * names (LATEST.ts, LOGINTEST.ts) are not tests, since "TEST" there can't be told apart from a word like LATEST.
  */
 export function isTestFile(path: string): boolean {
   const orig = String(path ?? '').split('/')
@@ -31,9 +33,9 @@ export function isTestFile(path: string): boolean {
   const stem = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name
   const low = stem.toLowerCase()
   if (parts.slice(0, -1).some(d => TEST_DIRS.has(d) || d.endsWith('.tests') || d.endsWith('.test'))) return true
-  if (low.split(/[._]/).some(w => w === 'test' || w === 'tests' || w === 'spec' || w === 'cy')) return true
-  if (low.split(/[-._]/).some(w => w === 'test' || w === 'spec')) return true
-  return stem.split(/[-._]/).some(w => /(?:^|[a-z0-9])Tests?$/.test(w))
+  if (low.split(/[._]/).some(w => w === 'test' || w === 'tests' || w === 'spec' || w === 'cy' || w === 'e2e')) return true
+  if (low.split(/[-._]/).some(w => w === 'test' || w === 'spec' || w === 'e2e')) return true
+  return stem.split(/[-._]/).some(w => /Tests?$/.test(w))
 }
 
 const CODE_EXTS = new Set(['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'py', 'sh', 'bash', 'zsh', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'pl', 'lua', 'vue', 'svelte'])
