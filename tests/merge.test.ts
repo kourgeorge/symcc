@@ -1367,6 +1367,84 @@ test('T-340: a task of a two-worker kind rejected from review goes back to its l
   }
 })
 
+// ---------------- merges: no and merge_tests: no (T-342) ----------------
+
+/** A world where T-1, of the owner's kind `name` (kind file text `text`; null: no owner file, the built-in kind), has its worker ag1 just finished, with the files `changed`. */
+async function ownKindFinished(name: string, text: string | null, changed: string[]) {
+  const w = world({ changed })
+  const KINDS = `${ROOT}/.symcc/kinds`
+  const x = w.$ as unknown as { fs: Record<string, unknown> }
+  x.fs.list = async (dir: string) => (dir === KINDS && text !== null ? [{ kind: 'file', name: `${name}.md` }] : [])
+  x.fs.exists = async (p: string) => (p === KINDS && text !== null) || w.files.has(p)
+  if (text !== null) w.put(`${KINDS}/${name}.md`, text)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  const [b] = boardWith('auto', ['npm test'], { kind: name, session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  await loadKinds(w.$)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'here is what I found')
+  return { w, t: find(await load(w.$), 'T-1')! }
+}
+
+const NO_MERGE_KIND = '---\ndescription: try something out, keep nothing\nmerges: no\n---\nTry it in the folder and say what happened.\n'
+const DOCS_KIND = '---\ndescription: a doc edit\nmerge_tests: no\n---\n'
+
+test('T-342: an owner kind with merges: no ends like an investigation: nothing committed, tested or merged, and it waits for the owner', async () => {
+  const before = S.kinds
+  try {
+    const { w, t } = await ownKindFinished('tryout', NO_MERGE_KIND, ['src/a.ts'])
+    expect(t.status).toBe('review')
+    expect(t.note).toBe('answered; waiting for you to read it')
+    expect(t.answer).toBe('here is what I found')
+    expect(w.calls.some(c => / git (add|commit)\b/.test(c))).toBe(false)
+    expect(ranTests(w)).toEqual([])
+    expect(movedMain(w)).toBe(false)
+    expect(w.git.main).toBe(M1)
+    // the owner's Done ends it with nothing merged
+    const out = await runTool(w.$, 'approve', { task: 'T-1' })
+    expect(out).toContain('nothing was merged')
+    const done = find(await load(w.$), 'T-1')!
+    expect([done.status, done.note]).toEqual(['done', 'read; nothing merged'])
+    expect(movedMain(w)).toBe(false)
+    expect(w.git.main).toBe(M1)
+  } finally {
+    S.kinds = before
+    cleanUp()
+  }
+})
+
+test('T-342: an owner kind with merge_tests: no merges only-docs work without the test command, but runs it for a .ts change', async () => {
+  const before = S.kinds
+  try {
+    const docs = await ownKindFinished('docedit', DOCS_KIND, ['src/README.md', 'src/notes.md'])
+    expect(docs.t.status).toBe('done')
+    expect(ranTests(docs.w)).toEqual([])
+    expect(docs.w.git.main).toBe(H1)
+    expect(docs.t.history.at(-1)).toContain('tests skipped (only docs changed)')
+    cleanUp()
+    const code = await ownKindFinished('docedit', DOCS_KIND, ['src/README.md', 'src/a.ts'])
+    expect(code.t.status).toBe('done')
+    expect(ranTests(code.w)).toEqual(['/bin/sh -c npm test'])
+    expect(code.t.history.at(-1)).toContain('tests passed')
+  } finally {
+    S.kinds = before
+    cleanUp()
+  }
+})
+
+test('T-342: a built-in kind still runs the tests for only-docs work and merges', async () => {
+  const before = S.kinds
+  try {
+    const { w, t } = await ownKindFinished('docs', null, ['src/notes.md'])
+    expect(t.status).toBe('done')
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+    expect(w.git.main).toBe(H1)
+  } finally {
+    S.kinds = before
+    cleanUp()
+  }
+})
+
 test('/symcc-off then /symcc-on: the reply names the mode, the lead is told once, and T-1 gets a new worker', async () => {
   const { w, spawned } = await liveWorld()
   try {

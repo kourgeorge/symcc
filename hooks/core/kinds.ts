@@ -2,7 +2,8 @@
 // The built-in ones are texts in the plugin's kinds/<name>.ts (like the worker prompts); the owner's own are files
 // `.<plugin name>/kinds/<name>.md` in the project, which win over a built-in one with the same name. Front matter: description (needed; the lead reads it
 // to choose), off: true (optional: the kind is never picked for a new task), merges and merge_tests (optional, yes / no).
-// The body is the kind's stages (see stages.ts). For now every kind still runs like a change, except investigation.
+// The body is the kind's stages (see stages.ts). A kind with merges: no ends like an investigation (nothing committed, tested or merged; see
+// mergesNothing in workers.ts); one with merge_tests: no skips the test command at merge when only docs changed.
 import { DEFAULT_NAME } from '../name'
 import { BUILT_IN_KIND_TEXTS } from '../../kinds'
 import { DEFAULT_KIND, INVESTIGATION, KIND_NAME, kindOf } from './board-file'
