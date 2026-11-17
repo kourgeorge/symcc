@@ -1,5 +1,7 @@
 # Task kinds, each with its own workflow (epics as one kind)
 
+> Decision 2026-11-17: the owner chose not to build per-kind workflows (overcomplicated for symcc); steps 2-4 were built and then removed in T-348. Kinds stay labels; a single optional checker before merge (T-349) replaces the workflow stages.
+
 **Short answer.** Every task already has a `kind` (after T-328: `change`, `bug`, `feature`,
 `refactor`, `docs`, `investigation`, each a file in `kinds/` or `.symcc/kinds/`). This design
 gives each kind a **workflow**: an ordered list of **stages** written in the kind's file. A stage
