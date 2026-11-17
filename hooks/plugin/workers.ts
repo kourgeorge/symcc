@@ -53,7 +53,8 @@ const changeValues = (t: SymccTask, b: Board, dir: string, role?: RoleDef): Reco
   ...sharedValues(t, dir, role),
   files: `Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}`,
-  test_command: b.test_commands.length ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands.join(' && ')}` : 'There is no test command; keep the change small and correct.',
+  test_command: b.test_commands.length === 1 ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands[0]}`
+    : b.test_commands.length ? `After you finish, these must pass; run each one on its own, from your folder:\n${b.test_commands.map(c => `  ${c}`).join('\n')}` : 'There is no test command; keep the change small and correct.',
   merge_main: t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : '',
   test_output: t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
   earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\nDon't repeat those mistakes.\n` : '',

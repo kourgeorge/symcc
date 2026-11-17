@@ -227,7 +227,9 @@ export const settingSetText = (c: SettingChange) => `${c.name} set to ${c.value}
 
 const unquoteValue = (s: string) => {
   const t = s.trim()
-  return t.length >= 2 && (t[0] === '"' || t[0] === "'") && t[t.length - 1] === t[0] ? t.slice(1, -1).trim() : t
+  const q = t[0]
+  // strip outer quotes only when they wrap the whole value: that quote mark appears nowhere inside
+  return t.length >= 2 && (q === '"' || q === "'") && t[t.length - 1] === q && !t.slice(1, -1).includes(q) ? t.slice(1, -1).trim() : t
 }
 
 /** Typed test commands: a JSON list of strings is several commands, else each line is one whole command. */

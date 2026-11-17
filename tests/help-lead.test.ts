@@ -8,3 +8,9 @@ test('/symcc-help lead names every lead tool and every setting', () => {
   for (const s of SETTINGS) expect(text).toContain(s.name)
   expect(text).toContain('scouts · roles · prompts · stats · setup_git')
 })
+
+test('/symcc-help says a typed test command is one whole line and several go in a list, not joined with &&', () => {
+  const text = manual('lead') + manual('')
+  expect(text).not.toContain('join them with " && "')
+  expect(text).toContain('a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"]')
+})

@@ -10,7 +10,7 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches } from './panel'
-import { offStatusLine } from './settings'
+import { offStatusLine, testCommandsText } from './settings'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
@@ -149,7 +149,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
-    b.test_commands.length ? fact(`tests: ${b.test_commands.join(' && ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
+    b.test_commands.length ? fact(`tests: ${testCommandsText(b.test_commands)}`) : [{ text: 'no test command', tone: 'warning' as const }],
     fact(`${b.max_parallel} at once`),
     fact(`${b.max_minutes} min`),
     fact(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
@@ -231,7 +231,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const s: BoardSections = boardSections(b.tasks, nowMs ?? NaN, offsetMin)
   const closed = [...s.today, ...s.days.flatMap(g => g.tasks)]
   const all = [...s.open, ...s.backlog, ...closed]
-  const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.join(' && ') || 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
+  const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.length ? testCommandsText(b.test_commands) : 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
   const search = filter.search?.trim() ?? ''
   let body: string[]

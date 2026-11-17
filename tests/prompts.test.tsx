@@ -89,6 +89,14 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   for (const k of ['change', 'investigation'] as const) expect(promptProblems(k, BUILT_IN_PROMPTS[k])).toEqual([])
 })
 
+test('several test commands are shown to the worker one per line, each run on its own, not joined with &&', () => {
+  setup()
+  const b = boardWith(['cd web && npm test', 'npm run lint'])
+  const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
+  expect(p).toContain('these must pass; run each one on its own, from your folder:\n  cd web && npm test\n  npm run lint')
+  expect(p).not.toContain('npm test && npm run lint')
+})
+
 test('placeholders are filled in one pass: "{{files}}" in the task\'s details stays as written', () => {
   const out = fillPrompt('change', 'A {{details}} B {{merge_main}}{{test_output}}{{ask}}', { details: 'see {{files}}', files: 'NO', merge_main: '', test_output: '', ask: 'ASK' })
   expect(out).toBe('A see {{files}} B ASK')

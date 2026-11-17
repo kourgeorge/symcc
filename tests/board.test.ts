@@ -1587,6 +1587,26 @@ test('a typed test_commands line is one whole command; several go in a list or o
   expect(applySettings(emptyBoard(), { test_commands: ['a', 'b', 'c', 'd', 'e', 'f'] }).board.test_commands).toEqual(['a', 'b', 'c', 'd', 'e'])
 })
 
+test('the board shows several test commands as a list, not joined with &&', () => {
+  const b = { ...emptyBoard(), branch: 'main', test_commands: ['cd web && npm test', 'npm run lint'] }
+  const banner = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 120).map(bannerText).join('\n')
+  expect(banner).toContain('tests: ["cd web && npm test","npm run lint"]')
+  expect(banner).not.toContain('npm test && npm run lint')
+  const [withTask] = addTask(b, { origin: W, title: 'A' }, T)
+  const text = boardText(withTask)
+  expect(text).toContain('tests: ["cd web && npm test","npm run lint"]')
+  expect(text).not.toContain('npm test && npm run lint')
+  expect(boardText({ ...withTask, test_commands: ['npm test'] })).toContain('tests: npm test ·')
+})
+
+test('typed test_commands: outer quotes are stripped only when they wrap the whole value', () => {
+  const cmds = (v: string) => (parseSettingValue('test_commands', v) as { input: { test_commands: string[] } }).input.test_commands
+  expect(cmds('"./run tests" --fast "x y"')).toEqual(['"./run tests" --fast "x y"'])
+  expect(cmds("'a b' 'c'")).toEqual(["'a b' 'c'"])
+  expect(cmds('"npm test"')).toEqual(['npm test'])
+  expect(cmds("'npm test'")).toEqual(['npm test'])
+})
+
 test('settings keep their limits, and a value cut to its limit says so', () => {
   const b = emptyBoard()
   const r = applySettings(b, { max_parallel: 12, max_minutes: 2, auto_retries: 4, notify: 'off', test_commands: [' npm test ', ''] })
