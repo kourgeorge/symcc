@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles, firstStageOf } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -51,8 +51,6 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     ...(cleanRole(f.role) ? { role: cleanRole(f.role) } : {}),
     // "change" is the default, so it is never stored
     ...(kindFor(f.kind, f.role) !== DEFAULT_KIND ? { kind: kindFor(f.kind, f.role) } : {}),
-    // it starts at its kind's first stage (a kind of the owner's own: missing, which means the same)
-    ...(firstStageOf(kindFor(f.kind, f.role)) ? { stage: firstStageOf(kindFor(f.kind, f.role)) } : {}),
   }
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
@@ -215,32 +213,14 @@ export const OVERTIME_OPTIONS = ['+30 min', '+60 min', 'Stop it'] as const
 /** How long a worker told its time is up (WRAP_UP_TEXT) gets to hand back before it is stopped. */
 export const WRAP_UP_GRACE_MS = 3 * 60_000
 
-/** The minutes a worker may run before the owner is asked for more time: its stage's `minutes:` when it has one, else max_minutes. */
-export const baseLimitOf = (max: number, stage?: { minutes?: number }) => stage?.minutes ?? max
-
-/** The minutes task `t`'s worker may run now: its stage's `minutes:` (else max_minutes) plus what the owner added for this try. */
-export const timeLimitOf = (max: number, t: { extra_minutes?: number } | undefined, stage?: { minutes?: number }) => baseLimitOf(max, stage) + (t?.extra_minutes ?? 0)
+/** The minutes task `t`'s worker may run now: max_minutes plus what the owner added for this try. */
+export const timeLimitOf = (max: number, t: { extra_minutes?: number } | undefined) => max + (t?.extra_minutes ?? 0)
 
 /**
  * With no answer from the owner, a worker over its limit is told to wrap up once it ran this long:
- * its limit plus max_minutes (or its stage's minutes:) again (so twice that when no time was added).
+ * its limit plus max_minutes again (so twice max_minutes when no time was added).
  */
-export const hardCapOf = (max: number, t: { extra_minutes?: number } | undefined, stage?: { minutes?: number }) => timeLimitOf(max, t, stage) + baseLimitOf(max, stage)
-
-/** The history line added when a worker that ran `limit` minutes (its limit) is over time and the owner is asked for more. */
-export const overtimeAskedLine = (limit: number) => `ran ${limit} min, over its time limit; asked the owner for more time`
-
-/**
- * The limit task `t` was asked about while it waits for the owner's "more time?" answer: read from its latest overtimeAskedLine
- * (so a stage's `minutes:` shows, though the panel doesn't know the kinds), else max_minutes plus what the owner added.
- */
-export function askedLimitOf(max: number, t: { history?: readonly string[]; extra_minutes?: number }): number {
-  for (const h of [...(t.history ?? [])].reverse()) {
-    const m = /: ran (\d+) min, over its time limit; asked the owner for more time$/.exec(h)
-    if (m) return Number(m[1])
-  }
-  return timeLimitOf(max, t)
-}
+export const hardCapOf = (max: number, t: { extra_minutes?: number } | undefined) => timeLimitOf(max, t) + max
 
 /** The question a task shows while its worker runs over its limit of `limit` minutes. */
 export const overtimeQuestion = (id: string, limit: number) => `${id} has run ${limit} min. Give it more time?`

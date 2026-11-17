@@ -5,7 +5,7 @@ import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
 import { originOf } from './origin'
-import { askedLimitOf, overtimeQuestion } from './task'
+import { overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
 import { roleMark, roleOf } from './roles'
@@ -120,7 +120,7 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
  *  own page, so the list does not offer them), the question of a
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked
  *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean.
- *  `maxMinutes`: the board's max_minutes, for the time limit in the more-time question when its history doesn't say (askedLimitOf). */
+ *  `maxMinutes`: the board's max_minutes, for the time limit in the more-time question. */
 export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes): string {
   const into = intoOf(t)
   const other = here && into !== here ? `→ ${into}` : ''
@@ -131,7 +131,7 @@ export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[]
 function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], maxMinutes: number): string {
   switch (t.status) {
     case 'doing':
-      if (asksMoreTime(t)) return overtimeQuestion(t.id, askedLimitOf(maxMinutes, t))
+      if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
       return [roleTag(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')
     case 'todo':
     case 'paused': {

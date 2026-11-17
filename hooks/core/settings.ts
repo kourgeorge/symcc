@@ -14,8 +14,7 @@ export const TEST_OUTPUT_CHARS = 3000
 
 /**
  * A task's tests failed. 'retry': send it back to "todo" so a new worker fixes it, with the
- * test output; 'fail': it already had `max` automatic retries, so the lead decides. `max` is the count of its kind's
- * `tests` check (`on fail: back to <stage> N times`, see testRetriesOf in stages.ts), else the board's auto_retries.
+ * test output; 'fail': it already had `max` automatic retries, so the lead decides.
  */
 export function onTestFail(t: Pick<SymccTask, 'test_tries'>, max = DEFAULT_AUTO_RETRIES): 'retry' | 'fail' {
   return retryOrFail(t.test_tries, max)

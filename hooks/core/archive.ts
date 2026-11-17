@@ -2,7 +2,7 @@
 // Every function here is pure; the plugin (plugin/archive.ts) reads and writes the files.
 import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId } from './board-file'
+import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId, withoutStages } from './board-file'
 import { addTokens, sumRuns } from './runs'
 
 /** Archiving runs at most this often (ms), on the regular check of the driving session. */
@@ -41,11 +41,14 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   const tasks = (raw as { tasks?: unknown }).tasks
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' }
   const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && FINISHED.includes((t as BoardTask).status))
-  // Migration: tries with tokens saved as one number get it marked unsplit (see migrateRunTokens); `migrated` counts the tasks changed so the file is saved once.
+  // Migration: tries with tokens saved as one number get it marked unsplit (see migrateRunTokens), and the removed stage engine's
+  // fields are dropped (see withoutStages); `migrated` counts the tasks changed so the file is saved once.
   let migrated = 0
-  const clean = ok.map(t => {
+  const clean = ok.map(t0 => {
+    const bare = withoutStages(t0)
+    const t = bare ?? t0
     const split = migrateRunTokens(t.runs)
-    if (split) migrated++
+    if (split || bare) migrated++
     return { ...cleanCommitFields(split ? { ...t, runs: split } : t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }
   })
   return { archive: { version: 1, tasks: clean }, ...(migrated ? { migrated } : {}) }

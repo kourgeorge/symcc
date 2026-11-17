@@ -175,15 +175,10 @@ export function roleChoices(roles: RoleDef[]): string[] {
   return names.some(n => n.toLowerCase() === DEFAULT_ROLE) ? names : [DEFAULT_ROLE, ...names]
 }
 
-/**
- * "try 2", or "try 2 (role tester)" when the task has a role other than general; "try 2 (fix)" or "try 2 (fix, role tester)" when
- * its last try ran a stage (SymccRun.stage, kept only for a kind with more than one worker stage).
- */
-export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | string; runs?: readonly { stage?: string }[] }): string {
+/** "try 2", or "try 2 (role tester)" when the task has a role other than general. */
+export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | string }): string {
   const role = roleOf(t)
-  const stage = t.runs?.[t.runs.length - 1]?.stage
-  const parts = [...(stage ? [stage] : []), ...(role === DEFAULT_ROLE ? [] : [`role ${role}`])]
-  return `try ${t.attempts}${parts.length ? ` (${parts.join(', ')})` : ''}`
+  return `try ${t.attempts}${role === DEFAULT_ROLE ? '' : ` (role ${role})`}`
 }
 
 /**

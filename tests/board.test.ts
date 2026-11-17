@@ -591,7 +591,7 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
 
 test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
   const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
-  const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x', stage: 'code' })] }
+  const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x' })] }
   const r = readBoard(JSON.stringify(old))
   expect(r.board.tasks.map(t => t.merge_into)).toEqual(['main', 'feature-x'])
   expect(r.migrated).toBe(2)
@@ -1808,19 +1808,6 @@ test('the worker prompt for a role with web tools has the web safety line; other
   expect(roleSection(parseRole('tester', '---\ndescription: tests\n---\nT')!)).not.toContain(WEB_SAFETY_LINE)
 })
 
-test('a board from before kinds had stages is migrated once: a todo change gets its first stage, one in review the stage before merge', () => {
-  const task = (id: string, status: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, merge_into: 'main', created_at: T, updated_at: T, ...extra })
-  const r = readBoard(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'todo'), task('T-2', 'review'), task('T-3', 'review', { kind: 'investigation' }), task('T-4', 'done'), task('T-5', 'todo', { kind: 'mine' })] }))
-  expect(r.board.tasks.map(t => t.stage)).toEqual(['code', 'tests', 'read', undefined, undefined])
-  // the three that got a stage (done needs none; a kind of the owner's own is at its first stage while it has none)
-  expect(r.migrated).toBe(3)
-  expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
-  // a new task starts at its kind's first stage, so it is never migrated
-  const [b, t] = addTask(emptyBoard(), { title: 'New', origin: { why: 'a test' } }, T)
-  expect(t.stage).toBe('code')
-  expect(readBoard(JSON.stringify(b)).migrated).toBe(0)
-})
-
 test('a board with old roles is migrated once: tests becomes tester, backend and frontend general', () => {
   const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
   const r = readBoard(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
@@ -2078,6 +2065,32 @@ test('a task without a why, or with a wrong origin, is refused with a clear erro
   expect(makeOrigin({ why: 'y' }, T).by).toBe('lead')
   expect(makeOrigin({ why: 'y', request: 'please' }, T).by).toBe('owner')
   expect(makeOrigin({ why: 'y', scout: 'docs' }, T).by).toBe('scout')
+})
+
+test('T-348: a task with the removed stage engine\'s stage, stages and backs loads without them, once (board.json and archive.json)', () => {
+  const origin = { by: 'lead', why: 'w', at: T }
+  const base = { title: 'A', details: 'A', files: [], note: '', question: null, order: 1, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
+  const staged = { stage: 'code', stages: [{ name: 'code', result: 'passed', at: T, try: 1 }], backs: { tests: 1 }, runs: [{ started: T, ended: T, stage: 'code' }] }
+  const board = { version: 1, next_id: 3, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
+    { ...base, id: 'T-1', status: 'todo', ...staged },
+    { ...base, id: 'T-2', status: 'todo', runs: [{ started: T, ended: T }] },
+  ] }
+  const r = readBoard(JSON.stringify(board))
+  const [t1, t2] = r.board.tasks
+  for (const k of ['stage', 'stages', 'backs']) expect(k in t1!).toBe(false)
+  expect(t1!.runs).toEqual([{ started: T, ended: T }])
+  expect(t1!.title).toBe('A')
+  // only the task that had them is migrated; once saved, nothing changes again
+  expect(r.migrated).toBe(1)
+  expect(t2).toEqual({ ...base, id: 'T-2', status: 'todo', runs: [{ started: T, ended: T }] } as unknown as typeof t2)
+  expect(readBoard(boardText(r.board)).migrated).toBe(0)
+  // the archive too
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...base, id: 'T-3', status: 'done', ...staged }] }))
+  expect(a.migrated).toBe(1)
+  const t3 = a.archive.tasks[0]!
+  for (const k of ['stage', 'stages', 'backs']) expect(k in t3).toBe(false)
+  expect(t3.runs).toEqual([{ started: T, ended: T }])
+  expect(readArchive(archiveText(a.archive)).migrated).toBeUndefined()
 })
 
 test('a board whose tasks have no origin is migrated once: the lead made them before origins were kept', () => {
