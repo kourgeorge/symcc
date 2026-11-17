@@ -95,7 +95,17 @@ export function checkerFinished(agentId: string, answer: string, aborted = false
 
 /** Stops every running checker (`why`, e.g. the board was turned off): each one's step goes on with no verdict. */
 export async function haltCheckers($: $, why: string) {
+  await haltCheckersOf($, why, () => true)
+}
+
+/** Stops the running checker of task `taskId` (it was dropped, paused or sent to the owner): its step goes on at once with no verdict. */
+export async function haltChecker($: $, taskId: string, why: string) {
+  await haltCheckersOf($, why, task => task === taskId)
+}
+
+async function haltCheckersOf($: $, why: string, which: (task: string) => boolean) {
   for (const [agentId, run] of [...checkerRuns]) {
+    if (!which(run.task)) continue
     stopped.add(agentId)
     await $.session.send({ to: { agentId }, text: `Stop now: ${why}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
     run.end({ answer: null, why })

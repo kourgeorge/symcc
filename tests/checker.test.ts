@@ -3,8 +3,8 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote } from '../hooks/board'
-import { S, leadQueue, meanwhile, workers, checkerRuns } from '../hooks/plugin/state'
-import { workerFinished, WORKER_PROMPT, setBoardMode } from '../hooks/plugin/workers'
+import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
+import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
@@ -25,6 +25,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   const files = new Map<string, string>()
   const calls: string[] = []
   const spawns: { prompt: string; subagentType?: string; cwd?: string; name?: string }[] = []
+  const sends: { to: { agentId: string }; text: string }[] = []
   const state = new Map<string, unknown>()
   function runGit(a0: string[]): Res {
     const a = a0.filter((x, i) => x !== '-c' && a0[i - 1] !== '-c')
@@ -88,7 +89,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       },
       list: async () => [],
     },
-    session: { id: async () => 'me', send: async () => undefined },
+    session: { id: async () => 'me', send: async (m: { to: { agentId: string }; text: string }) => void sends.push(m) },
     agent: {
       list: async () => [],
       spawn: async (o: { prompt: string; subagentType?: string; cwd?: string; name?: string }) => (spawns.push(o), { agentId: `chk${spawns.length}` }),
@@ -114,7 +115,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: $ as never, git, calls, spawns }
+  return { $: $ as never, git, calls, spawns, sends }
 }
 
 /** A board with task T-1 (files src/) "doing" on try 1, with the checker setting `checker`. */
@@ -273,3 +274,32 @@ test('an investigation skips the checker: its answer goes to review', async () =
   expect(t.status).toBe('review')
   expect(w.git.main).toBe(M1)
 })
+
+// ---------------- stopping a task while its checker runs (T-353) ----------------
+
+for (const [tool, args, status, again, againText] of [
+  ['drop', { reason: 'not needed' }, 'dropped', 'retry', 'T-1 brought back from dropped and queued'],
+  ['pause', {}, 'paused', 'resume', 'T-1 resumed'],
+  ['ask', { question: 'Which way?' }, 'waiting', 'retry', 'T-1 queued'],
+] as const) {
+  test(`${tool} while the checker runs stops the checker at once: nothing merges, the task is ${status}, and ${again} works right after`, async () => {
+    const w = world()
+    await saveBoard(w.$, boardWith(true))
+    let agent = ''
+    const t = await finish(w, async id => {
+      agent = id
+      await runTool(w.$, tool, { task: 'T-1', ...args })
+      // the checker is told to stop and is not waited for any more
+      expect(checkerRuns.has(id)).toBe(false)
+      expect(stopped.has(id)).toBe(true)
+      expect(w.sends.some(m => m.to.agentId === id && m.text.startsWith('Stop now'))).toBe(true)
+    })
+    expect(agent).not.toBe('')
+    expect(w.git.main).toBe(M1)
+    expect(t.status).toBe(status)
+    expect(checkingNow('T-1')).toBe(false)
+    expect(stopAsked.has('T-1')).toBe(false)
+    expect(await runTool(w.$, again, { task: 'T-1' })).toBe(againText)
+    expect(find(await load(w.$), 'T-1')!.status === 'todo' || find(await load(w.$), 'T-1')!.status === 'doing').toBe(true)
+  })
+}

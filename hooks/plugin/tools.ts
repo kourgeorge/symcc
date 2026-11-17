@@ -11,6 +11,7 @@ import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
 import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, fullAnswer } from './workers'
+import { haltChecker } from './checker'
 
 // ---------------- the lead's tools ----------------
 
@@ -627,6 +628,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
       await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
+      await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
     }
     case 'drop': {
@@ -638,6 +640,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
       await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
+      if (checking) await haltChecker($, t.id, 'the task was dropped')
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
       void pump($)
       return checking ? `${t.id} dropped; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it stays done)` : `${t.id} dropped`
@@ -651,6 +654,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
       if (checking) {
         stopAsked.set(t.id, 'paused')
         await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
+        await haltChecker($, t.id, 'the task was paused')
         return `${t.id} paused; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it is done); ${S.N.name} resume ${t.id} continues it`
       }
       const wasDoing = t.status === 'doing'
