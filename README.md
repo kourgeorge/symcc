@@ -65,6 +65,8 @@ Examples of what scouts do while you are away:
 
 The lead keeps it moving; you come back to merged work and a few questions.
 
+![symcc's loop: you direct the lead; the lead puts tasks on the board; workers build; tests and merge update the code; scouts look at the new code and find more work for the lead](docs/organizational-loop.jpg)
+
 ## How symcc is different
 
 **Coding agents** (Claude Code, Codex, OpenCode, Goose) run one agent you talk to. Their helper agents work inside your turn, and you wait for them. Nothing keeps a list of the work after the chat ends.
