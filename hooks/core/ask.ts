@@ -50,7 +50,7 @@ export function parseAsk(a: Record<string, unknown>): WorkerQuestion | string {
 export const EDIT_PATH_FIELD: Readonly<Record<string, string>> = { Edit: 'file_path', Write: 'file_path', NotebookEdit: 'notebook_path' }
 
 /** The path field of an Edit, Write or NotebookEdit call of `tool` with `input`, trimmed; undefined for other tools or no path. */
-function editTarget(tool: string, input: unknown): string | undefined {
+export function editTarget(tool: string, input: unknown): string | undefined {
   const field = EDIT_PATH_FIELD[tool]
   const p = field && input && typeof input === 'object' ? (input as Record<string, unknown>)[field] : undefined
   return typeof p === 'string' && p.trim() ? p.trim() : undefined

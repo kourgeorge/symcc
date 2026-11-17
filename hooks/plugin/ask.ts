@@ -4,7 +4,7 @@
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, find, kindOf, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, editTarget, find, kindOf, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
 import { S, type $, type Worker, scoutRuns } from './state'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -52,18 +52,17 @@ export async function askCall($: $, agentId: string | undefined, a: Record<strin
  */
 async function realEdit($: $, tool: string, input: unknown, worktree: string, root: string): Promise<{ input: unknown; worktree: string; root: string } | null> {
   const asIs = { input, worktree, root }
-  const field = EDIT_PATH_FIELD[tool]
-  const p = field && input && typeof input === 'object' ? (input as Record<string, unknown>)[field] : undefined
-  if (typeof p !== 'string' || !p.trim() || !worktree.startsWith('/') || !root.startsWith('/')) return asIs
+  const p = editTarget(tool, input)
+  if (!p || !worktree.startsWith('/') || !root.startsWith('/')) return asIs
   // a failed lookup (even one that throws at once) answers "not there" / "not a link", so nothing is refused for it
   const look: PathLookup = {
     real: q => Promise.resolve().then(() => $.fs.stat(q, { resolve: true })).then(st => st.realPath, () => undefined),
     isLink: (dir, name) => Promise.resolve().then(() => $.fs.list(dir)).then(es => es.some(e => e.name === name && e.isLink), () => false),
   }
-  const [file, wt, top] = await Promise.all([realPathOf(worktree, p.trim(), look), realPathOf('/', worktree, look), realPathOf('/', root, look)])
+  const [file, wt, top] = await Promise.all([realPathOf(worktree, p, look), realPathOf('/', worktree, look), realPathOf('/', root, look)])
   if (file === null) return null
   if (!file || !wt || !top) return asIs
-  return { input: { ...(input as Record<string, unknown>), [field!]: file }, worktree: wt, root: top }
+  return { input: { ...(input as Record<string, unknown>), [EDIT_PATH_FIELD[tool]!]: file }, worktree: wt, root: top }
 }
 
 /**
@@ -86,9 +85,10 @@ export async function checkEdit($: $, agentId: string | undefined, tool: string,
     return rel !== undefined ? bashOutsideText(rel, w.worktree) : undefined
   }
   const real = await realEdit($, tool, input, w.worktree, S.root)
-  if (real === null) return brokenLinkText(String((input as Record<string, unknown>)[EDIT_PATH_FIELD[tool]!]).trim())
+  // realEdit gives null only for an edit with a path
+  if (real === null) return brokenLinkText(editTarget(tool, input)!)
   const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
-  if (outside !== undefined) return outsideFolderText(outside, w.worktree)
+  if (outside !== undefined) return outsideFolderText(outside, w.worktree, S.N.dir)
   const b = await load($).catch(() => null)
   const t = b ? find(b, w.task) : undefined
   if (!t || kindOf(t) === 'investigation') return undefined
