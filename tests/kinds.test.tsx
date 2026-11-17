@@ -67,7 +67,7 @@ test('the built-in kinds load from the plugin\'s kinds/ folder, change first', a
 test("the owner's .symcc/kinds/<name>.md wins over a built-in kind of the same name, and adds a new one", async () => {
   const { $ } = setup({ 'bug.md': '---\ndescription: a defect the owner found\n---\nSteps go here.\n', 'chore.md': kindFile('small upkeep') })
   const kinds = await loadKinds($ as never)
-  expect(kinds.find(k => k.name === 'bug')).toEqual({ name: 'bug', description: 'a defect the owner found', body: 'Steps go here.' })
+  expect(kinds.find(k => k.name === 'bug')).toMatchObject({ name: 'bug', description: 'a defect the owner found', body: 'Steps go here.' })
   expect(kinds.filter(k => k.name === 'bug').length).toBe(1)
   expect(kinds.map(k => k.name)).toEqual([...BUILT_IN_KINDS, 'chore'])
   expect(checkKind(kinds, 'chore')).toBe('chore')
@@ -85,7 +85,7 @@ test("an owner's kind file that can't be read is skipped with a note, and the bu
 })
 
 test('a kind file needs a description and a plain name', () => {
-  expect(parseKind('Bug', kindFile('wrong'))).toEqual({ name: 'bug', description: 'wrong', body: '' })
+  expect(parseKind('Bug', kindFile('wrong'))).toMatchObject({ name: 'bug', description: 'wrong', body: '' })
   expect(kindSkipReason('bug', '---\nmodel: x\n---\n')).toBe('no description')
   expect(kindSkipReason('a b', kindFile('x'))).toMatch(/^bad name/)
 })

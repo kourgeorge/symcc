@@ -36,7 +36,7 @@ export function skippedKind($: $, file: string, reason: string) {
   if (skippedKinds.get(file) === reason) return
   skippedKinds.set(file, reason)
   $.ui.toast(S.N.toast(`skipped ${file}: ${reason}`))
-  tellLead($, `${note}. That kind can't be used until the file is fixed (front matter with a description; a name of letters, digits, - and _).`)
+  tellLead($, `${note}. That kind can't be used until the file is fixed (front matter with a description; a name of letters, digits, - and _; stages as in docs/research/task-kinds-and-workflows.md); if a built-in kind has that name, it is used meanwhile.`)
 }
 
 /** Reads the kinds again: the plugin's kinds/, then the project's .<name>/kinds/ over them. */
@@ -54,6 +54,9 @@ export async function kindLists($: $): Promise<{ builtIn: KindDef[]; project: Ki
   S.kinds = mergeKinds(builtIn, project)
   return { builtIn, project, broken, dir }
 }
+
+/** A kind's merges / merge_tests keys, kept when its file is written again. */
+const runKeys = (k: KindDef): Pick<KindDef, 'merges' | 'mergeTests'> => ({ ...(k.merges === false ? { merges: false as const } : {}), ...(k.mergeTests === false ? { mergeTests: false as const } : {}) })
 
 /** What the lead's kinds tool gets. */
 export type LeadKindInput = { action?: unknown; name?: unknown; description?: unknown; body?: unknown }
@@ -101,7 +104,7 @@ async function changeKindText($: $, a: LeadKindInput): Promise<string | { ok: tr
     const r = await $.process.run(['rm', '-f', '--', path(file)])
     return r.exitCode === 0 ? '' : `could not remove ${file}: ${r.stderr || r.stdout || `exit ${r.exitCode}`}`
   }
-  const save = async (k: Omit<KindDef, 'name'>) => {
+  const save = async (k: Pick<KindDef, 'description' | 'body' | 'off' | 'merges' | 'mergeTests'>) => {
     const text = kindFileText(k)
     const why = kindSkipReason(name, text)
     if (why) return why
@@ -146,12 +149,12 @@ async function changeKindText($: $, a: LeadKindInput): Promise<string | { ok: tr
     const off = action === 'off'
     if (off && ALWAYS_ON_KINDS.includes(name)) return `${name} can't be turned off: it is one of the two ways a task runs (${ALWAYS_ON_KINDS.join(' and ')})`
     if (!!cur.off === off) return `${name} is already ${action}`
-    const err = await save({ description: cur.description, body: cur.body, off })
+    const err = await save({ ...runKeys(cur), description: cur.description, body: cur.body, off })
     return err || await done(off ? `turned ${name} off${copied}: the lead won't pick it for a new task and add refuses it; tasks that already have it keep it` : `turned ${name} on again`)
   }
   const description = typeof a.description === 'string' && a.description.trim() ? a.description.trim() : cur.description
   const body = typeof a.body === 'string' ? a.body : cur.body
-  const err = await save({ description, body, ...(cur.off ? { off: true } : {}) })
+  const err = await save({ ...runKeys(cur), description, body, ...(cur.off ? { off: true } : {}) })
   return err || await done(`saved kind ${name} (${file})${copied}`)
 }
 
