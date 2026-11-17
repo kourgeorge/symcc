@@ -212,7 +212,7 @@ happens, never the words in its hand-back:
 ### A code change with no test
 
 Before a change task is merged, symcc looks at the files its
-commit changed. If it edits code but no test file (a test file is in a `test/`, `tests/`, `__tests__/` or `spec/` folder, or has `test` or `spec` as a name part split by `.` or `_` (`a.test.ts`, `a_test.py`, `test_a.py`); a name that only contains those letters (`latest.ts`, `run-tests.sh`) is not a test), the `tests_with_changes` setting decides:
+commit changed. If it edits code but no test file (a test file is in a `test/`, `tests/`, `__tests__/`, `spec/`, `e2e/` or `cypress/` folder or a folder ending in `.Test` / `.Tests`, or has `test` or `spec` as a name part split by `.`, `_` or `-` (`a.test.ts`, `a_test.py`, `test_a.py`, `a-test.ts`), a `.cy.` or `e2e` name part (`a.cy.ts`, `login.e2e.ts`), or a CamelCase name ending in `Test` or `Tests` (`FooTest.java`, `FooTests.cs`, `LoginUITests.swift`); a name that only contains those letters (`latest.ts`, `run-tests.sh`, all-capital `LATEST.ts`) is not a test), the `tests_with_changes` setting decides:
 `ask` (the default) merges it and tells the lead "T-3 changed code but no test", so the lead
 can add a test task or ask you; `review` makes the task wait for your review instead of
 merging (like `needs_review`), with that note; `off` does nothing. A change to docs only is never flagged
