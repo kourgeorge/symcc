@@ -9,7 +9,8 @@ that same folder. `epic` is one more kind: its spec is the plan, its children ar
 and it ends with an acceptance check of the whole feature.
 
 This doc is a design, not code. It names the real files and functions it changes, as they are
-at commit `06d327b`. Anything I could not confirm is marked **(guess)**.
+at commit `06d327b`, plus T-328 (kinds as files), which is now merged. Anything I could not
+confirm is marked **(guess)**.
 
 ---
 
@@ -17,7 +18,9 @@ at commit `06d327b`. Anything I could not confirm is marked **(guess)**.
 
 - A task is one entry in `.symcc/board.json` (`BoardTask`, `hooks/core/board-file.ts:90`). Its
   `kind` is `change` or `investigation` today (`TaskKind`, `board-file.ts:96`; `kindOf`,
-  `board-file.ts:100`; `kindFor`, `hooks/core/task.ts:22`). T-328 widens this to kind files.
+  `board-file.ts:100`; `kindFor`, `hooks/core/task.ts:22`). T-328 (merged) widened this: `TaskKind`
+  is now any kind name, and kinds are files read by `hooks/core/kinds.ts` (`readKind`,
+  `mergeKinds`, `BUILT_IN_KINDS`) and `hooks/plugin/kinds.ts` (`loadKinds`, `kindFiles`).
 - A worker is started by `startWorker` (`hooks/plugin/workers.ts:85`) with the prompt from
   `WORKER_PROMPT` (`workers.ts:23`), which fills `prompts/change.ts` or
   `prompts/investigation.ts` (`fillPrompt`, `hooks/core/prompts.ts:98`). Its folder comes from
@@ -38,14 +41,17 @@ at commit `06d327b`. Anything I could not confirm is marked **(guess)**.
 - Edits outside a task's files are refused by `checkEdit` (`hooks/plugin/ask.ts:78`).
 - Roles are files with front matter (`parseRole`, `hooks/core/roles.ts:84`; built-in in
   `roles/`, the owner's in `.symcc/roles/`, the owner's copy wins: `mergeRoles`, `roles.ts:129`).
-  Kind files (T-328) follow the same pattern.
+  Kind files (T-328) follow the same pattern: `kinds/<name>.md` and `.symcc/kinds/<name>.md`,
+  merged by `mergeKinds`. Today a kind file has only `description` in its front matter and a free
+  text body; the stage format below is what this design adds.
 
 ---
 
 ## 1. The kind file format
 
 A kind is one Markdown file: `kinds/<name>.md` in the plugin, or `.symcc/kinds/<name>.md` in the
-project (the owner's copy wins, like roles). The front matter is read by the lead to choose; the
+project (the owner's copy wins, like roles; today's `kinds/` folder has `change`, `bug`,
+`feature`, `refactor`, `docs` and `investigation`, and `epic` is added by build step 8). The front matter is read by the lead to choose; the
 body is the list of stages.
 
 ### Front matter
@@ -341,10 +347,10 @@ All run in the task's folder after symcc committed the stage's work, through
      (`git worktree add --detach .symcc/checks/<id> <base>`), copies in the new test files from
      the task's HEAD (`git checkout <head> -- <files>`), runs the test commands there (they must
      fail), then removes it (`git worktree remove --force`). This proves the fix, not the test,
-     made them pass. It costs one more test run; a kind can leave it out (open question 4).
-- **Test commands that can't run one file.** The check runs the whole test command, not just the
-  new files: symcc has no way to know how to run a single file. A later option is a `{files}`
-  placeholder in `run:`, e.g. `run: npx vitest run {files}` (open question 3).
+     made them pass. It costs one more test run; it is always done (decision 4).
+- **Running only the new tests (decision 3).** `run:` may use a `{files}` placeholder, which
+  symcc fills with the new test files, e.g. `run: npx vitest run {files}`. Without `{files}`, the
+  check runs the whole test command, because symcc can't know how to run a single file.
 
 ---
 
@@ -424,7 +430,7 @@ the way it is.
 - Children keep their own kinds (a `bug` child runs reproduce → fix as usual).
 - While children run, `main` moves on. Before each child starts, symcc brings the epic branch up
   to date with the owner's branch (one merge, like step 3 of today's merge). A clash there makes
-  the epic wait and tells the lead (open question 5).
+  the epic wait and tells the lead.
 
 ### The stages
 
@@ -538,38 +544,35 @@ test time. Gates cost nothing but waiting.
 
 Every go-back adds one more worker run. A feature whose checker finds a gap costs at least 3.
 
-**Default when the lead is unsure: `change`.** It is today's flow, the cheapest kind that still
-runs the tests. The lead picks `bug` only when there is a clear wrong behavior to prove, and
-`feature` when it is new behavior worth a second look.
+**The lead chooses by its own judgment (decision 1), and uses `change` for small fixes.** It is
+today's flow, the cheapest kind that still runs the tests. The lead picks `bug` when there is a
+clear wrong behavior to prove, and `feature` when it is new behavior worth a second look.
 
 ---
 
-## 9. Risks and open questions for the owner
+## 9. Decisions
 
-1. **Cost.** `bug` and `feature` double the worker runs. Should the lead use them only when the
-   owner asks, or by its own judgment (this doc assumes its own judgment)?
-2. **A wrong checker test.** In `feature`, the checker may write a test that expects the wrong
-   thing; the code worker then "fixes" correct code. Mitigation: the code worker may say the test
-   is wrong, and after 2 go-backs the lead decides. Is that enough, or should a failing checker
-   test first go to a lead gate?
-3. **Running only the new tests.** Should `run:` get a `{files}` placeholder so
-   `new test fails on old code` runs only the new files? (Faster and fewer false failures, but
-   the owner must write the command.)
-4. **The second fails-on-base run at merge.** Worth one extra test run per bug? (Default here: yes.)
-5. **Long-lived epic branches.** Bringing the epic branch up to date before each child can clash.
-   Should the epic instead let children merge straight into the owner's branch (no epic branch;
-   accept runs on `main`)? Simpler, but a half-built feature lands on `main` early.
-6. **Who writes the spec.** This doc has the lead write the details and a planner worker write
-   the file. The lead could write the file itself (it knows the chat best) to save one worker run.
-7. **Board mode `review` plus kind gates.** An investigation already ends with an owner gate, so
-   no second gate is added. For an epic, does `review` mode also gate each child? (Default here:
-   yes, children are normal tasks.)
+The owner answered the open questions on 2026-11-17.
+
+1. **Cost.** The lead picks `bug` or `feature` by its own judgment, not only when the owner asks.
+   It uses `change` for small fixes.
+2. **A checker test that expects the wrong thing.** The code worker may say in its report that the
+   test is wrong. After 2 go-backs the lead decides. There is no extra lead gate.
+3. **Running only the new tests.** Yes, as an option: `run:` may use a `{files}` placeholder.
+   Without it, the full test command runs.
+4. **The second fails-on-base run at merge.** Yes, it is done (one extra test run per bug).
+5. **Epic branch.** The epic keeps its own branch `symcc/T-n`. Children merge into it, and it
+   merges into the owner's branch only after the owner accepts the epic (section 5).
+6. **Who writes the spec.** A planner worker writes the spec file, from the details the lead gives
+   (section 5).
+7. **Review mode and epics.** In review mode each child waits for the owner too, because children
+   are normal tasks.
 
 ---
 
 ## 10. Build plan
 
-T-328 (kinds as files, all still one stage), T-329 (`symcc kinds` tool and Kinds view) and T-330
+T-328 (kinds as files, all still one stage; merged), T-329 (`symcc kinds` tool and Kinds view) and T-330
 (docs) are already on the board, so this plan starts at step 2. All of it touches
 `hooks/plugin/workers.ts` and `hooks/plugin/review.ts`, so it **must land before the Host
 refactor (T-240..T-246, backlog)**, which changes the same files. Each task lists `tests/` (the
@@ -577,7 +580,7 @@ memory rule). Each step's tests run in `claude plugin test .`, the project's tes
 
 | # | Title | Files | After | How it is tested |
 |---|---|---|---|---|
-| 2 | Kinds: read stages from the kind file | new `hooks/core/stages.ts`, the T-328 kinds parser, `kinds/*.md` (each still one worker stage + `tests`), `tests/` | T-328 | New `tests/stages.test.ts`: every built-in kind file parses into the expected stage list; files with an unknown key, a bad `on fail` target, `children:` outside epic are skipped with the right note; the merge step is added for `merges: yes` |
+| 2 | Kinds: read stages from the kind file | new `hooks/core/stages.ts`, `hooks/core/kinds.ts` and `hooks/plugin/kinds.ts` (T-328's kinds parser), `kinds/*.md` (each still one worker stage + `tests`), `tests/` | T-328 | New `tests/stages.test.ts`: every built-in kind file parses into the expected stage list; files with an unknown key, a bad `on fail` target, `children:` outside epic are skipped with the right note; the merge step is added for `merges: yes` |
 | 3 | Multi-stage workflows: stage on the task, run stages in order, `on fail` go-backs | `hooks/core/board-file.ts` (`stage`, `stages`, `backs`, `check_output`, migration in `migrateTask`), `hooks/core/stages.ts` (`nextStage`), `hooks/plugin/workers.ts` (`finishWork`, `runStages`, `settle`, `WORKER_PROMPT`), `hooks/core/prompts.ts` + `prompts/*.ts` (`{{stage}}`, `{{earlier_stages}}`), `hooks/core/roles.ts` (`tryLabel`), `hooks/plugin/git.ts` (`copyReports` from stages), `tests/` | 2 | Unit tests of `nextStage` (pass, go-back with count, go-back used up → failed). A run test in the style of `tests/merge.test.ts` with a test-only two-worker kind: two fresh workers run in the same folder, the second prompt names the first report, there is one merge. Migration test in `tests/board.test.ts`: a `review` change and a `todo` change get the right `stage` |
 | 4 | Stages: per-stage time limit and retries | `hooks/core/task.ts` (`timeLimitOf`), `hooks/plugin/workers.ts` (`timedOut`, `askOvertime`), `hooks/core/settings.ts` (`onTestFail` takes the stage count), `tests/` | 3 | Tests: a stage with `minutes: 5` asks for more time at 5 minutes, not `max_minutes`; a `tests` check with `on fail … 1 time` fails on the second failure while `auto_retries` is 2 |
 | 5 | Gates: owner and lead, and the board mode as an added owner gate | `hooks/core/review.ts` (`needsReview` → `gatesFor`, `reviewTask`, `rejectTask`), `hooks/plugin/workers.ts` (`approve`), `hooks/plugin/tools.ts` (approve/reject text, lead rules), `hooks/core/panel.ts` (`statusCell`: `lead check`), `tests/` | 3 | Tests: a lead gate wakes the lead and doesn't show under NEEDS YOU; the lead's approve moves to the next stage; `review` mode adds exactly one owner gate before merge and none for investigation; reject goes back to the worker stage before the gate |
@@ -594,13 +597,14 @@ Steps 4, 5 and 6 can run side by side once 3 is done if they keep to their files
 
 ## What I couldn't check
 
-- T-328's real file and function names (it isn't merged in this copy at `06d327b`); this doc
-  assumes a kinds parser like `roles.ts`.
 - T-51's exact text (the board is in the main project folder, which a worker may not read).
 - Whether `claude plugin test .` prints the failing test's file name (needed for the "right
   reason" rule in section 3) and whether it can run a single file.
 
+T-328 is merged. Its real names: `hooks/core/kinds.ts`, `hooks/plugin/kinds.ts` and `kinds/*.md`
+(no `epic.md` yet).
+
 ## Recommended next step
 
-Answer open questions 1, 5 and 6 (cost policy, epic branch, who writes the spec), then add build
-step 2 behind T-328, and steps 3 to 10 chained with `after` as in the table.
+Add build step 2 behind T-328 (now merged), and steps 3 to 10 chained with `after` as in the
+table.
