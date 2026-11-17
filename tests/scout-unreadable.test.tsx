@@ -4,7 +4,8 @@ import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
-import { SCOUT_SOON_MS } from '../hooks/plugin/scouts'
+import { SCOUT_SOON_MS, scheduleScouts, scoutFinished } from '../hooks/plugin/scouts'
+import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -80,4 +81,98 @@ test('/symcc-scouts with an unreadable scout file names it instead of throwing',
   world(on)
   const text = String((await $.command.run({ command: 'symcc-scouts', args: '' })).text)
   expect(text).toMatch(/b\.md: can't be read, skipped/)
+})
+
+// ---------------- T-326: an unreadable scout keeps its entry in scouts.json ----------------
+
+const ROOT = '/repo'
+const MEMORY = `${ROOT}/.symcc/scouts.json`
+const DIR = `${ROOT}/.symcc/scouts`
+const B_RUN = '2026-11-12T00:00:00.000Z'
+
+/** In-memory files: scouts a.md and b.md (b paused in scouts.json, with a last run and report). `o.bad`: b.md's read fails;
+ *  `o.gone`: b.md is not in the folder any more. */
+function memoryWorld() {
+  const files = new Map<string, string>([
+    [`${ROOT}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'auto' })],
+    [`${DIR}/a.md`, '---\nevery_minutes: 30\n---\nLook around.\n'],
+    [`${DIR}/b.md`, '---\nevery_minutes: 30\n---\nLook elsewhere.\n'],
+    [MEMORY, JSON.stringify({ scouts: { b: { last_run: B_RUN, last_report: 'b found things', paused: true } } })],
+  ])
+  const o = { bad: true, gone: false }
+  const $ = {
+    process: {
+      run: async (argv: string[]) => {
+        const [cmd, ...rest] = argv
+        if (cmd === 'mv') {
+          const [, from, to] = rest
+          files.set(to!, files.get(from!)!)
+          files.delete(from!)
+        }
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+    },
+    fs: {
+      exists: async (p: string) => p === DIR || files.has(p),
+      read: async (p: string) => {
+        if (o.bad && p === `${DIR}/b.md`) throw new Error('permission denied')
+        if (!files.has(p)) throw new Error(`no file ${p}`)
+        return files.get(p)!
+      },
+      write: async (p: string, text: string) => void files.set(p, text),
+      stat: async (p: string) => {
+        if (!files.has(p)) throw new Error(`no file ${p}`)
+        return { mtimeMs: 0 }
+      },
+      list: async (p: string) => (p === DIR ? [{ name: 'a.md', kind: 'file' }, ...(o.gone ? [] : [{ name: 'b.md', kind: 'file' }])] : []),
+    },
+    session: { id: async () => 'me', send: async () => undefined },
+    agent: { list: async () => [] },
+    env: { get: async () => undefined },
+    ui: { toast: () => undefined, status: () => undefined, invalidate: () => undefined },
+    clock: { after: () => ({ cancel() {} }), every: () => ({ cancel() {} }), sleep: async () => undefined },
+    prompt: { submit: async () => undefined },
+    state: {
+      get: async () => ({ value: undefined, version: 0 }),
+      set: async () => ({ isSet: true, version: 1 }),
+    },
+  }
+  S.root = ROOT
+  S.leadTimer = null
+  S.writing = Promise.resolve()
+  S.driving = false
+  S.enabledNow = true
+  S.players = Promise.resolve({ system: 'other', voice: [], sound: [] }) as never
+  const memory = () => JSON.parse(files.get(MEMORY) ?? '{}') as { scouts?: Record<string, { last_run: string | null; last_report?: string; paused?: boolean }> }
+  /** Scout a "runs" as agent x1 and finishes with a report. */
+  const finishA = async () => {
+    scoutState.get('a')!.running = true
+    scoutRuns.set('x1', 'a')
+    await scoutFinished($ as never, 'x1', '1. a found something.')
+  }
+  return { $: $ as never, o, memory, finishA }
+}
+
+test("a paused scout whose file can't be read keeps its pause, last run and report when another scout finishes", async () => {
+  const w = memoryWorld()
+  await scheduleScouts(w.$)
+  expect(scoutState.has('b')).toBe(false)
+  await w.finishA()
+  expect(w.memory().scouts?.b).toEqual({ last_run: B_RUN, last_report: 'b found things', paused: true })
+  expect(w.memory().scouts?.a?.last_report).toBe('1. a found something.')
+  // once b.md can be read again, b comes back still paused, with its last run
+  w.o.bad = false
+  await scheduleScouts(w.$)
+  expect(scoutState.get('b')?.paused).toBe(true)
+  expect(scoutState.get('b')?.last_run).toBe(B_RUN)
+})
+
+test('a scout whose file was removed is still dropped from scouts.json when another scout finishes', async () => {
+  const w = memoryWorld()
+  w.o.bad = false
+  w.o.gone = true
+  await scheduleScouts(w.$)
+  await w.finishA()
+  expect(w.memory().scouts?.b).toBeUndefined()
+  expect(w.memory().scouts?.a?.last_report).toBe('1. a found something.')
 })

@@ -173,12 +173,17 @@ export function changeScoutMemory($: $, fn: (old: string | null) => string | nul
 }
 
 /** Saves the scouts in scoutState; scouts no longer in scouts/ are dropped. Whether each is paused is taken from
- *  the file first, since the owner may have paused or resumed one from another session. */
+ *  the file first, since the owner may have paused or resumed one from another session. A scout whose file is
+ *  there but can't be read now (unreadableScouts) keeps its saved entry as it is, so its pause is not lost. */
 export async function saveScoutMemory($: $) {
   await changeScoutMemory($, old => {
     const saved = parseScoutMemory(old)
     for (const st of scoutState.values()) st.paused = saved[st.name]?.paused === true
-    return scoutMemoryText(scoutState.values())
+    const kept = unreadableScouts
+      .map(f => f.replace(/\.md$/, ''))
+      .filter(n => !scoutState.has(n) && saved[n])
+      .map(n => ({ name: n, ...saved[n]! }))
+    return scoutMemoryText([...scoutState.values(), ...kept])
   })
 }
 
