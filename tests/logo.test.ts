@@ -2,8 +2,8 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { ICON_ART } from '../hooks/name'
 import { logo, logoNow, logoOnPublish, noteLogoWidth, playLogo } from '../hooks/plugin/logo'
-import { BANNER_NARROW, applySettings, bannerLines, bannerText, emptyBoard, isNothing, parseBoard, readBoard, parseSettingsCommand, settingValue } from '../hooks/board'
-import { type LogoFacts, type LogoMove, LOGO_AREA, LOGO_ROWS, LOGO_SHAPES, LOGO_FRAME_MS, NOTE_COLUMN, DISSOLVE_ORDER, SPARKS, SWAY_EVERY_MS, allDone, isPlaying, logoFrame, logoMotionOn, mayMove, moveFrames, moveMs, pickMove, restFrame, singFrames, startMove, swayDue, swayFrames, transformFrames } from '../hooks/core/logo'
+import { BANNER_NARROW, SETTINGS, bannerLines, bannerText, emptyBoard, isNothing, parseBoard, readBoard, parseSettingsCommand } from '../hooks/board'
+import { type LogoFacts, type LogoMove, LOGO_AREA, LOGO_ROWS, LOGO_SHAPES, LOGO_FRAME_MS, NOTE_COLUMN, DISSOLVE_ORDER, SPARKS, SWAY_EVERY_MS, allDone, isPlaying, logoFrame, mayMove, moveFrames, moveMs, pickMove, restFrame, singFrames, startMove, swayDue, swayFrames, transformFrames } from '../hooks/core/logo'
 
 const MOVES: LogoMove[] = ['sway', 'check', 'robot', 'note', 'sing']
 const at = (f: string[]) => f.join('\n')
@@ -123,11 +123,10 @@ test('a scout run plays the note when its report arrives, not when it starts', (
   expect(pickMove(started, old, isNothing)).toBe(null)
 })
 
-test('nothing plays with logo_motion off, a narrow panel, a panel not shown, or the board off', () => {
+test('nothing plays on a narrow panel, a panel not shown, or the board off', () => {
   const ok = { width: 80, shown: true }
   expect(mayMove(ok)).toBe(true)
-  expect(mayMove({ ...ok, logo_motion: true, mode: 'auto', enabled: true })).toBe(true)
-  expect(mayMove({ ...ok, logo_motion: false })).toBe(false)
+  expect(mayMove({ ...ok, mode: 'auto', enabled: true })).toBe(true)
   expect(mayMove({ ...ok, width: BANNER_NARROW - 1 })).toBe(false)
   expect(mayMove({ ...ok, width: BANNER_NARROW })).toBe(true)
   expect(mayMove({ ...ok, shown: false })).toBe(false)
@@ -137,19 +136,16 @@ test('nothing plays with logo_motion off, a narrow panel, a panel not shown, or 
   expect(bannerLines({ ...emptyBoard(), tasks: [] }, '/x/app', '/x', true, BANNER_NARROW - 1).every(l => l.art === '')).toBe(true)
 })
 
-test('the logo_motion setting: on by default, turned off and on, kept in the board file', () => {
-  const b = emptyBoard()
-  expect(logoMotionOn(b)).toBe(true)
-  expect(settingValue(b, 'logo_motion')).toBe('on')
-  const off = applySettings(b, { logo_motion: false })
-  expect(off.board.logo_motion).toBe(false)
-  expect(off.changes).toEqual([{ name: 'logo_motion', value: 'off', said: 'the board logo stays still', cut: '' }])
-  expect(settingValue(off.board, 'logo_motion')).toBe('off')
-  expect(parseBoard(JSON.stringify(off.board)).logo_motion).toBe(false)
-  expect(readBoard(JSON.stringify({ ...off.board, logo_motion: 'maybe' })).fixed).toContain('logo_motion')
-  expect(applySettings(off.board, { logo_motion: true }).board.logo_motion).toBe(true)
-  expect(parseSettingsCommand('logo_motion off')).toEqual({ kind: 'set', setting: 'logo_motion', input: { logo_motion: false } })
-  expect(parseSettingsCommand('logo-motion on')).toEqual({ kind: 'set', setting: 'logo_motion', input: { logo_motion: true } })
+test('there is no logo_motion setting: an old board.json with logo_motion false loads and the logo still moves', async () => {
+  const old = JSON.stringify({ ...emptyBoard(), logo_motion: false })
+  const r = readBoard(old)
+  expect(r.fixed.join(' ')).not.toContain('logo')
+  expect(SETTINGS.map(s => s.name as string)).not.toContain('logo_motion')
+  expect(parseSettingsCommand('logo_motion off').kind).not.toBe('set')
+  const b = parseBoard(old)
+  expect(mayMove({ ...b, width: 80, shown: true })).toBe(true)
+  noteLogoWidth(80)
+  expect(await playLogo(fake$() as never, 'check', { ...(b as object), enabled: true, mode: 'auto' } as never)).toBe(true)
 })
 
 /** A stand-in for the plugin's $ with just what the player uses: the open panes, a frame timer to tick by hand, and redraws counted. */
@@ -170,7 +166,7 @@ const reset = () => noteLogoWidth(80)
 test('the player: a worker start plays the robot once on the frame timer, then the timer stops and the logo rests', async () => {
   reset()
   const $ = fake$()
-  const view = (status: string) => ({ tasks: [{ id: 'T-1', status }], scouts: [], logo_motion: true, enabled: true, mode: 'auto' }) as never
+  const view = (status: string) => ({ tasks: [{ id: 'T-1', status }], scouts: [], enabled: true, mode: 'auto' }) as never
   await logoOnPublish($ as never, view('todo'))
   expect(logo.play).toBe(null)
   await logoOnPublish($ as never, view('doing'))
@@ -184,10 +180,9 @@ test('the player: a worker start plays the robot once on the frame timer, then t
   expect($.redraws).toBeGreaterThanOrEqual(transformFrames('robot').length)
 })
 
-test('the player plays nothing with logo_motion off, a narrow or hidden panel, and drops a move while one plays', async () => {
+test('the player plays nothing on a narrow or hidden panel, and drops a move while one plays', async () => {
   reset()
-  const v = { logo_motion: true, enabled: true, mode: 'auto' } as never
-  expect(await playLogo(fake$() as never, 'check', { ...(v as object), logo_motion: false })).toBe(false)
+  const v = { enabled: true, mode: 'auto' } as never
   expect(await playLogo(fake$(false) as never, 'check', v)).toBe(false)
   noteLogoWidth(BANNER_NARROW - 1)
   expect(await playLogo(fake$() as never, 'check', v)).toBe(false)

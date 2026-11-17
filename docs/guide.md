@@ -392,7 +392,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   about a second and dissolves back; and when the board becomes all done (nothing to do,
   doing, in review or waiting) little notes ♪ ♫ float up beside it. Only one move plays at a
   time (one that comes meanwhile is dropped). Nothing moves on a panel too narrow to show the
-  logo, while the board is off, or with the `logo_motion` setting off.
+  logo or while the board is off.
 - **The band above the prompt** shows the mode, the busy workers, the counts and the scouts,
   e.g. `⏵ auto · 1/3 workers · 1 doing · 1 to do · 2 scouts (next: gaps-bot in 38m)`, and under
   it the tasks that need you or are running. When narrow, the `(next: …)` part goes first,
@@ -443,8 +443,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   instructions, its last report, and buttons to run it now, edit it, or pause or resume it.
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
-  default, allowed range and what it means. Enter on a row changes it: `open_on_start`,
-  `logo_motion` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
+  default, allowed range and what it means. Enter on a row changes it: `open_on_start`
+  and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (several test
   commands are joined with ` && `; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value

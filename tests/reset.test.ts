@@ -93,7 +93,7 @@ function logo$() {
 test('resetPlugin puts every logo field back to its start value and stops a running frame timer', async () => {
   const $ = logo$()
   logo.width = 80
-  expect(await playLogo($ as never, 'check', { logo_motion: true, enabled: true, mode: 'auto' })).toBe(true)
+  expect(await playLogo($ as never, 'check', { enabled: true, mode: 'auto' })).toBe(true)
   $.ticks.slice().forEach(f => f())
   logo.last = 1
   logo.before = { tasks: [{ id: 'T-1', status: 'doing' as never }], scouts: [] }

@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Removed
+- The `logo_motion` setting: the board logo's moves always play now. An old `board.json` that still has it just has it ignored.
+
 ### Added
 - The board banner's logo dances now and then: it sways when idle, turns into a check mark, robot or note when a task merges, a worker starts or a scout finds something, and sings when the board is all done. Turn it off with the `logo_motion` setting (on by default).
 - `tests_with_changes` setting (off / ask / review, default ask): a change task whose commit edits code but no test file is flagged before merging. With ask it merges and the lead is told "T-3 changed code but no test"; with review it waits for your review. Docs-only changes are never flagged. The lead now writes how each change will be tested ("Done when: tests show …").
