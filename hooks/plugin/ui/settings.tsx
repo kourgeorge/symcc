@@ -1,10 +1,11 @@
 // The board panel's Settings view.
-import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys, type KindDef, type KindSource, type BrokenKind, mergeKinds, kindSource, kindSourceLabel, kindsKeys, brokenKindNamed, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
 import { load } from '../store'
 import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../roles'
+import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
 import { loadPrompts, promptView, savePromptDraft, changePrompt } from '../prompts'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
@@ -235,6 +236,170 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
   )
 }
 
+// ---------------- the Kinds page (like the Roles page, with the same keys) ----------------
+
+/** A kind's file as the panel names it: .<name>/kinds/<kind>.md. */
+const kindFileOf = (name: string) => `${S.N.dir}/kinds/${name}.md`
+
+/** A kind's edit mode: Save and Cancel (x), then a box per part of its file: Description and Body. */
+function kindEditPage($: $, pane: PaneParts, source: KindSource | undefined) {
+  const { Box, Text, Button, Input, act, C, heading, footer } = pane
+  const d = kindView.draft!
+  const cancel = () => ((kindView.draft = null), $.ui.invalidate('ui.render'))
+  const box = (key: 'description' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
+    <Box flexDirection="column">
+      {heading(label)}
+      <Input key={`kind-${key}`} value={d[key]} placeholder={placeholder} submitLabel="keep" {...more} onInput={value => void (d[key] = value)} onSubmit={value => void (d[key] = value)} />
+    </Box>
+  )
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text>
+          <Text bold color={C('claude')}>{d.kind}</Text> <Text bold color={C('warning')}>editing</Text>
+        </Text>
+        <Text color={C('inactive')}>save writes {kindFileOf(d.kind)}{source === 'built-in' ? ' (a copy of the built-in kind; Reset to built-in undoes it)' : ''}</Text>
+      </Box>
+      <Box flexDirection="row" gap={1}>
+        <Button key="kind-save" label="Save" onPress={act(async () => {
+          const said = await saveKindDraft($)
+          if (said) $.ui.toast(S.N.toast(said))
+        })} />
+        <Button key="kind-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
+      </Box>
+      {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
+      {box('description', 'Description', 'what this kind of task is, in a few words', { autoFocus: true })}
+      {box('body', 'Body', 'free text about the kind', { rows: 6 })}
+      {footer(roleEditKeys(), 'kind-edit-keys')}
+    </Box>
+  )
+}
+
+/** One kind's page (Back returns to the Kinds page): its description and body, with Back, Edit, Turn off / on (not for change
+ *  or investigation), Reset to built-in (a replaced built-in only) and Remove (an added kind only, after a confirm step).
+ *  A kind whose file can't be read (`broken`) shows why, and only Reset or Remove. */
+function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: KindSource | undefined, broken: BrokenKind | undefined, builtIn: KindDef[]) {
+  const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
+  const name = k?.name ?? broken!.name
+  const run = (input: Parameters<typeof changeKind>[1], after?: () => void) => act(async () => {
+    const res = await changeKind($, input)
+    if (res.ok && after) after()
+    kindView.confirmRemove = false
+    $.ui.toast(S.N.toast(res.text))
+    $.ui.invalidate('ui.render')
+  })
+  const okName = !kindNameError(name)
+  const canEdit = !broken
+  const canOff = !broken && !ALWAYS_ON_KINDS.includes(name)
+  const canReset = broken ? okName && !!findKind(builtIn, name) : source === 'replaced'
+  const canRemove = broken ? okName && !canReset : source === 'added'
+  const file = broken ? broken.file : source === 'built-in' ? `kinds/${name}.md (in the plugin; Edit copies it to ${kindFileOf(name)})` : kindFileOf(name)
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text>
+          <Text bold color={C(broken || k?.off ? 'inactive' : 'claude')}>{name}</Text>
+          {broken ? <Text color={C('error')}> · your file can't be read: {broken.reason}</Text> : <Text color={C(k!.off ? 'warning' : 'inactive')}> · {kindSourceLabel(source!, k!.off)}</Text>}
+        </Text>
+        {broken ? <Text color={C('text')}>Fix the file by hand: {broken.file}.</Text> : <Text bold color={C('text')}>{k!.description}</Text>}
+      </Box>
+      {buttonRows([
+        <Button key="kind-back" label="Back" hotkey="b" autoFocus={kindView.confirmRemove ? undefined : true} onPress={() => ((kindView.open = ''), (kindView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
+        canEdit && <Button key="kind-edit" label="Edit" hotkey="e" onPress={() => ((kindView.draft = kindDraftOf(k!)), (kindView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
+        canOff && <Button key="kind-off" label={k!.off ? 'Turn on' : 'Turn off'} hotkey="o" onPress={run({ action: k!.off ? 'on' : 'off', name })} />,
+        canReset && <Button key="kind-reset" label="Reset to built-in" hotkey="r" onPress={run({ action: 'reset', name }, broken ? () => (kindView.open = '') : undefined)} />,
+        canRemove && <Button key="kind-remove" label="Remove" hotkey="d" onPress={() => ((kindView.confirmRemove = true), $.ui.invalidate('ui.render'))} />,
+      ], 'kind-buttons')}
+      {kindView.confirmRemove && canRemove ? (
+        <Box key="kind-remove-box" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+          <Text color={C('warning')}>Remove kind {name} and delete {broken ? broken.file : kindFileOf(name)}?</Text>
+          <Box flexDirection="row" gap={1}>
+            <Button key="kind-remove-yes" label="Yes, remove (y)" hotkey="y" autoFocus onPress={run({ action: 'remove', name }, () => (kindView.open = ''))} />
+            <Button key="kind-remove-cancel" label="Cancel (x)" hotkey="x" onPress={() => ((kindView.confirmRemove = false), $.ui.invalidate('ui.render'))} />
+          </Box>
+        </Box>
+      ) : null}
+      {k ? (
+        <Box flexDirection="column">
+          {heading('Body')}
+          {k.body.trim() ? paragraphs(k.body.trim()) : <Text color={C('inactive')}>(none)</Text>}
+        </Box>
+      ) : null}
+      <Box flexDirection="column">
+        {heading('File')}
+        <Text>
+          {'  '}
+          <Text color={C('autoAccept')}>{file}</Text>
+        </Text>
+      </Box>
+      {footer(roleKeys({ canEdit, canOff, off: !!k?.off, canReset, canRemove }), 'kind-keys')}
+    </Box>
+  )
+}
+
+/** The Kinds page, opened from Settings' Kinds row: one row per kind (Enter opens it), + New kind (n) and Back (b) to Settings. */
+function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenKind[]) {
+  const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
+  const cancel = () => ((kindView.naming = null), $.ui.invalidate('ui.render'))
+  const nameW = Math.max(0, ...kinds.map(k => k.name.length), ...broken.map(b => b.name.length))
+  const openRow = (name: string) => () => ((kindView.open = name), (kindView.confirmRemove = false), (kindView.naming = null), $.ui.invalidate('ui.render'))
+  const brokenRow = (b: BrokenKind, first: boolean) => (
+    <Button key={row(`kindRow:${b.name}`)} plain label={`${b.name} — your file can't be read: ${b.reason}`} autoFocus={first && !kindView.naming ? true : undefined} onPress={openRow(b.name)}>
+      <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
+      <Text color={C('error')}>{` — your file can't be read: ${b.reason}`}</Text>
+    </Button>
+  )
+  const newKindBox = () =>
+    kindView.naming ? (
+      <Box key="kind-new-box" flexDirection="column">
+        <Input
+          key="kind-new-name"
+          label="New kind's name"
+          placeholder="letters, digits, - and _"
+          value={kindView.naming.name}
+          autoFocus
+          submitLabel="make it"
+          onInput={value => void (kindView.naming && (kindView.naming.name = value))}
+          onSubmit={value => (value.trim() ? act(async () => {
+            const said = await newKindFile($, value)
+            if (said) $.ui.toast(S.N.toast(said))
+          })() : cancel())}
+        />
+        {kindView.naming.error ? <Text color={C('error')}>{kindView.naming.error}</Text> : null}
+        <Button key="kind-new-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
+        <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/kinds/<name>.md and opens it`)}</Text>
+      </Box>
+    ) : (
+      <Button key="kind-new" label="+ New kind" hotkey="n" onPress={() => ((kindView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
+        <Text color={C('text')}>{'  + New kind'}</Text>
+      </Button>
+    )
+  return (
+    <Box flexDirection="column">
+      {header()}
+      {heading('Kinds')}
+      {kinds.map((k, i) => {
+        const bad = brokenKindNamed(broken, k.name)
+        if (bad) return brokenRow(bad, i === 0)
+        const source = kindSource(k.name, builtIn, project)!
+        return (
+          <Button key={row(`kindRow:${k.name}`)} plain label={`${k.name}: ${kindSourceLabel(source, k.off)}`} autoFocus={i === 0 && !kindView.naming ? true : undefined} onPress={openRow(k.name)}>
+            <Text bold={!k.off} color={C(k.off ? 'inactive' : 'claude')}>{`  ${k.name.padEnd(nameW)}`}</Text>
+            <Text color={C(k.off ? 'warning' : 'inactive')}>{` ${kindSourceLabel(source, k.off)}`}</Text>
+            <Text color={C(k.off ? 'inactive' : 'text')}>{` · ${k.description}`}</Text>
+          </Button>
+        )
+      })}
+      {broken.filter(b => !findKind(kinds, b.name)).map((b, i) => brokenRow(b, !kinds.length && i === 0))}
+      {newKindBox()}
+      <Text color={C('inactive')}>Enter opens a kind · n makes a new one · or tell the lead</Text>
+      <Text key="kinds-page-blank"> </Text>
+      <Button key="kinds-back" label="Back (b)" hotkey="b" onPress={() => ((kindView.list = false), (kindView.naming = null), $.ui.invalidate('ui.render'))} />
+      {footer(kindsKeys(), 'kinds-keys')}
+    </Box>
+  )
+}
+
 // ---------------- the Prompts page ----------------
 
 /** One prompt's edit mode: one big box with the whole text, Save and Cancel (x). The box takes every letter, so Cancel is the way out. */
@@ -362,6 +527,14 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (opened && roleView.draft) return roleEditPage($, pane, roleSource(opened.name, builtIn, project))
   if (opened) return rolePage($, pane, opened, roleSource(opened.name, builtIn, project)!)
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
+  const kl = await kindLists($)
+  const kinds = mergeKinds(kl.builtIn, kl.project)
+  const openedKind = kindView.open ? findKind(kinds, kindView.open) : undefined
+  const openedBrokenKind = kindView.open ? brokenKindNamed(kl.broken, kindView.open) : undefined
+  if (kindView.open && !openedKind && !openedBrokenKind) ((kindView.open = ''), (kindView.draft = null), (kindView.confirmRemove = false))
+  if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, kindSource(openedKind.name, kl.builtIn, kl.project))
+  if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind && kindSource(openedKind.name, kl.builtIn, kl.project), openedBrokenKind, kl.builtIn)
+  if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
   const own = await loadPrompts($)
   const openedPrompt = promptView.open || undefined
   if (openedPrompt && promptView.draft) return promptEditPage($, pane)
@@ -370,6 +543,8 @@ export async function settingsPage($: $, pane: PaneParts) {
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const offCount = roles.filter(r => r.off).length
   const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
+  const kindsOff = kinds.filter(k => k.off).length
+  const kindsCount = `${kinds.length} kind${kinds.length === 1 ? '' : 's'}${kindsOff ? ` · ${kindsOff} off` : ''}`
   const yours = PROMPT_KINDS.filter(k => promptSource(own, k) === 'yours')
   const promptsCount = yours.length ? `${yours.join(', ')} yours` : 'built-in'
   const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
@@ -456,6 +631,11 @@ export async function settingsPage($: $, pane: PaneParts) {
         <Text bold color={C('claude')}>{'Roles'.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {rolesCount}</Text>
         <Text color={C('inactive')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>
+      </Button>
+      <Button key={row('settings-kinds')} plain label={`Kinds: ${kindsCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))}>
+        <Text bold color={C('claude')}>{'Kinds'.padEnd(nameWidth)}</Text>
+        <Text bold color={C('text')}> {kindsCount}</Text>
+        <Text color={C('inactive')}> · Enter opens the Kinds page: the task kinds, to open, edit, turn off or add</Text>
       </Button>
       <Button key={row('settings-prompts')} plain label={`Prompts: ${promptsCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (promptView.list = true), $.ui.invalidate('ui.render'))}>
         <Text bold color={C('claude')}>{'Prompts'.padEnd(nameWidth)}</Text>

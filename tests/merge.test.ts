@@ -3974,6 +3974,18 @@ test('add with kind bug saves kind bug; an unknown kind is refused naming the kn
   expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
 })
 
+test('an off kind is refused by add (and by change), naming the kinds that are on (T-329)', async () => {
+  const w = world()
+  await saveBoard(w.$, { ...emptyBoard(), mode: 'auto' })
+  S.kinds = [{ name: 'change', description: 'a general change', body: '' }, { name: 'bug', description: 'something that works wrongly', body: '', off: true }, { name: 'investigation', description: 'find an answer', body: '' }]
+  const add = (kind: string) => runTool(w.$, 'add', { title: 'Fix the cache', details: 'd', why: 'a test', origin_by: 'lead', backlog: true, kind })
+  await expect(add('bug')).rejects.toThrow('kind "bug" is turned off (the owner can turn it on again: kinds action "on"); the kinds are: change, investigation')
+  expect((await load(w.$)).tasks.length).toBe(0)
+  await add('change')
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'bug' })).rejects.toThrow('is turned off')
+  expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
+})
+
 test('a kind bug task is committed, tested and merged like a change', async () => {
   const w = world()
   const [b] = boardWith('auto', ['npm test'], { kind: 'bug', history: ['created by the lead'] } as Partial<SymccTask>)
