@@ -173,6 +173,8 @@ happens, never the words in its hand-back:
 4. **Test gate.** symcc runs your test commands on the combined code. If they fail,
    automatic retries kick in: the task goes back to `todo` and the next worker is shown the end of the failing output and
    told to fix it (2 times by itself; then it is marked `failed` for the lead).
+   **Checker (optional).** With the `checker` setting on, a fresh checker reads the task and
+   its changes and tries to break them before anything merges (see [The checker](#the-checker)).
 5. **Approval (optional).** In review mode (see below), the task stops here as
    `review` ("ready for review") and nothing is merged until you say so.
 6. **Merge.** Only now does your branch move forward. If you have that branch checked
@@ -446,7 +448,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start`
-  and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
+  `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
   `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
@@ -641,6 +643,22 @@ timer again. The pause is kept in `.symcc/scouts.json`
 (next to each scout's last run), so it survives a restart and your scout file is never
 changed. Only you can pause or resume a scout; the lead is told a paused scout doesn't run on its timer.
 
+### The checker
+
+The `checker` setting is `off` by default. Turn it on with `/symcc-settings checker on` (or tell
+the lead "turn on the checker"). Then, when a change passes its tests, a fresh checker (the
+built-in `checker` role) starts in the task's folder. It cannot edit files. It reads the task and
+the diff and tries to break the change, for example by running it with odd input.
+
+- **OK:** the task goes on as usual, to review or to merge.
+- **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
+  as one of the `auto_retries`.
+- **No answer** (the checker was stopped, ran longer than `max_minutes`, or could not start): the
+  task waits for your review.
+- **Skipped** for investigations and for changes that touch only docs.
+
+The checker's verdict is written in the task's history.
+
 ---
 
 ## Task kinds
@@ -665,8 +683,7 @@ The built-in kinds (in the plugin, one file each: `kinds/<name>.ts`):
 nothing is committed, tested or merged, and it waits for you to read it (see
 [Investigation tasks](#investigation-tasks)). Every other kind, `change` included, runs the
 same way: the worker changes files, which are committed, tested and merged (see
-[What happens when a worker finishes](#what-happens-when-a-worker-finishes)), unless the kind
-says `merges: no`.
+[What happens when a worker finishes](#what-happens-when-a-worker-finishes)).
 
 **How the lead picks one.** The lead reads each kind's description and chooses the one that
 fits when it adds a task; `change` when unsure. To override it, tell the lead: "make T-5 a
@@ -681,20 +698,12 @@ description: small upkeep work - dependency bumps, config tidying
 Keep the change small and say what you updated.
 ```
 
-`description` is required (the lead reads it to choose). The name uses letters, digits, `-`
-and `_`. A file with the name of a built-in kind replaces it. The text under the front matter
-holds the kind's stages, each under a `## name` heading. A file that can't be used is skipped, with a note.
+`description` is required: it says what the task is, the lead reads it to choose, and the worker
+is told it. The name uses letters, digits, `-` and `_`. A file with the name of a built-in kind
+replaces it. The text under the front matter is extra advice for the worker. A file that can't be
+used is skipped, with a note.
 
-**What runs today.** Stages run in order.
-
-- A `worker:` stage is a fresh worker each time, in the same task folder.
-- The `tests` and `scope` checks run.
-- `on fail: back to <stage>, <N> times` works: a failed check sends the task back to that stage.
-- `merges: no` (nothing is committed, tested or merged, like an investigation) and
-  `merge_tests: no` (the tests are skipped at merge when only docs changed) work.
-- **Not built yet:** gates (`gate: owner`, `gate: lead`), the other checks and `children:`. Such
-  a stage counts as passed, with a note in the task's history. So don't rely on an owner gate
-  in your own kind yet.
+A kind is only a label with a description. It does not change how a task runs.
 
 **Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the kinds", "add a
 `chore` kind for dependency bumps", "turn off the feature kind", "reset the bug kind". The lead
@@ -710,8 +719,8 @@ Roles page (Enter opens a kind, `n` adds a new one, `b` goes back).
 - **Off** means the lead never picks the kind for a new task. A task that already has it keeps
   it. `change` and `investigation` can't be turned off. **On** turns it back.
 
-Planned: a separate workflow for each kind (steps such as spec, tests and approvals). See
-[the design](research/task-kinds-and-workflows.md).
+A separate workflow for each kind was designed but is not built; the owner chose against it. See
+[the old design](research/task-kinds-and-workflows.md) for the history.
 
 ---
 
