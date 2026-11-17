@@ -13,4 +13,5 @@ test('/symcc-help says a typed test command is one whole line and several go in 
   const text = manual('lead') + manual('')
   expect(text).not.toContain('join them with " && "')
   expect(text).toContain('a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"]')
+  expect(text).not.toContain('one per line')
 })

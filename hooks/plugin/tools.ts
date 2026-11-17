@@ -97,8 +97,8 @@ export const MANUAL = (): Record<string, string> => ({
   /${S.N.name}-settings [NAME VALUE]  open the settings view, or set one setting, e.g.
                        /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings notify sound
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
-                       (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"],
-                       or one per line in the panel's edit box; "none" clears them)
+                       (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
+                       "none" clears them)
                        a value over its limit is cut to it, and the answer says so
   /${S.N.name}-stats [full] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
