@@ -3,6 +3,7 @@ import type { SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { frontMatterLine, splitFrontMatter } from './text'
 import { ASK_TOOL } from './ask'
+import { type DefSource, type BrokenDef, DEF_NAME, brokenNamed, defSource, defNamed, defNameError, leadBrokenDefLine, sourceLabel } from './def-files'
 
 // ---------------- worker roles ----------------
 
@@ -65,9 +66,6 @@ export function workerAgentTypes(name: string = DEFAULT_NAME): { suffix: string;
 /** The role a task gets when none is set: today's plain worker. */
 export const DEFAULT_ROLE = 'general'
 
-/** A role's name: letters, digits, - and _ only. */
-export const ROLE_NAME = /^[A-Za-z0-9_-]{1,64}$/
-
 /** A front matter list: "[a, b]" or "a, b", quotes dropped. */
 function frontMatterList(value: string): string[] {
   return value
@@ -112,7 +110,7 @@ function readRole(name: string, text: string): RoleDef | string {
   const said = unquote(meta.name)
   const warning = said && said !== name ? ignoredNameWarning(said, name) : ''
   const description = unquote(meta.description)
-  if (!ROLE_NAME.test(roleName)) return `bad name "${roleName}" (use letters, digits, - and _ only)`
+  if (!DEF_NAME.test(roleName)) return `bad name "${roleName}" (use letters, digits, - and _ only)`
   if (!description) return 'no description'
   const model = unquote(meta.model)
   const tools: string[] = []
@@ -203,24 +201,8 @@ export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): st
 /** The roles that are not turned off (general always counts as on). */
 export const onRoles = (roles: RoleDef[]): RoleDef[] => roles.filter(r => !r.off || r.name.toLowerCase() === DEFAULT_ROLE)
 
-/** Where a role comes from: the plugin (built-in), the owner's file with a built-in's name (replaced), or the owner's own (added). */
-export type RoleSource = 'built-in' | 'replaced' | 'added'
-
-/** Role `name` (any case) in `roles`, exactly (no general fallback). */
-export const roleNamed = (roles: RoleDef[], name: string): RoleDef | undefined => roles.find(r => r.name.toLowerCase() === name.trim().toLowerCase())
-
-/** Where role `name` comes from, or undefined when there is no such role. */
-export function roleSource(name: string, builtIn: RoleDef[], project: RoleDef[]): RoleSource | undefined {
-  const b = !!roleNamed(builtIn, name)
-  const p = !!roleNamed(project, name)
-  return b && p ? 'replaced' : b ? 'built-in' : p ? 'added' : undefined
-}
-
 /** Why `name` can't be a role name (it goes into a file path), or null when it can. */
-export function roleNameError(name: string): string | null {
-  if (!name.trim()) return 'give the role a name'
-  return ROLE_NAME.test(name) ? null : `"${name}" is not a valid role name: use letters, digits, - and _ only (no "/" or "..")`
-}
+export const roleNameError = (name: string): string | null => defNameError('role', name)
 
 /** The tools a role asks for, spelled as in EXTRA_TOOLS, or the reason one is not allowed. */
 export function roleTools(tools: string[]): string[] | string {
@@ -244,42 +226,27 @@ export function roleFileText(r: Omit<RoleDef, 'name'>): string {
 }
 
 /** One role's line for the lead's roles list: "tester (built-in): writes tests · model sonnet", with ", off" when it is off and its warning, if any, at the end. */
-function leadRoleLine(r: RoleDef, source: RoleSource): string {
-  return `- ${r.name} (${source}${r.off ? ', off' : ''}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
+function leadRoleLine(r: RoleDef, source: DefSource): string {
+  return `- ${r.name} (${sourceLabel(source, r.off)}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
 }
-
-/** One of the owner's role files that can't be read (so it is left out of the roles): its role name, its file and why. */
-export type BrokenRole = { name: string; file: string; reason: string }
-
-/** Broken file `name` (any case) in `broken`. */
-export const brokenNamed = (broken: BrokenRole[], name: string): BrokenRole | undefined => broken.find(b => b.name.toLowerCase() === name.trim().toLowerCase())
-
-/** What a broken role file shows as: "your file can't be read: no description". */
-export const brokenRoleLabel = (b: BrokenRole): string => `your file can't be read: ${b.reason}`
 
 /** The lead's line for a broken role file: what it is, why, and the way out (reset for a built-in's name, remove for an added role). */
-export function leadBrokenLine(b: BrokenRole, builtIn: RoleDef[]): string {
-  const isBuiltIn = !!roleNamed(builtIn, b.name)
-  const out = !roleNameError(b.name)
-    ? isBuiltIn ? `the built-in role is used meanwhile; fix the file, or action "reset" deletes it` : `fix the file, or action "remove" deletes it (ask the owner first)`
-    : 'fix the file by hand'
-  return `- ${b.name} (${brokenRoleLabel(b)}; ${b.file}): ${out}`
-}
+export const leadBrokenLine = (b: BrokenDef, builtIn: RoleDef[]): string => leadBrokenDefLine('role', b, builtIn)
 
 /** The lead's roles list: every role, where it comes from and whether it is off; a role whose file can't be read shows why instead. */
-export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: string, broken: BrokenRole[] = []): string {
+export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: string, broken: BrokenDef[] = []): string {
   const all = mergeRoles(builtIn, project)
   if (!all.length && !broken.length) return 'no roles found'
   const lines = all.map(r => {
     const b = brokenNamed(broken, r.name)
-    return b ? leadBrokenLine(b, builtIn) : leadRoleLine(r, roleSource(r.name, builtIn, project)!)
+    return b ? leadBrokenLine(b, builtIn) : leadRoleLine(r, defSource(r.name, builtIn, project)!)
   })
-  for (const b of broken) if (!roleNamed(all, b.name)) lines.push(leadBrokenLine(b, builtIn))
+  for (const b of broken) if (!defNamed(all, b.name)) lines.push(leadBrokenLine(b, builtIn))
   return `Roles (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${lines.join('\n')}`
 }
 
 /** One role in full for the lead: its line, its file, its front matter and its checklist. */
-export function leadRoleText(r: RoleDef, source: RoleSource, file: string): string {
+export function leadRoleText(r: RoleDef, source: DefSource, file: string): string {
   return `${leadRoleLine(r, source).slice(2)}\nfile: ${file}\n${roleFileText(r).trim()}`
 }
 
@@ -288,7 +255,4 @@ export const NEW_ROLE_TEMPLATE = {
   description: 'what this role is for, in a few words (the lead reads it to choose)',
   checklist: '- the first thing a worker with this role checks\n- the next thing',
 } as const
-
-/** Where a role comes from as the Settings view's Roles section shows it: "built-in", "replaced" or "added", then ", off" when it is turned off. */
-export const roleSourceLabel = (source: RoleSource, off: boolean | undefined): string => `${source}${off ? ', off' : ''}`
 

@@ -7,6 +7,7 @@ import { DEFAULT_NAME } from '../name'
 import { BUILT_IN_KIND_TEXTS } from '../../kinds'
 import { DEFAULT_KIND, INVESTIGATION, KIND_NAME, kindOf } from './board-file'
 import { frontMatterLine, splitFrontMatter } from './text'
+import { type DefSource, type BrokenDef, brokenNamed, defSource, defNameError, leadBrokenDefLine, sourceLabel } from './def-files'
 
 /** A task kind, read from its file. Its name is always its file name (lowercase). */
 export type KindDef = { name: string; description: string; body: string; off?: boolean }
@@ -110,21 +111,8 @@ export function kindsLeadText(kinds: readonly KindDef[], name: string = DEFAULT_
 
 // ---------------- managing kinds (the lead's kinds tool and the panel's Kinds page; like the roles) ----------------
 
-/** Where a kind comes from: the plugin (built-in), the owner's file with a built-in's name (replaced), or the owner's own (added). */
-export type KindSource = 'built-in' | 'replaced' | 'added'
-
-/** Where kind `name` comes from, or undefined when there is no such kind. */
-export function kindSource(name: string, builtIn: readonly KindDef[], project: readonly KindDef[]): KindSource | undefined {
-  const b = !!findKind(builtIn, name)
-  const p = !!findKind(project, name)
-  return b && p ? 'replaced' : b ? 'built-in' : p ? 'added' : undefined
-}
-
 /** Why `name` can't be a kind name (it goes into a file path), or null when it can. */
-export function kindNameError(name: string): string | null {
-  if (!name.trim()) return 'give the kind a name'
-  return /^[A-Za-z0-9_-]{1,64}$/.test(name) ? null : `"${name}" is not a valid kind name: use letters, digits, - and _ only (no "/" or "..")`
-}
+export const kindNameError = (name: string): string | null => defNameError('kind', name)
 
 /** A kind's file text: the front matter (description, then off when set), then the body. */
 export function kindFileText(k: Omit<KindDef, 'name'>): string {
@@ -133,40 +121,26 @@ export function kindFileText(k: Omit<KindDef, 'name'>): string {
   return `---\n${lines.join('\n')}\n---\n${k.body.trim() ? `${k.body.trim()}\n` : ''}`
 }
 
-/** One of the owner's kind files that can't be read (so it is left out of the kinds): its kind name, its file and why. */
-export type BrokenKind = { name: string; file: string; reason: string }
-
-/** Broken file `name` (any case) in `broken`. */
-export const brokenKindNamed = (broken: readonly BrokenKind[], name: string): BrokenKind | undefined => broken.find(b => b.name.toLowerCase() === name.trim().toLowerCase())
-
-/** Where a kind comes from as the lists show it: "built-in", "replaced" or "added", then ", off" when it is turned off. */
-export const kindSourceLabel = (source: KindSource, off: boolean | undefined): string => `${source}${off ? ', off' : ''}`
-
 /** One kind's line for the lead's kinds list: "bug (built-in): something that works wrongly", with ", off" when it is off. */
-const leadKindLine = (k: KindDef, source: KindSource): string => `- ${k.name} (${kindSourceLabel(source, k.off)}): ${k.description}`
+const leadKindLine = (k: KindDef, source: DefSource): string => `- ${k.name} (${sourceLabel(source, k.off)}): ${k.description}`
 
 /** The lead's line for a broken kind file: what it is, why, and the way out (reset for a built-in's name, remove for an added kind). */
-export function leadBrokenKindLine(b: BrokenKind, builtIn: readonly KindDef[]): string {
-  const out = kindNameError(b.name)
-    ? 'fix the file by hand'
-    : findKind(builtIn, b.name) ? 'the built-in kind is used meanwhile; fix the file, or action "reset" deletes it' : 'fix the file, or action "remove" deletes it (ask the owner first)'
-  return `- ${b.name} (your file can't be read: ${b.reason}; ${b.file}): ${out}`
-}
+export const leadBrokenKindLine = (b: BrokenDef, builtIn: readonly KindDef[]): string => leadBrokenDefLine('kind', b, builtIn)
 
 /** The lead's kinds list: every kind, where it comes from and whether it is off; a kind whose file can't be read shows why instead. */
-export function leadKindsText(builtIn: readonly KindDef[], project: readonly KindDef[], dir: string, broken: readonly BrokenKind[] = []): string {
+export function leadKindsText(builtIn: readonly KindDef[], project: readonly KindDef[], dir: string, broken: readonly BrokenDef[] = []): string {
   const all = mergeKinds([...builtIn], [...project])
   if (!all.length && !broken.length) return 'no kinds found'
   const lines = all.map(k => {
-    const b = brokenKindNamed(broken, k.name)
-    return b ? leadBrokenKindLine(b, builtIn) : leadKindLine(k, kindSource(k.name, builtIn, project)!)
+    const b = brokenNamed(broken, k.name)
+    return b ? leadBrokenKindLine(b, builtIn) : leadKindLine(k, defSource(k.name, builtIn, project)!)
   })
   for (const b of broken) if (!findKind(all, b.name)) lines.push(leadBrokenKindLine(b, builtIn))
   return `Kinds (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${lines.join('\n')}`
 }
 
 /** One kind in full for the lead: its line, its file, its front matter and its body. */
-export function leadKindText(k: KindDef, source: KindSource, file: string): string {
+export function leadKindText(k: KindDef, source: DefSource, file: string): string {
   return `${leadKindLine(k, source).slice(2)}\nfile: ${file}\n${kindFileText(k).trim()}`
 }
 

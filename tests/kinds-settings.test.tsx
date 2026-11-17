@@ -155,3 +155,18 @@ test('New kind makes .symcc/kinds/<name>.md and opens it; Edit saves; a bad name
   expect(await ui.find({ key: 'kind-remove' })).toBeDefined()
   await ui.unmount()
 })
+
+test('New kind over a file that is there but can not be read: says so with the way out (like New role), and writes nothing', async ($, on) => {
+  stateOf(on, VIEW)
+  const { mine } = fakeKinds(on, { 'chore.md': 'no front matter here', 'bug.md': '---\noff: true\n---\n' })
+  const ui = await settings($)
+  await ui.press({ key: 'kind-new' })
+  await ui.input({ key: 'kind-new-name', text: 'chore' })
+  expect(await ui.find({ type: 'Text', text: /\.symcc\/kinds\/chore\.md is already there but can't be read \(no front matter.*\): open it in the list to Remove it, or fix the file by hand/ })).toBeDefined()
+  expect(mine['chore.md']).toBe('no front matter here')
+  expect(await ui.find({ key: 'kind-description' })).toBeUndefined()
+  await ui.input({ key: 'kind-new-name', text: 'Bug' })
+  expect(await ui.find({ type: 'Text', text: /\.symcc\/kinds\/bug\.md is already there but can't be read \(no description\): open it in the list to Reset to built-in, or fix the file by hand/ })).toBeDefined()
+  expect(mine['bug.md']).toBe('---\noff: true\n---\n')
+  await ui.unmount()
+})

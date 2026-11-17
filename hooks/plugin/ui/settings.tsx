@@ -1,5 +1,6 @@
 // The board panel's Settings view.
-import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, type RoleSource, DEFAULT_ROLE, mergeRoles, roleSource, roleSourceLabel, roleKeys, roleEditKeys, rolesKeys, type BrokenRole, brokenNamed, brokenRoleLabel, roleNamed, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys, type KindDef, type KindSource, type BrokenKind, mergeKinds, kindSource, kindSourceLabel, kindsKeys, brokenKindNamed, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
+import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
@@ -16,7 +17,7 @@ const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
 /** A role's edit mode in Settings: the same header as its page, then Save and Cancel (x), then a box per part of its
  *  file, named and ordered as the page shows them: Description, Model, Skills, Tools, Checklist. Its boxes take every letter
  *  and Esc doesn't reach the panel from a text box, so Cancel is the way out. */
-function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
+function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
   const { Box, Text, Button, Input, act, C, heading, footer } = pane
   const d = roleView.draft!
   const cancel = () => ((roleView.draft = null), $.ui.invalidate('ui.render'))
@@ -55,7 +56,7 @@ function roleEditPage($: $, pane: PaneParts, source: RoleSource | undefined) {
 
 /** One role's page (opened from the Roles page; Back returns there): its front matter and checklist, with Back, Edit, Turn off / on (not for general),
  *  Reset to built-in (a replaced built-in only) and Remove (an added role only, after a confirm step). */
-function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
+function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => act(async () => {
     const res = await changeRole($, input)
@@ -79,7 +80,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
       <Box flexDirection="column">
         <Text>
           <Text bold color={C(r.off ? 'inactive' : 'claude')}>{r.name}</Text>
-          <Text color={C(r.off ? 'warning' : 'inactive')}> · {roleSourceLabel(source, r.off)}</Text>
+          <Text color={C(r.off ? 'warning' : 'inactive')}> · {sourceLabel(source, r.off)}</Text>
         </Text>
         <Text bold color={C('text')}>{r.description}</Text>
         {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
@@ -121,7 +122,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: RoleSource) {
 
 /** The page of a role whose file can't be read: why, then only what works: Reset to built-in (a built-in's name) or Remove
  *  (an added role, after a confirm step). The edit page can't load a broken file, so it is fixed by hand. */
-function brokenRolePage($: $, pane: PaneParts, b: BrokenRole, builtIn: RoleDef[]) {
+function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[]) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows } = pane
   const run = (input: Parameters<typeof changeRole>[1]) => act(async () => {
     const res = await changeRole($, input)
@@ -131,7 +132,7 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenRole, builtIn: RoleDef[]
     $.ui.invalidate('ui.render')
   })
   const okName = !roleNameError(b.name)
-  const canReset = okName && !!roleNamed(builtIn, b.name)
+  const canReset = okName && !!defNamed(builtIn, b.name)
   const canRemove = okName && !canReset
   const out = canReset ? 'Reset to built-in deletes it (the built-in role is used meanwhile)' : canRemove ? 'Remove deletes it' : ''
   return (
@@ -139,7 +140,7 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenRole, builtIn: RoleDef[]
       <Box flexDirection="column">
         <Text>
           <Text bold color={C('inactive')}>{b.name}</Text>
-          <Text color={C('error')}> · {brokenRoleLabel(b)}</Text>
+          <Text color={C('error')}> · {brokenLabel(b)}</Text>
         </Text>
         <Text color={C('text')}>Fix the file by hand: {b.file}{out ? `; or ${out}` : ''}.</Text>
       </Box>
@@ -171,16 +172,16 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenRole, builtIn: RoleDef[]
 
 /** The Roles page, opened from Settings' Roles row: one row per role (Enter opens it), + New role (n) and Back (b)
  *  to Settings. The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
-function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenRole[]) {
+function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenDef[]) {
   const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
   const cancel = () => ((roleView.naming = null), $.ui.invalidate('ui.render'))
   const nameW = Math.max(0, ...roles.map(r => r.name.length), ...broken.map(b => b.name.length))
   const openRow = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))
   /** A role whose file can't be read: "tester — your file can't be read: no description". */
-  const brokenRow = (b: BrokenRole, first: boolean) => (
-    <Button key={row(`roleRow:${b.name}`)} plain label={`${b.name} — ${brokenRoleLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
+  const brokenRow = (b: BrokenDef, first: boolean) => (
+    <Button key={row(`roleRow:${b.name}`)} plain label={`${b.name} — ${brokenLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
       <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
-      <Text color={C('error')}>{` — ${brokenRoleLabel(b)}`}</Text>
+      <Text color={C('error')}>{` — ${brokenLabel(b)}`}</Text>
     </Button>
   )
   /** "New role": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel button (x), leaves it. */
@@ -216,17 +217,17 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
       {roles.map((r, i) => {
         const bad = brokenNamed(broken, r.name)
         if (bad) return brokenRow(bad, i === 0)
-        const source = roleSource(r.name, builtIn, project)!
+        const source = defSource(r.name, builtIn, project)!
         return (
-          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${roleSourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
+          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${sourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
             <Text bold={!r.off} color={C(r.off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
-            <Text color={C(r.off ? 'warning' : 'inactive')}>{` ${roleSourceLabel(source, r.off)}`}</Text>
+            <Text color={C(r.off ? 'warning' : 'inactive')}>{` ${sourceLabel(source, r.off)}`}</Text>
             <Text color={C(r.off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
             {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
           </Button>
         )
       })}
-      {broken.filter(b => !roleNamed(roles, b.name)).map((b, i) => brokenRow(b, !roles.length && i === 0))}
+      {broken.filter(b => !defNamed(roles, b.name)).map((b, i) => brokenRow(b, !roles.length && i === 0))}
       {newRoleBox()}
       <Text color={C('inactive')}>Enter opens a role · n makes a new one · or tell the lead</Text>
       <Text key="roles-page-blank"> </Text>
@@ -242,7 +243,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
 const kindFileOf = (name: string) => `${S.N.dir}/kinds/${name}.md`
 
 /** A kind's edit mode: Save and Cancel (x), then a box per part of its file: Description and Body. */
-function kindEditPage($: $, pane: PaneParts, source: KindSource | undefined) {
+function kindEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
   const { Box, Text, Button, Input, act, C, heading, footer } = pane
   const d = kindView.draft!
   const cancel = () => ((kindView.draft = null), $.ui.invalidate('ui.render'))
@@ -278,7 +279,7 @@ function kindEditPage($: $, pane: PaneParts, source: KindSource | undefined) {
 /** One kind's page (Back returns to the Kinds page): its description and body, with Back, Edit, Turn off / on (not for change
  *  or investigation), Reset to built-in (a replaced built-in only) and Remove (an added kind only, after a confirm step).
  *  A kind whose file can't be read (`broken`) shows why, and only Reset or Remove. */
-function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: KindSource | undefined, broken: BrokenKind | undefined, builtIn: KindDef[]) {
+function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSource | undefined, broken: BrokenDef | undefined, builtIn: KindDef[]) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const name = k?.name ?? broken!.name
   const run = (input: Parameters<typeof changeKind>[1], after?: () => void) => act(async () => {
@@ -299,7 +300,7 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: KindSou
       <Box flexDirection="column">
         <Text>
           <Text bold color={C(broken || k?.off ? 'inactive' : 'claude')}>{name}</Text>
-          {broken ? <Text color={C('error')}> · your file can't be read: {broken.reason}</Text> : <Text color={C(k!.off ? 'warning' : 'inactive')}> · {kindSourceLabel(source!, k!.off)}</Text>}
+          {broken ? <Text color={C('error')}> · {brokenLabel(broken)}</Text> : <Text color={C(k!.off ? 'warning' : 'inactive')}> · {sourceLabel(source!, k!.off)}</Text>}
         </Text>
         {broken ? <Text color={C('text')}>Fix the file by hand: {broken.file}.</Text> : <Text bold color={C('text')}>{k!.description}</Text>}
       </Box>
@@ -338,15 +339,15 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: KindSou
 }
 
 /** The Kinds page, opened from Settings' Kinds row: one row per kind (Enter opens it), + New kind (n) and Back (b) to Settings. */
-function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenKind[]) {
+function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenDef[]) {
   const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
   const cancel = () => ((kindView.naming = null), $.ui.invalidate('ui.render'))
   const nameW = Math.max(0, ...kinds.map(k => k.name.length), ...broken.map(b => b.name.length))
   const openRow = (name: string) => () => ((kindView.open = name), (kindView.confirmRemove = false), (kindView.naming = null), $.ui.invalidate('ui.render'))
-  const brokenRow = (b: BrokenKind, first: boolean) => (
-    <Button key={row(`kindRow:${b.name}`)} plain label={`${b.name} — your file can't be read: ${b.reason}`} autoFocus={first && !kindView.naming ? true : undefined} onPress={openRow(b.name)}>
+  const brokenRow = (b: BrokenDef, first: boolean) => (
+    <Button key={row(`kindRow:${b.name}`)} plain label={`${b.name} — ${brokenLabel(b)}`} autoFocus={first && !kindView.naming ? true : undefined} onPress={openRow(b.name)}>
       <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
-      <Text color={C('error')}>{` — your file can't be read: ${b.reason}`}</Text>
+      <Text color={C('error')}>{` — ${brokenLabel(b)}`}</Text>
     </Button>
   )
   const newKindBox = () =>
@@ -379,13 +380,13 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
       {header()}
       {heading('Kinds')}
       {kinds.map((k, i) => {
-        const bad = brokenKindNamed(broken, k.name)
+        const bad = brokenNamed(broken, k.name)
         if (bad) return brokenRow(bad, i === 0)
-        const source = kindSource(k.name, builtIn, project)!
+        const source = defSource(k.name, builtIn, project)!
         return (
-          <Button key={row(`kindRow:${k.name}`)} plain label={`${k.name}: ${kindSourceLabel(source, k.off)}`} autoFocus={i === 0 && !kindView.naming ? true : undefined} onPress={openRow(k.name)}>
+          <Button key={row(`kindRow:${k.name}`)} plain label={`${k.name}: ${sourceLabel(source, k.off)}`} autoFocus={i === 0 && !kindView.naming ? true : undefined} onPress={openRow(k.name)}>
             <Text bold={!k.off} color={C(k.off ? 'inactive' : 'claude')}>{`  ${k.name.padEnd(nameW)}`}</Text>
-            <Text color={C(k.off ? 'warning' : 'inactive')}>{` ${kindSourceLabel(source, k.off)}`}</Text>
+            <Text color={C(k.off ? 'warning' : 'inactive')}>{` ${sourceLabel(source, k.off)}`}</Text>
             <Text color={C(k.off ? 'inactive' : 'text')}>{` · ${k.description}`}</Text>
           </Button>
         )
@@ -524,16 +525,16 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (openedBroken) return brokenRolePage($, pane, openedBroken, builtIn)
   const opened = roleView.open ? roles.find(r => r.name === roleView.open) : undefined
   if (roleView.open && !opened) resetRoleOpen()
-  if (opened && roleView.draft) return roleEditPage($, pane, roleSource(opened.name, builtIn, project))
-  if (opened) return rolePage($, pane, opened, roleSource(opened.name, builtIn, project)!)
+  if (opened && roleView.draft) return roleEditPage($, pane, defSource(opened.name, builtIn, project))
+  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!)
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
   const kl = await kindLists($)
   const kinds = mergeKinds(kl.builtIn, kl.project)
   const openedKind = kindView.open ? findKind(kinds, kindView.open) : undefined
-  const openedBrokenKind = kindView.open ? brokenKindNamed(kl.broken, kindView.open) : undefined
+  const openedBrokenKind = kindView.open ? brokenNamed(kl.broken, kindView.open) : undefined
   if (kindView.open && !openedKind && !openedBrokenKind) ((kindView.open = ''), (kindView.draft = null), (kindView.confirmRemove = false))
-  if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, kindSource(openedKind.name, kl.builtIn, kl.project))
-  if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind && kindSource(openedKind.name, kl.builtIn, kl.project), openedBrokenKind, kl.builtIn)
+  if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, defSource(openedKind.name, kl.builtIn, kl.project))
+  if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind && defSource(openedKind.name, kl.builtIn, kl.project), openedBrokenKind, kl.builtIn)
   if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
   const own = await loadPrompts($)
   const openedPrompt = promptView.open || undefined
