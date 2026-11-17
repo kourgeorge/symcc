@@ -92,9 +92,9 @@ s = new_slide()
 staff(s, 1.5, 1.2, 10.3)
 text(s, 0.8, 3.5, 11.7, 1.0, "symcc: a team, not a session", 54, TEXT, True, PP_ALIGN.CENTER)
 text(s, 1.6, 4.7, 10.1, 1.6,
-     "Turn a messy swarm of coding agents into an organized team: a lead that plans, "
-     "workers that build, and you in charge, so the work keeps moving even when you're "
-     "not pushing it.", 22, MUTED, False, PP_ALIGN.CENTER)
+     "Other tools run coding agents one chat at a time, with you as the manager. symcc gives them a lead that plans, "
+     "a board everyone shares, and workers that build in parallel. You stay in charge, and the work keeps moving "
+     "when you're not pushing it.", 22, MUTED, False, PP_ALIGN.CENTER)
 text(s, 0.8, 6.6, 11.7, 0.5, "A plugin for Claude Code", 16, ORANGE, True, PP_ALIGN.CENTER)
 
 # 2. Problem

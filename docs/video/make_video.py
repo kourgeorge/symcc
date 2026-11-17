@@ -355,9 +355,9 @@ def scene_title(c, t, dur):
 
     c.group(a2, sub)
     a3 = ramp(t, 2.6, 0.8)
-    vision = ("Turn a messy swarm of coding agents into an organized team: a lead that plans, "
-              "workers that build, and you in charge, so the work keeps moving even when "
-              "you're not pushing it.")
+    vision = ("Other tools run coding agents one chat at a time, with you as the manager. symcc gives "
+              "them a lead that plans, a board everyone shares, and workers that build in parallel. "
+              "You stay in charge, and the work keeps moving when you're not pushing it.")
     c.group(a3, lambda cc: text_block(cc, W / 2, 440, vision, font(27), MUTED, 900, 40, "ma"))
     a4 = ramp(t, 4.5, 0.8)
     c.group(a4, lambda cc: cc.text(W / 2, 610, "ORGANIZED  ·  SUPERVISED  ·  PROACTIVE",
