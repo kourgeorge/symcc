@@ -2325,8 +2325,8 @@ test("a worker's edit in the owner's copy of the project is refused without a fi
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
   expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${ROOT}/.symcc/board.json` })).toMatch(/^Refused: \.symcc\/board\.json is in the owner's copy/)
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: '../../README.md' })).toMatch(/^Refused: .*outside your own folder/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${ROOT}/.symcc/board.json` })).toMatch(/^Refused: \.symcc\/board\.json is symcc's own data.*not yours to edit/)
+  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: '../../README.md' })).toMatch(/^Refused: \.symcc\/README\.md is symcc's own data.*not yours to edit/)
   expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: '/tmp/scratch.txt' })).toBeUndefined()
   // none of these became a file request
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
@@ -2368,7 +2368,7 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   fs.list = async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 }))
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
   expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/link/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'link/.symcc/board.json' })).toMatch(/^Refused: \.symcc\/board\.json is in the owner's copy/)
+  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'link/.symcc/board.json' })).toMatch(/^Refused: \.symcc\/board\.json is symcc's own data.*not yours to edit/)
   expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/broken` })).toMatch(/^Refused: .*broken goes through a symbolic link that leads to nothing/)
   expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/scratch/notes.txt` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/src/new/b.ts` })).toBeUndefined()
