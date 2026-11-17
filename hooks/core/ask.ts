@@ -142,32 +142,125 @@ export const outsideFolderText = (rel: string, worktree: string, dataDir = '.sym
 /** Characters that split a shell command into the words checked by bashOutsideFolder: spaces, quotes, operators, `$(...)`, `=` and `:`. */
 const SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/
 
+/** A piece of a shell command as bashOutsideFolder walks it: a simple command's text, or the operator between two. */
+type ShellPiece = { text: string } | { op: '&&' | '||' | ';' | '|' | '&' | '(' | ')' }
+
+/**
+ * `command` cut into simple commands and the operators between them (&&, ||, ;, newline as ";", |, a lone "&", and
+ * "(", "{", "`" as opening and ")", "}", "`" as closing a group). Nothing is cut inside quotes or after a backslash, and
+ * the "&" of a redirect (`2>&1`, `&>`) is no operator. A best effort, not a shell parser.
+ */
+function shellPieces(command: string): ShellPiece[] {
+  const out: ShellPiece[] = []
+  let text = ''
+  let quote = ''
+  let tick = false
+  const op = (o: Extract<ShellPiece, { op: string }>['op']) => {
+    out.push({ text }, { op: o })
+    text = ''
+  }
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i]!
+    const n = command[i + 1]
+    if (quote) {
+      if (c === '\\' && quote === '"') text += c + (n ?? ''), i++
+      else {
+        text += c
+        if (c === quote) quote = ''
+      }
+    } else if (c === '\\') text += c + (n ?? ''), i++
+    else if (c === "'" || c === '"') (quote = c), (text += c)
+    else if ((c === '&' || c === '|') && n === c) op(c === '&' ? '&&' : '||'), i++
+    else if (c === '|') op('|'), n === '&' && i++
+    else if (c === '&' && n !== '>' && !/[<>]$/.test(text)) op('&')
+    else if (c === ';' || c === '\n') op(';')
+    else if (c === '(' || c === '{') op('(')
+    else if (c === ')' || c === '}') op(')')
+    else if (c === '`') op((tick = !tick) ? '(' : ')')
+    else text += c
+  }
+  out.push({ text })
+  return out
+}
+
+/**
+ * Where a simple command `text` that changes folder (`cd` or `pushd`) goes: a path as written (absolute, or relative to
+ * the folder it runs in), `home` (when known) for `cd`, `cd ~` and `~/...`, or null when it can't be followed (a
+ * variable, `$(...)`, `cd -`, options, `popd`, odd characters). Undefined when `text` does not change folder.
+ */
+function cdTarget(text: string, home: string | undefined): string | null | undefined {
+  const m = /^(cd|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim())
+  if (!m) return undefined
+  if (m[1] === 'popd') return null
+  let arg = (m[2] ?? '').trim()
+  const quoted = /^'([^']*)'$/.exec(arg) ?? /^"([^"$`\\]*)"$/.exec(arg)
+  if (quoted) arg = quoted[1]!
+  const homeOk = home?.startsWith('/') ? home : undefined
+  if (!arg) return m[1] === 'cd' ? (homeOk ?? null) : null
+  if (!/^[\w./~+@%,-]+$/.test(arg) || arg.startsWith('-')) return null
+  if (arg === '~' || arg.startsWith('~/')) return homeOk ? resolvePath(homeOk, arg.slice(1).replace(/^\/+/, '') || '.') : null
+  return arg.includes('~') ? null : arg
+}
+
 /**
  * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
  * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. A word counts as a path when
- * it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part; relative words are taken from the
- * worker's folder. A ".." word is also tried from the worker's folder with its leading "/" dropped, so `$(pwd)/../..`
- * is caught too. Any mention is refused, reading included: telling a safe read from a write in a shell line is not
- * reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a worker has its own copy of every file to read.
- * Like editOutsideFolder, the project check ignores letter case. A best effort, not a sandbox: a path built at run time
- * (variables, base64) gets through, and the merge-time scope check stays the backstop for the worker's folder.
+ * it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part. Relative words are taken from the
+ * folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller knows it) or else the
+ * worker's folder, and a plain `cd` or `pushd` earlier in the command moves it ("cd src && cat ../package.json" reads the
+ * worker's own file). When it can't be told for sure (a `cd` that may fail before ";" or "||", a group in parentheses),
+ * every folder the command may be in is tried, and a `cd` that can't be followed (a variable, `cd -`) goes back to the
+ * worker's folder, so nothing is let through that the plain check from the worker's folder would refuse. A ".." word is
+ * also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too. Any mention is refused, reading included:
+ * telling a safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`),
+ * and a worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A
+ * best effort, not a sandbox: a path built at run time (variables, base64) or a symbolic link gets through, and the
+ * merge-time scope check stays the backstop for the worker's folder.
  */
-export function bashOutsideFolder(command: unknown, worktree: string, root: string, home?: string): string | undefined {
+export function bashOutsideFolder(command: unknown, worktree: string, root: string, home?: string, cwd?: string): string | undefined {
   if (typeof command !== 'string' || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
   const wt = resolvePath('/', worktree)
   const top = resolvePath('/', root)
   const check = (abs: string) => (inside(abs, wt, true) !== undefined ? undefined : inside(abs, top, false))
-  for (const word of command.split(SHELL_SPLIT)) {
-    const w = word.replace(/\\/g, '')
-    const climbs = w.split('/').includes('..')
-    const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
-    if (!w.startsWith('/') && !homeWord && !climbs) continue
-    const tries = [homeWord ? resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.') : resolvePath(wt, w)]
-    if (climbs && w.startsWith('/')) tries.push(resolvePath(wt, w.replace(/^\/+/, '')))
-    for (const abs of tries) {
-      const rel = check(abs)
-      if (rel !== undefined) return rel
+  const start = [cwd?.startsWith('/') ? resolvePath('/', cwd) : wt]
+  const join = (...lists: string[][]) => [...new Set(lists.flat())]
+  let here = start
+  let seen = start
+  const groups: string[][] = []
+  const pieces = shellPieces(command)
+  for (let i = 0; i < pieces.length; i++) {
+    const p = pieces[i]!
+    if ('op' in p) {
+      if (p.op === '(') groups.push(here)
+      // a group may be a subshell (its cd stays inside) or not: either folder
+      else if (p.op === ')') here = join(groups.pop() ?? start, here)
+      // what runs after "||" may follow a failed cd anywhere before it
+      else if (p.op === '||') here = join(here, seen)
+      continue
     }
+    for (const word of p.text.split(SHELL_SPLIT)) {
+      const w = word.replace(/\\/g, '')
+      const climbs = w.split('/').includes('..')
+      const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
+      if (!w.startsWith('/') && !homeWord && !climbs) continue
+      const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : here.map(d => resolvePath(d, w))
+      if (climbs && w.startsWith('/')) tries.push(...here.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
+      for (const abs of tries) {
+        const rel = check(abs)
+        if (rel !== undefined) return rel
+      }
+    }
+    const to = cdTarget(p.text, home)
+    if (to === undefined) continue
+    const before = pieces[i - 1]
+    const after = pieces[i + 1]
+    const op = (x: ShellPiece | undefined) => (x && 'op' in x ? x.op : undefined)
+    // a cd in a pipe or sent to the background runs in a subshell: the folder stays
+    if (op(before) === '|' || op(after) === '|' || op(after) === '&') continue
+    const moved = to === null ? [wt] : here.map(d => resolvePath(d, to))
+    // only "&&" makes sure the cd worked before what follows runs
+    here = op(after) === '&&' ? moved : join(here, moved)
+    seen = join(seen, moved)
   }
   return undefined
 }
