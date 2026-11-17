@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles, firstStageOf } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun } from './runs'
@@ -51,8 +51,6 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     ...(cleanRole(f.role) ? { role: cleanRole(f.role) } : {}),
     // "change" is the default, so it is never stored
     ...(kindFor(f.kind, f.role) !== DEFAULT_KIND ? { kind: kindFor(f.kind, f.role) } : {}),
-    // it starts at its kind's first stage (a kind of the owner's own: missing, which means the same)
-    ...(firstStageOf(kindFor(f.kind, f.role)) ? { stage: firstStageOf(kindFor(f.kind, f.role)) } : {}),
   }
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }

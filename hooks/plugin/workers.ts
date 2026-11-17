@@ -1,12 +1,11 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, findKind, builtInStages } from '../board'
-import { type Stage, type StageResult, parseStages, workerStageFor, manyWorkers, workerAfter, retryStage, nextStage, roleOfStage, stageBuilt } from '../core/stages'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
-import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, commitAndScope, runTests } from './review'
+import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
 import { loadPrompts, promptTemplate } from './prompts'
@@ -27,49 +26,11 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
   return fillPrompt(kind, promptTemplate(kind), kind === 'investigation' ? investigationValues(t, dir, role) : changeValues(t, b, dir, role))
 }
 
-/** The stages of task `t`'s kind (from its kind file, see loadKinds; a kind that can't be found: a built-in one's, else one worker, then tests and merge). */
-export function stagesOf(t: { kind?: unknown }): Stage[] {
-  const kind = kindOf(t)
-  const found = findKind(S.kinds, kind)?.stages ?? builtInStages(kind)
-  if (found?.length) return found
-  const stages = parseStages('', kind, !isInvestigation(kind))
-  return typeof stages === 'string' ? [] : stages
-}
-
-/** Whether task `t` merges nothing: an investigation, or a task whose kind file says `merges: no` (see loadKinds). Its hand-back
- *  ends its try like an investigation's answer: nothing is committed, tested or merged, and it waits in review for the owner to read it. */
-export const mergesNothing = (t: { kind?: unknown }): boolean => isInvestigation(t) || findKind(S.kinds, kindOf(t))?.merges === false
-
-/** {{stage}}: the stage this worker runs and its instructions; empty for a kind with only one worker stage (every built-in kind today). */
-const stageValue = (t: BoardTask, stages: readonly Stage[]): string => {
-  const s = workerStageFor(stages, t.stage)
-  if (!s || !manyWorkers(stages)) return ''
-  const written = stages.filter(x => x.type !== 'merge')
-  return `\nStage ${s.name} (${written.indexOf(s) + 1} of ${written.length}) of a ${kindOf(t)} task.${s.text ? ` Your job in this stage: ${s.text}` : ''}\n`
-}
-
-/** One finished stage as {{earlier_stages}} lists it: "code (general): passed; report .symcc/reports/T-5-try-1.md". */
-const stageLine = (t: BoardTask, stages: readonly Stage[], r: StageResult): string => {
-  const s = stages.find(x => x.name === r.name)
-  const who = s?.type === 'worker' ? ` (${roleOfStage(s, roleOf(t))})` : ''
-  return `- ${r.name}${who}: ${r.result}${r.try ? `; report ${reportFile(S.N.dir, t.id, r.try)}` : ''}${r.note ? `; ${r.note}` : ''}`
-}
-
-/** {{earlier_stages}}: what the task's earlier stages did, one line each with its report (copied into the folder, see copyReports); empty when none finished yet. */
-const earlierStagesValue = (t: BoardTask, stages: readonly Stage[]): string => {
-  const done = t.stages ?? []
-  if (!done.length) return ''
-  return `\nEarlier stages of this task (their work is already committed in your folder; read their reports there, at the same paths):\n${done.slice(-10).map(r => stageLine(t, stages, r)).join('\n')}\n`
-}
-
 /** The last tries, as the prompts list them. */
 const triesList = (t: SymccTask) => tries(t).slice(-5).map(line => `- ${line}`).join('\n')
 
 /** The placeholders both prompts share. */
-const sharedValues = (t: BoardTask, dir: string, role?: RoleDef): Record<string, string> => ({
-  // The stage this worker runs, and what the earlier stages did (see hooks/core/stages.ts).
-  stage: stageValue(t, stagesOf(t)),
-  earlier_stages: earlierStagesValue(t, stagesOf(t)),
+const sharedValues = (t: SymccTask, dir: string, role?: RoleDef): Record<string, string> => ({
   name: S.N.name,
   task_id: t.id,
   title: t.title,
@@ -91,7 +52,7 @@ const investigationValues = (t: BoardTask, dir: string, role?: RoleDef): Record<
 })
 
 /** The placeholders of a change's prompt: change the files, which are then committed, tested and merged. */
-const changeValues = (t: BoardTask, b: Board, dir: string, role?: RoleDef): Record<string, string> => ({
+const changeValues = (t: SymccTask, b: Board, dir: string, role?: RoleDef): Record<string, string> => ({
   ...sharedValues(t, dir, role),
   files: `Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}`,
@@ -148,26 +109,19 @@ export async function startWorker($: $, id: string) {
     await loadKinds($).catch(() => undefined)
     // the owner's prompt files are read again, so an edit counts from this worker on
     await loadPrompts($).catch(() => undefined)
-    // The worker stage it runs (a fresh worker in the same folder for each one); only a kind with more than one keeps it on the try.
-    const stages = stagesOf(t0!)
-    const ws = workerStageFor(stages, t0!.stage)
-    const multi = !!ws && manyWorkers(stages)
     const t = await change($, x => {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]
       const at = now()
-      const runs = startRun(cur!.runs, at, !!cur!.merge_main)
-      if (multi) runs[runs.length - 1] = { ...runs[runs.length - 1]!, stage: ws!.name }
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs, ...(multi ? { stage: ws!.name } : {}) }, at)
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
       return [y, find(y, id)!]
     })
     if (!t) return
     const before = find(b, id)!
     let agentId: string
     try {
-      const role = findRole(roles, ws ? roleOfStage(ws, roleOf(t)) : roleOf(t))
-      const model = ws?.model ?? role?.model
-      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), subagentType: workerTypeFor(role, S.N.name), cwd: dir, ...(model ? { model } : {}) })
+      const role = findRole(roles, roleOf(t))
+      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), subagentType: workerTypeFor(role, S.N.name), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
       if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
@@ -183,7 +137,7 @@ export async function startWorker($: $, id: string) {
       notReady.set(id, misses + 1)
       await change($, x =>
         find(x, id)?.status === 'doing' && find(x, id)?.session === S.me
-          ? patchTask(x, id, { status: 'todo', session: before.session, attempts: before.attempts, branch: before.branch, note: before.note, runs: before.runs, stage: before.stage }, now())
+          ? patchTask(x, id, { status: 'todo', session: before.session, attempts: before.attempts, branch: before.branch, note: before.note, runs: before.runs }, now())
           : x,
       )
       return
@@ -663,8 +617,8 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
   // Its time was up: what it handed back is its report; the task fails with its work kept, nothing is merged.
   if (t.wrap_up) {
     const limit = timeLimitOf(b.max_minutes, t)
-    // An investigation's hand-back (or that of a kind that merges nothing) is its answer so far: it still goes to review for the owner to read.
-    if (mergesNothing(t)) {
+    // An investigation's hand-back is its answer so far: it still goes to review for the owner to read.
+    if (isInvestigation(t)) {
       if (gaveUp()) return
       await answered($, t, answer, summary, limit)
       return
@@ -693,18 +647,12 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     const why = endFailure(end)
     if (await writeIfSame($, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
     tellLead($, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
-  } else if (mergesNothing(t)) {
+  } else if (isInvestigation(t)) {
     if (gaveUp()) return
     await answered($, t, answer, summary)
   } else {
     if (gaveUp() || (await waitIfBranchGone($, b, t, 'merge'))) return
-    // A worker stage with another worker stage after it: its work is committed and checked, then the next stage runs (runStages).
-    const stages = stagesOf(t)
-    const ws = workerStageFor(stages, t.stage)
-    if (ws && workerAfter(stages, ws.name)) return runStages($, t, b, stages, ws, summary, w.worktree, agentId, gaveUp)
-    // The stages between the last worker stage and the merge step that are not built yet count as passed, with a line saying so.
-    const later = ws ? notBuiltYet(stages.slice(stages.indexOf(ws) + 1)) : []
-    await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging', ...(later.length ? { history: [...find(x, t.id)!.history, ...later.map(s => `${tryLabel(t)}: ${skipNote(s)}`)] } : {}) }, now()) : x))
+    await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
     const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
@@ -724,88 +672,6 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
   }
 }
 
-/** The stages in `stages` up to the next worker stage or the merge step that symcc can't run yet (see stageBuilt). */
-const notBuiltYet = (stages: readonly Stage[]): Stage[] => {
-  const end = stages.findIndex(s => s.type === 'worker' || s.type === 'merge')
-  return (end < 0 ? stages : stages.slice(0, end)).filter(s => !stageBuilt(s))
-}
-
-/** The note of a stage that can't run yet and so counts as passed. */
-const skipNote = (s: Stage) => `stage ${s.name} (${s.type}: ${s.value}) can't run yet, so it counts as passed`
-
-/**
- * Worker stage `from` of task `t` finished and another worker stage comes after it (a kind with more than one, see workerAfter): its
- * work is committed and scope-checked in the task's folder (commitAndScope; no change is fine here), then the stages after it run in
- * order until the next worker stage: a `tests` check runs the test commands there; `scope` already ran; a stage that can't run yet
- * (a gate, another check, children) counts as passed with a note. Reaching the next worker stage, the task goes back to "todo" at it,
- * and the next pump starts a fresh worker in the same folder and branch. A check that fails follows its `on fail` (nextStage): back to
- * "todo" at that stage with its output (while go-backs are left), else failed. Nothing is merged here: only the merge step merges.
- * Every write is skipped when the task was dropped, paused or changed meanwhile (see writeIfSame).
- */
-export async function runStages($: $, t: BoardTask, b: Board, stages: readonly Stage[], from: Stage, summary: string, worktree: string, agentId: string | undefined, gaveUp: () => boolean = () => false) {
-  await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: `checking stage ${from.name}` }, now()) : x))
-  const made: string[] = []
-  const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-  const stopped = (): CheckResult | undefined => {
-    const why = stop()
-    return why ? { ok: false, detail: `not checked: the task was ${why} while it was being checked` } : undefined
-  }
-  const c = await commitAndScope($, t, worktree, 'finish', made, stopped, true).catch((e: Error) => ({ result: { ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` } as CheckResult }))
-  if (gaveUp()) return
-  await recordCommits($, t.id, made)
-  const label = `${tryLabel(t)}: ${cutLine(summary, 300)} →`
-  const done: StageResult[] = []
-  const lines: string[] = []
-  /** Writes the outcome (`patch`, with the stages' record and history lines), or tells what changed meanwhile. Returns whether it was written. */
-  const write = async (patch: (cur: BoardTask) => Partial<BoardTask>, detail: string, end: string) => {
-    const moved = await writeIfSame($, t, cur => ({ ...patch(cur as BoardTask), stages: [...((cur as BoardTask).stages ?? []), ...done], history: [...cur.history, ...lines, `${label} ${detail}`], ...endedBy(cur, now(), 'finished', end) }))
-    if (moved && moved !== 'gone') await changedMeanwhile($, t, b, { ok: false, detail }, `${label} ${detail}`, worktree, agentId)
-    return !moved
-  }
-  /** Stage `s` failed (`r`): back to the stage its `on fail` names while go-backs are left, else failed. */
-  const failed = async (s: Stage, r: CheckResult) => {
-    done.push({ name: s.name, result: 'failed', at: now(), ...(s.type === 'worker' ? { try: t.attempts } : {}), note: cutLine(r.detail, 200) })
-    const next = nextStage(stages, { stage: s.name, backs: t.backs }, 'failed', b.auto_retries ?? DEFAULT_AUTO_RETRIES)
-    if (next.go === 'back') {
-      const note = `stage ${s.name} failed; a new try goes back to stage ${next.stage.name} (${next.count} of ${next.times})`
-      if (!(await write(cur => ({ status: 'todo', stage: next.stage.name, backs: { ...(cur.backs ?? {}), [s.name]: next.count }, note, test_output: r.testOutput, merge_main: false }), `${r.detail}; going back to stage ${next.stage.name} (${next.count} of ${next.times})`, `stage ${s.name} failed`))) return
-      tellLead($, `${t.id} "${t.title}" failed its stage ${s.name}; going back to stage ${next.stage.name} on its own (${next.count} of ${next.times}). Nothing to do.`)
-      return
-    }
-    const why = next.go === 'failed' ? next.why : `stage ${s.name} failed`
-    const detail = `${r.detail}${s.type === 'worker' ? '' : `; ${why}`}`
-    if (!(await write(() => ({ status: 'failed', note: detail.slice(0, 300), test_output: r.testOutput, merge_main: false }), detail, `stage ${s.name} failed`))) return
-    tellLead($, `✗ ${t.id} "${t.title}" failed at stage ${s.name}, nothing was merged: ${detail}${r.testOutput !== undefined ? `\nThe end of the last test output:\n${r.testOutput}` : ''}`)
-  }
-  if ('result' in c) return failed(from, c.result)
-  done.push({ name: from.name, result: 'passed', at: now(), try: t.attempts })
-  let cur: Stage = from
-  for (;;) {
-    const next = nextStage(stages, { stage: cur.name, backs: t.backs }, 'passed')
-    // Can't happen (a worker stage comes later, see workerAfter); said plainly rather than merging anything.
-    if (next.go !== 'next' || next.stage.type === 'merge') return failed(cur, { ok: false, detail: `no worker stage after stage ${cur.name}` })
-    const s = next.stage
-    if (s.type === 'worker') {
-      const note = `stage ${from.name} passed; next: stage ${s.name} (a fresh worker)`
-      if (!(await write(() => ({ status: 'todo', stage: s.name, note, test_output: undefined, merge_main: false }), `stage ${from.name} passed${done.length > 1 ? ` (${done.slice(1).map(d => `${d.name} ${d.result}`).join(', ')})` : ''}; next: stage ${s.name}`, `stage ${from.name} passed`))) return
-      noteForLead(`${t.id} "${t.title}": ${note}.`)
-      return
-    }
-    if (s.type === 'check' && s.value === 'tests') {
-      const f = await runTests($, worktree, b.test_commands, stopped)
-      if (gaveUp()) return
-      if (f) return failed(s, f)
-      done.push({ name: s.name, result: 'passed', at: now(), ...(b.test_commands.length ? {} : { note: 'no test command set' }) })
-    } else if (s.type === 'check' && s.value === 'scope') {
-      done.push({ name: s.name, result: 'passed', at: now(), note: 'checked with the worker stage before it' })
-    } else {
-      done.push({ name: s.name, result: 'skipped', at: now(), note: "can't run yet, so it counts as passed" })
-      lines.push(`${tryLabel(t)}: ${skipNote(s)}`)
-    }
-    cur = s
-  }
-}
-
 /** The note of an investigation that was answered and waits for the owner to read it. */
 export const ANSWERED_NOTE = 'answered; waiting for you to read it'
 /** The note of an investigation whose time ran out: what it handed back is its answer so far. */
@@ -822,10 +688,7 @@ async function answered($: $, t: SymccTask, answer: string, summary: string, lim
   const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
   const late = limit !== undefined
   if (await writeIfSame($, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: [...cur.history, `${tryLabel(t)}: answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`], ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
-  const then = isInvestigation(t)
-    ? `${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`
-    : `${S.N.name} approve ${t.id} is Done (it ends, nothing merged: its kind ${kindOf(t)} says merges: no, and its folder's edits are thrown away); ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker.`
-  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${then}`)
+  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
 }
 
 /**
@@ -921,13 +784,10 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
     return
   }
   const tries = t.conflict_tries ?? 0
-  // A kind with more than one worker stage: the new try runs the worker stage the merge step's failure goes back to (see retryStage).
-  const stages = stagesOf(t)
-  const backTo = (conflict: boolean) => (manyWorkers(stages) && retryStage(stages, conflict) ? { stage: retryStage(stages, conflict)!.name } : {})
   if (r.conflict && onConflict(t) === 'retry') {
     // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
     const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
-    if (!(await write(cur => ({ status: 'todo', note, conflict_tries: tries + 1, merge_main: true, ...backTo(true), history: [...cur.history, line] })))) return
+    if (!(await write(cur => ({ status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...cur.history, line] })))) return
     tellLead($, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
     return
   }
@@ -936,7 +796,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
     // Don't fail yet: a new worker gets the failing test output and fixes it.
     const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
-    if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, ...backTo(false), history: [...cur.history, line] })))) return
+    if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...cur.history, line] })))) return
     tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
     return
   }
@@ -960,7 +820,6 @@ export async function approve($: $, id: string, keepNote = false): Promise<strin
   const t = reviewTask(b, id, 'approve')
   if (isInvestigation(t)) return endInvestigation($, t, keepNote)
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
-  if (mergesNothing(t)) return endInvestigation($, t, false)
   return mergeFinished($, b, t, 'approve')
 }
 
@@ -974,16 +833,8 @@ export async function fullAnswer($: $, t: BoardTask): Promise<{ text: string; fi
 /** Every try's report file of `t` (oldest first), with `latest` (the one the full answer was read from) too. */
 const everyReport = (t: BoardTask, latest?: string): string[] => [...new Set([...taskReports(t).sort((a, b) => a.try - b.try).map(r => r.file), ...(latest ? [latest] : [])])]
 
-/** Done on task `id` of a kind that merges nothing (see mergesNothing), in review: it ends done, nothing merged. */
-function readDone(b: Board, id: string): Board {
-  const t = find(b, id)
-  if (!t) throw new Error(`${id} is not on the board`)
-  if (t.status !== 'review') throw new Error(`${t.id} is not waiting for you to read it (it is ${t.status})`)
-  return patchTask(b, t.id, { status: 'done', note: 'read; nothing merged', merge_main: false, test_output: undefined, history: [...t.history, `try ${t.attempts}: the owner read the result → done (nothing merged; its kind ${kindOf(t)} says merges: no)`] }, now())
-}
-
 /**
- * Done on answered investigation `t` (or on a task of another kind that merges nothing, see mergesNothing): it ends done (note "answered"), nothing merged. Its folder's uncommitted
+ * Done on answered investigation `t`: it ends done (note "answered"), nothing merged. Its folder's uncommitted
  * changes are its own scratch edits (a switch to an investigation is refused while the folder holds a change
  * try's work), so they are thrown away, and the folder is removed. Its branch is deleted too (with -D), unless it has
  * commits its target branch doesn't have (from an earlier change try): then it is kept and the lead is told. With `keepNote` (Keep as a
@@ -996,7 +847,7 @@ async function endInvestigation($: $, t: BoardTask, keepNote: boolean): Promise<
   // notes already written: a new note never overwrites one (it gets -2, -3… instead)
   const notes = keepNote ? (await Promise.resolve().then(() => $.fs.list(path('docs/research'))).catch(() => [])).map(f => `docs/research/${f.name}`) : []
   const added = await change($, x => {
-    if (!keepNote) return [isInvestigation(t) ? investigationDone(x, t.id, now()) : readDone(x, t.id), undefined] as [Board, BoardTask | undefined]
+    if (!keepNote) return [investigationDone(x, t.id, now()), undefined] as [Board, BoardTask | undefined]
     const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into }, now(), S.N.dir)
     return [investigationDone(y, t.id, now(), n.id), n] as [Board, BoardTask | undefined]
   })

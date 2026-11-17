@@ -665,8 +665,8 @@ The built-in kinds (in the plugin, one file each: `kinds/<name>.ts`):
 nothing is committed, tested or merged, and it waits for you to read it (see
 [Investigation tasks](#investigation-tasks)). Every other kind, `change` included, runs the
 same way: the worker changes files, which are committed, tested and merged (see
-[What happens when a worker finishes](#what-happens-when-a-worker-finishes)). So today a kind
-mainly tells the worker, and you, what the task is for.
+[What happens when a worker finishes](#what-happens-when-a-worker-finishes)), unless the kind
+says `merges: no`.
 
 **How the lead picks one.** The lead reads each kind's description and chooses the one that
 fits when it adds a task; `change` when unsure. To override it, tell the lead: "make T-5 a
@@ -683,7 +683,18 @@ Keep the change small and say what you updated.
 
 `description` is required (the lead reads it to choose). The name uses letters, digits, `-`
 and `_`. A file with the name of a built-in kind replaces it. The text under the front matter
-holds the kind's stages, each under a `## name` heading (the stages are read but don't run yet). A file that can't be used is skipped, with a note.
+holds the kind's stages, each under a `## name` heading. A file that can't be used is skipped, with a note.
+
+**What runs today.** Stages run in order.
+
+- A `worker:` stage is a fresh worker each time, in the same task folder.
+- The `tests` and `scope` checks run.
+- `on fail: back to <stage>, <N> times` works: a failed check sends the task back to that stage.
+- `merges: no` (nothing is committed, tested or merged, like an investigation) and
+  `merge_tests: no` (the tests are skipped at merge when only docs changed) work.
+- **Not built yet:** gates (`gate: owner`, `gate: lead`), the other checks and `children:`. Such
+  a stage counts as passed, with a note in the task's history. So don't rely on an owner gate
+  in your own kind yet.
 
 **Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the kinds", "add a
 `chore` kind for dependency bumps", "turn off the feature kind", "reset the bug kind". The lead

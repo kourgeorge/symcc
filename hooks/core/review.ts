@@ -1,8 +1,7 @@
 // The board modes (review before merge) and looking at a task's changes.
 import type { SymccMode, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, type BoardTask, type Blockers, blockerFiles, builtInStages, find, isMode, kindOf, modeOf, STATUS_WORD } from './board-file'
-import { type Stage, rejectedStage } from './stages'
+import { type Board, type BoardTask, type Blockers, blockerFiles, find, isMode, modeOf, STATUS_WORD } from './board-file'
 import { patchTask } from './task'
 import { clean } from './text'
 
@@ -104,14 +103,13 @@ export function reviewTask(b: Board, id: string, what: 'approve' | 'reject'): Bo
 
 /**
  * The owner rejected task `id` (in "review") because of `reason`: it goes back to "todo" with the
- * reason in its note and history, so the next worker sees it; its test and merge-main retries and its go-backs (`backs`) start over,
- * and it goes back to its kind's last worker stage before the merge step. `stages`: its kind's stages (default: a built-in kind's).
+ * reason in its note and history, so the next worker sees it; its test and merge-main retries start over.
  */
-export function rejectTask(b: Board, id: string, reason: string, now: string, stages?: readonly Stage[]): Board {
+export function rejectTask(b: Board, id: string, reason: string, now: string): Board {
   const t = reviewTask(b, id, 'reject')
   const why = clean(reason, 1000)
   if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
-  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, backs: undefined, stage: rejectedStage(stages ?? builtInStages(kindOf(t)) ?? []), history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
 }
 
 // ---------------- looking at a task's changes (review) ----------------
