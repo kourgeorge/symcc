@@ -534,7 +534,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   const openedBrokenKind = kindView.open ? brokenNamed(kl.broken, kindView.open) : undefined
   if (kindView.open && !openedKind && !openedBrokenKind) ((kindView.open = ''), (kindView.draft = null), (kindView.confirmRemove = false))
   if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, defSource(openedKind.name, kl.builtIn, kl.project))
-  if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind && defSource(openedKind.name, kl.builtIn, kl.project), openedBrokenKind, kl.builtIn)
+  if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind ? defSource(openedKind.name, kl.builtIn, kl.project) : undefined, openedBrokenKind, kl.builtIn)
   if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
   const own = await loadPrompts($)
   const openedPrompt = promptView.open || undefined
@@ -588,7 +588,7 @@ export async function settingsPage($: $, pane: PaneParts) {
           onSubmit={value => {
             if (!value.trim()) return cancel()
             const r = parseSettingValue(name, value)
-            if (!r.ok) return void ((ed.error = r.message), $.ui.invalidate('ui.render'))
+            if (r.ok === false) return void ((ed.error = r.message), $.ui.invalidate('ui.render'))
             saveIt(r.input)()
           }}
         />
