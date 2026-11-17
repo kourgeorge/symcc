@@ -232,3 +232,24 @@ test('with the plugin turned off, a scout report is saved but the lead gets no b
   expect(w.memory().scouts?.bugs?.last_report).toBe('1. Found a crash.')
   expect(w.toLead()).toEqual([])
 })
+
+// ---------------- a board.json that can't be read (T-324) ----------------
+
+test("with board.json broken, a scout's report still reaches the lead and is saved; board.json is left as it was", async () => {
+  const w = world()
+  w.files.set(BOARD, '{ not json')
+  await scoutFinished(w.$, 's1', 'Finding: X')
+  const sent = w.toLead()
+  expect(sent.length).toBe(1)
+  expect(sent[0]).toContain('Scout "bugs" found something')
+  expect(w.memory().scouts?.bugs?.last_report).toBe('Finding: X')
+  expect(w.files.get(BOARD)).toBe('{ not json')
+})
+
+test('with board.json broken, a stopped scout run still shows the "was stopped" toast and does not throw', async () => {
+  const w = world()
+  w.files.set(BOARD, '{ not json')
+  await scoutFinished(w.$, 's1', 'Finding: X', true)
+  expect(w.toasts.some(t => t.includes('scout bugs was stopped; nothing reported'))).toBe(true)
+  expect(w.files.get(BOARD)).toBe('{ not json')
+})

@@ -100,7 +100,7 @@ export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
     const msg = (err as Error)?.message ?? String(err)
     st.running = false
     st.last_run = lastRun
-    await publish($, await load($)).catch(() => undefined)
+    await load($).then(b => publish($, b)).catch(() => undefined)
     if (scoutNotReady(msg, S.N.name) && onNotReady(misses) === 'retry') {
       timers.push($.clock.after(SCOUT_RETRY_MS, () => void runScout($, s, misses + 1)))
       return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`
@@ -119,7 +119,7 @@ export async function runScout($: $, s: ScoutDef, misses = 0): Promise<string> {
   runBefore.set(agentId, lastRun)
   runStarted.set(agentId, Date.now())
   scoutRuns.set(agentId, s.name)
-  await publish($, await load($)).catch(() => undefined)
+  await load($).then(b => publish($, b)).catch(() => undefined)
   return ''
 }
 
@@ -220,7 +220,7 @@ export async function scoutFinished($: $, agentId: string, answer: string, isAbo
       st.running = false
       st.last_run = before
     }
-    await publish($, await load($))
+    await load($).then(b => publish($, b)).catch(() => undefined)
     $.ui.toast(S.N.toast(`scout ${name} was stopped; nothing reported`))
     return
   }
@@ -229,7 +229,8 @@ export async function scoutFinished($: $, agentId: string, answer: string, isAbo
     st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
     await saveScoutMemory($).catch((e: Error) => tellLead($, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
   }
-  await publish($, await load($))
+  // a broken board.json must not lose the report: telling the lead still happens
+  await load($).then(b => publish($, b)).catch(() => undefined)
   const msg = scoutLeadMessage(name, answer, st?.paused === true)
   if (msg) {
     const at = now()
