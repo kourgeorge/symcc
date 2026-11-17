@@ -2344,6 +2344,23 @@ test("a worker's edit in the owner's copy of the project is refused without a fi
   workers.clear()
 })
 
+test("with a data folder other than .symcc, a worker's edit under it is refused as not yours to edit (T-312)", async () => {
+  S.me = 'me'
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  const was = S.N
+  S.N = { ...was, dir: '.other' }
+  try {
+    workers.set('ag1', { task: 'T-1', worktree: `${ROOT}/.other/worktrees/T-1`, branch: 'symcc/T-1', since: T0 })
+    expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${ROOT}/.other/board.json` })).toMatch(/^Refused: \.other\/board\.json is symcc's own data.*not yours to edit/)
+    expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${ROOT}/.other/worktrees/T-9/a.ts` })).toMatch(/^Refused: \.other\/worktrees\/T-9\/a\.ts is another worker's copy.*not yours to edit/)
+  } finally {
+    S.N = was
+    workers.clear()
+  }
+})
+
 test("a worker's edit through a symbolic link into the owner's copy is refused; links elsewhere are judged by where they lead (T-303)", async () => {
   S.me = 'me'
   const f = world()

@@ -1327,6 +1327,47 @@ test("a worker's shell command naming the owner's copy of the project is refused
   expect(bashOutsideText('README.md', wt)).toBe(`Refused: this command names README.md in the owner's copy of the project, outside your own folder. Work only in your own folder ${wt}: use paths inside it (relative paths start there), never the owner's copy, even to read.`)
 })
 
+test("a worker's shell command: '..' paths are taken from the folder an earlier cd moved to (T-311)", () => {
+  const root = '/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const home = '/home/me'
+  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, home, cwd)
+  // the worker's own files, reached with ".." after a cd: allowed
+  expect(no('cd src && cat ../package.json')).toBeUndefined()
+  expect(no('cd tests && bun test ../tests')).toBeUndefined()
+  expect(no('cd hooks/core && grep -n foo ../plugin/ask.ts')).toBeUndefined()
+  expect(no('cd tests && bun test ../tests/merge.test.ts')).toBeUndefined()
+  expect(no(`cd ${wt}/src && cat ../package.json`)).toBeUndefined()
+  expect(no('cd "src" && cat ../a; cd .. && ls')).toBeUndefined()
+  expect(no('cd src && cd .. && cat package.json')).toBeUndefined()
+  // a ".." that climbs out of the worker's folder from where the cd went: refused
+  // (from ${wt}/src four ".." reach /repo; the five in the task's example reach / and so leave the project)
+  expect(no('cd src && echo x > ../../../../README.md')).toBe('README.md')
+  expect(no('cd src/a && echo x > ../../../../../README.md')).toBe('README.md')
+  expect(no('cd src && echo x > ../../../../../README.md')).toBeUndefined()
+  expect(no('cd src\ncat ../../../../README.md')).toBe('README.md')
+  expect(no('cd /tmp && cat ../repo/README.md')).toBe('README.md')
+  expect(no('cd ~ && cat ../../repo/a')).toBe('a')
+  expect(no('cd && cat ../../repo/a')).toBe('a')
+  // a cd that may not have worked (";", "||"), or ran in a subshell: the worker's folder is tried too
+  expect(no('cd src; cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd src || cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd src && true || cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('(cd src && pwd) && cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd src | cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd src & cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('echo "a && cd src && b" && cat ../x')).toBe('.symcc/worktrees/x')
+  // a cd that can't be followed: later ".." paths are judged from the worker's folder, as before
+  expect(no('cd $D && cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd src && cd - && cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd "$(dirname a)" && cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no('cd src && cd $D && cat ../../../README.md')).toBe('README.md')
+  // the shell's own folder, when the caller knows it (the Bash tool keeps it between calls)
+  expect(no('cat ../x', `${wt}/src`)).toBeUndefined()
+  expect(no('cat ../../../../README.md', `${wt}/src`)).toBe('README.md')
+  expect(no('cat ../x')).toBe('.symcc/worktrees/x')
+})
+
 test('the waiting question and the failure note for files outside the list', async () => {
   expect(needFilesQuestion('T-7', ['README.md', 'tests/x.test.ts'])).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts. Allow them?')
   const note = outOfScopeText(['docs/x.md'], ['src/'])
