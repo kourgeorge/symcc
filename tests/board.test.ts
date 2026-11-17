@@ -1368,6 +1368,35 @@ test("a worker's shell command: '..' paths are taken from the folder an earlier 
   expect(no('cat ../x')).toBe('.symcc/worktrees/x')
 })
 
+test("a worker's shell command: a project path with a space in it, quoted or with a backslash, is still caught (T-314)", () => {
+  const root = '/Users/o/My Project'
+  const wt = `${root}/.symcc/worktrees/T-9`
+  const home = '/Users/o'
+  const no = (c: string) => bashOutsideFolder(c, wt, root, home)
+  // the owner's copy, written with quotes or "\ ": refused
+  expect(no('cat "/Users/o/My Project/README.md"')).toBe('README.md')
+  expect(no('echo hi > "/Users/o/My Project/README.md"')).toBe('README.md')
+  expect(no("cd '/Users/o/My Project' && git checkout -- .")).toBe('')
+  expect(no('cp x /Users/o/My\\ Project/hooks/a.ts')).toBe('hooks/a.ts')
+  expect(no("cat '/Users/o/my project/README.md'")).toBe('README.md')
+  expect(no('cat ~/"My Project"/README.md')).toBe('README.md')
+  expect(no('cat ~/My\\ Project/README.md')).toBe('README.md')
+  expect(no('echo "see /Users/o/My Project/README.md"')).toBe('README.md')
+  expect(no('git diff --output="/Users/o/My Project/a"')).toBe('a')
+  expect(no('cat "/Users/o/My "Project/README.md')).toBe('README.md')
+  expect(no(`cat "${wt}/../../../README.md"`)).toBe('README.md')
+  expect(no('ls "/Users/o/My Project/.symcc/worktrees/T-9 copy"')).toBe('.symcc/worktrees/T-9 copy')
+  // the worker's own folder written whole, quoted or with "\ ": allowed
+  expect(no(`cat "${wt}/src/a.ts"`)).toBeUndefined()
+  expect(no(`cat '${wt}/src/a.ts'`)).toBeUndefined()
+  expect(no(`cat ${wt.replace(/ /g, '\\ ')}/src/a.ts`)).toBeUndefined()
+  expect(no(`cd "${wt}/src" && cat ../package.json`)).toBeUndefined()
+  // a folder whose name only starts the same, and other folders: allowed
+  expect(no('cat "/Users/o/My Project2/a"')).toBeUndefined()
+  expect(no('cat "/Users/o/My Projects/a" /tmp/b')).toBeUndefined()
+  expect(no('echo "a b" > src/a.ts')).toBeUndefined()
+})
+
 test('the waiting question and the failure note for files outside the list', async () => {
   expect(needFilesQuestion('T-7', ['README.md', 'tests/x.test.ts'])).toBe('T-7 needs to change files outside its list: README.md, tests/x.test.ts. Allow them?')
   const note = outOfScopeText(['docs/x.md'], ['src/'])
