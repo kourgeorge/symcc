@@ -260,7 +260,9 @@ export const register: Register = on => {
   // folder is refused (see checkEdit). Everything else is decided as usual.
   on('tool.check', async ($, e, next) => {
     useName($)
-    const deny = e.agentId ? await checkEdit($, e.agentId, e.tool, e.input).catch(() => undefined) : undefined
+    // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
+    const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
+    const deny = e.agentId ? await checkEdit($, e.agentId, e.tool, e.input, cwd).catch(() => undefined) : undefined
     return deny ? { decision: 'deny', reason: deny } : next(e)
   })
 

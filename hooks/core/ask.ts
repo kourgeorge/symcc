@@ -255,8 +255,8 @@ function cdTarget(text: string, home: string | undefined): string | null | undef
  * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
  * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. A word counts as a path when
  * it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part. Relative words are taken from the
- * folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller knows it) or else the
- * worker's folder, and a plain `cd` or `pushd` earlier in the command moves it ("cd src && cat ../package.json" reads the
+ * folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller knows it and it is inside
+ * the worker's folder) or else the worker's folder, and a plain `cd` or `pushd` earlier in the command moves it ("cd src && cat ../package.json" reads the
  * worker's own file). When it can't be told for sure (a `cd` that may fail before ";" or "||", a group in parentheses),
  * every folder the command may be in is tried, and a `cd` that can't be followed (a variable, `cd -`) goes back to the
  * worker's folder, so nothing is let through that the plain check from the worker's folder would refuse. A ".." word is
@@ -271,7 +271,9 @@ export function bashOutsideFolder(command: unknown, worktree: string, root: stri
   const wt = resolvePath('/', worktree)
   const top = resolvePath('/', root)
   const check = (abs: string) => (inside(abs, wt, true) !== undefined ? undefined : inside(abs, top, false))
-  const start = [cwd?.startsWith('/') ? resolvePath('/', cwd) : wt]
+  // the shell's folder counts only inside the worker's own folder; anywhere else it starts from the worker's folder
+  const sh = cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
+  const start = [sh !== undefined && inside(sh, wt, true) !== undefined ? sh : wt]
   const join = (...lists: string[][]) => [...new Set(lists.flat())]
   let here = start
   let seen = start

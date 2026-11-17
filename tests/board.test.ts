@@ -1366,6 +1366,11 @@ test("a worker's shell command: '..' paths are taken from the folder an earlier 
   expect(no('cat ../x', `${wt}/src`)).toBeUndefined()
   expect(no('cat ../../../../README.md', `${wt}/src`)).toBe('README.md')
   expect(no('cat ../x')).toBe('.symcc/worktrees/x')
+  // a shell folder outside the worker's folder is not trusted: the worker's folder is the start (T-317)
+  expect(no('cat ../x', `${root}/src`)).toBe('.symcc/worktrees/x')
+  expect(no('cat ../x', '/')).toBe('.symcc/worktrees/x')
+  expect(no('cat ../x', 'src')).toBe('.symcc/worktrees/x')
+  expect(no('cat package.json', wt)).toBeUndefined()
 })
 
 test("a worker's shell command: a project path with a space in it, quoted or with a backslash, is still caught (T-314)", () => {

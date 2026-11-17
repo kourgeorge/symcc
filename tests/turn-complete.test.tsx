@@ -341,6 +341,23 @@ test("an Edit outside a worker's files is refused with the reason and recorded; 
   expect(w.git.state.main).toBe(main)
 })
 
+test("a worker's Bash command starts from its shell's current folder (session.cwd in the hook), when that is inside its folder (T-317)", async ($, on) => {
+  let here = `${WT1}/src`
+  on('session.cwd', () => ({ value: here }) as never)
+  await trackedWorker($, on)
+  // after an earlier "cd src", ".." reaches the worker's own files: allowed
+  expect((await check($, 'a1', 'Bash', { command: 'cat ../package.json' })).decision).toBe('allow')
+  // four ".." from <worktree>/src reach the owner's copy: refused
+  const out = await check($, 'a1', 'Bash', { command: 'cat ../../../../README.md' })
+  expect(out.decision).toBe('deny')
+  expect(out.reason).toMatch(/names README\.md in the owner's copy/)
+  // a shell folder outside the worker's folder is not used: paths start from the worker's top folder
+  here = `${ROOT}/src`
+  expect((await check($, 'a1', 'Bash', { command: 'cat ../package.json' })).decision).toBe('deny')
+  here = '/'
+  expect((await check($, 'a1', 'Bash', { command: 'cat ../x' })).decision).toBe('deny')
+})
+
 test("an investigation's edits are never refused (it has no file list), and its hand-back is its answer", async ($, on) => {
   const w = await trackedWorker($, on, { investigation: true })
   expect((await check($, 'a1', 'Write', { file_path: `${WT1}/README.md`, content: 'x' })).decision).toBe('allow')
