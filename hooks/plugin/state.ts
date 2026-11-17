@@ -2,7 +2,7 @@
 // values, and every value the other modules change. They all use these (S, the maps and sets)
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
-import type { SymccView, SymccScout } from '../../types'
+import type { SymccView, SymccScout, SymccTokens } from '../../types'
 import { type RoleDef, type KindDef, type PromptKind, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
@@ -167,6 +167,10 @@ export const starting = new Set<string>()
 /** tasks whose worker finished and whose work is being checked and merged now */
 export const finishing = new Set<string>()
 export const scoutRuns = new Map<string, string>() // agentId → scout name
+/** How a checker's run ended: its answer (and tokens), or `answer` null when it was stopped or never answered (`why`). */
+export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTokens }
+/** checkers running now (the checker setting, see plugin/checker.ts): agentId → its task, and how to hand its end to the step waiting for it */
+export const checkerRuns = new Map<string, { task: string; end: (e: CheckerEnd) => void }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */

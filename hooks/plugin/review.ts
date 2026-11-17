@@ -82,8 +82,10 @@ export async function changesText($: $, target: string, t: SymccTask, file = '')
  * What checking (and maybe merging) a task's work came to; `untested`: the note "T-3 changed code but no test" when
  * the setting tests_with_changes flagged it (see untestedChange); `review`: the checks passed and it now waits for the owner;
  * `blocked`: everything passed, only the owner's files on the target branch are in the way of the merge (nothing moved).
+ * The checker setting (see plugin/checker.ts): `held`: the checks passed and nothing merged, for a checker to look at first;
+ * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
  */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string }
+export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string }
 
 /** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
 export type CheckMode = 'finish' | 'approve' | 'merge'
@@ -102,8 +104,10 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * `release`: settles when the caller gave this check up as stuck, so later merges into the branch stop waiting for it.
  * `turn`: the caller's time limit. `turn(false)` when this check has to wait in line for its merge turn (or tries
  * again after the branch moved), `turn(true)` when that turn begins: waiting in line and earlier goes don't count.
+ * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
+ * is `held` (with `review` too when the task waits for review): the checker runs next (see plugin/checker.ts).
  */
-export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
+export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -142,7 +146,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     // `release`, so the line keeps moving) and starts again from zero when its own go begins.
     const restart = n > 1 || mergeTurns.has(target)
     if (restart) turn?.(false)
-    const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed)), release)
+    const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold)), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return r.result
   }
 }
@@ -217,7 +221,7 @@ export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Pro
  * shows it; only while the task is still as it was when the check began and the check was not
  * stopped or given up. Never fails the check: a board that can't be written only misses the word.
  */
-async function markStep($: $, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
+export async function markStep($: $, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
   if (stopped()) return
   await change($, x => {
     const cur = find(x, t.id)
@@ -227,7 +231,7 @@ async function markStep($: $, t: SymccTask, step: CheckStep, stopped: () => Chec
 }
 
 /** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
-async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[]): Promise<{ result: CheckResult; raced?: boolean }> {
+async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], hold?: (changed: readonly string[]) => boolean): Promise<{ result: CheckResult; raced?: boolean }> {
   const res = (result: CheckResult) => ({ result })
   // First, before touching the folder: a step stopped or given up while it waited for its merge
   // turn does nothing, as the next try may already be using the folder.
@@ -263,7 +267,11 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
+  // the checker setting: a change that needs a checker stops here, before review or merge (see plugin/checker.ts)
+  const held = !!hold?.(changed)
+  const holding = held ? { held: true } : {}
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
+  if (held) return res({ ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; the checker looks at it before it merges` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()

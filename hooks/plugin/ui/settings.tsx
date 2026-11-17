@@ -515,9 +515,9 @@ function promptsPage($: $, pane: PaneParts, own: Partial<Record<PromptKind, stri
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, header, footer } = pane
-  // scout_findings and tests_with_changes are not in the panel's view of the board: read them from the board file
+  // scout_findings, tests_with_changes and checker are not in the panel's view of the board: read them from the board file
   const file = await load($).catch(() => null)
-  const v = { ...pane.v, scout_findings: file?.scout_findings, tests_with_changes: file?.tests_with_changes }
+  const v = { ...pane.v, scout_findings: file?.scout_findings, tests_with_changes: file?.tests_with_changes, checker: file?.checker }
   const { builtIn, project, broken } = await roleLists($)
   const roles = mergeRoles(builtIn, project)
   const openedBroken = roleView.open ? broken.find(b => b.name === roleView.open) : undefined

@@ -1,15 +1,16 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
+import { runChecker, haltCheckers } from './checker'
 import { loadKinds } from './kinds'
 import { loadPrompts, promptTemplate } from './prompts'
-import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
+import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -59,7 +60,7 @@ An edit outside this list is refused and asks the owner for that file; then stop
   test_command: b.test_commands.length === 1 ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands[0]}`
     : b.test_commands.length ? `After you finish, these must pass; run each one on its own, from your folder:\n${b.test_commands.map(c => `  ${c}`).join('\n')}` : 'There is no test command; keep the change small and correct.',
   merge_main: t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : '',
-  test_output: t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
+  test_output: isCheckerOutput(t.test_output) ? checkerRetryText(t.test_output!) : t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
   earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\nDon't repeat those mistakes.\n` : '',
 })
 
@@ -424,7 +425,7 @@ async function markChecking($: $, id: string, status: SymccTask['status'], tryNo
  * session, the report is taken as that worker's, so its work is still checked and merged.
  */
 export async function lateHandBack($: $, agentId: string): Promise<boolean> {
-  if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId)) return false
+  if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId) || checkerRuns.has(agentId)) return false
   const b = await load($).catch(() => null)
   const t = b?.tasks.find(x => x.agent === agentId)
   // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
@@ -655,7 +656,10 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    // The checker setting: a change that is not docs only is held before it merges (or goes to review), and a checker tries to break it first.
+    const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
+    let r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release, turn, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    if (r.ok && r.held && !gaveUp() && !stop()) r = await afterChecker($, t, b, r, w.worktree, made, stop, release, turn)
     // Given up meanwhile: the task was already sent back (or found merged); this late outcome is not
     // written over it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
@@ -670,6 +674,29 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
         if (!r.ok || r.review || !r.merged || !(await doneAfterMerge($, t, r.merged).catch(() => false))) throw e
       })
   }
+}
+
+/**
+ * Task `t`'s finished work passed its checks and was held for the checker (`r.held`): a checker tries to break it
+ * (runChecker; the step's time limit stops meanwhile, the checker has its own). OK: it goes on as without the checker,
+ * to review (`r.review`) or merged now (its tests run again only if its branch moved). Problems: a result like
+ * failing tests, with the checker's report, so settle sends it back to its worker (counting a retry) or fails it.
+ * No verdict (the checker was stopped, ran over its time or didn't start): it waits for the owner's review.
+ */
+async function afterChecker($: $, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
+  turn?.(false)
+  const c = await runChecker($, t, b, dir)
+  turn?.(true)
+  const { held: _held, ...passed } = r
+  if (c.verdict?.ok) {
+    if (passed.review) return passed
+    return checkAndMerge($, t, dir, b, 'merge', made, stop, false, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+  }
+  if (c.verdict && 'report' in c.verdict) return { ok: false, checker: true, detail: `the checker found problems: ${cutLine(c.verdict.report, 300)}`, testOutput: checkerOutput(c.verdict.report) }
+  const why = stop()
+  if (why) return { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
+  const noVerdict = `the checker gave no verdict (${c.why ?? 'no answer'})`
+  return { ...passed, review: true, noVerdict, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
 }
 
 /** The note of an investigation that was answered and waits for the owner to read it. */
@@ -779,8 +806,8 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
     return !moved
   }
   if (r.review) {
-    if (!(await write(cur => ({ status: 'review', note: `ready for review: the checks passed, nothing merged yet${r.untested ? ` (${r.untested})` : ''}`, merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
-    tellLead($, `${r.untested ? `${r.untested}. ` : ''}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
+    if (!(await write(cur => ({ status: 'review', note: `ready for review: ${r.noVerdict ? `the tests passed, but ${r.noVerdict}` : 'the checks passed'}, nothing merged yet${r.untested ? ` (${r.untested})` : ''}`, merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
+    tellLead($, `${r.noVerdict ? `${t.id}: ${r.noVerdict}. ` : ''}${r.untested ? `${r.untested}. ` : ''}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
   const tries = t.conflict_tries ?? 0
@@ -794,10 +821,10 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
   const testTries = t.test_tries ?? 0
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
-    // Don't fail yet: a new worker gets the failing test output and fixes it.
-    const note = `tests failed; a new try will fix them (${testTries + 1} of ${retries})`
+    // Don't fail yet: a new worker gets the failing test output (or the checker's report) and fixes it.
+    const note = `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${testTries + 1} of ${retries})`
     if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" failed its tests; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
+    tellLead($, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : 'failed its tests'}; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)}, still after ${tries} tries to merge it in` : r.detail
@@ -806,7 +833,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
   if (r.ok) sayDone($, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
   if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', taskBranch(t)])
-  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. The end of the last test output:\n${r.testOutput}` : ''
+  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? "The checker's report" : 'The end of the last test output'}:\n${r.checker ? r.testOutput.replace(/^[^\n]*\n/, '') : r.testOutput}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
   tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
@@ -1070,6 +1097,7 @@ export async function haltAll($: $, why: string, then?: (w: Worker) => Promise<u
   for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, why)
   scoutRuns.clear()
   for (const s of scoutState.values()) s.running = false
+  await haltCheckers($, why)
 }
 
 export async function stopWorker($: $, taskId: string, why: string) {
@@ -1168,7 +1196,7 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
   const out: string[] = []
   for (const a of agents) {
     if (a.type !== S.N.worker && a.type !== S.N.scout) continue
-    if (workers.has(a.id) || scoutRuns.has(a.id)) continue
+    if (workers.has(a.id) || scoutRuns.has(a.id) || checkerRuns.has(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
     if (a.type === S.N.worker) {
       // A worker of this session that was running when the plugin reloaded keeps working:

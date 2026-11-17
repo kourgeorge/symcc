@@ -20,8 +20,9 @@ import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
 import { loadKinds } from './plugin/kinds'
+import { checkerFinished } from './plugin/checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './plugin/scouts'
-import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
+import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
 import { noteForLead, brief } from './plugin/tell'
@@ -275,6 +276,8 @@ export const register: Register = on => {
     const end = { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}) }
     if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, end, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
+    // a checker's verdict (the checker setting) goes to the finish step waiting for it
+    else if (e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, e.isAborted || e.reason === 'aborted', usageTokens(e.usage))
     // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
     else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, end, usageTokens(e.usage)) : undefined)).catch(() => undefined)
     return r

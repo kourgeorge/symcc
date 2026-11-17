@@ -38,6 +38,11 @@ export type Board = {
    * it merges and the lead is told) or review (it waits for the owner's review instead of merging)
    */
   tests_with_changes?: TestsWithChanges
+  /**
+   * the checker setting: true (on) makes a fresh checker try to break each change whose tests passed, before it
+   * merges (see core/checker.ts); absent or false: off, the default
+   */
+  checker?: boolean
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
   archived?: ArchivedTotals
@@ -252,6 +257,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   archive_days: v => isNum(v) && v >= 0,
   scout_findings: v => isScoutFindings(v),
   tests_with_changes: v => isTestsWithChanges(v),
+  checker: v => typeof v === 'boolean',
 }
 
 /**

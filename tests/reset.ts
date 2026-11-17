@@ -4,7 +4,7 @@
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
 import { test as plainTest } from 'claude-code/testing'
 import { emptyHeard } from '../hooks/board'
-import { S, startS, timers, warnedPrompts, workers, starting, finishing, scoutRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
+import { S, startS, timers, warnedPrompts, workers, starting, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
 import { resetScoutRuns } from '../hooks/plugin/scouts'
 import { resetStore } from '../hooks/plugin/store'
 import { resetMergeTurns } from '../hooks/plugin/review'
@@ -29,7 +29,7 @@ export function resetPlugin() {
   resetStore()
   resetMergeTurns()
   resetLogo()
-  for (const m of [workers, scoutRuns, reminded, scoutState, notReady, changesCache, skippedRoles, skippedKinds, warnedPrompts, stopAsked, offAsked]) m.clear()
+  for (const m of [workers, scoutRuns, checkerRuns, reminded, scoutState, notReady, changesCache, skippedRoles, skippedKinds, warnedPrompts, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou]) s.clear()
   for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0
   for (const k of Object.keys(heard)) delete (heard as Record<string, unknown>)[k]
