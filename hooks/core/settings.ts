@@ -232,13 +232,24 @@ const unquoteValue = (s: string) => {
   return t.length >= 2 && (q === '"' || q === "'") && t[t.length - 1] === q && !t.slice(1, -1).includes(q) ? t.slice(1, -1).trim() : t
 }
 
-/** Typed test commands: a JSON list of strings is several commands, else each line is one whole command. */
-function commandList(v: string): string[] {
+export const BAD_LIST_MESSAGE = `that looks like a list but isn't valid JSON: use double quotes, like ["npm test", "npm run lint"]`
+
+/**
+ * A value meant as a list rather than a shell line: it starts with "[" and either has no space
+ * after it (a shell "[" test always does), or has a comma between quoted parts, or is quoted
+ * parts inside brackets. "[ -f a ] && npm test" is not.
+ */
+const looksLikeList = (v: string) =>
+  v.startsWith('[') && (/^\[\S/.test(v) || /["']\s*,\s*["']/.test(v) || /^\[\s*["'][\s\S]*["']\s*\]$/.test(v))
+
+/** Typed test commands: a JSON list of strings is several commands, else each line is one whole command; null for a broken list. */
+function commandList(v: string): string[] | null {
   if (v.startsWith('[')) {
     try {
       const a: unknown = JSON.parse(v)
       if (Array.isArray(a) && a.every(x => typeof x === 'string')) return a.map(x => x.trim()).filter(Boolean)
     } catch {}
+    if (looksLikeList(v)) return null
   }
   return v.split(/\r?\n/).map(x => x.trim()).filter(Boolean)
 }
@@ -279,8 +290,10 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
       const w = v.toLowerCase()
       return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be off, review or auto')
     }
-    case 'commands':
-      return { ok: true, input: { test_commands: v.toLowerCase() === 'none' ? [] : commandList(v) } }
+    case 'commands': {
+      const list = v.toLowerCase() === 'none' ? [] : commandList(v)
+      return list ? { ok: true, input: { test_commands: list } } : bad(BAD_LIST_MESSAGE)
+    }
   }
 }
 

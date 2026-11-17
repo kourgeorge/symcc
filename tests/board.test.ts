@@ -1588,6 +1588,11 @@ test('a typed test_commands line is one whole command; several go in a list or o
   expect(cmds('none')).toEqual([])
   // a line that only looks like a list stays one command
   expect(cmds('[ -f a ] && npm test')).toEqual(['[ -f a ] && npm test'])
+  // a list that isn't exact JSON is refused, not saved as one broken command
+  for (const broken of [`['npm test', 'npm run lint']`, `["npm test", 'npm run lint']`, `["npm test", "npm run lint"`]) {
+    expect(parseSettingValue('test_commands', broken)).toEqual({ ok: false, message: `that looks like a list but isn't valid JSON: use double quotes, like ["npm test", "npm run lint"]` })
+    expect(parseSettingsCommand(`test_commands ${broken}`).kind).toBe('bad')
+  }
   // shown back so one command and several look different, and read back the same
   const two = applySettings(emptyBoard(), { test_commands: ['npm test', 'npm run lint'] }).board
   expect(settingValue(two, 'test_commands')).toBe('["npm test","npm run lint"]')
