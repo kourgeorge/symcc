@@ -282,6 +282,21 @@ test("a role whose name: line differs from its file name shows a mark on its row
   await ui.unmount()
 })
 
+test("the checker role's page shows the checker's own built-in prompt, the one it really goes into", async ($, on) => {
+  stateOf(on, VIEW)
+  fakeRoles(on, { 'checker.md': '---\ndescription: tries to break a change\n---\n- try empty input\n' })
+  const ui = await settings($)
+  await ui.press({ key: 'roleRow:checker' })
+  await ui.press({ key: 'role-prompt' })
+  expect(await ui.find({ type: 'Text', text: /checker prompt/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /what a checker is told/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /your job is to try to break it/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /role checker's checklist goes here/ })).toBeDefined()
+  expect(await ui.find({ key: 'role-prompt-change' })).toBeUndefined()
+  expect(await ui.find({ key: 'role-prompt-investigation' })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('a role page lists the placeholders its checklist can use, and shows the built-in prompt it goes in (view only, {{role}} marked)', async ($, on) => {
   stateOf(on, VIEW)
   fakeRoles(on, {})

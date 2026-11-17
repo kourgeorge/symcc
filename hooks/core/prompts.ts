@@ -4,6 +4,7 @@
 // filled in for each task. Everything here is pure.
 import CHANGE from '../../prompts/change'
 import INVESTIGATION from '../../prompts/investigation'
+import CHECKER from '../../prompts/checker'
 
 /** The prompts there are: one per task kind. */
 export type PromptKind = 'change' | 'investigation'
@@ -57,7 +58,7 @@ export function fillPrompt(kind: PromptKind, values: Record<string, string>): st
 
 /** The placeholders a role's checklist may use and what they become: the task's own facts from the prompt, not its
  *  bigger parts (not {{role}} itself, {{details}}, {{ask}} and the like). {{files}} and {{test_command}} are only filled for
- *  a change task (an investigation has neither, so they are left as written there). */
+ *  a change task and its checker (an investigation has neither, so they are left as written there). */
 export const ROLE_PLACEHOLDERS: Record<string, string> = {
   task_id: SHARED_PLACEHOLDERS.task_id!,
   title: SHARED_PLACEHOLDERS.title!,
@@ -71,6 +72,14 @@ export const ROLE_PLACEHOLDERS: Record<string, string> = {
 
 /** A role's checklist with its placeholders filled in for the task (see ROLE_PLACEHOLDERS). */
 export const fillRole = (checklist: string, values: Record<string, string>): string => fillPlaceholders(checklist, ROLE_PLACEHOLDERS, values)
+
+/** The built-in prompts a role can be put into, to look at from its page: a worker's two, and the checker's (prompts/checker.ts). */
+export type RolePromptKind = PromptKind | 'checker'
+export const ROLE_PROMPTS: Record<RolePromptKind, string> = { ...BUILT_IN_PROMPTS, checker: CHECKER }
+
+/** The built-in prompts role `name` goes into: the checker role (see CHECKER_ROLE) only into the checker's prompt, any other
+ *  role into a worker's prompt, one per task kind. */
+export const promptsOfRole = (name: string): RolePromptKind[] => (name.toLowerCase() === 'checker' ? ['checker'] : [...PROMPT_KINDS])
 
 /** Where the role goes in a prompt. */
 export const ROLE_SLOT = '{{role}}'

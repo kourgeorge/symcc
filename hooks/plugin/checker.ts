@@ -6,6 +6,7 @@ import { type Board, CHECKER_ROLE, type CheckerVerdict, addTokens, agentSafeName
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
+import { changeValues } from './prompt-values'
 import { S, type $, type CheckerEnd, checkerRuns, stopped } from './state'
 import { change, now } from './store'
 
@@ -31,8 +32,9 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop
   const roles = await loadRoles($).catch(() => S.roles)
   const role = findRole(roles, CHECKER_ROLE)
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  const facts = { name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir }
-  const prompt = checkerPrompt({ ...facts, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
+  // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, test command, kind, ...)
+  const facts = changeValues(t, b, dir)
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`

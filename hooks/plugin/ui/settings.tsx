@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, BUILT_IN_PROMPTS, PROMPT_KINDS, type PromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { type $, S } from '../state'
 import { resetPane } from './open'
@@ -87,7 +87,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
       {buttonRows([
         <Button key="role-back" label="Back" hotkey="b" autoFocus={roleView.confirmRemove ? undefined : true} onPress={() => ((roleView.open = ''), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
         <Button key="role-edit" label="Edit" hotkey="e" onPress={() => ((roleView.draft = roleDraftOf(r)), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
-        <Button key="role-prompt" label="See the prompt" hotkey="p" onPress={() => ((roleView.prompt = 'change'), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
+        <Button key="role-prompt" label="See the prompt" hotkey="p" onPress={() => ((roleView.prompt = promptsOfRole(r.name)[0]!), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
         canOff && <Button key="role-off" label={r.off ? 'Turn on' : 'Turn off'} hotkey="o" onPress={run({ action: r.off ? 'on' : 'off', name: r.name })} />,
         canReset && <Button key="role-reset" label="Reset to built-in" hotkey="r" onPress={run({ action: 'reset', name: r.name })} />,
         canRemove && <Button key="role-remove" label="Remove" hotkey="d" onPress={() => ((roleView.confirmRemove = true), $.ui.invalidate('ui.render'))} />,
@@ -133,9 +133,9 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
 
 /** The built-in prompt role `r` is put into, view only (opened from its page with See the prompt; Back returns there): its text with
  *  the {{role}} slot marked, so it is clear where the checklist goes. The prompts are built-in: roles are how a worker is shaped. */
-function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: PromptKind) {
+function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: RolePromptKind) {
   const { Box, Text, Button, C, heading, footer, buttonRows } = pane
-  const show = (k: PromptKind | '') => () => ((roleView.prompt = k), $.ui.invalidate('ui.render'))
+  const show = (k: RolePromptKind | '') => () => ((roleView.prompt = k), $.ui.invalidate('ui.render'))
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
@@ -143,15 +143,15 @@ function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: PromptKind) {
           <Text bold color={C('claude')}>{kind} prompt</Text>
           <Text color={C('inactive')}> · built-in, view only</Text>
         </Text>
-        <Text color={C('inactive')}>what a worker on a {kind} task is told; role {r.name}'s checklist goes where {ROLE_SLOT} is</Text>
+        <Text color={C('inactive')}>{kind === 'checker' ? 'what a checker is told' : `what a worker on a ${kind} task is told`}; role {r.name}'s checklist goes where {ROLE_SLOT} is</Text>
       </Box>
       {buttonRows([
         <Button key="role-prompt-back" label="Back" hotkey="b" autoFocus onPress={show('')} />,
-        ...PROMPT_KINDS.filter(k => k !== kind).map(k => <Button key={`role-prompt-${k}`} label={`The ${k} prompt`} onPress={show(k)} />),
+        ...promptsOfRole(r.name).filter(k => k !== kind).map(k => <Button key={`role-prompt-${k}`} label={`The ${k} prompt`} onPress={show(k)} />),
       ], 'role-prompt-buttons')}
       <Box flexDirection="column">
         {heading('Text')}
-        {BUILT_IN_PROMPTS[kind].trimEnd().split('\n').map((line, i) => {
+        {ROLE_PROMPTS[kind].trimEnd().split('\n').map((line, i) => {
           if (!line.includes(ROLE_SLOT)) return <Text key={`role-prompt-line-${i}`}>{line || ' '}</Text>
           const [before, ...after] = line.split(ROLE_SLOT)
           return (

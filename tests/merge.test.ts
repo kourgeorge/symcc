@@ -1271,7 +1271,8 @@ test('a new worker gets the built-in change prompt even when a .symcc/prompts/ch
   const prompts: string[] = []
   const x = w.$ as unknown as { agent: Record<string, unknown> }
   x.agent.spawn = async (e: { prompt?: string }) => (prompts.push(String(e.prompt)), { agentId: `ag${prompts.length + 1}` })
-  w.put(`${ROOT}/.symcc/prompts/change.md`, 'MINE: {{details}}\n{{ask}}\n')
+  // a complete override, with every placeholder the old code needed, so old code would have used it (no warning path)
+  w.put(`${ROOT}/.symcc/prompts/change.md`, 'MINE: {{details}}{{merge_main}}{{test_output}}\n{{ask}}\n')
   try {
     await setSymcc(w.$, false)
     await setSymcc(w.$, true)

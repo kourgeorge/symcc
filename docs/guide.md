@@ -465,7 +465,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   (`d`, only for a role you added; it asks "Yes, remove (`y`)" or Cancel (`x`) first). Back (`b`)
   goes back to the Roles page. See the prompt shows the built-in worker prompt the role is put
   into, view only, with `{{role}}` marked where the checklist goes; it can switch between the
-  `change` and `investigation` prompts, and Back (`b`) returns to the role.
+  `change` and `investigation` prompts (for the `checker` role it shows the checker's prompt,
+  `prompts/checker.ts`, instead), and Back (`b`) returns to the role.
   Edit opens the role's edit page in the panel (like a scout's): the same names in the same
   order, one box each for **Description**, **Model**, **Skills**, **Tools** and **Checklist**.
   The name is the file's name, so the edit page can't change it: to rename a role, rename its
@@ -783,7 +784,8 @@ skills: [code-review]
   role fills the `{{role}}` slot of that fixed prompt, so roles are the one place to shape what a
   worker does. A role's page in the panel shows the prompt it goes in (See the prompt, `p`).
 - A checklist may use these placeholders; symcc fills them in for each task when it builds the
-  worker's prompt (any other `{{word}}` is left as written):
+  worker's prompt, and for the `checker` role the checker's prompt, from the task it checks (any
+  other `{{word}}` is left as written):
 
   | Placeholder | Becomes |
   |---|---|

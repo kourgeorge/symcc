@@ -209,6 +209,27 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(t.runs!.at(-1)!.tokens).toEqual({ output: 500 })
 })
 
+test("a checker role's checklist gets its placeholders filled in, as a worker's role does ({{files}}, {{test_command}}, {{kind}}, ...)", async () => {
+  const w = world()
+  const fs = (w.$ as unknown as { fs: Record<string, unknown> }).fs
+  const exists = fs.exists as (p: string) => Promise<boolean>
+  const read = fs.read as (p: string) => Promise<string>
+  const dir = `${ROOT}/.symcc/roles`
+  fs.exists = async (p: string) => p === dir || exists(p)
+  fs.list = async (p: string) => (p === dir ? [{ name: 'checker.md', kind: 'file' }] : [])
+  fs.read = async (p: string) => (p === `${dir}/checker.md` ? '---\ndescription: checks\n---\nfiles: {{files}}\ntests: {{test_command}}\nid {{task_id}} {{kind}} {{nope}}\n' : read(p))
+  await saveBoard(w.$, boardWith(true))
+  await finish(w, async id => checkerFinished(id, 'OK'))
+  const p = w.spawns[0]!.prompt
+  expect(p).toContain('files: Files you may change: src/.')
+  expect(p).toContain('tests: After you finish, these must pass (run them in that folder to check): npm test')
+  expect(p).toContain('id T-1 \nKind of task: change.')
+  expect(p).toContain('{{nope}}')
+  expect(p).not.toContain('{{files}}')
+  expect(p).not.toContain('{{test_command}}')
+  expect(p).not.toContain('{{kind}}')
+})
+
 test('a checker that finds problems sends the task back to its worker with the report in its next prompt, counting a retry', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
