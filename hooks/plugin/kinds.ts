@@ -1,10 +1,10 @@
-import { type KindDef, parseKind, kindSkipReason, mergeKinds, skippedRoleNote, findKind, kindSource, kindNameError, kindFileText, type BrokenKind, brokenKindNamed, leadBrokenKindLine, leadKindsText, leadKindText, ALWAYS_ON_KINDS, NEW_KIND_TEMPLATE } from '../board'
+import { type KindDef, builtInKinds, parseKind, kindSkipReason, mergeKinds, skippedRoleNote, findKind, kindSource, kindNameError, kindFileText, type BrokenKind, brokenKindNamed, leadBrokenKindLine, leadKindsText, leadKindText, ALWAYS_ON_KINDS, NEW_KIND_TEMPLATE } from '../board'
 import { type $, skippedKinds, S } from './state'
 import { path } from './store'
 import { tellLead } from './tell'
 
 // ---------------- task kinds ----------------
-// Read like the roles (see roles.ts): the plugin's kinds/ folder, then the project's .<name>/kinds/ over it.
+// The plugin's kinds are texts (kinds/<name>.ts); the project's .<name>/kinds/<name>.md files are read like the roles (see roles.ts), over them.
 
 /** The kind files in folder `dir`, shown as `shown` (e.g. ".symcc/kinds"); a file that can't be used is skipped with a note (see skippedKind)
  *  and, when `broken` is given, added to it with the reason. */
@@ -39,16 +39,16 @@ export function skippedKind($: $, file: string, reason: string) {
   tellLead($, `${note}. That kind can't be used until the file is fixed (front matter with a description; a name of letters, digits, - and _; stages as in docs/research/task-kinds-and-workflows.md); if a built-in kind has that name, it is used meanwhile.`)
 }
 
-/** Reads the kinds again: the plugin's kinds/, then the project's .<name>/kinds/ over them. */
+/** Reads the kinds again: the plugin's built-in ones, then the project's .<name>/kinds/ over them. */
 export async function loadKinds($: $): Promise<KindDef[]> {
-  S.kinds = mergeKinds(await kindFiles($, `${$.plugin.root}/kinds`, 'kinds'), S.root ? await kindFiles($, path(`${S.N.dir}/kinds`), `${S.N.dir}/kinds`) : [])
+  S.kinds = mergeKinds(builtInKinds(), S.root ? await kindFiles($, path(`${S.N.dir}/kinds`), `${S.N.dir}/kinds`) : [])
   return S.kinds
 }
 
 /** The plugin's kinds and the project's own, read again (S.kinds too); `broken` is the project's files that can't be read, with why. */
 export async function kindLists($: $): Promise<{ builtIn: KindDef[]; project: KindDef[]; broken: BrokenKind[]; dir: string }> {
   const dir = `${S.N.dir}/kinds`
-  const builtIn = await kindFiles($, `${$.plugin.root}/kinds`, 'kinds')
+  const builtIn = builtInKinds()
   const broken: BrokenKind[] = []
   const project = S.root ? await kindFiles($, path(dir), dir, broken) : []
   S.kinds = mergeKinds(builtIn, project)
@@ -98,7 +98,7 @@ async function changeKindText($: $, a: LeadKindInput): Promise<string | { ok: tr
   const hasFile = await $.fs.exists(path(file)).catch(() => false)
   const source = kindSource(name, builtIn, project)
   const cur = p ?? b
-  if (action === 'list') return cur && source ? leadKindText(cur, source, source === 'built-in' ? `kinds/${name}.md (in the plugin)` : file) : `no kind named ${asked} (${have()})`
+  if (action === 'list') return cur && source ? leadKindText(cur, source, source === 'built-in' ? `kinds/${name}.ts (in the plugin)` : file) : `no kind named ${asked} (${have()})`
   const rm = async () => {
     // An argument list (no shell), with "--" so the path can never be read as an option.
     const r = await $.process.run(['rm', '-f', '--', path(file)])

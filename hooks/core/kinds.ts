@@ -1,9 +1,10 @@
 // Task kinds: what a task is for (change, bug, feature, refactor, docs, investigation, or the owner's own).
-// Like roles: a file `kinds/<name>.md` in the plugin, or `.<plugin name>/kinds/<name>.md` in the project,
-// which wins over a built-in one with the same name. Front matter: description (needed; the lead reads it
+// The built-in ones are texts in the plugin's kinds/<name>.ts (like the worker prompts); the owner's own are files
+// `.<plugin name>/kinds/<name>.md` in the project, which win over a built-in one with the same name. Front matter: description (needed; the lead reads it
 // to choose), off: true (optional: the kind is never picked for a new task), merges and merge_tests (optional, yes / no).
 // The body is the kind's stages (see stages.ts). For now every kind still runs like a change, except investigation.
 import { DEFAULT_NAME } from '../name'
+import { BUILT_IN_KIND_TEXTS } from '../../kinds'
 import { DEFAULT_KIND, INVESTIGATION, KIND_NAME, kindOf } from './board-file'
 import { frontMatterLine, splitFrontMatter } from './text'
 import { type Stage, parseStages, readKindRun } from './stages'
@@ -12,7 +13,7 @@ import { type Stage, parseStages, readKindRun } from './stages'
  *  (ending with the merge step unless merges is false); merges / mergeTests are only set when the file says no. */
 export type KindDef = { name: string; description: string; body: string; off?: boolean; merges?: false; mergeTests?: false; stages: Stage[] }
 
-/** The kinds that come with the plugin (one file each in its kinds/ folder), in the order they are listed. */
+/** The kinds that come with the plugin (one text each in its kinds/ folder), in the order they are listed. */
 export const BUILT_IN_KINDS: readonly string[] = [DEFAULT_KIND, 'bug', 'feature', 'refactor', 'docs', INVESTIGATION]
 
 /** A kind file as a KindDef, or the reason it can't be used ("no front matter", "no description", "bad name ..."). */
@@ -59,6 +60,14 @@ export function parseKind(name: string, text: string): KindDef | null {
 export function kindSkipReason(name: string, text: string): string | null {
   const k = readKind(name, text)
   return typeof k === 'string' ? k : null
+}
+
+/** The plugin's kinds, read from their texts (kinds/index.ts), in BUILT_IN_KINDS order; one that can't be read is left out. */
+export function builtInKinds(): KindDef[] {
+  return BUILT_IN_KINDS.flatMap(n => {
+    const k = parseKind(n, BUILT_IN_KIND_TEXTS[n] ?? '')
+    return k ? [k] : []
+  })
 }
 
 /** The built-in kinds with the project's added: a project kind replaces a built-in one with the same name.

@@ -23,20 +23,13 @@ const PANE = {
 const VIEW = { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'review', test_commands: [] } }, tab: 'settings' }
 
 /**
- * Fake kinds folders: `builtIn` is the plugin's kinds/ folder, `mine` the project's .symcc/kinds (file name -> text).
+ * A fake kinds folder: `mine` is the project's .symcc/kinds (file name -> text); the built-in kinds are the real ones (kinds/index.ts).
  * fs.write and `rm -f` change `mine`, so what the panel writes or deletes is seen by the next read.
  */
 function fakeKinds(on: On, mine: Record<string, string>) {
-  const builtIn: Record<string, string> = {
-    'change.md': '---\ndescription: a general change\n---\nThe worker changes files.\n',
-    'bug.md': '---\ndescription: something that works wrongly\n---\n',
-    'investigation.md': '---\ndescription: find an answer\n---\n',
-  }
   const where = (p: string): [Record<string, string>, string] | null => {
     const m = /\/\.symcc\/kinds(?:\/(.*))?$/.exec(p)
-    if (m) return [mine, m[1] ?? '']
-    const b = /\/kinds(?:\/(.*))?$/.exec(p)
-    return b ? [builtIn, b[1] ?? ''] : null
+    return m ? [mine, m[1] ?? ''] : null
   }
   on('fs.exists', (_, e, next) => {
     const w = where(e.path)
@@ -76,7 +69,7 @@ function fakeKinds(on: On, mine: Record<string, string>) {
   on('env.get', () => ({ value: undefined }) as never)
   on('agent.list', () => ({ value: [] }) as never)
   mock.clock(on, { now: 1_800_000_000_000 })
-  return { builtIn, mine }
+  return { mine }
 }
 
 type Eng = Parameters<Parameters<typeof test>[1]>[0]
@@ -98,7 +91,7 @@ test('Settings has a Kinds row next to Roles; its page lists the kinds with the 
   stateOf(on, VIEW)
   fakeKinds(on, { 'bug.md': '---\ndescription: a defect\noff: true\n---\n', 'chore.md': '---\ndescription: small upkeep\n---\n' })
   const ui = await settingsOnly($)
-  expect((await ui.find({ key: 'settings-kinds' }))?.props.label).toBe('Kinds: 4 kinds · 1 off')
+  expect((await ui.find({ key: 'settings-kinds' }))?.props.label).toBe('Kinds: 7 kinds · 1 off')
   expect(await ui.find({ key: 'kindRow:change' })).toBeUndefined()
   await ui.press({ key: 'settings-kinds' })
   expect(await ui.find({ type: 'Text', text: /▍Kinds/ })).toBeDefined()
