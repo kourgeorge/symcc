@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, isDocFile, findKind, kindOf } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -280,7 +280,9 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
   }
-  const testsRun = mode === 'finish' || candidate !== head || retest
+  // A kind with merge_tests: no skips the test command when every file the task changed is a doc (the tests_with_changes rule, isDocFile).
+  const docsOnly = findKind(S.kinds, kindOf(t))?.mergeTests === false && changed.length > 0 && changed.every(isDocFile)
+  const testsRun = !docsOnly && (mode === 'finish' || candidate !== head || retest)
   if (testsRun && b.test_commands.length) await markStep($, t, 'testing', stopped)
   const failed = await runTests($, dir, testsRun ? b.test_commands : [], stopped)
   if (failed) return res(failed)
@@ -288,7 +290,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...flagged, detail: `checks passed${!b.test_commands.length ? '; no test command set' : docsOnly ? '; tests skipped (only docs changed)' : '; tests passed'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
@@ -297,7 +299,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }
-  const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
+  const tests = !b.test_commands.length ? '; no test command set' : docsOnly ? '; tests skipped (only docs changed)' : testsRun ? '; tests passed' : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
   if (researchNotes(changed).length) {
