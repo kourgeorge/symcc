@@ -3955,7 +3955,7 @@ test('change sets a task kind, and refuses an unknown one', async () => {
   expect(kindOf(find(await load(w.$), 'T-1'))).toBe('investigation')
   await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
   expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
-  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow('Nothing changed: unknown kind "question"; the kinds are: change, investigation')
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow('Nothing changed: unknown kind "question"; the kinds are: change, bug, feature, refactor, docs, investigation')
 })
 
 // ---------------- task kinds (T-328): more kinds, all run as a change but investigation ----------------
@@ -3963,11 +3963,11 @@ test('change sets a task kind, and refuses an unknown one', async () => {
 test('add with kind bug saves kind bug; an unknown kind is refused naming the known kinds', async () => {
   const w = world()
   await saveBoard(w.$, { ...emptyBoard(), mode: 'auto' })
-  S.kinds = [{ name: 'change', description: 'a general change', body: '' }, { name: 'bug', description: 'something that works wrongly', body: '' }, { name: 'investigation', description: 'find an answer', body: '' }]
+  // the kinds are read again: the built-in ones (kinds/index.ts), since this project has none of its own
   const add = (kind: string) => runTool(w.$, 'add', { title: 'Fix the cache', details: 'd', why: 'a test', origin_by: 'lead', backlog: true, kind })
   await add('Bug')
   expect(find(await load(w.$), 'T-1')!.kind).toBe('bug')
-  await expect(add('chore')).rejects.toThrow('unknown kind "chore"; the kinds are: change, bug, investigation')
+  await expect(add('chore')).rejects.toThrow('unknown kind "chore"; the kinds are: change, bug, feature, refactor, docs, investigation')
   expect((await load(w.$)).tasks.length).toBe(1)
   // change switches it between kinds; back to change stores none
   await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
@@ -3977,9 +3977,13 @@ test('add with kind bug saves kind bug; an unknown kind is refused naming the kn
 test('an off kind is refused by add (and by change), naming the kinds that are on (T-329)', async () => {
   const w = world()
   await saveBoard(w.$, { ...emptyBoard(), mode: 'auto' })
-  S.kinds = [{ name: 'change', description: 'a general change', body: '' }, { name: 'bug', description: 'something that works wrongly', body: '', off: true }, { name: 'investigation', description: 'find an answer', body: '' }]
+  // the owner's .symcc/kinds/bug.md turns the built-in bug kind off
+  const mine = `${ROOT}/.symcc/kinds`
+  w.put(mine, '')
+  w.put(`${mine}/bug.md`, '---\ndescription: something that works wrongly\noff: true\n---\n')
+  ;(w.$ as { fs: Record<string, unknown> }).fs.list = async (p: string) => (p === mine ? [{ name: 'bug.md', kind: 'file' }] : [])
   const add = (kind: string) => runTool(w.$, 'add', { title: 'Fix the cache', details: 'd', why: 'a test', origin_by: 'lead', backlog: true, kind })
-  await expect(add('bug')).rejects.toThrow('kind "bug" is turned off (the owner can turn it on again: kinds action "on"); the kinds are: change, investigation')
+  await expect(add('bug')).rejects.toThrow('kind "bug" is turned off (the owner can turn it on again: kinds action "on"); the kinds are: change, feature, refactor, docs, investigation')
   expect((await load(w.$)).tasks.length).toBe(0)
   await add('change')
   await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'bug' })).rejects.toThrow('is turned off')

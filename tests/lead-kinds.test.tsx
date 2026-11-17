@@ -4,28 +4,23 @@ import { test } from './reset'
 import { parseKind, checkKind, kindNames, kindsLeadText } from '../hooks/board'
 import { S, leadQueue, skippedKinds } from '../hooks/plugin/state'
 import { leadGuide, manual, runTool } from '../hooks/plugin/tools'
+import { BUILT_IN_KIND_TEXTS } from '../kinds'
 
 const ROOT = '/proj'
 const MINE = `${ROOT}/.symcc/kinds`
 const PLUGIN = '/plugin'
+/** The real built-in bug kind's body (from kinds/bug.ts). */
+const BUG_BODY = parseKind('bug', BUILT_IN_KIND_TEXTS.bug!)!.body
 
 /**
- * A fake $ with fake kinds folders: `builtIn` is the plugin's kinds/ folder, `mine` is the project's .symcc/kinds (file name -> text).
+ * A fake $ with a fake kinds folder: `mine` is the project's .symcc/kinds (file name -> text); the built-in kinds are the real ones (kinds/index.ts).
  * fs.write and `rm -f` change `mine`, so what the kinds tool writes or deletes is seen by the next read.
  */
 function setup(mine: Record<string, string> = {}) {
-  const builtIn: Record<string, string> = {
-    'change.md': '---\ndescription: a general change\n---\nThe worker changes files.\n',
-    'bug.md': '---\ndescription: something that works wrongly\n---\nWith a test that fails first.\n',
-    'docs.md': '---\ndescription: documentation only\n---\n',
-    'investigation.md': '---\ndescription: find an answer\n---\n',
-  }
   const touched: string[] = []
   const where = (p: string): [Record<string, string>, string] | null => {
     if (p === MINE) return [mine, '']
     if (p.startsWith(`${MINE}/`)) return [mine, p.slice(MINE.length + 1)]
-    if (p === `${PLUGIN}/kinds`) return [builtIn, '']
-    if (p.startsWith(`${PLUGIN}/kinds/`)) return [builtIn, p.slice(PLUGIN.length + 7)]
     return null
   }
   const $ = {
@@ -67,7 +62,7 @@ function setup(mine: Record<string, string> = {}) {
   }
   S.root = ROOT
   S.kinds = []
-  return { $, builtIn, mine, touched }
+  return { $, mine, touched }
 }
 
 /** Calls the lead's kinds tool. */
@@ -81,8 +76,8 @@ test('kinds list shows every kind and where it comes from; with name, one kind i
   expect(list).toContain('- chore (added, off): small upkeep')
   const one = await call($, { action: 'list', name: 'change' })
   expect(one).toContain('change (built-in): a general change')
-  expect(one).toContain('file: kinds/change.md (in the plugin)')
-  expect(one).toContain('The worker changes files.')
+  expect(one).toContain('file: kinds/change.ts (in the plugin)')
+  expect(one).toContain('The worker changes files, which are committed, tested and merged.')
   expect(await call($, { name: 'nope' })).toContain('no kind named nope')
 })
 
@@ -98,12 +93,12 @@ test('kinds add writes a kind file; a taken name, a bad name or no description i
 })
 
 test('kinds edit keeps what it is not given; editing a built-in makes a copy first', async () => {
-  const { $, builtIn, mine } = setup()
-  const before = builtIn['bug.md']
+  const { $, mine } = setup()
+  const before = BUILT_IN_KIND_TEXTS.bug
   const out = await call($, { action: 'edit', name: 'Bug', description: 'a defect' })
   expect(out).toContain('saved kind bug (.symcc/kinds/bug.md) (copied the built-in kind to .symcc/kinds/bug.md first)')
-  expect(builtIn['bug.md']).toBe(before)
-  expect(parseKind('bug', mine['bug.md']!)).toMatchObject({ name: 'bug', description: 'a defect', body: 'With a test that fails first.' })
+  expect(BUILT_IN_KIND_TEXTS.bug).toBe(before)
+  expect(parseKind('bug', mine['bug.md']!)).toMatchObject({ name: 'bug', description: 'a defect', body: BUG_BODY })
   expect(await call($, {})).toContain('- bug (replaced): a defect')
   expect(await call($, { action: 'edit', name: 'nope', description: 'x' })).toContain('no kind named nope')
 })
@@ -126,9 +121,9 @@ test("an off kind is not offered to the lead and refused; on brings it back; cha
   const out = await call($, { action: 'off', name: 'bug' })
   expect(out).toContain('turned bug off')
   expect(out).toContain('copied the built-in kind')
-  expect(parseKind('bug', mine['bug.md']!)).toMatchObject({ description: 'something that works wrongly', off: true, body: 'With a test that fails first.' })
+  expect(parseKind('bug', mine['bug.md']!)).toMatchObject({ description: 'something that works wrongly', off: true, body: BUG_BODY })
   expect(await call($, {})).toContain('- bug (replaced, off): something that works wrongly')
-  expect(kindNames(S.kinds)).toEqual(['change', 'docs', 'investigation'])
+  expect(kindNames(S.kinds)).toEqual(['change', 'feature', 'refactor', 'docs', 'investigation'])
   expect(kindsLeadText(S.kinds)).not.toContain('bug')
   expect(() => checkKind(S.kinds, 'bug')).toThrow('kind "bug" is turned off')
   expect(await call($, { action: 'off', name: 'bug' })).toContain('already off')

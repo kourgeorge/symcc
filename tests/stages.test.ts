@@ -6,19 +6,10 @@ import { parseKind, kindSkipReason, kindFileText } from '../hooks/board'
 import { parseStages, defaultStages, readKindRun, type Stage } from '../hooks/core/stages'
 import { S } from '../hooks/plugin/state'
 import { loadKinds } from '../hooks/plugin/kinds'
+import { BUILT_IN_KIND_TEXTS } from '../kinds'
 
-// The built-in kind files as they are in kinds/ (a test can only import code files, so they are copied here:
-// keep these the same as kinds/*.md).
-const work = (text: string) => `---\ndescription: DESC\n---\n## code\nworker: task\n${text}\n\n## tests\ncheck: tests\non fail: back to code, 2 times\n`
-const BUILT_IN: Record<string, string> = {
-  change: work('The worker changes files, which are committed, tested and merged.').replace('DESC', 'a general change when no other kind fits (the default)'),
-  bug: work('The worker finds why it goes wrong and fixes it, with a test that fails before the fix and passes after.').replace('DESC', 'something that works wrongly'),
-  feature: work('The worker adds the new behavior, with tests that show it works.').replace('DESC', 'new behavior for the owner'),
-  refactor: work('The worker changes how the code is written, not what it does; the tests that pass before still pass after.').replace('DESC', 'cleaning up code without changing what it does'),
-  docs: work('The worker changes documentation only (README, docs/, comments), not code.').replace('DESC', 'documentation only'),
-  investigation:
-    '---\ndescription: find an answer and hand it back; nothing is merged\nmerges: no\n---\n## research\nworker: task\nThe worker finds the answer and hands it back in full; nothing is committed, tested or merged.\n\n## read\ngate: owner\n',
-}
+// The real built-in kind texts (kinds/<name>.ts).
+const BUILT_IN = BUILT_IN_KIND_TEXTS
 
 const shape = (stages: Stage[]) => stages.map(s => `${s.name}=${s.type}${s.value ? `:${s.value}` : ''}${s.onFail ? ` (back to ${s.onFail.back} x${s.onFail.times})` : ''}`)
 
@@ -75,9 +66,8 @@ test('a kind file with an unknown key, a bad on fail target or children: outside
 test("the owner's kind file with a bad stage is skipped with a note, and the built-in kind is used", async () => {
   const PLUGIN = '/plugin'
   const MINE = '/proj/.symcc/kinds'
-  const plugin: Record<string, string> = { 'bug.md': BUILT_IN.bug! }
   const mine: Record<string, string> = { 'bug.md': '---\ndescription: mine\n---\n## fix\nworker: task\n\n## tests\ncheck: tests\non fail: back to code, 2 times\n' }
-  const dirOf = (p: string) => (p.startsWith(MINE) ? [mine, p.slice(MINE.length + 1)] : p.startsWith(`${PLUGIN}/kinds`) ? [plugin, p.slice(PLUGIN.length + 7)] : null) as [Record<string, string>, string] | null
+  const dirOf = (p: string) => (p.startsWith(MINE) ? [mine, p.slice(MINE.length + 1)] : null) as [Record<string, string>, string] | null
   const toasts: string[] = []
   const $ = {
     plugin: { root: PLUGIN },

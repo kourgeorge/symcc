@@ -1,34 +1,23 @@
-// Task kinds (T-328): built-in kind files in the plugin's kinds/, the owner's own in .symcc/kinds/ over them.
+// Task kinds (T-328): built-in kind texts in the plugin's kinds/ (kinds/index.ts), the owner's own in .symcc/kinds/ over them.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { parseKind, kindSkipReason, mergeKinds, checkKind, kindNames, kindsLeadText, BUILT_IN_KINDS, detailRows, addTask, emptyBoard } from '../hooks/board'
 import { S, skippedKinds } from '../hooks/plugin/state'
 import { loadKinds } from '../hooks/plugin/kinds'
 import { leadGuide } from '../hooks/plugin/tools'
+import { BUILT_IN_KIND_TEXTS } from '../kinds'
 
 const ROOT = '/proj'
 const MINE = `${ROOT}/.symcc/kinds`
 const PLUGIN = '/plugin'
 const kindFile = (description: string) => `---\ndescription: ${description}\n---\n`
 
-/** The built-in kinds as the plugin's kinds/ folder has them. */
-const BUILT_IN: Record<string, string> = {
-  'change.md': kindFile('a general change when no other kind fits (the default)'),
-  'bug.md': kindFile('something that works wrongly'),
-  'feature.md': kindFile('new behavior for the owner'),
-  'refactor.md': kindFile('cleaning up code without changing what it does'),
-  'docs.md': kindFile('documentation only'),
-  'investigation.md': kindFile('find an answer and hand it back; nothing is merged'),
-}
-
-/** A fake $ with the plugin's kinds/ folder and the project's .symcc/kinds (`mine`: file name -> text). */
+/** A fake $ with the project's .symcc/kinds (`mine`: file name -> text); the built-in kinds are the real ones. */
 function setup(mine: Record<string, string> = {}) {
   const toasts: string[] = []
   const where = (p: string): [Record<string, string>, string] | null => {
     if (p === MINE) return [mine, '']
     if (p.startsWith(`${MINE}/`)) return [mine, p.slice(MINE.length + 1)]
-    if (p === `${PLUGIN}/kinds`) return [BUILT_IN, '']
-    if (p.startsWith(`${PLUGIN}/kinds/`)) return [BUILT_IN, p.slice(PLUGIN.length + 7)]
     return null
   }
   const $ = {
@@ -56,10 +45,12 @@ function setup(mine: Record<string, string> = {}) {
   return { $, toasts }
 }
 
-test('the built-in kinds load from the plugin\'s kinds/ folder, change first', async () => {
+test('the built-in kinds load from kinds/index.ts, change first; each built-in name has a text', async () => {
   const { $ } = setup()
   const kinds = await loadKinds($ as never)
   expect(kinds.map(k => k.name)).toEqual([...BUILT_IN_KINDS])
+  expect(Object.keys(BUILT_IN_KIND_TEXTS).sort()).toEqual([...BUILT_IN_KINDS].sort())
+  for (const k of kinds) expect(kindSkipReason(k.name, BUILT_IN_KIND_TEXTS[k.name]!)).toBeNull()
   expect(kinds.find(k => k.name === 'bug')!.description).toBe('something that works wrongly')
   expect(S.kinds).toBe(kinds)
 })
