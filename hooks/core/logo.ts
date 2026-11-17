@@ -118,15 +118,12 @@ export const startMove = (p: LogoPlay, move: LogoMove, nowMs: number): LogoPlay 
 /** Is the idle sway due: nothing plays and nothing played (or swayed) for SWAY_EVERY_MS since `lastMs`? */
 export const swayDue = (p: LogoPlay, lastMs: number, nowMs: number) => !isPlaying(p, nowMs) && nowMs - lastMs >= SWAY_EVERY_MS
 
-/** The logo_motion setting: on unless the board turned it off. */
-export const logoMotionOn = (b: { logo_motion?: unknown }) => b.logo_motion !== false
-
 /** The width (in columns) from which the banner shows the logo; the same as BANNER_NARROW in banner.ts. */
 export const LOGO_MIN_WIDTH = 50
 
-/** May a move play: the setting is on, the panel is shown and wide enough to show the logo, and the board is not off. */
-export function mayMove(o: { logo_motion?: unknown; enabled?: boolean; mode?: string; width: number; shown: boolean }): boolean {
-  return logoMotionOn(o) && o.shown && o.enabled !== false && o.mode !== 'off' && o.width >= LOGO_MIN_WIDTH
+/** May a move play: the panel is shown and wide enough to show the logo, and the board is not off. */
+export function mayMove(o: { enabled?: boolean; mode?: string; width: number; shown: boolean }): boolean {
+  return o.shown && o.enabled !== false && o.mode !== 'off' && o.width >= LOGO_MIN_WIDTH
 }
 
 /** The statuses that mean "not done yet": while any task has one, the board is not all done. */

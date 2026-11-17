@@ -1,5 +1,4 @@
 import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
-import { logoMotionOn } from '../core/logo'
 import { homeBranch } from './git'
 import { type $, S, workers, type PaneView, scoutState, updateView } from './state'
 import { path, locked, change, now, load, safeWrite } from './store'
@@ -103,7 +102,7 @@ export async function publish($: $, b: Board) {
   const branch_note = gitNote(S.gitState)
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable($)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), logo_motion: logoMotionOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
   await updateView($, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish($, v).catch(() => undefined)
