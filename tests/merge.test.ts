@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, type WorkerQuestion } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, parseSettingValue, type WorkerQuestion } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -859,6 +859,19 @@ test('approve after the owner edited files in the folder runs the tests again an
   expect(t.status).toBe('done')
   expect(t.merged).toBe(H3)
   expect(t.history).toContain('owner edited files before approving: src/a.ts, src/b.md')
+})
+
+test('a typed "cd web && npm test" is one test command, run as one shell line in the task\'s folder', async () => {
+  const r = parseSettingValue('test_commands', '"cd web && npm test"')
+  expect(r).toEqual({ ok: true, input: { test_commands: ['cd web && npm test'] } })
+  const cmds = (r as { input: { test_commands: string[] } }).input.test_commands
+  const w = await inReview({ upToDate: false }, {}, cmds)
+  const runs: { argv: string[]; cwd?: string }[] = []
+  const run = w.$.process.run
+  w.$.process.run = ((argv: string[], o: { cwd?: string }) => (argv[0] === '/bin/sh' && runs.push({ argv, cwd: o?.cwd }), run(argv, o))) as typeof run
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  // one shell runs the whole line, so the cd takes effect for npm test
+  expect(runs).toEqual([{ argv: ['/bin/sh', '-c', 'cd web && npm test'], cwd: WT }])
 })
 
 test('a commit of the owner newer than the reviewed one also makes approve run the tests again', async () => {

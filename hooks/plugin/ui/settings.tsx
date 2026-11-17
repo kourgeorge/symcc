@@ -406,7 +406,7 @@ export async function settingsPage($: $, pane: PaneParts) {
           key="setting-edit"
           label={name}
           value={ed.value}
-          placeholder={info.kind === 'commands' ? 'e.g. npm test && npm run lint, or none' : `a whole number, ${info.range}`}
+          placeholder={info.kind === 'commands' ? 'e.g. cd web && npm test, or none' : `a whole number, ${info.range}`}
           autoFocus
           onInput={value => void (ed.value = value)}
           onSubmit={value => {
@@ -418,7 +418,7 @@ export async function settingsPage($: $, pane: PaneParts) {
         />
         {ed.error ? <Text color={C('error')}>{ed.error}</Text> : null}
         {cancelButton}
-        {info.kind === 'commands' ? <Text color={C('inactive')}>join commands with " && " · none clears them</Text> : null}
+        {info.kind === 'commands' ? <Text color={C('inactive')}>the line runs as one shell command · several: ["npm test", "npm run lint"] · none clears them</Text> : null}
         <Text color={C('inactive')}>{boxHint('Enter saves')}</Text>
       </Box>
     )

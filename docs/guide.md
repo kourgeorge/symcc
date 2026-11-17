@@ -445,8 +445,9 @@ are about changes; under "How tasks ended" a read investigation shows as
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. Enter on a row changes it: `open_on_start`
   and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
-  / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (several test
-  commands are joined with ` && `; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
+  / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
+  command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
+  `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
 - Under the settings, the **Roles** row says how many worker roles there are (e.g.

@@ -132,7 +132,7 @@ export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; 
 export const MAX_TEST_COMMANDS = 5
 
 export const SETTINGS: SettingInfo[] = [
-  { name: 'test_commands', kind: 'commands', default: 'none', range: 'commands joined with " && "', meaning: 'must all pass before work is merged' },
+  { name: 'test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
   { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
   { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer makes symcc ask the owner for more time' },
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
@@ -147,12 +147,19 @@ export const SETTINGS: SettingInfo[] = [
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
 
-/** A setting's current value as text: "npm test && npm run lint", "on", "5", "none". */
+/**
+ * Test commands as text: one command as it is ("cd web && npm test" is one shell line),
+ * several as a list in brackets (["npm test", "npm run lint"]), none as "none".
+ * parseSettingValue reads the same text back.
+ */
+export const testCommandsText = (cmds: readonly string[]): string => (!cmds.length ? 'none' : cmds.length === 1 && !cmds[0]!.trim().startsWith('[') ? cmds[0]! : JSON.stringify(cmds))
+
+/** A setting's current value as text: "npm test", '["npm test", "npm run lint"]', "on", "5", "none". */
 export function settingValue(b: Partial<Board>, name: SettingName): string {
   const d = emptyBoard()
   switch (name) {
     case 'test_commands':
-      return (b.test_commands ?? []).join(' && ') || 'none'
+      return testCommandsText(b.test_commands ?? [])
     case 'open_on_start':
       return openOnStart(b) ? 'on' : 'off'
     case 'notify':
@@ -189,7 +196,7 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
   if (Array.isArray(a.test_commands)) {
     const all = a.test_commands.map(x => String(x).trim()).filter(Boolean)
     y.test_commands = all.slice(0, MAX_TEST_COMMANDS)
-    add('test_commands', `tests: ${y.test_commands.join(' && ') || 'none'}`, all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept: test_commands holds up to ${MAX_TEST_COMMANDS})` : '')
+    add('test_commands', `tests: ${testCommandsText(y.test_commands)}`, all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept: test_commands holds up to ${MAX_TEST_COMMANDS})` : '')
   }
   for (const name of ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days'] as const) {
     const n = a[name]
@@ -223,10 +230,23 @@ const unquoteValue = (s: string) => {
   return t.length >= 2 && (t[0] === '"' || t[0] === "'") && t[t.length - 1] === t[0] ? t.slice(1, -1).trim() : t
 }
 
+/** Typed test commands: a JSON list of strings is several commands, else each line is one whole command. */
+function commandList(v: string): string[] {
+  if (v.startsWith('[')) {
+    try {
+      const a: unknown = JSON.parse(v)
+      if (Array.isArray(a) && a.every(x => typeof x === 'string')) return a.map(x => x.trim()).filter(Boolean)
+    } catch {}
+  }
+  return v.split(/\r?\n/).map(x => x.trim()).filter(Boolean)
+}
+
 /**
  * Reads a typed value for one setting into settings tool input: numbers as whole numbers
  * (outside the limit they are cut later, by applySettings), on/off, a mode,
- * or test commands joined with " && " ("none" or "" for none).
+ * or test commands: a typed line is one command, run as one shell line (so "cd web && npm test"
+ * works as in a shell); several are a list in brackets (["npm test", "npm run lint"]) or one per
+ * line; "none" or "" for none.
  */
 export function parseSettingValue(name: SettingName, raw: string): { ok: true; input: SettingsInput } | { ok: false; message: string } {
   const s = settingInfo(name)!
@@ -258,7 +278,7 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
       return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be off, review or auto')
     }
     case 'commands':
-      return { ok: true, input: { test_commands: v.toLowerCase() === 'none' ? [] : v.split(/\s+&&\s+/).map(x => x.trim()).filter(Boolean) } }
+      return { ok: true, input: { test_commands: v.toLowerCase() === 'none' ? [] : commandList(v) } }
   }
 }
 

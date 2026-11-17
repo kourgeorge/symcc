@@ -825,7 +825,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 45 · 5-600/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /commands joined with " && "/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /one shell line, or a list of up to 5 lines/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ off$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ review$/ })).toBeDefined()
   // Enter on a number opens an edit box; on mode a pick list of off / review / auto

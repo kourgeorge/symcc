@@ -1539,7 +1539,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
   expect(parseCommand('symcc-settings', 'mode review')).toEqual({ kind: 'set', setting: 'mode', input: { mode: 'review' } })
   expect(parseCommand('symcc-settings', 'target_branch dev')).toEqual({ kind: 'bad', message: expect.stringContaining('There is no setting called target_branch') })
   expect(parseCommand('symcc-settings', 'test_commands "npm test"')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test'] } })
-  expect(parseCommand('symcc-settings', 'test_commands npm test && npm run lint')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test', 'npm run lint'] } })
+  expect(parseCommand('symcc-settings', 'test_commands npm test && npm run lint')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: ['npm test && npm run lint'] } })
   expect(parseCommand('symcc-settings', 'test_commands none')).toEqual({ kind: 'set', setting: 'test_commands', input: { test_commands: [] } })
   const bad = (args: string) => {
     const c = parseCommand('symcc-settings', args)
@@ -1554,6 +1554,32 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
   expect(bad('tests_with_changes maybe')).toBe('tests_with_changes must be off, ask or review')
   expect(parseSettingValue('tests_with_changes', 'Review')).toEqual({ ok: true, input: { tests_with_changes: 'review' } })
+})
+
+test('a typed test_commands line is one whole command; several go in a list or one per line', () => {
+  const cmds = (v: string) => (parseSettingValue('test_commands', v) as { input: { test_commands: string[] } }).input.test_commands
+  expect(cmds('cd web && npm test')).toEqual(['cd web && npm test'])
+  expect(cmds('source .venv/bin/activate && pytest')).toEqual(['source .venv/bin/activate && pytest'])
+  // more than 5 pieces of one line are kept whole, not cut
+  const long = 'a && b && c && d && e && f && g'
+  const { board, changes } = applySettings(emptyBoard(), { test_commands: cmds(long) })
+  expect(board.test_commands).toEqual([long])
+  expect(changes[0]!.cut).toBe('')
+  expect(settingValue(board, 'test_commands')).toBe(long)
+  // several: a list in brackets, or one per line
+  expect(cmds('["npm test", "cd web && npm run lint"]')).toEqual(['npm test', 'cd web && npm run lint'])
+  expect(cmds('npm test\nnpm run lint')).toEqual(['npm test', 'npm run lint'])
+  expect(cmds('none')).toEqual([])
+  // a line that only looks like a list stays one command
+  expect(cmds('[ -f a ] && npm test')).toEqual(['[ -f a ] && npm test'])
+  // shown back so one command and several look different, and read back the same
+  const two = applySettings(emptyBoard(), { test_commands: ['npm test', 'npm run lint'] }).board
+  expect(settingValue(two, 'test_commands')).toBe('["npm test","npm run lint"]')
+  expect(cmds(settingValue(two, 'test_commands'))).toEqual(['npm test', 'npm run lint'])
+  const odd = applySettings(emptyBoard(), { test_commands: ['[ -f a ] && npm test'] }).board
+  expect(cmds(settingValue(odd, 'test_commands'))).toEqual(['[ -f a ] && npm test'])
+  // the lead's array form still gives several commands
+  expect(applySettings(emptyBoard(), { test_commands: ['a', 'b', 'c', 'd', 'e', 'f'] }).board.test_commands).toEqual(['a', 'b', 'c', 'd', 'e'])
 })
 
 test('settings keep their limits, and a value cut to its limit says so', () => {
@@ -1583,7 +1609,7 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 test('every setting has a row: value, default, range and meaning', () => {
   expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'mode', 'enabled'])
   const b = { ...emptyBoard(), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
-  expect(settingValue(b, 'test_commands')).toBe('npm test && npm run lint')
+  expect(settingValue(b, 'test_commands')).toBe('["npm test","npm run lint"]')
   expect(settingValue(b, 'notify')).toBe('off')
   expect(settingValue(b, 'open_on_start')).toBe('on')
   expect(settingValue(b, 'mode')).toBe('auto')
