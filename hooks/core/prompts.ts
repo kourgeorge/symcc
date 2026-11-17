@@ -30,6 +30,7 @@ const SHARED_PLACEHOLDERS: Record<string, string> = {
   branch: 'the worker\'s branch, e.g. symcc/T-12',
   folder: 'the worker\'s own folder (its copy of the project)',
   role: 'the role\'s checklist, skills and web rule (empty for general)',
+  kind: 'the task\'s kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."',
 }
 
 /** The placeholders of each prompt and what they become. {{details}} and {{ask}} are needed in both, {{merge_main}} and {{test_output}} in the change prompt (see REQUIRED_PLACEHOLDERS). */

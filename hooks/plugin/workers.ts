@@ -1,12 +1,13 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
+import { loadKinds } from './kinds'
 import { loadPrompts, promptTemplate } from './prompts'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
@@ -21,7 +22,7 @@ export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith
 /** The prompt a worker on task `t` is started with: its kind's prompt (the owner's .<name>/prompts/<kind>.md, else the built-in one; see
  *  loadPrompts) with the placeholders filled in for this task. */
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => {
-  const kind = kindOf(t) === 'investigation' ? 'investigation' : 'change'
+  const kind = isInvestigation(t) ? 'investigation' : 'change'
   return fillPrompt(kind, promptTemplate(kind), kind === 'investigation' ? investigationValues(t, dir, role) : changeValues(t, b, dir, role))
 }
 
@@ -37,6 +38,8 @@ const sharedValues = (t: SymccTask, dir: string, role?: RoleDef): Record<string,
   branch: taskBranch(t),
   folder: dir,
   role: roleSection(role),
+  // The task's kind and what it is for (from its kind file; see loadKinds).
+  kind: kindSection(kindOf(t), S.kinds),
   // How a worker asks the owner and what a refused edit means (see hooks/plugin/ask.ts).
   ask: ASK_LINE(S.N.tool(ASK_TOOL)),
 })
@@ -102,6 +105,8 @@ export async function startWorker($: $, id: string) {
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports($, t0!, dir).catch(() => [])
     const roles = await loadRoles($)
+    // the kind files are read again too, so the prompt has the kind's description as it is now
+    await loadKinds($).catch(() => undefined)
     // the owner's prompt files are read again, so an edit counts from this worker on
     await loadPrompts($).catch(() => undefined)
     const t = await change($, x => {
@@ -613,7 +618,7 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
   if (t.wrap_up) {
     const limit = timeLimitOf(b.max_minutes, t)
     // An investigation's hand-back is its answer so far: it still goes to review for the owner to read.
-    if (kindOf(t) === 'investigation') {
+    if (isInvestigation(t)) {
       if (gaveUp()) return
       await answered($, t, answer, summary, limit)
       return
@@ -623,7 +628,7 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     return
   }
   const q = t.try_question
-  const need = kindOf(t) === 'investigation' ? [] : (t.try_refused ?? [])
+  const need = isInvestigation(t) ? [] : (t.try_refused ?? [])
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
     const { question, options } = q
@@ -642,7 +647,7 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
     const why = endFailure(end)
     if (await writeIfSame($, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
     tellLead($, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
-  } else if (kindOf(t) === 'investigation') {
+  } else if (isInvestigation(t)) {
     if (gaveUp()) return
     await answered($, t, answer, summary)
   } else {
@@ -813,7 +818,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
 export async function approve($: $, id: string, keepNote = false): Promise<string> {
   const b = await load($)
   const t = reviewTask(b, id, 'approve')
-  if (kindOf(t) === 'investigation') return endInvestigation($, t, keepNote)
+  if (isInvestigation(t)) return endInvestigation($, t, keepNote)
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
   return mergeFinished($, b, t, 'approve')
 }

@@ -3,7 +3,7 @@
 // Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in.
 import type { SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { kindOf, STATUS_WORD } from './board-file'
+import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
 import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount } from './runs'
@@ -103,7 +103,7 @@ export function failReason(line: string): FailReason | null {
  * (nothing is merged), or null when its history doesn't say.
  */
 export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | null {
-  if (kindOf(t as { kind?: unknown }) === 'investigation') return 'answered'
+  if (isInvestigation(t as { kind?: unknown })) return 'answered'
   const merged = t.history.filter(l => / → merged into /.test(l))
   if (!merged.length) return null
   return merged.some(l => /approved by the owner/.test(l)) ? 'approved' : 'own'
@@ -121,7 +121,7 @@ export function originKey(t: Pick<SymccTask, 'origin'>): string {
  * (review), or a try of it handed back an answer.
  */
 export const isAnsweredInvestigation = (t: Pick<SymccTask, 'status' | 'runs'> & { kind?: unknown }): boolean =>
-  kindOf(t as { kind?: unknown }) === 'investigation' && (t.status === 'done' || t.status === 'review' || (t.runs ?? []).some(isAnsweredRun))
+  isInvestigation(t as { kind?: unknown }) && (t.status === 'done' || t.status === 'review' || (t.runs ?? []).some(isAnsweredRun))
 
 // ---------------- the report ----------------
 
@@ -273,7 +273,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const totalTok = sumTokens(tokKnown.map(t => F(t).tokens))
   // Investigations hand back an answer and merge nothing: they are counted on their own, not in the
   // done, first-try and merge figures (those are for change tasks).
-  const isInv = (t: SymccTask) => kindOf(t as { kind?: unknown }) === 'investigation'
+  const isInv = (t: SymccTask) => isInvestigation(t as { kind?: unknown })
   const inv = all.filter(isInv)
   const answered = inv.filter(isAnsweredInvestigation)
   const finished = all.filter(t => t.status === 'done')

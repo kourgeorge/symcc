@@ -19,6 +19,7 @@ import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
+import { loadKinds } from './plugin/kinds'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
@@ -143,6 +144,7 @@ export const register: Register = on => {
       await seedExampleScouts($).catch(() => undefined)
       await scheduleScouts($).catch(() => undefined)
       await loadRoles($).catch(() => undefined)
+      await loadKinds($).catch(() => undefined)
       await cleanLeftoverTmp($).catch(() => undefined)
       S.watchdog?.cancel()
       S.watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))

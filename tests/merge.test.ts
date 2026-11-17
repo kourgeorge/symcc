@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, parseSettingValue, type WorkerQuestion } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -3955,7 +3955,80 @@ test('change sets a task kind, and refuses an unknown one', async () => {
   expect(kindOf(find(await load(w.$), 'T-1'))).toBe('investigation')
   await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
   expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
-  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow(/kind must be change or investigation/)
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow('Nothing changed: unknown kind "question"; the kinds are: change, investigation')
+})
+
+// ---------------- task kinds (T-328): more kinds, all run as a change but investigation ----------------
+
+test('add with kind bug saves kind bug; an unknown kind is refused naming the known kinds', async () => {
+  const w = world()
+  await saveBoard(w.$, { ...emptyBoard(), mode: 'auto' })
+  S.kinds = [{ name: 'change', description: 'a general change', body: '' }, { name: 'bug', description: 'something that works wrongly', body: '' }, { name: 'investigation', description: 'find an answer', body: '' }]
+  const add = (kind: string) => runTool(w.$, 'add', { title: 'Fix the cache', details: 'd', why: 'a test', origin_by: 'lead', backlog: true, kind })
+  await add('Bug')
+  expect(find(await load(w.$), 'T-1')!.kind).toBe('bug')
+  await expect(add('chore')).rejects.toThrow('unknown kind "chore"; the kinds are: change, bug, investigation')
+  expect((await load(w.$)).tasks.length).toBe(1)
+  // change switches it between kinds; back to change stores none
+  await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
+  expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
+})
+
+test('a kind bug task is committed, tested and merged like a change', async () => {
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'], { kind: 'bug', history: ['created by the lead'] } as Partial<SymccTask>)
+  expect(b.tasks[0]!.kind).toBe('bug')
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'fixed it')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.answer).toBeUndefined()
+  expect(t.kind).toBe('bug')
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(movedMain(w)).toBe(true)
+})
+
+test('a kind investigation task still runs as an investigation: its answer waits for the owner, nothing merged', async () => {
+  const { w, t } = await investigationAnswers('auto', 'It is slow because of X.')
+  expect(t.kind).toBe('investigation')
+  expect(t.status).toBe('review')
+  expect(t.answer).toBe('It is slow because of X.')
+  expect(ranTests(w)).toEqual([])
+  expect(movedMain(w)).toBe(false)
+})
+
+test('old board tasks with kind change or investigation still load as before; another kind is kept', () => {
+  const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Old', files: ['src/'] }, ISO)
+  const old = { ...b, tasks: [{ ...b.tasks[0]!, id: 'T-1', kind: 'change' }, { ...b.tasks[0]!, id: 'T-2', kind: 'investigation' }, { ...b.tasks[0]!, id: 'T-3', kind: 'Refactor' }, { ...b.tasks[0]!, id: 'T-4', kind: 42 }] }
+  const p = parseBoard(JSON.stringify(old))
+  expect(find(p, 'T-1')!.kind).toBeUndefined()
+  expect(kindOf(find(p, 'T-1'))).toBe('change')
+  expect(find(p, 'T-2')!.kind).toBe('investigation')
+  expect(isAnswered({ ...find(p, 'T-2')!, status: 'review' })).toBe(true)
+  expect(find(p, 'T-3')!.kind).toBe('refactor')
+  expect(isAnswered({ ...find(p, 'T-3')!, status: 'review' })).toBe(false)
+  expect(kindOf(find(p, 'T-4'))).toBe('change')
+})
+
+test('the board line shows the kind next to the role; a plain change shows none; search matches the kind', () => {
+  const [b] = boardWith('auto', [], { kind: 'bug', role: 'tester', status: 'todo' } as Partial<SymccTask>)
+  const t = b.tasks[0]!
+  expect(rowExtra(t, b.tasks)).toBe('[bug · tester]')
+  expect(rowExtra({ ...t, role: undefined }, b.tasks)).toBe('[bug]')
+  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('tester')
+  expect(boardText(b, Date.now(), '~/p', 'symcc')).toContain('Do it [bug · tester]')
+  expect(taskMatches(t, 'bug')).toBe(true)
+  expect(taskMatches({ ...t, kind: undefined } as SymccTask, 'bug')).toBe(false)
+})
+
+test('the worker prompt says the task\'s kind and what it is for', () => {
+  S.kinds = [{ name: 'bug', description: 'something that works wrongly', body: '' }]
+  const [b] = boardWith('auto', ['npm test'], { kind: 'bug' } as Partial<SymccTask>)
+  expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).toContain('Kind of task: bug (something that works wrongly).')
+  const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
+  expect(WORKER_PROMPT(i.tasks[0]!, i, WT)).toContain('Kind of task: investigation')
 })
 
 /** Commits on T-1's branch that main doesn't have, in the fake git (`git rev-list --count main..branch`). */

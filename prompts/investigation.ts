@@ -11,7 +11,7 @@ Read whatever you need. You may run read-only commands and experiments, outside 
 
 Task {{task_id}}: {{title}}
 {{details}}
-{{role}}{{earlier_tries}}
+{{kind}}{{role}}{{earlier_tries}}
 When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.{{ask_more}}
 {{ask}}
 `

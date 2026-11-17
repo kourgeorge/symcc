@@ -4,7 +4,7 @@
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, editTarget, find, kindOf, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
 import { S, type $, type Worker, scoutRuns } from './state'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -92,7 +92,7 @@ export async function checkEdit($: $, agentId: string | undefined, tool: string,
   if (outside !== undefined) return outsideFolderText(outside, w.worktree, S.N.dir)
   const b = await load($).catch(() => null)
   const t = b ? find(b, w.task) : undefined
-  if (!t || kindOf(t) === 'investigation') return undefined
+  if (!t || isInvestigation(t)) return undefined
   const path = blockedEdit(tool, real.input, real.worktree, t.files, S.N.dir)
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)

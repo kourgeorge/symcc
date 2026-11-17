@@ -1,8 +1,9 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, kindOf } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
+import { loadKinds } from '../kinds'
 import { type $, S, workers, updateOpened } from '../state'
 import { path } from '../store'
 import { noteForLead, brief, tellLead } from '../tell'
@@ -13,6 +14,7 @@ import type { PaneParts } from './parts'
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const { Box, Text, Button, Input, v, width, color, word, mark, act, C, footer, buttonRows, heading, paragraphs } = pane
   if (!S.roles.length) await loadRoles($).catch(() => undefined)
+  if (!S.kinds.length) await loadKinds($).catch(() => undefined)
   // the branch this task merges into: its changes are shown against it
   const target = intoOf(t)
   const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
@@ -182,7 +184,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  const rows = detailRows(t, { roles: S.roles, all: v.tasks, when, nowMs: Date.now(), archivedDone: v.archived_done })
+  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: Date.now(), archivedDone: v.archived_done })
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
@@ -396,7 +398,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait, kindOf(t) === 'investigation'), 'task-keys')}
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait, isInvestigation(t)), 'task-keys')}
     </Box>
   )
 }
