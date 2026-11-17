@@ -2,8 +2,10 @@
 import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { dataDir } from '../name'
 import { cleanTokens } from './runs'
-import { parseStamp } from './text'
+import { frontMatterLine, parseStamp, splitFrontMatter } from './text'
 import type { WorkerQuestion } from './ask'
+import { BUILT_IN_KIND_TEXTS } from '../../kinds'
+import { type Stage, type StageResult, migratedStage, parseStages, yesNo } from './stages'
 
 export type Board = {
   version: 1
@@ -87,7 +89,30 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * reload mid-try doesn't lose it; only while "doing" on one try: `try_question`: its worker's ask_owner call
  * (the last one wins); `try_refused`: the paths of its edits refused as outside the task's files.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[] }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[] } & TaskStages
+
+/**
+ * Where a task is in its kind's workflow (docs/research/task-kinds-and-workflows.md, section 2): `stage`, the name of the stage it is
+ * in now (missing = the kind's first stage); `stages`, one line per finished stage, oldest first (a go-back keeps the record); `backs`,
+ * how many times each stage's `on fail` was used (test_tries and conflict_tries stay for the merge step).
+ */
+export type TaskStages = { stage?: string; stages?: StageResult[]; backs?: Record<string, number> }
+
+/** The stages of built-in kind `kind` (read from its text in kinds/), or undefined for any other kind (the owner's own are read where the kinds are loaded). */
+export function builtInStages(kind: string): Stage[] | undefined {
+  const text = BUILT_IN_KIND_TEXTS[kind]
+  if (!text) return undefined
+  const fm = splitFrontMatter(text)
+  const merges = (fm.lines ?? []).map(frontMatterLine).find(kv => kv?.key === 'merges')
+  const stages = parseStages(fm.body.trim(), kind, merges ? yesNo(merges.value) !== false : true)
+  return typeof stages === 'string' ? undefined : stages
+}
+
+/** The stage a new task of kind `kind` starts at: its first worker stage (a built-in kind's; none for the owner's own, which then start at their first). */
+export const firstStageOf = (kind: unknown): string | undefined => {
+  const stages = builtInStages(kindOf({ kind }))
+  return stages ? migratedStage(stages, 'todo') : undefined
+}
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -295,6 +320,17 @@ function cleanTask(t: unknown): BoardTask | null {
     else x.kind = kindOf(x)
   }
   if ('answer' in x && typeof x.answer !== 'string') delete x.answer
+  if ('stage' in x && !(typeof x.stage === 'string' && x.stage.trim())) delete x.stage
+  if ('stages' in x) {
+    const ok = Array.isArray(x.stages) ? (x.stages as unknown[]).filter(isStageResult) : []
+    if (ok.length) x.stages = ok
+    else delete x.stages
+  }
+  if ('backs' in x) {
+    const ok = isObj(x.backs) ? Object.fromEntries(Object.entries(x.backs).filter(([, n]) => isNum(n) && n >= 0)) : {}
+    if (Object.keys(ok).length) x.backs = ok
+    else delete x.backs
+  }
   if ('merge_wait' in x) {
     const mw = asBlockers(x.merge_wait)
     if (mw) x.merge_wait = mw
@@ -306,6 +342,10 @@ function cleanTask(t: unknown): BoardTask | null {
   const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined
   return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}), ...(checking ? { checking } : {}) } as BoardTask
 }
+
+/** Whether `r` is a usable line of BoardTask.stages. */
+const isStageResult = (r: unknown): r is StageResult =>
+  isObj(r) && typeof r.name === 'string' && ['passed', 'failed', 'skipped'].includes(r.result as string) && typeof r.at === 'string' && (r.try === undefined || isNum(r.try)) && (r.note === undefined || typeof r.note === 'string')
 
 /** The branch a task merges into (see SymccTask.merge_into); "main" for a task that has none (made by hand or in a test). */
 export const intoOf = (t: { merge_into?: unknown }): string => (typeof t?.merge_into === 'string' && t.merge_into.trim() ? t.merge_into.trim() : 'main')
@@ -321,7 +361,9 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - a try with no end time (left open by a reload) ends where the next try started, or at the task's
  *   last change; the last try of a task that is "doing" is running now and stays open;
  * - a try's tokens saved as one number: kept as-is, marked unsplit (see migrateRunTokens);
- * - no merge_into (from before each task kept its own branch): `into`, the board's old target_branch.
+ * - no merge_into (from before each task kept its own branch): `into`, the board's old target_branch;
+ * - no stage (from before kinds had stages) on a task of a built-in kind: its first worker stage while it is open, the stage before
+ *   the merge step while in review (see migratedStage); none once it is done or dropped.
  */
 export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = t
@@ -329,6 +371,11 @@ export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   const split = migrateRunTokens(t.runs)
   if (split) out = { ...out, runs: split }
   if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
+  if (!('stage' in t)) {
+    const stages = builtInStages(kindOf(t))
+    const stage = stages ? migratedStage(stages, t.status) : undefined
+    if (stage) out = { ...out, stage }
+  }
   const role = typeof t.role === 'string' ? OLD_ROLES[t.role.trim().toLowerCase()] : undefined
   if (role) out = { ...out, role }
   const rs = Array.isArray(out.runs) ? out.runs : []

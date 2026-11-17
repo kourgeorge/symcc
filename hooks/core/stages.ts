@@ -2,7 +2,7 @@
 // Each stage is a `## <name>` heading, then `key: value` lines, then free text (the worker's instructions).
 // Exactly one of worker: / check: / gate: / children: says what the stage is; files:, on fail:, minutes: and
 // model: are optional. A merging kind ends with the built-in merge step, which is not written in the file.
-// Pure code, no I/O. Nothing runs these stages yet: a task still runs as one worker, then commit, tests and merge.
+// Pure code, no I/O. hooks/plugin/workers.ts runs them (runStages): each worker stage is a fresh worker in the task's folder.
 
 /** What a stage is: a worker run, a check symcc runs itself, an approval, an epic's child tasks, or the built-in merge. */
 export type StageType = 'worker' | 'check' | 'gate' | 'children' | 'merge'
@@ -170,4 +170,101 @@ export function parseStages(body: string, kind: string, merges = true): Stage[] 
     stages.push(stage)
   }
   return merges ? [...stages, mergeStage()] : stages
+}
+
+// ---------------- running the stages (pure: what comes next) ----------------
+
+/** One finished stage of a task, oldest first (BoardTask.stages): a go-back keeps the record. `try`: the worker try of a worker stage. */
+export type StageResult = { name: string; result: 'passed' | 'failed' | 'skipped'; at: string; try?: number; note?: string }
+
+/** What a task keeps about its stages: the one it is in now (missing = the kind's first stage) and how many go-backs each `on fail` used. */
+export type StageState = { stage?: string; backs?: Record<string, number> }
+
+/** The stage named `name` in `stages`, else the first one (a task with no stage, or one its kind no longer has, is at its first stage). */
+export function currentStage(stages: readonly Stage[], name?: string): Stage | undefined {
+  return stages.find(s => s.name === name) ?? stages[0]
+}
+
+/** The worker stage a worker on a task at stage `name` runs: that stage when it is a worker stage, else the last worker stage before it (or the first one). */
+export function workerStageFor(stages: readonly Stage[], name?: string): Stage | undefined {
+  const at = Math.max(0, stages.findIndex(s => s.name === name))
+  for (let i = at; i >= 0; i--) if (stages[i]!.type === 'worker') return stages[i]
+  return stages.find(s => s.type === 'worker')
+}
+
+/** The role a worker stage runs as: its `worker:` role, or the task's own (`taskRole`) for `worker: task`. */
+export const roleOfStage = (s: Pick<Stage, 'value'>, taskRole: string): string => (s.value === 'task' ? taskRole : s.value)
+
+/** Whether symcc can run stage `s` yet: a worker, the tests or scope check, the merge step. Gates, the other checks and children come later
+ *  (build steps 4 to 8 of docs/research/task-kinds-and-workflows.md); until then such a stage counts as passed, with a note. */
+export const stageBuilt = (s: Pick<Stage, 'type' | 'value'>): boolean => s.type === 'worker' || s.type === 'merge' || (s.type === 'check' && (s.value === 'tests' || s.value === 'scope'))
+
+/** The worker stages of `stages`. */
+export const workerStages = (stages: readonly Stage[]): Stage[] => stages.filter(s => s.type === 'worker')
+
+/** Whether a kind with `stages` has more than one worker stage (only then does a worker's prompt and history name its stage). */
+export const manyWorkers = (stages: readonly Stage[]): boolean => workerStages(stages).length > 1
+
+/** Whether a worker stage comes after stage `name` (so the task goes on to a fresh worker before it reaches the merge step). */
+export function workerAfter(stages: readonly Stage[], name: string): boolean {
+  const i = stages.findIndex(s => s.name === name)
+  return i >= 0 && stages.slice(i + 1).some(s => s.type === 'worker')
+}
+
+/**
+ * The worker stage a new try goes to after the merge step's tests failed, or its merge conflicted: the last `tests` check's
+ * `on fail` target when it comes after the last worker stage, else the last worker stage (the one whose code is merged).
+ */
+export function retryStage(stages: readonly Stage[], conflict = false): Stage | undefined {
+  const last = workerStages(stages).at(-1)
+  if (!last || conflict) return last
+  const i = stages.indexOf(last)
+  const check = stages.slice(i + 1).filter(s => s.type === 'check' && s.value === 'tests').at(-1)
+  return (check?.onFail && stages.find(s => s.name === check.onFail!.back)) || last
+}
+
+/** The `on fail` a stage follows: its own, else (a check) back to the worker stage just before it, `retries` times. A worker stage has none. */
+export function onFailOf(stages: readonly Stage[], stage: Stage, retries: number): { back: string; times: number } | undefined {
+  if (stage.onFail) return stage.onFail
+  if (stage.type !== 'check') return undefined
+  const i = stages.indexOf(stage)
+  const before = stages.slice(0, Math.max(0, i)).filter(s => s.type === 'worker').at(-1)
+  return before && retries > 0 ? { back: before.name, times: retries } : undefined
+}
+
+/** What comes after a stage: the next stage (maybe the merge step), the end (a kind that doesn't merge), a go-back, or failed. */
+export type NextStage =
+  | { go: 'next'; stage: Stage }
+  | { go: 'end' }
+  | { go: 'back'; stage: Stage; from: string; count: number; times: number }
+  | { go: 'failed'; why: string }
+
+/**
+ * What comes after the task's current stage (`task.stage`, missing = the first) ended with `result`: when it passed, the next stage
+ * (or the end); when it failed, its `on fail: back to <stage>, N times` while `task.backs` has used fewer than N (`count` is
+ * the go-back this is, 1 for the first), else failed. A check with no `on fail` goes back to the worker stage before it
+ * `retries` times (the board's auto_retries); a worker stage with none fails at once.
+ */
+export function nextStage(stages: readonly Stage[], task: StageState, result: 'passed' | 'failed', retries = 0): NextStage {
+  const cur = currentStage(stages, task.stage)
+  if (!cur) return result === 'passed' ? { go: 'end' } : { go: 'failed', why: 'the kind has no stages' }
+  if (result === 'passed') {
+    const next = stages[stages.indexOf(cur) + 1]
+    return next ? { go: 'next', stage: next } : { go: 'end' }
+  }
+  const rule = onFailOf(stages, cur, retries)
+  if (!rule) return { go: 'failed', why: `stage ${cur.name} failed` }
+  const used = task.backs?.[cur.name] ?? 0
+  const back = stages.find(s => s.name === rule.back)
+  if (!back) return { go: 'failed', why: `stage ${cur.name} failed and goes back to ${rule.back}, which is not a stage` }
+  if (used >= rule.times) return { go: 'failed', why: `stage ${cur.name} still failed after going back to ${rule.back} ${rule.times} ${rule.times === 1 ? 'time' : 'times'}` }
+  return { go: 'back', stage: back, from: cur.name, count: used + 1, times: rule.times }
+}
+
+/** The stage a task with kind `stages` is at in status `status` when it has none yet (the one-time migration): its first worker stage while it is
+ *  open, the stage before the merge step while it waits in review, none once it is done or dropped. */
+export function migratedStage(stages: readonly Stage[], status: string): string | undefined {
+  if (status === 'done' || status === 'dropped') return undefined
+  if (status === 'review') return stages.filter(s => s.type !== 'merge').at(-1)?.name
+  return (stages.find(s => s.type === 'worker') ?? stages[0])?.name
 }

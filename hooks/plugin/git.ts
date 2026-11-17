@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
+import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText, namedReports, type BoardTask, reportFile } from '../board'
 import { publish } from './lead'
 import { type $, S, workers, starting, finishing, approving, keptDirty } from './state'
 import { load, change, path } from './store'
@@ -153,13 +153,14 @@ export async function prepareWorktree($: $, t: SymccTask, target: string) {
 
 /**
  * Copies the report files task `t`'s details name (<data dir>/reports/<id>-try-<N>.md, e.g. a keep-note task's
- * earlier answers) from the main project into its folder `dir`, at the same path: the data dir is git-ignored, so a
+ * earlier answers), and those of its earlier worker stages (BoardTask.stages, so the next stage's worker can read them), from the main project into its folder `dir`, at the same path: the data dir is git-ignored, so a
  * new worktree has none, and its worker may not read the main project folder. A .gitignore of "*" in the copied data
  * dir keeps them out of the commit even where the project's .gitignore lacks it. Returns the files copied; a report
  * that can't be read is skipped.
  */
-export async function copyReports($: $, t: Pick<SymccTask, 'details'>, dir: string): Promise<string[]> {
-  const files = namedReports(t.details, S.N.dir)
+export async function copyReports($: $, t: Pick<BoardTask, 'details'> & Partial<Pick<BoardTask, 'id' | 'stages'>>, dir: string): Promise<string[]> {
+  const fromStages = t.id ? (t.stages ?? []).filter(r => r.try).map(r => reportFile(S.N.dir, t.id!, r.try!)) : []
+  const files = [...new Set([...namedReports(t.details, S.N.dir), ...fromStages])]
   if (!files.length) return []
   const copied: string[] = []
   for (const f of files) {

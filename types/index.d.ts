@@ -33,6 +33,8 @@ export type SymccRun = {
   ended_note?: string
   /** set when this try first had to merge main into the branch, after a clash with main */
   merge_main?: true
+  /** the worker stage this try ran (see hooks/core/stages.ts); kept only for a kind with more than one worker stage, where it shows in the history ("try 2 (fix)") */
+  stage?: string
 }
 
 /**

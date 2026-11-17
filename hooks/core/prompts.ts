@@ -31,6 +31,8 @@ const SHARED_PLACEHOLDERS: Record<string, string> = {
   folder: 'the worker\'s own folder (its copy of the project)',
   role: 'the role\'s checklist, skills and web rule (empty for general)',
   kind: 'the task\'s kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."',
+  stage: 'only for a kind with more than one worker stage: the stage this worker runs and its instructions, e.g. "Stage fix (3 of 4) of a bug task."',
+  earlier_stages: 'only after earlier stages finished: one line each, with its report file (copied into the worker\'s folder)',
 }
 
 /** The placeholders of each prompt and what they become. {{details}} and {{ask}} are needed in both, {{merge_main}} and {{test_output}} in the change prompt (see REQUIRED_PLACEHOLDERS). */

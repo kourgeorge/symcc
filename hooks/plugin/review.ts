@@ -110,31 +110,9 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   }
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
-  await markStep($, t, 'checking', stopped)
-  const add = await git($, ['add', '-A', '--', '.'], dir)
-  if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
-  const committed = await commitTry($, t, dir, made)
-  if (committed) return { ok: false, detail: `symcc could not commit the work: ${committed}` }
-  const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
-  const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
-  const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
-  // -z: names come through as they are (without it git quotes and escapes unusual ones, e.g. "caf\303\251.md").
-  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
-  if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
-  const changed = d.stdout.split('\0').filter(Boolean)
-  if (!changed.length) {
-    // Nothing new, but this task's own work is already on the target branch (an earlier try merged
-    // it and a reload sent the task back): it is done, not failed.
-    if (await onTarget($, t.id, head, target)) return { ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` }
-    return { ok: false, detail: 'the worker made no change' }
-  }
-  const bad = outOfScope(changed, t.files, S.N.dir)
-  if (bad.length) {
-    // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
-    if (mode !== 'finish') return { ok: false, detail: outOfScopeText(bad, t.files) }
-    const undo = await undoOutOfScope($, t, dir, base, bad, made)
-    return { ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo }
-  }
+  const c = await commitAndScope($, t, dir, mode, made, stopped)
+  if ('result' in c) return c.result
+  const { head, changed } = c
   // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
   // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
   for (let n = 1; ; n++) {
@@ -145,6 +123,60 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
     const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed)), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return r.result
   }
+}
+
+/**
+ * The first part of checking task `t`'s work in folder `dir`: commit it (`made` gets the new commit), then the scope check on what
+ * its branch changed since it left the branch it merges into (on a worker's try, `mode` 'finish', files outside the task are undone,
+ * see undoOutOfScope). Gives `head` and the `changed` files, or the `result` when it stops here (git failed, nothing changed, out of
+ * scope). Used by checkAndMerge, and after a worker stage that is not the last one (runStages in workers.ts).
+ */
+export async function commitAndScope($: $, t: SymccTask, dir: string, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined = () => undefined, noChangeOk = false): Promise<{ result: CheckResult } | { head: string; changed: string[] }> {
+  const target = intoOf(t)
+  await markStep($, t, 'checking', stopped)
+  const add = await git($, ['add', '-A', '--', '.'], dir)
+  if (add.exitCode !== 0) return { result: { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` } }
+  const committed = await commitTry($, t, dir, made)
+  if (committed) return { result: { ok: false, detail: `symcc could not commit the work: ${committed}` } }
+  const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
+  const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
+  const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
+  // -z: names come through as they are (without it git quotes and escapes unusual ones, e.g. "caf\303\251.md").
+  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
+  if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
+  const changed = d.stdout.split('\0').filter(Boolean)
+  if (!changed.length && !noChangeOk) {
+    // Nothing new, but this task's own work is already on the target branch (an earlier try merged
+    // it and a reload sent the task back): it is done, not failed.
+    if (await onTarget($, t.id, head, target)) return { result: { ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` } }
+    return { result: { ok: false, detail: 'the worker made no change' } }
+  }
+  const bad = outOfScope(changed, t.files, S.N.dir)
+  if (bad.length) {
+    // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
+    if (mode !== 'finish') return { result: { ok: false, detail: outOfScopeText(bad, t.files) } }
+    const undo = await undoOutOfScope($, t, dir, base, bad, made)
+    return { result: { ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo } }
+  }
+  return { head, changed }
+}
+
+/**
+ * Runs the test commands `cmds` one after another in folder `dir` (each with TEST_TIMEOUT_MS), stopping at the first that fails:
+ * then that failure (with the end of its output in `testOutput`), else undefined. `stopped` is asked after each command; when
+ * the task was stopped meanwhile, that is the outcome instead. Used by the merge step and by a `tests` check stage.
+ */
+export async function runTests($: $, dir: string, cmds: readonly string[], stopped: () => CheckResult | undefined = () => undefined): Promise<CheckResult | undefined> {
+  for (const cmd of cmds) {
+    const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
+    if (r.exitCode !== 0) {
+      const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
+      return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
+    }
+    const s = stopped()
+    if (s) return s
+  }
+  return undefined
 }
 
 /**
@@ -250,15 +282,8 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
   }
   const testsRun = mode === 'finish' || candidate !== head || retest
   if (testsRun && b.test_commands.length) await markStep($, t, 'testing', stopped)
-  for (const cmd of testsRun ? b.test_commands : []) {
-    const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
-    if (r.exitCode !== 0) {
-      const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-      return res(stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) })
-    }
-    const s = stopped()
-    if (s) return res(s)
-  }
+  const failed = await runTests($, dir, testsRun ? b.test_commands : [], stopped)
+  if (failed) return res(failed)
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''

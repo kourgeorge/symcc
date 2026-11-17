@@ -13,6 +13,7 @@ import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
+import { loadKinds } from '../hooks/plugin/kinds'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
@@ -1227,6 +1228,113 @@ function cleanUp() {
   S.driving = false
   S.enabledNow = true
 }
+
+// ---------------- a kind of several stages (T-334) ----------------
+
+/** A test-only kind: two worker stages with a tests check between them, then the tests and the merge step. */
+const PAIR_KIND = `---
+description: two workers in a row (tests only)
+---
+## code
+worker: task
+Write the code.
+
+## check
+check: tests
+
+## review
+worker: task
+Read what the code stage did and make it better.
+
+## tests
+check: tests
+on fail: back to code, 2 times
+`
+
+test('a kind of two worker stages runs two fresh workers in the same folder, the second told of the first one\'s report, and merges once', async () => {
+  const w = world()
+  S.me = 'me'
+  const spawned: { name: string; prompt: string; cwd: string }[] = []
+  const KINDS = `${ROOT}/.symcc/kinds`
+  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  x.agent.spawn = async (e: { name?: string; prompt: string; cwd: string }) => (spawned.push({ name: String(e.name), prompt: e.prompt, cwd: e.cwd }), { agentId: `ag${spawned.length + 1}` })
+  x.plugin = { root: '/plugin' }
+  x.fs.list = async (dir: string) => (dir === KINDS ? [{ kind: 'file', name: 'pair.md' }] : [])
+  x.fs.exists = async (p: string) => p === KINDS || w.files.has(p)
+  w.put(`${KINDS}/pair.md`, PAIR_KIND)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  const [b] = boardWith('auto', ['npm test'], { kind: 'pair', stage: 'code', session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, stage: 'code' }] })
+  await saveBoard(w.$, b)
+  await loadKinds(w.$)
+  workers.clear()
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  S.startupDone = true
+  S.driving = true
+  try {
+    // the code stage hands back: its work is committed and tested in the folder, nothing is merged, and a fresh worker starts the review stage
+    await workerFinished(w.$, 'ag1', 'wrote the code')
+    expect(movedMain(w)).toBe(false)
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+    let t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('doing')
+    expect(t.stage).toBe('review')
+    expect(t.attempts).toBe(2)
+    expect(t.runs!.map(r => r.stage)).toEqual(['code', 'review'])
+    expect(t.stages!.map(r => `${r.name} ${r.result}${r.try ? ` try ${r.try}` : ''}`)).toEqual(['code passed try 1', 'check passed'])
+    expect(t.history).toContain('try 1 (code): wrote the code → stage code passed (check passed); next: stage review')
+    expect(spawned.length).toBe(1)
+    expect(spawned[0]!.cwd).toBe(WT)
+    expect(spawned[0]!.prompt).toContain('Stage review (3 of 4) of a pair task. Your job in this stage: Read what the code stage did and make it better.')
+    expect(spawned[0]!.prompt).toContain('- code (general): passed; report .symcc/reports/T-1-try-1.md')
+    // that report is copied into the folder, where the second worker can read it
+    expect(w.files.get(`${WT}/.symcc/reports/T-1-try-1.md`)).toContain('wrote the code')
+    // the review stage hands back: only now is the work merged, once
+    w.git.dirty = true
+    await workerFinished(w.$, 'ag2', 'made it better')
+    t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('done')
+    expect(w.calls.filter(c => / git update-ref .*refs\/heads\/main/.test(c)).length).toBe(1)
+    expect(w.git.main).toBe(H3)
+    expect(ranTests(w).length).toBe(2)
+    expect(t.history.at(-1)).toBe(`try 2 (review): made it better → merged into main (${H3.slice(0, 8)}); tests passed`)
+    expect(spawned.length).toBe(1)
+  } finally {
+    cleanUp()
+  }
+})
+
+test('a kind of two worker stages: a failing check between them goes back to its worker stage with the output, then fails once the go-backs are used up', async () => {
+  const w = world({}, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  S.me = 'me'
+  const KINDS = `${ROOT}/.symcc/kinds`
+  const x = w.$ as unknown as { fs: Record<string, unknown> }
+  x.fs.list = async (dir: string) => (dir === KINDS ? [{ kind: 'file', name: 'pair.md' }] : [])
+  x.fs.exists = async (p: string) => p === KINDS || w.files.has(p)
+  w.put(`${KINDS}/pair.md`, PAIR_KIND.replace('## check\ncheck: tests\n', '## check\ncheck: tests\non fail: back to code, 1 time\n'))
+  const [b] = boardWith('auto', ['npm test'], { kind: 'pair', stage: 'code', session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, stage: 'code' }] })
+  await saveBoard(w.$, b)
+  await loadKinds(w.$)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  try {
+    await workerFinished(w.$, 'ag1', 'wrote the code')
+    let t = find(await load(w.$), 'T-1')!
+    expect([t.status, t.stage, t.backs?.check]).toEqual(['todo', 'code', 1])
+    expect(t.test_output).toContain('FAIL a.test')
+    expect(t.note).toBe('stage check failed; a new try goes back to stage code (1 of 1)')
+    expect(movedMain(w)).toBe(false)
+    // the next try at code fails the check again: no go-backs left, so the task fails
+    await saveBoard(w.$, patchTask(await load(w.$), 'T-1', { status: 'doing', session: 'me', attempts: 2, runs: [...t.runs!, { started: ISO, stage: 'code' }] }, ISO))
+    w.git.dirty = true
+    workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+    await workerFinished(w.$, 'ag2', 'fixed it')
+    t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('failed')
+    expect(t.note).toContain('stage check still failed after going back to code 1 time')
+    expect(movedMain(w)).toBe(false)
+  } finally {
+    cleanUp()
+  }
+})
 
 test('/symcc-off then /symcc-on: the reply names the mode, the lead is told once, and T-1 gets a new worker', async () => {
   const { w, spawned } = await liveWorld()

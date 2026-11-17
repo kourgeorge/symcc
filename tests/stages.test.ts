@@ -1,9 +1,9 @@
 // Kind workflows step 2 (T-332): a kind file's body is read as its stage list (hooks/core/stages.ts).
-// Nothing runs the stages yet; these tests only check what is read.
+// Step 3 (T-334): nextStage says what comes after a stage (tests at the end of this file).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { parseKind, kindSkipReason, kindFileText } from '../hooks/board'
-import { parseStages, defaultStages, readKindRun, type Stage } from '../hooks/core/stages'
+import { parseStages, defaultStages, readKindRun, type Stage, nextStage, workerStageFor, retryStage, migratedStage, manyWorkers, workerAfter } from '../hooks/core/stages'
 import { S } from '../hooks/plugin/state'
 import { loadKinds } from '../hooks/plugin/kinds'
 import { BUILT_IN_KIND_TEXTS } from '../kinds'
@@ -89,4 +89,59 @@ test('a kind file written again keeps merges and merge_tests', () => {
   const text = kindFileText({ description: 'd', body: '## a\nworker: task', merges: false, mergeTests: false })
   expect(text).toBe('---\ndescription: d\nmerges: no\nmerge_tests: no\n---\n## a\nworker: task\n')
   expect(parseKind('x', text)).toMatchObject({ merges: false, mergeTests: false })
+})
+
+// ---------------- what comes after a stage (T-334) ----------------
+
+/** A kind of two worker stages: code, a tests check, review (another worker), a tests check that goes back to code once, then merge. */
+const PAIR = parseStages('## code\nworker: task\nDo it.\n\n## check\ncheck: tests\non fail: back to code, 2 times\n\n## review\nworker: tester\nLook again.\n\n## again\ncheck: tests\non fail: back to code, 1 time\n', 'pair') as Stage[]
+
+test('nextStage: a stage that passed goes on to the next one, and the last written stage to the merge step', () => {
+  const next = (stage?: string) => {
+    const n = nextStage(PAIR, { stage }, 'passed')
+    return n.go === 'next' ? n.stage.name : n.go
+  }
+  expect(next('code')).toBe('check')
+  expect(next('check')).toBe('review')
+  expect(next('again')).toBe('merge')
+  // no stage yet: the first one
+  expect(next(undefined)).toBe('check')
+  // a kind that doesn't merge ends after its last stage
+  const answer = parseStages('## research\nworker: task\n', 'answer', false) as Stage[]
+  expect(nextStage(answer, { stage: 'research' }, 'passed')).toEqual({ go: 'end' })
+})
+
+test('nextStage: a failed check goes back to its on fail stage, counting the go-backs; used up, the task fails', () => {
+  const n1 = nextStage(PAIR, { stage: 'check' }, 'failed')
+  expect(n1.go === 'back' && [n1.stage.name, n1.count, n1.times]).toEqual(['code', 1, 2])
+  const n2 = nextStage(PAIR, { stage: 'check', backs: { check: 1 } }, 'failed')
+  expect(n2.go === 'back' && [n2.stage.name, n2.count, n2.times]).toEqual(['code', 2, 2])
+  expect(nextStage(PAIR, { stage: 'check', backs: { check: 2 } }, 'failed')).toEqual({ go: 'failed', why: 'stage check still failed after going back to code 2 times' })
+  // each stage counts its own go-backs
+  const n3 = nextStage(PAIR, { stage: 'again', backs: { check: 2 } }, 'failed')
+  expect(n3.go === 'back' && [n3.stage.name, n3.count, n3.times]).toEqual(['code', 1, 1])
+  expect(nextStage(PAIR, { stage: 'again', backs: { again: 1 } }, 'failed').go).toBe('failed')
+})
+
+test('nextStage: a failed worker stage fails at once; a check with no on fail goes back to the worker before it, auto_retries times', () => {
+  expect(nextStage(PAIR, { stage: 'review' }, 'failed')).toEqual({ go: 'failed', why: 'stage review failed' })
+  const plain = parseStages('## code\nworker: task\n\n## lint\ncheck: run: npm run lint\n', 'plain') as Stage[]
+  const n = nextStage(plain, { stage: 'lint' }, 'failed', 2)
+  expect(n.go === 'back' && [n.stage.name, n.count, n.times]).toEqual(['code', 1, 2])
+  expect(nextStage(plain, { stage: 'lint', backs: { lint: 2 } }, 'failed', 2).go).toBe('failed')
+  expect(nextStage(plain, { stage: 'lint' }, 'failed', 0).go).toBe('failed')
+})
+
+test('the worker stage a task runs, where a merge-step failure goes back to, and the stage a task is migrated to', () => {
+  expect(workerStageFor(PAIR, 'check')!.name).toBe('code')
+  expect(workerStageFor(PAIR, 'again')!.name).toBe('review')
+  expect(workerStageFor(PAIR, undefined)!.name).toBe('code')
+  expect(workerStageFor(PAIR, 'gone')!.name).toBe('code')
+  expect([manyWorkers(PAIR), workerAfter(PAIR, 'code'), workerAfter(PAIR, 'review')]).toEqual([true, true, false])
+  // the tests after the last worker go back to code; a conflict goes to the last worker stage
+  expect([retryStage(PAIR)!.name, retryStage(PAIR, true)!.name]).toEqual(['code', 'review'])
+  const change = parseKind('change', BUILT_IN.change!)!.stages
+  expect(manyWorkers(change)).toBe(false)
+  expect([migratedStage(change, 'todo'), migratedStage(change, 'doing'), migratedStage(change, 'review'), migratedStage(change, 'done')]).toEqual(['code', 'code', 'tests', undefined])
+  expect(migratedStage(parseKind('investigation', BUILT_IN.investigation!)!.stages, 'review')).toBe('read')
 })
