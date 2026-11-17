@@ -142,6 +142,54 @@ export const outsideFolderText = (rel: string, worktree: string, dataDir = '.sym
 /** Characters that split a shell command into the words checked by bashOutsideFolder: spaces, quotes, operators, `$(...)`, `=` and `:`. */
 const SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/
 
+/** Characters (besides spaces outside quotes) that end a word in shellWords. */
+const WORD_END = /[;&|<>(){}$=:,`]/
+
+/**
+ * The words of simple command `text` as the shell reads them, so a path with a space in it stays whole: quotes are
+ * dropped and what is inside them kept together, and a backslash keeps the next character (a space too) in the word.
+ * Unlike the shell, `WORD_END` characters end a word even inside quotes, so `"--out=/x"` and `"$(cat /x)"` still give
+ * `/x`. A best effort, not a shell parser.
+ */
+function shellWords(text: string): string[] {
+  const out: string[] = []
+  let w = ''
+  let quote = ''
+  const cut = () => {
+    if (w) out.push(w)
+    w = ''
+  }
+  for (let i = 0; i < text.length; i++) {
+    let c = text[i]!
+    if (c === '\\' && quote !== "'") {
+      c = text[++i] ?? ''
+      if (c === '\n' || c === "'" || c === '"') continue
+      if (/\s/.test(c)) {
+        w += c
+        continue
+      }
+    } else if (quote) {
+      if (c === quote) {
+        quote = ''
+        continue
+      }
+    } else if (c === "'" || c === '"') {
+      quote = c
+      continue
+    } else if (/\s/.test(c)) {
+      cut()
+      continue
+    }
+    if (WORD_END.test(c)) cut()
+    else w += c
+  }
+  cut()
+  return out
+}
+
+/** `s` with every character that means something in a regular expression escaped. */
+const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')
+
 /** A piece of a shell command as bashOutsideFolder walks it: a simple command's text, or the operator between two. */
 type ShellPiece = { text: string } | { op: '&&' | '||' | ';' | '|' | '&' | '(' | ')' }
 
@@ -197,7 +245,8 @@ function cdTarget(text: string, home: string | undefined): string | null | undef
   if (quoted) arg = quoted[1]!
   const homeOk = home?.startsWith('/') ? home : undefined
   if (!arg) return m[1] === 'cd' ? (homeOk ?? null) : null
-  if (!/^[\w./~+@%,-]+$/.test(arg) || arg.startsWith('-')) return null
+  // spaces only inside quotes ("cd '/a b'"); a quoted "~" is no home folder
+  if (!(quoted ? /^[\w./+@%, -]+$/ : /^[\w./~+@%,-]+$/).test(arg) || arg.startsWith('-')) return null
   if (arg === '~' || arg.startsWith('~/')) return homeOk ? resolvePath(homeOk, arg.slice(1).replace(/^\/+/, '') || '.') : null
   return arg.includes('~') ? null : arg
 }
@@ -238,7 +287,7 @@ export function bashOutsideFolder(command: unknown, worktree: string, root: stri
       else if (p.op === '||') here = join(here, seen)
       continue
     }
-    for (const word of p.text.split(SHELL_SPLIT)) {
+    for (const word of new Set([...p.text.split(SHELL_SPLIT), ...shellWords(p.text)])) {
       const w = word.replace(/\\/g, '')
       const climbs = w.split('/').includes('..')
       const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
@@ -261,6 +310,21 @@ export function bashOutsideFolder(command: unknown, worktree: string, root: stri
     // only "&&" makes sure the cd worked before what follows runs
     here = op(after) === '&&' ? moved : join(here, moved)
     seen = join(seen, moved)
+  }
+  // backstop: the project folder written out whole anywhere in the text (plain, quoted, with "\ " for spaces, or
+  // from "~/"), up to the next space or operator, even where the words above came out wrong (a quote mid-path)
+  if (top === '/') return undefined
+  const flat = command.replace(/\\\n/g, '').replace(/["'\\]/g, '')
+  const homeDir = home?.startsWith('/') ? resolvePath('/', home) : undefined
+  const fromHome = homeDir ? inside(top, homeDir, false) : undefined
+  const B = String.raw`\s;&|<>(){}$=:,\``
+  const starts: [string, string][] = [[reEscape(top), '/']]
+  if (fromHome) starts.push([`~/${reEscape(fromHome)}`, homeDir!])
+  for (const [start, base] of starts) {
+    for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, 'gi'))) {
+      const rel = check(resolvePath(base, m[0].replace(/^~\/?/, '')))
+      if (rel !== undefined) return rel
+    }
   }
   return undefined
 }
