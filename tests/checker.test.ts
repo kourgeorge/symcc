@@ -303,3 +303,55 @@ for (const [tool, args, status, again, againText] of [
     expect(find(await load(w.$), 'T-1')!.status === 'todo' || find(await load(w.$), 'T-1')!.status === 'doing').toBe(true)
   })
 }
+
+for (const [tool, args, status, again, againText] of [
+  ['drop', { reason: 'not needed' }, 'dropped', 'retry', 'T-1 brought back from dropped and queued'],
+  ['pause', {}, 'paused', 'resume', 'T-1 resumed'],
+  ['ask', { question: 'Which way?' }, 'waiting', 'retry', 'T-1 queued'],
+] as const) {
+  test(`${tool} while the checker is still starting up stops it as soon as it starts: nothing merges, the task is ${status}, and ${again} works right after`, async () => {
+    const w = world()
+    await saveBoard(w.$, boardWith(true))
+    const a = w.$ as unknown as { agent: { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> } }
+    const real = a.agent.spawn
+    let reply = ''
+    a.agent.spawn = async o => {
+      if (o.name?.endsWith('-checker')) reply = await runTool(w.$, tool, { task: 'T-1', ...args })
+      return real(o)
+    }
+    const t = await finish(w)
+    expect(reply).not.toBe('')
+    const id = 'chk1'
+    expect(checkerRuns.size).toBe(0)
+    expect(stopped.has(id)).toBe(true)
+    expect(w.sends.some(m => m.to.agentId === id && m.text.startsWith('Stop now'))).toBe(true)
+    expect(w.git.main).toBe(M1)
+    expect(t.status).toBe(status)
+    expect(checkingNow('T-1')).toBe(false)
+    expect(stopAsked.has('T-1')).toBe(false)
+    expect(await runTool(w.$, again, { task: 'T-1' })).toBe(againText)
+  })
+}
+
+test('a drop that comes before the checker is spawned starts no checker at all', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const a = w.$ as unknown as { process: { run: (argv: string[], o?: { cwd?: string }) => Promise<Res> } }
+  const run = a.process.run
+  let dropped = false
+  // the drop lands while the checker step is still getting ready (reading the change for its prompt)
+  a.process.run = async (argv, o) => {
+    if (!dropped && argv[0] === 'git' && argv.some(x => x.endsWith('...HEAD'))) {
+      dropped = true
+      await runTool(w.$, 'drop', { task: 'T-1' })
+    }
+    return run(argv, o)
+  }
+  const t = await finish(w)
+  expect(dropped).toBe(true)
+  expect(w.spawns.some(s => s.name?.endsWith('-checker'))).toBe(false)
+  expect(checkerRuns.size).toBe(0)
+  expect(w.git.main).toBe(M1)
+  expect(t.status).toBe('dropped')
+  expect(checkingNow('T-1')).toBe(false)
+})

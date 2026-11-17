@@ -685,7 +685,7 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
  */
 async function afterChecker($: $, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
   turn?.(false)
-  const c = await runChecker($, t, b, dir)
+  const c = await runChecker($, t, b, dir, stop)
   turn?.(true)
   const { held: _held, ...passed } = r
   if (c.verdict?.ok) {

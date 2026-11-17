@@ -21,8 +21,10 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  * (no Edit or Write), and whatever it still changed in the folder is thrown away after. Its time limit is the board's
  * max_minutes: past it, it is stopped and there is no verdict. Its verdict goes into the task's history and its
  * tokens are added to the task's current try. Never throws: a checker that can't start gives no verdict.
+ * `stop`: why the task was stopped (dropped, paused, sent to the owner), if it was; looked at once the checker
+ * started too, so a stop that came while it was starting up (before haltChecker could see it) still stops it at once.
  */
-export async function runChecker($: $, t: SymccTask, b: Board, dir: string): Promise<CheckerOutcome> {
+export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined): Promise<CheckerOutcome> {
   await markStep($, t, 'checking', () => undefined)
   await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: 'a checker is trying to break it before it merges' }, now()) : x)).catch(() => undefined)
   const into = intoOf(t)
@@ -30,6 +32,12 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string): Pro
   const role = findRole(roles, CHECKER_ROLE)
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
   const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, details: t.details, branch: taskBranch(t), folder: dir, into, role: roleSection(role), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
+  const early = stop()
+  if (early) {
+    const why = `not started: the task was ${early}`
+    await record($, t, null, why)
+    return { verdict: null, why }
+  }
   let agentId: string
   try {
     const spawned = await $.agent.spawn({ prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, subagentType: S.N.scout, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
@@ -59,6 +67,12 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string): Pro
       }) ?? null
     } catch {
       timer = null
+    }
+    const late = stop()
+    if (late) {
+      stopped.add(agentId)
+      void $.session.send({ to: { agentId }, text: `Stop now: the task was ${late}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
+      done({ answer: null, why: `the task was ${late}` })
     }
   })
   await cleanFolder($, dir)
