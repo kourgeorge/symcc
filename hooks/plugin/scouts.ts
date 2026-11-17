@@ -7,15 +7,33 @@ import { tellLead } from './tell'
 
 // ---------------- scouts ----------------
 
+/** The scout files (names like "b.md") the last loadScouts could not read and skipped; /symcc-scouts names them. */
+export let unreadableScouts: string[] = []
+
+/** The warning /symcc-scouts shows for the skipped files, or '' when every scout file could be read. */
+export const unreadableScoutsText = () => unreadableScouts.map(f => `${f}: can't be read, skipped (fix or remove ${S.N.scouts}/${f})`).join('\n')
+
+/** The scouts in <dir>/scouts/*.md. A file that can't be read is skipped (and kept in unreadableScouts), so one
+ *  broken file never stops the other scouts or the session start. */
 export async function loadScouts($: $): Promise<ScoutDef[]> {
   const dir = path(S.N.scouts)
-  if (!(await $.fs.exists(dir))) return []
+  if (!(await $.fs.exists(dir))) return (unreadableScouts = [], [])
   const out: ScoutDef[] = []
+  const bad: string[] = []
   for (const f of await $.fs.list(dir)) {
     if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
-    const s = parseScout(f.name.replace(/\.md$/, ''), await $.fs.read(`${dir}/${f.name}`))
+    const text = await $.fs.read(`${dir}/${f.name}`).then(
+      t => t,
+      () => null,
+    )
+    if (text === null) {
+      bad.push(f.name)
+      continue
+    }
+    const s = parseScout(f.name.replace(/\.md$/, ''), text)
     if (s) out.push(s)
   }
+  unreadableScouts = bad
   return out
 }
 

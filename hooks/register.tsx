@@ -19,7 +19,7 @@ import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
 import { loadRoles } from './plugin/roles'
-import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused } from './plugin/scouts'
+import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
 import { seePlan, seeMainMode } from './plugin/plan'
@@ -141,7 +141,7 @@ export const register: Register = on => {
       if (!(await $.fs.exists(path(S.N.boardFile)))) await publish($, await load($))
       // A new project (no scouts folder yet) gets the plugin's example scouts, all paused (no timer runs them; run now still does); never stops the start.
       await seedExampleScouts($).catch(() => undefined)
-      await scheduleScouts($)
+      await scheduleScouts($).catch(() => undefined)
       await loadRoles($).catch(() => undefined)
       await cleanLeftoverTmp($).catch(() => undefined)
       S.watchdog?.cancel()
@@ -314,9 +314,12 @@ export const register: Register = on => {
         await publish($, await load($))
         // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
         const placed = await openPane($, { tab: 'scouts' }).then(r => r.isPlaced).catch(() => false)
-        if (placed) return say(`Scouts opened: Enter opens a scout, t tasks, b goes back to the tasks.`)
+        const skipped = unreadableScoutsText()
+        const withSkipped = (text: string) => (skipped ? `${text}\n${skipped}` : text)
+        if (placed) return say(withSkipped(`Scouts opened: Enter opens a scout, t tasks, b goes back to the tasks.`))
+        if (!defs.length && skipped) return { text: skipped }
         if (!defs.length) return { text: `No scouts yet. Add one as ${S.N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
-        return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') }
+        return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') + (skipped ? `\n${skipped}` : '') }
       }
       case 'scout':
         return { text: await runScoutNow($, cmd.name) }
