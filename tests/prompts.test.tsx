@@ -1,21 +1,19 @@
-// Editable worker prompts (T-286): the built-in prompts with their placeholders filled in, the owner's
-// .symcc/prompts/<kind>.md over them, reset, the warning for a missing {{ask}}, the lead's prompts tool and
-// the Prompts page in Settings.
+// Built-in worker prompts: the prompts in prompts/*.ts with their placeholders filled in. They can't be
+// overridden (a .symcc/prompts/<kind>.md file is ignored), the lead has no prompts tool, and Settings has no
+// Prompts row: roles are the one place to shape what a worker does.
 import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccTask } from '../types'
-import { addTask, emptyBoard, patchTask, fillPrompt, promptProblems, BUILT_IN_PROMPTS, PROMPT_PLACEHOLDERS, type Board } from '../hooks/board'
-import { S, leadQueue, warnedPrompts } from '../hooks/plugin/state'
-import { loadPrompts } from '../hooks/plugin/prompts'
+import { addTask, emptyBoard, patchTask, fillPrompt, placeholdersIn, fillRole, ROLE_PLACEHOLDERS, type RoleDef, BUILT_IN_PROMPTS, PROMPT_KINDS, PROMPT_PLACEHOLDERS, type Board } from '../hooks/board'
+import { S } from '../hooks/plugin/state'
 import { WORKER_PROMPT } from '../hooks/plugin/workers'
-import { runTool } from '../hooks/plugin/tools'
+import { TOOLS } from '../hooks/plugin/tools'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, entry } from './fakes'
 
 const ROOT = '/proj'
-const MINE = `${ROOT}/.symcc/prompts`
 const WT = `${ROOT}/.symcc/worktrees/T-1`
 const ISO = '2026-11-16T00:00:00.000Z'
 const ASK = 'To ask the owner something, call the mcp__symcc__ask_owner tool. If an edit is refused as outside your files, stop and hand back.'
@@ -27,44 +25,11 @@ function boardWith(test_commands: string[] = [], extra: Partial<SymccTask> = {})
   return patchTask(b, t.id, { status: 'doing', attempts: 1, ...extra }, ISO)
 }
 
-/** A fake $ whose only files are the owner's prompts (`mine`: file name -> text); write and `rm -f` change them. `toasts` and `logged` record what was said. */
-function setup(mine: Record<string, string> = {}) {
-  const toasts: string[] = []
-  const name = (p: string) => (p.startsWith(`${MINE}/`) ? p.slice(MINE.length + 1) : null)
-  const $ = {
-    plugin: { root: '/plugin' },
-    fs: {
-      exists: async (p: string) => p === MINE || (name(p) ?? '') in mine,
-      list: async () => Object.keys(mine).map(n => entry(n)),
-      read: async (p: string) => {
-        const n = name(p)
-        if (n === null || !(n in mine)) throw new Error('no file')
-        return mine[n]
-      },
-      write: async (p: string, text: string) => {
-        const n = name(p)
-        if (n !== null) mine[n] = String(text)
-      },
-    },
-    process: {
-      run: async (argv: string[]) => {
-        const n = argv[0] === 'rm' ? name(argv[argv.length - 1]!) : null
-        if (n !== null) delete mine[n]
-        return { exitCode: 0, stdout: '', stderr: '' }
-      },
-    },
-    ui: { invalidate: () => undefined, toast: (t: string) => void toasts.push(t), log: () => undefined, status: () => undefined },
-    clock: { after: () => undefined },
-  }
+/** Starts each test in a project. */
+function setup() {
   S.root = ROOT
-  S.prompts = {}
   S.enabledNow = true
-  leadQueue.splice(0)
-  warnedPrompts.clear()
-  return { $, mine, toasts }
 }
-
-const call = async ($: unknown, args: Record<string, unknown>) => String(await runTool($ as never, 'prompts', args as never))
 
 test('the built-in prompts are filled in for the task: no placeholder is left, and the change prompt has the test rule', () => {
   setup()
@@ -87,7 +52,7 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(q).not.toContain(TEST_RULE)
   expect(q.endsWith(ASK)).toBe(true)
   // every placeholder written in a built-in prompt is one symcc knows
-  for (const k of ['change', 'investigation'] as const) expect(promptProblems(k, BUILT_IN_PROMPTS[k])).toEqual([])
+  for (const k of PROMPT_KINDS) for (const p of placeholdersIn(BUILT_IN_PROMPTS[k])) expect(PROMPT_PLACEHOLDERS[k]).toHaveProperty(p)
 })
 
 test('several test commands are shown to the worker one per line, each run on its own, not joined with &&', () => {
@@ -99,91 +64,34 @@ test('several test commands are shown to the worker one per line, each run on it
 })
 
 test('placeholders are filled in one pass: "{{files}}" in the task\'s details stays as written', () => {
-  const out = fillPrompt('change', 'A {{details}} B {{merge_main}}{{test_output}}{{ask}}', { details: 'see {{files}}', files: 'NO', merge_main: '', test_output: '', ask: 'ASK' })
-  expect(out).toBe('A see {{files}} B ASK')
-  // an unknown placeholder is left as written and named as a problem
-  expect(fillPrompt('change', '{{details}} {{nope}} {{merge_main}}{{test_output}}{{ask}}', { details: 'd', merge_main: '', test_output: '', ask: 'a' })).toBe('d {{nope}} a')
-  expect(promptProblems('change', '{{details}} {{nope}} {{merge_main}}{{test_output}}{{ask}}')).toEqual(['{{nope}} is not a placeholder of the change prompt: it is left as written'])
+  setup()
+  const b = boardWith([], { details: 'see {{files}} and {{nope}}' })
+  const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
+  expect(p).toContain('Task T-1: Do it\nsee {{files}} and {{nope}}')
+  expect(fillPrompt('investigation', { details: 'D {{ask}}', ask: 'A' })).toContain('D {{ask}}')
   expect(PROMPT_PLACEHOLDERS.change).toHaveProperty('test_command')
 })
 
-test("the owner's .symcc/prompts/change.md is used instead of the built-in one; reset brings the built-in back", async () => {
-  const { $, mine } = setup({ 'change.md': 'Mine: {{task_id}} in {{folder}}.\n{{details}}\nTests: {{test_command}}\n{{ask}}\n' })
-  await loadPrompts($ as never)
+test("a role's checklist may use the prompt's placeholders: {{files}} and {{test_command}} come out filled in in the worker's prompt", () => {
+  setup()
+  const role: RoleDef = { name: 'tester', description: 'writes tests', skills: [], prompt: '- only touch {{files}}\n- run: {{test_command}}\n- {{task_id}} on {{branch}} in {{folder}}\n- left: {{nope}} {{role}} {{ask}}' }
   const b = boardWith(['npm test'])
-  const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
-  expect(p).toBe(`Mine: T-1 in ${WT}.\nMake it work.\nTests: After you finish, these must pass (run them in that folder to check): npm test\n${ASK}`)
-  expect(p).not.toContain(TEST_RULE)
-  // the investigation prompt is still the built-in one
-  const i = boardWith([], { kind: 'investigation' } as Partial<SymccTask>)
-  expect(WORKER_PROMPT(i.tasks[0]!, i, WT)).toContain('This task is an investigation')
-  expect(await call($, { action: 'reset', name: 'change' })).toContain('the change prompt is the built-in one again')
-  expect('change.md' in mine).toBe(false)
-  expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).toContain(TEST_RULE)
-  expect(await call($, { action: 'reset', name: 'change' })).toContain('already the built-in one')
+  const p = WORKER_PROMPT(b.tasks[0]!, b, WT, role)
+  expect(p).toContain('Your role: tester\n- only touch Files you may change: src/. This is the full list')
+  expect(p).toContain('- run: After you finish, these must pass (run them in that folder to check): npm test')
+  expect(p).toContain(`- T-1 on symcc/T-1 in ${WT}`)
+  // an unknown {{word}}, and the prompt's own bigger parts, are left as written
+  expect(p).toContain('- left: {{nope}} {{role}} {{ask}}')
+  expect(fillRole('{{title}} / {{details}}', { title: 'T', details: 'D' })).toBe('T / {{details}}')
+  expect(ROLE_PLACEHOLDERS).not.toHaveProperty('role')
 })
 
-test('a prompt file without {{ask}} is warned about once (owner and lead), and the ask line is still added at the end', async () => {
-  const { $, toasts } = setup({ 'change.md': 'Do {{task_id}}: {{details}}{{merge_main}}{{test_output}}\n' })
-  await loadPrompts($ as never)
-  expect(toasts.join('\n')).toContain('.symcc/prompts/change.md: {{ask}} is missing')
-  expect(leadQueue.join('\n')).toContain("The owner's worker prompt .symcc/prompts/change.md: {{ask}} is missing")
-  const b = boardWith()
-  expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).toBe(`Do T-1: Make it work.\n${ASK}`)
-  // read again with the same text: no second warning
-  await loadPrompts($ as never)
-  expect(toasts.length).toBe(1)
-  // {{details}} missing too: the task is added at the end
-  const out = fillPrompt('change', 'Hello.', { task_id: 'T-9', title: 'T', details: 'D', merge_main: '', test_output: '', ask: 'A' })
-  expect(out).toBe('Hello.\n\nTask T-9: T\nD\nA')
-  // an empty file: the built-in prompt is used, with a warning
-  expect(promptProblems('change', '  \n')).toEqual(['the file is empty, so the built-in prompt is used'])
-  expect(fillPrompt('change', '', { ask: 'A' })).toContain('Add or update a test')
+test('the lead has no prompts tool', () => {
+  setup()
+  expect(TOOLS().map(t => t.name)).not.toContain('prompts')
 })
 
-test('a change prompt without {{merge_main}} or {{test_output}} is warned about, and both are still added at the end', () => {
-  const both = '{{details}}\n{{merge_main}}{{test_output}}{{ask}}'
-  expect(promptProblems('change', both)).toEqual([])
-  expect(promptProblems('change', '{{details}}\n{{test_output}}{{ask}}')).toEqual(['{{merge_main}} is missing (how the worker merges the moved branch after a conflict): it is added at the end'])
-  expect(promptProblems('change', '{{details}}\n{{merge_main}}{{ask}}')).toEqual(['{{test_output}} is missing (why the last try failed its tests): it is added at the end'])
-  // the investigation prompt doesn't use them, so it doesn't need them
-  expect(promptProblems('investigation', '{{details}}\n{{ask}}')).toEqual([])
-  const values = { details: 'D', merge_main: '\nFirst, run `git merge main`.\n', test_output: '\nFAIL a.test\n', ask: 'ASK' }
-  const out = fillPrompt('change', '{{details}}\n{{ask}}', values)
-  expect(out).toContain('run `git merge main`')
-  expect(out).toContain('FAIL a.test')
-  expect(out).toBe('D\nASK\nFirst, run `git merge main`.\n\nFAIL a.test')
-  // when neither is needed (empty values) nothing shows
-  expect(fillPrompt('change', '{{details}}\n{{ask}}', { ...values, merge_main: '', test_output: '' })).toBe('D\nASK')
-})
-
-test("the lead's prompts tool lists both, shows one in full, edits (with text or as a copy) and refuses bad input", async () => {
-  const { $, mine } = setup()
-  const list = await call($, {})
-  expect(list).toContain('- change (built-in):')
-  expect(list).toContain('- investigation (built-in):')
-  const one = await call($, { action: 'list', name: 'change' })
-  expect(one).toContain('{{test_command}}:')
-  expect(one).toContain(TEST_RULE)
-  expect(one).toContain('edit copies it to .symcc/prompts/change.md')
-  // edit with no text copies the prompt as it is now to the owner's file
-  expect(await call($, { action: 'edit', name: 'investigation' })).toContain('copied the investigation prompt to .symcc/prompts/investigation.md')
-  expect(mine['investigation.md']).toBe(BUILT_IN_PROMPTS.investigation)
-  // edit with text saves it, and says what is wrong with it
-  const saved = await call($, { action: 'edit', name: 'change', text: 'Only {{details}}' })
-  expect(saved).toContain('saved the change prompt (.symcc/prompts/change.md)')
-  expect(saved).toContain('{{ask}} is missing')
-  expect(saved).toContain('it counts from the next worker on')
-  expect(mine['change.md']).toBe('Only {{details}}\n')
-  expect(await call($, {})).toContain('- change (yours: .symcc/prompts/change.md)')
-  expect(await call($, { action: 'edit', name: 'change', text: '  ' })).toContain('text is empty')
-  expect(await call($, { action: 'edit', name: '../x' })).toContain('no prompt named ../x')
-  expect(await call($, { action: 'edit' })).toContain('say which prompt to edit')
-  expect(await call($, { action: 'drop', name: 'change' })).toContain('unknown action')
-  expect(Object.keys(mine).sort()).toEqual(['change.md', 'investigation.md'])
-})
-
-// ---------------- the Prompts page ----------------
+// ---------------- Settings ----------------
 
 const PANE = {
   plugin: 'symcc',
@@ -241,34 +149,14 @@ function fakePrompts(on: On, mine: Record<string, string>) {
   mock.clock(on, { now: 1_800_000_000_000 })
 }
 
-test('Settings has a Prompts row; its page lists both prompts, opens one, edits it into .symcc/prompts/ and resets it', async ($, on) => {
+test('Settings has no Prompts row, even with a .symcc/prompts/change.md file', async ($, on) => {
   stateOf(on, VIEW)
-  const mine: Record<string, string> = {}
-  fakePrompts(on, mine)
+  fakePrompts(on, { 'change.md': 'Mine: {{details}}' })
   await $.session.start({ cwd: '/proj' } as never)
   const ui = await $.ui.mount(PANE)
-  expect((await ui.find({ key: 'settings-prompts' }))?.props.label).toBe('Prompts: built-in')
-  await ui.press({ key: 'settings-prompts' })
-  expect((await ui.find({ key: 'promptRow:change' }))?.props.label).toBe('change: built-in')
-  expect((await ui.find({ key: 'promptRow:investigation' }))?.props.label).toBe('investigation: built-in')
-  await ui.press({ key: 'promptRow:change' })
-  expect(await ui.find({ type: 'Text', text: /Add or update a test that checks your change/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^\{\{test_command\}\}$/ })).toBeDefined()
-  expect(await ui.find({ key: 'prompt-reset' })).toBeUndefined()
-  // Edit, change the text, Save: the owner's file is written
-  await ui.press({ key: 'prompt-edit' })
-  expect(await ui.find({ type: 'Text', text: /save writes \.symcc\/prompts\/change\.md/ })).toBeDefined()
-  await ui.input({ key: 'prompt-text', text: 'Mine: {{details}}', kind: 'change' })
-  await ui.press({ key: 'prompt-save' })
-  expect(mine['change.md']).toBe('Mine: {{details}}\n')
-  // back on its page: yours, the warning about {{ask}}, and Reset to built-in
-  expect(await ui.find({ type: 'Text', text: /\{\{ask\}\} is missing/ })).toBeDefined()
-  await ui.press({ key: 'prompt-reset' })
-  expect('change.md' in mine).toBe(false)
-  expect(await ui.find({ key: 'prompt-reset' })).toBeUndefined()
-  await ui.press({ key: 'prompt-back' })
-  expect((await ui.find({ key: 'promptRow:change' }))?.props.label).toBe('change: built-in')
-  await ui.press({ key: 'prompts-back' })
   expect(await ui.find({ key: 'setting:mode' })).toBeDefined()
+  expect(await ui.find({ key: 'settings-roles' })).toBeDefined()
+  expect(await ui.find({ key: 'settings-prompts' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^Prompts/ })).toBeUndefined()
   await ui.unmount()
 })

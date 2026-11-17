@@ -31,7 +31,8 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop
   const roles = await loadRoles($).catch(() => S.roles)
   const role = findRole(roles, CHECKER_ROLE)
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, details: t.details, branch: taskBranch(t), folder: dir, into, role: roleSection(role), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
+  const facts = { name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir }
+  const prompt = checkerPrompt({ ...facts, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`

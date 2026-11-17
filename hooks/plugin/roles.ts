@@ -1,4 +1,4 @@
-import { type RoleDef, NEW_ROLE_TEMPLATE, parseRole, roleSkipReason, mergeRoles, EXTRA_TOOLS, DEFAULT_ROLE, roleNameError, roleTools, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
+import { type RoleDef, type PromptKind, NEW_ROLE_TEMPLATE, parseRole, roleSkipReason, mergeRoles, EXTRA_TOOLS, DEFAULT_ROLE, roleNameError, roleTools, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
 import type { BrokenDef } from '../core/def-files'
 import { type $, skippedRoles, S } from './state'
 import { type DefKind, loadDefs, defLists, manageDefs, newDefFile } from './def-files'
@@ -92,6 +92,8 @@ export const roleView = {
   draft: null as RoleDraft | null,
   confirmRemove: false,
   naming: null as { name: string; error: string } | null,
+  /** the built-in prompt shown on the opened role's page, view only ('' = none) */
+  prompt: '' as PromptKind | '',
 }
 
 /** Closes the Roles page and everything on it. */
@@ -101,6 +103,7 @@ export function resetRoleView() {
   roleView.draft = null
   roleView.confirmRemove = false
   roleView.naming = null
+  roleView.prompt = ''
 }
 
 /** The edit mode for role `r`, filled from it. */

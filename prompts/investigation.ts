@@ -1,7 +1,7 @@
 // The built-in prompt of an investigation's worker (it finds an answer and hands it back; nothing is kept).
-// To change it for your project, don't edit this file: use the Prompts page (Settings) or the lead's prompts
-// tool, which write .symcc/prompts/investigation.md, and that file is used instead. The {{...}} words are
-// placeholders symcc fills in for each task (see hooks/core/prompts.ts and docs/guide.md, "Worker prompts").
+// This is the built-in prompt; it can't be swapped out per project. To shape what a worker does, use roles
+// (roles/*.md, or the Roles page in Settings): a role fills the {{role}} slot below. The other {{...}} words
+// are placeholders symcc fills in for each task (see hooks/core/prompts.ts).
 export default `You are a {{name}} worker. Do exactly this one investigation, then stop.
 
 This task is an investigation: your job is to find the answer and hand it back in full. Your hand-back is the result; the owner reads it. Nothing is committed, tested or merged.

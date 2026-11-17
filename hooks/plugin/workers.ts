@@ -9,7 +9,6 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers } from './checker'
 import { loadKinds } from './kinds'
-import { loadPrompts, promptTemplate } from './prompts'
 import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
@@ -20,25 +19,25 @@ import { sayDone, sayNeedsYou } from './voice'
 /** A task's history without the "created by ..." line: what earlier tries did. */
 export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith('created by '))
 
-/** The prompt a worker on task `t` is started with: its kind's prompt (the owner's .<name>/prompts/<kind>.md, else the built-in one; see
- *  loadPrompts) with the placeholders filled in for this task. */
+/** The prompt a worker on task `t` is started with: its kind's built-in prompt with the placeholders filled in for this task.
+ *  The role's checklist goes in {{role}}, with its own placeholders filled in from the same values. */
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
-  return fillPrompt(kind, promptTemplate(kind), kind === 'investigation' ? investigationValues(t, dir, role) : changeValues(t, b, dir, role))
+  const values = kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)
+  return fillPrompt(kind, { ...values, role: roleSection(role, values) })
 }
 
 /** The last tries, as the prompts list them. */
 const triesList = (t: SymccTask) => tries(t).slice(-5).map(line => `- ${line}`).join('\n')
 
 /** The placeholders both prompts share. */
-const sharedValues = (t: SymccTask, dir: string, role?: RoleDef): Record<string, string> => ({
+const sharedValues = (t: SymccTask, dir: string): Record<string, string> => ({
   name: S.N.name,
   task_id: t.id,
   title: t.title,
   details: t.details,
   branch: taskBranch(t),
   folder: dir,
-  role: roleSection(role),
   // The task's kind and what it is for (from its kind file; see loadKinds).
   kind: kindSection(kindOf(t), S.kinds),
   // How a worker asks the owner and what a refused edit means (see hooks/plugin/ask.ts).
@@ -46,15 +45,15 @@ const sharedValues = (t: SymccTask, dir: string, role?: RoleDef): Record<string,
 })
 
 /** The placeholders of an investigation's prompt: find the answer and hand it back in full; nothing it changes is kept. */
-const investigationValues = (t: BoardTask, dir: string, role?: RoleDef): Record<string, string> => ({
-  ...sharedValues(t, dir, role),
+const investigationValues = (t: BoardTask, dir: string): Record<string, string> => ({
+  ...sharedValues(t, dir),
   earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\n` : '',
   ask_more: askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : '',
 })
 
 /** The placeholders of a change's prompt: change the files, which are then committed, tested and merged. */
-const changeValues = (t: SymccTask, b: Board, dir: string, role?: RoleDef): Record<string, string> => ({
-  ...sharedValues(t, dir, role),
+const changeValues = (t: SymccTask, b: Board, dir: string): Record<string, string> => ({
+  ...sharedValues(t, dir),
   files: `Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}`,
   test_command: b.test_commands.length === 1 ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands[0]}`
@@ -108,8 +107,6 @@ export async function startWorker($: $, id: string) {
     const roles = await loadRoles($)
     // the kind files are read again too, so the prompt has the kind's description as it is now
     await loadKinds($).catch(() => undefined)
-    // the owner's prompt files are read again, so an edit counts from this worker on
-    await loadPrompts($).catch(() => undefined)
     const t = await change($, x => {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]

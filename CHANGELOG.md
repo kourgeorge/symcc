@@ -35,6 +35,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - git's real error is shown when symcc's own commit, git add, bring-up-to-date merge or moving main fails.
 
 ### Changed
+- The worker prompts are built-in only: the Prompts page, the lead's `prompts` tool and `.symcc/prompts/*.md` overrides are gone. Roles are the one place to shape a worker: a role fills the `{{role}}` slot of the fixed prompt, its checklist may use placeholders like `{{files}}` and `{{test_command}}`, and a role's page lists them and shows the prompt it goes in (view only).
 - Workers ask you through a small `ask_owner` tool (a question and 2 to 6 choices), and an edit outside a task's files is refused and becomes a file request. symcc no longer reads `QUESTION:`, `OPTIONS:` or `NEED FILES:` lines out of a worker's hand-back, so a report that happens to contain them is merged normally.
 - Pausing a scout now only stops its timer: "run now" (`r` on its page, `/symcc-scout <name>`, or the lead's `scouts run`) still runs a paused scout once, and it stays paused. You can try an example scout without resuming it.
 - The `target_branch` setting is gone. Each task now merges into the branch you were on when you asked for it.

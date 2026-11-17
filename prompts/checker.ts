@@ -1,5 +1,6 @@
 // The built-in prompt of a checker: a fresh worker that tries to break a finished change before it merges (the
-// checker setting; see hooks/core/checker.ts). The {{...}} words are filled in for each task.
+// checker setting; see hooks/core/checker.ts). It is built-in only; the checker role (roles/checker.md, the Roles page)
+// fills its {{role}} slot and is how you shape what a checker does. The other {{...}} words are filled in for each task.
 export default `You are a {{name}} checker. A worker has just finished task {{task_id}} and its tests passed. Before it merges, your job is to try to break it.
 
 The change is in this folder, on branch {{branch}} (everything is committed):

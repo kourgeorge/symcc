@@ -325,6 +325,9 @@ export const rolesKeys = (): KeyHint[] => [
   { key: 'b', word: 'back' },
 ]
 
+/** The keys at the bottom of the view of the built-in prompt a role goes in (view only). */
+export const rolePromptKeys = (): KeyHint[] => [{ key: 'b', word: 'back' }]
+
 /** The keys at the bottom of the Kinds page (opened from Settings): the same as the Roles page's. A kind's own page and
  *  edit page use roleKeys and roleEditKeys. */
 export const kindsKeys = (): KeyHint[] => [
@@ -336,9 +339,10 @@ export const kindsKeys = (): KeyHint[] => [
 ]
 
 /** The keys at the bottom of a role's page; which ones depend on its buttons. */
-export function roleKeys(o: { canEdit?: boolean; canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean }): KeyHint[] {
+export function roleKeys(o: { canEdit?: boolean; canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean; canSeePrompt?: boolean }): KeyHint[] {
   return [
     ...(o.canEdit === false ? [] : [{ key: 'e', word: 'edit' }]),
+    ...(o.canSeePrompt ? [{ key: 'p', word: 'the prompt it goes in' }] : []),
     ...(o.canOff ? [{ key: 'o', word: o.off ? 'turn on' : 'turn off' }] : []),
     ...(o.canReset ? [{ key: 'r', word: 'reset to built-in' }] : []),
     ...(o.canRemove ? [{ key: 'd', word: 'remove' }] : []),

@@ -1,7 +1,7 @@
 // The built-in prompt of a change task's worker (the files are changed, then committed, tested and merged).
-// To change it for your project, don't edit this file: use the Prompts page (Settings) or the lead's prompts
-// tool, which write .symcc/prompts/change.md, and that file is used instead. The {{...}} words are
-// placeholders symcc fills in for each task (see hooks/core/prompts.ts and docs/guide.md, "Worker prompts").
+// This is the built-in prompt; it can't be swapped out per project. To shape what a worker does, use roles
+// (roles/*.md, or the Roles page in Settings): a role fills the {{role}} slot below. The other {{...}} words
+// are placeholders symcc fills in for each task (see hooks/core/prompts.ts).
 export default `You are a {{name}} worker. Do exactly this one task, then stop.
 
 Work ONLY inside this folder, your own copy of the project on branch {{branch}}:

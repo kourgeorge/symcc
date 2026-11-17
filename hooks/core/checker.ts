@@ -6,6 +6,7 @@ import CHECKER_PROMPT from '../../prompts/checker'
 import type { Board } from './board-file'
 import { isDocFile } from './review'
 import { testTail } from './settings'
+import { fillPlaceholders } from './prompts'
 
 /** The role a checker runs as (roles/checker.md; the owner's .<name>/roles/checker.md is used instead). */
 export const CHECKER_ROLE = 'checker'
@@ -56,8 +57,7 @@ export const checkerDiff = (diff: string): string => {
 export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string }
 
 /** A checker's prompt (prompts/checker.ts) with `v` filled in. */
-export const checkerPrompt = (v: CheckerValues): string =>
-  CHECKER_PROMPT.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (all, p: string) => (p in v ? v[p as keyof CheckerValues] : all)).trimEnd()
+export const checkerPrompt = (v: CheckerValues): string => fillPlaceholders(CHECKER_PROMPT, v, v).trimEnd()
 
 /** The history line of a checker's verdict. */
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>

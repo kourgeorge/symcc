@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, type PromptKind, PROMPT_KINDS, PROMPT_ABOUT, PROMPT_PLACEHOLDERS, BUILT_IN_PROMPTS, promptProblems, promptSource, promptFileOf, builtInPromptFile, promptsKeys, promptKeys, promptEditKeys, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, BUILT_IN_PROMPTS, PROMPT_KINDS, type PromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { type $, S } from '../state'
 import { resetPane } from './open'
@@ -7,7 +7,6 @@ import { ownerSettings } from '../tools'
 import { load } from '../store'
 import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../roles'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
-import { loadPrompts, promptView, savePromptDraft, changePrompt } from '../prompts'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 
@@ -88,6 +87,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
       {buttonRows([
         <Button key="role-back" label="Back" hotkey="b" autoFocus={roleView.confirmRemove ? undefined : true} onPress={() => ((roleView.open = ''), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
         <Button key="role-edit" label="Edit" hotkey="e" onPress={() => ((roleView.draft = roleDraftOf(r)), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
+        <Button key="role-prompt" label="See the prompt" hotkey="p" onPress={() => ((roleView.prompt = 'change'), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
         canOff && <Button key="role-off" label={r.off ? 'Turn on' : 'Turn off'} hotkey="o" onPress={run({ action: r.off ? 'on' : 'off', name: r.name })} />,
         canReset && <Button key="role-reset" label="Reset to built-in" hotkey="r" onPress={run({ action: 'reset', name: r.name })} />,
         canRemove && <Button key="role-remove" label="Remove" hotkey="d" onPress={() => ((roleView.confirmRemove = true), $.ui.invalidate('ui.render'))} />,
@@ -109,13 +109,62 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
         {r.prompt.trim() ? paragraphs(r.prompt.trim()) : <Text color={C('inactive')}>(none: a plain worker)</Text>}
       </Box>
       <Box flexDirection="column">
+        {heading('Placeholders')}
+        <Text color={C('inactive')}>  the checklist may use these; each is filled in for the task (any other {'{{word}}'} is left as written)</Text>
+        {Object.entries(ROLE_PLACEHOLDERS).map(([p, m]) => (
+          <Text key={`role-holder-${p}`}>
+            {'  '}
+            <Text bold color={C('ide')}>{`{{${p}}}`}</Text>
+            <Text color={C('inactive')}> {m}</Text>
+          </Text>
+        ))}
+      </Box>
+      <Box flexDirection="column">
         {heading('File')}
         <Text>
           {'  '}
           <Text color={C('autoAccept')}>{source === 'built-in' ? `roles/${r.name}.md (in the plugin; Edit copies it to ${roleFileOf(r.name)})` : roleFileOf(r.name)}</Text>
         </Text>
       </Box>
-      {footer(roleKeys({ canEdit: true, canOff, off: !!r.off, canReset, canRemove }), 'role-keys')}
+      {footer(roleKeys({ canEdit: true, canOff, off: !!r.off, canReset, canRemove, canSeePrompt: true }), 'role-keys')}
+    </Box>
+  )
+}
+
+/** The built-in prompt role `r` is put into, view only (opened from its page with See the prompt; Back returns there): its text with
+ *  the {{role}} slot marked, so it is clear where the checklist goes. The prompts are built-in: roles are how a worker is shaped. */
+function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: PromptKind) {
+  const { Box, Text, Button, C, heading, footer, buttonRows } = pane
+  const show = (k: PromptKind | '') => () => ((roleView.prompt = k), $.ui.invalidate('ui.render'))
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text>
+          <Text bold color={C('claude')}>{kind} prompt</Text>
+          <Text color={C('inactive')}> · built-in, view only</Text>
+        </Text>
+        <Text color={C('inactive')}>what a worker on a {kind} task is told; role {r.name}'s checklist goes where {ROLE_SLOT} is</Text>
+      </Box>
+      {buttonRows([
+        <Button key="role-prompt-back" label="Back" hotkey="b" autoFocus onPress={show('')} />,
+        ...PROMPT_KINDS.filter(k => k !== kind).map(k => <Button key={`role-prompt-${k}`} label={`The ${k} prompt`} onPress={show(k)} />),
+      ], 'role-prompt-buttons')}
+      <Box flexDirection="column">
+        {heading('Text')}
+        {BUILT_IN_PROMPTS[kind].trimEnd().split('\n').map((line, i) => {
+          if (!line.includes(ROLE_SLOT)) return <Text key={`role-prompt-line-${i}`}>{line || ' '}</Text>
+          const [before, ...after] = line.split(ROLE_SLOT)
+          return (
+            <Text key={`role-prompt-line-${i}`}>
+              {before}
+              <Text bold color={C('warning')}>{ROLE_SLOT}</Text>
+              {after.join(ROLE_SLOT)}
+              <Text color={C('warning')}>{`  ◀ role ${r.name}'s checklist goes here`}</Text>
+            </Text>
+          )
+        })}
+      </Box>
+      {footer(rolePromptKeys(), 'role-prompt-keys')}
     </Box>
   )
 }
@@ -401,116 +450,6 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
   )
 }
 
-// ---------------- the Prompts page ----------------
-
-/** One prompt's edit mode: one big box with the whole text, Save and Cancel (x). The box takes every letter, so Cancel is the way out. */
-function promptEditPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, act, C, heading, footer } = pane
-  const d = promptView.draft!
-  const cancel = () => ((promptView.draft = null), $.ui.invalidate('ui.render'))
-  return (
-    <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        <Text>
-          <Text bold color={C('claude')}>{d.kind} prompt</Text> <Text bold color={C('warning')}>editing</Text>
-        </Text>
-        <Text color={C('inactive')}>save writes {promptFileOf(S.N.dir, d.kind)} · keep the {'{{placeholders}}'}; {'{{details}}'} and {'{{ask}}'} are needed</Text>
-      </Box>
-      <Box flexDirection="row" gap={1}>
-        <Button key="prompt-save" label="Save" onPress={act(async () => {
-          const said = await savePromptDraft($)
-          if (said) $.ui.toast(S.N.toast(said))
-        })} />
-        <Button key="prompt-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
-      </Box>
-      {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
-      <Box flexDirection="column">
-        {heading('Text')}
-        <Input key="prompt-text" value={d.text} placeholder="the whole prompt" submitLabel="keep" rows={20} autoFocus onInput={value => void (d.text = value)} onSubmit={value => void (d.text = value)} />
-      </Box>
-      {footer(promptEditKeys(), 'prompt-edit-keys')}
-    </Box>
-  )
-}
-
-/** One prompt's page (opened from the Prompts page; Back returns there): where it comes from, what is wrong with it, its placeholders
- *  and its text, with Back, Edit and Reset to built-in (only when it is the owner's). */
-function promptPage($: $, pane: PaneParts, kind: PromptKind, own: Partial<Record<PromptKind, string>>) {
-  const { Box, Text, Button, act, C, heading, footer, buttonRows } = pane
-  const source = promptSource(own, kind)
-  const hasFile = own[kind] !== undefined
-  const text = source === 'yours' ? own[kind]! : BUILT_IN_PROMPTS[kind]
-  const problems = hasFile ? promptProblems(kind, own[kind]!) : []
-  const reset = act(async () => {
-    const r = await changePrompt($, { action: 'reset', name: kind })
-    $.ui.toast(S.N.toast(r.text))
-    $.ui.invalidate('ui.render')
-  })
-  return (
-    <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        <Text>
-          <Text bold color={C('claude')}>{kind} prompt</Text>
-          <Text color={C('inactive')}> · {source}</Text>
-        </Text>
-        <Text color={C('inactive')}>{PROMPT_ABOUT[kind]}</Text>
-      </Box>
-      {buttonRows([
-        <Button key="prompt-back" label="Back" hotkey="b" autoFocus onPress={() => ((promptView.open = ''), $.ui.invalidate('ui.render'))} />,
-        <Button key="prompt-edit" label="Edit" hotkey="e" onPress={() => ((promptView.draft = { kind, text, error: '' }), $.ui.invalidate('ui.render'))} />,
-        hasFile && <Button key="prompt-reset" label="Reset to built-in" hotkey="r" onPress={reset} />,
-      ], 'prompt-buttons')}
-      {problems.map((p, i) => <Text key={`prompt-problem-${i}`} color={C('warning')}>⚠ {p}</Text>)}
-      <Box flexDirection="column">
-        {heading('File')}
-        <Text color={C('autoAccept')}>{source === 'yours' ? promptFileOf(S.N.dir, kind) : `${builtInPromptFile(kind)}; Edit copies it to ${promptFileOf(S.N.dir, kind)}`}</Text>
-      </Box>
-      <Box flexDirection="column">
-        {heading('Placeholders')}
-        {Object.entries(PROMPT_PLACEHOLDERS[kind]).map(([p, m]) => (
-          <Text key={`prompt-holder-${p}`}>
-            <Text bold color={C('ide')}>{`{{${p}}}`}</Text>
-            <Text color={C('inactive')}> {m}</Text>
-          </Text>
-        ))}
-      </Box>
-      <Box flexDirection="column">
-        {heading('Text')}
-        {text.trimEnd().split('\n').map((line, i) => <Text key={`prompt-line-${i}`}>{line || ' '}</Text>)}
-      </Box>
-      {footer(promptKeys(hasFile), 'prompt-keys')}
-    </Box>
-  )
-}
-
-/** The Prompts page, opened from Settings' Prompts row: one row per prompt (Enter opens it) and Back (b) to Settings. */
-function promptsPage($: $, pane: PaneParts, own: Partial<Record<PromptKind, string>>) {
-  const { Box, Text, Button, C, header, footer } = pane
-  const nameW = Math.max(...PROMPT_KINDS.map(k => k.length))
-  return (
-    <Box flexDirection="column">
-      {header()}
-      <Text bold color={C('suggestion')}>▍Prompts</Text>
-      {PROMPT_KINDS.map((k, i) => {
-        const source = promptSource(own, k)
-        const warn = own[k] !== undefined && promptProblems(k, own[k]!).length > 0
-        return (
-          <Button key={row(`promptRow:${k}`)} plain label={`${k}: ${source}${warn ? ' ⚠' : ''}`} autoFocus={i === 0 ? true : undefined} onPress={() => ((promptView.open = k), $.ui.invalidate('ui.render'))}>
-            <Text bold color={C('claude')}>{k.padEnd(nameW)}</Text>
-            <Text color={C(source === 'yours' ? 'warning' : 'inactive')}>{` ${source}`}</Text>
-            {warn ? <Text color={C('warning')}> ⚠</Text> : null}
-            <Text color={C('inactive')}>{` · ${PROMPT_ABOUT[k]}`}</Text>
-          </Button>
-        )
-      })}
-      <Text color={C('inactive')}>Enter opens a prompt to see, edit or reset it · or tell the lead</Text>
-      <Text key="prompts-page-blank"> </Text>
-      <Button key="prompts-back" label="Back (b)" hotkey="b" onPress={() => ((promptView.list = false), $.ui.invalidate('ui.render'))} />
-      {footer(promptsKeys(), 'prompts-keys')}
-    </Box>
-  )
-}
-
 /** The Settings view: one row per setting; Enter changes it. Every box and pick list has a Cancel button (x), and
  *  Enter on an empty edit box cancels it too; Back (b) goes to the board list. None of it needs Esc, which
  *  doesn't reach the panel from a text box. */
@@ -526,6 +465,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   const opened = roleView.open ? roles.find(r => r.name === roleView.open) : undefined
   if (roleView.open && !opened) resetRoleOpen()
   if (opened && roleView.draft) return roleEditPage($, pane, defSource(opened.name, builtIn, project))
+  if (opened && roleView.prompt) return rolePromptPage($, pane, opened, roleView.prompt)
   if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!)
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
   const kl = await kindLists($)
@@ -536,18 +476,11 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, defSource(openedKind.name, kl.builtIn, kl.project))
   if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind ? defSource(openedKind.name, kl.builtIn, kl.project) : undefined, openedBrokenKind, kl.builtIn)
   if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
-  const own = await loadPrompts($)
-  const openedPrompt = promptView.open || undefined
-  if (openedPrompt && promptView.draft) return promptEditPage($, pane)
-  if (openedPrompt) return promptPage($, pane, openedPrompt, own)
-  if (promptView.list) return promptsPage($, pane, own)
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const offCount = roles.filter(r => r.off).length
   const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
   const kindsOff = kinds.filter(k => k.off).length
   const kindsCount = `${kinds.length} kind${kinds.length === 1 ? '' : 's'}${kindsOff ? ` · ${kindsOff} off` : ''}`
-  const yours = PROMPT_KINDS.filter(k => promptSource(own, k) === 'yours')
-  const promptsCount = yours.length ? `${yours.join(', ')} yours` : 'built-in'
   const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
   const cancelButton = <Button key="setting-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
   const saveIt = (input: SettingsInput) => act(async () => {
@@ -638,11 +571,6 @@ export async function settingsPage($: $, pane: PaneParts) {
         <Text bold color={C('text')}> {kindsCount}</Text>
         <Text color={C('inactive')}> · Enter opens the Kinds page: the task kinds, to open, edit, turn off or add</Text>
       </Button>
-      <Button key={row('settings-prompts')} plain label={`Prompts: ${promptsCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (promptView.list = true), $.ui.invalidate('ui.render'))}>
-        <Text bold color={C('claude')}>{'Prompts'.padEnd(nameWidth)}</Text>
-        <Text bold color={C('text')}> {promptsCount}</Text>
-        <Text color={C('inactive')}> · Enter opens the Prompts page: what every worker is told, to see, edit or reset</Text>
-      </Button>
       <Text key="settings-blank"> </Text>
       <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
       {footer(settingsKeys(), 'settings-keys')}
@@ -655,4 +583,5 @@ function resetRoleOpen() {
   roleView.open = ''
   roleView.draft = null
   roleView.confirmRemove = false
+  roleView.prompt = ''
 }

@@ -194,6 +194,11 @@ test('the file name is the role\'s name: a name: line is ignored with a warning,
   expect(await call($, { action: 'remove', name: 'qa' })).toContain('no role named qa')
   expect(await call($, { action: 'edit', name: 'qa', description: 'x' })).toContain('no role named qa')
   expect(await call($, { action: 'list', name: 'tester' })).toContain(warning)
+  // one role in full also says where it goes and which placeholders its checklist can use
+  const one = await call($, { action: 'list', name: 'tester' })
+  expect(one).toContain('fills the {{role}} slot of the built-in worker prompt')
+  expect(one).toContain('  {{files}}: the "Files you may change" lines')
+  expect(one).toContain('  {{test_command}}: ')
   expect(await call($, { action: 'off', name: 'tester' })).toContain('turned tester off')
   expect(parseRole('tester', mine['tester.md']!)).toMatchObject({ description: 'my tests', off: true, prompt: '- mine' })
   expect(await call($, { action: 'on', name: 'tester' })).toContain('turned tester on again')

@@ -3,6 +3,7 @@ import type { SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { frontMatterLine, splitFrontMatter } from './text'
 import { ASK_TOOL } from './ask'
+import { ROLE_PLACEHOLDERS, fillRole } from './prompts'
 import { type DefSource, type BrokenDef, DEF_NAME, brokenNamed, defSource, defNamed, defNameError, leadBrokenDefLine, sourceLabel } from './def-files'
 
 // ---------------- worker roles ----------------
@@ -182,12 +183,13 @@ export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | strin
 /**
  * The worker prompt's role section: "Your role: <name>", the role's checklist, the skills to use and,
  * for a role with web tools, the web safety line. Empty for a role with none of these (general: today's worker).
+ * The checklist's {{placeholders}} are filled in from `values`, the prompt's own (see fillRole).
  */
-export function roleSection(r: RoleDef | undefined): string {
+export function roleSection(r: RoleDef | undefined, values: Record<string, string> = {}): string {
   if (!r || (!r.prompt && !r.skills.length && !r.tools?.length)) return ''
   const skills = r.skills.length ? `Use these skills if they are available: ${r.skills.join(', ')}.` : ''
   const web = r.tools?.some(t => t === 'WebSearch' || t === 'WebFetch') ? WEB_SAFETY_LINE : ''
-  return `\nYour role: ${r.name}\n${[r.prompt, skills, web].filter(Boolean).join('\n')}\n`
+  return `\nYour role: ${r.name}\n${[fillRole(r.prompt, values), skills, web].filter(Boolean).join('\n')}\n`
 }
 
 /** The lead's paragraph about roles: each one with its description, and how to pick. */
@@ -245,9 +247,16 @@ export function leadRolesText(builtIn: RoleDef[], project: RoleDef[], dir: strin
   return `Roles (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${lines.join('\n')}`
 }
 
-/** One role in full for the lead: its line, its file, its front matter and its checklist. */
+/** The lines that say what a checklist's {{placeholders}} become, one per placeholder. */
+export const rolePlaceholderLines = (): string[] => Object.entries(ROLE_PLACEHOLDERS).map(([p, m]) => `  {{${p}}}: ${m}`)
+
+/** One role in full for the lead: its line, its file, its front matter and its checklist, then where it goes and the placeholders it can use. */
 export function leadRoleText(r: RoleDef, source: DefSource, file: string): string {
-  return `${leadRoleLine(r, source).slice(2)}\nfile: ${file}\n${roleFileText(r).trim()}`
+  return [
+    `${leadRoleLine(r, source).slice(2)}\nfile: ${file}\n${roleFileText(r).trim()}`,
+    'The checklist fills the {{role}} slot of the built-in worker prompt (prompts/change.ts, prompts/investigation.ts); it may use these placeholders, filled in for each task (any other {{word}} is left as written):',
+    ...rolePlaceholderLines(),
+  ].join('\n')
 }
 
 /** What a new role made in the panel's Settings view starts with (the owner changes it in the edit mode). */

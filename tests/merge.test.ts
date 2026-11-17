@@ -1266,6 +1266,24 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
   }
 })
 
+test('a new worker gets the built-in change prompt even when a .symcc/prompts/change.md file exists', async () => {
+  const { w } = await liveWorld()
+  const prompts: string[] = []
+  const x = w.$ as unknown as { agent: Record<string, unknown> }
+  x.agent.spawn = async (e: { prompt?: string }) => (prompts.push(String(e.prompt)), { agentId: `ag${prompts.length + 1}` })
+  w.put(`${ROOT}/.symcc/prompts/change.md`, 'MINE: {{details}}\n{{ask}}\n')
+  try {
+    await setSymcc(w.$, false)
+    await setSymcc(w.$, true)
+    await settle(w, () => workerOn('T-1'))
+    expect(prompts.length).toBe(1)
+    expect(prompts[0]).not.toContain('MINE:')
+    expect(prompts[0]).toContain('You are a symcc worker. Do exactly this one task, then stop.')
+  } finally {
+    cleanUp()
+  }
+})
+
 // ---------------- retry and ask on dropped, done and clashed tasks ----------------
 
 test('retry brings a dropped task back to "todo" on purpose, with a history line', async () => {

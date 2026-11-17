@@ -2,7 +2,7 @@
 // cancelled and dropped, and the private queues of store.ts and review.ts forgotten.
 import { expect } from 'claude-code/testing'
 import { test, resetPlugin } from './reset'
-import { S, startS, timers, warnedPrompts } from '../hooks/plugin/state'
+import { S, startS, timers } from '../hooks/plugin/state'
 import { oneAtATime } from '../hooks/plugin/store'
 import { mergeTurn } from '../hooks/plugin/review'
 import { logo, playLogo, resetLogo } from '../hooks/plugin/logo'
@@ -20,10 +20,8 @@ test('resetPlugin puts S.me, S.driving and S.root back to their start values', (
 })
 
 test('resetPlugin gives S fresh objects, not the ones an earlier test changed', () => {
-  S.prompts.change = 'my prompt'
   S.roles.push({ name: 'x' } as never)
   resetPlugin()
-  expect(S.prompts).toEqual({})
   expect(S.roles).toEqual([])
 })
 
@@ -49,12 +47,6 @@ test('resetPlugin goes on when a left-over timer fails to cancel', () => {
   resetPlugin()
   expect(timers.length).toBe(0)
   expect(S.me).toBe('')
-})
-
-test('resetPlugin empties warnedPrompts', () => {
-  warnedPrompts.set('/p/change.md', 'empty')
-  resetPlugin()
-  expect(warnedPrompts.size).toBe(0)
 })
 
 test('a merge into a branch left hanging before resetPlugin does not hold up the next one', async () => {

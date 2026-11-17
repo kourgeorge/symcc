@@ -2,7 +2,6 @@
 import { boardTitle } from '../../board'
 import { type $, S, updateOpened, updateScoutOpen, updateTab } from '../state'
 import { resetRoleView } from '../roles'
-import { resetPromptView } from '../prompts'
 import { resetKindView } from '../kinds'
 
 /** The board panel's views: its tabs. */
@@ -17,7 +16,6 @@ export async function resetPane($: $, which?: PaneTab, task = '') {
   if (!which) return
   resetRoleView()
   resetKindView()
-  resetPromptView()
   await updateScoutOpen($, () => '')
   await updateTab($, () => which)
 }
