@@ -1,6 +1,6 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, kindOf, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -160,7 +160,7 @@ async function mergedBeforeStart($: $, t: BoardTask): Promise<boolean> {
     if (!cur || cur.status !== 'todo' || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     return [{ ...x, tasks: x.tasks.map(y => (y.id === t.id ? mergedDone(cur, sha, 'tried again', now()) : y)) }, true] as [Board, boolean]
   })
-  if (done) tellLead($, `✓ ${t.id} "${t.title}" is done: its work (${tryLabel(t)}) was already merged into ${intoOf(t)} (${sha.slice(0, 8)}), so no new try starts.`)
+  if (done) tellLead($, `✓ ${t.id} "${t.title}" is done: its work (${tryLabel(t)}) was already merged into ${intoOf(t)} (${shortSha(sha)}), so no new try starts.`)
   return done
 }
 
@@ -330,7 +330,7 @@ async function finishRanOver($: $, id: string, tryNo: number, limitMs: number) {
   })
   if (!out) return
   const { t, again } = out
-  if (sha) tellLead($, `✓ ${id} "${t.title}" is done: its checking and merging ran over ${min} minutes, but its work was already merged (${sha.slice(0, 8)}).`)
+  if (sha) tellLead($, `✓ ${id} "${t.title}" is done: its checking and merging ran over ${min} minutes, but its work was already merged (${shortSha(sha)}).`)
   else if (again) tellLead($, `✗ ${id} "${t.title}" failed: its checking and merging ran over ${min} minutes twice in a row and was given up both times, so no new try starts. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
   else tellLead($, `${id} "${t.title}": its checking and merging ran over ${min} minutes and seemed stuck, so I stopped waiting for it and sent it back to todo for a fresh try (its folder and branch are kept). Nothing to do unless it gets stuck again.`)
 }
@@ -357,7 +357,7 @@ async function landIfMerged($: $, t: SymccTask, merged: string | undefined, made
  */
 async function landedLate($: $, t: SymccTask, sha: string, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
   const fits = (cur: BoardTask) => cur.attempts === t.attempts && (kind === 'finish' ? ['doing', 'todo', 'failed'].includes(cur.status) : cur.status === status)
-  const short = sha.slice(0, 8)
+  const short = shortSha(sha)
   const into = intoOf(t)
   const r = await change($, x => {
     const cur = find(x, t.id)
@@ -697,7 +697,7 @@ async function doneAfterMerge($: $, t: SymccTask, sha: string): Promise<boolean>
     if (cur.status === 'done') return [x, true] as [Board, boolean]
     return [{ ...x, tasks: x.tasks.map(y => (y.id === t.id ? mergedDone({ ...cur, runs: addCommits(cur.runs, [sha]) }, sha, 'marked done', now()) : y)) }, true] as [Board, boolean]
   })
-  if (done) tellLead($, `✓ ${t.id} "${t.title}" merged into ${intoOf(t)} (${sha.slice(0, 8)}); it is done.`)
+  if (done) tellLead($, `✓ ${t.id} "${t.title}" merged into ${intoOf(t)} (${shortSha(sha)}); it is done.`)
   return done
 }
 
@@ -928,7 +928,7 @@ async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind:
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
   const late = t ? null : find(await load($).catch(() => null) ?? emptyBoard(), id)
-  if (late?.status === 'done' && late.merged) return `${id} is done: its checking and merging ran over ${min} minutes, but its work was merged into ${intoOf(late)} (${late.merged.slice(0, 8)}) after all.`
+  if (late?.status === 'done' && late.merged) return `${id} is done: its checking and merging ran over ${min} minutes, but its work was merged into ${intoOf(late)} (${shortSha(late.merged)}) after all.`
   if (kind === 'approve') {
     if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
     return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
@@ -983,7 +983,7 @@ async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge'
     if (r.merged) {
       // The work is on the target branch: the task is done, whatever happened to it meanwhile
       // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
-      const sha = r.merged.slice(0, 8)
+      const sha = shortSha(r.merged)
       if (!cur) {
         tellLead($, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
         return `${t.id} was merged into ${intoOf(t)} (${sha}), but it is no longer on the board`
@@ -1249,7 +1249,7 @@ async function timedOut($: $, id: string, t: BoardTask | undefined, max: number,
     return [{ ...x, tasks: x.tasks.map(y => (y.id === id ? next : y)) }, cur] as [Board, BoardTask]
   })
   if (!out) return
-  if (sha) tellLead($, `✓ ${id} "${out.title}" is done: its worker ran over ${max} minutes and was stopped, but its work was already merged (${sha.slice(0, 8)}).`)
+  if (sha) tellLead($, `✓ ${id} "${out.title}" is done: its worker ran over ${max} minutes and was stopped, but its work was already merged (${shortSha(sha)}).`)
   else tellLead($, `${id} "${out.title}": its time (${max} minutes) was up, so I stopped the worker and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
 }
 
@@ -1394,7 +1394,7 @@ export async function check($: $) {
           return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
         }),
       }))
-    for (const id of merged.keys()) tellLead($, `✓ ${id} is done: its work was already merged (${merged.get(id)!.slice(0, 8)}) when the plugin reloaded.`)
+    for (const id of merged.keys()) tellLead($, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
   }
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)

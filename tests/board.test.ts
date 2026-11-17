@@ -2306,6 +2306,16 @@ test('a task lists its commits newest first with the merged one marked', () => {
   expect(detailRows(base, { roles: [], all: [], when: s => s, nowMs: 0 }).some(r => r.label === 'Commits')).toBe(false)
 })
 
+import { mergedDone, alreadyMergedLine } from '../hooks/board'
+
+test('a task found already merged names its commit by the short sha', () => {
+  const [, t] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
+  const done = mergedDone(t, SHA1, 'sent back to todo', T)
+  expect(done.note).toBe('merged into main (aaaaaaaa)')
+  expect(done.history!.at(-1)).toBe(alreadyMergedLine(t, SHA1, 'sent back to todo'))
+  expect(done.history!.at(-1)).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
+})
+
 import { symccOn, setEnabled, offAnswer, offStatusLine } from '../hooks/board'
 
 test('symcc is on for a board without the setting and new ones, and off only when the board says so', () => {

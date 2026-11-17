@@ -2,6 +2,7 @@
 import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf } from './board-file'
 import { parseStamp } from './text'
 import { stoppedLine, stopEnd } from './history'
+import { shortSha } from './commits'
 import { tryLabel } from './roles'
 import { endedBy, withEnd } from './runs'
 
@@ -129,7 +130,7 @@ export function mergedThisTry(t: Pick<BoardTask, 'merged' | 'runs'>): string | n
 
 /** The history line of a task found already merged (`sha`) when it was about to be `when` (e.g. "sent back to todo"). */
 export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merge_into'>, sha: string, when: string) =>
-  `${tryLabel(t)}: its work was already merged into ${intoOf(t)} (${sha.slice(0, 8)}) when it was about to be ${when}, so it is done`
+  `${tryLabel(t)}: its work was already merged into ${intoOf(t)} (${shortSha(sha)}) when it was about to be ${when}, so it is done`
 
 /**
  * Task `t` as "done", because its work is already on the branch it merges into (`sha`): it must
@@ -138,7 +139,7 @@ export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merg
 export function mergedDone(t: BoardTask, sha: string, when: string, now: string): BoardTask {
   const { session: _s, finishing: _f, checking: _c, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
-  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${sha.slice(0, 8)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), alreadyMergedLine(t, sha, when)], ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), alreadyMergedLine(t, sha, when)], ...(runs ? { runs } : {}) }
 }
 
 /**

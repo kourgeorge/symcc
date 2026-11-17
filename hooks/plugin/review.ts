@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, kindOf, testsWithChangesOf, untestedChange, untestedText } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, kindOf, testsWithChangesOf, untestedChange, untestedText, shortSha } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, type $, changesCache } from './state'
 import { change, now } from './store'
@@ -36,7 +36,7 @@ export async function ownerEdits($: $, t: SymccTask, dir: string): Promise<strin
     const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
     if (head && head !== seen) {
       const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${seen}..${head}`], dir)
-      files.push(...(d.exitCode === 0 ? d.stdout.split('\0').filter(Boolean) : [`(commits after ${seen.slice(0, 8)})`]))
+      files.push(...(d.exitCode === 0 ? d.stdout.split('\0').filter(Boolean) : [`(commits after ${shortSha(seen)})`]))
     }
   }
   const skip = S.N.dir
@@ -125,7 +125,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
   if (!changed.length) {
     // Nothing new, but this task's own work is already on the target branch (an earlier try merged
     // it and a reload sent the task back): it is done, not failed.
-    if (await onTarget($, t.id, head, target)) return { ok: true, merged: head, detail: `already merged into ${target} (${head.slice(0, 8)}) by an earlier try; nothing new to merge` }
+    if (await onTarget($, t.id, head, target)) return { ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` }
     return { ok: false, detail: 'the worker made no change' }
   }
   const bad = outOfScope(changed, t.files, S.N.dir)
@@ -279,7 +279,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
     const n = await git($, ['diff', '--name-only', '--no-renames', '-z', '--diff-filter=AM', main, candidate])
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
-  return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${candidate.slice(0, 8)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
+  return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
 }
 
 /** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */
