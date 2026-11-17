@@ -5,6 +5,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { path } from '../hooks/plugin/store'
 import { S } from '../hooks/plugin/state'
+import { ran } from './fakes'
 
 /** Records every write and every command, wherever it points; the files hold just a board under /repo. */
 function watch(on: On) {
@@ -21,7 +22,7 @@ function watch(on: On) {
     const argv = (e as unknown as { argv: string[] }).argv
     runs.push(argv)
     if (argv[0] === 'mv') files.set(argv[argv.length - 1]!, files.get(argv[argv.length - 2]!) ?? '')
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   return { writes, runs, files }
 }

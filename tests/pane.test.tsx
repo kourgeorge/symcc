@@ -1,4 +1,4 @@
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
@@ -6,6 +6,7 @@ import { hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, 
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/plugin/ui/arrows'
 import { sayQueue } from '../hooks/plugin/state'
 import { inProject } from './project'
+import { ran, readText, entry, slash, print } from './fakes'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -860,12 +861,12 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
   const dirOf = (p: string) => Object.keys(files).some(f => f.startsWith('/') && p.endsWith(f.slice(0, f.lastIndexOf('/'))))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : dirOf(e.path) ? { value: true } : next(e)))
   on('fs.list', (_, e, next) =>
-    dirOf(e.path) ? { value: Object.keys(files).filter(f => e.path.endsWith(f.slice(0, f.lastIndexOf('/'))) && files[f] !== null).map(f => ({ name: f.slice(f.lastIndexOf('/') + 1), kind: 'file' })) } : next(e),
+    dirOf(e.path) ? { value: Object.keys(files).filter(f => e.path.endsWith(f.slice(0, f.lastIndexOf('/'))) && files[f] !== null).map(f => entry(f.slice(f.lastIndexOf('/') + 1))) } : next(e),
   )
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] } : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', (_, e) => ((written[e.path] = String(e.text)), { value: undefined }))
   on('ui.status', () => ({ value: undefined }))
-  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  on('process.run', () => ({ value: ran() }))
   // the project folder (tool calls need it, see findRoot)
   inProject(on)
   return written
@@ -1072,7 +1073,7 @@ test('the lead guide is in the system prompt while symcc is on, and left out onc
   fakeFiles(on, files)
   // the engine's own sections, beneath the plugin
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'You are Claude.', scope: 'shared' as const }] }))
-  const ids = async () => ((await $.prompt.compose(COMPOSE)) as { sections: { id: string }[] }).sections.map(x => x.id)
+  const ids = async () => (await $.prompt.compose(COMPOSE)).sections.map(x => x.id)
   // an old board without "enabled" is on
   expect(await ids()).toContain('symcc:lead')
   files['/board.json'] = JSON.stringify({ tasks: [], enabled: false })
@@ -1201,7 +1202,7 @@ for (const width of [50, 90]) {
     const names = ['recent-changes', 'gaps-bot', 'secrets', 'test-gaps', 'simplify']
     const rows: string[] = []
     for (const n of names) rows.push(String((await ui.find({ key: `scout:${n}` }))?.text).trimEnd())
-    console.log(`Scouts list at ${width} columns:\n${rows.join('\n')}`)
+    print(`Scouts list at ${width} columns:\n${rows.join('\n')}`)
     for (const r of rows) expect(r.length).toBeLessThanOrEqual(width)
     if (width === 90)
       expect(rows).toEqual([
@@ -1248,14 +1249,14 @@ function scoutFiles(on: On, memory: string | null, more: Record<string, string> 
   }
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : e.path.endsWith('/scouts') ? { value: true } : next(e)))
-  on('fs.list', (_, e, next) => (e.path.endsWith('/scouts') ? { value: ['bugs', ...Object.keys(more)].map(n => ({ name: `${n}.md`, kind: 'file' })) } : next(e)))
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
+  on('fs.list', (_, e, next) => (e.path.endsWith('/scouts') ? { value: ['bugs', ...Object.keys(more)].map(n => entry(`${n}.md`)) } : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', (_, e) => {
     if (/\/scouts\.json\..*\.tmp$/.test(e.path)) files['/scouts.json'] = String(e.text)
     return { value: undefined }
   })
   on('ui.status', () => ({ value: undefined }))
-  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  on('process.run', () => ({ value: ran() }))
   inProject(on)
   mock.clock(on, { now: Date.now() })
   return files
@@ -1307,7 +1308,7 @@ test('a running scout\'s page has no Run now button', async ($, on) => {
 test('/symcc-scout <name> pause and resume, and run now not refused while paused', async ($, on) => {
   const files = scoutFiles(on, null)
   stateOf(on, {})
-  const run = async (args: string) => String((await $.command.run({ command: 'symcc-scout', args })).text)
+  const run = async (args: string) => String((await $.command.run(slash('symcc-scout', args))).text)
   expect(await run('bugs pause')).toMatch(/^bugs paused: it doesn't run on its timer until you resume it/)
   expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: null, paused: true })
   expect(await run('bugs pause')).toMatch(/^bugs is already paused/)
@@ -1326,7 +1327,7 @@ test('/symcc-scout <name> pause and resume, and run now not refused while paused
 test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts with the warning, and run now still works', async ($, on) => {
   scoutFiles(on, null, { secrets: '---\nevery_minutes: 0\n---\nLook for keys.\n', bad: '---\nevery_minutes: -5\n---\nLook around.\n' })
   stateOf(on, {})
-  const list = String((await $.command.run({ command: 'symcc-scouts', args: '' })).text)
+  const list = String((await $.command.run(slash('symcc-scouts'))).text)
   expect(list).toMatch(/^bugs: every 30 min/m)
   expect(list).toMatch(/^secrets: on demand$/m)
   expect(list).toMatch(/^bad: on demand \(every_minutes "-5" is not valid: runs only on demand until fixed\)$/m)
@@ -1338,7 +1339,7 @@ test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts wit
   expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran$/)
   await ui.unmount()
   // run now is not refused because the scout runs only on demand
-  const run = String((await $.command.run({ command: 'symcc-scout', args: 'secrets' })).text)
+  const run = String((await $.command.run(slash('symcc-scout', 'secrets'))).text)
   expect(run).not.toMatch(/no scout named|on demand|paused/)
 })
 
@@ -1392,11 +1393,11 @@ test('archived tasks are only counted on the Done row, and /symcc-task still fin
   // T-12 waits on T-5, which is archived as done: no "after T-5"
   expect(await ui.find({ type: 'Text', text: /after T-5/ })).toBeUndefined()
   await ui.unmount()
-  const shown = String((await $.command.run({ command: 'symcc-task', args: 'T-5' })).text)
+  const shown = String((await $.command.run(slash('symcc-task', 'T-5'))).text)
   expect(shown).toMatch(/^T-5 is archived \(in \.symcc\/archive\.json; read-only\)/)
   expect(shown).toMatch(/An old one/)
-  expect(String((await $.command.run({ command: 'symcc-approve', args: 'T-5' })).text)).toBe('T-5 is archived.')
-  expect(String((await $.command.run({ command: 'symcc-task', args: 'T-6' })).text)).toBe('T-6 is not on the board.')
+  expect(String((await $.command.run(slash('symcc-approve', 'T-5'))).text)).toBe('T-5 is archived.')
+  expect(String((await $.command.run(slash('symcc-task', 'T-6'))).text)).toBe('T-6 is not on the board.')
 })
 
 // ---------------- each try's report on the task page ----------------
@@ -1523,8 +1524,8 @@ test('/symcc-task says how each try ended next to its time and tokens', async ($
   fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
   stateOf(on, {})
   on('ui.toast', () => ({ value: undefined }))
-  on('ui.open', () => ({ value: undefined }))
-  const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'the test has no terminal to place it in' } }))
+  const text = String((await $.command.run(slash('symcc-task', 'T-1'))).text)
   expect(text).toContain('  try 1: 24s · restarted: the task was changed (after, details)\n')
   expect(text).toContain('  try 3: 3m · 232.5k tokens in all · merged main in (clash with main) · finished: merged\n')
   expect(text).toContain('  try 4: 1m\n')
@@ -1536,8 +1537,8 @@ test('/symcc-task shows the latest report, or its first 40 lines and where the f
   fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null, '/reports/T-1-try-1.md': 'Old.\n', '/reports/T-1-try-2.md': many })
   stateOf(on, {})
   on('ui.toast', () => ({ value: undefined }))
-  on('ui.open', () => ({ value: undefined }))
-  const text = String((await $.command.run({ command: 'symcc-task', args: 'T-1' })).text)
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'the test has no terminal to place it in' } }))
+  const text = String((await $.command.run(slash('symcc-task', 'T-1'))).text)
   expect(text).toContain(`Report (try 2, ${R2}):`)
   expect(text).toContain('  line 40')
   expect(text).not.toContain('line 41\n')
@@ -1553,13 +1554,13 @@ test('plan mode: add puts the task in the backlog and says so; leaving plan mode
   const temp: Record<string, string> = {}
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] } : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', (_, e) => ((temp[e.path] = String(e.text)), { value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('process.run', (_, e) => {
     const argv = (e as { argv?: string[] }).argv ?? []
     if (argv[0] === 'mv' && /board\.json$/.test(argv[3] ?? '') && temp[argv[2]!] !== undefined) files['/board.json'] = temp[argv[2]!]!
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   // nothing beneath answers the classic events in a test: answer them empty
   on('classic.UserPromptSubmit', () => ({}) as never)
@@ -1590,7 +1591,7 @@ test('plan mode: add puts the task in the backlog and says so; leaving plan mode
   expect(await add('After')).toContain('added T-5 After')
 })
 
-type Mounted = Awaited<ReturnType<Parameters<Parameters<typeof test>[1]>[0]['ui']['mount']>>
+type Mounted = TestMounted<'terminal', 'Pane'>
 /** The page's footer: there is exactly one, it is the last thing on the page, it starts with the light rule, and
  *  the page's key hints are in it and nowhere else. Returns its text without the rule. */
 async function footerOf(ui: Mounted, hints: KeyHint[], width = 50): Promise<string> {
@@ -1741,9 +1742,9 @@ test('the ↑↓ stops of a drawn page are only its list rows: the tabs, search,
  *  engine) is kept: where the ring is, and the scrolls. The test kit has no stand-in for the plugin's own
  *  `$.ui.focus` call, so only the scrolls past the ends (and off the rows) are checked here; the moves between rows
  *  are checked on arrowTarget and rowStops above. */
-function arrowKeys($: Parameters<Parameters<typeof test>[1]>[0], on: On) {
+function arrowKeys($: Engine, on: On) {
   const seen = { focused: undefined as string | undefined, scrolls: [] as { by: number; offset: number }[] }
-  on('ui.focus', (_, e) => ((seen.focused = e.element), { value: undefined }))
+  on('ui.focus', (_, e) => ((seen.focused = e.element), {}))
   on('ui.scroll', (_, e) => (seen.scrolls.push({ by: e.by, offset: e.offset }), {}))
   on('ui.toast', () => ({ value: undefined }))
   const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, plugin: 'symcc', element, origin: { kind: 'person' } })

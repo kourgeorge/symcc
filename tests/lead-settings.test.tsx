@@ -2,13 +2,14 @@ import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { inProject } from './project'
+import { ran, readText } from './fakes'
 
 /** A fake board.json: a save (write to a temp file, then mv over it) is kept, so the next read sees it. */
 function setup(on: On, board: Record<string, unknown>) {
   const files: Record<string, string | null> = { '/board.json': JSON.stringify(board), '/board.lock': null, '/scouts.json': null }
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   const temp: Record<string, string> = {}
   on('fs.write', (_, e) => {
     const f = fileOf(e.path)
@@ -21,7 +22,7 @@ function setup(on: On, board: Record<string, unknown>) {
     const argv = (e as { argv?: string[] }).argv ?? []
     const [src, dest] = argv.slice(-2)
     if (argv[0] === 'mv' && src! in temp && fileOf(dest!)) files[fileOf(dest!)!] = temp[src!]!
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   // the project folder (tool calls need it, see findRoot)
   inProject(on)

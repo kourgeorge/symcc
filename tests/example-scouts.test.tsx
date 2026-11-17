@@ -1,16 +1,18 @@
 // A new project (no scouts folder yet) starts with the plugin's example scouts, all paused (T-221).
 // Files, git and agents are a fake world; time is the fake clock.
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
+import { ran, entry } from './fakes'
+import type { ProcessRunResult } from 'claude-code'
 
 const T0 = 1_800_000_000_000
 const EXAMPLES = ['bugs', 'deps', 'docs-check', 'gaps', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
 const EVERY_MINUTES = 5
 const example = (n: string) => `---\nevery_minutes: ${EVERY_MINUTES}\n---\nExample ${n}.\n`
-type Res = { exitCode: number; stdout: string; stderr: string }
-const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
+type Res = ProcessRunResult
+const ok = (stdout = ''): Res => ran({ stdout })
 
 /**
  * Project files in memory (keyed from "/.symcc/" on), the plugin's examples under ".../examples/scouts/", and
@@ -37,9 +39,9 @@ function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; fai
   })
   on('fs.stat', (_, e) => (files.has(key(e.path)) ? { value: { mtimeMs: T0 } } : Promise.reject(new Error('no file'))) as never)
   on('fs.list', (_, e) => {
-    if (ex(e.path)) return o.failExamples ? (Promise.reject(new Error('no access')) as never) : { value: [...EXAMPLES.map(n => ({ name: `${n}.md`, kind: 'file' })), { name: 'notes.txt', kind: 'file' }] }
+    if (ex(e.path)) return o.failExamples ? (Promise.reject(new Error('no access')) as never) : { value: [...EXAMPLES.map(n => entry(`${n}.md`)), entry('notes.txt')] }
     const dir = `${key(e.path)}/`
-    return { value: [...files.keys()].filter(f => f.startsWith(dir) && !f.slice(dir.length).includes('/')).map(f => ({ name: f.slice(dir.length), kind: 'file' })) }
+    return { value: [...files.keys()].filter(f => f.startsWith(dir) && !f.slice(dir.length).includes('/')).map(f => entry(f.slice(dir.length))) }
   })
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', (_, e) => (toasts.push(String((e as unknown as { text?: string; message?: string }).text ?? (e as unknown as { message?: string }).message ?? JSON.stringify(e))), { value: undefined }) as never)
@@ -49,7 +51,7 @@ function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; fai
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ok('true\n') : ok() }
     if (cmd === 'mkdir') for (const p of rest.filter(x => !x.startsWith('-'))) dirs.add(key(p))
     if (cmd === 'ln') {
-      if (files.has(key(rest[1]!))) return { value: { exitCode: 1, stdout: '', stderr: 'File exists' } }
+      if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
       files.set(key(rest[1]!), files.get(key(rest[0]!)) ?? '')
     }
     if (cmd === 'mv') {
@@ -71,7 +73,7 @@ function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; fai
   return { files, dirs, toasts, spawned, clock }
 }
 
-const start = async ($: Parameters<Parameters<typeof test>[1]>[0]) => {
+const start = async ($: Engine) => {
   await ($.session.start({ cwd: '/repo' } as never) as Promise<unknown>)
 }
 const paused = (files: Map<string, string>) => {

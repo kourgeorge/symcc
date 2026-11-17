@@ -2,18 +2,20 @@
 // old workers it stopped to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (RELOAD_SETTLE_MS, 2 s).
 // session.start goes on without those waits; pump starts no work until they are over.
 // The plugin runs as loaded by the test kit; files, git and agents are the fake world below, time is the fake clock.
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { ORPHAN_WAIT_MS, RELOAD_SETTLE_MS } from '../hooks/plugin/workers'
+import { ran } from './fakes'
+import type { ProcessRunResult } from 'claude-code'
 
 const T0 = 1_800_000_000_000
 const ISO = new Date(T0 - 60_000).toISOString()
 const BOARD = '/.symcc/board.json'
 
-type Res = { exitCode: number; stdout: string; stderr: string }
-const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
+type Res = ProcessRunResult
+const ok = (stdout = ''): Res => ran({ stdout })
 
 /**
  * Files in memory (keyed from "/.symcc/" on), a fake git that says yes to everything, and the agents.
@@ -39,7 +41,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ok('true\n') : ok() }
     // the board's lock and its save through a temp file (see store.ts)
     if (cmd === 'ln') {
-      if (files.has(key(rest[1]!))) return { value: { exitCode: 1, stdout: '', stderr: 'File exists' } }
+      if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
       files.set(key(rest[1]!), files.get(key(rest[0]!)) ?? '')
     }
     if (cmd === 'mv') {
@@ -76,7 +78,7 @@ function board(maxParallel: number): Board {
 }
 
 /** Starts the session without waiting for it; `done()` says whether session.start has returned. */
-function start($: Parameters<Parameters<typeof test>[1]>[0]) {
+function start($: Engine) {
   let finished = false
   const p = ($.session.start({ cwd: '/repo' } as never) as Promise<unknown>).then(() => (finished = true))
   return { p, done: () => finished }

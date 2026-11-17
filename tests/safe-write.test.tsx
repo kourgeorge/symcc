@@ -4,11 +4,12 @@ import { changeScoutMemory, recordScoutRun } from '../hooks/plugin/scouts'
 import { tmpFor } from '../hooks/plugin/store'
 import { parseScoutMemory, parseScoutUsage } from '../hooks/board'
 import { setRoot } from './project'
+import { pause } from './fakes'
 
 // these call the plugin's code directly, so each test sets the project folder (path() refuses an empty one,
 // and the reset test() empties it before each test)
 
-const tick = () => new Promise(r => setTimeout(r, 5))
+const tick = () => pause(5)
 
 /** A fake $ over an in-memory folder: reads, writes and `mv`s are slow (a few ms each), so two saves overlap. Keeps every temp name written. */
 function fakeFiles(files: Map<string, string>) {

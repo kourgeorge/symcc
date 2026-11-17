@@ -13,6 +13,7 @@ import { finishing as finishingSet } from '../hooks/plugin/state'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
+import { commandsOf } from './fakes'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
@@ -224,7 +225,7 @@ type Rec = { question?: WorkerQuestion; requested?: string[] }
 /** Board `b` with T-1's current try holding `rec`, as ask_owner and the tool.check hook write it. */
 const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { ...(rec.question ? { try_question: rec.question } : {}), ...(rec.requested ? { try_refused: rec.requested } : {}) }, ISO) : b)
 
-function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<SymccTask> = {}): [Board, SymccTask] {
+function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<BoardTask> = {}): [Board, BoardTask] {
   const [b, t] = addTask({ ...emptyBoard(), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
   const b2 = patchTask(b, t.id, { status: 'doing', attempts: 1, ...extra }, ISO)
   return [b2, b2.tasks[0]!]
@@ -786,7 +787,7 @@ test('UITests / APITests-style names and an e2e name part count as tests', () =>
 // ---------------- approve and reject ----------------
 
 /** A world where T-1 waits in review: its work is committed (h1) in its worktree and the board is saved. */
-async function inReview(g: Partial<Git> = {}, tests: Record<string, Res> = {}, test_commands = ['npm test'], extra: Partial<SymccTask> = {}) {
+async function inReview(g: Partial<Git> = {}, tests: Record<string, Res> = {}, test_commands = ['npm test'], extra: Partial<BoardTask> = {}) {
   const w = world({ dirty: false, head: H1, ...g }, tests)
   const [b] = boardWith('review', test_commands, extra)
   await saveBoard(w.$, patchTask(b, 'T-1', { status: 'review', note: 'ready for review' }, ISO))
@@ -864,11 +865,12 @@ test('approve after the owner edited files in the folder runs the tests again an
 test('a typed "cd web && npm test" is one test command, run as one shell line in the task\'s folder', async () => {
   const r = parseSettingValue('test_commands', '"cd web && npm test"')
   expect(r).toEqual({ ok: true, input: { test_commands: ['cd web && npm test'] } })
-  const cmds = (r as { input: { test_commands: string[] } }).input.test_commands
+  const cmds = commandsOf(r)
   const w = await inReview({ upToDate: false }, {}, cmds)
   const runs: { argv: string[]; cwd?: string }[] = []
-  const run = w.$.process.run
-  w.$.process.run = ((argv: string[], o: { cwd?: string }) => (argv[0] === '/bin/sh' && runs.push({ argv, cwd: o?.cwd }), run(argv, o))) as typeof run
+  const fake = w.$ as unknown as { process: { run: (argv: string[], o?: { cwd?: string }) => Promise<unknown> } }
+  const run = fake.process.run
+  fake.process.run = (argv, o) => (argv[0] === '/bin/sh' && runs.push({ argv, cwd: o?.cwd }), run(argv, o))
   await runTool(w.$, 'approve', { task: 'T-1' })
   // one shell runs the whole line, so the cd takes effect for npm test
   expect(runs).toEqual([{ argv: ['/bin/sh', '-c', 'cd web && npm test'], cwd: WT }])
@@ -1596,7 +1598,7 @@ test('what a try recorded for its hand-back is cleared when a new try starts, an
 
 test('the worker prompts say how to ask and what a refused edit means, with no QUESTION / OPTIONS / NEED FILES wording', () => {
   const [c] = boardWith('auto', ['npm test'])
-  const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
+  const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<BoardTask>)
   for (const p of [WORKER_PROMPT(c.tasks[0]!, c, WT), WORKER_PROMPT(i.tasks[0]!, i, WT)]) {
     expect(p).toContain('To ask the owner something, call the mcp__symcc__ask_owner tool. If an edit is refused as outside your files, stop and hand back.')
     expect(p).not.toMatch(/QUESTION|OPTIONS|NEED FILES/)
@@ -1607,7 +1609,7 @@ test('the worker prompts say how to ask and what a refused edit means, with no Q
 async function askedForFiles(files: string[]) {
   const w = world()
   const [b] = boardWith('auto')
-  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: `T-1 needs to change files outside its list: ${files.join(', ')}. Allow them?`, asked_files: files, note: 'waiting for you' } as Partial<SymccTask>, ISO))
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: `T-1 needs to change files outside its list: ${files.join(', ')}. Allow them?`, asked_files: files, note: 'waiting for you' } as Partial<BoardTask>, ISO))
   let saves = 0
   const fs = (w.$ as { fs: { write: (p: string, t: string) => Promise<void> } }).fs
   const write = fs.write
@@ -1783,7 +1785,7 @@ test('change on a paused task keeps it paused with the change saved, and resume 
 const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
 
 /** T-1 is "doing" (try 1, one run) with worker ag1, which then answers `answer`; the fake git and the task as given. */
-async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<SymccTask> = {}, rec: Rec = {}) {
+async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<BoardTask> = {}, rec: Rec = {}) {
   const w = world(g)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...extra })
   await saveBoard(w.$, recorded(b0, rec))
@@ -2049,7 +2051,7 @@ test("notify can't be set to a choice this machine can't play: the owner and the
 // ---------------- how each try ended ----------------
 
 /** T-1 is "doing" (try 1, one open run) with worker ag1; `then` ends it. Gives back the run as saved. */
-async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, o: { g?: Partial<Git>; tests?: Record<string, Res>; extra?: Partial<SymccTask> } = {}) {
+async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, o: { g?: Partial<Git>; tests?: Record<string, Res>; extra?: Partial<BoardTask> } = {}) {
   const w = world(o.g, o.tests)
   const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...o.extra })
   await saveBoard(w.$, b0)
@@ -2518,7 +2520,7 @@ const forget = () => finishingSet.clear()
 
 test('a reload while a task is being tested and merged leaves it "doing"; it merges once and is done, with no restart or "too late" line', async () => {
   S.me = 'me'
-  let during: SymccTask | undefined
+  let during: BoardTask | undefined
   let spawned = 0
   const { w, t } = await finishing(async w => {
     ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
@@ -3642,7 +3644,7 @@ test('an approve waiting in line behind two slow merges, then main moving under 
 /** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
 async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Rec = {}) {
   const w = world()
-  const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<BoardTask>)
   // set after the try started: a new try (attempts changing) clears the time fields
   const b = Object.keys(extra).length ? patchTask(b0, 'T-1', extra, ISO) : b0
   await saveBoard(w.$, recorded(b, rec))
@@ -3828,7 +3830,7 @@ test('Keep as a note after two tries lists both reports, oldest first, and asks 
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
   ]
-  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<BoardTask>)
   await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
   w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
   w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
@@ -3849,7 +3851,7 @@ test('a keep-note task after two tries reads both answers inside its own folder,
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
   ]
-  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<SymccTask>)
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<BoardTask>)
   await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
   w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
   w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
@@ -3992,7 +3994,7 @@ test('an off kind is refused by add (and by change), naming the kinds that are o
 
 test('a kind bug task is committed, tested and merged like a change', async () => {
   const w = world()
-  const [b] = boardWith('auto', ['npm test'], { kind: 'bug', history: ['created by the lead'] } as Partial<SymccTask>)
+  const [b] = boardWith('auto', ['npm test'], { kind: 'bug', history: ['created by the lead'] } as Partial<BoardTask>)
   expect(b.tasks[0]!.kind).toBe('bug')
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -4029,7 +4031,7 @@ test('old board tasks with kind change or investigation still load as before; an
 })
 
 test('the board line shows the kind next to the role; a plain change shows none; search matches the kind', () => {
-  const [b] = boardWith('auto', [], { kind: 'bug', role: 'tester', status: 'todo' } as Partial<SymccTask>)
+  const [b] = boardWith('auto', [], { kind: 'bug', role: 'tester', status: 'todo' } as Partial<BoardTask>)
   const t = b.tasks[0]!
   expect(rowExtra(t, b.tasks)).toBe('[bug · tester]')
   expect(rowExtra({ ...t, role: undefined }, b.tasks)).toBe('[bug]')
@@ -4041,9 +4043,9 @@ test('the board line shows the kind next to the role; a plain change shows none;
 
 test('the worker prompt says the task\'s kind and what it is for', () => {
   S.kinds = [{ name: 'bug', description: 'something that works wrongly', body: '' }]
-  const [b] = boardWith('auto', ['npm test'], { kind: 'bug' } as Partial<SymccTask>)
+  const [b] = boardWith('auto', ['npm test'], { kind: 'bug' } as Partial<BoardTask>)
   expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).toContain('Kind of task: bug (something that works wrongly).')
-  const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
+  const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<BoardTask>)
   expect(WORKER_PROMPT(i.tasks[0]!, i, WT)).toContain('Kind of task: investigation')
 })
 
@@ -4148,7 +4150,7 @@ test('a researcher task of kind change is committed, tested and merged as today'
 })
 
 test('the worker prompt of an investigation asks for the answer in full and says file changes are not kept; a change keeps its prompt', () => {
-  const [b] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
+  const [b] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<BoardTask>)
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
   expect(p).toContain('This task is an investigation: your job is to find the answer and hand it back in full.')
   expect(p).toContain('any file changes you make in the project are not kept')

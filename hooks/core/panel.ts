@@ -121,7 +121,7 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
  *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked
  *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean.
  *  `maxMinutes`: the board's max_minutes, for the time limit in the more-time question. */
-export function rowExtra(t: SymccTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes): string {
+export function rowExtra(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes): string {
   const into = intoOf(t)
   const other = here && into !== here ? `→ ${into}` : ''
   const rest = fileWaitText(t) || rowExtraOf(t, tasks, maxMinutes)

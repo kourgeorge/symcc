@@ -4,10 +4,12 @@
 // finish at the same moment must both be merged and neither one's board save may be lost.
 // The plugin runs as loaded by the test kit; files, git and agents are the fake world below. The hook starts its
 // work without waiting for it, so each test lets that work finish with the fake clock's settle(), never a real wait.
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
+import { entry, ran } from './fakes'
+import type { ProcessRunResult } from 'claude-code'
 
 const T0 = 1_800_000_000_000
 const ISO = new Date(T0 - 60_000).toISOString()
@@ -15,9 +17,9 @@ const ROOT = '/repo'
 const BOARD = '/.symcc/board.json'
 const SCOUTS_DIR = '/.symcc/scouts'
 
-type Res = { exitCode: number; stdout: string; stderr: string }
-const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
-const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
+type Res = ProcessRunResult
+const ok = (stdout = ''): Res => ran({ stdout })
+const fail = (stderr = ''): Res => ran({ exitCode: 1, stderr })
 
 /** A commit id from a number: always the same 40 hex characters for the same number. */
 const sha = (n: number) => n.toString(16).padStart(40, 'c')
@@ -119,7 +121,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   on('fs.write', (_, e) => (files.set(key(e.path), String((e as unknown as { text: string }).text)), { value: undefined }))
   on('fs.stat', (_, e) => (files.has(key(e.path)) ? { value: { mtimeMs: T0 } } : Promise.reject(new Error('no file'))) as never)
   on('fs.list', (_, e) =>
-    key(e.path) === SCOUTS_DIR ? { value: [...files.keys()].filter(f => f.startsWith(`${SCOUTS_DIR}/`)).map(f => ({ name: f.slice(SCOUTS_DIR.length + 1), kind: 'file' })) } : ({ value: [] } as never),
+    key(e.path) === SCOUTS_DIR ? { value: [...files.keys()].filter(f => f.startsWith(`${SCOUTS_DIR}/`)).map(f => entry(f.slice(SCOUTS_DIR.length + 1))) } : ({ value: [] } as never),
   )
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
@@ -169,7 +171,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   return { files, git, prompts, reached, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 
-type Eng = Parameters<Parameters<typeof test>[1]>[0]
+type Eng = Engine
 
 /** A board in `mode` with one task per entry, each "doing" in this session ("me") for its agent, with its files. */
 function doingBoard(mode: 'auto' | 'review', tasks: { agent: string; files: string[] }[]): Board {

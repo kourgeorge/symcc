@@ -55,7 +55,7 @@ test('a transform dissolves the clef into its shape, holds about 1 s, and dissol
     // some frames in between show sparks
     expect(shown.some(x => SPARKS.some(s => x.includes(s)))).toBe(true)
     // only the logo's 5 columns change: the free columns on both sides stay blank
-    for (const f of fs) for (const r of f) expect(r[0] + r[6]).toBe('  ')
+    for (const f of fs) for (const r of f) expect(r.charAt(0) + r.charAt(6)).toBe('  ')
   }
 })
 

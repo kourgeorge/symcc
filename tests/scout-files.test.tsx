@@ -3,6 +3,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { fileToolHits } from '../hooks/plugin/scouts'
 import { inProject } from './project'
+import { ran, readText, entry, pause } from './fakes'
 
 /**
  * Fake files for the scouts and roles folders: `files` maps the end of a path to its text (null = no file).
@@ -12,7 +13,7 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
   const views: string[] = []
   const listed: string[] = []
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
-  const namesIn = (dir: string) => Object.keys(files).filter(f => f.startsWith(`${dir}/`) && files[f] !== null).map(f => ({ name: f.slice(dir.length + 1), kind: 'file' }))
+  const namesIn = (dir: string) => Object.keys(files).filter(f => f.startsWith(`${dir}/`) && files[f] !== null).map(f => entry(f.slice(dir.length + 1)))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : /\/(scouts|roles)$/.test(e.path) ? { value: true } : next(e)))
   on('fs.list', (_, e, next) => {
     listed.push(e.path)
@@ -20,14 +21,14 @@ function fakeFiles(on: On, files: Record<string, string | null>) {
     if (e.path.endsWith('/roles')) return { value: namesIn('/.symcc/roles') }
     return next(e)
   })
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', () => ({ value: undefined }))
   on('state.set', (_, e, next) => {
     if (e.key === 'view') views.push(JSON.stringify((e as { value?: unknown }).value))
     return next(e)
   })
   on('ui.status', () => ({ value: undefined }))
-  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  on('process.run', () => ({ value: ran() }))
   inProject(on)
   mock.clock(on, { now: Date.now() })
   return { views, listed }
@@ -44,7 +45,7 @@ function fakeTools(on: On, files: Record<string, string | null>) {
 }
 
 const settle = async (until: () => boolean) => {
-  for (let i = 0; i < 100 && !until(); i++) await new Promise(r => setTimeout(r, 5))
+  for (let i = 0; i < 100 && !until(); i++) await pause(5)
 }
 const lastView = (views: string[]) => views[views.length - 1] ?? ''
 

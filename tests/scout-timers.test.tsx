@@ -3,6 +3,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
 import { inProject } from './project'
+import { ran, readText, entry, pause } from './fakes'
 
 const MIN = 60_000
 
@@ -15,16 +16,16 @@ function setup(on: On, files: Record<string, string | null>) {
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : /\/scouts$/.test(e.path) ? { value: true } : next(e)))
   on('fs.list', (_, e, next) =>
-    e.path.endsWith('/.symcc/scouts') ? { value: Object.keys(files).filter(f => f.startsWith('/.symcc/scouts/') && files[f] !== null).map(f => ({ name: f.slice('/.symcc/scouts/'.length), kind: 'file' })) } : next(e),
+    e.path.endsWith('/.symcc/scouts') ? { value: Object.keys(files).filter(f => f.startsWith('/.symcc/scouts/') && files[f] !== null).map(f => entry(f.slice('/.symcc/scouts/'.length))) } : next(e),
   )
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', () => ({ value: undefined }))
   on('state.set', (_, e, next) => {
     if (e.key === 'view') views.push(JSON.parse(JSON.stringify((e as { value?: { value?: unknown } }).value?.value ?? (e as { value?: unknown }).value)))
     return next(e)
   })
   on('ui.status', () => ({ value: undefined }))
-  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  on('process.run', () => ({ value: ran() }))
   on('tool.call', (_, e) => {
     const a = e as unknown as { tool: string; file_path?: string; content?: string }
     if (a.tool === 'Write') files[a.file_path!.slice(a.file_path!.indexOf('/.symcc/'))] = a.content ?? ''
@@ -42,7 +43,7 @@ const memory = (m: Record<string, object>) => JSON.stringify({ scouts: m })
 async function write($: { tool: { call(a: never): Promise<unknown> } }, views: unknown[], name: string, text: string) {
   const before = views.length
   await $.tool.call({ tool: 'Write', file_path: `/proj/.symcc/scouts/${name}.md`, content: text } as never)
-  for (let i = 0; i < 100 && views.length === before; i++) await new Promise(r => setTimeout(r, 5))
+  for (let i = 0; i < 100 && views.length === before; i++) await pause(5)
 }
 const nextAt = (views: { scouts?: { name: string; next_run?: string }[] }[], name: string) => Date.parse(views[views.length - 1]?.scouts?.find(s => s.name === name)?.next_run ?? '')
 

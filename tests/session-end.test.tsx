@@ -2,18 +2,20 @@
 // session id, so everything keeps running and is handed over to the new id; a real end stops the timers and
 // lets go of lead.json. The plugin runs as loaded by the test kit, against the in-memory world below and the
 // kit's fake clock (no real waiting). The plugin is loaded fresh for every test.
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
+import { ran } from './fakes'
+import type { ProcessRunResult } from 'claude-code'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
 const BOARD = '/.symcc/board.json'
 const LEAD = '/.symcc/lead.json'
 
-type Res = { exitCode: number; stdout: string; stderr: string }
-const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
+type Res = ProcessRunResult
+const ok = (stdout = ''): Res => ran({ stdout })
 
 /**
  * Files in memory (keyed from "/.symcc/" on), one live worker agent "w1" for T-1, and a session id that
@@ -38,7 +40,7 @@ function world(on: On) {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     // the board's lock and its save through a temp file (see store.ts)
     if (cmd === 'ln') {
-      if (files.has(key(rest[1]!))) return { value: { exitCode: 1, stdout: '', stderr: 'File exists' } }
+      if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
       files.set(key(rest[1]!), files.get(key(rest[0]!)) ?? '')
     }
     if (cmd === 'mv') {
@@ -77,7 +79,7 @@ function world(on: On) {
   }
 }
 
-type Eng = Parameters<Parameters<typeof test>[1]>[0]
+type Eng = Engine
 
 /** Session "s1" starts and drives the board; T-1 is "doing" for "s1", worked on by the live agent w1 (adopted at start). */
 async function startDriving($: Eng, w: ReturnType<typeof world>) {

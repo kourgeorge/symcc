@@ -2,7 +2,7 @@
 // code that uses them). Every test file shares one copy, so what one test leaves there (an agent id in
 // `stopped`, a task in `finishing`, S.me, ...) changes what a later test sees. resetPlugin() empties them all
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
-import { test as plainTest } from 'claude-code/testing'
+import { test as plainTest, type TestBody, type TestRest } from 'claude-code/testing'
 import { emptyHeard } from '../hooks/board'
 import { S, startS, timers, warnedPrompts, workers, starting, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
 import { resetScoutRuns } from '../hooks/plugin/scouts'
@@ -39,10 +39,13 @@ export function resetPlugin() {
 /**
  * The runtime's test(), but each test starts with resetPlugin() (the runtime has no beforeEach).
  * Use it in place of the plain test() in a file whose tests touch the plugin's memory. What the runtime passes
- * a test (a hook test's `on`, ...) is passed on.
+ * a test (`$` and a hook test's `on`) is passed on, and options given before the body (timeoutMs, ...) too.
  */
-export const test = ((name: string, fn: (...args: unknown[]) => unknown, ...rest: unknown[]) =>
-  (plainTest as (...a: unknown[]) => unknown)(name, (...args: unknown[]) => {
+export const test = (name: string, ...rest: TestRest): void => {
+  const fresh = (body: TestBody): TestBody => ($, on) => {
     resetPlugin()
-    return fn(...args)
-  }, ...rest)) as typeof plainTest
+    return body($, on)
+  }
+  if (rest.length === 1) plainTest(name, fresh(rest[0]))
+  else plainTest(name, rest[0], fresh(rest[1]))
+}

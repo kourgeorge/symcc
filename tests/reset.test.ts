@@ -80,6 +80,16 @@ test('the reset test() starts with S.me and S.driving as a fresh load has them',
   expect(S.driving).toBe(false)
 })
 
+test('another test that leaves S.me set (the next one, given options, checks it is gone)', () => {
+  S.me = 'left-over'
+  expect(S.me).toBe('left-over')
+})
+
+test('the reset test() given options before the body still starts fresh and runs the body with $', { timeoutMs: 5000 }, $ => {
+  expect(S.me).toBe('')
+  expect(typeof $.ui).toBe('object')
+})
+
 /** A stand-in $ for the logo player: a shown, placed board pane and a frame timer ticked by hand. */
 function logo$() {
   const ticks: (() => void)[] = []

@@ -4,6 +4,7 @@ import type { On } from 'claude-code'
 import { parseScout, safeScoutFile, resolveRel, SCOUT_FILE_NAME } from '../hooks/board'
 import { runScoutNow, setScoutPaused } from '../hooks/plugin/scouts'
 import { inProject } from './project'
+import { ran, readText, entry } from './fakes'
 
 /**
  * Fake scouts folder, scouts.json and board: `files` maps the end of a path to its text (null = no file).
@@ -17,9 +18,9 @@ function setup(on: On, files: Record<string, string | null>) {
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : /\/scouts$/.test(e.path) ? { value: true } : next(e)))
   on('fs.list', (_, e, next) =>
-    e.path.endsWith('/.symcc/scouts') ? { value: Object.keys(files).filter(f => f.startsWith('/.symcc/scouts/') && files[f] !== null).map(f => ({ name: f.slice('/.symcc/scouts/'.length), kind: 'file' })) } : next(e),
+    e.path.endsWith('/.symcc/scouts') ? { value: Object.keys(files).filter(f => f.startsWith('/.symcc/scouts/') && files[f] !== null).map(f => entry(f.slice('/.symcc/scouts/'.length))) } : next(e),
   )
-  on('fs.read', (_, e, next) => (fileOf(e.path) ? (files[fileOf(e.path)!] === null ? Promise.reject(new Error('no file')) : { value: files[fileOf(e.path)!] }) : next(e)))
+  on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', (_, e) => {
     if (!e.path.endsWith('.tmp') && !/\/(scouts\.json|board\.json|board\.lock)$/.test(e.path)) touched.push(e.path)
     if (e.path.includes('/.symcc/scouts/')) files[key(e.path)] = String(e.text)
@@ -37,7 +38,7 @@ function setup(on: On, files: Record<string, string | null>) {
       touched.push(p)
       if (p.includes('/.symcc/scouts/')) files[key(p)] = null
     }
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   // the project folder (tool calls need it, see findRoot)
   inProject(on)
@@ -115,7 +116,7 @@ test('scouts run is not refused for a paused scout; pause and resume are for the
 
 test('scouts edit, remove, run and list refuse a name that could reach outside the scouts folder', async ($, on) => {
   const readme = '# the project\n'
-  const files = { ...base(), '/README.md': readme, '/x.md': 'outside\n' }
+  const files: Record<string, string | null> = { ...base(), '/README.md': readme, '/x.md': 'outside\n' }
   const { touched } = setup(on, files)
   for (const bad of ['../x', '../../README', 'a/b', '..', '../../.symcc/scouts/bugs', '/etc/passwd', 'a\\b', '.'])
     for (const action of ['edit', 'remove', 'run', 'list']) {

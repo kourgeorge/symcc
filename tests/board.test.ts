@@ -1,9 +1,10 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import type { SymccScout, SymccStatus, SymccTask } from '../types'
+import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../types'
+import { pause, commandsOf } from './fakes'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
-import { type Board, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
+import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { putTask } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
@@ -34,7 +35,7 @@ test('putTask swaps in the task with the same id and leaves the rest and the old
   const b3 = putTask(b2, { ...a, title: 'A2' })
   expect(b3.tasks.map(t => t.title)).toEqual(['A2', 'C'])
   expect(b3.tasks[1]).toBe(c)
-  expect(b2.tasks[0].title).toBe('A')
+  expect(b2.tasks[0]!.title).toBe('A')
   expect(putTask(b2, { ...a, id: 'T-99' }).tasks).toEqual(b2.tasks)
 })
 
@@ -377,17 +378,20 @@ test('a merged task is said out loud, several are joined into one line, and noti
 })
 
 test("a notify choice this machine can't play is refused with the reason, and a saved one is told once", () => {
-  const linux = { system: 'linux' as const, sound: true, voice: false }
+  const linux: Playable = { system: 'linux', sound: true, voice: false }
+  const other: Playable = { system: 'other', sound: false, voice: false }
+  const mac: Playable = { system: 'mac', sound: true, voice: true }
+  const windows: Playable = { system: 'windows', sound: false, voice: false }
   expect(notifyChoices(linux)).toEqual(['off', 'sound'])
-  expect(notifyChoices({ system: 'other', sound: false, voice: false })).toEqual(['off'])
-  expect(notifyChoices({ system: 'mac', sound: true, voice: true })).toEqual(['off', 'sound', 'voice'])
+  expect(notifyChoices(other)).toEqual(['off'])
+  expect(notifyChoices(mac)).toEqual(['off', 'sound', 'voice'])
   expect(notifyRefusal('voice', linux)).toBe("voice isn't available here: no speech program found (install espeak or speech-dispatcher)")
   expect(notifyRefusal('sound', linux)).toBe('')
-  expect(notifyRefusal('off', { system: 'other', sound: false, voice: false })).toBe('')
-  expect(notifyRefusal('sound', { system: 'windows', sound: false, voice: false })).toContain("sound isn't available here: no sound player found")
+  expect(notifyRefusal('off', other)).toBe('')
+  expect(notifyRefusal('sound', windows)).toContain("sound isn't available here: no sound player found")
   expect(unplayableNote('voice', linux)).toBe("notify is 'voice' but no speech program was found here; nothing will play")
   expect(unplayableNote('sound', linux)).toBe('')
-  expect(unplayableNote('off', { system: 'other', sound: false, voice: false })).toBe('')
+  expect(unplayableNote('off', other)).toBe('')
 })
 
 test('the project folder name is the last part of its path', () => {
@@ -1573,7 +1577,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
 })
 
 test('a typed test_commands line is one whole command; several go in a list or one per line', () => {
-  const cmds = (v: string) => (parseSettingValue('test_commands', v) as { input: { test_commands: string[] } }).input.test_commands
+  const cmds = (v: string) => commandsOf(parseSettingValue('test_commands', v))
   expect(cmds('cd web && npm test')).toEqual(['cd web && npm test'])
   expect(cmds('source .venv/bin/activate && pytest')).toEqual(['source .venv/bin/activate && pytest'])
   // more than 5 pieces of one line are kept whole, not cut
@@ -1618,7 +1622,7 @@ test('the board shows several test commands as a list, not joined with &&', () =
 })
 
 test('typed test_commands: outer quotes are stripped only when they wrap the whole value', () => {
-  const cmds = (v: string) => (parseSettingValue('test_commands', v) as { input: { test_commands: string[] } }).input.test_commands
+  const cmds = (v: string) => commandsOf(parseSettingValue('test_commands', v))
   expect(cmds('"./run tests" --fast "x y"')).toEqual(['"./run tests" --fast "x y"'])
   expect(cmds("'a b' 'c'")).toEqual(["'a b' 'c'"])
   expect(cmds('"npm test"')).toEqual(['npm test'])
@@ -1835,20 +1839,20 @@ test('the lead is told: one task, one role; split big work by role and link the 
 
 test('after merge: only done tasks lose their branch, and only the plugin\'s merged branches', async () => {
   const tasks = [
-    { id: 'T-1', status: 'done' as const },
+    { id: 'T-1', status: 'done' as const, branch: null },
     { id: 'T-2', status: 'done' as const, branch: 'feature/x' },
-    { id: 'T-3', status: 'dropped' as const },
-    { id: 'T-4', status: 'review' as const },
-    { id: 'T-5', status: 'done' as const },
-    { id: 'T-6', status: 'failed' as const },
-    { id: 'T-7', status: 'todo' as const },
+    { id: 'T-3', status: 'dropped' as const, branch: null },
+    { id: 'T-4', status: 'review' as const, branch: null },
+    { id: 'T-5', status: 'done' as const, branch: null },
+    { id: 'T-6', status: 'failed' as const, branch: null },
+    { id: 'T-7', status: 'todo' as const, branch: null },
   ]
   const merged = ['main', '  symcc/T-1', 'feature/x', 'symcc/T-3', 'symcc/T-4', 'symcc/T-6', 'symcc/T-7', '']
   // T-5 is done but not listed as merged; T-2's branch lacks the prefix; the rest are not done.
   expect(branchesToDelete(tasks, merged, 'symcc/')).toEqual(['symcc/T-1'])
   expect(branchesToDelete(tasks, merged, '')).toEqual([])
   for (const s of ['todo', 'doing', 'review', 'failed', 'paused', 'backlog', 'waiting', 'dropped'] as const)
-    expect(branchesToDelete([{ id: 'T-9', status: s }], ['symcc/T-9'], 'symcc/')).toEqual([])
+    expect(branchesToDelete([{ id: 'T-9', status: s, branch: null }], ['symcc/T-9'], 'symcc/')).toEqual([])
 })
 
 test('leftover worktrees of done and dropped tasks may be removed, others are kept', async () => {
@@ -2488,7 +2492,7 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   const scouts = [
     { name: 'tests', running: false, next_run: '2026-11-11T13:00:00Z' },
     { name: 'secrets', running: false, next_run: '2026-11-11T12:38:00Z' },
-    { name: 'docs', running: false, next_run: null },
+    { name: 'docs', running: false },
   ]
   const tasks = [{ id: 'T-1', status: 'doing' as const }, { id: 'T-2', status: 'todo' as const }, { id: 'T-3', status: 'backlog' as const }]
   const crew = { max_parallel: 3, tasks, scouts }
@@ -2521,7 +2525,7 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   // a stale mark (the copy that merged it is gone) is not merging now
   expect(crewParts({ max_parallel: 3, tasks: [{ status: 'doing', finishing: new Date(now - 3_600_000).toISOString() }], scouts: [] }, now).workers).toBe('1/3 workers')
   expect(withCrew((w, s) => [w, s].join('|'), undefined, now)).toBe('|')
-  expect(nextScoutText([{ name: 'bugs', running: true, next_run: null }, ...scouts], now)).toBe('running: bugs')
+  expect(nextScoutText([{ name: 'bugs', running: true }, ...scouts], now)).toBe('running: bugs')
   expect(nextScoutText([], now)).toBe('')
 })
 
@@ -2629,7 +2633,7 @@ test('a paused scout is saved in scouts.json and read back; old files without it
 })
 
 test('a pause does not stop run now (only the timer checks it)', () => {
-  const ok = { driving: true, gitOk: true, mode: 'auto' as const, on: true }
+  const ok: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean } = { driving: true, gitOk: true, mode: 'auto', on: true }
   expect(scoutMayRun({ running: false }, ok)).toBe(true)
   expect(scoutMayRun({ running: false, paused: false }, ok)).toBe(true)
   expect(scoutMayRun({ running: false, paused: true }, ok)).toBe(true)
@@ -2978,7 +2982,7 @@ test('a scout whose type is not ready yet is tried again shortly, then starts wi
   expect(w.later.length).toBe(2)
   ready = true
   w.later.at(-1)!.f()
-  for (let i = 0; i < 20 && !scoutRuns.has('a1'); i++) await new Promise(r => setTimeout(r, 0))
+  for (let i = 0; i < 20 && !scoutRuns.has('a1'); i++) await pause(0)
   expect(scoutRuns.get('a1')).toBe('gaps')
   expect(st.running).toBe(true)
   expect(st.last_run).not.toBe(OLD_RUN)

@@ -2,19 +2,21 @@
 // the /symcc-diff, /symcc-approve and /symcc-reject commands, and which prompts count as the owner's request.
 // The plugin runs as loaded by the test kit; what lies beneath it (files, git, agents) is the fake world below.
 // The plugin is loaded fresh for every test, so its state (stopped agents, the owner's last prompt) starts empty.
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { statsUsage } from '../hooks/core/stats'
+import { ran } from './fakes'
+import type { ProcessRunResult } from 'claude-code'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
 const BOARD = '/.symcc/board.json'
 const DIFF = ['diff --git a/src/b.md b/src/b.md', '--- a/src/b.md', '+++ b/src/b.md', '@@ -1 +1 @@', '-old line', '+new line'].join('\n')
 
-type Res = { exitCode: number; stdout: string; stderr: string }
-const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
+type Res = ProcessRunResult
+const ok = (stdout = ''): Res => ran({ stdout })
 
 /**
  * Files in memory (keyed from "/.symcc/" on, so the project folder does not matter), a small fake git and
@@ -36,7 +38,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
     // a repo with a commit, so work can start
     if (args[0] === 'rev-parse' && args[1] === '--is-inside-work-tree') return ok('true\n')
     if (args[0] !== 'diff') return ok()
-    if (state.gitFails) return { exitCode: 128, stdout: '', stderr: 'fatal: bad object symcc/T-1' }
+    if (state.gitFails) return ran({ exitCode: 128, stderr: 'fatal: bad object symcc/T-1' })
     if (args.some(a => a.startsWith('--stat'))) return ok(' src/b.md | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n')
     // the diff of one file: only src/b.md, as git was asked for it (no leading ./)
     const i = args.indexOf('--')
@@ -58,7 +60,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
     if (cmd === 'git') return { value: git(rest) }
     // the board's lock and its save through a temp file (see store.ts)
     if (cmd === 'ln') {
-      if (files.has(key(rest[1]!))) return { value: { exitCode: 1, stdout: '', stderr: 'File exists' } }
+      if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
       files.set(key(rest[1]!), files.get(key(rest[0]!)) ?? '')
     }
     if (cmd === 'mv') {
@@ -89,7 +91,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   return { files, tools, prompts, sent, toasts, spawned, state, clock, board: () => JSON.parse(files.get(BOARD)!) as Board }
 }
 
-type Eng = Parameters<Parameters<typeof test>[1]>[0]
+type Eng = Engine
 
 /** A board (mode review) with T-1 in review (files src/, branch symcc/T-1) and T-2 to do. */
 function reviewBoard(): Board {

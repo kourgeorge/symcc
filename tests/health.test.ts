@@ -1,14 +1,13 @@
 import { expect, test } from 'claude-code/testing'
-import type { SymccTask } from '../types'
-import { type Board, emptyBoard, boardHealth, newFindings, healthText, shareFiles, afterChanges, afterChangedLine, changeLines, OWNER_IDLE_MS } from '../hooks/board'
+import { type Board, type BoardTask, emptyBoard, boardHealth, newFindings, healthText, shareFiles, afterChanges, afterChangedLine, changeLines, OWNER_IDLE_MS } from '../hooks/board'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 
-function task(id: string, over: Partial<SymccTask> = {}): SymccTask {
+function task(id: string, over: Partial<BoardTask> = {}): BoardTask {
   return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
 }
-const board = (tasks: SymccTask[], extra: Partial<Board> = {}): Board => ({ ...emptyBoard(), tasks, ...extra })
+const board = (tasks: BoardTask[], extra: Partial<Board> = {}): Board => ({ ...emptyBoard(), tasks, ...extra })
 const reasons = (b: Board) => boardHealth(b, NOW).map(f => `${f.reason}:${f.tasks.join(',')}`)
 
 test('health: a healthy board finds nothing and sends nothing', () => {

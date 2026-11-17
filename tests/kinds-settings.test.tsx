@@ -1,9 +1,10 @@
 // The Kinds page of the board panel's Settings view (T-329): like the Roles page, with the same keys.
-import { expect, mock } from 'claude-code/testing'
+import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
+import { ran, entry } from './fakes'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -37,13 +38,13 @@ function fakeKinds(on: On, mine: Record<string, string>) {
   })
   on('fs.list', (_, e, next) => {
     const w = where(e.path)
-    return w && w[1] === '' ? { value: Object.keys(w[0]).map(name => ({ name, kind: 'file' })) } : next(e)
+    return w && w[1] === '' ? { value: Object.keys(w[0]).map(name => entry(name)) } : next(e)
   })
   on('fs.read', (_, e, next) => {
     const w = where(e.path)
     if (!w) return next(e)
     if (!(w[1] in w[0])) throw new Error('no file')
-    return { value: w[0][w[1]] }
+    return { value: w[0][w[1]]! }
   })
   on('fs.write', (_, e, next) => {
     const w = where(e.path)
@@ -57,7 +58,7 @@ function fakeKinds(on: On, mine: Record<string, string>) {
       const w = where(argv[argv.length - 1]!)
       if (w) delete w[0][w[1]]
     }
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
@@ -72,7 +73,7 @@ function fakeKinds(on: On, mine: Record<string, string>) {
   return { mine }
 }
 
-type Eng = Parameters<Parameters<typeof test>[1]>[0]
+type Eng = Engine
 
 /** Starts the session (so the plugin knows its project folder) and mounts the panel on its Settings view. */
 async function settingsOnly($: Eng) {

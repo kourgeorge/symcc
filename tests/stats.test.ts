@@ -102,7 +102,7 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
 })
 
 test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
-  const t = task('T-1', { updated_at: iso(50), runs: [{ started: iso(60) }, { started: iso(58), ended: iso(55), tokens: 10 }, { started: iso(54) }] })
+  const t = task('T-1', { updated_at: iso(50), runs: [{ started: iso(60) }, { started: iso(58), ended: iso(55), tokens: { unsplit: 10 } }, { started: iso(54) }] })
   const read = (x: typeof t) => readBoard(JSON.stringify({ version: 1, tasks: [x] }))
   const r = read(t)
   expect(r.migrated).toBe(1)

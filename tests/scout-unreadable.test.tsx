@@ -6,6 +6,7 @@ import type { On } from 'claude-code'
 import { LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { SCOUT_SOON_MS, scheduleScouts, scoutFinished } from '../hooks/plugin/scouts'
 import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
+import { ran, entry, pause, slash } from './fakes'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -25,14 +26,14 @@ function world(on: On) {
   on('fs.read', (_, e) => (files.has(key(e.path)) ? { value: files.get(key(e.path))! } : Promise.reject(new Error(`can't read ${e.path}`))))
   on('fs.write', (_, e) => (writes.push(key(e.path)), files.set(key(e.path), (e as unknown as { text: string }).text), { value: undefined }))
   on('fs.stat', (_, e) => (files.has(key(e.path)) ? { value: { mtimeMs: T0 } } : Promise.reject(new Error('no file'))) as never)
-  on('fs.list', (_, e) => ({ value: key(e.path) === SCOUTS ? [{ name: 'a.md', kind: 'file' }, { name: 'b.md', kind: 'file' }] : [] }) as never)
+  on('fs.list', (_, e) => ({ value: key(e.path) === SCOUTS ? [entry('a.md'), entry('b.md')] : [] }) as never)
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
-    if (cmd === 'git') return { value: { exitCode: 0, stdout: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? 'true\n' : '', stderr: '' } }
+    if (cmd === 'git') return { value: ran({ stdout: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? 'true\n' : '' }) }
     if (cmd === 'ln') {
-      if (files.has(key(rest[1]!))) return { value: { exitCode: 1, stdout: '', stderr: 'File exists' } }
+      if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
       files.set(key(rest[1]!), files.get(key(rest[0]!)) ?? '')
     }
     if (cmd === 'mv') {
@@ -42,7 +43,7 @@ function world(on: On) {
       files.delete(key(from!))
     }
     if (cmd === 'rm') for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(key(p))
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   on('agent.list', () => (state.lists++, { value: [{ id: 'w1', type: 'symcc:worker', name: 'symcc-T-1', status: 'running' }] }) as never)
   on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
@@ -64,7 +65,7 @@ test('session.start with an unreadable scout file still runs the other scout, th
   expect(JSON.parse(w.files.get(LEAD)!).session).toBe('s1')
   // a is scheduled and runs at its first turn
   await w.clock.advance(SCOUT_SOON_MS)
-  for (let i = 0; i < 100 && !w.spawned.length; i++) await new Promise(r => setTimeout(r, 5))
+  for (let i = 0; i < 100 && !w.spawned.length; i++) await pause(5)
   expect(w.spawned.filter(n => /scout/i.test(n)).length).toBe(1)
   expect(w.spawned).toContain('symcc-scout-a')
   // the heartbeat refreshes lead.json one beat later
@@ -79,7 +80,7 @@ test('session.start with an unreadable scout file still runs the other scout, th
 
 test('/symcc-scouts with an unreadable scout file names it instead of throwing', async ($, on) => {
   world(on)
-  const text = String((await $.command.run({ command: 'symcc-scouts', args: '' })).text)
+  const text = String((await $.command.run(slash('symcc-scouts'))).text)
   expect(text).toMatch(/b\.md: can't be read, skipped/)
 })
 
@@ -124,7 +125,7 @@ function memoryWorld() {
         if (!files.has(p)) throw new Error(`no file ${p}`)
         return { mtimeMs: 0 }
       },
-      list: async (p: string) => (p === DIR ? [{ name: 'a.md', kind: 'file' }, ...(o.gone ? [] : [{ name: 'b.md', kind: 'file' }])] : []),
+      list: async (p: string) => (p === DIR ? [entry('a.md'), ...(o.gone ? [] : [entry('b.md')])] : []),
     },
     session: { id: async () => 'me', send: async () => undefined },
     agent: { list: async () => [] },

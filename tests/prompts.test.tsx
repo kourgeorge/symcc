@@ -12,6 +12,7 @@ import { WORKER_PROMPT } from '../hooks/plugin/workers'
 import { runTool } from '../hooks/plugin/tools'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
+import { ran, entry } from './fakes'
 
 const ROOT = '/proj'
 const MINE = `${ROOT}/.symcc/prompts`
@@ -34,7 +35,7 @@ function setup(mine: Record<string, string> = {}) {
     plugin: { root: '/plugin' },
     fs: {
       exists: async (p: string) => p === MINE || (name(p) ?? '') in mine,
-      list: async () => Object.keys(mine).map(n => ({ name: n, kind: 'file' })),
+      list: async () => Object.keys(mine).map(n => entry(n)),
       read: async (p: string) => {
         const n = name(p)
         if (n === null || !(n in mine)) throw new Error('no file')
@@ -215,7 +216,7 @@ function fakePrompts(on: On, mine: Record<string, string>) {
     const w = where(e.path)
     if (w === null) return next(e)
     if (!(w in mine)) throw new Error('no file')
-    return { value: mine[w] }
+    return { value: mine[w]! }
   })
   on('fs.write', (_, e, next) => {
     const w = where(e.path)
@@ -227,7 +228,7 @@ function fakePrompts(on: On, mine: Record<string, string>) {
     const argv = (e as { argv: string[] }).argv
     const w = argv[0] === 'rm' ? where(argv[argv.length - 1]!) : null
     if (w) delete mine[w]
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    return { value: ran() }
   })
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
