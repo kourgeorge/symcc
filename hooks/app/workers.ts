@@ -1090,11 +1090,17 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
+/** How the last Approve, Done, Keep as a note or Merge now of each task ended: 'merged', 'done' (an investigation's Done), or 'failed'. */
+const outcomes = new Map<string, 'merged' | 'done' | 'failed'>()
+/** How task `id`'s last Approve, Done, Keep as a note or Merge now ended (see outcomes); undefined when none ran. */
+export const mergeOutcome = (id: string) => outcomes.get(id)
+
 /**
  * The owner approved task `id` (in "review"): the same checked merge as for a finished worker. An answered
  * investigation has nothing to merge: approve is its Done (see endInvestigation), and `keepNote` its Keep as a note.
  */
 export async function approve(host: Host, id: string, keepNote = false): Promise<string> {
+  if (!approving.has(id)) outcomes.set(id, 'failed')
   const b = await load(host)
   const t = reviewTask(b, id, 'approve')
   if (isInvestigation(t)) return endInvestigation(host, t, keepNote)
@@ -1139,6 +1145,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean): Pr
   if ((await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) && !keep) await git(host, ['branch', '-D', branch])
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`)
   void pump(host)
+  outcomes.set(t.id, 'done')
   if (!added) return `${t.id} done: the answer was read; nothing was merged${kept ? `.${kept}` : ''}`
   return `${t.id} done: the answer was read; nothing was merged. Added ${added.id} "${added.title}": it writes ${added.files[0]} from the answer and merges as usual${kept ? `.${kept}` : ''}`
 }
@@ -1149,6 +1156,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean): Pr
  * merged). A task in review (an approve that was blocked) is approved again.
  */
 export async function mergeWaiting(host: Host, id: string): Promise<string> {
+  if (!approving.has(id)) outcomes.set(id, 'failed')
   const b = await load(host)
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
@@ -1265,6 +1273,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     await recordCommits(host, t.id, made, r.merged)
     const cur = find(await load(host), t.id)
     if (r.merged) {
+      outcomes.set(t.id, 'merged')
       // The work is on the target branch: the task is done, whatever happened to it meanwhile
       // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
       const sha = shortSha(r.merged)
@@ -1317,6 +1326,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       return `${t.id} was not merged and stays in review: ${r.detail}${/approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'}`
     }
     await settle(host, cur, b, r, by, dir)
+    if (r.ok) outcomes.set(t.id, 'merged')
     const label = kind === 'approve' ? 'approved, but not merged' : 'not merged'
     return r.ok ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} ${label}: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
   } finally {

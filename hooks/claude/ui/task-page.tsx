@@ -13,6 +13,18 @@ import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../host'
+import { mergingNow, mergeOutcome } from '../../app/workers'
+
+/** The line a task's page shows in place of its review buttons while it merges. */
+export const MERGING_LINE = 'Merging… (tests running)'
+/** The keys of the review and merge buttons (approve or done, reject or ask more, keep as a note, merge now): not offered while it merges. */
+const MERGE_KEYS = ['a', 'x', 'k', 'r']
+/** Tasks whose Approve, Done, Keep as a note or Merge now was pressed and still runs: the line their page shows meanwhile. */
+const pressed = new Map<string, string>()
+/** The last such press's result for each task, shown on its page once it ends (until the next press). */
+const lastResult = new Map<string, { text: string; ok: boolean }>()
+/** What task `id`'s page says while its merge runs, or '' when none does (pressed here, or approved another way). */
+export const mergingLine = (id: string): string => pressed.get(id) ?? (mergingNow(id) ? MERGING_LINE : '')
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
@@ -26,22 +38,52 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // An answered investigation in review: nothing to merge; Done, Keep as a note and Ask more instead of Approve and Reject.
   const answered = isAnswered(t as BoardTask)
   const showDiff = (file: string) => () => ((S.diffOpen = { task: t.id, file }), $.ui.invalidate('ui.render'))
-  const approveIt = act(async () => {
-    const r = await runTool(claudeHost($), 'approve', { task: t.id })
+  // The merge runs without holding the press: the page redraws at once with its merging line (no Approve, Reject or
+  // Merge now buttons meanwhile), and once more with the result. A second press meanwhile starts nothing.
+  const merging = mergingLine(t.id)
+  const redraw = () => $.ui.invalidate('ui.render')
+  const startMerge = (line: string, start: string, run: () => Promise<string>, tell: (r: string) => void) => () => {
+    if (mergingLine(t.id)) return void $.ui.toast(S.N.toast(`${t.id} is already merging`))
+    pressed.set(t.id, line)
+    lastResult.delete(t.id)
     S.diffOpen = null
     S.rejecting = null
-    $.ui.toast(S.N.toast(r))
-    noteForLead(answered ? `The owner read the answer of ${t.id} and marked it done: ${brief(r)}` : `The owner approved ${t.id}: ${brief(r)}`)
-  })
-  const keepNote = act(async () => {
-    const r = await runTool(claudeHost($), 'approve', { task: t.id, keep_note: true })
-    S.rejecting = null
-    $.ui.toast(S.N.toast(r))
-    tellLead(claudeHost($), `The owner kept the answer of ${t.id} as a note: ${brief(r)}`)
-  })
+    $.ui.toast(S.N.toast(start))
+    redraw()
+    void run()
+      .then(
+        // its color comes from how it really ended (merged, done or failed), not from the words of the reply
+        r => (lastResult.set(t.id, { text: r, ok: ['merged', 'done'].includes(mergeOutcome(t.id) ?? '') }), $.ui.toast(S.N.toast(r)), tell(r)),
+        (err: Error) => (lastResult.set(t.id, { text: err.message, ok: false }), $.ui.toast(S.N.toast(err.message))),
+      )
+      .finally(() => (pressed.delete(t.id), redraw()))
+  }
+  const approveIt = startMerge(
+    answered ? 'Marking it done…' : MERGING_LINE,
+    answered ? `Marking ${t.id} done…` : `Approving ${t.id}: running the tests, then merging…`,
+    () => runTool(claudeHost($), 'approve', { task: t.id }),
+    r => noteForLead(answered ? `The owner read the answer of ${t.id} and marked it done: ${brief(r)}` : `The owner approved ${t.id}: ${brief(r)}`),
+  )
+  const keepNote = startMerge(
+    'Keeping the answer as a note…',
+    `Keeping the answer of ${t.id} as a note…`,
+    () => runTool(claudeHost($), 'approve', { task: t.id, keep_note: true }),
+    r => tellLead(claudeHost($), `The owner kept the answer of ${t.id} as a note: ${brief(r)}`),
+  )
+  const last = merging ? undefined : lastResult.get(t.id)
+  const result = last?.text ?? ''
+  const resultOk = !!last?.ok
+  /** The merging line, or the last merge press's result, in the status area. */
+  const mergeStatus = merging ? (
+    <Text key="merging" bold color={C('success')}>{merging}</Text>
+  ) : result ? (
+    <Text key="merge-result" color={C(resultOk ? 'success' : 'warning')}>{result}</Text>
+  ) : null
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
   const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
-  const reviewButtons = answered
+  const reviewButtons = merging
+    ? []
+    : answered
     ? [<Button key="done" label="Done (a)" hotkey="a" onPress={approveIt} />, <Button key="keep-note" label="Keep as a note (k)" hotkey="k" onPress={keepNote} />, <Button key="ask-more" label="Ask more (x)" hotkey="x" onPress={askReason} />]
     : inReview
       ? [<Button key="approve" label="Approve" hotkey="a" onPress={approveIt} />, <Button key="reject" label="Reject" hotkey="x" onPress={askReason} />]
@@ -59,7 +101,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button (c), leaves it: Esc
    *  doesn't reach the panel from a text box. */
   const rejectBox =
-    inReview && S.rejecting?.task === t.id ? (
+    inReview && !merging && S.rejecting?.task === t.id ? (
       <Box flexDirection="column" borderStyle="round" borderColor={C(answered ? 'warning' : 'error')} paddingX={1}>
         <Input
           key="reject-reason"
@@ -96,6 +138,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           <Text bold color={C('text')}>
             {t.title}
           </Text>
+          {mergeStatus}
         </Box>
         {buttonRows([
           <Button key="diff-back" label="Back" hotkey="b" autoFocus={rejectBox ? undefined : true} onPress={() => ((S.diffOpen = null), $.ui.invalidate('ui.render'))} />,
@@ -112,7 +155,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Text>
           ))}
         </Box>
-        {footer(diffKeys(inReview, !!d.file), 'diff-keys')}
+        {footer(diffKeys(inReview && !merging, !!d.file), 'diff-keys')}
       </Box>
     )
   }
@@ -239,7 +282,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const openTask = (id: string) => act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => id)))
   const pauseIt = act(async () => (await runTool(claudeHost($), 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))
   const resumeIt = act(async () => (await runTool(claudeHost($), 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))
-  const mergeNow = act(async () => ($.ui.toast(S.N.toast(await runTool(claudeHost($), 'retry', { task: t.id }))), noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`)))
+  const mergeNow = startMerge(MERGING_LINE, `Merging ${t.id} now…`, () => runTool(claudeHost($), 'retry', { task: t.id }), () => noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`))
   const retryIt = act(async () => (await runTool(claudeHost($), 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))
   const toTodo = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))
   const stashIt = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))
@@ -260,7 +303,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      agentId, inReview, answered, target, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
+      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
       on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
@@ -272,6 +315,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           <Text bold color={C(STATUS_BADGE[t.status])}>{`[${STATUS_MARK[t.status]} ${answered ? 'answered: read it' : word[t.status]}]`}</Text>
           {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
         </Text>
+        {mergeStatus}
       </Box>
 
       {why && (
@@ -294,7 +338,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         t.status === 'paused' && (
           <Button key="resume" label="Resume" hotkey="u" onPress={resumeIt} />
         ),
-        fileWait && (
+        fileWait && !merging && (
           <Button key="merge-now" label="Merge now (r)" hotkey="r" onPress={mergeNow} />
         ),
         (t.status === 'failed' || t.status === 'dropped') && (
@@ -367,7 +411,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {fileWait && (
         <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
           <Text color={C('text')}>{fileWait}</Text>
-          <Text color={C('inactive')}>r merges it now</Text>
+          {merging ? null : <Text color={C('inactive')}>r merges it now</Text>}
         </Box>
       )}
 
@@ -417,7 +461,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait, isInvestigation(t)), 'task-keys')}
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait, isInvestigation(t)).filter(h => !merging || !MERGE_KEYS.includes(h.key)), 'task-keys')}
     </Box>
   )
 }
