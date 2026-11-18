@@ -888,7 +888,9 @@ gets its own git worktree. It checks this when a session starts and before a wor
   - writes a `.gitignore` (or adds to yours, never twice) with `.symcc/`,
     `node_modules/`, `.env`, `.env.*` (but not templates: `!.env*.example`, `!.env*.sample`,
     `!.env*.template`, `!.env*.dist` and `!.env*.defaults`, so `.env.example` and
-    `.env.local.example` are committed), `.DS_Store`, `dist/`, `build/`, `__pycache__/` and `.venv/`;
+    `.env.local.example` are committed), `.DS_Store`, `dist/`, `build/`, `__pycache__/` and `.venv/`.
+    If your own `.gitignore` already ignores a name with one of those endings (say `.env.sample`),
+    the matching `!` line is not added, so that file stays ignored as you wanted;
   - makes a first commit of the current files, "Initial commit (by symcc)", leaving
     out (and ignoring) files that look like secrets (`.env`, `*.pem`, `id_rsa`) or
     are over 50 MB; the result says which;

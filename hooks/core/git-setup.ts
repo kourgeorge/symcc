@@ -132,17 +132,30 @@ export const gitignoreBase = (dir: string = DATA_DIR) => [`${dir}/`, 'node_modul
 /** A .gitignore line as git matches it, to spot one already there: no leading "/", no trailing "/", no spaces around. */
 const ignoreKey = (line: string) => line.trim().replace(/^\//, '').replace(/\/+$/, '')
 
+/** The ending (".sample") of a line's last part, lower case; '' when it has none. */
+const lineEnding = (line: string) => {
+  const last = ignoreKey(line).split('/').pop() ?? ''
+  const dot = last.lastIndexOf('.')
+  return dot > 0 ? last.slice(dot).toLowerCase() : ''
+}
+
 /**
  * The .gitignore text after adding `lines` to `old` (null = no file yet): only the lines not
  * there already (and each once), at the end. Returns `old` unchanged when nothing is missing.
+ * A `!` line (such as `!.env*.sample`) is skipped when the old file already ignores a name with the
+ * same ending (`.env.sample`, `config/.env.sample`, `*.sample`): added last it would win over the
+ * owner's line and commit a file they ignored on purpose.
  */
 export function gitignoreWith(old: string | null, lines: string[]): string {
   const text = old ?? ''
-  const have = new Set(text.split(/\r?\n/).map(ignoreKey).filter(Boolean))
+  const own = text.split(/\r?\n/).map(x => x.trim()).filter(x => x && !x.startsWith('#'))
+  const have = new Set(own.map(ignoreKey).filter(Boolean))
+  const ownEndings = new Set(own.filter(x => !x.startsWith('!')).map(lineEnding).filter(Boolean))
   const add: string[] = []
   for (const l of lines.map(x => x.trim()).filter(Boolean)) {
     const k = ignoreKey(l)
     if (!k || have.has(k)) continue
+    if (l.startsWith('!') && ownEndings.has(lineEnding(l))) continue
     have.add(k)
     add.push(l)
   }

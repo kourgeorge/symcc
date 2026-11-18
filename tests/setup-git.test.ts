@@ -358,6 +358,20 @@ test('longer template names (.env.local.example, config/.env.production.sample) 
   for (const f of ['.env.local', '.env.EXAMPLE']) expect(files).not.toContain(f)
 })
 
+test("a template the owner's own .gitignore ignores on purpose (.env.sample) stays out: setup adds no !.env*.sample line after it", async () => {
+  const w = world()
+  await withProject(w)
+  w.files.set(`${w.top}/.gitignore`, '.env.sample\n')
+  for (const f of ['.env.sample', '.env.example']) w.files.set(`${ROOT}/${f}`, 'REAL=1\n')
+  await setupGit(w.$, 'the lead')
+  const lines = ignoreLinesOf(w)
+  expect(lines).not.toContain('!.env*.sample')
+  expect(lines).toContain('!.env*.example')
+  const files = w.repo.commits[0]!.files
+  expect(files).not.toContain('.env.sample')
+  expect(files).toContain('.env.example')
+})
+
 test('a secret-looking file the base lines miss (a .pem) is taken out of the commit and added to .gitignore by its path', async () => {
   const w = world()
   await withProject(w)

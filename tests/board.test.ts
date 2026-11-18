@@ -1531,6 +1531,13 @@ test('setup .gitignore: the safe lines are added once, never twice', async () =>
   expect(out.split('\n').filter(l => l.includes('.symcc')).length).toBe(1)
   expect(out).toContain('.venv/\n')
   expect(gitignoreWith('', ['a', 'a', ' ', 'a/'])).toBe('a\n')
+  // a template ending the owner already ignores gets no ! line (it would come last and win)
+  for (const own of ['.env.sample\n', 'config/.env.sample\n', '*.sample\n', '.env.SAMPLE\n']) {
+    const o = gitignoreWith(own, base)
+    expect(o).not.toContain('!.env*.sample')
+    expect(o).toContain('!.env*.example')
+  }
+  expect(gitignoreWith('# .env.sample\n', base)).toContain('!.env*.sample')
 })
 
 test('setup leaves secrets and big files out of the first commit', async () => {
