@@ -11,6 +11,7 @@ import { registerAll } from './claude/registration'
 import { editTouch, fileTouch } from './claude/tools'
 import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
+import { noteBackground, stopSeen, takeBackground } from './claude/background'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
 import { S, useName } from './app/state'
 import { hookFailed } from './app/ask'
@@ -137,6 +138,8 @@ export const register: Register = on => {
     const ours = await toolCall(host, e.tool, e.agentId, call)
     if (ours) return ours
     const r = await next(e)
+    // a Bash command an agent sent to the background: noted as its own (see claude/background.ts)
+    noteBackground(e.agentId, call, r)
     otherToolDone(host, fileTouch(call))
     return r
   }).catch(($, e, next) => {
@@ -179,7 +182,7 @@ export const register: Register = on => {
     const host = claudeHost($)
     useName(host)
     const r = await next(e)
-    agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
+    agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e, takeBackground(e.agentId)), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
     if (!e.agentId) leadTurn(false)
     // any turn's end (the lead's or an agent's) starts the queued agents (see app/starts.ts)
     await drainStarts(host)
@@ -198,6 +201,8 @@ export const register: Register = on => {
   on('classic.UserPromptSubmit', async ($, e, next) => (mainMode($, e), next(e))).catch(($, e, next) => passOn($, 'classic.UserPromptSubmit', e, next))
   on('classic.Stop', async ($, e, next) => (mainMode($, e), next(e))).catch(($, e, next) => passOn($, 'classic.Stop', e, next))
   on('classic.SessionStart', async ($, e, next) => (mainMode($, e), next(e))).catch(($, e, next) => passOn($, 'classic.SessionStart', e, next))
+  // A subagent stops: its own background commands still running (of the session's list) are kept for its turn.complete.
+  on('classic.SubagentStop', async ($, e, next) => (stopSeen(e.agent_id, e.background_tasks), next(e))).catch(($, e, next) => passOn($, 'classic.SubagentStop', e, next))
   on('agent.spawn', async ($, e, next) => (useName(claudeHost($)), seeSpawnMode(claudeHost($), e), next(e))).catch(($, e, next) => {
     // Failed before passing it on: the start of one of symcc's own agent types is refused, any other goes on.
     if (next.called) return next(e)

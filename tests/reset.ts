@@ -13,6 +13,7 @@ import { resetLogo } from '../hooks/app/logo'
 import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/app/workers'
 import { saidNeedsYou } from '../hooks/app/voice'
 import { guardLogged } from '../hooks/app/ask'
+import { resetBackground } from '../hooks/claude/background'
 
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {
@@ -33,6 +34,7 @@ export function resetPlugin() {
   resetMergeTurns()
   resetTestLine()
   resetLogo()
+  resetBackground()
   for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0
