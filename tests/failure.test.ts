@@ -48,3 +48,16 @@ test("the worker's report asking for files or a question is pointed out", () => 
   expect(failAsks('All done, nothing to ask.')).toBe('')
   expect(failAsks(null)).toBe('')
 })
+
+test('the "try N (role X):" label is left out of the report quote, like "try N:"', () => {
+  expect(whyFailed(failed({ note: 'the worker made no change', history: ['try 2 (role tester): Found the cause. → the worker made no change'] })))
+    .toBe('The worker finished without changing any files. Its report says: Found the cause.')
+})
+
+test('a report that only mentions NEED FILES or asks an early question gives no false alarm', () => {
+  expect(failAsks('Fixed the parser so a `NEED FILES:` line is only read at the start of a line.')).toBe('')
+  expect(failAsks('I checked it.\nneed files: a.ts\nAll good.')).toBe('')
+  expect(failAsks('  NEED FILES: src/x.ts')).toBe('The worker asks for more files: src/x.ts. Add them to the task with change, then Retry.')
+  expect(failAsks('Done.\nStatus:   ◆ ready for review · added ? · changed ?\n')).toBe('')
+  expect(failAsks('Why does it fail?\nThe cache was stale.\nI cleared it in load().\nTests pass now.\nAll done.')).toBe('')
+})

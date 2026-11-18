@@ -33,7 +33,7 @@ function saidBefore(t: Failed, detail: RegExp): string {
   for (const line of [...(t.history ?? [])].reverse()) {
     const at = line.lastIndexOf(' → ')
     if (at < 0 || !detail.test(line.slice(at + 3))) continue
-    const said = line.slice(0, at).replace(/^try \S+:\s*/, '').trim()
+    const said = line.slice(0, at).replace(/^try \S+(?: \(role [^)]*\))?:\s*/, '').trim()
     return said === '(no summary)' ? '' : said
   }
   return ''
@@ -134,9 +134,12 @@ export function failNext(t: Failed): string {
  */
 export function failAsks(report: string | null | undefined): string {
   const lines = (report ?? '').split('\n').map(l => l.trim()).filter(Boolean)
-  const need = lines.find(l => /NEED FILES:/i.test(l))
-  if (need) return `The worker asks for more files: ${cutLine(need.replace(/^.*?NEED FILES:\s*/i, ''), 200) || '(none named)'}. Add them to the task with change, then Retry.`
-  const q = [...lines].reverse().find(l => /\?\s*\**$/.test(l) && !/^[-*]?\s*(https?:|`)/.test(l))
+  // Workers write "NEED FILES:" at the start of a line, in capitals; a report that only mentions the phrase doesn't count.
+  const need = lines.find(l => /^NEED FILES:/.test(l))
+  if (need) return `The worker asks for more files: ${cutLine(need.replace(/^NEED FILES:\s*/, ''), 200) || '(none named)'}. Add them to the task with change, then Retry.`
+  // A question counts only in the report's last lines (an earlier one is usually answered later on), and only a
+  // real sentence ending on a word and "?" (not a status line like "changed ?" or a link or code).
+  const q = [...lines.slice(-3)].reverse().find(l => /[\w)'"`]\?\s*\**$/.test(l) && /^[-*#>\s]*\**[A-Za-z]/.test(l) && !/^[-*]?\s*(https?:|`)/.test(l) && !/^\w+:\s{2,}/.test(l))
   if (q) return `The worker's report asks: ${cutLine(q.replace(/^[-*#>\s]+/, ''), 200)} Answer it by changing the task, then Retry.`
   return ''
 }
