@@ -22,6 +22,7 @@ The change (from where it left {{into}}; run \`git diff {{into}}...HEAD\` in the
 {{diff}}
 \`\`\`
 
+Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later.
 End your answer with exactly one of these:
 - the single word OK on its own last line, when you found no real problem;
 - or a list of the problems, one per line: file:line, what is wrong, and how to show it (a command, an input, or a test that fails).
