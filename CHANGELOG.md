@@ -4,6 +4,15 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.4.0 (2026-11-18)
+
+### Breaking changes
+- The Prompts page, the lead's `prompts` tool and the `.symcc/prompts/*.md` overrides are gone. Roles shape workers now.
+- The `target_branch` setting is gone. A task merges into the branch it was made on.
+- Workers ask through the `ask_owner` tool. symcc no longer reads `QUESTION:`, `OPTIONS:` or `NEED FILES:` lines.
+- The old `voice` setting and the scout `every` key are no longer read. Use `notify` and `every_minutes`.
+- Old `board.json` files are converted once.
+
 ### Added
 - A failed task says clearly why: its page starts with a "Why it failed" block (the reason in one plain sentence, what the worker's report asks for, and what to do next), and its board row and the lead's board show the same sentence instead of the bare note.
 - The Settings view groups the settings under headings: Work, Checks before merging, Workers (Roles, Kinds), Scouts, and Board and alerts. ↑↓ still go through every row. The lead's settings listing uses the same groups.
