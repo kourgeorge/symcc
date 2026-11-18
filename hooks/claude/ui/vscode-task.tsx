@@ -42,6 +42,9 @@ export function reportPart(body: string, n = REPORT_FIRST_LINES): { text: string
   return { text: [...head, ...(fences % 2 ? ['```'] : [])].join('\n'), more: lines.length - n }
 }
 
+/** Whether a merge press's result (Approve, Done, Keep as a note, Merge now) says it didn't go through: drawn in the warning color. */
+export const mergeFailed = (result: string) => /not merged|stays in review|keeps waiting|fail|refused|error|already|could not|can't/i.test(result)
+
 /** What task-page.tsx worked out for the open task, and what its buttons do. */
 export type VsTaskCtx = {
   agentId: string | undefined
@@ -58,6 +61,10 @@ export type VsTaskCtx = {
   answerFrom: { try: number; file: string } | undefined
   answer: string
   fileWait: string
+  /** the line shown while its Approve, Done, Keep as a note or Merge now runs ('' when none does): no review buttons meanwhile */
+  merging: string
+  /** the last such press's result, once it ended ('' when there is none to show) */
+  result: string
   overtime: boolean
   answerable: boolean
   askedQuestion: string | null | undefined
@@ -100,10 +107,13 @@ type Press = { surface?: Parameters<$['ui']['copy']>[0]['surface'] }
 type Action = { key: string; label: string; onPress: (press?: Press) => void; main?: boolean }
 
 /** The action buttons that fit task `t` now, in order; `main` marks the one to press (one at most, none while a question waits). */
-export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview' | 'answered' | 'fileWait' | 'answerable' | 'canPickRole'>, on: VsTaskCtx['on']): Action[] {
+export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview' | 'answered' | 'fileWait' | 'answerable' | 'canPickRole'> & Partial<Pick<VsTaskCtx, 'merging'>>, on: VsTaskCtx['on']): Action[] {
   const s = t.status
   const open = s !== 'done' && s !== 'dropped'
-  const out: (Action | false)[] = x.answered
+  // while it merges: no Approve, Reject, Done, Keep as a note, Ask more or Merge now (see MERGING_LINE)
+  const out: (Action | false)[] = x.merging
+    ? []
+    : x.answered
     ? [
         { key: 'done', label: 'Done', onPress: on.approve, main: true },
         { key: 'keep-note', label: 'Keep as a note', onPress: on.keepNote },
@@ -118,7 +128,7 @@ export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview
     !!x.agentId && { key: 'watch', label: 'Watch worker', onPress: on.watch },
     (s === 'doing' || s === 'todo') && { key: 'pause', label: 'Pause', onPress: on.pause },
     s === 'paused' && { key: 'resume', label: 'Resume', onPress: on.resume, main: true },
-    !!x.fileWait && { key: 'merge-now', label: 'Merge now', onPress: on.mergeNow, main: true },
+    !!x.fileWait && !x.merging && { key: 'merge-now', label: 'Merge now', onPress: on.mergeNow, main: true },
     (s === 'failed' || s === 'dropped') && { key: 'retry', label: 'Retry', onPress: on.retry, main: s === 'failed' },
     s === 'backlog' && { key: 'to-todo', label: 'Move to todo', onPress: on.toTodo, main: true },
     (s === 'todo' || s === 'paused' || s === 'failed') && { key: 'stash', label: 'Stash to backlog', onPress: on.stash },
@@ -195,7 +205,13 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       </Box>
     </Box>
   )
-  const typingBox = S.rejecting?.task === t.id && x.inReview
+  const typingBox = S.rejecting?.task === t.id && x.inReview && !x.merging
+  // while its merge runs: a line in place of the review buttons; once it ended: its result
+  const mergeStatus = x.merging
+    ? plain('merging', x.merging, 'success', { bold: true })
+    : x.result
+      ? plain('merge-result', x.result, mergeFailed(x.result) ? 'warning' : 'success')
+      : null
   const rolePicking = S.rolePick?.task === t.id
   const acts = vsActions(t, x, on)
   // Retry sits in "Why it failed" and Merge now in "Waiting for your files", right by their words
@@ -414,6 +430,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {question}
       {fileWait}
       {failed}
+      {mergeStatus}
       {actionRow}
       {rejectBox}
       {roleBox}
