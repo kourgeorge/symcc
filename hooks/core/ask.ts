@@ -103,20 +103,56 @@ function inside(abs: string, dir: string, exact: boolean): string | undefined {
   return a === d ? '' : a.startsWith(`${d}/`) ? abs.slice(dir.length + 1) : undefined
 }
 
+/** Folders macOS gives two names: the first is a symbolic link to the second (T-417). */
+const MAC_LINKS: readonly [string, string][] = [
+  ['/tmp', '/private/tmp'],
+  ['/var', '/private/var'],
+  ['/etc', '/private/etc'],
+]
+
+/** Clean absolute path `p` and, when it is under /tmp, /var or /etc (or their /private names), its other macOS name too. */
+export function pathAliases(p: string): string[] {
+  const out = [p]
+  for (const [a, b] of MAC_LINKS) {
+    for (const [from, to] of [[a, b], [b, a]] as const) if (p === from || p.startsWith(`${from}/`)) out.push(to + p.slice(from.length))
+  }
+  return out
+}
+
+/** One folder, or the same folder by several names (as written, then where its links lead); the first is the main one. */
+export type Folders = string | readonly string[]
+
+/** Folders `f` as clean absolute paths, each with its macOS other name (pathAliases), the main one first; relative ones are left out. */
+function folderList(f: Folders): string[] {
+  const list = (typeof f === 'string' ? [f] : f).filter(x => typeof x === 'string' && x.startsWith('/')).map(x => resolvePath('/', x))
+  return [...new Set(list.flatMap(pathAliases))]
+}
+
+/** `abs` relative to the first of `dirs` it is inside (see inside), or undefined. */
+function insideAny(abs: string, dirs: readonly string[], exact: boolean): string | undefined {
+  for (const d of dirs) {
+    const rel = inside(abs, d, exact)
+    if (rel !== undefined) return rel
+  }
+  return undefined
+}
+
 /**
  * Where an edit of `path` would write when it lands inside the project folder `root` but outside the
  * worker's own folder `worktree` (for example the owner's README.md, the board, or another worker's folder): the path
  * relative to `root`. Relative paths are taken from the worker's folder. Undefined for no path, for edits inside
  * the worker's folder, and for paths outside the project (such as /tmp). The project check ignores letter case (macOS
- * folders usually do), so a path that only differs in case is refused too.
+ * folders usually do), so a path that only differs in case is refused too. Each folder may be given by several names
+ * (as written and its real path), and /tmp, /var and /etc also match their macOS /private names (T-417).
  */
-export function editOutsideFolder(path: string | undefined, worktree: string, root: string): string | undefined {
+export function editOutsideFolder(path: string | undefined, worktree: Folders, root: Folders): string | undefined {
   const p = editTarget(path)
-  if (!p || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
-  const abs = resolvePath(worktree, p)
-  const wt = resolvePath('/', worktree)
-  if (inside(abs, wt, true) !== undefined) return undefined
-  return inside(abs, resolvePath('/', root), false)
+  const wts = folderList(worktree)
+  const tops = folderList(root)
+  if (!p || !wts.length || !tops.length) return undefined
+  const abs = resolvePath(wts[0]!, p)
+  if (insideAny(abs, wts, true) !== undefined) return undefined
+  return insideAny(abs, tops, false)
 }
 
 /**
@@ -140,19 +176,24 @@ const SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/
 /** Characters (besides spaces outside quotes) that end a word in shellWords. */
 const WORD_END = /[;&|<>(){}$=:,`]/
 
+/** A word of a shell command, and whether any of it was inside quotes (or a here-document's text). */
+type ShellWord = { w: string; q: boolean }
+
 /**
  * The words of simple command `text` as the shell reads them, so a path with a space in it stays whole: quotes are
  * dropped and what is inside them kept together, and a backslash keeps the next character (a space too) in the word.
  * Unlike the shell, `WORD_END` characters end a word even inside quotes, so `"--out=/x"` and `"$(cat /x)"` still give
  * `/x`. A best effort, not a shell parser.
  */
-function shellWords(text: string): string[] {
-  const out: string[] = []
+function shellWords(text: string): ShellWord[] {
+  const out: ShellWord[] = []
   let w = ''
+  let q = false
   let quote = ''
   const cut = () => {
-    if (w) out.push(w)
+    if (w) out.push({ w, q })
     w = ''
+    q = false
   }
   for (let i = 0; i < text.length; i++) {
     let c = text[i]!
@@ -176,53 +217,127 @@ function shellWords(text: string): string[] {
       continue
     }
     if (WORD_END.test(c)) cut()
-    else w += c
+    else (w += c), (q ||= !!quote)
   }
   cut()
   return out
 }
 
+/** For each character of `text`, whether it is inside quotes (the quote marks themselves are not). */
+function quoteMask(text: string): boolean[] {
+  const mask: boolean[] = []
+  let quote = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\' && quote !== "'") {
+      mask[i] = mask[i + 1] = !!quote
+      i++
+    } else if (quote) {
+      if (c === quote) quote = ''
+      else mask[i] = true
+    } else if (c === "'" || c === '"') quote = c
+  }
+  return mask
+}
+
+/**
+ * The words bashOutsideFolder checks in piece `p`: those of shellWords and those cut at every quote and operator
+ * (SHELL_SPLIT), with backslashes dropped. A word counts as quoted only when every time it shows up it is inside
+ * quotes, or it is a here-document's text.
+ */
+function pieceWords(p: { text: string; doc?: boolean }): Map<string, boolean> {
+  const words = new Map<string, boolean>()
+  const add = (word: string, q: boolean) => {
+    const w = word.replace(/\\/g, '')
+    if (w) words.set(w, (words.get(w) ?? true) && (q || !!p.doc))
+  }
+  const mask = quoteMask(p.text)
+  let at = 0
+  for (const part of p.text.split(SHELL_SPLIT_KEEP)) {
+    if (part && !SHELL_SPLIT_KEEP.test(part)) add(part, mask[at] === true)
+    at += part.length
+  }
+  for (const { w, q } of shellWords(p.text)) add(w, q)
+  return words
+}
+
+/** SHELL_SPLIT, keeping the separators when splitting (so where each word starts can be counted). */
+const SHELL_SPLIT_KEEP = new RegExp(`(${SHELL_SPLIT.source})`)
+
 /** `s` with every character that means something in a regular expression escaped. */
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')
 
-/** A piece of a shell command as bashOutsideFolder walks it: a simple command's text, or the operator between two. */
-type ShellPiece = { text: string } | { op: '&&' | '||' | ';' | '|' | '&' | '(' | ')' }
+/**
+ * A piece of a shell command as bashOutsideFolder walks it: a simple command's text (`doc`: a here-document's text), or
+ * the operator between two. An opening "(" is a subshell (`sub`) for "(", "$(" and "`", and not for "{".
+ */
+type ShellPiece = { text: string; doc?: boolean } | { op: '&&' | '||' | ';' | '|' | '&' | ')' } | { op: '('; sub: boolean }
+
+/** Where a here-document starts (`<<EOF`, `<<-'EOF'`, `<< "EOF"`, `<<\EOF`): its end word and whether tabs before it are dropped. */
+const HEREDOC = /^<<(-?)[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|\\?([^\s;&|<>()'"`]+))/
 
 /**
  * `command` cut into simple commands and the operators between them (&&, ||, ;, newline as ";", |, a lone "&", and
  * "(", "{", "`" as opening and ")", "}", "`" as closing a group). Nothing is cut inside quotes or after a backslash, and
- * the "&" of a redirect (`2>&1`, `&>`) is no operator. A best effort, not a shell parser.
+ * the "&" of a redirect (`2>&1`, `&>`) is no operator. The lines of a here-document (`cat > f <<'EOF'` ... `EOF`) come
+ * as pieces marked `doc`, cut the same way but with quotes read as plain characters (an apostrophe in a here-document
+ * opens no quote). A best effort, not a shell parser.
  */
-function shellPieces(command: string): ShellPiece[] {
+function shellPieces(command: string, doc = false): ShellPiece[] {
   const out: ShellPiece[] = []
   let text = ''
   let quote = ''
   let tick = false
-  const op = (o: Extract<ShellPiece, { op: string }>['op']) => {
-    out.push({ text }, { op: o })
+  const docs: { end: string; tabs: boolean }[] = []
+  const op = (o: '&&' | '||' | ';' | '|' | '&' | ')' | '(', sub = true) => {
+    out.push(doc ? { text, doc } : { text }, o === '(' ? { op: o, sub } : { op: o })
     text = ''
   }
   for (let i = 0; i < command.length; i++) {
     const c = command[i]!
     const n = command[i + 1]
-    if (quote) {
+    // "<<<" is a here-string, not a here-document
+    const hereString = !doc && !quote && c === '<' && n === '<' && command[i + 2] === '<'
+    const here = !doc && !quote && !hereString && c === '<' && n === '<' ? HEREDOC.exec(command.slice(i)) : null
+    if (hereString) (text += '<<<'), (i += 2)
+    else if (quote) {
       if (c === '\\' && quote === '"') text += c + (n ?? ''), i++
       else {
         text += c
         if (c === quote) quote = ''
       }
     } else if (c === '\\') text += c + (n ?? ''), i++
-    else if (c === "'" || c === '"') (quote = c), (text += c)
-    else if ((c === '&' || c === '|') && n === c) op(c === '&' ? '&&' : '||'), i++
+    else if (!doc && (c === "'" || c === '"')) (quote = c), (text += c)
+    else if (here) {
+      docs.push({ end: here[2] ?? here[3] ?? here[4]!, tabs: here[1] === '-' })
+      text += here[0]
+      i += here[0].length - 1
+    } else if ((c === '&' || c === '|') && n === c) op(c === '&' ? '&&' : '||'), i++
     else if (c === '|') op('|'), n === '&' && i++
     else if (c === '&' && n !== '>' && !/[<>]$/.test(text)) op('&')
-    else if (c === ';' || c === '\n') op(';')
-    else if (c === '(' || c === '{') op('(')
+    else if (c === '\n' && docs.length) {
+      // the here-documents started on this line: their lines, up to each one's end word
+      op(';')
+      let j = i + 1
+      for (const d of docs.splice(0)) {
+        const lines: string[] = []
+        while (j < command.length) {
+          const e = command.indexOf('\n', j)
+          const line = command.slice(j, e < 0 ? command.length : e)
+          j = e < 0 ? command.length : e + 1
+          if ((d.tabs ? line.replace(/^\t+/, '') : line) === d.end) break
+          lines.push(line)
+        }
+        out.push(...shellPieces(lines.join('\n'), true), { op: ';' })
+      }
+      i = j - 1
+    } else if (c === ';' || c === '\n') op(';')
+    else if (c === '(' || c === '{') op('(', c === '(')
     else if (c === ')' || c === '}') op(')')
-    else if (c === '`') op((tick = !tick) ? '(' : ')')
+    else if (c === '`') (tick = !tick) ? op('(') : op(')')
     else text += c
   }
-  out.push({ text })
+  out.push(doc ? { text, doc } : { text })
   return out
 }
 
@@ -247,57 +362,62 @@ function cdTarget(text: string, home: string | undefined): string | null | undef
 }
 
 /**
- * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
- * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. A word counts as a path when
- * it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part. Relative words are taken from the
- * folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller knows it and it is inside
- * the worker's folder) or else the worker's folder, and a plain `cd` or `pushd` earlier in the command moves it ("cd src && cat ../package.json" reads the
- * worker's own file). When it can't be told for sure (a `cd` that may fail before ";" or "||", a group in parentheses),
- * every folder the command may be in is tried, and a `cd` that can't be followed (a variable, `cd -`) goes back to the
- * worker's folder, so nothing is let through that the plain check from the worker's folder would refuse. A ".." word is
- * also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too. Any mention is refused, reading included:
- * telling a safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`),
- * and a worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A
- * best effort, not a sandbox: a path built at run time (variables, base64) or a symbolic link gets through, and the
- * merge-time scope check stays the backstop for the worker's folder.
+ * Walks shell `command` of a worker whose own folder is `wts` (the main name first) and calls `visit` with each clean
+ * absolute path a word of it may name, stopping at (and answering) the first answer that is not undefined. A word
+ * counts as a path when it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part. Relative words
+ * are taken from the folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller
+ * knows it and it is inside the worker's folder) or else the worker's folder, and a plain `cd` or `pushd` earlier in the
+ * command moves it ("cd src && cat ../package.json" reads the worker's own file). When it can't be told for sure (a `cd`
+ * that may fail before ";" or "||", a group in parentheses), every folder the command may be in is tried, and a `cd`
+ * that can't be followed (a variable, `cd -`) goes back to the worker's folder. Words inside quotes (an import path in
+ * `bun -e "..."`) and here-document text are checked the same way, from every folder the command may be in, since
+ * code passed as text may still read the path; a `cd` in here-document text only adds a folder it may be in, and `<<<` is a
+ * here-string, not a here-document (T-417). A ".." word is also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too.
  */
-export function bashOutsideFolder(command: unknown, worktree: string, root: string, home?: string, cwd?: string): string | undefined {
-  if (typeof command !== 'string' || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
-  const wt = resolvePath('/', worktree)
-  const top = resolvePath('/', root)
-  const check = (abs: string) => (inside(abs, wt, true) !== undefined ? undefined : inside(abs, top, false))
+function walkBash(command: string, wts: readonly string[], home: string | undefined, cwd: string | undefined, visit: (abs: string) => string | undefined): string | undefined {
+  const wt = wts[0]!
   // the shell's folder counts only inside the worker's own folder; anywhere else it starts from the worker's folder
   const sh = cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
-  const start = [sh !== undefined && inside(sh, wt, true) !== undefined ? sh : wt]
+  const start = [sh !== undefined && insideAny(sh, wts, true) !== undefined ? sh : wt]
   const join = (...lists: string[][]) => [...new Set(lists.flat())]
+  // every folder the command may be in at this point
   let here = start
   let seen = start
-  const groups: string[][] = []
+  const groups: { here: string[] }[] = []
   const pieces = shellPieces(command)
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i]!
     if ('op' in p) {
-      if (p.op === '(') groups.push(here)
-      // a group may be a subshell (its cd stays inside) or not: either folder
-      else if (p.op === ')') here = join(groups.pop() ?? start, here)
+      if (p.op === '(') groups.push({ here })
+      else if (p.op === ')') {
+        // a group may be a subshell (its cd stays inside) or not: either folder
+        const g = groups.pop()
+        here = join(g?.here ?? start, here)
+      }
       // what runs after "||" may follow a failed cd anywhere before it
       else if (p.op === '||') here = join(here, seen)
       continue
     }
-    for (const word of new Set([...p.text.split(SHELL_SPLIT), ...shellWords(p.text)])) {
-      const w = word.replace(/\\/g, '')
+    for (const w of pieceWords(p).keys()) {
       const climbs = w.split('/').includes('..')
       const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
       if (!w.startsWith('/') && !homeWord && !climbs) continue
-      const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : here.map(d => resolvePath(d, w))
-      if (climbs && w.startsWith('/')) tries.push(...here.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
+      const dirs = here
+      const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : dirs.map(d => resolvePath(d, w))
+      if (climbs && w.startsWith('/')) tries.push(...dirs.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
       for (const abs of tries) {
-        const rel = check(abs)
+        const rel = visit(abs)
         if (rel !== undefined) return rel
       }
     }
     const to = cdTarget(p.text, home)
     if (to === undefined) continue
+    // a "cd" in a here-document's text may run (`bash <<X`) or be only text (`cat > f <<X`): it adds a folder the
+    // command may be in, and never drops the one it was in (T-417)
+    if (p.doc) {
+      if (to !== null) (here = join(here, here.map(d => resolvePath(d, to)))), (seen = join(seen, here))
+      continue
+    }
     const before = pieces[i - 1]
     const after = pieces[i + 1]
     const op = (x: ShellPiece | undefined) => (x && 'op' in x ? x.op : undefined)
@@ -308,22 +428,65 @@ export function bashOutsideFolder(command: unknown, worktree: string, root: stri
     here = op(after) === '&&' ? moved : join(here, moved)
     seen = join(seen, moved)
   }
+  return undefined
+}
+
+/**
+ * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
+ * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. Which words count as paths,
+ * and from which folder relative ones are taken, is told at walkBash. Each folder may be given by several names (as
+ * written, and where its links lead), and /tmp, /var and /etc also match their macOS /private names, so the project
+ * named through /tmp is refused like through /private/tmp (T-417). Any mention is refused, reading included: telling a
+ * safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a
+ * worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A best
+ * effort, not a sandbox: a path built at run time (variables, base64) gets through; symbolic links elsewhere on disk
+ * are followed by the caller (bashPathsOutside), and the merge-time scope check stays the backstop for the worker's
+ * folder.
+ */
+export function bashOutsideFolder(command: unknown, worktree: Folders, root: Folders, home?: string, cwd?: string): string | undefined {
+  const wts = folderList(worktree)
+  const tops = folderList(root)
+  if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
+  const check = (abs: string) => (insideAny(abs, wts, true) !== undefined ? undefined : insideAny(abs, tops, false))
+  const found = walkBash(command, wts, home, cwd, check)
+  if (found !== undefined) return found
   // backstop: the project folder written out whole anywhere in the text (plain, quoted, with "\ " for spaces, or
   // from "~/"), up to the next space or operator, even where the words above came out wrong (a quote mid-path)
-  if (top === '/') return undefined
   const flat = command.replace(/\\\n/g, '').replace(/["'\\]/g, '')
   const homeDir = home?.startsWith('/') ? resolvePath('/', home) : undefined
-  const fromHome = homeDir ? inside(top, homeDir, false) : undefined
   const B = String.raw`\s;&|<>(){}$=:,\``
-  const starts: [string, string][] = [[reEscape(top), '/']]
-  if (fromHome) starts.push([`~/${reEscape(fromHome)}`, homeDir!])
-  for (const [start, base] of starts) {
-    for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, 'gi'))) {
-      const rel = check(resolvePath(base, m[0].replace(/^~\/?/, '')))
-      if (rel !== undefined) return rel
+  for (const top of tops) {
+    if (top === '/') continue
+    const fromHome = homeDir ? inside(top, homeDir, false) : undefined
+    const starts: [string, string][] = [[reEscape(top), '/']]
+    if (fromHome) starts.push([`~/${reEscape(fromHome)}`, homeDir!])
+    for (const [start, base] of starts) {
+      for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, 'gi'))) {
+        const rel = check(resolvePath(base, m[0].replace(/^~\/?/, '')))
+        if (rel !== undefined) return rel
+      }
     }
   }
   return undefined
+}
+
+/** The most paths bashPathsOutside answers, so a long command costs a bounded number of disk lookups. */
+export const BASH_PATHS_MAX = 20
+
+/**
+ * The absolute paths (at most BASH_PATHS_MAX, the same walk as bashOutsideFolder) a worker's Bash `command` names
+ * outside its own folder `worktree`: the caller looks each up on disk, so a symbolic link elsewhere that leads into the
+ * owner's copy (`~/link/README.md`) is judged by where it leads (T-417).
+ */
+export function bashPathsOutside(command: unknown, worktree: Folders, home?: string, cwd?: string): string[] {
+  const wts = folderList(worktree)
+  if (typeof command !== 'string' || !wts.length) return []
+  const out = new Set<string>()
+  walkBash(command, wts, home, cwd, abs => {
+    if (insideAny(abs, wts, true) === undefined) out.add(abs)
+    return out.size >= BASH_PATHS_MAX ? '' : undefined
+  })
+  return [...out]
 }
 
 /** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree`. */
@@ -513,10 +676,11 @@ export const gitWriteText = (what: string) =>
  * path, or is outside the worker's folder (see
  * editOutsideFolder for those). Relative paths are taken from the worker's folder, and ".." is worked out first.
  */
-export function blockedEdit(path: string | undefined, worktree: string, files: string[], dataDir: string): string | undefined {
+export function blockedEdit(path: string | undefined, worktree: Folders, files: string[], dataDir: string): string | undefined {
   const p = editTarget(path)
-  if (!p || !worktree.startsWith('/')) return undefined
-  const rel = inside(resolvePath(worktree, p), resolvePath('/', worktree), true)
+  const wts = folderList(worktree)
+  if (!p || !wts.length) return undefined
+  const rel = insideAny(resolvePath(wts[0]!, p), wts, true)
   if (!rel) return undefined
   return outOfScope([rel], files, dataDir).length ? rel : undefined
 }
