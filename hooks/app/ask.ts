@@ -6,10 +6,10 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
-import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
+import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
-import { workerOf } from './workers'
+import { workerOf, agentOnBoard } from './workers'
 import { scratchOn } from './git'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
@@ -30,13 +30,15 @@ export const ASK_TOOL_DEF = () => ({
 
 /**
  * An ask_owner call from agent `agentId` with input `a`: the reply the caller sees. Taken only from a running
- * worker whose task is still "doing" (a worker this copy lost in a reload is found again from the board, see
- * workerOf); the question is written to its try on the board (a later call replaces it). Everyone else is refused.
+ * worker whose task is still "doing" (one this copy doesn't hold, started by another session's copy or lost in a
+ * reload, is found from the board, see workerOf); the question is written to its try on the board (a later call
+ * replaces it). Everyone else is refused.
  */
 export async function askCall($: Host, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
   const tool = toolName(ASK_TOOL)
   if (!agentId) return `Refused: ${tool} is only for ${S.N.name} workers; the lead (the main chat) never calls it (use ${toolName('ask')} to make a task wait for the owner).`
   if (scoutRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not scouts. End with your report as usual.`
+  if (checkerRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not checkers. End with your verdict as usual.`
   const w = await workerOf($, agentId)
   if (!w) return `Refused: ${tool} is only for running ${S.N.name} workers, and you are not one (or your try already handed back).`
   const t = find(await load($), w.task)
@@ -165,19 +167,21 @@ function linkFinder($: Host, wts: readonly string[]): (abs: string) => Promise<b
  */
 export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string): Promise<string | undefined> {
   if (!agentId || !touch) return undefined
+  if (stopped.has(agentId)) return stoppedText()
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
   const chk = checkerRuns.get(agentId)
-  if (chk) {
-    // a checker only reads with git: its branch names are shared with the owner's folder (main too), and so is the stash
-    const git = 'command' in touch ? gitWriteIn(touch.command) : undefined
-    if (git) return gitWriteText(git)
-    return outsideOwnFolder($, touch, chk.worktree, cwd)
-  }
+  if (chk) return checkerCheck($, touch, chk.worktree, cwd)
   // a scout runs in the owner's own folder: it may run tests and read with git, and write throwaway files outside the
   // project (such as /tmp), but never write with git or edit a file inside the project
   if (scoutRuns.has(agentId)) return scoutCheck($, touch)
-  // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
-  const w = await workerOf($, agentId).catch(() => undefined)
+  // a worker or checker this copy doesn't hold (another session's copy started it, or this copy lost it in a reload)
+  // is found from the board (T-471), as for ask_owner; an unreadable board throws, so the call is refused (guardFailed).
+  // An agent not on the board is none of symcc's: nothing is refused
+  const mine = workers.get(agentId)
+  const on = mine ? undefined : await agentOnBoard($, agentId)
+  if (on?.kind === 'ended') return stoppedText()
+  if (on?.kind === 'checker') return checkerCheck($, touch, on.worktree, cwd)
+  const w = mine ?? (on?.kind === 'worker' ? on.worker : undefined)
   if (!w) return undefined
   if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command)
   const real = await realEdit($, touch.path, w.worktree, S.root)
@@ -193,6 +197,20 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
+}
+
+/** What an agent symcc stopped (or whose task no longer runs it) is told when it tries a tool. */
+export const stoppedText = () => `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.`
+
+/**
+ * Why a checker's call in the task's folder `worktree` is refused: a checker only reads with git (its branch names
+ * are shared with the owner's folder, main too, and so is the stash), and it is kept inside that folder as a worker
+ * is; it has no file list. Undefined: allowed.
+ */
+async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<string | undefined> {
+  const git = 'command' in touch ? gitWriteIn(touch.command) : undefined
+  if (git) return gitWriteText(git)
+  return outsideOwnFolder($, touch, worktree, cwd)
 }
 
 /**
@@ -248,12 +266,12 @@ const GUARD_LOGGED_MAX = 50
 
 /**
  * A guard hook (tool.check, tool.call) threw or ran out of time on a call of agent `agentId` (`failure`: why, as the
- * hook's .catch reads it on next.error). For symcc's own agents (isOwnAgent) the reason to refuse the call with;
- * undefined for the lead and everyone else, whose call goes on as if the hook were not there (a symcc error never
- * blocks the owner's own session). The failure is logged once.
+ * hook's .catch reads it on next.error). For symcc's own agents (isOwnAgent, or found on the board by an earlier
+ * guard, boardAgents: T-471) the reason to refuse the call with; undefined for the lead and everyone else, whose call
+ * goes on as if the hook were not there (a symcc error never blocks the owner's own session). The failure is logged once.
  */
 export function guardFailed($: Pick<Host, 'ui'>, hook: string, agentId: string | undefined, failure: { kind?: string; message?: string } | undefined): string | undefined {
-  const own = isOwnAgent(agentId)
+  const own = isOwnAgent(agentId) || (!!agentId && boardAgents.has(agentId))
   const reason = hookFailed($, hook, failure, own ? 'the call of its agent was refused' : 'the call went on unchecked')
   return own ? guardFailedText(S.N.name, reason) : undefined
 }
