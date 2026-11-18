@@ -1,4 +1,5 @@
-import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { liveWorkersFor } from '../claude/agents'
 import { homeBranch } from './git'
 import { S, workers, type PaneView, scoutState, updateView } from './state'
 import type { Host } from '../host'

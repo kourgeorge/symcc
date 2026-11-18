@@ -1,5 +1,5 @@
 // Agent names, never two workers on one task, and a worker that can't start yet.
-import { DEFAULT_NAME, namesFor } from '../name'
+import { DEFAULT_NAME } from '../name'
 import { type Board, type BoardTask, normId } from './board-file'
 import { ownedHere } from './lead'
 
@@ -44,23 +44,23 @@ export function scoutDescription(scout: string, instructions = ''): string {
   return (line || scout).slice(0, AGENT_DESCRIPTION_CHARS)
 }
 
-/** An agent as $.agent.list() reports it. */
-export type AgentInfo = { id: string; type?: string; status: string; description?: string; name?: string }
-
-/** Agent statuses that mean it has ended; anything else counts as still alive. */
-export const ENDED_STATUSES = ['completed', 'failed', 'killed']
+/**
+ * An agent as symcc sees it, whatever the host: its id, whether it is one of the plugin's (base) workers, whether it
+ * is still alive, and its name and description. The host's adapter makes these from its own agent list (for Claude
+ * Code, see claude/agents.ts).
+ */
+export type AgentState = { id: string; worker: boolean; alive: boolean; description?: string; name?: string }
 
 /**
  * The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any
  * whose name is workerName (e.g. "symcc-T-3") or the bare task id, maybe with a suffix the
  * host added ("symcc-T-3-2"), or whose description starts with the task id (older workers).
  */
-export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name: string = DEFAULT_NAME): AgentInfo[] {
-  const worker = namesFor(name).worker
+export function liveWorkersFor<A extends AgentState>(t: Pick<BoardTask, 'id' | 'agent'>, agents: A[], name: string = DEFAULT_NAME): A[] {
   return agents.filter(a => {
-    if (ENDED_STATUSES.includes(a.status)) return false
+    if (!a.alive) return false
     if (t.agent && a.id === t.agent) return true
-    if (a.type !== worker) return false
+    if (!a.worker) return false
     const n = String(a.name ?? '')
     const full = workerName(name, t.id)
     if (n && (n === t.id || n.startsWith(`${t.id}-`) || n === full || n.startsWith(`${full}-`))) return true
@@ -74,8 +74,8 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
  * - "adopt": the worker's task is still "doing" for this session (`me`) and the task names
  *   this agent (or no agent yet), and no other worker was adopted for it (`taken`): keep it
  *   working and track it again, so a reload does not stop it. It is also adopted when the task
- *   names this very agent but a session that no longer drives the board ($.agent.list() lists
- *   this process's agents, so it is ours; the session id may have changed over the reload).
+ *   names this very agent but a session that no longer drives the board (the host's agent list has
+ *   only this process's agents, so it is ours; the session id may have changed over the reload).
  * - "leave": the task belongs to another session that drives the board now: not ours to touch.
  * - "stop": anything else (task gone, not "doing", another worker named on it, a dead
  *   session's task found only by the worker's name): a real orphan.
@@ -83,9 +83,9 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
  * then by the worker's name.
  */
 export type OrphanMove = { move: 'adopt'; task: string } | { move: 'leave' } | { move: 'stop' }
-export function orphanMove(a: AgentInfo, b: Board, me: string, live: string | null, taken: string[] = [], name: string = DEFAULT_NAME): OrphanMove {
+export function orphanMove(a: AgentState, b: Board, me: string, live: string | null, taken: string[] = [], name: string = DEFAULT_NAME): OrphanMove {
   if (!a || typeof a.id !== 'string' || !a.id) return { move: 'leave' }
-  if (ENDED_STATUSES.includes(a.status)) return { move: 'leave' }
+  if (!a.alive) return { move: 'leave' }
   const tasks = Array.isArray(b?.tasks) ? b.tasks : []
   const t = tasks.find(x => x.agent === a.id) ?? tasks.find(x => x.status === 'doing' && liveWorkersFor({ id: x.id }, [a], name).length > 0)
   if (!t || t.status !== 'doing') return { move: 'stop' }
@@ -100,28 +100,19 @@ export function orphanMove(a: AgentInfo, b: Board, me: string, live: string | nu
 
 /**
  * Whether a new worker may start on task `t`: it is still "todo", and no live agent
- * (in `agents`, $.agent.list() plus the workers this session knows) works on it.
+ * (in `agents`, the host's agent list plus the workers this session knows) works on it.
  */
-export function mayStart(t: BoardTask | undefined, agents: AgentInfo[], name: string = DEFAULT_NAME): boolean {
+export function mayStart(t: BoardTask | undefined, agents: AgentState[], name: string = DEFAULT_NAME): boolean {
   return !!t && t.status === 'todo' && liveWorkersFor(t, agents, name).length === 0
 }
 
 // ---------------- a worker that can't start yet ----------------
-// Right after a reload the worker agent type may not be registered yet: spawning then fails
-// with "Agent type '<name>:worker' not found". That is not the task's fault: it goes back to
-// "todo" with no try counted, and is only marked failed after MAX_NOT_READY misses in a row.
+// Right after a reload the host may not have the plugin's worker agent type yet, so spawning fails (for Claude
+// Code, see isNotReady in claude/agents.ts). That is not the task's fault: it goes back to "todo" with no try
+// counted, and is only marked failed after MAX_NOT_READY misses in a row.
 
 /** How many "not ready" misses in a row a task gets before it is marked failed. */
 export const MAX_NOT_READY = 3
-
-/** Whether a spawn error only means the plugin isn't ready yet (its worker type isn't there). */
-export function isNotReady(message: string, name: string = DEFAULT_NAME): boolean {
-  const m = String(message ?? '')
-  const worker = namesFor(name).worker.toLowerCase()
-  const low = m.toLowerCase()
-  if (/agent type .* not found/.test(low) && low.includes(worker)) return true
-  return /\bnot (yet )?ready\b|not registered|still starting/.test(low)
-}
 
 /** After one more "not ready" miss (misses = the count so far): retry later, or fail now. */
 export function onNotReady(misses: number, max = MAX_NOT_READY): 'retry' | 'fail' {
