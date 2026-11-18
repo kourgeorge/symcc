@@ -453,3 +453,39 @@ test('the checker prompt tells it not to run git commands that change anything',
   expect(w.spawns[0]!.prompt).toContain('Do NOT run git commands that change anything (commit, reset, checkout')
   expect(w.spawns[0]!.prompt).toContain('Read-only ones like git diff, git log, git show and git status are fine.')
 })
+
+test("a checker's git commands that change anything are refused, read-only ones are allowed, and a worker's git is not changed by this", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  await finish(w, async id => {
+    const bash = (command: string) => checkEdit(w.$, id, 'Bash', { command })
+    for (const [command, what] of [
+      ['git commit -am x', 'git commit'],
+      ['git checkout main', 'git checkout'],
+      ['git switch main', 'git switch'],
+      ['git stash', 'git stash'],
+      ['git stash push -m x', 'git stash'],
+      ['cd /x && git reset --hard', 'git reset'],
+      ['git -C /x branch -f main HEAD', 'git branch'],
+      ['git branch -D symcc/T-2', 'git branch'],
+      ['git branch new-one', 'git branch'],
+      ['git status; git tag v1', 'git tag'],
+      ['git log | git update-ref refs/heads/main HEAD', 'git update-ref'],
+      ['echo $(git rebase main)', 'git rebase'],
+      ['sh -c "git merge main"', 'git merge'],
+      ['git -c user.name=x --no-pager cherry-pick abc', 'git cherry-pick'],
+      ['/usr/bin/git push', 'git push'],
+      ['git worktree add /tmp/x', 'git worktree'],
+      ['git restore --staged a.ts', 'git restore'],
+      ['git clean -fd', 'git clean'],
+      ['git apply --index p.diff', 'git apply'],
+    ] as const) expect(await bash(command)).toMatch(new RegExp(`^Refused: ${what} may change the repository, and the checker may only read with git`))
+    for (const command of ['git diff', 'git log -3', 'git status', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test'])
+      expect(await bash(command)).toBeUndefined()
+    checkerFinished(id, 'OK')
+  })
+  // a worker's own git commands in its folder are not refused
+  workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  for (const command of ['git commit -am x', 'git stash', 'git reset --hard', 'git checkout -b x'])
+    expect(await checkEdit(w.$, 'ag2', 'Bash', { command })).toBeUndefined()
+})

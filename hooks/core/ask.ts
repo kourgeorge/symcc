@@ -335,6 +335,95 @@ export function bashOutsideFolder(command: unknown, worktree: string, root: stri
 export const bashOutsideText = (rel: string, worktree: string) =>
   `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
 
+/** git commands a checker may run as they are: they only read. Anything not listed (and not in gitReadOnly below) is refused. */
+const GIT_READ = new Set(['diff', 'log', 'show', 'status', 'blame', 'grep', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'rev-list', 'merge-base', 'describe', 'shortlog', 'show-branch', 'whatchanged', 'name-rev', 'diff-tree', 'diff-index', 'diff-files', 'annotate', 'help', 'version', 'count-objects', 'var', 'check-ignore', 'check-attr'])
+
+/** git's own options (before the command name) that take the next word as their value. */
+const GIT_GLOBAL_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix'])
+
+/** `git branch` options that change branches. */
+const BRANCH_WRITE = /^(-[a-zA-Z]*[dDfmMcCu]|--(delete|force|move|copy|set-upstream-to|unset-upstream|edit-description|track|no-track|create-reflog|recurse-submodules)(=|$))/
+
+/** `git branch` options that take the next word as their value. */
+const BRANCH_VALUE = new Set(['--contains', '--no-contains', '--merged', '--no-merged', '--points-at', '--format', '--sort', '--column'])
+
+/**
+ * The words of simple command `text`, split at spaces outside quotes; quotes are dropped and a backslash keeps the next
+ * character. A best effort, not a shell parser.
+ */
+function plainWords(text: string): string[] {
+  const out: string[] = []
+  let w = ''
+  let has = false
+  let quote = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\' && quote !== "'") (w += text[++i] ?? ''), (has = true)
+    else if (quote) c === quote ? (quote = '') : (w += c)
+    else if (c === "'" || c === '"') (quote = c), (has = true)
+    else if (/\s/.test(c)) {
+      if (w || has) out.push(w)
+      w = ''
+      has = false
+    } else w += c
+  }
+  if (w || has) out.push(w)
+  return out
+}
+
+/** Whether git `args` (the words after the command name `sub`) only read. */
+function gitReadOnly(sub: string, args: string[]): boolean {
+  if (GIT_READ.has(sub)) return true
+  if (sub === 'stash' || sub === 'worktree') return args[0] === 'list' || (sub === 'stash' && args[0] === 'show')
+  if (sub !== 'branch') return false
+  let list = false
+  let named = false
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!
+    if (a === '--list' || a === '-l' || a === '--show-current') list = true
+    else if (BRANCH_WRITE.test(a)) return false
+    else if (BRANCH_VALUE.has(a)) i++
+    else if (!a.startsWith('-')) named = true
+  }
+  // `git branch <name>` makes a branch; with --list the names are patterns to show
+  return list || !named
+}
+
+/**
+ * The first git command in Bash `command` that may change anything (a commit, a branch, the stash, the index, a tag, a
+ * push...), as `git <command>`, or undefined when every git command in it only reads (diff, log, show, status, branch
+ * --list, stash list...). Looks inside compound commands (&&, ;, |, `$(...)`), after `cd`, `env` or `xargs`, past git's
+ * own options (`git -C <dir>`, `-c k=v`), and inside quoted text run as a command (`sh -c "git commit"`). Any word
+ * `git` (or ending in `/git`) counts, so an odd read may be refused too; that is the safe side. A best effort, not a
+ * sandbox: a git run through a variable or a script file gets through.
+ */
+export function gitWriteIn(command: unknown, depth = 0): string | undefined {
+  if (typeof command !== 'string' || depth > 4) return undefined
+  for (const p of shellPieces(command)) {
+    if ('op' in p) continue
+    const words = plainWords(p.text)
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]!
+      // quoted text with a space in it may be a command run by sh -c, eval and such
+      if (/\s/.test(w) && /git/.test(w)) {
+        const inner = gitWriteIn(w, depth + 1)
+        if (inner) return inner
+      }
+      if (w !== 'git' && !w.endsWith('/git')) continue
+      let j = i + 1
+      while (j < words.length && words[j]!.startsWith('-')) j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1
+      const sub = words[j]
+      if (sub === undefined) continue
+      if (!gitReadOnly(sub, words.slice(j + 1))) return `git ${sub}`
+    }
+  }
+  return undefined
+}
+
+/** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
+export const gitWriteText = (what: string) =>
+  `Refused: ${what} may change the repository, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show). Check the work without changing any branch, commit, tag or the stash.`
+
 /**
  * The project path (relative to the worker's folder `worktree`) an Edit, Write or NotebookEdit call of `tool`
  * with `input` would change, when it lies outside `files` (the same matching as the merge-time scope check,
