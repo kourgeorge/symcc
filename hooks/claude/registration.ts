@@ -1,7 +1,7 @@
 // What symcc registers with Claude Code at session start: the worker agent types (base, and one per set of extra role
 // tools), the scout agent type, the lead's tools, the workers' question tool and the slash commands (app/symcc.ts).
 import { WEB_SAFETY_LINE, ASK_TOOL } from '../board'
-import { claudeNames, workerAgentTypes, EXTRA_TOOLS, SCOUT_TOOLS } from './agent-types'
+import { claudeNames, workerAgentTypes, EXTRA_TOOLS, scoutAgentTools } from './agent-types'
 import { ASK_TOOL_DEF } from '../plugin/ask'
 import { S } from '../plugin/state'
 import type { $ } from './panel'
@@ -25,8 +25,8 @@ export async function registerAll($: $) {
   await ok($.agent.register({
     name: 'scout',
     description: `${S.N.name} scout: does what its scout file asks (reading the project, shell commands, the web) and reports to the lead. Started by ${S.N.name} only.`,
-    prompt: `You are a ${S.N.name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`,
-    tools: [...SCOUT_TOOLS],
+    prompt: `You are a ${S.N.name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${claudeNames(S.N.name).tool('board')} and ${claudeNames(S.N.name).tool('stats')} tools (they only read), not the board file.`,
+    tools: scoutAgentTools(S.N.name),
     background: true,
   }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))

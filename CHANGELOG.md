@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Added
+- Scouts (and checkers) can read the board with symcc's `board` (no arguments, `status`, `search` or `task`) and `stats` tools instead of reading `.symcc/board.json`. Every symcc tool that changes something is refused for them with "scouts can only read the board".
+
 ## 0.4.0 (2026-11-18)
 
 ### Breaking changes
