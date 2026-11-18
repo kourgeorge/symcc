@@ -486,6 +486,10 @@ test("a checker's git commands that change anything are refused, read-only ones 
       ['git diff --output=/tmp/x', 'git diff --output'],
       ['git diff --outp /tmp/x', 'git diff --outp'],
       ['git show -o /tmp/x HEAD', 'git show -o'],
+      ['git diff -o x', 'git diff -o'],
+      ['git log -po x', 'git log -o'],
+      ['git log -pofile', 'git log -o'],
+      ['git shortlog -no x', 'git shortlog -o'],
       ['git grep -nOvim foo', 'git grep -O'],
       ['git grep --open-files-in-pager=vim foo', 'git grep --open-files-in-pager'],
       ['git diff --ext-diff', 'git diff --ext-diff'],
@@ -512,7 +516,7 @@ test("a checker's git commands that change anything are refused, read-only ones 
       ['git-core/git-log --output=/tmp/x', 'git log --output'],
     ] as const) expect(await bash(command)).toBe(gitWriteText(what))
     expect(gitWriteText('git stash')).toMatch(/^Refused: git stash may change the repository or run another program, and the checker may only read with git/)
-    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git diff --text --stat', 'git diff --no-ext-diff', 'git ls-files -o', 'git grep -n foo', '/usr/libexec/git-core/git-diff', 'echo "use git diff"', 'export GIT_PAGER=cat', 'grep -rn "gitWriteIn(" hooks', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test'])
+    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git diff --text --stat', 'git diff --no-ext-diff', 'git ls-files -o', 'git grep -n foo', '/usr/libexec/git-core/git-diff', 'echo "use git diff"', 'export GIT_PAGER=cat', 'grep -rn "gitWriteIn(" hooks', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test', 'git log -Sfoo', 'git log -p -G"checkout" -- hooks', "git log -L'/function gitScan/,+5:hooks/core/ask.ts'", 'git diff -Sfoo', 'git log -n3o', 'git grep -e-O foo'])
       expect(await bash(command)).toBeUndefined()
     checkerFinished(id, 'OK')
   })

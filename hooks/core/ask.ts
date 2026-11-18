@@ -394,13 +394,30 @@ function plainWords(text: string): string[] {
   return out
 }
 
+/** Short options of git grep that take a value right after them (`-e<pattern>`, `-A3`). */
+const GREP_VALUE = 'efABCmO'
+/** Short options of diff-like git commands that take a value right after them (`-S<text>`, `-G<regex>`, `-L<range>`, `-n3`); shortlog's -n takes none. */
+const DIFF_VALUE = 'SGLOInUlMCBX'
+
+/** The option letters of short option word `a` (`-nSfoo` gives `nS`): stops after the first letter that takes a value. */
+function shortFlags(a: string, value: string): string {
+  let out = ''
+  for (const c of a.slice(1)) {
+    out += c
+    if (value.includes(c)) break
+  }
+  return out
+}
+
 /** The option of git `args` (the words after read-only command `sub`) that writes a file or runs another program, or undefined. */
 function gitBadOption(sub: string, args: string[]): string | undefined {
   for (const a of args) {
     const long = /^--([^=]+)/.exec(a)?.[1]
     if (long && !LONG_OK.has(long) && !long.startsWith('no-') && LONG_REFUSED.some(n => n.startsWith(long))) return a.split('=')[0]
-    // short options may be put together (`-nO`); -O runs its value as a command in grep, -o writes a file in diff-like commands
-    if (/^-[^-]/.test(a) && ((sub === 'grep' && a.includes('O')) || (DIFF_LIKE.has(sub) && a.includes('o')))) return sub === 'grep' && a.includes('O') ? '-O' : '-o'
+    // short options may be put together (`-nO`); -O runs its value as a command in grep, -o writes a file in diff-like
+    // commands. The letters after an option that takes a value are that value (`-Sfoo`, `-G"checkout"`), not options.
+    const flag = sub === 'grep' ? 'O' : DIFF_LIKE.has(sub) ? 'o' : undefined
+    if (flag && /^-[^-]/.test(a) && shortFlags(a, sub === 'grep' ? GREP_VALUE : sub === 'shortlog' ? DIFF_VALUE.replace('n', '') : DIFF_VALUE).includes(flag)) return `-${flag}`
   }
   return undefined
 }
