@@ -3,6 +3,7 @@
 // vscode-scouts-settings.test.tsx). The board view is BOARD_VIEW's, with these scouts.
 import type { On } from 'claude-code'
 import { BOARD_VIEW, T0, seedBoard } from './board-fixture'
+import { ran, entry } from './fakes'
 
 const iso = (ms: number) => new Date(ms).toISOString()
 /** The scouts' times are set from T0, the fixed clock seedBoard gives the pages (see hooks/claude/ui/now.ts). */
@@ -45,3 +46,78 @@ export function seedScouts(on: On, tab: 'scouts' | 'settings', scout = '', toast
 
 /** The scout pages the tests open, one by one. */
 export const SCOUT_PAGES = SCOUTS.map(s => s.name)
+
+/** The plugin's roles (built-in) and the project's own roles and kinds the Roles and Kinds pages list (T-460): a
+ *  replaced role, one turned off, one added with a long name and description, one whose file can't be read, the
+ *  checker role; a built-in kind turned off and an added kind. fs.write and `rm -f` change the project's files. */
+export const ROLE_FILES = {
+  builtIn: {
+    'general.md': '---\ndescription: a plain worker for any task; use it when no other role fits\n---\n',
+    'tester.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n',
+    'docs.md': '---\ndescription: writes the docs\n---\n- plain words\n',
+    'checker.md': '---\ndescription: checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)\noff: true\n---\n- read the whole diff\n',
+  } as Record<string, string>,
+  mine: {
+    'tester.md': '---\ndescription: writes tests that try hard to break the change, with every edge case found\nmodel: sonnet\nskills: testing, review\n---\n- cover errors\n- cover empty input\n',
+    'docs.md': '---\ndescription: writes the docs\noff: true\n---\n- plain words\n',
+    'mobile-apps-and-tablets-everywhere.md': '---\ndescription: builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too\n---\n- test on a small screen\n',
+    'bad.md': 'no front matter here',
+  } as Record<string, string>,
+  kinds: {
+    'bug.md': '---\ndescription: something that works wrongly\noff: true\n---\n',
+    'chore-and-upkeep-of-the-build.md': '---\ndescription: small upkeep: bumping versions, tidying the build, moving files, nothing the user sees at all\n---\nKeep it small.\n',
+  } as Record<string, string>,
+}
+
+/** Seeds the board on Settings (see seedScouts) with the roles and kinds of ROLE_FILES. */
+export function seedRolesKinds(on: On, toast: (e: unknown) => void = () => {}) {
+  seedScouts(on, 'settings', '', toast)
+  const builtIn = { ...ROLE_FILES.builtIn }
+  const mine = { ...ROLE_FILES.mine }
+  const kinds = { ...ROLE_FILES.kinds }
+  const where = (p: string): [Record<string, string>, string] | null => {
+    const k = /\/\.symcc\/kinds(?:\/(.*))?$/.exec(p)
+    if (k) return [kinds, k[1] ?? '']
+    const m = /\/\.symcc\/roles(?:\/(.*))?$/.exec(p)
+    if (m) return [mine, m[1] ?? '']
+    const b = /\/roles(?:\/(.*))?$/.exec(p)
+    return b ? [builtIn, b[1] ?? ''] : null
+  }
+  on('fs.exists', (_, e, next) => {
+    const w = where(e.path)
+    return w ? { value: w[1] === '' || w[1] in w[0] } : next(e)
+  })
+  on('fs.list', (_, e, next) => {
+    const w = where(e.path)
+    return w && w[1] === '' ? { value: Object.keys(w[0]).map(name => entry(name)) } : next(e)
+  })
+  on('fs.read', (_, e, next) => {
+    const w = where(e.path)
+    if (!w) return next(e)
+    if (!(w[1] in w[0])) throw new Error('no file')
+    return { value: w[0][w[1]]! }
+  })
+  on('fs.write', (_, e, next) => {
+    const w = where(e.path)
+    if (!w) return next(e)
+    w[0][w[1]] = String(e.text)
+    return { value: undefined }
+  })
+  on('process.run', (_, e, next) => {
+    const argv = (e as { argv: string[] }).argv
+    if (argv[0] === 'mv') {
+      // safeWrite: a temp file, then mv over the real one
+      const [src, dest] = argv.slice(-2).map(p => where(p!))
+      if (!src || !dest) return next(e)
+      dest[0][dest[1]] = src[0][src[1]]!
+      delete src[0][src[1]]
+      return { value: ran() }
+    }
+    const w = where(argv[argv.length - 1] ?? '')
+    if (!w) return next(e)
+    // rm deletes; anything else on these folders (mkdir -p) just works
+    if (argv[0] === 'rm') delete w[0][w[1]]
+    return { value: ran() }
+  })
+  return { mine, kinds }
+}

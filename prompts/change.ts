@@ -7,6 +7,7 @@ export default `You are a {{name}} worker. Do exactly this one task, then stop.
 Work ONLY inside this folder, your own copy of the project on branch {{branch}}:
   {{folder}}
 Use absolute paths under that folder for every {{file_tools}}. Never touch the main project folder.
+Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
 
 Task {{task_id}}: {{title}}
 {{details}}

@@ -2680,6 +2680,58 @@ test('the merge-main-in try is marked when it starts, and the first end reason i
   expect(fmtRun({ ...once[0]!, ended: ISO }, 2)).toBe('try 3: 0s · merged main in (clash with main) · stopped: paused')
 })
 
+test('a worker may write and run a throwaway script under .scratch/ with no file request; the commit and scope check leave it out, and the folder is emptied after the try (T-456)', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  // the Write tool, by full and by relative path, then Bash runs it: all allowed
+  expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratch/edit.py` })).toBeUndefined()
+  expect(await checkEdit(w.$, 'ag1', { path: '.scratch/notes/plan.md' })).toBeUndefined()
+  expect(await checkEdit(w.$, 'ag1', { command: 'python3 .scratch/edit.py' }, WT)).toBeUndefined()
+  expect(await checkEdit(w.$, 'ag1', { command: `python3 ${WT}/.scratch/edit.py && rm ${WT}/.scratch/edit.py` }, WT)).toBeUndefined()
+  // no file request was recorded
+  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  // elsewhere outside the task's files is still refused: a look-alike folder, a climb out of .scratch/, a top-level script
+  expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.t448-edit.py` })).toMatch(/^\.t448-edit\.py is outside this task's files/)
+  expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratchy/edit.py` })).toMatch(/^\.scratchy\/edit\.py is outside this task's files/)
+  expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratch/../README.md` })).toMatch(/^README\.md is outside this task's files/)
+  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toEqual(['.t448-edit.py', '.scratchy/edit.py', 'README.md'])
+  // the try, without those refusals: its commit never stages .scratch/, it merges, and the folder is emptied afterwards
+  await change(w.$, x => patchTask(x, 'T-1', { try_refused: undefined }, ISO))
+  await workerFinished(w.$, 'ag1', 'made the change')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  const add = w.calls.indexOf(`wt: git add -A -- . :(exclude).scratch`)
+  expect(add).toBeGreaterThan(-1)
+  expect(w.calls.some(c => c.startsWith('wt: git add') && !c.includes(':(exclude).scratch'))).toBe(false)
+  expect(t.history.join('\n')).not.toContain('outside the task')
+  const rm = w.calls.indexOf(`rm -rf ${WT}/.scratch`)
+  expect(rm).toBeGreaterThan(add)
+  expect(w.calls[rm - 1]).toBe(`wt: git check-ignore -q -- .scratch/x`)
+  workers.clear()
+})
+
+test('a project that keeps files under .scratch/ in git: an edit there gets the normal file check, git add has no exclude, and the folder is not emptied (T-456)', async () => {
+  S.me = 'me'
+  const w = world({ answer: a => (a[0] === 'ls-files' && a.includes('.scratch') ? ok('.scratch/keep.txt') : undefined) })
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratch/keep.txt` })).toMatch(/^\.scratch\/keep\.txt is outside this task's files/)
+  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toEqual(['.scratch/keep.txt'])
+  await change(w.$, x => patchTask(x, 'T-1', { try_refused: undefined }, ISO))
+  await workerFinished(w.$, 'ag1', 'made the change')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.calls).toContain('wt: git add -A -- .')
+  expect(w.calls.some(c => c.includes(':(exclude).scratch'))).toBe(false)
+  expect(w.calls.some(c => c.startsWith('rm ') && c.includes('.scratch'))).toBe(false)
+  workers.clear()
+})
+
 test("a worker's edit in the owner's copy of the project is refused without a file request; its own folder works as before (T-299)", async () => {
   S.me = 'me'
   const f = world()
@@ -4364,7 +4416,7 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   const [b2, t2] = [await load(w.$), find(await load(w.$), 'T-2')! as SymccTask]
   const r = await checkAndMerge(w.$, t2, wt, b2)
   expect(r.ok).toBe(true)
-  expect(w.calls).toContain(`${wt}: git add -A -- .`)
+  expect(w.calls).toContain(`${wt}: git add -A -- . :(exclude).scratch`)
   expect(t2.files).toEqual(['docs/research/do-it.md'])
 })
 

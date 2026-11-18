@@ -10,6 +10,7 @@ import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
+import { scratchOn } from './git'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
 function recordOnTry($: Host, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
@@ -187,7 +188,8 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   // an unreadable board throws on, so the hook's .catch refuses the edit (see guardFailed): never let it through unchecked
   const t = find(await load($), w.task)
   if (!t || isInvestigation(t)) return undefined
-  const path = blockedEdit(real.path, real.worktree, t.files, S.N.dir)
+  // the throwaway .scratch/ is free to edit only where the project keeps no file there in git (T-456)
+  const path = blockedEdit(real.path, real.worktree, t.files, S.N.dir, await scratchOn($, w.worktree))
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)

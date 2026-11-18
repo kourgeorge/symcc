@@ -1,7 +1,7 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE } from '../board'
 import { publish } from './lead'
-import { S, workers, starting, finishing, approving, keptDirty } from './state'
+import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
 import { load, change, path } from './store'
 import { tellLead, noteForLead, brief } from './tell'
@@ -151,7 +151,68 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string) {
     else await gitOk($, ['worktree', 'add', '-b', branch, dir, target])
   }
   await copyTypes($, dir).catch(() => false)
+  await prepareScratch($, dir).catch(() => false)
   return { dir, branch }
+}
+
+/**
+ * Whether the project keeps any file under SCRATCH_DIR in git in the worker folder `dir` (`git ls-files -- .scratch`
+ * prints something). Then the scratch feature is off there: those are the project's own files. A git failure counts as
+ * kept, so nothing is ever removed or let through on a guess.
+ */
+export async function scratchTracked($: Host, dir: string): Promise<boolean> {
+  const r = await git($, ['ls-files', '--', SCRATCH_DIR], dir)
+  return r.exitCode !== 0 || r.stdout.trim() !== ''
+}
+
+/**
+ * Whether the worker folder `dir` uses its SCRATCH_DIR (T-456): worked out once (scratchTracked, when the folder is
+ * made or reused) and kept in scratchUse; a folder not seen yet (after a reload) is checked then.
+ */
+export async function scratchOn($: Host, dir: string): Promise<boolean> {
+  const known = scratchUse.get(dir)
+  if (known !== undefined) return known
+  const on = !(await scratchTracked($, dir))
+  scratchUse.set(dir, on)
+  return on
+}
+
+/**
+ * Gives the worker folder `dir` an empty SCRATCH_DIR for throwaway scripts and notes (T-456): SCRATCH_EXCLUDE is added
+ * to that checkout's local ignore list (the file `git rev-parse --git-path info/exclude` names; never .gitignore, so
+ * nothing is committed), then the folder is cleared (clearScratch). Returns whether the folder is ready. When the
+ * project keeps files under SCRATCH_DIR in git (scratchTracked), the feature is off for that folder: no line, no clearing.
+ */
+export async function prepareScratch($: Host, dir: string): Promise<boolean> {
+  const on = !(await scratchTracked($, dir))
+  scratchUse.set(dir, on)
+  if (!on) return false
+  const r = await git($, ['rev-parse', '--git-path', 'info/exclude'], dir)
+  const where = r.exitCode === 0 ? r.stdout.trim() : ''
+  if (!where) return false
+  const file = where.startsWith('/') ? where : `${dir}/${where}`
+  const old = await Promise.resolve().then(() => $.fs.read(file)).then(x => String(x), () => '')
+  if (!old.split('\n').some(l => l.trim() === SCRATCH_EXCLUDE)) {
+    if ((await $.run(['mkdir', '-p', file.slice(0, file.lastIndexOf('/')) || '/'])).exitCode !== 0) return false
+    await $.fs.write(file, `${old}${old && !old.endsWith('\n') ? '\n' : ''}${SCRATCH_EXCLUDE}\n`)
+  }
+  return clearScratch($, dir)
+}
+
+/**
+ * Empties SCRATCH_DIR in the worker folder `dir` (a try ended, or the folder is used again). Only where the project
+ * keeps no file there in git (scratchTracked, asked again right before) and git in `dir` ignores it (check-ignore), so
+ * the project's own files are never removed.
+ */
+export async function clearScratch($: Host, dir: string): Promise<boolean> {
+  if (await scratchTracked($, dir)) {
+    scratchUse.set(dir, false)
+    return false
+  }
+  if ((await git($, ['check-ignore', '-q', '--', `${SCRATCH_DIR}/x`], dir)).exitCode !== 0) return false
+  const to = `${dir}/${SCRATCH_DIR}`
+  if ((await $.run(['rm', '-rf', to], { cwd: dir })).exitCode !== 0) return false
+  return (await $.run(['mkdir', '-p', to], { cwd: dir })).exitCode === 0
 }
 
 /** The generated, git-ignored types folder the project's tsconfig.json extends. */

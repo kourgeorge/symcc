@@ -3,7 +3,7 @@
 // has no real git or disk, so a small fake below keeps files in memory and answers the few commands used.
 import { expect } from 'claude-code/testing'
 import { type SymccTask } from '../types'
-import { prepareWorktree, copyTypes, worktreeDir, TYPES_DIR } from '../hooks/app/git'
+import { prepareWorktree, copyTypes, worktreeDir, TYPES_DIR, clearScratch } from '../hooks/app/git'
 import { S } from '../hooks/app/state'
 import { test } from './reset'
 import { fakeHost } from './fake-host'
@@ -13,8 +13,14 @@ type Res = { exitCode: number; stdout: string; stderr: string }
 const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
 const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 
-/** `types`: the main folder has .claude-plugin/types; `ignored`: git ignores it (as this project's .gitignore does). */
-function world({ types = true, ignored = true } = {}) {
+const EXCLUDE = `${ROOT}/.git/info/exclude`
+
+/**
+ * `types`: the main folder has .claude-plugin/types; `ignored`: git ignores it (as this project's .gitignore does).
+ * `excludes`: git names the checkout's info/exclude (`git rev-parse --git-path info/exclude`), and ignores what it lists.
+ * `tracked`: files the project keeps in git (relative to a folder), as `git ls-files` lists them.
+ */
+function world({ types = true, ignored = true, excludes = false, tracked = [] as string[] } = {}) {
   const files = new Map<string, string>()
   const calls: string[] = []
   if (types) {
@@ -22,7 +28,7 @@ function world({ types = true, ignored = true } = {}) {
     files.set(`${ROOT}/${TYPES_DIR}/claude-code.d.ts`, 'declare const x: 1')
   }
   const under = (dir: string) => [...files.keys()].filter(k => k.startsWith(`${dir}/`))
-  const isIgnored = (rel: string) => ignored && rel.startsWith(`${TYPES_DIR}/`)
+  const isIgnored = (rel: string) => (ignored && rel.startsWith(`${TYPES_DIR}/`)) || (rel.startsWith('.scratch/') && (files.get(EXCLUDE) ?? '').split('\n').includes('/.scratch/'))
   const runGit = (a: string[], cwd: string): Res => {
     if (a[0] === 'worktree' && a[1] === 'add') {
       const dir = a[2] === '-b' ? a[4]! : a[2]!
@@ -30,7 +36,11 @@ function world({ types = true, ignored = true } = {}) {
       files.set(`${dir}/tsconfig.json`, `{"extends":"./${TYPES_DIR}/tsconfig.json"}`)
       return ok()
     }
-    if (a[0] === 'rev-parse') return fail()
+    if (a[0] === 'rev-parse') return excludes && a[1] === '--git-path' && a[2] === 'info/exclude' ? ok(EXCLUDE) : fail()
+    if (a[0] === 'ls-files') {
+      const want = a.slice(a.indexOf('--') + 1)
+      return ok(tracked.filter(f => want.some(w => f === w || f.startsWith(`${w}/`))).join('\n'))
+    }
     if (a[0] === 'check-ignore') return isIgnored(a.at(-1)!) ? ok() : fail()
     if (a[0] === 'status') {
       // new files only (the fake's tracked file is tsconfig.json): what the scope check and commit would see
@@ -108,4 +118,45 @@ test('a reused worker folder gets a fresh copy: old files from an earlier copy g
   expect(w.calls.filter(c => c.includes('worktree add')).length).toBe(adds)
   expect(w.files.has(`${dir}/${TYPES_DIR}/old.d.ts`)).toBe(false)
   expect(w.files.get(`${dir}/${TYPES_DIR}/tsconfig.json`)).toBe('{"compilerOptions":{"strict":false}}')
+})
+
+test('a worker folder gets an empty .scratch/ that git ignores through info/exclude, never .gitignore; a reused folder gets it emptied (T-456)', async () => {
+  const w = world({ excludes: true })
+  w.files.set(EXCLUDE, '# local ignores\n*.log')
+  const { dir } = await prepareWorktree(w.$, task, 'main')
+  expect(w.files.get(EXCLUDE)).toBe('# local ignores\n*.log\n/.scratch/\n')
+  expect([...w.files.keys()].some(k => k.endsWith('.gitignore'))).toBe(false)
+  expect(w.calls).toContain(`mkdir -p ${dir}/.scratch`)
+  // a throwaway script there is not a change git sees, so the commit and the scope check never get it
+  w.files.set(`${dir}/.scratch/edit.py`, 'print(1)')
+  expect(await w.status(dir)).toBe('')
+  // the folder used again: the line is not added twice, and the old script is gone
+  await prepareWorktree(w.$, task, 'main')
+  expect(w.files.get(EXCLUDE)!.match(/\/\.scratch\//g)).toHaveLength(1)
+  expect(w.files.has(`${dir}/.scratch/edit.py`)).toBe(false)
+})
+
+test('.scratch/ is never emptied where git does not ignore it (it could be the project\'s own files)', async () => {
+  const w = world()
+  const dir = worktreeDir('T-1')
+  w.files.set(`${dir}/.git`, 'gitdir: x')
+  w.files.set(`${dir}/.scratch/tracked.txt`, 'mine')
+  expect(await clearScratch(w.$, dir)).toBe(false)
+  expect(w.files.get(`${dir}/.scratch/tracked.txt`)).toBe('mine')
+})
+
+test('a project that keeps files under .scratch/ in git: no exclude line is written and the folder is never emptied (T-456)', async () => {
+  const w = world({ excludes: true, tracked: ['.scratch/keep.txt'] })
+  w.files.set(EXCLUDE, '# local ignores\n')
+  const dir = worktreeDir('T-1')
+  w.files.set(`${dir}/.scratch/keep.txt`, 'mine')
+  await prepareWorktree(w.$, task, 'main')
+  expect(w.files.get(EXCLUDE)).toBe('# local ignores\n')
+  expect(w.files.get(`${dir}/.scratch/keep.txt`)).toBe('mine')
+  // even where git would ignore it (the line added by hand): the kept file decides
+  w.files.set(EXCLUDE, '/.scratch/\n')
+  expect(await clearScratch(w.$, dir)).toBe(false)
+  expect(w.files.get(`${dir}/.scratch/keep.txt`)).toBe('mine')
+  expect(w.calls.some(c => c.startsWith('rm ') && c.includes('.scratch'))).toBe(false)
+  expect(w.calls.some(c => c === `mkdir -p ${dir}/.scratch`)).toBe(false)
 })

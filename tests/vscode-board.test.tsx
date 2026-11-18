@@ -381,7 +381,7 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
     await ui.press({ key: 'Q-3', link: { href: vsHref('question', 'Q-3') } })
     expect(await ui.find({ key: 'vs-task-T-404' }), at).toBeUndefined()
     expect(texts(await ui.drawn()).join(' '), at).toContain(QUESTION.text)
-    await ui.press({ key: 'back' })
+    await ui.press({ key: 'question-back', link: { href: vsHref('page', 'back/question-back') } })
     expect(await ui.find({ key: 'vs-task-T-404' }), at).toBeDefined()
     await ui.unmount()
   }

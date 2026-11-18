@@ -5,12 +5,13 @@
 //   mode  [auto ▾]                            (VS Code's Select: a pick saves it)
 //   default auto · off: nothing runs; …       (what it means, dim, wrapped)
 //   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
-// Roles and Kinds are buttons that open their pages. No key hints.
+//   Roles  7 roles · 1 off                  (a link that opens the Roles page; Kinds the same)
+// Only real actions are Buttons (an Input's Save). No key hints.
 import { SETTINGS, SETTING_GROUPS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, isSettingPage, settingValue, parseSettingValue, type SettingName, type SettingsInput } from '../../board'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { vsFooter, vsSection } from './vscode'
+import { vsFooter, vsHref, vsLink, mdLink, mdText, vsSection } from './vscode'
 
 /** What settings.tsx hands the VS Code page: the Roles and Kinds counts, how to save, how to open those pages. */
 export type VsSettingsCtx = {
@@ -35,7 +36,7 @@ export function settingChoices(name: SettingName, notifyChoices: readonly string
 
 /** The Settings page in VS Code. */
 export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
-  const { Box, Text, Button, Input, C, banner, tabs, vs, v } = pane
+  const { Box, Text, Input, C, banner, tabs, vs, v } = pane
   const { Select } = vs
   const plain = (key: string, text: string, color = 'inactive') => (
     <Text key={key} wrap="wrap" color={C(color)}>
@@ -93,13 +94,14 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     )
   }
 
+  // Roles and Kinds open their pages: a link (VS Code draws a Button as a filled box), the count beside it
   const pageRow = (page: 'roles' | 'kinds') => {
     const roles = page === 'roles'
+    const href = vsHref('page', page)
+    const count = roles ? ctx.rolesCount : ctx.kindsCount
     return (
       <Box key={`vs-setting-${page}`} flexDirection="column">
-        <Box key={`vs-setting-${page}-row`} flexDirection="row" flexWrap="wrap" gap={1}>
-          <Button key={roles ? 'settings-roles' : 'settings-kinds'} label={roles ? `Roles: ${ctx.rolesCount}` : `Kinds: ${ctx.kindsCount}`} variant="secondary" onPress={roles ? ctx.openRoles : ctx.openKinds} />
-        </Box>
+        {vsLink(vs, roles ? 'settings-roles' : 'settings-kinds', `**${mdLink(roles ? 'Roles' : 'Kinds', href)}** \u00a0${mdText(count)}`, [[href, roles ? ctx.openRoles : ctx.openKinds]])}
         {plain('about', roles ? 'the worker roles, to open, edit, turn off or add' : 'the task kinds, to open, edit, turn off or add')}
       </Box>
     )

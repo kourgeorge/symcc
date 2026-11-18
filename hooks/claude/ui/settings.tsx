@@ -10,6 +10,7 @@ import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKin
 import type { PaneParts } from './parts'
 import { arrows, headingFocused, row } from './arrows'
 import { settingsPageVs } from './vscode-settings'
+import { rolesPageVs, rolePageVs, brokenRolePageVs, rolePromptPageVs, roleEditPageVs, kindsPageVs, kindPageVs, kindEditPageVs } from './vscode-roles'
 import { claudeHost } from '../host'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
@@ -19,6 +20,8 @@ const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
  *  file, named and ordered as the page shows them: Description, Model, Skills, Tools, Checklist. Its boxes take every letter
  *  and Esc doesn't reach the panel from a text box, so Cancel is the way out. */
 function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return roleEditPageVs($, pane, source)
   const { Box, Text, Button, Input, act, C, heading, footer } = pane
   const d = roleView.draft!
   const cancel = () => ((roleView.draft = null), $.ui.invalidate('ui.render'))
@@ -59,6 +62,8 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
  *  nor for the checker role: its page says the checker setting runs it and whether that is on, `checker`), Reset to built-in (a replaced built-in only)
  *  and Remove (an added role only, after a confirm step). */
 function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker: boolean) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return rolePageVs($, pane, r, source, checker)
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => act(async () => {
     const res = await changeRole(claudeHost($), input)
@@ -141,6 +146,8 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker:
 /** The built-in prompt role `r` is put into, view only (opened from its page with See the prompt; Back returns there): its text with
  *  the {{role}} slot marked, so it is clear where the checklist goes. The prompts are built-in: roles are how a worker is shaped. */
 function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: RolePromptKind) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return rolePromptPageVs($, pane, r, kind)
   const { Box, Text, Button, C, heading, footer, buttonRows } = pane
   const show = (k: RolePromptKind | '') => () => ((roleView.prompt = k), $.ui.invalidate('ui.render'))
   return (
@@ -179,6 +186,8 @@ function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: RolePromptKind)
 /** The page of a role whose file can't be read: why, then only what works: Reset to built-in (a built-in's name) or Remove
  *  (an added role, after a confirm step). The edit page can't load a broken file, so it is fixed by hand. */
 function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[]) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return brokenRolePageVs($, pane, b, builtIn)
   const { Box, Text, Button, act, C, heading, footer, buttonRows } = pane
   const run = (input: Parameters<typeof changeRole>[1]) => act(async () => {
     const res = await changeRole(claudeHost($), input)
@@ -229,6 +238,8 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[])
 /** The Roles page, opened from Settings' Roles row: one row per role (Enter opens it), + New role (n) and Back (b)
  *  to Settings. The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
 function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenDef[]) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return rolesPageVs($, pane, roles, builtIn, project, broken)
   const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
   const cancel = () => ((roleView.naming = null), $.ui.invalidate('ui.render'))
   const nameW = Math.max(0, ...roles.map(r => r.name.length), ...broken.map(b => b.name.length))
@@ -301,6 +312,8 @@ const kindFileOf = (name: string) => `${S.N.dir}/kinds/${name}.md`
 
 /** A kind's edit mode: Save and Cancel (x), then a box per part of its file: Description and Body. */
 function kindEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return kindEditPageVs($, pane, source)
   const { Box, Text, Button, Input, act, C, heading, footer } = pane
   const d = kindView.draft!
   const cancel = () => ((kindView.draft = null), $.ui.invalidate('ui.render'))
@@ -337,6 +350,8 @@ function kindEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
  *  or investigation), Reset to built-in (a replaced built-in only) and Remove (an added kind only, after a confirm step).
  *  A kind whose file can't be read (`broken`) shows why, and only Reset or Remove. */
 function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSource | undefined, broken: BrokenDef | undefined, builtIn: KindDef[]) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return kindPageVs($, pane, k, source, broken, builtIn)
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const name = k?.name ?? broken!.name
   const run = (input: Parameters<typeof changeKind>[1], after?: () => void) => act(async () => {
@@ -397,6 +412,8 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSour
 
 /** The Kinds page, opened from Settings' Kinds row: one row per kind (Enter opens it), + New kind (n) and Back (b) to Settings. */
 function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenDef[]) {
+  // VS Code's side panel draws its own page (vscode-roles.tsx)
+  if (pane.vscode) return kindsPageVs($, pane, kinds, builtIn, project, broken)
   const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
   const cancel = () => ((kindView.naming = null), $.ui.invalidate('ui.render'))
   const nameW = Math.max(0, ...kinds.map(k => k.name.length), ...broken.map(b => b.name.length))

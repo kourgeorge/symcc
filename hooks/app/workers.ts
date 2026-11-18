@@ -2,7 +2,7 @@ import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
@@ -679,11 +679,19 @@ export async function saveReport(host: Host, t: SymccTask, answer: string) {
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
  * an API error or a refusal → failed with the reason; the host saw a background command still running (end.background) → failed (ENDED_EARLY_NOTE);
  * else done: checked and merged (an investigation: its answer).
+ * Once the try has ended (its outcome written), the folder's .scratch/ throwaway folder is emptied (clearScratch, T-456);
+ * not when the task changed meanwhile, was given up, or a checker starts again there.
  */
 export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
+  const ended = await finishTry(host, agentId, w, answer, end, gaveUp, release, turn)
+  if (ended && !gaveUp()) await clearScratch(host, w.worktree).catch(() => false)
+}
+
+/** finishWork's body: true when this try's outcome was written (its folder's .scratch/ may be emptied), false when it was not ours to end. */
+async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd, gaveUp: () => boolean, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<boolean> {
   const b = await load(host)
   const t = find(b, w.task)
-  if (!t || t.status !== 'doing') return // changed or dropped meanwhile
+  if (!t || t.status !== 'doing') return false // changed or dropped meanwhile
   await saveReport(host, t, answer)
   const summary = cutLine(answer, 600) || '(no summary)'
   // Its time was up: what it handed back is its report; the task fails with its work kept, nothing is merged.
@@ -691,46 +699,46 @@ export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 't
     const limit = timeLimitOf(b.max_minutes, t)
     // An investigation's hand-back is its answer so far: it still goes to review for the owner to read.
     if (isInvestigation(t)) {
-      if (gaveUp()) return
+      if (gaveUp()) return false
       await answered(host, t, answer, summary, limit)
-      return
+      return true
     }
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: [...cur.history, `${tryLabel(t)}: out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`], ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: [...cur.history, `${tryLabel(t)}: out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`], ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return false
     tellLead(host, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
-    return
+    return true
   }
   const q = t.try_question
   const need = isInvestigation(t) ? [] : (t.try_refused ?? [])
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
     const { question, options } = q
-    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'question') }))) return
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'question') }))) return false
     sayNeedsYou(host, b, t, question)
     tellLead(host, workerQuestionText(t.id, question, options))
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need)
-    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`], ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`], ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
     sayNeedsYou(host, b, t, question)
     tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (end.reason === 'aborted') {
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return false
     tellLead(host, `${t.id} "${t.title}": the worker was stopped before finishing.`)
   } else if (end.reason === 'error' || end.reason === 'refusal') {
     const why = endFailure(end)
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
   } else if (end.background?.length) {
     // The host saw a background command of it still running when its turn ended: its work isn't done.
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: [...cur.history, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${ENDED_EARLY_NOTE}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: [...cur.history, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${ENDED_EARLY_NOTE}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
   } else if (isInvestigation(t)) {
-    if (gaveUp()) return
+    if (gaveUp()) return false
     await warnEndedEarly(host, t, answer)
     await answered(host, t, answer, summary)
   } else {
-    if (gaveUp()) return
+    if (gaveUp()) return false
     await warnEndedEarly(host, t, answer)
-    if (await waitIfBranchGone(host, b, t, 'merge')) return
+    if (await waitIfBranchGone(host, b, t, 'merge')) return true
     await change(host, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
@@ -740,11 +748,12 @@ export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 't
     if (r.ok && r.held && !gaveUp() && !stop()) {
       const c = await afterChecker(host, t, b, r, w.worktree, made, stop, release, turn)
       // T-428: the checker was stopped before its verdict: the task stays "doing" in its checker step, and a new checker starts (restartCheckers)
-      if (c.again) return
+      if (c.again) return false
       r = c
     }
     await finishTail(host, t, b, r, made, summary, w.worktree, agentId, gaveUp)
   }
+  return true
 }
 
 /** The end of a finished try's check (finishWork, or a checker started again after a reload): its commits recorded and its outcome `r` written. */
