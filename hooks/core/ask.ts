@@ -288,6 +288,8 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
   let text = ''
   let quote = ''
   let tick = false
+  // open `@{` braces (`HEAD@{1}`): a git revision, not a command group, so neither brace cuts the command
+  let atBrace = 0
   const docs: { end: string; tabs: boolean }[] = []
   const op = (o: '&&' | '||' | ';' | '|' | '&' | ')' | '(', sub = true) => {
     out.push(doc ? { text, doc } : { text }, o === '(' ? { op: o, sub } : { op: o })
@@ -332,6 +334,8 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
       }
       i = j - 1
     } else if (c === ';' || c === '\n') op(';')
+    else if (c === '{' && text.endsWith('@')) (text += c), atBrace++
+    else if (c === '}' && atBrace) (text += c), atBrace--
     else if (c === '(' || c === '{') op('(', c === '(')
     else if (c === ')' || c === '}') op(')')
     else if (c === '`') (tick = !tick) ? op('(') : op(')')
@@ -496,7 +500,7 @@ export const bashOutsideText = (rel: string, worktree: string) =>
   `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
 
 /** git commands a checker may run as they are: they only read. Anything not listed (and not in gitReadOnly below) is refused. */
-const GIT_READ = new Set(['diff', 'log', 'show', 'status', 'blame', 'grep', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'rev-list', 'merge-base', 'describe', 'shortlog', 'show-branch', 'whatchanged', 'name-rev', 'diff-tree', 'diff-index', 'diff-files', 'annotate', 'help', 'version', 'count-objects', 'var', 'check-ignore', 'check-attr'])
+const GIT_READ = new Set(['diff', 'log', 'show', 'status', 'blame', 'grep', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'rev-list', 'merge-base', 'describe', 'shortlog', 'show-branch', 'whatchanged', 'name-rev', 'diff-tree', 'diff-index', 'diff-files', 'annotate', 'help', 'version', 'count-objects', 'var', 'check-ignore', 'check-attr', 'show-ref'])
 
 /** git's own options (before the command name) that take the next word as their value. */
 const GIT_GLOBAL_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix'])
@@ -515,7 +519,7 @@ const LONG_REFUSED = ['output', 'ext-diff', 'textconv', 'open-files-in-pager', '
 const LONG_OK = new Set(['text'])
 
 /** git commands that take diff options, where `-o <file>` writes the output to a file. */
-const DIFF_LIKE = new Set(['diff', 'log', 'show', 'whatchanged', 'diff-tree', 'diff-index', 'diff-files', 'format-patch', 'rev-list', 'shortlog'])
+const DIFF_LIKE = new Set(['diff', 'log', 'show', 'reflog', 'whatchanged', 'diff-tree', 'diff-index', 'diff-files', 'format-patch', 'rev-list', 'shortlog'])
 
 /** `git branch` options that change branches. */
 const BRANCH_WRITE = /^(-[a-zA-Z]*[dDfmMcCu]|--(delete|force|move|copy|set-upstream-to|unset-upstream|edit-description|track|no-track|create-reflog|recurse-submodules)(=|$))/
@@ -573,6 +577,8 @@ function shortFlags(a: string, value: string): string {
 function gitBadOption(sub: string, args: string[]): string | undefined {
   for (const a of args) {
     const long = /^--([^=]+)/.exec(a)?.[1]
+    // cat-file --filters runs the repository's filter programs (any unique start of it: --fi, --filter)
+    if (sub === 'cat-file' && long && long.length > 1 && 'filters'.startsWith(long)) return a.split('=')[0]
     if (long && !LONG_OK.has(long) && !long.startsWith('no-') && LONG_REFUSED.some(n => n.startsWith(long))) return a.split('=')[0]
     // short options may be put together (`-nO`); -O runs its value as a command in grep, -o writes a file in diff-like
     // commands. The letters after an option that takes a value are that value (`-Sfoo`, `-G"checkout"`), not options.
@@ -582,9 +588,31 @@ function gitBadOption(sub: string, args: string[]): string | undefined {
   return undefined
 }
 
+/** `git config` options that only pick where to read or how to show it; any other option (--add, --unset, --edit, --file...) is refused. */
+const CONFIG_SHOW = /^(--(global|local|system|worktree|show-origin|show-scope|name-only|null|includes|no-includes|bool|int|bool-or-int|path|expiry-date|type=[\w-]+)|-z)$/
+
+/** `git config` options (or, in newer git, first words) that read a setting; one of them is needed. */
+const CONFIG_GET = new Set(['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l'])
+
+/** Whether `git config args` only reads: one of CONFIG_GET (or `get`/`list` first), and else only CONFIG_SHOW options. */
+function configReadOnly(args: string[]): boolean {
+  let get = args[0] === 'get' || args[0] === 'list'
+  for (const a of get ? args.slice(1) : args) {
+    if (CONFIG_GET.has(a)) get = true
+    else if (a.startsWith('-') && !CONFIG_SHOW.test(a)) return false
+  }
+  return get
+}
+
 /** Whether git `args` (the words after the command name `sub`) only read. */
 function gitReadOnly(sub: string, args: string[]): boolean {
   if (GIT_READ.has(sub)) return true
+  // `git remote` and `-v` list the remotes, get-url shows one; show, prune, update and the rest may reach the network or change them
+  if (sub === 'remote') return args.length === 0 || args.every(a => a === '-v' || a === '--verbose') || args[0] === 'get-url'
+  if (sub === 'config') return configReadOnly(args)
+  // only `git reflog` (options alone) and `git reflog show ...` show; every other subcommand (expire, delete, drop,
+  // write, and any git adds later) may change it, and a plain ref (`git reflog HEAD`) can't be told from one
+  if (sub === 'reflog') return args[0] === 'show' || args.every(a => a.startsWith('-'))
   if (sub === 'stash' || sub === 'worktree') return args[0] === 'list' || (sub === 'stash' && args[0] === 'show')
   if (sub !== 'branch') return false
   let list = false
@@ -607,10 +635,16 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * The first git command in Bash `command` that may change anything or run another program (a commit, a branch, the
  * stash, the index, a tag, a push, `--output=<file>`, `grep -O<cmd>`, `-c core.pager=...`, `GIT_EXTERNAL_DIFF=...`), as
  * `git <command>` (or `git <command> <option>`, or the setting's name), or undefined when every git command in it only
- * reads (diff, log, show, status, branch --list, stash list...). Looks inside compound commands (&&, ;, |, `$(...)`),
- * after `cd`, `env` or `xargs`, past git's own options (`git -C <dir>`), and inside any word that has `git` in it (quoted
- * text run by `sh -c`, a `VAR=` value, an option value like `-O"git stash"`). Any word `git` (or ending in `/git`) counts,
- * so an odd read may be refused too; that is the safe side.
+ * reads (diff, log, show, status, branch --list, stash list, remote -v, config --get, reflog...). Looks inside compound
+ * commands (&&, ;, |, `$(...)`), past git's own options (`git -C <dir>`), and inside any word that has `git` in it
+ * (quoted text run by `sh -c`, a `VAR=` value, an option value like `-O"git stash"`). Any word `git` (or ending in
+ * `/git`, or `git-xyz`) counts, so an odd read may be refused too; that is the safe side. Two exceptions (T-439): a
+ * command run by a read-only text tool (grep, rg, cat, ls, find without -exec... see TEXT_TOOLS), where `git` is only
+ * a pattern or a name (`grep -n "git stash" docs`), and a read-only git command, whose words aren't read again
+ * (`git log --grep="git stash"`). They hold only when every command in the whole line is one of them, so
+ * `grep -h git notes | sh` and `grep -h git notes > s; $SHELL s` are refused, and never in a line with a newline, a
+ * `#` comment, `$'` or a backslash (`grep x #'` + newline + `git stash`, `grep x a\>& git stash`). git run by xargs is
+ * refused.
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
@@ -649,50 +683,142 @@ export const mergeStepAllow =
     return names.length === 1 && names[0] === into
   }
 
+/**
+ * Read-only text tools: in a command run by one of these, the word `git` in an argument is only text (a search
+ * pattern, a file name), never run. Each value: an option of that tool that runs another program or deletes, which
+ * puts the piece back under the broad rule (rg --pre, ag/ack --pager, sort --compress-program, less +!cmd, find -exec).
+ */
+const TEXT_TOOLS: Record<string, RegExp | undefined> = {
+  grep: undefined,
+  egrep: undefined,
+  fgrep: undefined,
+  rg: /^--(p|hostname-bin)/,
+  ag: /^--p/,
+  ack: /^--p/,
+  cat: undefined,
+  head: undefined,
+  tail: undefined,
+  less: /^(\+|-k|--lesskey)/,
+  more: /^(\+|-k|--lesskey)/,
+  wc: undefined,
+  sort: /^--co/,
+  uniq: undefined,
+  cut: undefined,
+  ls: undefined,
+  file: undefined,
+  stat: undefined,
+  diff: undefined,
+  find: /^-(exec|execdir|ok|okdir|delete)$/,
+}
+
+/** Folders a text tool may be run from by its full path (`/usr/bin/grep`); any other path may be a script of the same name. */
+const TOOL_DIR = /^(\/usr\/local\/bin|\/opt\/homebrew\/bin|\/usr\/bin|\/bin)\/[^/]+$/
+
+/** The program name of word `w` (`/usr/bin/sudo` gives `sudo`), in small letters. */
+const progName = (w: string) => w.slice(w.lastIndexOf('/') + 1).toLowerCase()
+
+/** Programs that add words from their input to the command they run (`echo stash | xargs git`). */
+const ADDS_WORDS = new Set(['xargs', 'parallel'])
+
+/** Whether simple command `words` is a read-only text tool (TEXT_TOOLS), first word and without its refused options. */
+function textTool(words: string[]): boolean {
+  const w = words[0]
+  if (w === undefined || (w.includes('/') && !TOOL_DIR.test(w))) return false
+  const name = progName(w)
+  if (!Object.hasOwn(TEXT_TOOLS, name)) return false
+  const refused = TEXT_TOOLS[name]
+  return !refused || !words.slice(1).some(a => refused.test(a))
+}
+
+/**
+ * Whether simple command `p` is a plain `cd` or `pushd`: no folder, or one plain path (no `$`, quotes, `(`, `<`, `;`,
+ * glob, and not an option), so it only changes folder (`cd hooks && grep -n git ask.ts`).
+ */
+const plainCd = (p: { text: string; words: string[] }) =>
+  (p.words[0] === 'cd' || p.words[0] === 'pushd') && p.words.length <= 2 && /^\s*(cd|pushd)(\s+(?!-)[\w./~+,:%-]+)?\s*$/.test(p.text)
+
+/** Whether text holds a command run inside it (`$(...)`, backquotes, `<(...)`, `>(...)`). */
+const RUNS_INSIDE = /\$\(|`|<\(|>\(/
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
-function gitScan(command: string, depth: number, allow?: GitAllow): { bad?: string; git: boolean; env?: string } {
+function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
   if (depth > 4) return out
-  for (const p of shellPieces(command)) {
-    if ('op' in p) continue
+  const pieces = shellPieces(command)
+  // `adds`: an xargs or parallel comes before it in the line (`xargs -I{} git {}` is cut at the braces)
+  let seen = false
+  const simple = pieces.flatMap(p => {
+    if ('op' in p) return []
     const words = plainWords(p.text)
+    const adds = seen
+    seen ||= words.some(a => ADDS_WORDS.has(progName(a)))
+    return [{ ...p, words, adds }]
+  })
+  /** The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined when it isn't git. */
+  const gitAt = (words: string[], at: number, adds: boolean): { bad?: string } | undefined => {
+    const w = words[at]!
+    // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
+    const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
+    // an option whose value is git runs it with the words after (`rg --pre=git stash .` runs `git stash`)
+    if (!dashed && !isGit(w) && !/=git$/i.test(w)) return undefined
+    out.git = true
+    // xargs and parallel add words from their input (`stash`, `--output=x`), so what that git does can't be known
+    if (adds || words.slice(0, at).some(a => ADDS_WORDS.has(progName(a)))) return { bad: 'xargs git' }
+    let j = at + 1
+    let sub = dashed
+    if (!dashed) {
+      for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
+        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { bad: `git ${words[j]!.split('=')[0]}` }
+      sub = words[j++]
+    }
+    if (sub === undefined) return {}
+    const args = words.slice(j)
+    if (allow?.(sub, args)) return {}
+    if (!gitReadOnly(sub, args)) return { bad: `git ${sub}` }
+    const opt = gitBadOption(sub, args)
+    return opt ? { bad: `git ${sub} ${opt}` } : {}
+  }
+  /**
+   * Whether a simple command's `git` words are only text: a TEXT_TOOLS command, or a read-only git command (checked
+   * by gitAt), with no command run inside it and not in a here-document.
+   */
+  const exempt = (p: { text: string; doc?: boolean; words: string[]; adds: boolean }): boolean => {
+    if (p.words.length === 0) return true
+    if (p.doc || RUNS_INSIDE.test(p.text)) return false
+    if (textTool(p.words) || plainCd(p)) return true
+    const w = p.words[0]!
+    // `HEAD@{1}` braces were cut at before T-439's round 6, so a line with `@{` gets no read-only git exception
+    if (command.includes('@{')) return false
+    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds)?.bad === undefined
+  }
+  // Text one command prints may be run by another (`grep -h git notes | sh`, `grep ... > s; $SHELL s`, `./s`), and a
+  // list of programs that run their input or a file can never be complete. So the exceptions hold only when every
+  // command in the whole line is exempt; one other command anywhere (sh, $SHELL, ./s, chmod, echo, tee...) keeps
+  // main's broad rule for all of it. The command splitter doesn't know `#` comments or `$'...'` quoting, so with a
+  // newline, a `#` that starts a word or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
+  // Nor with a backslash anywhere: an escape like `a\>&` hides a background `&` from the splitter (T-439 round 7).
+  const unsplit = /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(command)
+  // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
+  const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
+  broad ||= unsplit || gitProgram || !simple.every(exempt)
+  for (const p of simple) {
+    const words = p.words
+    for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
+    if (!broad && exempt(p)) continue
+    // main's broad rule: any word `git` (or ending in `/git`, or `git-xyz`) counts, and text from a `git` on in any
+    // word that holds more than one word or command (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
-      out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
-      // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
-      const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
-      if (dashed) {
-        out.git = true
-        const args = words.slice(i + 1)
-        if (allow?.(dashed, args)) continue
-        if (!gitReadOnly(dashed, args)) return { ...out, bad: `git ${dashed}` }
-        const opt = gitBadOption(dashed, args)
-        if (opt) return { ...out, bad: `git ${dashed} ${opt}` }
-        continue
+      const g = gitAt(words, i, p.adds)
+      if (g?.bad) return { ...out, bad: g.bad }
+      if (g) continue
+      const at = w.search(/git(?!\w)/i)
+      if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
+        const inner = gitScan(w.slice(at), depth + 1, allow, broad)
+        out.git ||= inner.git
+        out.env ??= inner.env
+        if (inner.bad) return { ...out, bad: inner.bad }
       }
-      if (!isGit(w)) {
-        // text from the first "git" that ends a word on, in a word that holds more than one word or command
-        // (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
-        const at = w.search(/git(?!\w)/i)
-        if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
-          const inner = gitScan(w.slice(at), depth + 1, allow)
-          out.git ||= inner.git
-          out.env ??= inner.env
-          if (inner.bad) return { ...out, bad: inner.bad }
-        }
-        continue
-      }
-      out.git = true
-      let j = i + 1
-      for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
-        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { ...out, bad: `git ${words[j]!.split('=')[0]}` }
-      const sub = words[j]
-      if (sub === undefined) continue
-      const args = words.slice(j + 1)
-      if (allow?.(sub, args)) continue
-      if (!gitReadOnly(sub, args)) return { ...out, bad: `git ${sub}` }
-      const opt = gitBadOption(sub, args)
-      if (opt) return { ...out, bad: `git ${sub} ${opt}` }
     }
   }
   return out
@@ -700,7 +826,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow): { bad?: stri
 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
-  `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
+  `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
 
 /**
  * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
@@ -708,14 +834,14 @@ export const gitWriteText = (what: string) =>
  * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
  */
 export const workerGitWriteText = (what: string, into?: string) =>
-  `Refused: ${what} may change the repository or run another program, and a worker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
+  `Refused: ${what} may change the repository or run another program, and a worker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change
  * something: a scout runs in the owner's own folder, so a git write there changes the owner's branch, files or stash.
  */
 export const scoutGitWriteText = (what: string) =>
-  `Refused: ${what} may change the repository or run another program, and a scout may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`
+  `Refused: ${what} may change the repository or run another program, and a scout may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`
 
 /**
  * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative

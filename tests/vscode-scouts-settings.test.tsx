@@ -3,7 +3,7 @@
 // holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_VIEW, seedBoard, plainTree } from './board-fixture'
+import { PANE, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board-fixture'
 import { SCOUTS_SETTINGS_BEFORE } from './scouts-settings-snapshot'
 import { SCENES, OLD_SURFACES } from './scouts-settings-scenes'
 import { LONG_REPORT, SCOUTS, SCOUTS_VIEW, seedScouts } from './scouts-settings-fixture'
@@ -49,11 +49,35 @@ for (const sc of SCENES) {
       sc.seed(on)
       const ui = await $.ui.mount({ ...PANE, surface })
       await sc.go(ui as never)
-      expect(plainTree(await ui.drawn()), `${surface} ${sc.name}`).toEqual(plainTree(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`]))
+      expect(drawnData(await ui.drawn()), `${surface} ${sc.name}`).toEqual(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`])
       await ui.unmount()
     })
   }
 }
+
+// The scouts' times are set from T0 and the pages are drawn at the host's clock (the kit's mock clock), so the saved
+// trees are compared exactly: a real change (one indent, one time) fails, and moving the clock moves only the times.
+test('the scouts list snapshot comparison fails on a changed indent or next-run time, and passes as drawn', async ($, on) => {
+  seedScouts(on, 'scouts')
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = drawnData(await ui.drawn())
+  const saved = SCOUTS_SETTINGS_BEFORE['terminal scouts list']
+  expect(drawn).toEqual(saved)
+  expect(drawn).not.toEqual(changedTree(saved, [['"  + New scout"', '"      + New scout"']]))
+  expect(drawn).not.toEqual(changedTree(saved, [['next in 3h 00m', 'next in 2h 59m']]))
+  await ui.unmount()
+})
+
+test("the scouts follow the host clock: 10 minutes later only the list's next run and the scout page's times change", async ($, on) => {
+  const clock = seedBoard(on, { view: SCOUTS_VIEW, tab: 'scouts' })
+  on('ui.toast', () => ({ value: undefined }))
+  await clock.set(T0 + 10 * 60_000)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(drawnData(await ui.drawn())).toEqual(changedTree(SCOUTS_SETTINGS_BEFORE['terminal scouts list'], [['next in 3h 00m', 'next in 2h 50m']]))
+  await ui.press({ key: 'scout:dependency-updates' })
+  expect(drawnData(await ui.drawn())).toEqual(changedTree(SCOUTS_SETTINGS_BEFORE['terminal scout dependency-updates'], [['ran 40m ago', 'ran 50m ago']]))
+  await ui.unmount()
+})
 
 /** Checks a VS Code page: nothing cut with "…", no key hints, no key marks on buttons, the click hint at the bottom. */
 function readable(tree: unknown, page: string) {
@@ -85,8 +109,8 @@ test('the Scouts list in VS Code at width 50: whole names, summaries and report 
   }
   const row = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(n => texts(n).join(' '))
   expect(await row('dependency-updates')).toMatch(/◉ running now/)
-  expect(await row('dependency-updates')).toMatch(/every 30 min · haiku · ran 4[01]m ago/)
-  expect(await row('security-advisories-for-node-packages')).toMatch(/next in (3h 00m|2h 59m)/)
+  expect(await row('dependency-updates')).toMatch(/every 30 min · haiku · ran 40m ago/)
+  expect(await row('security-advisories-for-node-packages')).toMatch(/next in 3h 00m/)
   expect(await row('security-advisories-for-node-packages')).toMatch(/found 5: The package left-pad has a security advisory/)
   expect(await row('docs-drift')).toMatch(/○ paused/)
   expect(await row('docs-drift')).toMatch(/last report: nothing/)
@@ -128,7 +152,7 @@ for (const s of SCOUTS) {
     const facts = texts(await ui.find({ key: 'vs-scout-facts' })).join(' ')
     expect(facts, s.name).toContain(s.every_minutes === 30 ? 'every 30 min' : s.every_minutes === 1440 ? 'every day' : s.every_minutes === 60 ? 'every hour' : 'on demand')
     expect(facts, s.name).toMatch(s.last_run ? /last run: ran \d[\dhm ]* ago/ : /last run: never ran/)
-    if (s.next_run) expect(facts, s.name).toMatch(/next run: in (3h 00m|2h 59m)/)
+    if (s.next_run) expect(facts, s.name).toMatch(/next run: in 3h 00m/)
     // the actions are buttons: run now (not while it runs), pause or resume, edit
     const row = await ui.find({ key: 'vs-scout-actions' })
     const keys = elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key)

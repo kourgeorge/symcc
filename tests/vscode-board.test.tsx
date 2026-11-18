@@ -2,7 +2,7 @@
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_TASKS, T0, seedBoard, plainTree, changedTree } from './board-fixture'
+import { PANE, BOARD_TASKS, T0, seedBoard, drawnData, changedTree } from './board-fixture'
 import { BEFORE } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { shortTests } from '../hooks/plugin/ui/vscode'
@@ -45,17 +45,17 @@ test('the board on the terminal and the desktop draws exactly as before the VS C
   for (const surface of ['terminal', 'desktop'] as const) {
     for (const bodyColumns of [50, 90]) {
       const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface })
-      expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} ${bodyColumns}`]))
+      expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} ${bodyColumns}`])
       await ui.unmount()
     }
     const ui = await $.ui.mount({ ...PANE, surface })
     await ui.press({ key: 'T-405' })
-    expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} task`]))
+    expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} task`])
     await ui.press({ key: 'back' })
     await ui.press({ key: 'tab-scouts' })
-    expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} scouts`]))
+    expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} scouts`])
     await ui.press({ key: 'tab-settings' })
-    expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} settings`]))
+    expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} settings`])
     await ui.press({ key: 'tab-tasks' }) // the next surface starts on the Tasks page again
     await ui.unmount()
   }
@@ -72,7 +72,7 @@ test('the board follows the host clock: 10 minutes later only the running time c
   await clock.set(T0 + TEN_MIN)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect(plainTree(await ui.drawn()), surface).toEqual(changedTree(BEFORE[`${surface} 50`], [['▶ 2m       ', '▶ 12m      ']]))
+    expect(drawnData(await ui.drawn()), surface).toEqual(changedTree(BEFORE[`${surface} 50`], [['▶ 2m       ', '▶ 12m      ']]))
     await ui.unmount()
   }
 })
@@ -81,8 +81,8 @@ test('the board snapshot comparison still fails when the drawn tree really chang
   seedBoard(on)
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const drawn = plainTree(await ui.drawn())
-  expect(drawn).toEqual(plainTree(BEFORE['terminal 50']))
+  const drawn = drawnData(await ui.drawn())
+  expect(drawn).toEqual(BEFORE['terminal 50'])
   // one word of one title, one running time, one color: each alone is caught
   expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['Show the plugin version in the', 'Show the plugin release in the']]))
   expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['▶ 2m       ', '▶ 3m       ']]))

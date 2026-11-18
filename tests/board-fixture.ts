@@ -63,13 +63,14 @@ export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_
   return clock
 }
 
-/** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped. */
-export const plainTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
+/** A drawn tree as plain data, to compare with a saved one exactly: only the press handles are dropped (each draw
+ *  gives new numbers; the saved trees have none), every text, space, color and time stays as drawn. */
+export const drawnData = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
 
 /** A saved tree with some of its text changed: each `[from, to]` replaces every `from` in the tree's text; it throws
  *  when a `from` isn't there, so a test can't pass by changing nothing. */
 export function changedTree(tree: unknown, swaps: [string, string][]): unknown {
-  let s = JSON.stringify(plainTree(tree))
+  let s = JSON.stringify(tree)
   for (const [from, to] of swaps) {
     if (!s.includes(from)) throw new Error(`changedTree: "${from}" is not in the tree`)
     s = s.split(from).join(to)
