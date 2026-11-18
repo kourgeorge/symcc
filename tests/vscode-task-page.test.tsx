@@ -153,3 +153,15 @@ test('reportPart cuts at a line and closes an open code block', () => {
   expect(reportPart('a\nb', 5)).toEqual({ text: 'a\nb', more: 0 })
   expect(reportPart('a\n```\nb\nc\nd', 3)).toEqual({ text: 'a\n```\nb\n```', more: 2 })
 })
+
+// Copy copies on the screen it was pressed on, in VS Code as on the terminal
+for (const surface of ['terminal', 'vscode'] as const)
+  test(`copy surface on ${surface}`, async ($, on) => {
+    seedRich(on, 'T-501')
+    const seen: unknown[] = []
+    on('ui.copy', (_, e) => (seen.push(e.surface ?? 'NONE'), { value: { isCopied: true } }))
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'copy' })
+    expect(seen).toEqual([surface])
+    await ui.unmount()
+  })

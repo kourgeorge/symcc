@@ -13,6 +13,7 @@ import { squash } from '../../core/text'
 import { S } from '../state'
 import { when } from '../tools'
 import type { PaneParts } from './parts'
+import type { $ } from '../../claude/panel'
 import { vsFooter, vsSection } from './vscode'
 
 /** A history line in parts: its "try 2:" (or ''), what was said, the result after "→", and whether it went badly or well. */
@@ -80,7 +81,7 @@ export type VsTaskCtx = {
     drop: () => void
     watch: () => void
     toggleReview: () => void
-    copy: (press?: { surface?: never }) => void
+    copy: (press?: Press) => void
     openRolePick: () => void
     pickRole: (name: string) => () => void
     cancelRolePick: () => void
@@ -90,7 +91,9 @@ export type VsTaskCtx = {
   }
 }
 
-type Action = { key: string; label: string; onPress: () => void; main?: boolean }
+/** What a button press tells: the screen it came from, so Copy copies there. */
+type Press = { surface?: Parameters<$['ui']['copy']>[0]['surface'] }
+type Action = { key: string; label: string; onPress: (press?: Press) => void; main?: boolean }
 
 /** The action buttons that fit task `t` now, in order; `main` marks the one to press (one at most, none while a question waits). */
 export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview' | 'answered' | 'fileWait' | 'answerable' | 'canPickRole'>, on: VsTaskCtx['on']): Action[] {
@@ -118,7 +121,7 @@ export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview
     x.canPickRole && { key: 'role', label: 'Role', onPress: on.openRolePick },
     open && { key: 'drop', label: 'Drop', onPress: on.drop },
     open && { key: 'needs-review', label: `Needs review: ${t.needs_review ? 'on' : 'off'}`, onPress: on.toggleReview },
-    { key: 'copy', label: 'Copy', onPress: () => on.copy() },
+    { key: 'copy', label: 'Copy', onPress: (press?: Press) => on.copy(press) },
   )
   const list = out.filter((a): a is Action => !!a)
   // one primary at most: the first main one, and none while a question waits (its first answer is the primary then)
