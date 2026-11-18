@@ -7,6 +7,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## 0.4.1 (2026-11-18)
 
 ### Added
+- The board in VS Code's side panel has its own layout: a wrapped header, tabs without key labels, tasks grouped by status with whole titles and the status color on the mark only, Backlog / Done / Dropped as fold rows, and a footer with a mode switch button and a search box instead of key hints. The terminal board is unchanged.
 - Tests now run one task at a time across all tasks (a `.symcc/tests.lock` file keeps the turn), so merges can take longer when several tasks finish at once. A waiting task shows "waiting for another task's tests (T-x)" and its time limit's clock is stopped meanwhile.
 - Scouts keep their run history: each of a scout's last 50 runs is kept with when it ran, how it ended (found, nothing, stopped, API error, refusal or couldn't start), its findings, tokens, the tasks made from it (saved when the lead adds them, so archived tasks still count) and its full report (in `.symcc/reports/scouts/`). The scout's page, in the terminal and in VS Code's side panel, lists them under **Runs** (newest first) and opens one's whole report, and says when the last run ended on an API error or a refusal, so nothing was reported. The lead's `scouts` list with a name shows the last few runs too. A scout's last report becomes its first run once.
 - The lead's questions that are not about one task ("raise the version?", "add a scout?") go on the board with its new `question` tool, so they no longer get lost in the chat. They show as "Questions for you (2)" at the top of the board list, with a button per choice plus "Answer…", and as "2 questions for you" in the band and the status line, with the "needs you" sound once per question. A board answer closes the question and reaches the lead in its next board update; a chat answer is closed by the lead.
@@ -22,6 +23,13 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - The folder guard now matches paths through symlinks, so `/tmp` and `/private/tmp` on macOS count as the same place.
 - The board's drawing tests no longer depend on the clock.
 - Workers, checkers and scouts are told not to end their turn while a background command is still running.
+- The edit guard now also covers `MultiEdit`, so a worker's MultiEdit outside its allowed files is refused like Edit and Write.
+- The kept test output caps its list of short "(fail)" lines, and the heading for the end of the test output is fixed.
+- A plugin reload no longer loses queued starts or uses up tries: tasks keep their place in line.
+- Sessions that don't drive the board now reload it when `board.json` changes.
+- A `board.json` that cannot be read is never overwritten, and a broken one is reported once. While it is broken, every Edit or Write of a worker is refused, even inside its own files, since symcc can't check it.
+- When symcc's own guard fails (it throws or runs out of time), calls from symcc's own agents (workers, checkers, scouts) are refused with "symcc couldn't check this call", and the lead's calls go on as if symcc weren't there; the lead's call of a symcc tool gets an error answer. Each failure is logged once.
+- symcc's other hooks no longer fail open: when the agent listing hook fails, symcc's worker and scout types stay hidden from the lead's own chat (so the lead's model can't start a "worker" by itself), and when the agent start hook fails, the start of a symcc agent type is refused. The prompt, command, plan mode and board panel hooks pass the event on as if symcc weren't there. Each failure is logged once.
 
 ## 0.4.0 (2026-11-18)
 
@@ -33,7 +41,6 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Old `board.json` files are converted once.
 
 ### Added
-- The board in VS Code's side panel has its own layout: a wrapped header, tabs without key labels, tasks grouped by status with whole titles and the status color on the mark only, Backlog / Done / Dropped as fold rows, and a footer with a mode switch button and a search box instead of key hints. The terminal board is unchanged.
 - A failed task says clearly why: its page starts with a "Why it failed" block (the reason in one plain sentence, what the worker's report asks for, and what to do next), and its board row and the lead's board show the same sentence instead of the bare note.
 - The Settings view groups the settings under headings: Work, Checks before merging, Workers (Roles, Kinds), Scouts, and Board and alerts. ↑↓ still go through every row. The lead's settings listing uses the same groups.
 - The Settings view's groups open and close: all start closed, each heading showing its values in short (`▸ Work · auto · 3 at once · 45 min · 2 retries`); Enter on a heading opens or closes it, ↑↓ skip the rows of closed groups, and open groups stay open until the session ends.
@@ -96,9 +103,6 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - The `checker` role can't be turned on or off any more (its page has no Turn on button and points to the `checker` setting instead), and it is never offered as a task role.
 - A worker whose run ended on an API error or a refusal now fails its task with the reason, instead of being checked and merged as if it had finished.
 - Merge: the owner's branch is no longer left half-updated by a clashing untracked file, and git-ignored files are not silently overwritten.
-- A `board.json` that cannot be read is never overwritten, and a broken one is reported once. While it is broken, every Edit or Write of a worker is refused, even inside its own files, since symcc can't check it.
-- When symcc's own guard fails (it throws or runs out of time), calls from symcc's own agents (workers, checkers, scouts) are refused with "symcc couldn't check this call", and the lead's calls go on as if symcc weren't there; the lead's call of a symcc tool gets an error answer. Each failure is logged once.
-- symcc's other hooks no longer fail open: when the agent listing hook fails, symcc's worker and scout types stay hidden from the lead's own chat (so the lead's model can't start a "worker" by itself), and when the agent start hook fails, the start of a symcc agent type is refused. The prompt, command, plan mode and board panel hooks pass the event on as if symcc weren't there. Each failure is logged once.
 - Safe writes use a unique temp file, so two saves at once cannot break each other.
 - Finishing a task no longer overwrites one that was dropped, paused or changed meanwhile.
 - Scouts: failed starts and stopped runs are handled, "run now" says why it did not start, scout files from the lead show up at once, the next run counts from the last run, and a report starting with "NOTHING" counts as nothing found.
