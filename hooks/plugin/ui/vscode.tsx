@@ -1,13 +1,14 @@
 // The board panel's own pieces for VS Code's side panel (see surface.ts): a header with the logo and the facts on
-// readable, wrapped lines, a tab strip you click, a footer with real buttons and no key hints, small section headings and fold rows. The Tasks page uses
+// readable, wrapped lines, a tab strip you click, a footer with no key hints, small section headings and fold rows. The Tasks page uses
 // them, and so do the task page (vscode-task.tsx) and the Scouts and Settings pages (vscode-scouts.tsx, vscode-settings.tsx).
+// VS Code draws every Button as a filled blue box (`plain` or not) and never wraps its label, so the things you click to
+// go somewhere (task, question and scout rows, folds, tabs, the mode switch) are links in a Markdown block that the plugin
+// answers (`onLinkPress`, see vsLink); real Buttons stay for the actions on a page (Approve, Retry, Save ...).
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
 import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
-import { namesFor } from '../../name'
+import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../state'
-import { logoNow } from '../logo'
-import { LOGO_AREA, LOGO_MIN_WIDTH } from '../../core/logo'
 import type { PaneTab } from './open'
 import { CLICK_HINT } from './surface'
 
@@ -47,20 +48,35 @@ const COUNT_COLOR: Record<string, string> = { backlog: 'inactive', review: 'sugg
  *  text color would read as a black or white block). */
 export const pillColor = (m: SymccMode) => (m === 'auto' ? 'success' : modeColor(m))
 
-/** How wide the logo's column is in VS Code: the frame's width (LOGO_AREA, room for the sway) and nothing else. */
-export const VS_LOGO_COLUMNS = LOGO_AREA
+/** How a board panel of `width` columns tells the logo's width (see noteLogoWidth): 0 in VS Code, where the logo is the
+ *  single still 𝄞 glyph (its font breaks the multi-row clef apart), so no move plays there; elsewhere the panel's own
+ *  width (no logo below LOGO_MIN_WIDTH). */
+export const logoWidthFor = (vscode: boolean, width: number) => (vscode ? 0 : width)
 
-/** A logo row for VS Code: its spaces as no-break spaces, so the web panel keeps them (the clef's lines stay lined up);
- *  drawn in the monospace font, so each character takes one column. */
-export const vsLogoRow = (row: string) => row.replace(/ /g, ' ')
+/** Where VS Code's links point: never opened (the plugin answers the press); `.invalid`, so no real site is named. */
+export const VS_LINK_BASE = 'https://symcc.invalid/'
+/** The link for a place on the board: vsHref('task', 'T-372') is "https://symcc.invalid/task/T-372". */
+export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more', id: string) => `${VS_LINK_BASE}${kind}/${encodeURIComponent(id)}`
 
-/** How a board panel of `width` columns tells the logo's width (see noteLogoWidth): VS Code always shows the logo,
- *  so its moves may play at any width there; elsewhere the panel's own width (no logo below LOGO_MIN_WIDTH). */
-export const logoWidthFor = (vscode: boolean, width: number) => (vscode ? Math.max(width, LOGO_MIN_WIDTH) : width)
+/** Text put into markdown as it is: on one line, every markdown mark escaped (a title with "*" or "[x]" stays plain). */
+export const mdText = (s: string) => s.replace(/\s+/g, ' ').trim().replace(/[\\`*_[\]<>~|#!&]/g, '\\$&')
+/** A markdown link, its text escaped (see mdText). */
+export const mdLink = (text: string, href: string) => `[${mdText(text)}](${href})`
+
+/**
+ * Clickable text in VS Code: a Markdown block with links the plugin answers. `links` pairs each href written in `text`
+ * with what a press on it does; any other link in the text is left to VS Code. It wraps as text does.
+ */
+export function vsLink(k: VsKit, key: string, text: string, links: [href: string, onPress: () => void][], dim?: boolean): RenderChildren {
+  const { Markdown } = k
+  const on = new Map(links)
+  return <Markdown key={key} text={text} dimColor={dim || undefined} pressableLinks={[...on.keys()]} onLinkPress={l => on.get(l.href)?.()} />
+}
 
 /**
  * The header in VS Code, each line wrapped to the panel (never cut):
- *  - on the left the logo (the clef, bold in the accent color; it sways and turns into shapes as on the terminal), and beside it
+ *  - on the left the logo (the single 𝄞 glyph, large and bold in the accent color: VS Code's font breaks the terminal's
+ *    multi-row clef apart, so it is one still glyph here), and beside it
  *    the name, version and folder; the mode as a pill with its meaning dim beside it; the branch and who drives on one dim line;
  *    the tests and the limits on one dim line;
  *  - under it the counts as small badges ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
@@ -78,13 +94,10 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}`
   const counts = bannerCounts({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: retries, mode }, k.nowMs)
   const dot = (key: string) => <Text key={key} color={C('subtle')}> · </Text>
-  const frame = logoNow()
   return [
     <Box key="vs-top" flexDirection="row" gap={1}>
-      <Box key="vs-logo" flexDirection="column" width={VS_LOGO_COLUMNS} flexShrink={0}>
-        {frame.map((row, i) => (
-          <Text key={`vs-logo-${i}`} mono bold color={C('ide')}>{vsLogoRow(row)}</Text>
-        ))}
+      <Box key="vs-logo" flexDirection="column" flexShrink={0}>
+        <Text key="vs-logo-glyph" bold size="title" color={C('ide')}>{ICON}</Text>
       </Box>
       <Box key="vs-facts" flexDirection="column" flexGrow={1} flexShrink={1}>
         <Text key="vs-title" wrap="wrap">
@@ -129,46 +142,34 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
 /** A tab in VS Code: its name, the count beside it as a small badge (none for Settings), and whether it is shown. */
 export type VsTab = { which: PaneTab; label: string; count?: number; active: boolean; onPress: () => void }
 
-/** A tab's text as one string: "Tasks 20", "Settings" (the Button's label, what a screen reader says). */
+/** A tab's text as one string: "Tasks 20", "Settings". */
 export const tabLabel = (t: Pick<VsTab, 'label' | 'count'>) => (t.count === undefined ? t.label : `${t.label} ${t.count}`)
 
 /**
- * The tabs in VS Code: a segmented row, each tab a small bordered box around a plain button ("Tasks 20", no key labels).
- * The one shown has a bold border in the accent color, its name bold in the accent color and its count a filled badge;
- * the others a dim border in the subtle color, their name and count in the secondary color. The row wraps when the panel
- * is too narrow for the three, never cutting a tab.
+ * The tabs in VS Code: one line of text that wraps, "**Tasks 20** · Scouts 1 · Settings": the one shown bold and not
+ * a link, the others links (a press switches the page). No Buttons: VS Code draws those as filled blue boxes.
  */
 export function vsTabs(k: VsKit, tabs: VsTab[]): RenderChildren {
-  const { Box, Text, Button, C } = k
+  const { Box } = k
+  const text = tabs.map(t => (t.active ? `**${mdText(tabLabel(t))}**` : mdLink(tabLabel(t), vsHref('tab', t.which)))).join(' \u00a0·\u00a0 ')
   return (
-    <Box key="tabs" flexDirection="row" flexWrap="wrap" marginTop={1}>
-      {tabs.map(t => (
-        <Box key={`tab-box-${t.which}`} borderStyle={t.active ? 'bold' : 'round'} borderColor={C(t.active ? 'ide' : 'subtle')} borderDimColor={!t.active} paddingX={1} flexShrink={0}>
-          <Button key={`tab-${t.which}`} plain label={tabLabel(t)} onPress={t.onPress}>
-            <Text bold={t.active} color={C(t.active ? 'ide' : 'inactive')}>{t.label}</Text>
-            {t.count === undefined ? null : <Text color={C('inactive')}> </Text>}
-            {t.count === undefined ? null : t.active ? (
-              <Text bold backgroundColor={C('ide')} color={C('inverseText')}>{` ${t.count} `}</Text>
-            ) : (
-              <Text color={C('inactive')}>{String(t.count)}</Text>
-            )}
-          </Button>
-        </Box>
-      ))}
+    <Box key="tabs-row" flexDirection="column" marginTop={1}>
+      {vsLink(k, 'tabs', text, tabs.filter(t => !t.active).map(t => [vsHref('tab', t.which), t.onPress]))}
     </Box>
   )
 }
 
-/** The footer in VS Code: a light rule, then (Tasks page) the mode switch button and the search box, else one line
- *  that says how to act in the panel. No key hints. `extra`: more buttons beside the switch (a "Clear search"). */
+/** The footer in VS Code: a light rule, then (Tasks page) the mode switch as a quiet link and the search box, else one
+ *  line that says how to act in the panel. No key hints. `extra`: more beside the switch (a "Clear search" button). */
 export function vsFooter(k: VsKit, name: string, opts: { mode?: SymccMode; onSwitch?: () => void; search?: RenderChildren; extra?: RenderChildren } = {}): RenderChildren {
-  const { Box, Text, Button, C, width } = k
+  const { Box, Text, C, width } = k
+  const to = opts.mode ? vsHref('mode', nextMode(opts.mode)) : ''
   return (
     <Box key={`${name}-footer`} flexDirection="column">
       <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {opts.mode && opts.onSwitch ? (
         <Box key="footer-mode" flexDirection="row" flexWrap="wrap" gap={1}>
-          <Button key="mode" label={switchLabel(opts.mode)} variant="secondary" onPress={opts.onSwitch} />
+          {vsLink(k, 'mode', mdLink(switchLabel(opts.mode), to), [[to, opts.onSwitch]])}
           {opts.extra}
         </Box>
       ) : null}
@@ -208,20 +209,15 @@ export function vsHeading(k: VsKit, key: string, mark: string, tone: string, lab
   )
 }
 
-/** A fold row in VS Code: a plain button that reads as a heading, the count as a badge ("▸ Backlog  6 ", "▾ Done  3 
- *  (+12 archived)"); its label says it in words ("▸ Backlog (6)"). `top` false: a smaller, dim fold (a day under Done). */
-export function vsFold(k: VsKit, key: string, label: string, n: number | string, open: boolean, onPress: () => void, top = true, autoFocus?: true, note = ''): RenderChildren {
-  const { Button, Text, C } = k
-  const text = `${open ? '▾' : '▸'} ${label} (${n}${note ? ` ${note}` : ''})`
-  return (
-    <Button key={key} plain label={text} autoFocus={autoFocus} onPress={onPress}>
-      <Text bold={top} color={C('inactive')}>{`${open ? '▾' : '▸'} `}</Text>
-      <Text bold={top} color={C(top ? 'text' : 'inactive')}>{label}</Text>
-      <Text color={C('inactive')}> </Text>
-      {top ? vsBadge(k, `${key}-count`, n, 'inactive') : <Text color={C('inactive')}>{String(n)}</Text>}
-      {note ? <Text color={C('inactive')}>{` ${note}`}</Text> : null}
-    </Button>
-  )
+/** A fold's words, as a screen reader would say them: "▸ Backlog (6)", "▾ Done (3 (+12 archived))". */
+export const foldLabel = (label: string, n: number | string, open: boolean, note = '') => `${open ? '▾' : '▸'} ${label} (${n}${note ? ` ${note}` : ''})`
+
+/** A fold row in VS Code: a link that reads as a heading, "**▸ Backlog 6**" bold, then a note ("(+12 archived)");
+ *  a press opens or closes it. `top` false: a smaller, dim fold (a day under Done). Not a Button (see the top). */
+export function vsFold(k: VsKit, key: string, label: string, n: number | string, open: boolean, onPress: () => void, top = true, note = ''): RenderChildren {
+  const href = vsHref('fold', key)
+  const link = mdLink(`${open ? '▾' : '▸'} ${label} ${n}`, href)
+  return vsLink(k, key, `${top ? `**${link}**` : link}${note ? ` ${mdText(note)}` : ''}`, [[href, onPress]], !top)
 }
 
 /** A title cut to about two lines of `columns` (whole words, `lead` columns taken by what comes before it on the first

@@ -12,6 +12,7 @@ import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { reportStart } from '../hooks/plugin/ui/vscode-scouts'
+import { vsHref } from '../hooks/plugin/ui/vscode'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -97,7 +98,7 @@ test('the Scouts list in VS Code at width 50: whole names, summaries and report 
     const box = await ui.find({ key: `vs-scout-${s.name}` })
     expect(box, s.name).toBeDefined()
     const open = await ui.find({ key: `scout:${s.name}` })
-    expect(open?.type, s.name).toBe('Button')
+    expect(open?.type, s.name).toBe('Markdown')
     expect(texts(open).join(''), s.name).toContain(s.name)
     // the status color is on the mark only, never on the name or the summary
     const colored = elements(box!.children).filter(n => n.type === 'Text' && STATUS_COLORS.has(String(n.props?.color)))
@@ -116,18 +117,19 @@ test('the Scouts list in VS Code at width 50: whole names, summaries and report 
   expect(await row('docs-drift')).toMatch(/last report: nothing/)
   expect(await row('on-demand-check')).toMatch(/on demand · never ran/)
   expect(await row('broken')).toMatch(/every_minutes "-5" is not valid/)
-  // T-444: each scout is one plain button (text only inside): its name, its status as a filled badge, then dim lines;
-  // the start of the last report dim too
+  // T-448: each scout's name is a link in a Markdown (no Button: VS Code draws a Button as a filled blue box), its status
+  // a filled badge beside it, then dim lines; the start of the last report dim too
   for (const s of SCOUTS) {
     const open = await ui.find({ key: `scout:${s.name}` })
-    expect(open?.props.plain, s.name).toBe(true)
-    for (const c of (open!.children as unknown[]).flat(9)) if (c && typeof c === 'object') expect((c as { type?: string }).type, s.name).toBe('Text')
-    const badge = elements(open!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
+    expect([open?.type, open?.props.pressableLinks], s.name).toEqual(['Markdown', [vsHref('scout', s.name)]])
+    const box = await ui.find({ key: `vs-scout-${s.name}` })
+    expect(elements(box).filter(n => n.type === 'Button'), s.name).toEqual([])
+    const badge = elements(box!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
     expect([badge?.props?.color, badge?.props?.bold], s.name).toEqual(['inverseText', true])
   }
-  const running = elements((await ui.find({ key: 'scout:dependency-updates' }))!.children).find(n => n.props?.backgroundColor)
+  const running = elements((await ui.find({ key: 'vs-scout-dependency-updates' }))!.children).find(n => n.props?.backgroundColor)
   expect([texts(running).join(''), running?.props?.backgroundColor]).toEqual([' ◉ running now ', 'ide'])
-  const report = elements((await ui.find({ key: 'scout:security-advisories-for-node-packages' }))!.children).find(n => /^last report: /.test(texts(n).join('')))
+  const report = elements((await ui.find({ key: 'vs-scout-security-advisories-for-node-packages' }))!.children).find(n => n.type === 'Text' && /^last report: /.test(texts(n).join('')))
   expect(report?.props?.color).toBe('inactive')
   expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('secondary')
   // a new scout: a button, then a box for its name with a Cancel button
@@ -137,7 +139,7 @@ test('the Scouts list in VS Code at width 50: whole names, summaries and report 
   expect((await ui.find({ key: 'scout-new-cancel' }))?.props.label).toBe('Cancel')
   // a press on a row opens the scout's page
   await ui.press({ key: 'scout-new-cancel' })
-  await ui.press({ key: 'scout:docs-drift' })
+  await ui.press({ key: 'scout:docs-drift', link: { href: vsHref('scout', 'docs-drift') } })
   expect(await ui.find({ key: 'vs-scout-facts' }), 'the scout page').toBeDefined()
   await ui.unmount()
 })

@@ -7,6 +7,7 @@
 //   the action buttons in one row (only the ones that fit the status, at most one primary on the page)
 //   Why / where it came from · What to do (Markdown) · Changes · History (a timeline, newest first) · Report (Markdown,
 //   its first part with a "Show all" button), then the folds, closed by default: Files it may change · Waits for · Time and cost
+// (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS } from '../../board'
@@ -15,7 +16,7 @@ import { S } from '../state'
 import { when } from '../tools'
 import type { PaneParts } from './parts'
 import type { $ } from '../../claude/panel'
-import { vsBadge, vsCallout, vsFold, vsFooter, vsSection, vsTags } from './vscode'
+import { vsBadge, vsCallout, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
 
 /** A history line in parts: its "try 2:" (or ''), what was said, the result after "→", and whether it went badly or well. */
 export function historyParts(line: string): { m: string; said: string; result: string; bad: boolean; good: boolean } {
@@ -307,7 +308,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     ...more.map((r, i) => segs(`vs-more-${i}`, [...(r.label ? [{ text: `${r.label}: `, color: 'inactive' }] : []), ...r.segs])),
   ])
 
-  // the tasks it waits for: each id a button that opens it, its status and title beside
+  // the tasks it waits for: each id a link that opens it, its status and title beside
   const waits = t.after.length
     ? fold('after', 'Waits for', t.after.length, [
         ...t.after.map(id => {
@@ -318,9 +319,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
             <Box key={`vs-after-${id}`} flexDirection="column">
               <Box key={`vs-after-${id}-top`} flexDirection="row" gap={1}>
                 {dep ? (
-                  <Button key={`after-${id}`} plain label={`Open ${id}`} onPress={on.open(id)}>
-                    <Text bold color={C('claude')}>{id}</Text>
-                  </Button>
+                  vsLink(vs, `after-${id}`, `**${mdLink(id, vsHref('task', id))}**`, [[vsHref('task', id), on.open(id)]])
                 ) : (
                   <Text key="id" bold color={C('inactive')}>{id}</Text>
                 )}

@@ -7,6 +7,7 @@ import { TASK_BEFORE } from './task-page-snapshot'
 import { TASK_BEFORE_MOBILE } from './task-page-mobile-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
+import { vsHref } from '../hooks/plugin/ui/vscode'
 import { reportPart } from '../hooks/plugin/ui/vscode-task'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -23,7 +24,9 @@ function elements(tree: unknown): Node[] {
   walk(tree)
   return out
 }
-/** All the text of a tree: string children, Button and Input labels and placeholders, Markdown texts. */
+/** A Markdown's text as it reads: each link its words, the bold marks and the escapes taken off. */
+const mdPlain = (md: string) => md.replace(/\[((?:\\.|[^\]\\])*)\]\([^)]*\)/g, '$1').replace(/\*\*/g, '').replace(/\\(.)/g, '$1')
+/** All the text of a tree: string children, Button and Input labels and placeholders, Markdown texts (as they read). */
 function texts(tree: unknown): string[] {
   const out: string[] = []
   const walk = (n: unknown) => {
@@ -31,15 +34,15 @@ function texts(tree: unknown): string[] {
     if (Array.isArray(n)) return n.forEach(walk)
     if (!n || typeof n !== 'object') return
     const e = n as Node
-    for (const p of ['label', 'placeholder', 'text'] as const) if (typeof e.props?.[p] === 'string') out.push(e.props[p] as string)
+    for (const p of ['label', 'placeholder', 'text'] as const) if (typeof e.props?.[p] === 'string') out.push(e.type === 'Markdown' && p === 'text' ? mdPlain(e.props[p] as string) : (e.props[p] as string))
     for (const c of e.children ?? []) walk(c)
   }
   walk(tree)
   return out
 }
 const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /Esc back/, /Enter sends/, /Enter on empty/, /Enter picks/, /\s\([a-z0-9]\)$/]
-/** A fold row ("▸ Waits for (2)") ends in its count, which is no key hint. */
-const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \(\d+\)$/.test(s))
+/** A fold row ("▸ Waits for 2") ends in its count, which is no key hint. */
+const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \d+$/.test(s))
 
 /** The action buttons each rich task shows in VS Code, in order, and the one primary (if any) on its page. */
 const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
@@ -85,7 +88,7 @@ for (const id of RICH_IDS) {
     // the id and the title on top, the status badge, then the sections
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
     expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(/^ \S+ .+ /)
-    const want = ['Why / where it came from', 'What to do', '▸ Files it may change (3)', '▸ Waits for (2)', `▸ Time and cost (${'runs' in t ? t.runs.length : 0})`]
+    const want = ['Why / where it came from', 'What to do', '▸ Files it may change 3', '▸ Waits for 2', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
     if (t.status === 'failed') want.push('✗ Why it failed')
@@ -99,10 +102,10 @@ for (const id of RICH_IDS) {
     expect(elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key), id).toEqual(ACTIONS[id]!.keys)
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
     expect(primary, id).toEqual(ACTIONS[id]!.primary ? [ACTIONS[id]!.primary] : [])
-    // the tasks it waits for (in their fold, closed at first) are buttons that open them; back to the list is a clear button; no key hints
+    // the tasks it waits for (in their fold, closed at first) are links that open them; back to the list is a clear button; no key hints
     expect(await ui.find({ key: 'after-T-499' })).toBeUndefined()
-    await ui.press({ key: 'fold-after' })
-    expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Button')
+    await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
+    expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Markdown')
     expect((await ui.find({ key: 'back' }))?.props.label).toBe('← Tasks')
     for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
     expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
@@ -178,11 +181,11 @@ test('in VS Code a file request shows the files, with Allow files and Don\'t all
 test('in VS Code a task it waits for opens by its button, and "← Tasks" goes back to the list', async ($, on) => {
   seedRich(on, '')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  await ui.press({ key: 'T-506' })
+  await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })
   expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ○ to do /)
-  await ui.press({ key: 'fold-after' })
-  await ui.press({ key: 'after-T-499' })
+  await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
+  await ui.press({ key: 'after-T-499', link: { href: vsHref('task', 'T-499') } })
   expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ✓ done /)
   await ui.press({ key: 'back' })
@@ -239,7 +242,7 @@ for (const [id, want] of Object.entries(CARDS))
       for (const h of ['Why / where it came from', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
       // the folds, closed by default, each with its count; pressing one opens it
       for (const f of ['files', 'after', 'time']) {
-        expect((await ui.find({ key: `fold-${f}` }))?.props.label, `${at} ${f}`).toMatch(/^▸ .+ \(\w+\)$/)
+        expect(mdPlain(String((await ui.find({ key: `fold-${f}` }))?.props.text)), `${at} ${f}`).toMatch(/^▸ .+ \w+$/)
         expect(await ui.find({ key: `vs-sec-${f}-body` }), `${at} ${f}`).toBeUndefined()
       }
       // what needs you: boxed at the top in its tone, its main button inside
@@ -265,8 +268,8 @@ for (const [id, want] of Object.entries(CARDS))
       expect(all.filter(s => s.includes('…')), at).toEqual([])
       for (const re of KEY_HINTS) expect(hints(all, re), `${at} ${re}`).toEqual([])
       // a fold opens on its press, and only for this task
-      await ui.press({ key: 'fold-time' })
-      expect((await ui.find({ key: 'fold-time' }))?.props.label, at).toMatch(/^▾ Time and cost/)
+      await ui.press({ key: 'fold-time', link: { href: vsHref('fold', 'fold-time') } })
+      expect(mdPlain(String((await ui.find({ key: 'fold-time' }))?.props.text)), at).toMatch(/^▾ Time and cost/)
       expect(await ui.find({ key: 'vs-sec-time-body' }), at).toBeDefined()
       expect(await ui.find({ key: 'vs-sec-files-body' }), at).toBeUndefined()
       await ui.unmount()

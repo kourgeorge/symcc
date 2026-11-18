@@ -1,6 +1,6 @@
 // The board panel's Scouts view in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's list
-// (scouts-page.tsx) packs each scout on one line of columns, cut to the width; here each scout is one button of a
-// few readable lines instead:
+// (scouts-page.tsx) packs each scout on one line of columns, cut to the width; here each scout is a block of a
+// few readable lines that wrap, its name a link that opens it (VS Code draws a Button as a blue box):
 //   security-advisories   ◎ next in 3h       (the name, then its status as a badge in its color)
 //   every day · ran 21h ago                  (how often, model, when it ran: dim)
 //   Checks the advisories for our packages   (the summary, whole)
@@ -18,7 +18,7 @@ import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from './open'
 import { claudeHost } from '../../claude/host'
-import { vsBadge, vsFooter, vsSection } from './vscode'
+import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 
 /** The color of a scout's mark in VS Code: running blue, paused dim, a bad file in the warning color, waiting plain. */
 const markTone = (s: SymccScout) => (s.running ? 'ide' : s.paused ? 'inactive' : s.warning ? 'warning' : 'text')
@@ -58,8 +58,6 @@ function lastLine(s: SymccScout): { text: string; tone: string } {
 export function scoutsListVs($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, scouts, banner, tabs, vs } = pane
   const { nowMs } = pane
-  let first = true
-  const focusFirst = (): true | undefined => (first ? ((first = false), true) : undefined)
   const plain = (key: string, text: string, color = 'inactive') => (
     <Text key={key} wrap="wrap" color={C(color)}>
       {text}
@@ -71,25 +69,25 @@ export function scoutsListVs($: $, pane: PaneParts) {
     const facts = [r.every, r.model, r.ran].filter(Boolean).join(' · ')
     const title = x.summary?.trim() || (x.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) || ''
     const last = lastLine(x)
-    // one plain button: the name and its status badge, then dim lines: how often and the last run, the summary, a bad
-    // file's warning, the start of the last report
-    const line = (text: string, color = 'inactive') => [
-      '\n',
-      <Text key={`l-${text}`} wrap="wrap" color={C(color)}>
+    // the name a link that opens it (text, not a Button: VS Code draws a Button as a blue box) and its status badge,
+    // then dim lines: how often and the last run, the summary, a bad file's warning, the start of the last report
+    const line = (key: string, text: string, color = 'inactive') => (
+      <Text key={key} wrap="wrap" color={C(color)}>
         {text}
-      </Text>,
-    ]
+      </Text>
+    )
+    const href = vsHref('scout', x.name)
+    const name = mdLink(x.name, href)
     return (
       <Box key={`vs-scout-${x.name}`} flexDirection="column">
-        <Button key={row(`scout:${x.name}`)} plain label={`Open ${x.name}`} autoFocus={focusFirst()} onPress={act(() => panelValues($).updateScoutOpen(() => x.name))}>
-          <Text wrap="wrap" bold={!x.paused} color={C(x.paused ? 'inactive' : 'claude')}>{x.name}</Text>
-          <Text>{'  '}</Text>
+        <Box key={`vs-scout-${x.name}-top`} flexDirection="row" flexWrap="wrap" columnGap={2}>
+          {vsLink(vs, row(`scout:${x.name}`), x.paused ? name : `**${name}**`, [[href, act(() => panelValues($).updateScoutOpen(() => x.name))]], x.paused)}
           {vsBadge(vs, 'mark', `${scoutIcon(x)} ${vsScoutState(x, nowMs)}`, markTone(x))}
-          {line(facts)}
-          {title ? line(title, 'text') : null}
-          {x.warning ? line(x.warning, 'warning') : null}
-          {last.text ? line(last.text) : null}
-        </Button>
+        </Box>
+        {line('facts', facts)}
+        {title ? line('summary', title, 'text') : null}
+        {x.warning ? line('warning', x.warning, 'warning') : null}
+        {last.text ? line('last', last.text) : null}
       </Box>
     )
   }

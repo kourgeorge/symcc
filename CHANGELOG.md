@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Changed
+- The board in VS Code's side panel has no more blue boxes. VS Code draws every button as a filled blue box whose label never wraps, so task rows, question rows and scout rows are now plain text that wraps, with the ID (or scout name) as a link that opens it; Backlog / Done / Dropped (and the folds on a task's page) are bold links ("▸ Backlog 7"); the tabs are one line of text with the shown tab bold and the others links; and the mode switch is a small link. Buttons are kept for real actions (Approve, Retry, Save ...). The logo in VS Code is the single 𝄞 glyph, large and bold, since VS Code's font broke the multi-row clef apart. The terminal, desktop and mobile boards are unchanged.
+
 ## 0.4.1 (2026-11-18)
 
 ### Added
