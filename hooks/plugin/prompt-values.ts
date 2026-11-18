@@ -1,7 +1,7 @@
 // The values a worker's prompt is filled in with, for each task (see fillPrompt in hooks/core/prompts.ts). A role's
 // checklist is filled in from the same values (see roleSection), for a worker and for a checker alike.
 import type { SymccTask } from '../../types'
-import { type Board, type BoardTask, kindOf, kindSection, ASK_TOOL, ASK_LINE, askedMore, intoOf, isCheckerOutput, checkerRetryText } from '../board'
+import { type Board, type BoardTask, kindOf, kindSection, ASK_TOOL, ASK_LINE, askedMore, intoOf, isCheckerOutput, checkerRetryText, testOutputHeading } from '../board'
 import { taskBranch } from './git'
 import { S, toolName } from './state'
 
@@ -42,7 +42,7 @@ An edit outside this list is refused and asks the owner for that file; then stop
   test_command: b.test_commands.length === 1 ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands[0]}`
     : b.test_commands.length ? `After you finish, these must pass; run each one on its own, from your folder:\n${b.test_commands.map(c => `  ${c}`).join('\n')}` : 'There is no test command; keep the change small and correct.',
   merge_main: t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : '',
-  test_output: isCheckerOutput(t.test_output) ? checkerRetryText(t.test_output!) : t.test_output ? `\nYour last try failed these tests; fix it. The end of the test output:\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
+  test_output: isCheckerOutput(t.test_output) ? checkerRetryText(t.test_output!) : t.test_output ? `\nYour last try failed these tests; fix it. ${testOutputHeading(t.test_output)}\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
   earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\nDon't repeat those mistakes.\n` : '',
 })
 
