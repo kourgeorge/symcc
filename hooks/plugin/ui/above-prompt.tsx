@@ -1,6 +1,6 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandStatus, boardBrand, boardVersion, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
+import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
 import { type $, type PaneView, S, panelValues } from '../state'
 import { openPane } from './open'
 import { claudeHost } from '../../claude/host'
@@ -16,8 +16,8 @@ export function bandTitle(columns: number, facts: (room: number) => string): { b
   const roomFor = (brand: string) => columns - brand.length - ' open board'.length - 2
   const bare = boardBrand(S.N.name, '')
   const plain = facts(roomFor(bare))
-  if (!boardVersion()) return { brand: bare, facts: plain }
-  const brand = boardBrand(S.N.name)
+  if (!S.version) return { brand: bare, facts: plain }
+  const brand = boardBrand(S.N.name, S.version)
   const room = roomFor(brand)
   const full = facts(room)
   return full === plain && full.length <= room ? { brand, facts: full } : { brand: bare, facts: plain }

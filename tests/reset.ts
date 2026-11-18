@@ -4,7 +4,7 @@
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
 import { test as plainTest, type TestBody, type TestRest } from 'claude-code/testing'
 import { emptyHeard } from '../hooks/board'
-import { S, startS, timers, workers, starting, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds, resetVersion } from '../hooks/plugin/state'
+import { S, startS, timers, workers, starting, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
 import { resetScoutRuns } from '../hooks/plugin/scouts'
 import { resetStore } from '../hooks/plugin/store'
 import { resetMergeTurns } from '../hooks/plugin/review'
@@ -30,7 +30,6 @@ export function resetPlugin() {
   resetStore()
   resetMergeTurns()
   resetLogo()
-  resetVersion()
   for (const m of [workers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0

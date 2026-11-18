@@ -3,7 +3,7 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, setBoardVersion, versionOf } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, versionOf } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 import type { Host, PanelValues } from '../host'
@@ -99,6 +99,9 @@ export function updateView(host: Host, change: (value: SymccView) => SymccView) 
 export const startS = () => ({
   N: namesFor(DEFAULT_NAME),
   named: false,
+  /** the plugin's version from plugin.json, for the board's titles; '' = not known (see loadVersion) */
+  version: '',
+  versionRead: false,
   root: '',
   /** whether the plugin is on, as the board said when it was last read (see load); for the places that can't wait */
   enabledNow: true,
@@ -186,19 +189,13 @@ export function useName($: Pick<Host, 'plugin'>) {
   S.N = namesFor(name)
 }
 
-/** Reads the plugin's version from its plugin.json (in host.plugin.root) once, for the titles (see setBoardVersion).
- *  A missing or broken file shows no version; it never throws. */
-let versionRead = false
+/** Reads the plugin's version from its plugin.json (in host.plugin.root) into S.version, once, for the titles.
+ *  A missing or broken file leaves no version (''); it never throws. */
 export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
-  if (versionRead) return
-  versionRead = true
+  if (S.versionRead) return
+  S.versionRead = true
   const text = await host.fs.read(`${host.plugin.root}/.claude-plugin/plugin.json`).catch(() => '')
-  setBoardVersion(versionOf(text))
-}
-/** Forgets the version, so the next loadVersion reads it again (for the tests). */
-export function resetVersion() {
-  versionRead = false
-  setBoardVersion('')
+  S.version = versionOf(text)
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */

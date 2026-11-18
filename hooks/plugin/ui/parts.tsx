@@ -48,7 +48,7 @@ export async function paneParts($: $, e: PaneEvent) {
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
-      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name, logoNow()).map((l, i) => (
+      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name, logoNow(), S.version).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
           {l.art ? <Text bold color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
           {l.parts.map(p => (

@@ -29,13 +29,8 @@ export function shortHome(path: string, home?: string): string {
 }
 
 // ---------------- the plugin's version in the titles ----------------
-// Read once from plugin.json when the plugin loads (see loadVersion in plugin/state.ts) and kept here, so every
-// title (the panel's, the band's, the board as text) shows it without each caller passing it. '' = not known: no version shown.
-let version = ''
-/** Sets the version the titles show ('' shows none). */
-export const setBoardVersion = (v: string) => void (version = v)
-/** The version the titles show now; '' when it isn't known. */
-export const boardVersion = () => version
+// The version is read once when the plugin loads (see loadVersion in plugin/state.ts, kept in S.version) and passed in
+// to each title below; '' = not known: no version shown.
 
 /** The version in plugin.json's text, e.g. "0.3.0"; '' when the text isn't JSON or has no short, plain version. Never throws. */
 export function versionOf(text: string): string {
@@ -48,15 +43,15 @@ export function versionOf(text: string): string {
 }
 
 /** " v0.3.0", or '' with no version. */
-export const versionMark = (v: string = version) => (v ? ` v${v}` : '')
+export const versionMark = (v: string) => (v ? ` v${v}` : '')
 
 /** "<icon> <name> v<version> board": the bold, colored part of a title (ICON from name.ts, then the name, the version
  *  when known and "board"). */
-export const boardBrand = (name: string = DEFAULT_NAME, v: string = version) => `${ICON} ${namesFor(name).name}${versionMark(v)} board`
+export const boardBrand = (name: string = DEFAULT_NAME, v: string = '') => `${ICON} ${namesFor(name).name}${versionMark(v)} board`
 /** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
-/** The board's title: "<icon> <name> board · <folder>", or just "<icon> <name> board" when the folder is unknown. */
-export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = version) => `${boardBrand(name, v)}${boardWhere(root)}`
+/** The board's title: "<icon> <name> v<version> board · <folder>" (no version when `v` is ''), without " · <folder>" when the folder is unknown. */
+export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = '') => `${boardBrand(name, v)}${boardWhere(root)}`
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
@@ -174,9 +169,10 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
  * settings, and (when there are tasks) the counts and total. With `width` of at least
  * BANNER_NARROW the drawing sits on the left; narrower, only the text, cut to fit.
  * The separator under it is `bannerRule(width)`. `logo`: the drawing's frame now (see core/logo.ts; the logo at rest when not given),
- * LOGO_AREA columns wide, so the text beside it never moves.
+ * LOGO_AREA columns wide, so the text beside it never moves. `version`: the plugin's version for the first line ('' = none);
+ * it is left out first when that line doesn't fit.
  */
-export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME, logo: LogoFrame = restFrame()): BannerLine[] {
+export function bannerLines(b: BannerBoard, root: string, home: string, driving: boolean, width: number, nowMs?: number, name: string = DEFAULT_NAME, logo: LogoFrame = restFrame(), version: string = ''): BannerLine[] {
   // Facts are plain (the panel draws them in the same color as the tabs that aren't selected,
   // which reads well on light and dark themes), not bold; only the " · " separators are dim.
   const sep: BannerPart = { text: ' · ', tone: 'dim' }
@@ -281,9 +277,10 @@ export function hiddenLine(done: number, dropped: number): string {
 /** The board for the model (the lead's board tool): the project's path (with `where`), the settings line, then the rows,
  *  newest first (with a short "from:" line under each, see fromText), then the archived count and the total time (and cost).
  *  With no `filter`: the open tasks and the backlog in full, the done and dropped ones only as counts (see hiddenLine).
- *  With a filter: every task on the board with one of its statuses and matching its search words (as the panel's search). */
-export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs), filter: BoardFilter = {}): string {
-  const top = where ? [`${boardBrand(name)} · ${where}`] : []
+ *  With a filter: every task on the board with one of its statuses and matching its search words (as the panel's search).
+ *  `version`: the plugin's version for the top line ('' = none). */
+export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs), filter: BoardFilter = {}, version: string = ''): string {
+  const top = where ? [`${boardBrand(name, version)} · ${where}`] : []
   const gone = archivedLine(b, name)
   if (!b.tasks.length) return [...top, 'The board is empty.', ...(gone ? [gone] : [])].join('\n')
   const s: BoardSections = boardSections(b.tasks, nowMs ?? NaN, offsetMin)
