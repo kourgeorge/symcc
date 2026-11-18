@@ -3,7 +3,7 @@
 // holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, steadyTree } from './board-fixture'
+import { PANE, BOARD_VIEW, seedBoard, steadyTree } from './board-fixture'
 import { SCOUTS_SETTINGS_BEFORE } from './scouts-settings-snapshot'
 import { SCENES, OLD_SURFACES } from './scouts-settings-scenes'
 import { LONG_REPORT, SCOUTS, SCOUTS_VIEW, seedScouts } from './scouts-settings-fixture'
@@ -36,7 +36,7 @@ function texts(tree: unknown): string[] {
   }
   return out
 }
-const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /Enter on a heading/, /Enter changes/, /Enter saves/, /Enter picks/, /Enter goes on/, /open\/close/, /→ \/ ←/, /↑↓/, /t s c views/, /Esc back/, /\s\([a-z]\)$/]
+const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /Enter on a heading/, /Enter changes/, /Enter saves/, /Enter picks/, /Enter goes on/, /open\/close/, /→ \/ ←/, /↑↓/, /t s c views/, /Esc back/, /\s\([a-z]\)(\s|$)/]
 const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success', 'suggestion'])
 const CHOICES = ['mode', 'notify', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']
@@ -108,6 +108,19 @@ test('the Scouts list in VS Code at width 50: whole names, summaries and report 
   await ui.press({ key: 'scout-new-cancel' })
   await ui.press({ key: 'scout:docs-drift' })
   expect(await ui.find({ key: 'vs-scout-facts' }), 'the scout page').toBeDefined()
+  await ui.unmount()
+})
+
+test('the Scouts list in VS Code with no scouts: the how-to text without terminal key marks', async ($, on) => {
+  seedBoard(on, { view: { shape: BOARD_VIEW.shape, value: { ...BOARD_VIEW.value, scouts: [] } }, tab: 'scouts' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  const tree = await ui.drawn()
+  readable(tree, 'no scouts')
+  const all = texts(tree).join('\n')
+  expect(all).toContain('No scouts yet.')
+  expect(all).toContain('Or press "New scout" to write one right here.')
+  expect(all).not.toContain('(n)')
+  expect((await ui.find({ key: 'scout-new' }))?.type).toBe('Button')
   await ui.unmount()
 })
 

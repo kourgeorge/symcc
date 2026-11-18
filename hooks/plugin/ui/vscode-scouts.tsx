@@ -106,7 +106,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
       <Box key="vs-header" flexDirection="column">
         {[...banner(), tabs()]}
       </Box>
-      {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column">{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line, i === 0 ? 'text' : 'inactive'))}</Box> : null}
+      {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column">{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
       {scouts.map(scoutBox)}
       {newBox}
       <Box key="vs-scouts-back-row" flexDirection="row">
