@@ -262,7 +262,29 @@ test('(c) a tracked worker that ends with no hand-back: its task fails right aft
   expect(w.prompts.filter(p => p.includes('the worker ended without a result'))).toHaveLength(1)
 })
 
-test('a task dropped from elsewhere while its ended worker is in its short grace stays dropped, not failed', async ($, on) => {
+test('a tracked worker that vanishes from the agent list: its task fails at the next check, not at its time limit', async ($, on) => {
+  const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
+  const w = world(on, agents)
+  w.files.set(BOARD, JSON.stringify(doing('s1', 'w1', new Date(Date.now() - 10 * 60_000).toISOString())))
+  w.files.set(LEAD, JSON.stringify({ session: 's1', heartbeat: T0 - 1000 }) + '\n')
+  await start($, w)
+  expect(w.task('T-1').status).toBe('doing')
+  // Claude Code drops the ended agent from its list
+  await w.clock.advance(10_000)
+  agents.length = 0
+  // the first check (at 2:00) sees it missing: one whole check of grace
+  await w.clock.advance(2 * 60_000 - 10_000)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('doing')
+  // still missing at the next check (at 4:00): failed
+  await w.clock.advance(2 * 60_000)
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('failed')
+  expect(t.note).toBe('the worker ended without a result')
+})
+
+test('a task dropped from elsewhere while its ended worker is in its short grace stays dropped, not failed',async ($, on) => {
   const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
   const w = world(on, agents)
   w.files.set(BOARD, JSON.stringify(doing('s1', 'w1', new Date(Date.now() - 10 * 60_000).toISOString())))
