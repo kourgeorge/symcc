@@ -60,6 +60,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - A task waiting on your files keeps waiting (even if its merge runs over) and tells you the right fix for each kind of file: commit or stash, remove an untracked file, or deal with an ignored one.
 
 ### Fixed
+- A lead's question no longer stays open in the chat after you answered it on the board: the lead now asks board questions (reviews, answers, worker questions, more time, file requests) as plain text with numbered options, not with a pop-up dialog that symcc cannot close.
 - The checker no longer skips changes that only look like docs: agent instructions (`roles/`, `kinds/`, `.claude/`, `.symcc/`, `skills/`, `CLAUDE.md`, `AGENTS.md`, `SKILL.md`), `.mdx` files and config, build or CI files (even under `docs/`) are now checked. Only README / CHANGELOG / LICENSE, other `.md` files and media skip it.
 - The `checker` role can't be turned on or off any more (its page has no Turn on button and points to the `checker` setting instead), and it is never offered as a task role.
 - A worker whose run ended on an API error or a refusal now fails its task with the reason, instead of being checked and merged as if it had finished.
