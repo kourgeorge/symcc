@@ -127,7 +127,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - README and guide: new text on traceability and observability.
 - README: a presentation video, with a GIF preview.
 - Slide deck in `docs/slides/symcc.pptx`.
-- README: a "Swarm Harness" vision line under the tagline.
+- README: an "Agent Organization" vision line under the tagline.
 
 ## 0.2.0
 

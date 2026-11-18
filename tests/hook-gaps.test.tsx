@@ -73,6 +73,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   })
   on('tool.call', (_, e) => (tools.push(e.tool), { result: 'ran' }))
   on('prompt.submit', (_, e) => (prompts.push(e.text), { text: e.text }) as never)
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('command.run', () => ({ text: 'not a symcc command' }))
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: ended.has(a.id) ? 'completed' : 'running' })) }) as never)
   on('session.send', (_, e) => {
@@ -311,6 +312,13 @@ test("session.start with a board.json that isn't JSON finishes quietly, tells th
   const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Change b', files: ['src/'], merge_into: 'main' }, ISO)
   w.files.set(BOARD, JSON.stringify(b))
   await w.clock.advance(LEAD_BEAT_MS)
+  // a timer never starts an agent (T-391): the worker is queued, and the idle lead is woken with a board update
+  expect(w.spawned).toEqual([])
+  await w.clock.advance(1500)
+  expect(w.prompts.filter(p => p.includes('Starting worker symcc-T-1 ')).length).toBe(1)
+  // the wake-up's turn starts it
+  await $.turn.start({ text: '', turnId: 'wake' } as never)
+  await w.clock.settle()
   expect(w.spawned.length).toBe(1)
   expect(w.spawned[0]).toContain('T-1')
 })
@@ -335,6 +343,9 @@ test('/symcc-mode off then review: work starts again, T-1 gets a worker, and the
   const review = await run($, 'symcc-mode', 'review')
   expect(review.text).toContain('work starts again')
   await w.clock.advance(2000)
+  // queued (T-391): it starts at the lead's next turn
+  await $.turn.start({ text: '', turnId: 'wake' } as never)
+  await w.clock.settle()
   expect(w.spawned.slice(before).some(n => n.includes('T-1'))).toBe(true)
   const update = w.prompts.find(p => p.startsWith('[symcc] Board update:')) ?? ''
   expect(update).toContain('The owner set the board mode to review')

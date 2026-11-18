@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the second manuscript-style short: many hands first, then the holes and the scouts.
 
-The story (docs/video/swarm_narration.md): one agent makes you wait; the owner asks the
+The story (docs/video/organization_narration.md): one agent makes you wait; the owner asks the
 lead for a feature; the lead splits it into tasks that workers build side by side; every
 change leaves holes; scouts find them and turn them into tasks; workers close them; every
 task page keeps where its change came from.
@@ -12,16 +12,16 @@ all come from there (and from make_youtube_video.py). Only the scene functions a
 thumbnail are new.
 
 Writes:
-    docs/video/out/symcc_swarm.mp4          1080x1920, 30 fps, H.264 + AAC (not committed)
-    docs/video/symcc_swarm.srt              subtitles
-    docs/video/symcc_swarm_thumbnail.png    1080x1920 thumbnail
+    docs/video/out/symcc_organization.mp4          1080x1920, 30 fps, H.264 + AAC (not committed)
+    docs/video/symcc_organization.srt              subtitles
+    docs/video/symcc_organization_thumbnail.png    1080x1920 thumbnail
 
 Usage (the same options as make_scouts_video.py):
-    python docs/video/make_swarm_video.py             # build everything
-    python docs/video/make_swarm_video.py --times     # when each scene starts, and words
-    python docs/video/make_swarm_video.py --frame 12  # save only the frame at 12 s to /tmp
-    python docs/video/make_swarm_video.py --clip 2    # save scene 2's audio to /tmp
-    python docs/video/make_swarm_video.py --thumbnail # only the thumbnail
+    python docs/video/make_organization_video.py             # build everything
+    python docs/video/make_organization_video.py --times     # when each scene starts, and words
+    python docs/video/make_organization_video.py --frame 12  # save only the frame at 12 s to /tmp
+    python docs/video/make_organization_video.py --clip 2    # save scene 2's audio to /tmp
+    python docs/video/make_organization_video.py --thumbnail # only the thumbnail
 """
 
 import math
@@ -447,8 +447,8 @@ def thumbnail(path):
 # ---------------------------------------------------------------- setup
 # Done at import time, so the frame workers (which import this file again) draw this story.
 
-sv.NAME = "symcc_swarm"
-sv.NARRATION = os.path.join(HERE, "swarm_narration.md")
+sv.NAME = "symcc_organization"
+sv.NARRATION = os.path.join(HERE, "organization_narration.md")
 sv.MP4 = os.path.join(sv.yt.OUT_DIR, sv.NAME + ".mp4")
 sv.SRT = os.path.join(HERE, sv.NAME + ".srt")
 sv.THUMB = os.path.join(HERE, sv.NAME + "_thumbnail.png")

@@ -19,6 +19,8 @@ import { commandsOf } from './fakes'
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
 import { fakeHost, memoryFs } from './fake-host'
+import { drainStarts, queuedStarts } from '../hooks/plugin/starts'
+import { withStarts } from './starts'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -1426,7 +1428,8 @@ async function liveWorld() {
 
 /** Lets the `void pump($)` started by setSymcc or setBoardMode run to its end (no clock: only promise turns). */
 async function settle(w: ReturnType<typeof world>, done: () => boolean) {
-  for (let i = 0; i < 5000 && !(done() && !w.files.has(LOCK)); i++) await Promise.resolve()
+  // a queued worker starts as at a turn's start or end (T-391)
+  for (let i = 0; i < 5000 && !(done() && !w.files.has(LOCK)); i++) await (queuedStarts() ? drainStarts(w.$) : Promise.resolve())
   expect(done()).toBe(true)
   // a few more turns, so the board write that records the new agent has finished too
   for (let i = 0; i < 200; i++) await Promise.resolve()
@@ -1473,6 +1476,30 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
     expect(leadQueue.length).toBe(told)
     // T-1 already has its worker: no second one
     expect(spawned.length).toBe(1)
+  } finally {
+    cleanUp()
+  }
+})
+
+// T-391: a worker's start waits in the queue until a turn starts or ends; the board says so honestly meanwhile
+test('a queued worker: its task shows "starting at the next turn" and no agent until the queue is emptied, then "worker on it" with its agent', async () => {
+  const { w, spawned } = await liveWorld()
+  try {
+    await setSymcc(w.$, false)
+    await setSymcc(w.$, true)
+    for (let i = 0; i < 5000 && (queuedStarts() === 0 || w.files.has(LOCK)); i++) await Promise.resolve()
+    expect(queuedStarts()).toBe(1)
+    const queued = find(await load(w.$), 'T-1')!
+    expect(queued.status).toBe('doing')
+    expect(queued.note).toBe('starting at the next turn')
+    expect(spawned).toEqual([])
+    expect(workerOn('T-1')).toBe(false)
+    await drainStarts(w.$)
+    await settle(w, () => workerOn('T-1'))
+    const t = find(await load(w.$), 'T-1')!
+    expect(spawned.length).toBe(1)
+    expect(t.note).toBe('worker on it')
+    expect(t.agent).toBe('ag2')
   } finally {
     cleanUp()
   }
@@ -3048,7 +3075,7 @@ function stuckFinish(g: Partial<Git> = {}) {
 
 /** Promise turns only (no clock), until `done()` and the board lock is free. */
 async function turns(w: ReturnType<typeof world>, done: () => boolean) {
-  for (let i = 0; i < 20000 && !(done() && !w.files.has(LOCK)); i++) await Promise.resolve()
+  for (let i = 0; i < 20000 && !(done() && !w.files.has(LOCK)); i++) await (queuedStarts() ? drainStarts(w.$) : Promise.resolve())
   expect(done()).toBe(true)
 }
 
@@ -4104,7 +4131,7 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   x.agents.spawn = async e => ((prompt = e.prompt), { agentId: 'ag9' })
   x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
-  await startWorker(w.$, 'T-2')
+  await withStarts(w.$, startWorker(w.$, 'T-2'))
   const wt = `${ROOT}/.symcc/worktrees/T-2`
   expect(find(await load(w.$), 'T-2')!.status).toBe('doing')
   expect(prompt).toContain(wt)

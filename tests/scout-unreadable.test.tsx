@@ -48,6 +48,7 @@ function world(on: On) {
   })
   on('agent.list', () => (state.lists++, { value: [{ id: 'w1', type: 'symcc:worker', name: 'symcc-T-1', status: 'running' }] }) as never)
   on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('session.send', () => ({ isDelivered: true }) as never)
   on('session.start', (_, e) => ({ cwd: e.cwd }) as never)
   on('session.repo', () => ({ value: { root: '/repo' } }) as never)
@@ -66,7 +67,8 @@ test('session.start with an unreadable scout file still runs the other scout, th
   expect(JSON.parse(w.files.get(LEAD)!).session).toBe('s1')
   // a is scheduled and runs at its first turn
   await w.clock.advance(SCOUT_SOON_MS)
-  for (let i = 0; i < 100 && !w.spawned.length; i++) await pause(5)
+  // its timer queues it (T-391): it starts at the next turn's start
+  for (let i = 0; i < 100 && !w.spawned.length; i++) await ($.turn.start({ text: '', turnId: `t${i}` } as never), pause(5))
   expect(w.spawned.filter(n => /scout/i.test(n)).length).toBe(1)
   expect(w.spawned).toContain('symcc-scout-a')
   // the heartbeat refreshes lead.json one beat later
