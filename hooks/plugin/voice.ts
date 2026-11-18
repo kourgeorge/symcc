@@ -130,6 +130,16 @@ export function sayNeedsYou(host: Host, b: Board, t: Pick<SymccTask, 'id' | 'att
   if (queueSay(host, b, NEEDS_YOU_MARK + t.id)) saidNeedsYou.add(key)
 }
 
+/**
+ * Says "symcc: Q-3 needs you" (or the same chime as a waiting task) when the lead put a question for the owner on
+ * the board (see core/questions.ts), once per question, in the same queue as "T-5 needs you".
+ */
+export function sayQuestion(host: Host, b: Board, id: string) {
+  const key = `question#${id}`
+  if (saidNeedsYou.has(key)) return
+  if (queueSay(host, b, NEEDS_YOU_MARK + id)) saidNeedsYou.add(key)
+}
+
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
 function queueSay(host: Host, b: Board, item: string): boolean {
   if (!S.driving || !symccOn(b) || b.notify === 'off') return false

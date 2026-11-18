@@ -440,8 +440,10 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
  * safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a
  * worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A best
  * effort, not a sandbox: a path built at run time (variables, base64) gets through; symbolic links elsewhere on disk
- * are followed by the caller (bashPathsOutside), and the merge-time scope check stays the backstop for the worker's
- * folder.
+ * are followed by the caller (bashPathsOutside). It checks paths only: git writes run from the worker's own folder
+ * (a commit, `git update-ref refs/heads/main`, a push) are refused by the caller with gitWriteIn. The merge-time scope
+ * check only looks at which files the task's commits change, so it catches files written through the shell inside the
+ * worker's folder outside the task's files, not a branch the worker moved.
  */
 export function bashOutsideFolder(command: unknown, worktree: Folders, root: Folders, home?: string, cwd?: string): string | undefined {
   const wts = folderList(worktree)
@@ -613,14 +615,42 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
  */
-export function gitWriteIn(command: unknown): string | undefined {
+export function gitWriteIn(command: unknown, allow?: GitAllow): string | undefined {
   if (typeof command !== 'string') return undefined
-  const { bad, git, env } = gitScan(command, 0)
+  const { bad, git, env } = gitScan(command, 0, allow)
   return bad ?? (git && env ? env : undefined)
 }
 
+/** A git command (`sub`, and the words after it) that gitWriteIn lets through although it writes. */
+export type GitAllow = (sub: string, args: string[]) => boolean
+
+/** Options a "merge it in" try's `git merge` may have: none of them commits anything the plain merge wouldn't. */
+const MERGE_STEP_OPTIONS = new Set(['--no-edit', '--no-ff', '--no-commit'])
+
+/**
+ * The git writes a worker may run in a "merge it in" try (a task whose branch conflicts with `into`, see merge_main):
+ * `git merge <into>` (with only --no-edit, --no-ff or --no-commit) and `git merge --abort`. Nothing else: the worker
+ * resolves the conflicts in the files, and symcc adds and commits them (git add -A) as for any try.
+ */
+export const mergeStepAllow =
+  (into: string): GitAllow =>
+  (sub, args) => {
+    if (sub !== 'merge') return false
+    // output redirections (`2>&1`, `> log`) don't change what git does; their target is checked as a path elsewhere
+    const rest: string[] = []
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]!
+      const redir = /^(\d*|&)>>?(&\d+)?(.*)$/.exec(a)
+      if (!redir) rest.push(a)
+      else if (!redir[2] && !redir[3]) i++
+    }
+    if (rest.length === 1 && rest[0] === '--abort') return true
+    const names = rest.filter(a => !MERGE_STEP_OPTIONS.has(a))
+    return names.length === 1 && names[0] === into
+  }
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
-function gitScan(command: string, depth: number): { bad?: string; git: boolean; env?: string } {
+function gitScan(command: string, depth: number, allow?: GitAllow): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
   if (depth > 4) return out
   for (const p of shellPieces(command)) {
@@ -634,6 +664,7 @@ function gitScan(command: string, depth: number): { bad?: string; git: boolean; 
       if (dashed) {
         out.git = true
         const args = words.slice(i + 1)
+        if (allow?.(dashed, args)) continue
         if (!gitReadOnly(dashed, args)) return { ...out, bad: `git ${dashed}` }
         const opt = gitBadOption(dashed, args)
         if (opt) return { ...out, bad: `git ${dashed} ${opt}` }
@@ -644,7 +675,7 @@ function gitScan(command: string, depth: number): { bad?: string; git: boolean; 
         // (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
         const at = w.search(/git(?!\w)/i)
         if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
-          const inner = gitScan(w.slice(at), depth + 1)
+          const inner = gitScan(w.slice(at), depth + 1, allow)
           out.git ||= inner.git
           out.env ??= inner.env
           if (inner.bad) return { ...out, bad: inner.bad }
@@ -658,6 +689,7 @@ function gitScan(command: string, depth: number): { bad?: string; git: boolean; 
       const sub = words[j]
       if (sub === undefined) continue
       const args = words.slice(j + 1)
+      if (allow?.(sub, args)) continue
       if (!gitReadOnly(sub, args)) return { ...out, bad: `git ${sub}` }
       const opt = gitBadOption(sub, args)
       if (opt) return { ...out, bad: `git ${sub} ${opt}` }
@@ -669,6 +701,14 @@ function gitScan(command: string, depth: number): { bad?: string; git: boolean; 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
   `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
+
+/**
+ * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
+ * something: its branch names, tags and stash are shared with the owner's folder (main too), and symcc commits, tests
+ * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
+ */
+export const workerGitWriteText = (what: string, into?: string) =>
+  `Refused: ${what} may change the repository or run another program, and a worker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
 
 /**
  * The project path (relative to the worker's folder `worktree`) an edit of `path` would change, when it lies outside

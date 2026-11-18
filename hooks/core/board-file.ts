@@ -4,6 +4,7 @@ import { dataDir } from '../name'
 import { cleanTokens } from './runs'
 import { parseStamp } from './text'
 import type { WorkerQuestion } from './ask'
+import { type OwnerQuestion, cleanQuestions } from './questions'
 
 export type Board = {
   version: 1
@@ -48,6 +49,10 @@ export type Board = {
   archived?: ArchivedTotals
   /** the ids of archived tasks that were done, so a task waiting on one still starts */
   archived_done?: string[]
+  /** the lead's questions for the owner that are not about one task (see core/questions.ts); absent until the first one */
+  questions?: OwnerQuestion[]
+  /** the next question number ("Q-n"); absent until the first question */
+  next_question?: number
 }
 
 /** What plays when a task is merged or waits for the owner. */
@@ -268,7 +273,7 @@ const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 
 /** Each setting with the test its value must pass; a value that fails is replaced by the default. */
-const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done'>]: (v: unknown) => boolean } = {
+const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
   max_parallel: v => isNum(v) && v >= 0,
@@ -430,6 +435,13 @@ export function readBoard(text: string | null): BoardRead {
   if ('target_branch' in raw) migrated++
   if (Array.isArray(raw.archived_done)) board.archived_done = [...new Set(raw.archived_done.filter((x): x is string => typeof x === 'string').map(normId))]
   else if ('archived_done' in raw) fixed.push('archived_done')
+  const questions = cleanQuestions(raw.questions)
+  if (questions) board.questions = questions
+  else if ('questions' in raw) fixed.push('questions')
+  if (questions?.length || 'next_question' in raw) {
+    const top = Math.max(0, ...(questions ?? []).map(q => Number(/^Q-(\d+)$/.exec(q.id)?.[1] ?? 0)))
+    board.next_question = Math.max(isNum(raw.next_question) && Number.isInteger(raw.next_question) && raw.next_question >= 1 ? raw.next_question : 1, top + 1)
+  }
   let skipped = 0
   const seen = new Set<string>()
   for (const t of (raw.tasks as unknown[] | undefined) ?? []) {

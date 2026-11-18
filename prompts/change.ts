@@ -14,7 +14,7 @@ Task {{task_id}}: {{title}}
 {{files}}
 {{test_command}}
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.
-Do not run git commit, push or merge: {{name}} commits, tests and merges your work.
+Do not run git commands that change anything (commit, push, merge, reset, checkout or switch of branches, stash, branch, tag, update-ref...); they are refused. Read-only ones like git status, diff, log and show are fine. {{name}} commits, tests and merges your work.
 {{merge_main}}{{test_output}}{{earlier_tries}}
 When you are done, answer in one or two plain sentences: what you changed.
 {{ask}}

@@ -61,12 +61,12 @@ export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
 }
 
-/**
- * A time like "0s", "27m" or "1h 5m", with the spaces after it. The drawing code reads the real clock (Date.now, which a
- * test cannot move), not the mock clock, so the time of a running try grows as the real day goes on; plainTree puts "~"
- * for each such time, so two drawings compare equal at any hour.
- */
-const SHOWN_TIME = /\b\d+[smhd](?: \d+[smh])?\b */g
-/** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped, and times as "~" (see SHOWN_TIME). */
-export const plainTree = (tree: unknown): unknown =>
-  JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : typeof v === 'string' ? v.replace(SHOWN_TIME, '~ ') : v)))
+/** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped. */
+export const plainTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
+/** A running task's time ("▶ 9m", "try 2: 6m (running)", "total: 26m") is counted on the real clock, which the kit's
+ *  fake clock does not hold, so it grows once T0 has passed; it is blanked out for the trees compared with a snapshot. */
+const DUR = String.raw`\d+[smhd](?: \d+[smh])?`
+export const steadyTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(plainTree(tree), (_k, v) => typeof v !== 'string' ? v : v
+  .replace(new RegExp(`▶ ${DUR} *`, 'g'), '▶ ~ ')
+  .replace(new RegExp(`(try \\d+: )${DUR}( \\(running\\))`, 'g'), '$1~$2')
+  .replace(new RegExp(`(total: |^ · )${DUR}( · )`, 'g'), '$1~$2')))

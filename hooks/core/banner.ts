@@ -13,6 +13,7 @@ import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches } from './panel'
 import { whyFailed } from './failure'
 import { offStatusLine, testCommandsText } from './settings'
+import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
@@ -92,7 +93,7 @@ export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ $
  * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏹ off").
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
  */
-export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
+export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[]; questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
   const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   // in plan mode the line says so first (see core/plan.ts)
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
@@ -101,6 +102,8 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
   const m = modeOf({ mode })
   const label = modeLabel(m)
   const c = crew && { ...crew, mode: m, plan_mode: plan }
+  // the lead's open questions for the owner come right after the mode, so they are never cut ("2 questions for you")
+  const asks = questionsForYou(openQuestions(b).length)
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
     const note = triesNote(b.tasks.filter(t => t.status === 'doing'))
@@ -114,7 +117,7 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
       // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
       const parked = ids('backlog').length
       const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
-      return withCrew((w, s) => join([label, w, counts, s, branch_note]), c, nowMs, width)
+      return withCrew((w, s) => join([label, asks, w, counts, s, branch_note]), c, nowMs, width)
     }
     // the try marks are extra: they are kept only when they fit without cutting anything else (scouts, "(next: …)")
     const plain = line('')
@@ -122,10 +125,10 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
     const full = line(note)
     return full.length <= width && full.length === plain.length + note.length ? full : plain
   }
-  if (!driving) return withCrew((w, s) => join([label, w, 'empty' + other, s, branch_note]), c, nowMs, width)
+  if (!driving) return withCrew((w, s) => join([label, asks, w, 'empty' + other, s, branch_note]), c, nowMs, width)
   // an empty board in mode auto stays quiet (unless there are scouts), so a fresh project shows nothing
-  if (m !== 'auto') return withCrew((w, s) => join([label, w, s, branch_note]), c, nowMs, width)
-  return withCrew((w, s) => join([s && label, w, s, branch_note]), c, nowMs, width) || undefined
+  if (m !== 'auto') return withCrew((w, s) => join([label, asks, w, s, branch_note]), c, nowMs, width)
+  return withCrew((w, s) => join([(s || asks) && label, asks, w, s, branch_note]), c, nowMs, width) || undefined
 }
 
 // ---------------- the banner at the top of the board panel ----------------
@@ -282,7 +285,10 @@ export function hiddenLine(done: number, dropped: number): string {
 export function boardText(b: Board, nowMs?: number, where?: string, name: string = DEFAULT_NAME, offsetMin: number = localOffset(nowMs), filter: BoardFilter = {}, version: string = ''): string {
   const top = where ? [`${boardBrand(name, version)} · ${where}`] : []
   const gone = archivedLine(b, name)
-  if (!b.tasks.length) return [...top, 'The board is empty.', ...(gone ? [gone] : [])].join('\n')
+  // the lead's open questions for the owner, first (see core/questions.ts)
+  const open = openQuestions(b)
+  const asks = open.length ? [`${questionsLabel(open.length)}:`, ...open.map(q => `  ${questionLine(q)}`)] : []
+  if (!b.tasks.length) return [...top, ...asks, 'The board is empty.', ...(gone ? [gone] : [])].join('\n')
   const s: BoardSections = boardSections(b.tasks, nowMs ?? NaN, offsetMin)
   const closed = [...s.today, ...s.days.flatMap(g => g.tasks)]
   const all = [...s.open, ...s.backlog, ...closed]
@@ -298,5 +304,5 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
     body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries)), ...(hidden ? [hidden] : [])]
   }
-  return [...top, head, ...body, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
+  return [...top, head, ...asks, ...body, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
 }
