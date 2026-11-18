@@ -1,5 +1,5 @@
 import type { SymccScout, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, countFindings, reportText } from '../board'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -89,6 +89,104 @@ export function resetScoutRuns() {
   runBefore.clear()
   runStarted.clear()
   startWarned.clear()
+  runsChecked.clear()
+  historyWarned = false
+  scoutRunOpen.scout = ''
+  scoutRunOpen.ended = ''
+}
+
+// ---------------- each scout's run history ----------------
+
+/** scouts whose one-time move of the last report (scouts.json) into their run history was checked this session */
+const runsChecked = new Set<string>()
+/** whether a run history that could not be saved was already told (once per session) */
+let historyWarned = false
+
+/** The run whose full report the scout's page shows now (its scout and when it ended); '' for none. */
+export const scoutRunOpen = { scout: '', ended: '' }
+
+/** A scout's runs file, in the project. */
+const runsPath = (scout: string) => path(scoutRunsFile(scout, S.N.name))
+
+/** Saves a scout run's full report to `rel` (<dir>/reports/scouts/…), through a temp file and a rename. */
+async function writeRunReport(host: Host, rel: string, text: string) {
+  await host.run(['mkdir', '-p', path(`${S.N.dir}/reports/scouts`)])
+  await safeWrite(host, path(rel), reportText(text), 'the scout report')
+}
+
+/** Scout `scout`'s runs, oldest first ([] when it has none, or its name can't be a file's). */
+export async function loadScoutRunHistory(host: Host, scout: string): Promise<ScoutRunRecord[]> {
+  if (safeScoutFile(scout, S.N.name) === null) return []
+  return parseScoutRuns(await host.fs.read(runsPath(scout)).catch(() => null))
+}
+
+/** The full report of a run (its file's text), or null when it has none or it can't be read. */
+export async function readScoutRunReport(host: Host, run: Pick<ScoutRunRecord, 'report'>): Promise<string | null> {
+  if (!isScoutRunReport(run.report)) return null
+  return host.fs.read(path(run.report)).catch(() => null)
+}
+
+/**
+ * Changes scout `scout`'s runs file: `fn` gets its runs (oldest first) and gives the new ones and those dropped (null:
+ * leave it). When there is no runs file yet, the scout's last report in scouts.json becomes its first run (the
+ * one-time move; its report saved as a file), so it is never lost. Report files of dropped runs are removed.
+ */
+function changeScoutRuns(host: Host, scout: string, fn: (runs: ScoutRunRecord[]) => { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } | null): Promise<void> {
+  const file = runsPath(scout)
+  return oneAtATime(file, async () => {
+    const text = await host.fs.read(file).catch(() => null)
+    let runs = typeof text === 'string' ? parseScoutRuns(text) : []
+    let moved = false
+    if (typeof text !== 'string') {
+      const m = migratedScoutRun((await loadScoutMemory(host))[scout], ended => scoutRunReportFile(scout, ended, S.N.name), now())
+      if (m) {
+        if (m.run.report) await writeRunReport(host, m.run.report, m.text)
+        runs = [m.run]
+        moved = true
+      }
+    }
+    const next = fn(runs)
+    if (!next && !moved) return
+    await host.run(['mkdir', '-p', path(S.N.scouts)])
+    await safeWrite(host, file, scoutRunsText(next?.runs ?? runs), `${scoutRunsFile(scout, S.N.name)}`)
+    const gone = (next?.dropped ?? []).map(r => r.report).filter(isScoutRunReport).map(r => path(r))
+    if (gone.length) await host.run(['rm', '-f', '--', ...gone]).catch(() => undefined)
+  })
+}
+
+/** The one-time move of scout `scout`'s last report into its run history (see changeScoutRuns), once a session. */
+async function moveLastReport(host: Host, scout: string) {
+  if (runsChecked.has(scout)) return
+  runsChecked.add(scout)
+  await changeScoutRuns(host, scout, () => null).catch(() => undefined)
+}
+
+/** Adds a run that ended to scout `scout`'s history: its full report (`answer`, when it said anything) goes to a
+ *  file of its own. A failure is told once a session and never stops the scout. */
+async function addRunToHistory(host: Host, scout: string, run: ScoutRunRecord, answer: string) {
+  try {
+    if (answer.trim()) {
+      // two runs that end in the same millisecond never share a file
+      const base = scoutRunReportFile(scout, run.ended, S.N.name)
+      let rel = base
+      for (let n = 2; n < 100 && (await host.fs.exists(path(rel)).catch(() => false)); n++) rel = base.replace(/\.md$/, `-${n}.md`)
+      await writeRunReport(host, rel, answer)
+      run.report = rel
+    }
+    await changeScoutRuns(host, scout, runs => addScoutRunRecord(runs, run))
+  } catch (e) {
+    if (historyWarned) return
+    historyWarned = true
+    host.ui.toast(S.N.toast(`scout ${scout}: could not save this run in its history (${String((e as Error)?.message ?? e).slice(0, 200)}); later failures are not told again`))
+  }
+}
+
+/** Scout `scout`'s runs, newest first, each with the ids of the board's tasks made from it. */
+export async function scoutRunsWithTasks(host: Host, scout: string): Promise<{ run: ScoutRunRecord; tasks: string[] }[]> {
+  const runs = await loadScoutRunHistory(host, scout)
+  const tasks = runs.length ? await load(host).then(b => b.tasks).catch(() => []) : []
+  const made = scoutRunTasks(runs, tasks, scout)
+  return runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
 }
 
 /**
@@ -145,6 +243,7 @@ async function scoutStarted(host: Host, s: ScoutDef, st: SymccScout, spawn: Prom
       return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`
     }
     const text = `scout ${s.name} didn't start: ${msg}`
+    await addRunToHistory(host, s.name, { started: null, ended: now(), outcome: 'not started', findings: 0, why: msg.slice(0, 300) }, '')
     if (byHand || !startWarned.has(s.name)) {
       startWarned.add(s.name)
       host.ui.toast(S.N.toast(text))
@@ -264,6 +363,14 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
   const before = runBefore.get(agentId) ?? null
   runBefore.delete(agentId)
   const st = scoutState.get(name)
+  // Its run history first: when it has none yet, the last report still in scouts.json moves in before this run's.
+  const outcome = scoutRunOutcome(reason, answer)
+  await addRunToHistory(
+    host,
+    name,
+    { started: started === undefined ? null : new Date(started).toISOString(), ended: new Date(endMs).toISOString(), outcome, findings: outcome === 'found' ? countFindings(answer) : 0, ...(tokens !== undefined ? { tokens } : {}) },
+    answer,
+  )
   if (reason !== 'answer') {
     // Stopped from the agent controls, or ended on an error or a refusal: what it said so far is not a report. Keep the last real run and report.
     if (st) {
@@ -359,6 +466,8 @@ export async function scheduleScouts(host: Host) {
     if (old?.last_report !== undefined) st.last_report = old.last_report
     if (old?.paused) st.paused = true
     scoutState.set(s.name, st)
+    // once: a scout with a last report but no run history yet gets that report as its first run
+    if (old?.last_report !== undefined) await moveLastReport(host, s.name)
     // every_minutes 0 (or a bad value): only on demand, so no timer
     if (timed) armScout(host, s, st)
   }
@@ -484,7 +593,7 @@ export async function leadScouts(host: Host, a: LeadScoutInput): Promise<string>
     const st = scoutState.get(name)
     if (!st || !known) return `no scout named ${name} (${have()})`
     await pausedNow(host, st).catch(() => undefined)
-    return leadScoutText(st, Date.now(), true)
+    return leadScoutText(st, Date.now(), true, await scoutRunsWithTasks(host, name).catch(() => []))
   }
   if (action === 'run') {
     if (!name) return 'say which scout to run (name)'

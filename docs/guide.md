@@ -700,6 +700,17 @@ the optional `summary:` line in the file's front matter, e.g. `summary: Looks fo
 Without one, the page shows the first line of the instructions there instead, in a dimmer
 colour.
 
+Under the last report, **Runs** lists the scout's recent runs, newest first, one line each:
+when it ended, how it ended (found, nothing, stopped, API error, refusal or couldn't start),
+how many findings its report numbers, and the tasks made from it (the tasks from this scout
+added after that run and before its next report). Open one to read that run's whole report.
+When the last run ended on an API error or a refusal, the page says so under the header
+("Its last run ended on an API error, so nothing was reported."). Each scout keeps its last
+50 runs in `.symcc/scouts/<name>.runs.json` and each run's full report in
+`.symcc/reports/scouts/<name>-<time>.md`; older runs and their report files are removed.
+The first time, a scout's last report from `.symcc/scouts.json` becomes its first run.
+(The Runs list is on the terminal page for now.)
+
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
 header line, then the same names in the same order, one box each: **Runs every** (in
@@ -710,8 +721,8 @@ matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` 
 
 Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
 like "every 2 days" or "on demand", whether it is paused or running, its next and last run
-and the first lines of its last report), show one in full (its instructions and whole last
-report), add or change one (name of lowercase letters, digits and dashes, every_minutes with
+and the first lines of its last report), show one in full (its instructions, whole last
+report and its last few runs), add or change one (name of lowercase letters, digits and dashes, every_minutes with
 0 for only on demand, an optional model, and the instructions), remove one (it checks with
 you first) and run one now, just like "run now" (a paused scout runs too, once, and stays paused;
 refused, with the reason, when the scout is already running or git isn't set up). Every change shows on the board at once. Only
@@ -1156,10 +1167,11 @@ your-project/
     ├── archive.json      old done and dropped tasks, moved off the board (see archive_days)
     ├── board.lock        held for a moment while a window saves the board
     ├── lead.json         which window drives the board (with a heartbeat)
-    ├── scouts/           your scout files (*.md)
+    ├── scouts/           your scout files (*.md) and each scout's recent runs (*.runs.json)
     ├── scouts.json       each scout's last run and report, and whether it is paused
     ├── roles/            your own worker roles (*.md), see Worker roles
-    ├── reports/          each try's full worker report (T-3-try-2.md)
+    ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
+    │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged

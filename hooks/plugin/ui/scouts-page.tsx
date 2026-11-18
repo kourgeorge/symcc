@@ -1,6 +1,6 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
+import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -76,6 +76,44 @@ export async function scoutsPage($: $, pane: PaneParts) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
     const report = scoutReport(sc.last_report)
+    const host = claudeHost($)
+    // its runs, newest first, each with the tasks made from it (the board's tasks from this scout)
+    const runs = await loadScoutRunHistory(host, sc.name)
+    const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
+    const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
+    const problem = scoutLastRunProblem(runs)
+    const opened = scoutRunOpen.scout === sc.name ? shown.find(x => x.run.ended === scoutRunOpen.ended) : undefined
+    const closeRun = () => ((scoutRunOpen.scout = ''), (scoutRunOpen.ended = ''), $.ui.invalidate('ui.render'))
+    if (opened) {
+      // one run's page: its line, then its full report (from its file)
+      const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Box flexDirection="column">
+            <Text>
+              <Text bold color={C('claude')}>{sc.name}</Text>
+              <Text color={C('inactive')}> · run that ended {opened.run.ended}</Text>
+            </Text>
+            <Text color={C(scoutOutcomeTone(opened.run.outcome))}>{scoutRunLine(opened.run, opened.tasks, nowMs)}</Text>
+            {opened.run.why ? <Text color={C('error')}>{opened.run.why}</Text> : null}
+          </Box>
+          {buttonRows([<Button key="scout-run-back" label="Back" hotkey="b" autoFocus onPress={closeRun} />], 'scout-run-buttons')}
+          <Box flexDirection="column">
+            {heading('Report')}
+            {text ? paragraphs(text) : <Text color={C('inactive')}>{opened.run.report ? `(its report file ${opened.run.report} can't be read)` : '(this run reported nothing)'}</Text>}
+          </Box>
+          {opened.run.report ? (
+            <Box flexDirection="column">
+              {heading('File')}
+              <Text>
+                {'  '}
+                <Text color={C('autoAccept')}>{opened.run.report}</Text>
+              </Text>
+            </Box>
+          ) : null}
+        </Box>
+      )
+    }
     // the subheader: the summary from the file's front matter, else the first line of the instructions (in the inactive colour)
     const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
     const title = sc.summary?.trim() || firstLine
@@ -100,10 +138,11 @@ export async function scoutsPage($: $, pane: PaneParts) {
             </Text>
           ) : null}
           {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
+          {problem && !sc.running ? <Text color={C('error')}>{problem}</Text> : null}
         </Box>
 
         {buttonRows([
-          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />,
+          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => (closeRun(), panelValues($).updateScoutOpen(() => '')))} />,
           // no Run now while it runs: it couldn't start again until this run ends
           !sc.running && <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow(claudeHost($), sc.name))))} />,
           <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout(claudeHost($), sc))} />,
@@ -119,6 +158,17 @@ export async function scoutsPage($: $, pane: PaneParts) {
           {heading('Last report')}
           {report === 'nothing found' ? <Text color={C('inactive')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : paragraphs(report)}
         </Box>
+
+        {shown.length ? (
+          <Box key="scout-runs" flexDirection="column">
+            {heading('Runs')}
+            {shown.map(x => (
+              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={() => ((scoutRunOpen.scout = sc.name), (scoutRunOpen.ended = x.run.ended), $.ui.invalidate('ui.render'))}>
+                <Text color={C(scoutOutcomeTone(x.run.outcome))}>{`  ${scoutRunLine(x.run, x.tasks, nowMs)}`}</Text>
+              </Button>
+            ))}
+          </Box>
+        ) : null}
 
         <Box flexDirection="column">
           {heading('File')}
