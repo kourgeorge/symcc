@@ -3,20 +3,26 @@
 // as another program (an OpenCode plugin, a standalone app) would build one, must be enough to run the logic.
 import { expect } from 'claude-code/testing'
 import type { EngineInterface } from 'claude-code'
-import { type Host, type HostRunResult, notReadyYet } from '../hooks/host'
-import { S } from '../hooks/plugin/state'
-import { findRoot, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
-import { addTask, emptyBoard } from '../hooks/board'
+import { type Host, type HostRunResult, type PanelValues, noUi, notReadyYet } from '../hooks/host'
+import { S, type PaneView } from '../hooks/plugin/state'
+import { findRoot, load, saveBoard, takeLock, dropLock, change } from '../hooks/plugin/store'
+import { tellLead } from '../hooks/plugin/tell'
+import { addTask, emptyBoard, type Board } from '../hooks/board'
 import { test } from './reset'
 import { claudeHost } from '../hooks/claude/host'
 
 // Fails the type check (scripts/typecheck.sh) if Claude Code's `$`, with the adapter's agents added, stops fitting a Host.
 const fromClaude = (claude: EngineInterface): Host => claudeHost(claude)
 
-/** A Host over files kept in memory, written out in full with no casts: what a second adapter has to give. */
-function memoryHost(root: string) {
+/**
+ * A Host over files kept in memory, written out in full with no casts: what a second adapter has to give. `ui` is
+ * noUi (no screen at all) unless given; `later` runs a timer's function at once (else timers never fire). What the
+ * lead was sent is kept in `sent`.
+ */
+function memoryHost(root: string, ui: Host['ui'] = noUi, later = false) {
   const files = new Map<string, string>()
   const ran: string[] = []
+  const sent: string[] = []
   const done = (r: Partial<HostRunResult> = {}): HostRunResult => ({ exitCode: 0, stdout: '', stderr: '', ...r })
   const timer = { cancel: () => undefined }
   const host: Host = {
@@ -27,7 +33,7 @@ function memoryHost(root: string) {
       root: async () => root,
       usage: async () => ({}),
     },
-    prompt: { submit: async () => undefined },
+    lead: { send: async text => void sent.push(text) },
     agents: { spawn: async () => ({ agentId: 'agent-1' }), list: async () => [], send: async () => undefined, stop: async () => undefined },
     env: { get: async () => undefined },
     fs: {
@@ -64,10 +70,10 @@ function memoryHost(root: string) {
         return done({ exitCode: 127, stderr: `${cmd}: not in this fake` })
       },
     },
-    clock: { after: () => timer, every: () => timer, sleep: async () => undefined },
-    ui: { toast: () => undefined, status: () => undefined, log: () => undefined, invalidate: () => undefined, open: async () => ({ isPlaced: false }), panes: async () => [] },
+    clock: { after: (_ms, fn) => (later && fn(), timer), every: () => timer, sleep: async () => undefined },
+    ui,
   }
-  return { host, files, ran }
+  return { host, files, ran, sent }
 }
 
 test("Claude Code's $ fits a Host once the adapter adds the agents (the type check proves it; nothing to run)", () => {
@@ -92,8 +98,63 @@ test('a Host written by hand runs the board store: find the project, take the lo
   expect((await load(host)).max_parallel).toBe(3)
   expect(ran).toEqual(['mv', 'ln', 'rm', 'mv', 'rm'])
   expect([...files.keys()]).toEqual([`/proj/${S.N.boardFile}`])
-  // Not yet: change() also publishes the board to the panel, and that still needs Claude Code's own panel state
-  // (state.ts); a Host with no panel gets its own way to show the board in a later step of the plan.
+})
+
+const addOne = (b: Board) => addTask(b, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, '2026-11-18T00:00:00Z')[0]
+
+test('change() runs on a Host with no screen at all (noUi): the board is saved, and publishing it goes nowhere', async () => {
+  const { host } = memoryHost('/proj')
+  expect(await findRoot(host)).toBe(true)
+  await change(host, addOne)
+  expect((await load(host)).tasks.map(t => t.title)).toEqual(['Do it'])
+})
+
+test("change() publishes the board to a hand-written host's panel and status line, settings included", async () => {
+  let view = { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as PaneView
+  const status: (string | undefined)[] = []
+  const keep = () => {
+    let value = ''
+    return { read: async () => value, update: async (f: (v: string) => string) => void (value = f(value)) }
+  }
+  const [opened, tab, scout] = [keep(), keep(), keep()]
+  const panel: PanelValues = {
+    readOpened: opened.read,
+    updateOpened: opened.update,
+    readTab: tab.read,
+    updateTab: tab.update,
+    readScoutOpen: scout.read,
+    updateScoutOpen: scout.update,
+    readView: async () => view,
+    updateView: async f => void (view = f(view)),
+  }
+  const { host } = memoryHost('/proj', { ...noUi, status: text => void status.push(text), panel })
+  expect(await findRoot(host)).toBe(true)
+  await saveBoard(host, { ...emptyBoard(), scout_findings: 'backlog', tests_with_changes: 'review', checker: true })
+  await change(host, addOne)
+  expect(view.tasks.map(t => t.title)).toEqual(['Do it'])
+  // the Settings view draws these from the published view, as it does the other settings
+  expect([view.scout_findings, view.tests_with_changes, view.checker]).toEqual(['backlog', 'review', true])
+  expect(status.length).toBeGreaterThan(0)
+})
+
+test('tellLead gives the board update to host.lead.send', async () => {
+  const { host, sent } = memoryHost('/proj', noUi, true)
+  tellLead(host, 'T-1 is done')
+  expect(sent).toHaveLength(1)
+  expect(sent[0]).toContain(`[${S.N.name}] Board update:`)
+  expect(sent[0]).toContain('T-1 is done')
+})
+
+test("Claude Code's adapter: host.lead.send submits a prompt, ui.refresh redraws on 'ui.render', and ui.panel is there", async () => {
+  const prompts: unknown[] = []
+  const redraws: unknown[] = []
+  const claude = { prompt: { submit: async (input: unknown) => void prompts.push(input) }, ui: { invalidate: (event: unknown) => void redraws.push(event) } }
+  const host = claudeHost(claude as unknown as EngineInterface)
+  await host.lead.send('hello lead')
+  host.ui.refresh()
+  expect(prompts).toEqual([{ text: 'hello lead' }])
+  expect(redraws).toEqual(['ui.render'])
+  expect(typeof host.ui.panel?.readView).toBe('function')
 })
 
 /** Claude Code's `$`, only the agent parts claudeHost's `agents` use: what it was asked to spawn and send, and what spawn and list answer. */

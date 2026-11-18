@@ -6,7 +6,7 @@ import type { SymccView, SymccScout, SymccTokens } from '../../types'
 import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
-import type { Host } from '../host'
+import type { Host, PanelValues } from '../host'
 
 export type $ = EngineInterface
 
@@ -30,21 +30,10 @@ const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], workin
 // modules read and change these four through the functions below.
 // Only Claude Code's `$` holds these values, and the loader lets only `$` itself reach `read` and `update`, so
 // panelValues makes the reads and changes from one hook's `$`, and Claude Code's Host (claude/host.ts claudeHost)
-// carries them as its `panel`. The functions after it take that Host, because the logic (publish, saveScout,
-// openPane) calls them with one. A host with no panel has none of these values (noPanel); it gets its own way
-// to show the board in a later step.
+// carries them as its `ui.panel` (PanelValues, in host.ts). The functions after it take a Host, because the logic
+// (publish, saveScout, openPane) calls them with one. A host with no panel leaves `ui.panel` out (noPanel below).
 
-/** The board panel's values, read and changed through one hook's `$`. */
-export type PanelValues = {
-  readOpened: () => Promise<string>
-  updateOpened: (change: (value: string) => string) => Promise<unknown>
-  readTab: () => Promise<string>
-  updateTab: (change: (value: string) => string) => Promise<unknown>
-  readScoutOpen: () => Promise<string>
-  updateScoutOpen: (change: (value: string) => string) => Promise<unknown>
-  readView: () => Promise<SymccView>
-  updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
-}
+export type { PanelValues }
 
 /** The board panel's values through Claude Code's `$` (for claude/host.ts). */
 export function panelValues($: $): PanelValues {
@@ -72,9 +61,9 @@ const noPanel: PanelValues = {
   updateView: async () => undefined,
 }
 
-/** A Host's board panel values; only Claude Code's Host has them so far (see noPanel for the others). */
+/** A Host's board panel values, or noPanel for a host without them. */
 function panelOf(host: Host): PanelValues {
-  return (host as Host & { panel?: PanelValues }).panel ?? noPanel
+  return host.ui.panel ?? noPanel
 }
 
 export function readOpened(host: Host) {
@@ -196,7 +185,7 @@ export function useName($: Pick<Host, 'plugin'>) {
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'enabled'> & { driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
