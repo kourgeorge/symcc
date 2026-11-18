@@ -2,8 +2,8 @@
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_TASKS, T0, seedBoard, drawnData, changedTree } from './board-fixture'
-import { BEFORE } from './board-snapshot'
+import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board-fixture'
+import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { shortTests, logoWidthFor, vsLogoRow, VS_LOGO_COLUMNS } from '../hooks/plugin/ui/vscode'
 import { drawNow } from '../hooks/plugin/ui/now'
@@ -60,6 +60,21 @@ test('the board on the terminal, the desktop and mobile draws exactly as before 
     expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} settings`])
     await ui.press({ key: 'tab-tasks' }) // the next surface starts on the Tasks page again
     await ui.unmount()
+  }
+})
+
+// a board with only dropped tasks (and nothing run) keeps its empty counts line under the banner, as before
+const DROPPED_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, working: [], tasks: BOARD_TASKS.filter(t => t.status === 'dropped') } }
+
+test('a board with only dropped tasks on the terminal, the desktop and mobile draws exactly as before', async ($, on) => {
+  seedBoard(on, { view: DROPPED_VIEW })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
+    for (const bodyColumns of [50, 90]) {
+      const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface })
+      expect(drawnData(await ui.drawn()), `${surface} ${bodyColumns}`).toEqual(BEFORE_DROPPED[`${surface} ${bodyColumns}`])
+      await ui.unmount()
+    }
   }
 })
 

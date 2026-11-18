@@ -225,8 +225,8 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const withV = line1(version)
   const l1 = withV.reduce((n, p) => n + p.text.length, 0) <= room1 ? withV : line1('')
   const texts = [l1, l2, l3]
-  const counts = bannerCounts(b, nowMs)
-  if (counts.length) texts.push(join(counts.map(c => fact(c.text))))
+  // as before: a board with tasks (or archived ones) always gets a counts line, even an empty one
+  if (b.tasks.length || archivedOf(b).done) texts.push(join(bannerCounts(b, nowMs).map(c => fact(c.text))))
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW
   // The three fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook)
