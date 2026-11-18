@@ -1210,16 +1210,16 @@ test("a worker's ask_owner call: a question, with 2 to 6 different options or no
 
 test("an edit is blocked when its path is outside the task's files, with the merge-time matching", async () => {
   const wt = '/repo/.symcc/worktrees/T-1'
-  expect(blockedEdit('Edit', { file_path: `${wt}/README.md` }, wt, ['src/'], '.symcc')).toBe('README.md')
-  expect(blockedEdit('Write', { file_path: `${wt}/src/a.ts` }, wt, ['src/'], '.symcc')).toBeUndefined()
-  expect(blockedEdit('Write', { file_path: `${wt}/src/a.ts` }, wt, ['src/*.ts'], '.symcc')).toBeUndefined()
-  expect(blockedEdit('NotebookEdit', { notebook_path: `${wt}/nb/x.ipynb` }, wt, ['src/'], '.symcc')).toBe('nb/x.ipynb')
+  expect(blockedEdit(`${wt}/README.md`, wt, ['src/'], '.symcc')).toBe('README.md')
+  expect(blockedEdit(`${wt}/src/a.ts`, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEdit(`${wt}/src/a.ts`, wt, ['src/*.ts'], '.symcc')).toBeUndefined()
+  expect(blockedEdit(`${wt}/nb/x.ipynb`, wt, ['src/'], '.symcc')).toBe('nb/x.ipynb')
   // no file list: anywhere but the board's folder
-  expect(blockedEdit('Edit', { file_path: `${wt}/README.md` }, wt, [], '.symcc')).toBeUndefined()
-  expect(blockedEdit('Edit', { file_path: `${wt}/.symcc/board.json` }, wt, [], '.symcc')).toBe('.symcc/board.json')
-  // other tools, and paths outside the worker's folder, are not this check's to judge
-  expect(blockedEdit('Bash', { command: 'echo x > README.md' }, wt, ['src/'], '.symcc')).toBeUndefined()
-  expect(blockedEdit('Write', { file_path: '/tmp/scratch.txt' }, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEdit(`${wt}/README.md`, wt, [], '.symcc')).toBeUndefined()
+  expect(blockedEdit(`${wt}/.symcc/board.json`, wt, [], '.symcc')).toBe('.symcc/board.json')
+  // no path (a shell command, say), and paths outside the worker's folder, are not this check's to judge
+  expect(blockedEdit(undefined, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEdit('/tmp/scratch.txt', wt, ['src/'], '.symcc')).toBeUndefined()
   expect(blockedEditText('README.md')).toBe("README.md is outside this task's files; it's recorded as a request to the owner. Stop and hand back.")
 })
 
@@ -1227,25 +1227,25 @@ test("an edit inside the project but outside the worker's own folder is refused;
   const root = '/repo'
   const wt = `${root}/.symcc/worktrees/T-5`
   // the owner's copy, the board, a relative way out, a ".." way out, another worker's folder: refused
-  expect(editOutsideFolder('Edit', { file_path: `${root}/README.md` }, wt, root)).toBe('README.md')
-  expect(editOutsideFolder('Write', { file_path: `${root}/.symcc/board.json` }, wt, root)).toBe('.symcc/board.json')
-  expect(editOutsideFolder('Edit', { file_path: '../../README.md' }, wt, root)).toBe('.symcc/README.md')
-  expect(editOutsideFolder('Edit', { file_path: '../../../README.md' }, wt, root)).toBe('README.md')
-  expect(editOutsideFolder('Edit', { file_path: `${wt}/src/../../../../README.md` }, wt, root)).toBe('README.md')
-  expect(editOutsideFolder('NotebookEdit', { notebook_path: `${root}/.symcc/worktrees/T-6/a.ipynb` }, wt, root)).toBe('.symcc/worktrees/T-6/a.ipynb')
-  expect(editOutsideFolder('Write', { file_path: `${root}/.symcc/worktrees/T-55/x` }, wt, root)).toBe('.symcc/worktrees/T-55/x')
-  expect(editOutsideFolder('Edit', { file_path: '/REPO/README.md' }, wt, root)).toBe('README.md')
-  // outside the project, inside the worker's folder, other tools: not refused here
-  expect(editOutsideFolder('Write', { file_path: '/tmp/scratch.txt' }, wt, root)).toBeUndefined()
-  expect(editOutsideFolder('Write', { file_path: '/repository/x' }, wt, root)).toBeUndefined()
-  expect(editOutsideFolder('Edit', { file_path: `${wt}/README.md` }, wt, root)).toBeUndefined()
-  expect(editOutsideFolder('Edit', { file_path: 'src/a.ts' }, wt, root)).toBeUndefined()
-  expect(editOutsideFolder('Bash', { command: `echo x > ${root}/README.md` }, wt, root)).toBeUndefined()
+  expect(editOutsideFolder(`${root}/README.md`, wt, root)).toBe('README.md')
+  expect(editOutsideFolder(`${root}/.symcc/board.json`, wt, root)).toBe('.symcc/board.json')
+  expect(editOutsideFolder('../../README.md', wt, root)).toBe('.symcc/README.md')
+  expect(editOutsideFolder('../../../README.md', wt, root)).toBe('README.md')
+  expect(editOutsideFolder(`${wt}/src/../../../../README.md`, wt, root)).toBe('README.md')
+  expect(editOutsideFolder(`${root}/.symcc/worktrees/T-6/a.ipynb`, wt, root)).toBe('.symcc/worktrees/T-6/a.ipynb')
+  expect(editOutsideFolder(`${root}/.symcc/worktrees/T-55/x`, wt, root)).toBe('.symcc/worktrees/T-55/x')
+  expect(editOutsideFolder('/REPO/README.md', wt, root)).toBe('README.md')
+  // outside the project, inside the worker's folder, no path: not refused here
+  expect(editOutsideFolder('/tmp/scratch.txt', wt, root)).toBeUndefined()
+  expect(editOutsideFolder('/repository/x', wt, root)).toBeUndefined()
+  expect(editOutsideFolder(`${wt}/README.md`, wt, root)).toBeUndefined()
+  expect(editOutsideFolder('src/a.ts', wt, root)).toBeUndefined()
+  expect(editOutsideFolder(undefined, wt, root)).toBeUndefined()
   expect(outsideFolderText('README.md', wt)).toBe(`Refused: README.md is in the owner's copy of the project, outside your own folder. Work only in your own folder ${wt}: edit ${wt}/README.md instead.`)
   // the scope check works out ".." too, so it can't be skipped with a detour
-  expect(blockedEdit('Edit', { file_path: `${wt}/src/../README.md` }, wt, ['src/'], '.symcc')).toBe('README.md')
-  expect(blockedEdit('Edit', { file_path: './src/../README.md' }, wt, ['src/'], '.symcc')).toBe('README.md')
-  expect(blockedEdit('Edit', { file_path: 'src/a.ts' }, wt, ['src/'], '.symcc')).toBeUndefined()
+  expect(blockedEdit(`${wt}/src/../README.md`, wt, ['src/'], '.symcc')).toBe('README.md')
+  expect(blockedEdit('./src/../README.md', wt, ['src/'], '.symcc')).toBe('README.md')
+  expect(blockedEdit('src/a.ts', wt, ['src/'], '.symcc')).toBeUndefined()
   expect(resolvePath('/a/b', '../c//./d')).toBe('/a/c/d')
   expect(resolvePath('/a', '../../..')).toBe('/')
 })
@@ -1295,8 +1295,7 @@ test("an edit is judged by where symbolic links really lead (T-303)", async () =
   const check = async (p: string, files = ['src/']) => {
     const [file, w, top] = [await real(p), await realPathOf('/', wt, disk), await realPathOf('/', root, disk)]
     if (file === null) return 'broken link'
-    const input = { file_path: file }
-    return editOutsideFolder('Edit', input, w!, top!) ?? blockedEdit('Edit', input, w!, files, '.symcc')
+    return editOutsideFolder(file, w!, top!) ?? blockedEdit(file, w!, files, '.symcc')
   }
   // a link in the worker's folder that leads to the project root (or up to it): refused as the owner's copy
   expect(await real(`${wt}/link/README.md`)).toBe(`${realRoot}/README.md`)

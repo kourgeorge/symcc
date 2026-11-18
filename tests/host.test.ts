@@ -3,7 +3,7 @@
 // as another program (an OpenCode plugin, a standalone app) would build one, must be enough to run the logic.
 import { expect } from 'claude-code/testing'
 import type { EngineInterface } from 'claude-code'
-import { type Host, type HostRunResult, type PanelValues, SYMCC_WORDS, noUi, notReadyYet } from '../hooks/host'
+import { type Host, type HostRunResult, type PanelValues, ALL_FEATURES, SYMCC_WORDS, noUi, notReadyYet } from '../hooks/host'
 import { S, type PaneView } from '../hooks/plugin/state'
 import { findRoot, load, saveBoard, takeLock, dropLock, change } from '../hooks/plugin/store'
 import { tellLead } from '../hooks/plugin/tell'
@@ -26,6 +26,7 @@ function memoryHost(root: string, ui: Host['ui'] = noUi, later = false) {
   const done = (r: Partial<HostRunResult> = {}): HostRunResult => ({ exitCode: 0, stdout: '', stderr: '', ...r })
   const timer = { cancel: () => undefined }
   const host: Host = {
+    features: ALL_FEATURES,
     plugin: { name: 'symcc', root: '/plugin' },
     session: {
       id: async () => 'session-1',

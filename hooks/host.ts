@@ -10,7 +10,9 @@
 // what symcc reads, so another program (an OpenCode plugin's ctx, or plain Node/Bun in a standalone app)
 // can be made to fit it too. Since T-246 (step 7) every member is in symcc's own words (`run`, `env`, `agents` with
 // their `kind`, `words` for the names that differ from host to host, `lead.usage`), and tests/fake-host.ts is the
-// shared fake Host the app logic's tests run on, the model for a new host.
+// shared fake Host the app logic's tests run on, the model for a new host. Since T-371 (step 8) the Host says what it
+// can do (`features`: a panel, a band, how the lead is woken, plan mode, the lead's usage), and symcc falls back to
+// text where a feature is missing.
 
 import type { SymccView } from '../types'
 import type { AgentState } from './core/agents'
@@ -98,18 +100,56 @@ export type HostWords = {
   tool: (name: string, tool: string) => string
   /** the extra tools a role may add, as its file spells them, and which of them reach the web */
   roleTools: RoleTools
+  /** what a worker uses on files, after "Use absolute paths under that folder for every " (Claude Code: "Read, Edit and Write") */
+  fileTools: string
+  /** what the host's plan mode is and how it is turned on, for the lead guide (Claude Code: "Claude Code's own planning mode, Shift+Tab") */
+  planMode: string
+  /** the host's tool that asks the owner in a dialog in the chat, which stays open when they answer on the board; '' when it has none (Claude Code: "AskUserQuestion") */
+  askPopup: string
 }
 
 /**
- * symcc's own words, for a host that adds nothing: its tools are called by their plain names. The role files spell the
- * web tools WebSearch and WebFetch for now (step 10 of docs/research/host-independence.md gives them symcc's words).
+ * symcc's own words, for a host that adds nothing: its tools are called by their plain names, and the prompts name no
+ * tools. The role files spell the web tools WebSearch and WebFetch for now (step 10 of
+ * docs/research/host-independence.md gives them symcc's words).
  */
 export const SYMCC_WORDS: HostWords = {
   tool: (_name, tool) => tool,
   roleTools: { extra: ['WebSearch', 'WebFetch'], web: ['WebSearch', 'WebFetch'] },
+  fileTools: 'file you read or change',
+  planMode: "the host's own planning mode",
+  askPopup: '',
 }
 
-/** What a file-changing tool call touches, in symcc's words: a file it writes or edits (`path`), or a shell command it runs (`command`). */
+/**
+ * What the host can do, beyond the members every Host has; symcc falls back to text where one is missing (T-371, step 8
+ * of docs/research/host-independence.md). Claude Code has them all (claude/host.ts); an OpenCode plugin has a panel and
+ * a composer strip but no plan mode; a standalone app may have no screen at all, and runs the lead chat itself.
+ */
+export type HostFeatures = {
+  /** a board panel symcc draws (ui.open, ui.panel); without it /<name> and /<name>-tasks answer with the text board, and no panel is opened */
+  panel: boolean
+  /** a line above the prompt (ui.status) that shows the board's status text; without it that text goes nowhere */
+  band: boolean
+  /**
+   * how a board update reaches the lead: 'now' sends it with lead.send (an idle lead wakes up); 'next-turn' keeps it
+   * until the host asks for it on its next hook that can carry text (leadUpdate in app/symcc.ts)
+   */
+  wakeLead: 'now' | 'next-turn'
+  /** the host tells symcc when the lead is in a read-only plan mode; without it symcc is never "in plan", and the lead guide leaves plan mode out */
+  planMode: boolean
+  /** lead.usage can tell the lead's model calls; without it the stats say they can't be read here */
+  leadUsage: boolean
+}
+
+/** Every feature on: Claude Code's, and what symcc does when the host doesn't say. */
+export const ALL_FEATURES: HostFeatures = { panel: true, band: true, wakeLead: 'now', planMode: true, leadUsage: true }
+
+/**
+ * What a file-changing tool call touches, in symcc's words: a file it writes or edits (`path`), or a shell command it
+ * runs (`command`). The host turns its own tool calls into these (for Claude Code see claude/tools.ts), both after a
+ * call (otherToolDone) and before one (toolCheck, the edit guard), so symcc's logic never sees a host's tool names.
+ */
 export type FileTouch = { path: string } | { command: string }
 
 /**
@@ -128,6 +168,8 @@ export type PanelValues = {
 }
 
 export interface Host {
+  /** what this host can do (see HostFeatures) */
+  features: HostFeatures
   /** this plugin: its name (from plugin.json) and its folder, where roles/, kinds/ and examples/ ship */
   plugin: { name: string; root: string }
   session: {
