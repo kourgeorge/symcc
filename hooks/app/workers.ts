@@ -26,6 +26,13 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
   return fillPrompt(kind, { ...values, role: roleSection(role, values) })
 }
 
+/**
+ * The text added to a worker's prompt when its branch still lacks `behind` commits of the branch it merges into
+ * (`into`) because it has commits of its own (T-482), so it knows it starts from older code. '' when it is up to date.
+ */
+export const behindNote = (behind: number, into: string) =>
+  behind > 0 ? `\n\nNote: your branch has commits from an earlier try, and ${into} has ${behind} newer commit${behind === 1 ? '' : 's'} your branch lacks. Your folder shows the older code; symcc brings your work up to date with ${into} when it merges.` : ''
+
 export async function pump(host: Host) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!S.driving) return // another session drives the board and starts its work
@@ -86,7 +93,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     if (await mergedBeforeStart(host, t0!)) return null
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone(host, b, t0!, 'start')) return null
-    const { dir, branch } = await prepareWorktree(host, t0!, intoOf(t0!))
+    const { dir, branch, behind } = await prepareWorktree(host, t0!, intoOf(t0!), true)
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports(host, t0!, dir).catch(() => [])
     const roles = await loadRoles(host)
@@ -111,7 +118,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role) + behindNote(behind, intoOf(t)), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
