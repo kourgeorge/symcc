@@ -23,6 +23,10 @@ const READS = [
   // T-436: a range that spells no git is no git
   'echo {1..3}',
   'echo {a..f}it',
+  // T-436: a range too big to spell out, of numbers only, can never spell git
+  'echo {1..2000}',
+  'touch f{1..1100}.txt',
+  'mkdir -p d{0..9}{0..9}{0..9}{0..9}',
   'grep -n "git" docs/guide.md',
   'grep -rn git hooks',
   'rg "git stash" .',
@@ -256,6 +260,9 @@ const WRITES: [string, string][] = [
   ['bash -c "g{i..i}t stash"', 'git with {braces}'],
   ['{g..h}it stash', 'git with {braces}'],
   ['{f,{g..g}}it stash', 'git with {braces}'],
+  // too big to spell out, but its letters and letter ranges could still make git
+  ['{a..z}{a..z}{a..z} stash', 'git with {braces}'],
+  ['{1..2000}g{h..j}t stash', 'git with {braces}'],
   ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],

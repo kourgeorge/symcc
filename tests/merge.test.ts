@@ -2709,6 +2709,10 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await bash('cd src && cat ../link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
   expect(await bash('cat README.md', `${wt5}/link`)).toMatch(/names README\.md in the owner's copy/)
   expect(await bash(`python3 - <<'EOF'\nprint(open('link/README.md').read())\nEOF`)).toMatch(/names README\.md in the owner's copy/)
+  // wildcards: the folder part before the first wildcard piece is looked up, so a link there is followed too
+  for (const glob of ['cat link/*.md', 'cat link/R?ADME.md', 'cat link/[R]EADME.md', 'cat ./link/README*', 'head -n1 link/READM*', 'cat "link"/*.md'])
+    expect(await bash(glob), glob).toMatch(/^Refused: this command names the project folder in the owner's copy/)
+  expect(await bash('cat src/*.ts scratch/*.txt *.md')).toBeUndefined()
   // links that lead elsewhere, a link that leads nowhere, and the worker's own files: allowed
   expect(await bash('cat scratch/notes.txt broken src/a.ts && ls src')).toBeUndefined()
   expect(await bash(`cat ${wt5}/src/a.ts`)).toBeUndefined()

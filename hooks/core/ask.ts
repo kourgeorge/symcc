@@ -388,12 +388,29 @@ function plainPathWords(p: { text: string; doc?: boolean }): Set<string> {
   if (!p.doc) {
     const words = shellWords(p.text)
     words.forEach(({ w, q }, i) => {
+      // a word with a wildcard (`lnk/*.md`, `lnk/R?ADME.md`) is looked up by its folder part before the first
+      // wildcard piece (`lnk`), so a link there is judged by where it leads (T-436)
+      if (i > 0 && GLOB_PATH.test(w)) {
+        const head = globFolder(w)
+        if (head) out.add(head)
+        return
+      }
       if (!PLAIN_PATH.test(w) || (i === 0 && !w.includes('/'))) return
       if (!q || w.includes('/') || p.text.includes(`"${w}"`) || p.text.includes(`'${w}'`)) out.add(w)
     })
   }
   for (const w of pieceWords(p).keys()) if (w.includes('/') && PLAIN_PATH.test(w)) out.add(w)
   return out
+}
+
+/** A word that may be a relative path with a shell wildcard in it (`lnk/*.md`, `lnk/[R]EADME.md`, `./lnk/README*`). */
+const GLOB_PATH = /^(?!-)(?=[^*?[]*[*?[])[\w.@%+~/*?[\]!^-]+$/
+
+/** The folder part of wildcard word `w` before its first piece with a wildcard (`lnk/*.md` gives `lnk`), or '' for none. */
+const globFolder = (w: string) => {
+  const parts = w.split('/')
+  const at = parts.findIndex(part => /[*?[]/.test(part))
+  return parts.slice(0, at).join('/')
 }
 
 /**
@@ -912,7 +929,23 @@ const braceGit = (w: string) => {
   if (!hasBrace(w)) return false
   if (/(?:^|[/=])git$/i.test(w.replace(/[{},]/g, '')) || w.split(/[{},]/).some(part => /^git(?:$|-)/i.test(part.split(/[/=]/).pop() ?? ''))) return true
   const words = braceExpand(w)
-  return !words || words.some(e => /(?:^|[/=])git(?:$|-)/i.test(e))
+  return words ? words.some(e => /(?:^|[/=])git(?:$|-)/i.test(e)) : braceLetters(w)
+}
+
+/**
+ * Whether word `w` has every letter of "git" among its letters and the letters its `{x..y}` letter ranges make, for a
+ * brace expansion too big for braceExpand: a number range (`{1..2000}`, `f{1..1100}.txt`) adds no letter, so it can
+ * never spell git (T-436).
+ */
+const braceLetters = (w: string) => {
+  const letters = w
+    .replace(/\{-?\d+\.\.-?\d+(?:\.\.-?\d+)?\}/g, '')
+    .replace(/\{([A-Za-z])\.\.([A-Za-z])(?:\.\.-?\d+)?\}/g, (_, a: string, b: string) => {
+      const [x, y] = [a.charCodeAt(0), b.charCodeAt(0)].sort((m, n) => m - n) as [number, number]
+      return Array.from({ length: y - x + 1 }, (_, k) => String.fromCharCode(x + k)).join('')
+    })
+    .toLowerCase()
+  return [...'git'].every(c => letters.includes(c))
 }
 
 /**
