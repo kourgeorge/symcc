@@ -10,6 +10,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { claimLead } from '../hooks/app/lead'
+import { bestMsOfAsync, growsSlowly } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
@@ -2837,11 +2838,14 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
   expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
   expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
-  const t0 = Date.now()
   expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  expect(Date.now() - t0).toBeLessThan(1000)
-  // the folder lookups of the worker's own folder and the project, not one per path
-  expect(slow).toBeLessThan(30)
+  const looked = slow
+  // the time grows slowly with the number of paths, with a generous cap (T-478): 4 times the paths, at most 8 times the time
+  const small = await bestMsOfAsync(() => bash(`cat ${files(500, i => `src/f${i}.ts`)}`))
+  const big = await bestMsOfAsync(() => bash(`cat ${files(1999, i => `src/f${i}.ts`)}`))
+  expect({ small, big, slow: growsSlowly(small, big, 8) }).toMatchObject({ slow: true })
+  // the folder lookups of the worker's own folder and the project, not one per path (counted before the timed calls)
+  expect(looked).toBeLessThan(30)
   // a link among many plain paths is still followed
   expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
   fs.stat = realStat
