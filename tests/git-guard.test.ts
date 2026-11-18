@@ -161,6 +161,12 @@ const WRITES: [string, string][] = [
   ['grep "$(git stash)" x', 'git stash'],
   ['grep x <(git stash)', 'git stash'],
   ['cat <<EOF\ngit stash\nEOF', 'git stash'],
+  // the checker's try-5 holes: a shell in the line runs a text tool's output without a `|`
+  ['coproc sh; grep -h "git stash" notes >&${COPROC[1]}', 'git stash'],
+  ['mkfifo p; sh < p & grep -h "git stash" notes > p', 'git stash'],
+  ['grep -h "git stash" notes > /tmp/s; sh /tmp/s', 'git stash'],
+  ['grep -h "git stash" notes > s; . s', 'git stash'],
+  ['grep -h "git stash" notes > s; exec bash s', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {
