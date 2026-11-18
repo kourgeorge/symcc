@@ -129,6 +129,24 @@ changed is kept.
   sends the task back to work.
 - **Any other question** has a text box: type the answer and press Enter.
 
+### When the lead asks you something
+
+Questions from the lead that are not about one task ("raise the version?", "add a scout?",
+a settings choice) used to live only in the chat, where they scroll away. Now the lead puts
+each one on the board with its `question` tool, with 2 to 6 short choices, and asks it
+briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` (under
+`questions`), not in the chat.
+
+- The board list shows **Questions for you (2)** at the top, above the tasks. Enter on one
+  opens its page: the question, one button per choice (also on the number keys) and
+  **Answer…** for your own words, the same as a waiting task.
+- The band above the prompt and the status line say **2 questions for you** while any is
+  open, and with `notify` on you hear "needs you" once per question.
+- Answer on the board and the question closes and leaves the list (it stays in the file as
+  history). The lead hears it in its next board update, as a line like "The owner answered
+  Q-3 (…): Yes". Answer in the chat instead and the lead closes it with your words. The
+  lead can also drop a question that no longer matters.
+
 ---
 
 ## What happens when a worker finishes
