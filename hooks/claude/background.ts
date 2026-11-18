@@ -30,8 +30,9 @@ export function noteBackground(agentId: string | undefined, call: Record<string,
 /**
  * SubagentStop of agent `agentId`: of the session's `tasks`, its own shell commands still running are kept for its turn's end.
  * A command is only ever tied to the agent by its task id, never by its text alone (another agent may run the same
- * text). So when some of its commands had no id and a running shell task is tied to no agent by id, whose it is can't
- * be told: nothing is kept (unknown), and the text check stands in.
+ * text). A command tied to it by id that is still running is always kept. Only when none is, some of its commands had
+ * no id and a running shell task is tied to no agent by id, whose that is can't be told: nothing is kept (unknown), and
+ * the text check stands in.
  */
 export function stopSeen(agentId: unknown, tasks: unknown) {
   if (typeof agentId !== 'string' || !agentId || !Array.isArray(tasks)) return
@@ -39,11 +40,12 @@ export function stopSeen(agentId: unknown, tasks: unknown) {
   const shells = (tasks as BackgroundTask[]).filter(t => !!t && t.type === 'shell')
   const isMine = (t: BackgroundTask) => !!mine && typeof t.id === 'string' && mine.ids.has(t.id)
   const ownedBySomeone = (t: BackgroundTask) => typeof t.id === 'string' && [...started.values()].some(s => s.ids.has(t.id as string))
-  if (mine && mine.commands.size > 0 && shells.some(t => !ownedBySomeone(t))) {
+  const own = shells.filter(isMine)
+  if (own.length === 0 && mine && mine.commands.size > 0 && shells.some(t => !ownedBySomeone(t))) {
     atStop.delete(agentId)
     return
   }
-  atStop.set(agentId, shells.filter(isMine).map(t => (typeof t.command === 'string' && t.command) || (typeof t.description === 'string' && t.description) || String(t.id)))
+  atStop.set(agentId, own.map(t => (typeof t.command === 'string' && t.command) || (typeof t.description === 'string' && t.description) || String(t.id)))
 }
 
 /**

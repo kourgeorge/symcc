@@ -463,6 +463,18 @@ test("T-457: a worker's id-less background command is done; another agent's same
   expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
 })
 
+test("T-457: a worker's own command, tied to it by id, still running fails its try even when it also had an id-less one and the lead's runs", async ($, on) => {
+  const w = await trackedWorker($, on, { noId: ['lint'] })
+  const main = w.git.state.main
+  await inBackground($, 'a1', 'lint')
+  await inBackground($, 'a1', 'bun test')
+  await subagentStop($, 'a1', [shell('bun test'), { id: 'L1', type: 'shell', status: 'running', description: 'tsc', command: 'tsc' }])
+  await finish($, 'a1', 'made the change')
+  await w.clock.settle()
+  expect(w.task('T-1')).toMatchObject({ status: 'failed', note: ENDED_EARLY })
+  expect(w.git.state.main).toBe(main)
+})
+
 test('T-435: with nothing in flight at its SubagentStop, a worker that says "still running" only gets a warning and is merged', async ($, on) => {
   const w = await trackedWorker($, on)
   await inBackground($, 'a1', 'bun test')
