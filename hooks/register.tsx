@@ -13,6 +13,9 @@ import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
 import { S, useName } from './plugin/state'
+import { hookFailed } from './plugin/ask'
+import { spawnFailedText } from './core/ask'
+import { DEFAULT_NAME, cleanName } from './name'
 import { drainStarts, leadTurn } from './plugin/starts'
 import { findRoot } from './plugin/store'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
@@ -27,6 +30,46 @@ export { registerAll } from './claude/registration'
 function mainMode($: $, e: { permission_mode?: string; agent_id?: string }) {
   useName(claudeHost($))
   seeMainMode(claudeHost($), e)
+}
+
+/**
+ * Whether agent type `agent` is one of the plugin's own (a worker or scout type). Checked under every name the
+ * plugin may go by (the one in use, the one in plugin.json, the default), so a hook that failed still knows them.
+ */
+export function symccAgentType($: $, agent: unknown): boolean {
+  const names = new Set([DEFAULT_NAME])
+  names.add(nameNow())
+  try {
+    names.add(cleanName($.plugin.name))
+  } catch {
+    // no plugin name to read
+  }
+  const type = typeof agent === 'string' ? agent : ''
+  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout)
+}
+
+/** The plugin's name in use, or the default one when even that can't be read. */
+function nameNow(): string {
+  try {
+    return S.N.name
+  } catch {
+    return DEFAULT_NAME
+  }
+}
+
+/** Logs once that hook `hook` failed and what was done instead (see hookFailed); answers the short reason. Never throws. */
+function failed($: $, hook: string, error: { kind?: string; message?: string } | undefined, outcome: string): string {
+  try {
+    return hookFailed(claudeHost($), hook, error, outcome)
+  } catch {
+    return 'it failed'
+  }
+}
+
+/** What the .catch of hook `hook`, whose failure must change nothing, answers: the event goes on as if the plugin weren't there. */
+function passOn<E, R>($: $, hook: string, e: E, next: ((e: E) => R) & { readonly error: { kind?: string; message?: string } }): R {
+  failed($, hook, next.error, "it was passed on as if symcc weren't there")
+  return next(e)
 }
 
 export const register: Register = on => {
@@ -73,12 +116,17 @@ export const register: Register = on => {
     const kind = e.origin?.kind
     if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
     return r
-  })
+  }).catch(($, e, next) => passOn($, 'prompt.submit', e, next))
 
   // Workers and scouts only reach the agents through the plugin itself (the name is only known once a hook runs).
   on('agent.offer', ($, e, next) => {
     useName(claudeHost($))
     return isWorkerType(e.agent, S.N.name) || e.agent === claudeNames(S.N.name).scout ? { isOffered: false } : next(e)
+  }).catch(($, e, next) => {
+    // Failed: symcc's types are still hidden (else the lead's model could start a "worker" itself); any other is offered as usual.
+    const ours = symccAgentType($, e?.agent)
+    failed($, 'agent.offer', next.error, ours ? "symcc's agent type was hidden" : 'the agent type was offered as usual')
+    return ours ? { isOffered: false } : next(e)
   })
 
   // One tool.call hook for every tool: symcc's own run in toolCall; any other runs, then otherToolDone looks at what it changed.
@@ -143,14 +191,20 @@ export const register: Register = on => {
     const host = claudeHost($)
     useName(host)
     return (await runCommand(host, e.command, e.args)) ?? next(e)
-  })
+  }).catch(($, e, next) => passOn($, 'command.run', e, next))
 
   // Plan mode (see core/plan.ts): Claude Code has no call for the mode and no event when it changes, so it is
   // read from these events of the main session (never a worker's or scout's). Each passes the event on unchanged.
-  on('classic.UserPromptSubmit', async ($, e, next) => (mainMode($, e), next(e)))
-  on('classic.Stop', async ($, e, next) => (mainMode($, e), next(e)))
-  on('classic.SessionStart', async ($, e, next) => (mainMode($, e), next(e)))
-  on('agent.spawn', async ($, e, next) => (useName(claudeHost($)), seeSpawnMode(claudeHost($), e), next(e)))
+  on('classic.UserPromptSubmit', async ($, e, next) => (mainMode($, e), next(e))).catch(($, e, next) => passOn($, 'classic.UserPromptSubmit', e, next))
+  on('classic.Stop', async ($, e, next) => (mainMode($, e), next(e))).catch(($, e, next) => passOn($, 'classic.Stop', e, next))
+  on('classic.SessionStart', async ($, e, next) => (mainMode($, e), next(e))).catch(($, e, next) => passOn($, 'classic.SessionStart', e, next))
+  on('agent.spawn', async ($, e, next) => (useName(claudeHost($)), seeSpawnMode(claudeHost($), e), next(e))).catch(($, e, next) => {
+    // Failed before passing it on: the start of one of symcc's own agent types is refused, any other goes on.
+    if (next.called) return next(e)
+    const ours = symccAgentType($, e?.subagentType)
+    const reason = failed($, 'agent.spawn', next.error, ours ? "the start of symcc's agent type was refused" : 'the agent started as usual')
+    return ours ? { deny: spawnFailedText(nameNow(), reason) } : next(e)
+  })
   on('prompt.attachment', async ($, e, next) => (useName(claudeHost($)), seeAttachment(claudeHost($), e), next(e)))
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
@@ -165,7 +219,7 @@ export const register: Register = on => {
     useName(claudeHost($))
     if (e.id !== S.N.pane) return next(e)
     return (await paneClosing($, e.origin.kind)) ? { value: undefined } : next(e)
-  })
+  }).catch(($, e, next) => passOn($, 'ui.close', e, next))
 
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
@@ -178,9 +232,9 @@ export const register: Register = on => {
   on('ui.focus', { component: 'Pane' }, async ($, e, next) => {
     useName(claudeHost($))
     return noteFocus($, e, next)
-  })
+  }).catch(($, e, next) => passOn($, 'ui.focus', e, next))
   on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
     useName(claudeHost($))
     return arrowMove($, e, next)
-  })
+  }).catch(($, e, next) => passOn($, 'ui.scroll', e, next))
 }

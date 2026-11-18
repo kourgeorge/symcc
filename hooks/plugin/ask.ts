@@ -134,17 +134,26 @@ const GUARD_LOGGED_MAX = 50
  * blocks the owner's own session). The failure is logged once.
  */
 export function guardFailed($: Pick<Host, 'ui'>, hook: string, agentId: string | undefined, failure: { kind?: string; message?: string } | undefined): string | undefined {
-  const reason = guardReason(failure?.kind, failure?.message)
   const own = isOwnAgent(agentId)
+  const reason = hookFailed($, hook, failure, own ? 'the call of its agent was refused' : 'the call went on unchecked')
+  return own ? guardFailedText(S.N.name, reason) : undefined
+}
+
+/**
+ * Hook `hook` threw or ran out of time (`failure`, as its .catch reads it on next.error) and `outcome` was done in
+ * its place. Logs that once per hook and reason (a failing log changes nothing) and answers the short reason.
+ */
+export function hookFailed($: Pick<Host, 'ui'>, hook: string, failure: { kind?: string; message?: string } | undefined, outcome: string): string {
+  const reason = guardReason(failure?.kind, failure?.message)
   const key = `${hook}: ${reason}`
   if (!guardLogged.has(key)) {
     if (guardLogged.size >= GUARD_LOGGED_MAX) guardLogged.clear()
     guardLogged.add(key)
     try {
-      $.ui.log(`${S.N.name}: the ${hook} hook ${reason}; ${own ? 'the call of its agent was refused' : 'the call went on unchecked'}.`, { to: 'debug' })
+      $.ui.log(`${S.N.name}: the ${hook} hook ${reason}; ${outcome}.`, { to: 'debug' })
     } catch {
-      // no log to write to: the decision below still stands
+      // no log to write to: the decision still stands
     }
   }
-  return own ? guardFailedText(S.N.name, reason) : undefined
+  return reason
 }
