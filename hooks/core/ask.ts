@@ -528,3 +528,21 @@ export function blockedEdit(tool: string, input: unknown, worktree: string, file
 
 /** The reason a worker reads when its edit of `path` is refused as outside its task's files. */
 export const blockedEditText = (path: string) => `${path} is outside this task's files; it's recorded as a request to the owner. Stop and hand back.`
+
+/** The longest reason kept in guardFailedText; a longer one (an error message can hold anything) is cut. */
+export const GUARD_REASON_MAX_CHARS = 200
+
+/**
+ * The short reason for a guard hook that failed (`kind` throw or timeout, and its message if any), on one line,
+ * cut to GUARD_REASON_MAX_CHARS. Control characters are turned into spaces so the reason can't fake lines.
+ */
+export function guardReason(kind: string | undefined, message?: string): string {
+  const head = kind === 'timeout' ? 'it ran out of time' : 'it failed'
+  // eslint-disable-next-line no-control-regex
+  const msg = typeof message === 'string' ? message.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim() : ''
+  const text = msg ? `${head} (${msg})` : head
+  return text.length > GUARD_REASON_MAX_CHARS ? `${text.slice(0, GUARD_REASON_MAX_CHARS - 1)}…` : text
+}
+
+/** What one of symcc's own agents reads when a guard hook failed on its call, so the call was refused. */
+export const guardFailedText = (name: string, reason: string) => `${name} couldn't check this call, so it was refused: ${reason}`

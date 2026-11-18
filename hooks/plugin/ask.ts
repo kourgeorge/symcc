@@ -4,8 +4,8 @@
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
-import { S, type Worker, scoutRuns, checkerRuns } from './state'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { S, type Worker, scoutRuns, checkerRuns, workers, stopped } from './state'
 import type { Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -95,8 +95,8 @@ export async function checkEdit($: Host, agentId: string | undefined, tool: stri
   if (real === null) return brokenLinkText(editTarget(tool, input)!)
   const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
   if (outside !== undefined) return outsideFolderText(outside, w.worktree, S.N.dir)
-  const b = await load($).catch(() => null)
-  const t = b ? find(b, w.task) : undefined
+  // an unreadable board throws on, so the hook's .catch refuses the edit (see guardFailed): never let it through unchecked
+  const t = find(await load($), w.task)
   if (!t || isInvestigation(t)) return undefined
   const path = blockedEdit(tool, real.input, real.worktree, t.files, S.N.dir)
   if (!path) return undefined
@@ -118,4 +118,34 @@ async function outsideOwnFolder($: Host, tool: string, input: unknown, worktree:
   if (real === null) return brokenLinkText(editTarget(tool, input)!)
   const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
   return outside !== undefined ? outsideFolderText(outside, worktree, S.N.dir) : undefined
+}
+
+/** The guard failures already logged (hook and reason), so each is logged once; kept small. */
+export const guardLogged = new Set<string>()
+const GUARD_LOGGED_MAX = 50
+
+/** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
+export const isOwnAgent = (agentId: string | undefined): agentId is string =>
+  !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
+
+/**
+ * A guard hook (tool.check, tool.call) threw or ran out of time on a call of agent `agentId` (`failure`: why, as the
+ * hook's .catch reads it on next.error). For symcc's own agents (isOwnAgent) the reason to refuse the call with;
+ * undefined for the lead and everyone else, whose call goes on as if the hook were not there (a symcc error never
+ * blocks the owner's own session). The failure is logged once.
+ */
+export function guardFailed($: Pick<Host, 'ui'>, hook: string, agentId: string | undefined, failure: { kind?: string; message?: string } | undefined): string | undefined {
+  const reason = guardReason(failure?.kind, failure?.message)
+  const own = isOwnAgent(agentId)
+  const key = `${hook}: ${reason}`
+  if (!guardLogged.has(key)) {
+    if (guardLogged.size >= GUARD_LOGGED_MAX) guardLogged.clear()
+    guardLogged.add(key)
+    try {
+      $.ui.log(`${S.N.name}: the ${hook} hook ${reason}; ${own ? 'the call of its agent was refused' : 'the call went on unchecked'}.`, { to: 'debug' })
+    } catch {
+      // no log to write to: the decision below still stands
+    }
+  }
+  return own ? guardFailedText(S.N.name, reason) : undefined
 }
