@@ -1,6 +1,7 @@
 // Scout files, and scouts in the board panel.
-import type { SymccMode, SymccScout, SymccTask } from '../../types'
+import type { SymccMode, SymccScout, SymccTask, SymccTokens } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
+import { originOf } from './origin'
 import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
 import { planScoutText } from './plan'
@@ -127,8 +128,9 @@ const fromNow = (iso: string | null | undefined, nowMs: number): string => {
 }
 
 /** A scout for the lead's scouts tool: name, how often, paused, running, next run, last run, and its last report
- *  (the first SCOUT_LIST_REPORT_LINES lines, or all of it with `full`, which also shows its model and prompt). */
-export function leadScoutText(s: SymccScout, nowMs: number, full = false): string {
+ *  (the first SCOUT_LIST_REPORT_LINES lines, or all of it with `full`, which also shows its model and prompt).
+ *  With `full`, `runs` (newest first, each with the tasks made from it) adds its recent runs, one line each. */
+export function leadScoutText(s: SymccScout, nowMs: number, full = false, runs: { run: ScoutRunRecord; tasks: string[] }[] = []): string {
   const parts = [everyText(s.every_minutes), s.paused ? 'paused' : 'not paused', s.running ? 'running now' : 'not running']
   const next = onDemand(s) ? 'only when run' : s.paused ? 'none while paused' : fromNow(s.next_run, nowMs) || 'not planned'
   parts.push(`next run: ${next}`, `last run: ${fromNow(s.last_run, nowMs) || 'never'}`)
@@ -138,6 +140,9 @@ export function leadScoutText(s: SymccScout, nowMs: number, full = false): strin
   const report = String(s.last_report ?? '').trim()
   if (full) {
     lines.push('prompt:', s.prompt?.trim() || '(none)', 'last report:', report || '(none yet)')
+    lines.push('recent runs (newest first: when · outcome · findings · tasks made · report file):')
+    if (!runs.length) lines.push('  (none yet)')
+    for (const r of runs.slice(0, SCOUT_LEAD_RUNS)) lines.push(`  ${scoutRunLine(r.run, r.tasks, nowMs)}${r.run.why ? ` (${r.run.why})` : ''}${r.run.report ? ` · ${r.run.report}` : ''}`)
     return lines.join('\n')
   }
   if (report) {
@@ -494,4 +499,162 @@ export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
     `examples/scouts/ in the plugin has examples to copy. Then run /${name}-scouts.`,
     'Or press "New scout" (n) to write one right here.',
   ]
+}
+
+// ---------------- a scout's run history ----------------
+
+/** How a scout run ended: it reported findings, reported NOTHING, was stopped, ended on an API error or a refusal
+ *  (both: nothing reported), or could not start at all. */
+export type ScoutRunOutcome = 'found' | 'nothing' | 'stopped' | 'error' | 'refusal' | 'not started'
+
+const OUTCOMES: readonly ScoutRunOutcome[] = ['found', 'nothing', 'stopped', 'error', 'refusal', 'not started']
+
+/**
+ * One run of a scout, kept in <dir>/scouts/<scout>.runs.json: when it started (null when not known) and ended, how it
+ * ended, how many findings its report numbers, its tokens, the file its full report is in (<dir>/reports/scouts/…;
+ * none when it said nothing), why it could not start (`why`, only for "not started"), and the ids of the tasks made
+ * from it (`tasks`, saved when the lead adds them, so archived tasks still count). A run recorded before `tasks` was
+ * saved (the one moved from scouts.json) has none: its tasks are worked out from the board (see scoutRunTasks).
+ */
+export type ScoutRunRecord = { started: string | null; ended: string; outcome: ScoutRunOutcome; findings: number; tokens?: SymccTokens; report?: string; why?: string; tasks?: string[] }
+
+/** How many runs each scout keeps; older ones (and their report files) are removed. */
+export const SCOUT_RUNS_KEPT = 50
+
+/** How many recent runs the lead's scouts list with a name shows. */
+export const SCOUT_LEAD_RUNS = 5
+
+/** Where scout `scout` keeps its runs, relative to the project: "<dir>/scouts/<scout>.runs.json". */
+export const scoutRunsFile = (scout: string, name: string = DEFAULT_NAME) => `${namesFor(name).scouts}/${scout}.runs.json`
+
+/** Where the full report of scout `scout`'s run that ended at `ended` (ISO time) goes: "<dir>/reports/scouts/<scout>-<time>.md". */
+export const scoutRunReportFile = (scout: string, ended: string, name: string = DEFAULT_NAME) => `${namesFor(name).dir}/reports/scouts/${scout}-${ended.replace(/[:.]/g, '-')}.md`
+
+/** True when `rel` is a scout report file (as scoutRunReportFile makes), so a hand-edited runs file can't point elsewhere. */
+export const isScoutRunReport = (rel: unknown): rel is string => typeof rel === 'string' && /^\.?[\w-]+\/reports\/scouts\/[\w.-]+\.md$/.test(rel) && !rel.includes('..')
+
+/** How a run ended, from why its turn ended (`reason`) and what it answered. */
+export function scoutRunOutcome(reason: 'answer' | 'aborted' | 'refusal' | 'error', answer: string | undefined): ScoutRunOutcome {
+  if (reason === 'aborted') return 'stopped'
+  if (reason === 'error' || reason === 'refusal') return reason
+  return isNothing(answer) ? 'nothing' : 'found'
+}
+
+/** A scout's runs from its runs file, oldest first; a missing or broken file (or entry) is skipped, never an error. */
+export function parseScoutRuns(text: string | null | undefined): ScoutRunRecord[] {
+  if (!text || !text.trim()) return []
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return []
+  }
+  const list = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { runs?: unknown }).runs : undefined
+  if (!Array.isArray(list)) return []
+  const out: ScoutRunRecord[] = []
+  for (const v of list) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue
+    const e = v as Record<string, unknown>
+    if (typeof e.ended !== 'string' || !Number.isFinite(Date.parse(e.ended)) || !OUTCOMES.includes(e.outcome as ScoutRunOutcome)) continue
+    const r: ScoutRunRecord = {
+      started: typeof e.started === 'string' && Number.isFinite(Date.parse(e.started)) ? e.started : null,
+      ended: e.ended,
+      outcome: e.outcome as ScoutRunOutcome,
+      findings: typeof e.findings === 'number' && Number.isSafeInteger(e.findings) && e.findings >= 0 ? e.findings : 0,
+    }
+    if (e.tokens && typeof e.tokens === 'object' && !Array.isArray(e.tokens)) r.tokens = e.tokens as SymccTokens
+    if (isScoutRunReport(e.report)) r.report = e.report
+    if (typeof e.why === 'string' && e.why) r.why = e.why
+    if (Array.isArray(e.tasks)) r.tasks = [...new Set(e.tasks.filter((x): x is string => typeof x === 'string' && /^[\w-]{1,40}$/.test(x)))]
+    out.push(r)
+  }
+  return out.slice(-SCOUT_RUNS_KEPT)
+}
+
+/** The text of a scout's runs file. */
+export const scoutRunsText = (runs: ScoutRunRecord[]): string => JSON.stringify({ runs }, null, 2) + '\n'
+
+/** `runs` with `run` added at the end, only the last `keep` kept; `dropped` are the ones that fell out (their report files go too). */
+export function addScoutRunRecord(runs: ScoutRunRecord[], run: ScoutRunRecord, keep = SCOUT_RUNS_KEPT): { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } {
+  const all = [...runs, run]
+  const cut = Math.max(0, all.length - Math.max(1, keep))
+  return { runs: all.slice(cut), dropped: all.slice(0, cut) }
+}
+
+/** The one-time move from scouts.json: a scout's saved last report becomes its first run (ended at its last run, or
+ *  `nowIso` when that is not known), its report going to the file `report` names. Null when there is no last report. */
+export function migratedScoutRun(mem: { last_run: string | null; last_report?: string } | undefined, report: (ended: string) => string, nowIso: string): { run: ScoutRunRecord; text: string } | null {
+  if (!mem || mem.last_report === undefined) return null
+  const text = mem.last_report.trim()
+  const ended = mem.last_run && Number.isFinite(Date.parse(mem.last_run)) ? mem.last_run : nowIso
+  const outcome: ScoutRunOutcome = isNothing(text) ? 'nothing' : 'found'
+  const run: ScoutRunRecord = { started: null, ended, outcome, findings: outcome === 'found' ? countFindings(text) : 0 }
+  if (text) run.report = report(ended)
+  return { run, text }
+}
+
+const reported = (r: ScoutRunRecord) => r.outcome === 'found' || r.outcome === 'nothing'
+const byNumber = (ids: string[]) => {
+  const num = (id: string) => Number(/\d+/.exec(id)?.[0] ?? 0)
+  return [...new Set(ids)].sort((a, b) => num(a) - num(b))
+}
+
+/**
+ * The ids of the tasks made from each run of scout `scout` (same order as `runs`). A run's saved `tasks` when it has
+ * them (they stay even once the tasks are archived). Only a run recorded before those were saved (no `tasks`) gets
+ * them worked out from the board: the tasks whose origin names this scout, each linked to the last run that
+ * reported (found or nothing) and ended before the task was made.
+ */
+export function scoutRunTasks(runs: ScoutRunRecord[], tasks: Pick<SymccTask, 'id' | 'created_at' | 'origin'>[], scout: string): string[][] {
+  const out = runs.map(r => [...(r.tasks ?? [])])
+  const ends = runs.map(r => (reported(r) ? Date.parse(r.ended) : NaN))
+  for (const t of tasks) {
+    const o = originOf(t)
+    if (o?.by !== 'scout' || o.scout !== scout) continue
+    const made = Date.parse(t.created_at || o.at || '')
+    if (!Number.isFinite(made)) continue
+    let best = -1
+    for (let i = 0; i < runs.length; i++) if (Number.isFinite(ends[i]!) && ends[i]! <= made && (best < 0 || ends[i]! >= ends[best]!)) best = i
+    if (best >= 0 && !runs[best]!.tasks) out[best]!.push(t.id)
+  }
+  return out.map(byNumber)
+}
+
+/**
+ * `runs` with task `id` saved in the scout's latest run that reported something (found or nothing): the report the
+ * lead made it from. A run recorded before tasks were saved first takes the ones worked out from the board
+ * (`boardTasks`), so none are lost. Null when no run reported anything, or it is already there.
+ */
+export function linkScoutRunTask(runs: ScoutRunRecord[], id: string, scout: string, boardTasks: Pick<SymccTask, 'id' | 'created_at' | 'origin'>[]): ScoutRunRecord[] | null {
+  let i = runs.length - 1
+  while (i >= 0 && !reported(runs[i]!)) i--
+  if (i < 0) return null
+  const had = runs[i]!.tasks ?? scoutRunTasks(runs, boardTasks.filter(t => t.id !== id), scout)[i]!
+  if (had.includes(id)) return runs[i]!.tasks ? null : runs.map((r, j) => (j === i ? { ...r, tasks: had } : r))
+  return runs.map((r, j) => (j === i ? { ...r, tasks: byNumber([...had, id]) } : r))
+}
+
+/** A run's outcome in words: "found", "nothing", "stopped", "API error", "refusal", "couldn't start". */
+export const scoutOutcomeText = (o: ScoutRunOutcome): string => ({ found: 'found', nothing: 'nothing', stopped: 'stopped', error: 'API error', refusal: 'refusal', 'not started': "couldn't start" })[o]
+
+/** The theme color of a run's outcome: found warning; an API error, a refusal or a failed start error; else inactive. */
+export const scoutOutcomeTone = (o: ScoutRunOutcome): string => (o === 'found' ? 'warning' : o === 'error' || o === 'refusal' || o === 'not started' ? 'error' : 'inactive')
+
+/** One run as a line: "8m ago · found · 2 findings · tasks T-3, T-4" (time · outcome · findings · tasks made). */
+export function scoutRunLine(r: ScoutRunRecord, tasks: string[], nowMs: number): string {
+  const when = fromNow(r.ended, nowMs) || r.ended
+  const n = `${r.findings} finding${r.findings === 1 ? '' : 's'}`
+  const made = tasks.length ? `task${tasks.length > 1 ? 's' : ''} ${tasks.join(', ')}` : 'no tasks'
+  return `${when} · ${scoutOutcomeText(r.outcome)} · ${n} · ${made}`
+}
+
+/** What the scout's page says when its last run reported nothing because it ended on an API error or a refusal
+ *  (or could not start); '' otherwise. `runs` oldest first. */
+export function scoutLastRunProblem(runs: ScoutRunRecord[]): string {
+  const last = runs[runs.length - 1]
+  if (!last) return ''
+  if (last.outcome === 'error') return 'Its last run ended on an API error, so nothing was reported.'
+  if (last.outcome === 'refusal') return 'Its last run ended on a refusal, so nothing was reported.'
+  if (last.outcome === 'not started') return `Its last run couldn't start${last.why ? ` (${last.why})` : ''}, so nothing was reported.`
+  return ''
 }

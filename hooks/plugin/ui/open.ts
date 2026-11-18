@@ -11,7 +11,7 @@ export type PaneTab = 'tasks' | 'scouts' | 'settings'
 
 /**
  * Sets what the board panel shows: task `task` opened ('' = the list). With `which`, it also
- * switches to that view ('tasks', 'scouts' or 'settings') with no scout and no role opened; without, the view stays.
+ * switches to that view ('tasks', 'scouts' or 'settings') with no scout (so no scout run) and no role opened; without, the view stays.
  */
 export async function resetPane($: Host, which?: PaneTab, task = '') {
   await updateOpened($, () => task)

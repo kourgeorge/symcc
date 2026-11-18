@@ -30,6 +30,7 @@ const CASES: [string, PanePlace, Partial<Boxes>, EscStep][] = [
   ['Scouts list', at({ tab: 'scouts' }), {}, 'board list'],
   ['Scouts list, new scout name box', at({ tab: 'scouts' }), { naming: { name: 'x', error: '' } }, 'cancel scout edit'],
   ['scout page', at({ tab: 'scouts', scout: 'bugs' }), {}, 'scouts list'],
+  ["scout's run page", at({ tab: 'scouts', scout: 'bugs', run: true }), {}, 'close run'],
   ["scout's edit page", at({ tab: 'scouts', scout: 'bugs' }), { draft }, 'cancel scout edit'],
   // Settings
   ['Settings', at({ tab: 'settings' }), {}, 'board list'],
