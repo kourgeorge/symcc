@@ -12,7 +12,8 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, workerAgentTypes, WEB_SAFETY_LINE, isWorkerType, intoOf, ASK_TOOL, EXTRA_TOOLS } from './board'
+import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, WEB_SAFETY_LINE, intoOf, ASK_TOOL } from './board'
+import { workerAgentTypes, isWorkerType, EXTRA_TOOLS, SCOUT_TOOLS } from './claude/agent-types'
 import { findArchived, saveArchiveMigrated } from './plugin/archive'
 import { ASK_TOOL_DEF, askCall, checkEdit } from './plugin/ask'
 import { gitReady } from './plugin/git'
@@ -58,7 +59,7 @@ export async function registerAll($: $) {
     name: 'scout',
     description: `${S.N.name} scout: does what its scout file asks (reading the project, shell commands, the web) and reports to the lead. Started by ${S.N.name} only.`,
     prompt: `You are a ${S.N.name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`,
-    tools: ['Read', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch'],
+    tools: [...SCOUT_TOOLS],
     background: true,
   }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))

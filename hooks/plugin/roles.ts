@@ -1,4 +1,5 @@
-import { type RoleDef, type RolePromptKind, NEW_ROLE_TEMPLATE, parseRole, roleSkipReason, mergeRoles, EXTRA_TOOLS, DEFAULT_ROLE, roleNameError, roleTools, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
+import { type RoleDef, type RolePromptKind, NEW_ROLE_TEMPLATE, mergeRoles, DEFAULT_ROLE, roleNameError, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
+import { parseRole, roleSkipReason, EXTRA_TOOLS, roleTools } from '../claude/agent-types'
 import type { BrokenDef } from '../core/def-files'
 import { skippedRoles, S } from './state'
 import type { Host } from '../host'

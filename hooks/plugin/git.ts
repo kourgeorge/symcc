@@ -1,5 +1,6 @@
 import type { SymccTask } from '../../types'
-import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
+import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
+import { liveWorkersFor } from '../claude/agents'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty } from './state'
 import type { Host } from '../host'

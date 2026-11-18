@@ -1,7 +1,6 @@
 // Scout files, and scouts in the board panel.
 import type { SymccMode, SymccScout, SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { isNotReady } from './agents'
 import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
 import { planScoutText } from './plan'
@@ -266,15 +265,7 @@ export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, 
   return ''
 }
 
-/** Whether a scout spawn error only means the plugin isn't ready yet (its scout type isn't there, e.g. just after
- *  a reload): then the run is tried again shortly, like a worker's. */
-export function scoutNotReady(message: string, name: string = DEFAULT_NAME): boolean {
-  const low = String(message ?? '').toLowerCase()
-  if (/agent type .* not found/.test(low) && low.includes(namesFor(name).scout.toLowerCase())) return true
-  return isNotReady(message, name)
-}
-
-/** How long to wait before trying a scout again whose type wasn't ready yet. */
+/** How long to wait before trying a scout again whose type wasn't ready yet (see scoutNotReady in claude/agents.ts). */
 export const SCOUT_RETRY_MS = 5_000
 
 /** A scout's state icon (one column wide): ◉ running, ○ paused, ◎ waiting for its next run or for "run now" (a

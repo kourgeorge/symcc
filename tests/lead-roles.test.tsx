@@ -1,6 +1,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { parseRole, roleChoices, rolesLeadText, checkRole } from '../hooks/board'
+import { roleChoices, rolesLeadText, checkRole } from '../hooks/board'
+import { parseRole } from '../hooks/claude/agent-types'
 import { S, leadQueue, skippedRoles } from '../hooks/plugin/state'
 import { leadGuide, manual, runTool } from '../hooks/plugin/tools'
 

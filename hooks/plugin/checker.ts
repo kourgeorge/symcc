@@ -2,7 +2,8 @@
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
 // verdict; turn.complete (register.tsx) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, addTokens, agentSafeName, checkerDiff, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, roleSection, tryLabel } from '../board'
+import { type Board, CHECKER_ROLE, type CheckerVerdict, addTokens, agentSafeName, checkerDiff, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
+import { roleSection } from '../claude/agent-types'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
