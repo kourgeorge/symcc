@@ -61,5 +61,12 @@ export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
 }
 
-/** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped. */
-export const plainTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
+/**
+ * A time like "0s", "27m" or "1h 5m", with the spaces after it. The drawing code reads the real clock (Date.now, which a
+ * test cannot move), not the mock clock, so the time of a running try grows as the real day goes on; plainTree puts "~"
+ * for each such time, so two drawings compare equal at any hour.
+ */
+const SHOWN_TIME = /\b\d+[smhd](?: \d+[smh])?\b */g
+/** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped, and times as "~" (see SHOWN_TIME). */
+export const plainTree = (tree: unknown): unknown =>
+  JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : typeof v === 'string' ? v.replace(SHOWN_TIME, '~ ') : v)))
