@@ -6,6 +6,17 @@ import { offAnswer } from './settings'
 import { planScoutText } from './plan'
 import { frontMatterLine, splitFrontMatter } from './text'
 
+/**
+ * The symcc tools a scout (and a checker, which runs as the scout type) may call, in symcc's own words: both only read
+ * the board. Every other symcc tool changes something and is refused for them (see scoutToolRefusal).
+ */
+export const SCOUT_BOARD_TOOLS: readonly string[] = ['board', 'stats']
+
+/** Why a scout's or checker's call of symcc tool `tool` is refused, or null when it may run (board and stats). */
+export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME): string | null {
+  return SCOUT_BOARD_TOOLS.includes(tool) ? null : `Refused: ${name} scouts can only read the board (board and stats); "${tool}" is only for the lead. Put what you would change in your report instead.`
+}
+
 /** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
 /** `every_minutes` 0 means "only on demand" (never on the timer). A bad value in the file also gives 0, with
  *  `warning` saying so and `bad_every` holding the value as written. */
@@ -453,6 +464,7 @@ What makes a good finding:
 Rules:
 - Don't change, create or delete files in the project: no edits, no installs, no git commands that change anything (commit, checkout, reset, stash, ...). Changes are made through board tasks, not by you.
 - You may read files, run shell commands that only look, and search or fetch pages on the web.
+- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
 

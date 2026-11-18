@@ -527,6 +527,25 @@ are about changes; under "How tasks ended" a read investigation shows as
   total, e.g. `total: 1h 12m · 1.2M tokens in all over 4 tries`. "In all" means every kind of
   token added up; `/symcc-stats` shows the kinds apart (see below).
 
+### In VS Code
+
+In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: you click a button
+(or Tab to it and press Enter). So the board there has its own layout; the terminal's is
+unchanged.
+
+- **Header**: the name and folder, the folder's path, the branch and who drives, the board
+  mode and what it means, the tests (the first command, then "(+1 more)"), the limits and the
+  counts, each on its own line and wrapped, never cut.
+- **Tabs**: `● Tasks (20)`, `Scouts (1)`, `Settings`; the dot marks the one shown.
+- **Tasks**: grouped under small headings (Waiting for you, Review, Failed, Doing, To do). Each
+  task is an `Open T-12` button with its status mark and word in the status color, then its
+  whole title, then a dim line (role, try, question or why it failed). Backlog, Done and
+  Dropped are fold rows: `▸ Backlog (3)`.
+- **Footer**: a `Switch to review merge` (or `Switch to auto`) button and a search box that
+  filters as you type, with `Clear search` while a search is on. No key hints; other pages
+  say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
+  (`Back`, not `Back (b)`).
+
 ---
 
 ## Tracing a task back
@@ -581,7 +600,11 @@ A scout does what its file says. It can read files, run shell commands (these fo
 normal permission rules, like workers) and search or fetch web pages. It can't edit or write
 files, and it is told not to change the project at all: no installs, no git commands that
 change anything. Changes only go through board tasks. It also sees the open tasks, so it
-doesn't suggest them again.
+doesn't suggest them again. To look further at the board it has symcc's two read-only tools:
+`board` (no arguments: the open tasks; `status` and `search` narrow it; `task`: one task in full
+with its latest report) and `stats`. Every symcc tool that changes something (`add`, `change`,
+`drop`, `approve`, `settings`, ...) is refused for a scout with "scouts can only read the board".
+A checker gets the same read-only tools.
 
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
 tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message.

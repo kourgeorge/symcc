@@ -102,7 +102,19 @@ async function keepCopy(host: Host, text: string, what: string, say: (copy: stri
   return name
 }
 
+/** board.json's mtime (ms) now, or null when it is missing or can't be looked at. Never throws. */
+export async function boardMtime(host: Host): Promise<number | null> {
+  const st = await host.fs.stat(path(S.N.boardFile)).catch(() => null)
+  return st ? st.mtimeMs : null
+}
+
+/** Notes board.json's mtime as seen by this session (after its own load or save), so it causes no extra redraw (T-429). */
+async function noteMtime(host: Host) {
+  S.boardMtime = await boardMtime(host).catch(() => null)
+}
+
 export async function load(host: Host): Promise<Board> {
+  await noteMtime(host)
   const exists = await host.fs.exists(path(S.N.boardFile))
   if (!exists) {
     const b = emptyBoard()
@@ -208,6 +220,7 @@ export async function tryLock(host: Host, file: string, text: string): Promise<b
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
 export async function saveBoard(host: Host, b: Board) {
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
+  await noteMtime(host)
 }
 
 /**

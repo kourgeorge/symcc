@@ -35,6 +35,8 @@ export const investigationValues = (t: BoardTask, dir: string): Record<string, s
 /** The placeholders of a change's prompt: change the files, which are then committed, tested and merged. */
 export const changeValues = (t: SymccTask, b: Board, dir: string): Record<string, string> => ({
   ...sharedValues(t, dir),
+  // the host's words for its file tools (see HostWords), so the prompt names no host's tools itself
+  file_tools: S.W.fileTools,
   files: `Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}`,
   test_command: b.test_commands.length === 1 ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands[0]}`

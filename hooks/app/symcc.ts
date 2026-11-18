@@ -16,7 +16,7 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (plugin/state.ts) with its plugin name, so S.N is right.
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason } from '../board'
+import { boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal } from '../board'
 import type { FileTouch, Host } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from '../plugin/archive'
@@ -30,7 +30,7 @@ import { checkerFinished } from '../plugin/checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from '../plugin/scouts'
 import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from '../plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from '../plugin/store'
-import { noteForLead, brief } from '../plugin/tell'
+import { noteForLead, brief, takeBoardUpdate } from '../plugin/tell'
 import { playable } from '../plugin/voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from '../plugin/tools'
 import { openPane } from '../plugin/ui/open'
@@ -180,7 +180,16 @@ export async function leadGuideText(host: Host): Promise<string | undefined> {
   if (!(await findRoot(host))) return undefined
   // Read on every call, so /<name>-off and /<name>-on count from the next message.
   if (!(await isOn(host))) return undefined
-  return leadGuide()
+  return leadGuide(host.features)
+}
+
+/**
+ * For a host that can't wake the lead (features.wakeLead 'next-turn'): the board update waiting for the lead, for the
+ * host to add to its next hook that can carry text (e.g. when the lead's turn ends or the owner sends a prompt);
+ * undefined when nothing waits. A host that wakes the lead at once never needs it: its updates are sent.
+ */
+export function leadUpdate(): string | undefined {
+  return takeBoardUpdate()
 }
 
 /**
@@ -205,11 +214,18 @@ export function isSymccTool(tool: string): boolean {
 /**
  * A tool is called (by the lead or by one of symcc's agents). Answers a refusal (`deny`) or symcc's tool's answer
  * (`result`); null: not symcc's call, the host runs it as usual and then calls otherToolDone.
- * A worker or scout symcc stopped can't do anything more, so every tool it tries is refused; the lead's own tools
+ * A worker or scout symcc stopped can't do anything more, so every tool it tries is refused. A scout or checker may
+ * only read the board (board and stats); its call of any other symcc tool is refused. The lead's own tools
  * and the workers' question tool (it knows the calling worker from `agentId`) run here.
  */
 export async function toolCall(host: Host, tool: string, agentId: string | undefined, input: Record<string, unknown>): Promise<{ deny: string } | { result: string } | null> {
   if (agentId && stopped.has(agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
+  // a scout or checker only reads the board: board and stats run, every other symcc tool (ask_owner too) is refused
+  if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId))) {
+    const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find(t => tool === toolName(t))
+    const why = short ? scoutToolRefusal(short, S.N.name) : null
+    if (why) return { deny: why }
+  }
   if (tool === toolName(ASK_TOOL)) {
     if (!(await findRoot(host))) return { result: startingText() }
     return { result: await askCall(host, agentId, input).catch((err: Error) => `error: ${err.message}`) }
@@ -258,13 +274,15 @@ export function toolCallFailed(host: Host, tool: string, agentId: string | undef
 }
 
 /**
- * A tool is about to run: answers why it is refused, or undefined to decide as usual. A worker's edit outside its
- * change task's files is refused, and the path is recorded as a request to the owner; an edit or shell command
- * reaching the owner's copy outside the worker's folder is refused (see checkEdit). `cwd` is the calling agent's
- * own folder, when the host knows it. An error is not swallowed: the host then calls toolCheckFailed.
+ * A tool is about to run, and would touch what `touch` says (a file it writes or edits, or a shell command it runs;
+ * null: none of those, as the host tells it from its own tool names, e.g. claude/tools.ts editTouch): answers why it
+ * is refused, or undefined to decide as usual. A worker's edit outside its change task's files is refused, and the
+ * path is recorded as a request to the owner; an edit or shell command reaching the owner's copy outside the worker's
+ * folder is refused (see checkEdit). `cwd` is the calling agent's own folder, when the host knows it. An error is not
+ * swallowed: the host then calls toolCheckFailed.
  */
-export async function toolCheck(host: Host, agentId: string | undefined, tool: string, input: unknown, cwd?: string): Promise<string | undefined> {
-  return agentId ? await checkEdit(host, agentId, tool, input, cwd) : undefined
+export async function toolCheck(host: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string): Promise<string | undefined> {
+  return agentId ? await checkEdit(host, agentId, touch, cwd) : undefined
 }
 
 /** toolCheck threw or ran out of time: a worker's, checker's or scout's call is refused (the reason), the lead's goes on (undefined). */
@@ -323,9 +341,11 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'bad':
       return say(cmd.message)
     case 'help':
-      return say(manual(cmd.topic))
+      return say(manual(cmd.topic, host.features))
     case 'open':
     case 'tasks':
+      // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
+      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, undefined, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
       return say(BOARD_OPENED)
     case 'scouts': {

@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -8,7 +8,7 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
-import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, cancelStarts, startCancelled, QUEUED_NOTE } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
@@ -112,22 +112,31 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
-    return { started: workerStarted(host, id, before, dir, branch, spawn).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
+    return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
   } finally {
     if (!queued) starting.delete(id)
   }
 }
 
 /** Task `id`'s queued worker (`spawn`, see queueWorker) started, or didn't: it is recorded on the task, or the task is put back as it was (`before`). */
-async function workerStarted(host: Host, id: string, before: BoardTask, dir: string, branch: string, spawn: Promise<HostAgentStarted>) {
+async function workerStarted(host: Host, id: string, before: BoardTask, dir: string, branch: string, spawn: Promise<HostAgentStarted>, claimed: number) {
   let agentId: string
   try {
     const spawned = await spawn
     if (!spawned.agentId) throw new Error('the worker did not start')
     agentId = spawned.agentId
   } catch (err) {
-    // taken back before it started (its task was stopped, dropped, paused or changed meanwhile): nothing failed
-    if (startCancelled(err)) return
+    // taken back before it started (its task was stopped, dropped, paused or changed meanwhile): nothing failed.
+    // T-428: when the task is still claimed for this very try, only queued (nobody stopped it on purpose), its claim
+    // is undone at once: left "doing" with no worker, the regular check would send it back as if a worker had ended.
+    if (startCancelled(err)) {
+      if (!onPurpose.has(id))
+        await change(host, x => {
+          const cur = find(x, id)
+          return cur?.status === 'doing' && cur.note === QUEUED_NOTE && cur.attempts === claimed && !handedBack(cur) ? putTask(x, unclaimed(cur, now())) : x
+        }).catch(() => undefined)
+      return
+    }
     const misses = notReady.get(id) ?? 0
     if (!notReadyYet(err) || onNotReady(misses) === 'fail') {
       notReady.delete(id)
@@ -267,7 +276,18 @@ export async function workerFinished(host: Host, agentId: string, answer: string
     finishing.delete(w.task)
     await endCheck(host, w.task)
   }
+  await checkerAgainNow(host, w.task)
   await pump(host)
+}
+
+/** T-428: tasks whose checker was stopped before its verdict (see afterChecker): their checker step starts again once the step that ran it is over. */
+const checkerAgain = new Set<string>()
+
+/** T-428: task `id`'s checker was stopped before its verdict: a new checker starts now (restartCheckers), not only at the next check. */
+async function checkerAgainNow(host: Host, id: string) {
+  if (!checkerAgain.delete(id)) return
+  const agents = await agentsNow(host)
+  if (agents) await restartCheckers(host, agents).catch(() => undefined)
 }
 
 /** What withLimit gives back when the step ran over its limit. */
@@ -426,7 +446,7 @@ async function markChecking(host: Host, id: string, status: SymccTask['status'],
  * session, the report is taken as that worker's, so its work is still checked and merged.
  */
 export async function lateHandBack(host: Host, agentId: string): Promise<boolean> {
-  if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId) || checkerRuns.has(agentId)) return false
+  if (isOwnAgent(agentId)) return false
   const b = await load(host).catch(() => null)
   const t = b?.tasks.find(x => x.agent === agentId)
   // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
@@ -567,9 +587,12 @@ export function endFailure(end: TurnEnd): string {
   return `the model refused to go on${said ? ` (${cutLine(said, 300)})` : ''}`
 }
 
+/** " (not AskUserQuestion: ...)" after "numbered plain chat text", with the host's pop-up question tool; '' when it has none. */
+const notAskPopup = () => (S.W.askPopup ? ` (not ${S.W.askPopup}: its dialog stays open if they answer on the board)` : '')
+
 /** What the lead is told when a worker asked a question (ask_owner) and its task now waits for the owner. */
 export const workerQuestionText = (id: string, question: string, options?: readonly string[]) =>
-  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? ', offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"' : ', and say they can also answer on the board'}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.`
+  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? `, offering the options as numbered plain chat text${notAskPopup()}, plus "or answer on the board"` : ', and say they can also answer on the board'}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.`
 
 /** Whether a report that could not be saved was already told (once per session, so it never floods). */
 let reportWarned = false
@@ -660,7 +683,12 @@ export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 't
     // The checker setting: a change that is not docs only is held before it merges (or goes to review), and a checker tries to break it first.
     const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
     let r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, turn, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    if (r.ok && r.held && !gaveUp() && !stop()) r = await afterChecker(host, t, b, r, w.worktree, made, stop, release, turn)
+    if (r.ok && r.held && !gaveUp() && !stop()) {
+      const c = await afterChecker(host, t, b, r, w.worktree, made, stop, release, turn)
+      // T-428: the checker was stopped before its verdict: the task stays "doing" in its checker step, and a new checker starts (restartCheckers)
+      if (c.again) return
+      r = c
+    }
     await finishTail(host, t, b, r, made, summary, w.worktree, agentId, gaveUp)
   }
 }
@@ -756,6 +784,7 @@ async function checkAgain(host: Host, t0: BoardTask) {
     finishing.delete(id)
     await endCheck(host, id)
   }
+  await checkerAgainNow(host, id)
   await pump(host)
 }
 
@@ -802,8 +831,19 @@ async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, 
     checkerNotReady.set(t.id, misses + 1)
     return true
   }
+  // the checkers symcc had stopped before this one ran: one it stops meanwhile (a reload's orphan stop, a halt) is told apart below
+  const stoppedBefore = new Set(stopped)
   const c = await runChecker(host, t, b, dir, stop, restarted ? tryLater : undefined)
   turn?.(true)
+  // T-428: a checker that only answered "stopped", or that symcc itself stopped, gives no verdict: it found nothing.
+  // Its step starts again as after a reload (T-386, restartCheckers), with no retry counted.
+  if (c.verdict && 'report' in c.verdict && (stoppedAnswer(c.verdict.report) || (await checkerStopped(host, t.id, stoppedBefore)))) {
+    await unsayProblems(host, t, c.verdict.report)
+    const why = stop()
+    if (why) return { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
+    checkerAgain.add(t.id)
+    return { ok: false, again: true, detail: 'the checker was stopped before its verdict; a new checker starts' }
+  }
   if (c.again) return { ok: false, again: true, detail: `the checker couldn't start yet (${c.why}); tried again at the next check` }
   checkerNotReady.delete(t.id)
   const { held: _held, ...passed } = r
@@ -816,6 +856,31 @@ async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, 
   if (why) return { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
   const noVerdict = `the checker gave no verdict (${c.why ?? 'no answer'})`
   return { ...passed, review: true, noVerdict, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
+}
+
+/** T-428: whether a checker's answer is only "stopped" (what symcc tells an agent it stops to answer), not a problems report. */
+export const stoppedAnswer = (answer: string) => /^[\s*_`"'.]*stopped[\s*_`"'.!]*$/i.test(String(answer ?? ''))
+
+/** T-428: whether task `id`'s checker was stopped by symcc while it ran (an agent named as its checker, stopped since `before`). */
+async function checkerStopped(host: Host, id: string, before: Set<string>): Promise<boolean> {
+  const fresh = [...stopped].filter(a => !before.has(a))
+  if (!fresh.length) return false
+  const agents = await agentsNow(host)
+  return !!agents?.some(a => fresh.includes(a.id) && a.name === checkerName(S.N.name, id))
+}
+
+/** T-428: task `t`'s "checker found problems" history line for `report` (written by runChecker) becomes a no-verdict line, as the checker was only stopped. */
+async function unsayProblems(host: Host, t: SymccTask, report: string) {
+  await change(host, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.attempts !== t.attempts) return x
+    const said = checkerLine(tryLabel(cur), { ok: false, report })
+    const at = cur.history.lastIndexOf(said)
+    if (at < 0) return x
+    const history = [...cur.history]
+    history[at] = checkerLine(tryLabel(cur), null, 'it was stopped; a new checker starts')
+    return patchTask(x, t.id, { history }, now())
+  }).catch(() => undefined)
 }
 
 /** The note of an investigation that was answered and waits for the owner to read it. */
@@ -1206,12 +1271,6 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
   }
 }
 
-/** Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. */
-export async function halt(host: Host, agentId: string, why: string) {
-  stopped.add(agentId)
-  await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
-}
-
 /**
  * Tasks whose worker is being stopped on purpose (pause, drop, ask, change, the board or symcc turned
  * off, ...), with how many regular checks have seen the mark: the one stopping it changes the task's
@@ -1357,9 +1416,8 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
   const out: string[] = []
   for (const a of agents) {
     if (a.kind === 'other') continue
-    if (workers.has(a.id) || scoutRuns.has(a.id) || checkerRuns.has(a.id)) continue
-    // Already told to stop: not taken back, and not messaged again (a message would wake it up).
-    if (stopped.has(a.id)) continue
+    // Already tracked, or already told to stop: not taken back, and not messaged again (a message would wake it up).
+    if (isOwnAgent(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
     if (a.kind === 'worker' && !b) continue
     if (a.kind === 'worker' && b) {
@@ -1454,7 +1512,7 @@ async function timedOut(host: Host, id: string, t: BoardTask | undefined, max: n
 
 /** What the lead is told when task `id`'s worker runs over its limit of `limit` minutes and the owner is asked. */
 export const overtimeLeadText = (id: string, title: string, limit: number) =>
-  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.`
+  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these as numbered plain chat text${notAskPopup()}, plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.`
 
 /** Task `id`'s worker runs over its limit: the task keeps "doing" with the question, the owner hears "needs you", the lead is told. */
 async function askOvertime(host: Host, b: Board, id: string, limit: number) {
@@ -1549,6 +1607,29 @@ function sameTry(cur: BoardTask, was: BoardTask, agentId?: string) {
  * tool it tries is refused, even while it is still listed. Only tasks this session may take over
  * (ownedHere) are touched, and never one whose worker is being stopped on purpose (onPurpose).
  */
+/**
+ * T-428: whether "doing" task `t` was only claimed and its worker queued (note QUEUED_NOTE, see queueWorker), but its
+ * worker never started and this copy no longer has it in its start queue (a reload emptied the queue, or the queued
+ * start was taken back). Its worker didn't end: it never began. Such a task is unclaimed (see unclaimed), not sent back.
+ */
+export const queuedNeverStarted = (t: BoardTask) => t.status === 'doing' && t.note === QUEUED_NOTE && !t.finishing && !handedBack(t) && !starting.has(t.id) && !queuedWorkers.has(t.id)
+
+/**
+ * T-428: task `t`'s claim undone, as if it had never been claimed: "todo" again, its try not counted (attempts back
+ * one, the run the claim opened taken off), no history line. The next pump claims it again on the same try number.
+ */
+export function unclaimed(t: BoardTask, at: string): BoardTask {
+  const { session: _s, runs: _r, ...rest } = t
+  const last = t.runs?.at(-1)
+  const runs = last && !last.ended ? t.runs!.slice(0, -1) : t.runs
+  return { ...rest, status: 'todo' as const, note: '', attempts: Math.max(0, t.attempts - 1), updated_at: at, ...(runs?.length ? { runs } : {}) }
+}
+
+/** T-428: board `b` with every task of this session (or a session that no longer drives, see ownedHere) whose queued worker never started unclaimed (see queuedNeverStarted), except those in `keep` (a live worker works on them after all). */
+export function unclaimQueued(b: Board, me: string, live: string | null, at: string, keep: string[] = []): Board {
+  return { ...b, tasks: b.tasks.map(t => (queuedNeverStarted(t) && ownedHere(t, me, live) && !keep.includes(t.id) ? unclaimed(t, at) : t)) }
+}
+
 export async function sendBackIdle(host: Host, agents: HostAgent[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
@@ -1558,6 +1639,7 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
   const idle = (await load(host)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working.map(agentState), S.N.name).length))
   const merged = new Map<string, string>()
   for (const t of idle) {
+    if (queuedNeverStarted(t)) continue // never started: unclaimed below, not looked up as merged
     const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged(host, t).catch(() => null) : null)
     if (sha) merged.set(t.id, sha)
   }
@@ -1570,6 +1652,9 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
       // Re-read here: left as it is if its status, agent or run changed since it was picked.
       const was = idle.find(i => i.id === t.id)
       if (!was || !free(t) || !sameTry(t, was) || [...workers.values()].some(w => w.task === t.id)) return t
+      // T-428: its worker was only queued and the queue lost it (a reload): it never started, so no try is counted,
+      // no "restarted" line is written and the lead is not told; the next pump queues it again on the same try number
+      if (queuedNeverStarted(t)) return unclaimed(t, now())
       const sha = merged.get(t.id)
       if (sha) return mergedDone(t, sha, 'sent back to todo', now())
       back.push(t)

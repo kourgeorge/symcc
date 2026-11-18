@@ -1,12 +1,12 @@
-import { liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver } from '../board'
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView } from './state'
 import { type Host, agentState } from '../host'
-import { path, locked, change, now, load, safeWrite } from './store'
+import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
-import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers } from './workers'
+import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers, unclaimQueued } from './workers'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
@@ -44,7 +44,13 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await host.fs.exists(path(S.N.boardFile)))
-      await change(host, b => resetDoing(b, S.me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id) || queuedWorkers.has(t.id)).map(t => t.id)))
+      await change(host, b => {
+        const keep = b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id) || queuedWorkers.has(t.id)).map(t => t.id)
+        // T-428: a task whose worker was only queued when the plugin reloaded (the reload emptied the queue) never
+        // started: its claim is undone with no try counted and no "restarted" line, and the next pump queues it again
+        const unqueued = unclaimQueued(b, S.me, liveDriver(leadBefore, Date.now()), now(), keep)
+        return resetDoing(unqueued, S.me, leadBefore, Date.now(), note, now(), keep)
+      })
     if (move === 'takeover' && !fresh) host.ui.toast(S.N.toast('the session driving the board stopped answering; this session drives it now'))
   }
   if (was && !S.driving) {
@@ -58,9 +64,23 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     await haltWorkers(host, 'the task was changed on the board', w => find(b, w.task)?.status !== 'doing')
   }
   if (was !== S.driving || fresh) await publish(host, await load(host))
+  else if (!S.driving) await followBoard(host)
   // the heartbeat (every 30 s) also looks whether the banner logo's idle sway is due
   void logoIdle(host).catch(() => undefined)
   return S.driving
+}
+
+/**
+ * A session that does not drive gets no "Board update" and runs no regular check, so on its heartbeat it looks
+ * whether board.json changed (its mtime differs from the one last seen) and, if so, loads it and redraws the panel
+ * and status line (T-429). A missing or unreadable (or broken) file does nothing: the heartbeat goes on.
+ */
+async function followBoard(host: Host) {
+  const m = await boardMtime(host).catch(() => null)
+  if (m === null || m === S.boardMtime) return
+  S.boardMtime = m
+  const b = await load(host).catch(() => null)
+  if (b) await publish(host, b).catch(() => undefined)
 }
 
 /** On session end the driver lets go of lead.json, so another session can take over at once. */
@@ -113,12 +133,12 @@ export async function publish(host: Host, b: Board) {
 }
 
 let statusText: (() => string | undefined) | undefined
-/** Shows `text()` as the line above the prompt; refreshStatus draws it again later. */
+/** Shows `text()` as the line above the prompt; refreshStatus draws it again later. A host with no band (features.band off) shows it nowhere. */
 function showStatus(host: Host, text: () => string | undefined) {
   statusText = text
-  host.ui.status(text())
+  if (host.features.band) host.ui.status(text())
 }
 /** Draws the line above the prompt again, so "next: x in 38m" counts down (scouts.ts calls it every minute). */
 export function refreshStatus(host: Host) {
-  if (statusText) host.ui.status(statusText())
+  if (statusText && host.features.band) host.ui.status(statusText())
 }

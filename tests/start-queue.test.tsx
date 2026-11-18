@@ -5,10 +5,11 @@
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { type Board, addTask, emptyBoard } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, startRun } from '../hooks/board'
 import type { Host, HostAgentStart } from '../hooks/host'
-import { noUi } from '../hooks/host'
+import { ALL_FEATURES, noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/plugin/state'
+import { queuedNeverStarted, unclaimQueued } from '../hooks/plugin/workers'
 import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/plugin/starts'
 import { ran } from './fakes'
 
@@ -29,6 +30,7 @@ function fakeHost(fail: string[] = []) {
     clock: { after: (ms: number, f: () => void) => (timers.push({ ms, f }), { cancel() {} }) },
     lead: { send: async () => undefined },
     ui: noUi,
+    features: ALL_FEATURES,
   } as unknown as Host
   S.enabledNow = true
   return { host, spawned, timers }
@@ -268,3 +270,76 @@ for (const [what, stop, status] of [
     expect(w.spawned).toEqual([])
   })
 }
+
+// ---------------- T-428: a queued start lost (a reload) is not a worker that ended ----------------
+
+/**
+ * Board `b` with task `id` claimed by session s1 and its worker only queued (QUEUED_NOTE), as queueWorker leaves it,
+ * but with nothing in the loaded copy's start queue: what a reload (another task merging) leaves behind.
+ */
+const lostStart = (b: Board, id: string, session = 's1'): Board =>
+  patchTask(b, id, { status: 'doing', session, attempts: 1, branch: `symcc/${id}`, note: QUEUED_NOTE, runs: startRun(undefined, ISO) }, ISO)
+
+const sentBack = (h: string) => h.includes('old worker has ended') || h.includes('restarted')
+
+test('T-428 loaded: after a reload lost the queue, the session start queues the task again on the same try, with no "restarted" line and no word to the lead', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(lostStart(todo(1), 'T-1')))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  // the fresh copy waits a moment (RELOAD_SETTLE_MS) before it decides about "doing" tasks with no worker
+  await w.clock.advance(5_000)
+  await w.clock.settle()
+  expect(w.task('T-1').note).toBe(QUEUED_NOTE)
+  expect(w.task('T-1').attempts).toBe(1)
+  await leadTurnStarts($, 'wake')
+  await w.clock.settle()
+  expect(w.spawned).toEqual(['symcc-T-1'])
+  const t = w.task('T-1')
+  expect(t.attempts).toBe(1)
+  expect(t.runs?.length).toBe(1)
+  expect(t.history.some(sentBack)).toBe(false)
+  expect(w.prompts.some(p => p.includes('no worker was working on'))).toBe(false)
+})
+
+test('T-428 loaded: the regular check, with no reload, finds a queued task its copy no longer holds: it gets its worker on the same try, not "the old worker has ended"', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify({ ...todo(1), max_parallel: 3 }))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  expect(w.task('T-1').note).toBe(QUEUED_NOTE)
+  // T-2 is on the board as claimed by this session and queued, but this copy's start queue doesn't have it
+  const b = JSON.parse(w.files.get(BOARD)!) as Board
+  const [withT2] = addTask(b, { origin: { why: 'a test' }, title: 'Change 2', files: ['src2/'], merge_into: 'main' }, ISO)
+  w.files.set(BOARD, JSON.stringify(lostStart(withT2, 'T-2')))
+  for (let i = 0; i < 3; i++) {
+    await w.clock.advance(2 * 60_000)
+    await w.clock.settle()
+  }
+  expect(w.task('T-2').status).toBe('doing')
+  expect(w.task('T-2').note).toBe(QUEUED_NOTE)
+  await leadTurnStarts($, 'wake')
+  await w.clock.settle()
+  expect([...w.spawned].sort()).toEqual(['symcc-T-1', 'symcc-T-2'])
+  for (const id of ['T-1', 'T-2']) {
+    const t = w.task(id)
+    expect(t.attempts).toBe(1)
+    expect(t.history.some(sentBack)).toBe(false)
+  }
+  expect(w.prompts.some(p => p.includes('no worker was working on'))).toBe(false)
+})
+
+test('T-428: a doing task whose worker started (no longer the queued note) is not unclaimed; only a queued one is, with no try counted', () => {
+  const [b0] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'One', files: ['a/'] }, ISO)
+  const t = { ...b0.tasks[0]!, status: 'doing' as const, attempts: 1, note: 'worker on it', session: 's1', runs: [{ started: ISO }] }
+  expect(queuedNeverStarted(t)).toBe(false)
+  expect(unclaimQueued({ ...b0, tasks: [t] }, 's1', null, ISO).tasks[0]!.status).toBe('doing')
+  // the same task still only queued: unclaimed, its try not counted and its run taken off
+  const q = { ...t, note: QUEUED_NOTE }
+  expect(queuedNeverStarted(q)).toBe(true)
+  const u = unclaimQueued({ ...b0, tasks: [q] }, 's1', null, ISO).tasks[0]!
+  expect(u.status).toBe('todo')
+  expect(u.attempts).toBe(0)
+  expect(u.runs).toBeUndefined()
+  expect(u.history).toEqual(t.history)
+})
