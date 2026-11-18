@@ -11,6 +11,7 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches } from './panel'
+import { whyFailed } from './failure'
 import { offStatusLine, testCommandsText } from './settings'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
@@ -230,7 +231,7 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 
 /** One row (and its "from:" line) of the board as text. */
 function boardRow(t: SymccTask, autoRetries?: number): string[] {
-  const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
+  const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.status === 'failed' ? ` — ${whyFailed(t)}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
   const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')

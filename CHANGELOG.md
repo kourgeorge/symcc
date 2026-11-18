@@ -5,6 +5,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## Unreleased
 
 ### Added
+- A failed task says clearly why: its page starts with a "Why it failed" block (the reason in one plain sentence, what the worker's report asks for, and what to do next), and its board row and the lead's board show the same sentence instead of the bare note.
 - The Settings view groups the settings under headings: Work, Checks before merging, Workers (Roles, Kinds), Scouts, and Board and alerts. ↑↓ still go through every row. The lead's settings listing uses the same groups.
 - The Settings view's groups open and close: all start closed, each heading showing its values in short (`▸ Work · auto · 3 at once · 45 min · 2 retries`); Enter on a heading opens or closes it, ↑↓ skip the rows of closed groups, and open groups stay open until the session ends.
 - A doing task on its 2nd or later try says so: `try 2` in the board list (warning colour from try 3), `T-5 doing (try 2)` above the prompt and in the status line, and `try 2/3` in the lead's board while auto retries run. A first try shows nothing.
