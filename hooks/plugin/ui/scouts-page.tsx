@@ -1,6 +1,6 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
 import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen } from '../scouts'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen, closeScoutRun } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -83,7 +83,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
     const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
     const problem = scoutLastRunProblem(runs)
     const opened = scoutRunOpen.scout === sc.name ? shown.find(x => x.run.ended === scoutRunOpen.ended) : undefined
-    const closeRun = () => ((scoutRunOpen.scout = ''), (scoutRunOpen.ended = ''), $.ui.invalidate('ui.render'))
+    const closeRun = () => (closeScoutRun(), $.ui.invalidate('ui.render'))
     if (opened) {
       // one run's page: its line, then its full report (from its file)
       const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''

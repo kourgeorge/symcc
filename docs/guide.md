@@ -705,7 +705,9 @@ when it ended, how it ended (found, nothing, stopped, API error, refusal or coul
 how many findings its report numbers, and the tasks made from it (a task the lead adds from
 this scout's finding is saved in the scout's latest run that reported something, so it stays
 listed after the task is archived). Open one to read that run's whole report; in VS Code's
-side panel each run is a button, and "← <scout>" goes back.
+side panel each run is a button, and "← <scout>" goes back. Esc on a run's page goes back to
+the scout's page too, and leaving the scout's page any other way (Esc again, another view,
+closing the panel) closes the run, so the scout opens on its own page next time.
 When the last run ended on an API error or a refusal, the page says so under the header
 ("Its last run ended on an API error, so nothing was reported."). Each scout keeps its last
 50 runs in `.symcc/scouts/<name>.runs.json` and each run's full report in

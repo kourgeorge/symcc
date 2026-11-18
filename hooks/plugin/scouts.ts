@@ -91,8 +91,7 @@ export function resetScoutRuns() {
   startWarned.clear()
   runsChecked.clear()
   historyWarned = false
-  scoutRunOpen.scout = ''
-  scoutRunOpen.ended = ''
+  closeScoutRun()
 }
 
 // ---------------- each scout's run history ----------------
@@ -104,6 +103,12 @@ let historyWarned = false
 
 /** The run whose full report the scout's page shows now (its scout and when it ended); '' for none. */
 export const scoutRunOpen = { scout: '', ended: '' }
+
+/** Closes the open run (back to its scout's page); also called whenever the scout's page is left (resetPane, forgetPane). */
+export function closeScoutRun() {
+  scoutRunOpen.scout = ''
+  scoutRunOpen.ended = ''
+}
 
 /** A scout's runs file, in the project. */
 const runsPath = (scout: string) => path(scoutRunsFile(scout, S.N.name))

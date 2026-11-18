@@ -4,6 +4,7 @@ import { S, updateOpened, updateScoutOpen, updateTab } from '../state'
 import { type $ } from '../../claude/panel'
 import { resetRoleView } from '../roles'
 import { resetKindView } from '../kinds'
+import { closeScoutRun } from '../scouts'
 import type { Host } from '../../host'
 
 /** The board panel's views: its tabs. */
@@ -11,13 +12,14 @@ export type PaneTab = 'tasks' | 'scouts' | 'settings'
 
 /**
  * Sets what the board panel shows: task `task` opened ('' = the list). With `which`, it also
- * switches to that view ('tasks', 'scouts' or 'settings') with no scout and no role opened; without, the view stays.
+ * switches to that view ('tasks', 'scouts' or 'settings') with no scout, no scout run and no role opened; without, the view stays.
  */
 export async function resetPane($: Host, which?: PaneTab, task = '') {
   await updateOpened($, () => task)
   if (!which) return
   resetRoleView()
   resetKindView()
+  closeScoutRun()
   await updateScoutOpen($, () => '')
   await updateTab($, () => which)
 }

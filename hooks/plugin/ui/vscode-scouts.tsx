@@ -10,7 +10,7 @@
 // with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
 import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen } from '../scouts'
+import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen, closeScoutRun } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -153,7 +153,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
   const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
   const problem = sc.running ? '' : scoutLastRunProblem(runs)
   const opened = scoutRunOpen.scout === sc.name ? shown.find(x => x.run.ended === scoutRunOpen.ended) : undefined
-  const closeRun = () => ((scoutRunOpen.scout = ''), (scoutRunOpen.ended = ''), $.ui.invalidate('ui.render'))
+  const closeRun = () => (closeScoutRun(), $.ui.invalidate('ui.render'))
   if (opened) {
     const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
     return (

@@ -7,14 +7,15 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccScout } from '../types'
 import { emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, linkScoutRunTask, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
-import { scoutFinished, scheduleScouts } from '../hooks/plugin/scouts'
+import { scoutFinished, scheduleScouts, scoutRunOpen } from '../hooks/plugin/scouts'
 import { runTool } from '../hooks/plugin/tools'
 import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
 import { fakeHost, memoryFs } from './fake-host'
 import { inProject } from './project'
 import { readText } from './fakes'
 import { ICON } from '../hooks/name'
-
+import { forgetPane } from '../hooks/plugin/ui/esc'
+import { resetPane } from '../hooks/plugin/ui/open'
 const ROOT = '/repo'
 const MEMORY = `${ROOT}/.symcc/scouts.json`
 const RUNS = `${ROOT}/.symcc/scouts/bugs.runs.json`
@@ -206,6 +207,24 @@ test("the scout's page lists its runs, newest first, and opening one shows its f
   expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^▍Report$/ })).toBeUndefined()
   await ui.unmount()
+})
+
+// A mounted panel runs its own copy of the plugin's modules, and unmount tells the plugin nothing (in Claude Code the
+// panel closing raises ui.close, which calls forgetPane). So the ways out are checked on this file's copy: each one
+// closes the open run, so opening the scout again shows its page with "▍Runs" (the first page test above), not the
+// old run. Esc on a run page going back to the scout's page first ('close run') is in tests/esc.test.tsx.
+test("an open run is closed whenever its scout's page is left: switching views (resetPane) and the panel closing (forgetPane)", async $ => {
+  const { host } = fakeHost()
+  scoutRunOpen.scout = 'bugs'
+  scoutRunOpen.ended = LAST_RUN
+  await resetPane(host, 'scouts') // what Esc's "scouts list" step, the tabs and opening the panel do
+  expect(scoutRunOpen).toEqual({ scout: '', ended: '' })
+  scoutRunOpen.scout = 'bugs'
+  scoutRunOpen.ended = LAST_RUN
+  await resetPane(host) // only the opened task changes: the scout's run page stays
+  expect(scoutRunOpen).toEqual({ scout: 'bugs', ended: LAST_RUN })
+  await forgetPane($ as never) // the panel closing
+  expect(scoutRunOpen).toEqual({ scout: '', ended: '' })
 })
 
 test("the scout's page says when its last run ended on an API error, so nothing was reported", async ($, on) => {
