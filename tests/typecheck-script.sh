@@ -35,6 +35,40 @@ printf 'const a: string[] = []\nconst s: string = a[0] ?? ""\nexport { s }\n' > 
 out="$(sh "$script" "$tmp" 2>&1)"; code=$?
 [ "$code" -eq 0 ] || bad "fixed code: expected exit 0, got $code: $out"
 
+# 3b. T-480: TypeScript is installed once into a cache and reused; an install is retried once;
+# once the cache exists, a failing install (no network) doesn't matter. A fake bun stands in.
+mkdir -p "$tmp/fakebin"
+cat > "$tmp/fakebin/bun" <<'FAKE'
+#!/bin/sh
+n=$(cat "$FAKE_BUN_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$FAKE_BUN_COUNT"
+if [ "$FAKE_BUN_FAIL" = always ] || [ "$n" -le "$FAKE_BUN_FAIL" ]; then echo "fake bun: no network" >&2; exit 1; fi
+mkdir -p node_modules/typescript/bin
+printf '{ "name": "typescript", "version": "5.9.3" }\n' > node_modules/typescript/package.json
+printf 'console.log("fake tsc ran")\n' > node_modules/typescript/bin/tsc
+FAKE
+chmod +x "$tmp/fakebin/bun"
+fake() { # $1 failures before bun works ("always" = never works); runs the script on the fixed copy
+  FAKE_BUN_FAIL=$1 FAKE_BUN_COUNT="$tmp/bun-count" SYMCC_TS_CACHE="$tmp/tscache/ts" PATH="$tmp/fakebin:$PATH" \
+    sh "$script" "$tmp" 2>&1
+}
+rm -f "$tmp/bun-count"
+out="$(fake always)"; code=$?
+[ "$code" -eq 2 ] || bad "install never works: expected exit 2, got $code: $out"
+echo "$out" | grep -q "retrying once" || bad "install never works: no retry: $out"
+echo "$out" | grep -q "couldn't install TypeScript" || bad "install never works: unclear message: $out"
+[ ! -e "$tmp/tscache/ts" ] || bad "install never works: a broken cache was left behind"
+rm -f "$tmp/bun-count"
+out="$(fake 1)"; code=$?
+[ "$code" -eq 0 ] || bad "install works on the retry: expected exit 0, got $code: $out"
+echo "$out" | grep -q "retrying once" || bad "install works on the retry: no retry: $out"
+echo "$out" | grep -q "fake tsc ran" || bad "install works on the retry: tsc from the cache did not run: $out"
+rm -f "$tmp/bun-count"
+out="$(fake always)"; code=$?
+[ "$code" -eq 0 ] || bad "cache exists, no network: expected exit 0, got $code: $out"
+echo "$out" | grep -q "fake tsc ran" || bad "cache exists, no network: tsc from the cache did not run: $out"
+[ ! -f "$tmp/bun-count" ] || bad "cache exists: bun was called again"
+rm -rf "$tmp/fakebin" "$tmp/tscache" "$tmp/bun-count" "$tmp/bun.lock"
+
 # 4. T-372: tests/host-free.sh (run by the script) fails when hooks/app/ or hooks/core/ needs Claude Code.
 mkdir -p "$tmp/tests" "$tmp/hooks/app" "$tmp/hooks/core" "$tmp/hooks/claude"
 cp "$here/tests/host-free.sh" "$tmp/tests/host-free.sh"
