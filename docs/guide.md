@@ -216,11 +216,18 @@ happens, never the words in its hand-back:
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
    a new try as usual.
+   **One task's tests at a time.** Tests run for one task at a time across all tasks,
+   sessions and target branches, oldest first. A task that has to wait shows the note
+   "waiting for another task's tests (T-x)", where T-x is the task running its tests now.
+   So when several tasks finish together, merges can take longer. The turn is kept with
+   the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
+   you never need to delete it by hand.
    **Time limit.** Each test command may run up to 10 minutes. The whole checking and
    merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
    and the board: 15 minutes with one test command, 35 with three. Only the task's own
    work counts: the clock stops while it waits in line behind other merges into the same
-   branch (each of those has its own limit, so the line keeps moving), and starts again
+   branch (each of those has its own limit, so the line keeps moving) and while it waits for
+   another task's tests (see below), and starts again
    from zero when its turn begins, and again each time it is brought up to date and
    tested again because the branch moved meanwhile. A step still running past the limit
    is taken as stuck and given up: a finished worker's task goes back to `todo` for a
