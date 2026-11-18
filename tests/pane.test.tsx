@@ -906,7 +906,8 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.autoFocus).toBe(true)
   expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
   expect(work?.props.label).toBe('▸ Work · auto · 3 at once · 45 min · 2 retries')
-  expect(await ui.find({ type: 'Text', text: '▸ Work · auto · 3 at once · 45 min · 2 retries' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '▸ Work' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' · auto · 3 at once · 45 min · 2 retries' })).toBeDefined()
   expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ kinds?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
@@ -941,6 +942,68 @@ test('a closed group summary is cut to fit', () => {
   expect(groupSummary(board, { archive_days: 0 }, 80)).toContain('never archive')
   expect(groupSummary(board, { archive_days: 0 }, 80)).not.toContain('archive after')
   expect(groupSummary(board, { archive_days: 1 }, 80)).toContain('archive after 1 day')
+  // a long title is kept whole even when narrow; the values that don't fit are left out
+  const checks = SETTING_GROUPS.find(g => g.title === 'Checks before merging')!
+  expect(groupSummary(checks, { test_commands: ['npm test'] }, 20)).toBe('Checks before merging')
+  expect(groupSummary(checks, { test_commands: ['npm test'] }, 21)).toBe('Checks before merging')
+  // test commands in plain words: no brackets or quotes
+  const two = groupSummary(checks, { test_commands: ['claude plugin test .', 'sh scripts/typecheck.sh'] }, 80)
+  expect(two).toBe('Checks before merging · 2 test commands · untested: ask · checker off')
+  expect(two).not.toMatch(/[[\]"]/)
+  expect(groupSummary(checks, { test_commands: ['claude plugin test .'] }, 80)).toMatch(/^Checks before merging · claude plugin test \. · /)
+  expect(groupSummary(checks, { test_commands: ['cd web && npm run test:all -- --coverage'] }, 80)).toContain(' · cd web && npm run test:… · ')
+  expect(groupSummary(checks, { test_commands: [] }, 80)).toContain(' · no tests · ')
+})
+
+test('a closed group heading draws its title bold in the text colour and its values dim; an open one is bold', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', max_parallel: 3, test_commands: ['claude plugin test .', 'sh scripts/typecheck.sh'] } } })
+  fakeFiles(on, ROLE_FILES)
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-settings' })
+  const title = await ui.find({ type: 'Text', text: /^▸ Work$/ })
+  expect(title?.props.bold).toBe(true)
+  expect(title?.props.color).toBe('text')
+  const values = await ui.find({ type: 'Text', text: /^ · auto · 3 at once/ })
+  expect(values?.props.color).toBe('inactive')
+  expect(values?.props.bold).toBeFalsy()
+  const checks = await ui.find({ key: 'group:Checks before merging' })
+  expect(checks?.text).toMatch(/^▸ Checks before merging · 2 test commands/)
+  expect(checks?.text).not.toMatch(/[[\]"]/)
+  await ui.press({ key: 'group:Work' })
+  const open = await ui.find({ type: 'Text', text: /^▾ Work$/ })
+  expect(open?.props.bold).toBe(true)
+  await ui.unmount()
+})
+
+test('the Settings key line says "Enter open/close" on a group heading and "Enter change" on a setting row', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, ROLE_FILES)
+  const keys = arrowKeys($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const heading = /^Enter open\/close · ↑↓ move/
+  const change = /^Enter change · ↑↓ move/
+  await ui.press({ key: 'tab-settings' })
+  // the focus is not known yet (or is on a tab button): the normal page hint, not "open/close"
+  expect(await ui.find({ type: 'Text', text: change })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: heading })).toBeUndefined()
+  await keys.focus('tab-settings')
+  expect(await ui.find({ type: 'Text', text: change })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: heading })).toBeUndefined()
+  // a group heading gets the focus: "Enter open/close"
+  await keys.focus('group:Work')
+  expect(await ui.find({ type: 'Text', text: heading })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: change })).toBeUndefined()
+  // the focus moves to a setting row of the open group: "Enter change"; back on a heading: "Enter open/close"
+  // (the test kit can't stand in for the plugin's own ↑↓ focus move, so the moves are made as Tab would)
+  await ui.press({ key: 'group:Work' })
+  await keys.focus('setting:mode')
+  expect(await ui.find({ type: 'Text', text: change })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: heading })).toBeUndefined()
+  await keys.focus('group:Scouts')
+  expect(await ui.find({ type: 'Text', text: heading })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: change })).toBeUndefined()
+  await ui.unmount()
 })
 
 /**

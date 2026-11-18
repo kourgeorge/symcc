@@ -10,7 +10,9 @@ import { seeMainMode, seeSpawnMode, seeAttachment } from './claude/plan'
 import { registerAll } from './claude/registration'
 import { usageTokens, turnEnd } from './claude/usage'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
-import { type $, S, useName } from './plugin/state'
+import { type $, S, useName, scoutRuns, checkerRuns } from './plugin/state'
+import { checkerFinished } from './plugin/checker'
+import { scoutFinished } from './plugin/scouts'
 import { findRoot } from './plugin/store'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { arrowMove, noteFocus } from './plugin/ui/arrows'
@@ -114,7 +116,13 @@ export const register: Register = on => {
     const host = claudeHost($)
     useName($)
     const r = await next(e)
-    agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
+    const end = turnEnd(e)
+    const tokens = usageTokens(e.usage)
+    // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
+    const broken = !e.isAborted && (end.reason === 'error' || end.reason === 'refusal')
+    if (broken && e.agentId && scoutRuns.has(e.agentId)) void scoutFinished(host, e.agentId, e.answer, end, tokens)
+    else if (broken && e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, end, tokens)
+    else agentFinished(host, e.agentId, { answer: e.answer, end, isAborted: e.isAborted, tokens })
     return r
   })
 

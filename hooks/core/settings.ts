@@ -267,8 +267,10 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
       return `${v} ${v === '1' ? 'retry' : 'retries'}`
     case 'enabled':
       return v === 'on' ? '' : 'plugin off'
-    case 'test_commands':
-      return v === 'none' ? 'no tests' : v
+    case 'test_commands': {
+      const cmds = b.test_commands ?? []
+      return !cmds.length ? 'no tests' : cmds.length === 1 ? ellipsis(cmds[0]!, 24) : `${cmds.length} test commands`
+    }
     case 'tests_with_changes':
       return `untested: ${v}`
     case 'checker':
@@ -287,13 +289,22 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
 }
 
 /**
- * A closed group's line on the Settings page: its title and its values in short, cut to `width`
- * ("Work · auto · 3 at once · 45 min · 2 retries"). `pages` gives the text of its page rows
- * (roles, kinds), which are not on the board.
+ * A closed group's line on the Settings page in two parts: its whole title (never cut) and its values in
+ * short after it, cut so both fit in `width` (" · auto · 3 at once · 45 min · 2 retries"); the panel draws
+ * the title bold and the values dim. `pages` gives the text of its page rows (roles, kinds), which are not on the board.
  */
-export function groupSummary(g: SettingGroup, b: Partial<Board>, width: number, pages: Partial<Record<SettingPage, string>> = {}): string {
+export function groupSummaryParts(g: SettingGroup, b: Partial<Board>, width: number, pages: Partial<Record<SettingPage, string>> = {}): { title: string; values: string } {
   const parts = g.items.map(x => (isSettingPage(x) ? (pages[x] ?? '') : shortValue(b, x))).filter(Boolean)
-  return ellipsis([g.title, ...parts].join(' · '), Math.max(width, g.title.length))
+  const room = width - g.title.length
+  // too little room for even a word of the values: leave them out rather than show only " ·…"
+  const values = !parts.length || room < 5 ? '' : ellipsis(` · ${parts.join(' · ')}`, room)
+  return { title: g.title, values }
+}
+
+/** A closed group's line as one text: its title and its values in short ("Work · auto · 3 at once · 45 min"); see groupSummaryParts. */
+export function groupSummary(g: SettingGroup, b: Partial<Board>, width: number, pages: Partial<Record<SettingPage, string>> = {}): string {
+  const p = groupSummaryParts(g, b, width, pages)
+  return p.title + p.values
 }
 
 /**
