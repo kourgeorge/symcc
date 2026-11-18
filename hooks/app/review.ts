@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow } from '../board'
-import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
+import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, now, load, path, tryLock, dropIfSame, safeWrite } from './store'
@@ -97,7 +97,10 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
  * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
  */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string }
+export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
+
+/** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
+export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
 
 /** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
 export type CheckMode = 'finish' | 'approve' | 'merge'
@@ -139,6 +142,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   if (unstaged) return { ok: false, detail: `symcc could not leave out files that look like secrets (${secretsLeftText(left)}): ${unstaged}` }
   const committed = await commitTry($, t, dir, made)
   if (committed) return { ok: false, detail: `symcc could not commit the work: ${committed}` }
+  if (!(await branchExists($, target))) return goneResult(target)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   let head = await gitOk($, ['rev-parse', 'HEAD'], dir)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
@@ -467,6 +471,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // turn does nothing, as the next try may already be using the folder.
   const early = stopped()
   if (early) return res(early)
+  // T-440: checked again here, as the merge turn may have waited long behind other merges
+  if (!(await branchExists($, target))) return res(goneResult(target))
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
   let candidate = tip
@@ -514,9 +520,12 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
   if (s) return res(s)
+  // T-440: the tests can take many minutes; the branch may have been deleted meanwhile
+  if (!(await branchExists($, target))) return res(goneResult(target))
   await markStep($, t, 'merging', stopped)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
+  if (!moved.ok && !(await branchExists($, target))) return res(goneResult(target))
   if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }
   const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.

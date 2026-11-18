@@ -91,9 +91,12 @@ export const startS = () => ({
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
   driving: false,
-  /** board.json's mtime (ms) when this session last read, saved or looked at it; null = not known yet. A session that
-   *  does not drive reloads and redraws the board on its heartbeat when the file's mtime differs from this (T-429) */
+  /** board.json's mtime (ms) of the state this session last drew (publish) or saved; null = not known yet. A session that
+   *  does not drive reloads and redraws the board on its heartbeat when the file's mtime differs from this (T-429).
+   *  A plain load does not set it, so reading the board just after another session wrote it still redraws (T-431) */
   boardMtime: null as number | null,
+  /** board.json's mtime (ms) when this session last loaded or saved it; publish copies it to boardMtime (T-431) */
+  readMtime: null as number | null,
   beat: null as { cancel(): void } | null,
   /** the Settings view's edit box (numbers, test_commands): which setting, what is typed, the last error */
   settingEdit: null as { name: SettingName; value: string; error: string } | null,

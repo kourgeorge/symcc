@@ -48,7 +48,7 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
       {box('description', 'Description', 'what the role is for, in a few words', { autoFocus: true })}
       {box('model', 'Model', "empty: the session's model")}
       {box('skills', 'Skills', 'skill names joined with ", " (empty: none)')}
-      {box('tools', 'Tools', 'extra tools: WebSearch, WebFetch (empty: none)')}
+      {box('tools', 'Tools', 'extra tools: web, to search and read the web (empty: none)')}
       {box('checklist', 'Checklist', 'what a worker with this role checks, one line each', { rows: 8 })}
       {footer(roleEditKeys(), 'role-edit-keys')}
     </Box>
