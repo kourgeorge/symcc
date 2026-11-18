@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -2740,6 +2740,62 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   // the lead (no agent) and an agent that is not a worker are never refused
   expect(await bash(undefined, `echo x > ${ROOT}/README.md`)).toBeUndefined()
   expect(await bash('nobody', `echo x > ${ROOT}/README.md`)).toBeUndefined()
+  workers.clear()
+})
+
+test("a worker's git writes in its own folder are refused like a checker's; read-only git and the merge-it-in step still work (T-432)", async () => {
+  S.me = 'me'
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
+  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
+  const bash = (command: string) => checkEdit(f.$, 'ag1', { command })
+  for (const [command, what] of [
+    ['git commit -am x', 'git commit'],
+    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
+    ['git push . HEAD:main', 'git push'],
+    ['git merge main', 'git merge'],
+    ['git add -A && git commit -m x', 'git add'],
+    ['git reset --hard HEAD~1', 'git reset'],
+    ['git checkout main', 'git checkout'],
+    ['git switch -c x', 'git switch'],
+    ['git branch -f main HEAD', 'git branch'],
+    ['git tag v1', 'git tag'],
+    ['git stash', 'git stash'],
+    ['git rebase main', 'git rebase'],
+    ['git worktree add /tmp/x main', 'git worktree'],
+    ['git merge --abort', 'git merge'],
+    ['sh -c "git update-ref refs/heads/main HEAD"', 'git update-ref'],
+    ['/usr/libexec/git-core/git-update-ref refs/heads/main HEAD', 'git update-ref'],
+  ] as const) expect(await bash(command)).toBe(workerGitWriteText(what))
+  expect(workerGitWriteText('git commit')).toMatch(/^Refused: git commit may change the repository .*a worker may only read with git/)
+  expect(workerGitWriteText('git commit')).not.toMatch(/In this try you may/)
+  for (const command of ['git status', 'git diff', 'git log --oneline -5', 'git show HEAD', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git stash list', 'bun test', 'echo "use git diff"'])
+    expect(await bash(command)).toBeUndefined()
+  // a path in the owner's copy is still refused for that first
+  expect(await bash(`cd ${ROOT} && git commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
+  // the merge-it-in try (its task conflicted with main): git merge main and --abort pass, nothing else does
+  await saveBoard(f.$, patchTask(b, 'T-1', { merge_main: true }, ISO))
+  for (const command of ['git merge main', 'git merge --no-edit main 2>&1 | tail -20', 'git merge --abort', 'git status && git diff'])
+    expect(await bash(command)).toBeUndefined()
+  for (const [command, what] of [
+    ['git merge other', 'git merge'],
+    ['git merge -m x main', 'git merge'],
+    ['git merge main && git commit -am x', 'git commit'],
+    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
+    ['git add -A', 'git add'],
+  ] as const) expect(await bash(command)).toBe(workerGitWriteText(what, 'main'))
+  expect(workerGitWriteText('git commit', 'main')).toMatch(/In this try you may also run `git merge main`/)
+  // a task that merges into another branch may merge only that one
+  await saveBoard(f.$, patchTask(b, 'T-1', { merge_main: true, merge_into: 'dev' } as Partial<BoardTask>, ISO))
+  expect(await bash('git merge dev')).toBeUndefined()
+  expect(await bash('git merge main')).toBe(workerGitWriteText('git merge', 'dev'))
+  // no file request was recorded for any of them
+  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  // the lead and agents that are not workers are never refused
+  expect(await checkEdit(f.$, undefined, { command: 'git commit -am x' })).toBeUndefined()
+  expect(await checkEdit(f.$, 'nobody', { command: 'git commit -am x' })).toBeUndefined()
   workers.clear()
 })
 
