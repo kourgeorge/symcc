@@ -46,14 +46,9 @@ export function parseAsk(a: Record<string, unknown>): WorkerQuestion | string {
   return { question: question.slice(0, QUESTION_MAX_CHARS), options }
 }
 
-/** The file tools whose target a worker's edit is checked on, and the input field that names it. */
-export const EDIT_PATH_FIELD: Readonly<Record<string, string>> = { Edit: 'file_path', Write: 'file_path', NotebookEdit: 'notebook_path' }
-
-/** The path field of an Edit, Write or NotebookEdit call of `tool` with `input`, trimmed; undefined for other tools or no path. */
-export function editTarget(tool: string, input: unknown): string | undefined {
-  const field = EDIT_PATH_FIELD[tool]
-  const p = field && input && typeof input === 'object' ? (input as Record<string, unknown>)[field] : undefined
-  return typeof p === 'string' && p.trim() ? p.trim() : undefined
+/** The path an edit would write (as the host tells it, see FileTouch in host.ts), trimmed; undefined for none or an empty one. */
+export function editTarget(path: string | undefined): string | undefined {
+  return typeof path === 'string' && path.trim() ? path.trim() : undefined
 }
 
 /** `p` as a clean absolute path: relative paths are taken from `base`, and ".", ".." and repeated slashes are worked out. */
@@ -109,14 +104,14 @@ function inside(abs: string, dir: string, exact: boolean): string | undefined {
 }
 
 /**
- * Where an Edit, Write or NotebookEdit call would write when it lands inside the project folder `root` but outside the
+ * Where an edit of `path` would write when it lands inside the project folder `root` but outside the
  * worker's own folder `worktree` (for example the owner's README.md, the board, or another worker's folder): the path
- * relative to `root`. Relative paths are taken from the worker's folder. Undefined for other tools, for edits inside
+ * relative to `root`. Relative paths are taken from the worker's folder. Undefined for no path, for edits inside
  * the worker's folder, and for paths outside the project (such as /tmp). The project check ignores letter case (macOS
  * folders usually do), so a path that only differs in case is refused too.
  */
-export function editOutsideFolder(tool: string, input: unknown, worktree: string, root: string): string | undefined {
-  const p = editTarget(tool, input)
+export function editOutsideFolder(path: string | undefined, worktree: string, root: string): string | undefined {
+  const p = editTarget(path)
   if (!p || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
   const abs = resolvePath(worktree, p)
   const wt = resolvePath('/', worktree)
@@ -513,13 +508,13 @@ export const gitWriteText = (what: string) =>
   `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
 
 /**
- * The project path (relative to the worker's folder `worktree`) an Edit, Write or NotebookEdit call of `tool`
- * with `input` would change, when it lies outside `files` (the same matching as the merge-time scope check,
- * outOfScope); undefined when the edit is allowed, is another tool, or is outside the worker's folder (see
+ * The project path (relative to the worker's folder `worktree`) an edit of `path` would change, when it lies outside
+ * `files` (the same matching as the merge-time scope check, outOfScope); undefined when the edit is allowed, has no
+ * path, or is outside the worker's folder (see
  * editOutsideFolder for those). Relative paths are taken from the worker's folder, and ".." is worked out first.
  */
-export function blockedEdit(tool: string, input: unknown, worktree: string, files: string[], dataDir: string): string | undefined {
-  const p = editTarget(tool, input)
+export function blockedEdit(path: string | undefined, worktree: string, files: string[], dataDir: string): string | undefined {
+  const p = editTarget(path)
   if (!p || !worktree.startsWith('/')) return undefined
   const rel = inside(resolvePath(worktree, p), resolvePath('/', worktree), true)
   if (!rel) return undefined

@@ -1,12 +1,13 @@
 // A worker's try hands back through Claude Code's own mechanisms, never through words in its text:
 // - a question: the workers' ask_owner tool (as the host names it, see toolName in state.ts), served in the tool.call hook;
-// - more files: an Edit, Write or NotebookEdit outside the task's files is refused in the tool.check hook,
-//   and the path is recorded as a request to the owner.
+// - more files: an edit outside the task's files is refused in the tool.check hook, and the path is recorded as a
+//   request to the owner. The host tells what a call would touch (a file path, or a shell command: FileTouch in
+//   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
-import type { Host } from '../host'
+import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
 
@@ -46,14 +47,14 @@ export async function askCall($: Host, agentId: string | undefined, a: Record<st
 }
 
 /**
- * An edit call's path, the worker's folder `worktree` and the project folder `root` with symbolic links followed
+ * An edit's path, the worker's folder `worktree` and the project folder `root` with symbolic links followed
  * (realPathOf), so a link in the worker's folder that leads into the owner's copy is judged by where it leads.
  * When any of the three can't be looked up, all three stay as written (the checks then work as before T-303).
  * Null when the path goes through a link that leads nowhere.
  */
-async function realEdit($: Host, tool: string, input: unknown, worktree: string, root: string): Promise<{ input: unknown; worktree: string; root: string } | null> {
-  const asIs = { input, worktree, root }
-  const p = editTarget(tool, input)
+async function realEdit($: Host, path: string, worktree: string, root: string): Promise<{ path: string; worktree: string; root: string } | null> {
+  const asIs = { path, worktree, root }
+  const p = editTarget(path)
   if (!p || !worktree.startsWith('/') || !root.startsWith('/')) return asIs
   // a failed lookup (even one that throws at once) answers "not there" / "not a link", so nothing is refused for it
   const look: PathLookup = {
@@ -63,60 +64,61 @@ async function realEdit($: Host, tool: string, input: unknown, worktree: string,
   const [file, wt, top] = await Promise.all([realPathOf(worktree, p, look), realPathOf('/', worktree, look), realPathOf('/', root, look)])
   if (file === null) return null
   if (!file || !wt || !top) return asIs
-  return { input: { ...(input as Record<string, unknown>), [EDIT_PATH_FIELD[tool]!]: file }, worktree: wt, root: top }
+  return { path: file, worktree: wt, root: top }
 }
 
 /**
- * The tool.check hook's part: for a running worker, an edit inside the project but outside its own folder (the owner's
- * copy, the board, another worker's folder) is always refused, with no file request (the worker should edit its own copy).
+ * The tool.check hook's part, for a call that touches what `touch` says (from the host: a file it writes, or a shell
+ * command it runs; null for anything else, which is never refused here): for a running worker, an edit inside the
+ * project but outside its own folder (the owner's copy, the board, another worker's folder) is always refused, with no
+ * file request (the worker should edit its own copy).
  * On a change task, an edit in its folder outside the task's files is refused (the reason the worker reads) and its path
  * recorded on its try on the board. Undefined: not ours to decide. An investigation
- * has no file list, so its edits are never refused (they are not kept anyway). A worker's Bash command that names a path
+ * has no file list, so its edits are never refused (they are not kept anyway). A worker's shell command that names a path
  * in the project outside its own folder is refused too (bashOutsideFolder); the merge-time scope check stays the backstop
- * for files written through Bash inside its folder. `cwd` is the folder the worker's shell is in (the Bash tool keeps it
- * between calls); relative paths start there when it is inside the worker's folder.
+ * for files written through the shell inside its folder. `cwd` is the folder the worker's shell is in (a shell tool may
+ * keep it between calls); relative paths start there when it is inside the worker's folder.
  */
-export async function checkEdit($: Host, agentId: string | undefined, tool: string, input: unknown, cwd?: string): Promise<string | undefined> {
-  if (!agentId || (!EDIT_PATH_FIELD[tool] && tool !== 'Bash')) return undefined
+export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string): Promise<string | undefined> {
+  if (!agentId || !touch) return undefined
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
   const chk = checkerRuns.get(agentId)
   if (chk) {
     // a checker only reads with git: its branch names are shared with the owner's folder (main too), and so is the stash
-    const git = tool === 'Bash' ? gitWriteIn(input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined) : undefined
+    const git = 'command' in touch ? gitWriteIn(touch.command) : undefined
     if (git) return gitWriteText(git)
-    return outsideOwnFolder($, tool, input, chk.worktree, cwd)
+    return outsideOwnFolder($, touch, chk.worktree, cwd)
   }
   // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
   const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
-  if (tool === 'Bash') return outsideOwnFolder($, tool, input, w.worktree, cwd)
-  const real = await realEdit($, tool, input, w.worktree, S.root)
+  if ('command' in touch) return outsideOwnFolder($, touch, w.worktree, cwd)
+  const real = await realEdit($, touch.path, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
-  if (real === null) return brokenLinkText(editTarget(tool, input)!)
-  const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
+  if (real === null) return brokenLinkText(editTarget(touch.path)!)
+  const outside = real.root ? editOutsideFolder(real.path, real.worktree, real.root) : undefined
   if (outside !== undefined) return outsideFolderText(outside, w.worktree, S.N.dir)
   // an unreadable board throws on, so the hook's .catch refuses the edit (see guardFailed): never let it through unchecked
   const t = find(await load($), w.task)
   if (!t || isInvestigation(t)) return undefined
-  const path = blockedEdit(tool, real.input, real.worktree, t.files, S.N.dir)
+  const path = blockedEdit(real.path, real.worktree, t.files, S.N.dir)
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
 }
 
 /**
- * Why a Bash command or an edit of a checker in folder `worktree` is refused: it names a path in the project outside
+ * Why a shell command or an edit of a checker in folder `worktree` is refused: it names a path in the project outside
  * that folder (the owner's copy, the board, another worker's folder). Undefined: allowed.
  */
-async function outsideOwnFolder($: Host, tool: string, input: unknown, worktree: string, cwd?: string): Promise<string | undefined> {
-  if (tool === 'Bash') {
-    const cmd = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined
-    const rel = S.root ? bashOutsideFolder(cmd, worktree, S.root, S.home || undefined, cwd) : undefined
+async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<string | undefined> {
+  if ('command' in touch) {
+    const rel = S.root ? bashOutsideFolder(touch.command, worktree, S.root, S.home || undefined, cwd) : undefined
     return rel !== undefined ? bashOutsideText(rel, worktree) : undefined
   }
-  const real = await realEdit($, tool, input, worktree, S.root)
-  if (real === null) return brokenLinkText(editTarget(tool, input)!)
-  const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
+  const real = await realEdit($, touch.path, worktree, S.root)
+  if (real === null) return brokenLinkText(editTarget(touch.path)!)
+  const outside = real.root ? editOutsideFolder(real.path, real.worktree, real.root) : undefined
   return outside !== undefined ? outsideFolderText(outside, worktree, S.N.dir) : undefined
 }
 

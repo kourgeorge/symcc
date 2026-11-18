@@ -1,14 +1,15 @@
 // The shared fake Host (T-246): what the tests of symcc's logic (hooks/plugin/, hooks/app/) run on, with no Claude Code
 // `$` at all. It is also the model for a new host (an OpenCode plugin, a standalone client): every member a Host has,
 // in symcc's words (hooks/host.ts). By default nothing is there: no files, every command answers exit 0 with no output,
-// timers never fire, no agents, no screen; the lead's messages and the agents started and messaged are recorded.
+// timers never fire, no agents, no screen (but every feature on, as Claude Code has them); the lead's messages and the agents started and messaged are recorded.
 // A test gives only the parts its world needs (`parts`), and may change any member afterwards (the Host is a plain
 // object: e.g. `w.$.agents.spawn = ...`).
-import { type Host, type HostAgent, type HostAgentStart, type HostRunResult, type PanelValues, SYMCC_WORDS, noUi } from '../hooks/host'
+import { type Host, type HostAgent, type HostAgentStart, type HostRunResult, type PanelValues, ALL_FEATURES, SYMCC_WORDS, noUi } from '../hooks/host'
 import type { SymccView } from '../types'
 
 /** The parts of a Host a test gives: each member group in part; what is left out keeps the fake's default. */
 export type HostParts = {
+  features?: Partial<Host['features']>
   plugin?: Partial<Host['plugin']>
   session?: Partial<Host['session']>
   lead?: Partial<Host['lead']>
@@ -54,6 +55,7 @@ export function fakeHost(parts: HostParts = {}) {
   const panel = memoryPanel()
   const timer = { cancel: () => undefined }
   const host: Host = {
+    features: { ...ALL_FEATURES, ...parts.features },
     plugin: { name: 'symcc', root: '/plugin', ...parts.plugin },
     session: { id: async () => 'me', repo: async () => null, root: async () => '/', usage: async () => ({}), ...parts.session },
     lead: { send: async text => void toLead.push(text), usage: async () => ({}), ...parts.lead },

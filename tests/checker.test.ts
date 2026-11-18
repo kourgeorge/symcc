@@ -477,11 +477,11 @@ test("a checker's Bash aimed at the owner's project folder is refused as a worke
   const w = world()
   await saveBoard(w.$, boardWith(true))
   await finish(w, async id => {
-    expect(await checkEdit(w.$, id, 'Bash', { command: `echo x > ${ROOT}/README.md` })).toBe(bashOutsideText('README.md', WT))
-    expect(await checkEdit(w.$, id, 'Bash', { command: `cd ${ROOT} && git reset --hard HEAD~1` })).toBeDefined()
-    expect(await checkEdit(w.$, id, 'Bash', { command: `cat ${ROOT}/.symcc/board.json` })).toBeDefined()
-    expect(await checkEdit(w.$, id, 'Edit', { file_path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
-    expect(await checkEdit(w.$, id, 'Bash', { command: `cat ${WT}/src/a.ts && npm test` })).toBeUndefined()
+    expect(await checkEdit(w.$, id, { command: `echo x > ${ROOT}/README.md` })).toBe(bashOutsideText('README.md', WT))
+    expect(await checkEdit(w.$, id, { command: `cd ${ROOT} && git reset --hard HEAD~1` })).toBeDefined()
+    expect(await checkEdit(w.$, id, { command: `cat ${ROOT}/.symcc/board.json` })).toBeDefined()
+    expect(await checkEdit(w.$, id, { path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
+    expect(await checkEdit(w.$, id, { command: `cat ${WT}/src/a.ts && npm test` })).toBeUndefined()
     checkerFinished(id, 'OK')
   })
 })
@@ -498,7 +498,7 @@ test("a checker's git commands that change anything are refused, read-only ones 
   const w = world()
   await saveBoard(w.$, boardWith(true))
   await finish(w, async id => {
-    const bash = (command: string) => checkEdit(w.$, id, 'Bash', { command })
+    const bash = (command: string) => checkEdit(w.$, id, { command })
     for (const [command, what] of [
       ['git commit -am x', 'git commit'],
       ['git checkout main', 'git checkout'],
@@ -563,7 +563,7 @@ test("a checker's git commands that change anything are refused, read-only ones 
   // a worker's own git commands in its folder are not refused
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   for (const command of ['git commit -am x', 'git stash', 'git reset --hard', 'git checkout -b x'])
-    expect(await checkEdit(w.$, 'ag2', 'Bash', { command })).toBeUndefined()
+    expect(await checkEdit(w.$, 'ag2', { command })).toBeUndefined()
 })
 
 // ---------------- a reload during the checker (T-386) ----------------

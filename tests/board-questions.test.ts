@@ -2,10 +2,13 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { leadGuide } from '../hooks/plugin/tools'
 import { workerQuestionText, overtimeLeadText } from '../hooks/plugin/workers'
+import { S } from '../hooks/plugin/state'
+import { CLAUDE_WORDS } from '../hooks/claude/host'
 
 // T-396: an AskUserQuestion dialog stays open in the chat when the owner answers on the
 // board, so the lead must ask board-answerable questions as plain chat text.
 test('the lead asks board-answerable questions as plain numbered text, not with AskUserQuestion', () => {
+  S.W = CLAUDE_WORDS // Claude Code's words (T-371: another host may have no pop-up question tool)
   const guide = leadGuide()
   expect(guide).toContain('Never use AskUserQuestion for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep AskUserQuestion only for questions that are not on the board.')
   expect(guide).not.toContain('e.g. with AskUserQuestion')
