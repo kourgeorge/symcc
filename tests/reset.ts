@@ -6,6 +6,7 @@ import { test as plainTest, type TestBody, type TestRest } from 'claude-code/tes
 import { emptyHeard } from '../hooks/board'
 import { S, startS, timers, workers, starting, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
 import { resetScoutRuns } from '../hooks/plugin/scouts'
+import { resetStarts } from '../hooks/plugin/starts'
 import { resetStore } from '../hooks/plugin/store'
 import { resetMergeTurns } from '../hooks/plugin/review'
 import { resetLogo } from '../hooks/plugin/logo'
@@ -27,6 +28,7 @@ export function resetPlugin() {
   for (const k of Object.keys(S)) delete (S as Record<string, unknown>)[k]
   Object.assign(S, startS())
   resetScoutRuns()
+  resetStarts()
   resetStore()
   resetMergeTurns()
   resetLogo()

@@ -11,7 +11,8 @@ import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
-import { type Host, notReadyYet } from '../host'
+import { type Host, type HostAgentStarted, notReadyYet } from '../host'
+import { startAgent, QUEUED_NOTE } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -35,40 +36,58 @@ export async function pump(host: Host) {
   if (modeOf(b) === 'off' || !symccOn(b)) return
   if (!ready(b).length) return
   if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
-  for (const t of ready(b)) {
-    if (workers.size >= b.max_parallel) break
-    if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
-    await startWorker(host, t.id).catch(async (err: Error) => {
-      await change(host, x => patchTask(x, t.id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, t.id), now(), 'stopped', "couldn't start") }, now()))
-      tellLead(host, `${t.id} couldn't start: ${err.message.slice(0, 300)}`)
-    })
+  const failed = (id: string) => async (err: Error) => {
+    await change(host, x => patchTask(x, id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, id), now(), 'stopped', "couldn't start") }, now()))
+    tellLead(host, `${id} couldn't start: ${err.message.slice(0, 300)}`)
   }
+  // Each task is made ready and claimed in turn; their starts then wait in the queue together (see plugin/starts.ts),
+  // so one wake-up starts them all. A worker still in the queue counts as running (it is in `starting`).
+  const queued: Promise<void>[] = []
+  for (const t of ready(b)) {
+    if (workers.size + starting.size >= b.max_parallel) break
+    if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
+    const q = await queueWorker(host, t.id).catch(async (err: Error) => (await failed(t.id)(err), null))
+    if (q) queued.push(q.started.catch(failed(t.id)))
+  }
+  await Promise.all(queued)
 }
 
 /**
  * Starts a worker on task `id`, but only if it is still "todo" and no live agent works on it
- * (see mayStart). The claim happens inside change(), so two starts can't both win.
+ * (see mayStart). The claim happens inside change(), so two starts can't both win. Settles once the worker
+ * started (it waits in the start queue meanwhile, see plugin/starts.ts).
  */
 export async function startWorker(host: Host, id: string) {
+  const q = await queueWorker(host, id)
+  await q?.started
+}
+
+/**
+ * startWorker up to the queue: prepares task `id`'s folder, claims the task ("doing", noted as starting at the next
+ * turn) and queues its worker's start. Null when it doesn't start; else `started` settles once the worker started
+ * (or rejects: the start failed for good). The task stays in `starting` until then.
+ */
+async function queueWorker(host: Host, id: string): Promise<{ started: Promise<void> } | null> {
   // Not while its last try is still being checked (it was resumed or retried meanwhile): it starts when the check ends.
-  if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return
+  if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return null
   starting.add(id)
   onPurpose.delete(id) // a new try: an old stop on purpose is over
+  let queued = false
   try {
     const listed = await agentsNow(host)
-    if (!listed) return // can't see which agents run; try again on the next pump
+    if (!listed) return null // can't see which agents run; try again on the next pump
     // An agent this copy stopped (an orphan, see stopOrphans) doesn't hold its task any more, even
     // while it stays listed: every tool it tries is refused, so a fresh worker may start (sendBackIdle
     // sent its task back to todo for exactly that).
     const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id))
     const b = await load(host)
     const t0 = find(b, id)
-    if (!mayStart(t0, agents, S.N.name)) return
+    if (!mayStart(t0, agents, S.N.name)) return null
     // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
     // the owner retried it after it was wrongly failed): it is done, not tried again.
-    if (await mergedBeforeStart(host, t0!)) return
+    if (await mergedBeforeStart(host, t0!)) return null
     // the branch it merges into is gone: it waits for the owner instead of failing
-    if (await waitIfBranchGone(host, b, t0!, 'start')) return
+    if (await waitIfBranchGone(host, b, t0!, 'start')) return null
     const { dir, branch } = await prepareWorktree(host, t0!, intoOf(t0!))
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports(host, t0!, dir).catch(() => [])
@@ -79,40 +98,47 @@ export async function startWorker(host: Host, id: string) {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]
       const at = now()
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: QUEUED_NOTE, runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
       return [y, find(y, id)!]
     })
-    if (!t) return
+    if (!t) return null
     const before = find(b, id)!
-    let agentId: string
-    try {
-      const role = findRole(roles, roleOf(t))
-      const spawned = await host.agents.spawn({ kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
-      if (!spawned.agentId) throw new Error('the worker did not start')
-      agentId = spawned.agentId
-    } catch (err) {
-      const misses = notReady.get(id) ?? 0
-      if (!notReadyYet(err) || onNotReady(misses) === 'fail') {
-        notReady.delete(id)
-        throw err
-      }
-      // Not the task's fault: the worker type isn't there yet (e.g. just after a reload).
-      // Put the task back as it was, with no try counted; the next pump or check tries again.
-      notReady.set(id, misses + 1)
-      await change(host, x =>
-        find(x, id)?.status === 'doing' && find(x, id)?.session === S.me
-          ? patchTask(x, id, { status: 'todo', session: before.session, attempts: before.attempts, branch: before.branch, note: before.note, runs: before.runs }, now())
-          : x,
-      )
-      return
-    }
-    notReady.delete(id)
-    workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
-    // Record which agent works on the task, so a reloaded copy can find it.
-    await change(host, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId }, now()) : x))
+    const role = findRole(roles, roleOf(t))
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+    queued = true
+    return { started: workerStarted(host, id, before, dir, branch, spawn).finally(() => starting.delete(id)) }
   } finally {
-    starting.delete(id)
+    if (!queued) starting.delete(id)
   }
+}
+
+/** Task `id`'s queued worker (`spawn`, see queueWorker) started, or didn't: it is recorded on the task, or the task is put back as it was (`before`). */
+async function workerStarted(host: Host, id: string, before: BoardTask, dir: string, branch: string, spawn: Promise<HostAgentStarted>) {
+  let agentId: string
+  try {
+    const spawned = await spawn
+    if (!spawned.agentId) throw new Error('the worker did not start')
+    agentId = spawned.agentId
+  } catch (err) {
+    const misses = notReady.get(id) ?? 0
+    if (!notReadyYet(err) || onNotReady(misses) === 'fail') {
+      notReady.delete(id)
+      throw err
+    }
+    // Not the task's fault: the worker type isn't there yet (e.g. just after a reload).
+    // Put the task back as it was, with no try counted; the next pump or check tries again.
+    notReady.set(id, misses + 1)
+    await change(host, x =>
+      find(x, id)?.status === 'doing' && find(x, id)?.session === S.me
+        ? patchTask(x, id, { status: 'todo', session: before.session, attempts: before.attempts, branch: before.branch, note: before.note, runs: before.runs }, now())
+        : x,
+    )
+    return
+  }
+  notReady.delete(id)
+  workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
+  // Record which agent works on the task, so a reloaded copy can find it; the note says it runs now.
+  await change(host, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId, ...(find(x, id)!.note === QUEUED_NOTE ? { note: 'worker on it' } : {}) }, now()) : x))
 }
 
 /**

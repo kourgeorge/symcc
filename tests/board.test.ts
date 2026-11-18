@@ -2,6 +2,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../types'
 import { pause, commandsOf } from './fakes'
+import { turnNow, withStarts } from './starts'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
@@ -2975,34 +2976,49 @@ function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
 
 const OLD_RUN = '2026-11-01T10:00:00.000Z'
 
-test('a scout whose start fails keeps its old last_run, and "run now" says why instead of "started"', async () => {
+/**
+ * "Run now" on scout `name` (T-391: it answers at once, and its start waits in the queue), then the next turn's start
+ * or end, which starts it (turnNow); waits until it ran or its start failed. Returns what "run now" answered.
+ */
+async function runNow(w: ReturnType<typeof scoutWorld>, name: string) {
+  const said = await runScoutNow(w.$, name)
+  if (!(await turnNow(w.$))) return said
+  for (let i = 0; i < 10; i++) await pause(0)
+  return said
+}
+
+test('a scout whose start fails keeps its old last_run; "run now" says it is starting, and the owner is told why it did not', async () => {
   const w = scoutWorld(async () => ({ deny: 'no agents allowed here' }))
-  expect(await runScoutNow(w.$, 'gaps')).toBe("scout gaps didn't start: no agents allowed here")
+  expect(await runNow(w, 'gaps')).toBe('scout gaps is starting')
+  expect(w.toasts.filter(t => t.includes("scout gaps didn't start: no agents allowed here")).length).toBe(1)
   const st = scoutState.get('gaps')!
   st.last_run = OLD_RUN
-  const why = await runScout(w.$, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' })
+  const why = await withStarts(w.$, runScout(w.$, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' }))
   expect(why).toContain('no agents allowed here')
   expect(st.last_run).toBe(OLD_RUN)
   expect(st.running).toBe(false)
   // the owner is told once, not on every failed try
   expect(w.toasts.filter(t => t.includes("didn't start")).length).toBe(1)
-  expect(w.later.length).toBe(0)
+  // no retry timer; the only timer is the lead's wake-up for the queued start (1.5 s, T-391)
+  expect(w.later.filter(l => l.ms !== 1500).length).toBe(0)
 })
 
 test('a scout whose type is not ready yet is tried again shortly, then starts with the old last_run in its prompt', async () => {
   let ready = false
   const w = scoutWorld(async () => (ready ? { agentId: 'a1' } : { deny: "Agent type 'symcc:scout' not found" }))
-  await runScoutNow(w.$, 'gaps')
+  await runNow(w, 'gaps')
   const st = scoutState.get('gaps')!
   st.last_run = OLD_RUN
-  const why = await runScout(w.$, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' })
+  const why = await withStarts(w.$, runScout(w.$, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' }))
   expect(why).toContain('trying again')
   expect(st.last_run).toBe(OLD_RUN)
   expect(w.toasts.length).toBe(0)
-  expect(w.later.length).toBe(2)
+  // the retry timers (one per failed start); the lead's wake-up for the queued start is a timer too (1.5 s)
+  const retries = w.later.filter(l => l.ms !== 1500)
+  expect(retries.length).toBe(2)
   ready = true
-  w.later.at(-1)!.f()
-  for (let i = 0; i < 20 && !scoutRuns.has('a1'); i++) await pause(0)
+  retries.at(-1)!.f()
+  for (let i = 0; i < 20 && !scoutRuns.has('a1'); i++) await (turnNow(w.$), pause(0))
   expect(scoutRuns.get('a1')).toBe('gaps')
   expect(st.running).toBe(true)
   expect(st.last_run).not.toBe(OLD_RUN)
@@ -3011,19 +3027,20 @@ test('a scout whose type is not ready yet is tried again shortly, then starts wi
 
 test('a scout run stopped from the agent controls is not saved as a report and not sent to the lead', async () => {
   const w = scoutWorld(async () => ({ agentId: 'a2' }))
-  await runScoutNow(w.$, 'gaps') // first, so the scout is known
+  await runNow(w, 'gaps') // first, so the scout is known
   const st0 = scoutState.get('gaps')!
   st0.running = false
   st0.last_run = OLD_RUN
   st0.last_report = 'the real report'
-  expect(await runScoutNow(w.$, 'gaps')).toBe('scout gaps started')
+  expect(await runNow(w, 'gaps')).toBe('scout gaps is starting')
   const st = scoutState.get('gaps')! // "run now" schedules the scouts again, which makes a new state object
   expect(st.last_run).not.toBe(OLD_RUN)
   await scoutFinished(w.$, 'a2', 'I was halfway through check', true)
   expect(st.running).toBe(false)
   expect(st.last_run).toBe(OLD_RUN)
   expect(st.last_report).toBe('the real report')
-  expect(scoutLeadQueue.length).toBe(0)
+  // only the wake-ups for the queued starts (T-391) went to the lead
+  expect(scoutLeadQueue.filter(m => !m.startsWith('Starting ')).length).toBe(0)
   // the stopped run's tokens and time still count (scouts.json's usage), but no report or run time is saved
   const saved = w.files.get('/repo/.symcc/scouts.json') ?? null
   expect(parseScoutMemory(saved).gaps).toBe(undefined)
@@ -3242,9 +3259,9 @@ test("taskKeys shows the try number keys for reports only when more than one try
 
 test('a scout answer that starts with a NOTHING line, then what it checked, is saved but not sent to the lead', async () => {
   const w = scoutWorld(async () => ({ agentId: 'a3' }))
-  await runScoutNow(w.$, 'gaps') // first, so the scout is known
+  await runNow(w, 'gaps') // first, so the scout is known
   scoutState.get('gaps')!.running = false
-  expect(await runScoutNow(w.$, 'gaps')).toBe('scout gaps started')
+  expect(await runNow(w, 'gaps')).toBe('scout gaps is starting')
   const st = scoutState.get('gaps')!
   scoutLeadQueue.splice(0)
   await scoutFinished(w.$, 'a3', 'NOTHING\n\nWhat I checked: .env files, keys in src/, the git history.')

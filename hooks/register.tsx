@@ -13,6 +13,7 @@ import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideTex
 import { type $, S, useName, scoutRuns, checkerRuns } from './plugin/state'
 import { checkerFinished } from './plugin/checker'
 import { scoutFinished } from './plugin/scouts'
+import { drainStarts, leadTurn } from './plugin/starts'
 import { findRoot } from './plugin/store'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { arrowMove, noteFocus } from './plugin/ui/arrows'
@@ -38,6 +39,8 @@ export const register: Register = on => {
     await registerAll($)
     const result = await next(e)
     await sessionStart(host)
+    // agents start only inside session.start, the main loop's turn.start and turn.complete (see plugin/starts.ts)
+    await drainStarts(host)
     return result
   })
 
@@ -111,6 +114,17 @@ export const register: Register = on => {
     return deny ? { decision: 'deny', reason: deny } : next(e)
   })
 
+  // The main loop's turn starts (the owner's prompt, or symcc's own board update that woke the lead): queued agents start here.
+  on('turn.start', async ($, e, next) => {
+    useName($)
+    const r = await next(e)
+    if (!e.agentId) {
+      leadTurn(true)
+      await drainStarts(claudeHost($))
+    }
+    return r
+  })
+
   // An agent's run ended: its final answer arrives here, with why it ended (e.reason).
   on('turn.complete', async ($, e, next) => {
     const host = claudeHost($)
@@ -123,6 +137,9 @@ export const register: Register = on => {
     if (broken && e.agentId && scoutRuns.has(e.agentId)) void scoutFinished(host, e.agentId, e.answer, end, tokens)
     else if (broken && e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, end, tokens)
     else agentFinished(host, e.agentId, { answer: e.answer, end, isAborted: e.isAborted, tokens })
+    if (!e.agentId) leadTurn(false)
+    // any turn's end (the lead's or an agent's) starts the queued agents (see plugin/starts.ts)
+    await drainStarts(host)
     return r
   })
 

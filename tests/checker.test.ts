@@ -12,6 +12,9 @@ import { runTool } from '../hooks/plugin/tools'
 import { test, resetPlugin } from './reset'
 import { turnComplete } from './turn-hook'
 import { claudeHost } from '../hooks/claude/host'
+import type { Host } from '../hooks/host'
+import { drainStarts, queuedStarts } from '../hooks/plugin/starts'
+import { withStarts } from './starts'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -126,8 +129,13 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: claudeHost($ as never) as never, claude: $, git, calls, spawns, sends }
+  const host = claudeHost($ as never)
+  current = host
+  return { $: host as never, claude: $, git, calls, spawns, sends }
 }
+
+/** The last world's host: until and turns start the queued agents with it, as a turn's start or end does (T-391). */
+let current: Host | null = null
 
 /** A board with task T-1 (files src/) "doing" on try 1, with the checker setting `checker`. */
 function boardWith(checker: boolean, extra: Partial<SymccTask> = {}, over: Partial<Board> = {}): Board {
@@ -137,14 +145,25 @@ function boardWith(checker: boolean, extra: Partial<SymccTask> = {}, over: Parti
 
 /** Waits (a few rounds of pending work, never the clock) until `f` holds. */
 async function until(f: () => boolean) {
-  for (let i = 0; i < 20_000 && !f(); i++) await Promise.resolve()
+  for (let i = 0; i < 20_000 && !f(); i++) await turn()
   if (!f()) throw new Error('it never happened')
+}
+
+/** One round of pending work; queued agents start first, as at a turn's start or end (see tests/starts.ts). */
+async function turn() {
+  if (current && queuedStarts()) await drainStarts(current)
+  await Promise.resolve()
+}
+
+/** `n` rounds of pending work (see turn). */
+async function turns(n: number) {
+  for (let i = 0; i < n; i++) await turn()
 }
 
 /** T-1's worker (agent ag1) hands back; `checker` answers the checker (when one starts) and may look at the board meanwhile. */
 async function finish(w: ReturnType<typeof world>, checker?: (agentId: string) => Promise<void>) {
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  const done = workerFinished(w.$, 'ag1', 'made the change')
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change'))
   if (checker) {
     await until(() => checkerRuns.size > 0)
     await checker([...checkerRuns.keys()][0]!)
@@ -663,7 +682,7 @@ test('T-386: a reload after the checker said OK and the work reached main (befor
   S.gitState = 'ok'
   ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status: 'completed' }]
   await check(w.$)
-  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  await turns(2000)
   expect(w.spawns.length).toBe(0)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
@@ -692,7 +711,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
   scoutNotLoaded(w, 1)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
-  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  await turns(2000)
   expect(checkerRuns.size).toBe(0)
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
@@ -716,13 +735,13 @@ test("T-386: a restarted checker whose agent type is still not loaded after 3 st
   scoutNotLoaded(w, 99)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
-  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  await turns(2000)
   expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
   await check(w.$)
-  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  await turns(2000)
   expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
   await check(w.$)
-  for (let i = 0; i < 4000; i++) await Promise.resolve()
+  await turns(4000)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
   expect(t.note).toMatch(/the checker gave no verdict \(the checker couldn't start: Agent type symcc:scout not found\)/)

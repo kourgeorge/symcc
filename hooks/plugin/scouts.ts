@@ -2,7 +2,8 @@ import type { SymccScout, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError } from '../board'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
-import { type Host, notReadyYet } from '../host'
+import { type Host, type HostAgentStarted, notReadyYet } from '../host'
+import { startAgent } from './starts'
 import type { TurnEnd } from './workers'
 import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
@@ -91,11 +92,22 @@ export function resetScoutRuns() {
 }
 
 /**
- * Starts a run of scout `s`. Returns '' when it started, else why not. last_run is only set once the spawn
- * worked, so a failed try doesn't hide the commits since the last real run. When the scout type isn't ready yet
- * (just after a reload) it tries again shortly (`misses` such tries so far); other failures are told to the owner.
+ * Starts a run of scout `s` and waits until it started. Returns '' when it started, else why not. last_run is only
+ * set once the spawn worked, so a failed try doesn't hide the commits since the last real run. When the scout type
+ * isn't ready yet (just after a reload) it tries again shortly (`misses` such tries so far); other failures are told
+ * to the owner.
  */
 export async function runScout(host: Host, s: ScoutDef, misses = 0): Promise<string> {
+  const q = await queueScout(host, s, misses)
+  return typeof q === 'string' ? q : q.started
+}
+
+/**
+ * runScout up to the start queue (see starts.ts): the scout's run is queued, to start at the next turn's start or
+ * end. Answers why not (a string), or `started`, which settles as runScout's answer once it started or didn't.
+ * `byHand`: run now by the owner or the lead, so a failed start is always told (not only the first time).
+ */
+async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): Promise<string | { started: Promise<string> }> {
   const st = scoutState.get(s.name)
   if (!st) return `no scout named ${s.name}`
   // A pause only stops the timer (armScout checks it), so a paused scout still runs here when asked to run now;
@@ -110,9 +122,15 @@ export async function runScout(host: Host, s: ScoutDef, misses = 0): Promise<str
   await publish(host, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
   const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name })
+  const spawn = startAgent(host, { kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
+  return { started: scoutStarted(host, s, st, spawn, lastRun, misses, byHand) }
+}
+
+/** Scout `s`'s queued run (`spawn`) started, or didn't (see runScout): '' or why not. */
+async function scoutStarted(host: Host, s: ScoutDef, st: SymccScout, spawn: Promise<HostAgentStarted>, lastRun: string | null, misses: number, byHand: boolean): Promise<string> {
   let agentId: string
   try {
-    const spawned = await host.agents.spawn({ kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
+    const spawned = await spawn
     if (!spawned.agentId) throw new Error('the scout did not start')
     agentId = spawned.agentId
   } catch (err) {
@@ -125,7 +143,7 @@ export async function runScout(host: Host, s: ScoutDef, misses = 0): Promise<str
       return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`
     }
     const text = `scout ${s.name} didn't start: ${msg}`
-    if (!startWarned.has(s.name)) {
+    if (byHand || !startWarned.has(s.name)) {
       startWarned.add(s.name)
       host.ui.toast(S.N.toast(text))
     }
@@ -359,7 +377,11 @@ export async function runScoutNow(host: Host, name: string): Promise<string> {
   const cur = await load(host)
   const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
-  return (await runScout(host, s)) || `scout ${s.name} started`
+  // not waited for: it is asked from a tool call, a slash command or the panel, and starts at the next turn's start or end (see starts.ts)
+  const q = await queueScout(host, s, 0, true)
+  if (typeof q === 'string') return q
+  void q.started.catch(() => undefined)
+  return `scout ${s.name} is starting`
 }
 
 /** A scout file's text, or null when there is none (or it can't be read). */
