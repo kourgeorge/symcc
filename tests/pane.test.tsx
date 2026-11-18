@@ -1838,3 +1838,29 @@ test('the Scouts, Settings and Roles rows are plain Buttons like the task rows: 
   expect(await ui.find({ key: 'scout:secrets' })).toBeUndefined()
   await ui.unmount()
 })
+
+// ---------------- a failed task's "Why it failed" block ----------------
+
+test('a failed task page starts with "Why it failed": the reason, what the report asks and what to do next, before Details', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-1.md': 'Found the cause: the cache key ignores the user.\nNo code change needed.\nNEED FILES: src/cache.ts\n' })
+  const t = task('T-1', 'failed', 'Fix the cache', { attempts: 1, note: 'the worker made no change', runs: [{ started: '', ended: '', report: R1 }], history: ['try 1: Found the cause: the cache key ignores the user. No code change needed. NEED FILES: src/cache.ts → the worker made no change'] })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  const head = L.findIndex(l => l === '▍Why it failed')
+  expect(head).toBeGreaterThan(-1)
+  expect(head).toBeLessThan(L.findIndex(l => l === '▍Details'))
+  const block = L.slice(head, L.findIndex(l => l === '▍Details')).join(' ').replace(/\s+/g, ' ')
+  expect(block).toContain('The worker finished without changing any files. Its report says: Found the cause: the cache key ignores the user.')
+  expect(block).toContain('The worker asks for more files: src/cache.ts.')
+  expect(block).toContain('Next: Read the report below; Retry if it should try again')
+  for (const l of L.slice(head, L.findIndex(l => l === '▍Details'))) expect(l.length).toBeLessThanOrEqual(50)
+  await ui.unmount()
+})
+
+test('a task that did not fail has no "Why it failed" block', async ($, on) => {
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await lines(ui)).some(l => l === '▍Why it failed')).toBe(false)
+  await ui.unmount()
+})

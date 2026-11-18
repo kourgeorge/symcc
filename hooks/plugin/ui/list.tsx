@@ -148,7 +148,7 @@ export function listPage($: $, pane: PaneParts) {
         const lead = r.indent + idWidth + 3 + cellWidth + 2
         // a later try ("try 2") is dim, from try 3 on in the warning colour (see tryMark)
         const tried = tryMark(x)
-        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), width)
+        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), width, x.status === 'failed')
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
             <Text>{' '.repeat(r.indent)}</Text>
