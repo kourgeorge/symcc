@@ -2,7 +2,7 @@
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_TASKS, seedBoard, steadyTree } from './board-fixture'
+import { PANE, BOARD_TASKS, seedBoard, plainTree, steadyTree } from './board-fixture'
 import { BEFORE } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { shortTests } from '../hooks/plugin/ui/vscode'

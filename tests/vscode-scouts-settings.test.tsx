@@ -41,6 +41,14 @@ const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success
 const CHOICES = ['mode', 'notify', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']
 
+/** steadyTree (it hides a running task's time), with a scout's times hidden too: the fixture sets them from the real
+ *  clock when the file loads, so "ran 1h 30m ago" can read "ran 1h 31m ago" a minute later. Only the length of time
+ *  inside "ran … ago" and "next in …" goes; every space and indent is kept, so a changed layout still fails. */
+const SCOUT_DUR = String.raw`\d+[smhd](?: \d+[smh])?`
+const steadyScouts = (tree: unknown): unknown => JSON.parse(JSON.stringify(steadyTree(tree), (_k, v) => typeof v !== 'string' ? v : v
+  .replace(new RegExp(`\\bran ${SCOUT_DUR} ago\\b`, 'g'), 'ran ~ ago')
+  .replace(new RegExp(`\\bnext in ${SCOUT_DUR}`, 'g'), 'next in ~')))
+
 // one test per surface: what a page keeps in memory (the open groups, a box being typed in) starts fresh in each
 for (const sc of SCENES) {
   for (const surface of OLD_SURFACES) {
@@ -48,7 +56,7 @@ for (const sc of SCENES) {
       sc.seed(on)
       const ui = await $.ui.mount({ ...PANE, surface })
       await sc.go(ui as never)
-      expect(steadyTree(await ui.drawn()), `${surface} ${sc.name}`).toEqual(steadyTree(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`]))
+      expect(steadyScouts(await ui.drawn()), `${surface} ${sc.name}`).toEqual(steadyScouts(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`]))
       await ui.unmount()
     })
   }

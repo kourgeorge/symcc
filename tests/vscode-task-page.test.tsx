@@ -2,7 +2,7 @@
 // the desktop it draws exactly as before (task-page-snapshot.ts holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, steadyTree } from './board-fixture'
+import { PANE, plainTree, steadyTree } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
