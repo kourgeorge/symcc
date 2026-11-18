@@ -122,6 +122,7 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-stats [full] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations |
 | `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-on` | Turn symcc back on, in the mode the board had |
+| `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
 | `/symcc-help [topic]` | The built-in manual |
 
 ## Settings
