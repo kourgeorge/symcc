@@ -1,5 +1,6 @@
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
+import { SETTING_GROUPS } from '../hooks/board'
 import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
@@ -86,10 +87,12 @@ function fakeRoles(on: On, mine: Record<string, string>, board?: () => unknown) 
 
 type Eng = Engine
 
-/** Starts the session (so the plugin knows its project folder) and mounts the panel on its Settings view. */
+/** Starts the session (so the plugin knows its project folder) and mounts the panel on its Settings view, every group open. */
 async function settingsOnly($: Eng) {
   await $.session.start({ cwd: '/proj' } as never)
-  return $.ui.mount(PANE)
+  const ui = await $.ui.mount(PANE)
+  for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
+  return ui
 }
 
 /** Mounts the panel on Settings and opens its Roles page. */

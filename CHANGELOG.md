@@ -6,6 +6,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Added
 - The Settings view groups the settings under headings: Work, Checks before merging, Workers (Roles, Kinds), Scouts, and Board and alerts. ↑↓ still go through every row. The lead's settings listing uses the same groups.
+- The Settings view's groups open and close: all start closed, each heading showing its values in short (`▸ Work · auto · 3 at once · 45 min · 2 retries`); Enter on a heading opens or closes it, ↑↓ skip the rows of closed groups, and open groups stay open until the session ends.
 - A doing task on its 2nd or later try says so: `try 2` in the board list (warning colour from try 3), `T-5 doing (try 2)` above the prompt and in the status line, and `try 2/3` in the lead's board while auto retries run. A first try shows nothing.
 - The board banner's logo dances now and then: it sways when idle, turns into a check mark, robot or note when a task merges, a worker starts or a scout finds something, and sings when the board is all done.
 - `tests_with_changes` setting (off / ask / review, default ask): a change task whose commit edits code but no test file is flagged before merging. With ask it merges and the lead is told "T-3 changed code but no test"; with review it waits for your review. Docs-only changes are never flagged. The lead now writes how each change will be tested ("Done when: tests show …").

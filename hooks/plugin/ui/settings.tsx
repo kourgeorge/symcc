@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, isSettingPage, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummary, isSettingPage, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { type $, S } from '../state'
 import { resetPane } from './open'
@@ -458,11 +458,12 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
 }
 
 /** The Settings view: the settings under their category headings (SETTING_GROUPS), one row each; Enter changes it.
- *  The headings are plain text, so ↑↓ and Tab go from the last row of one category to the first of the next. Every box and pick list has a Cancel button (x), and
+ *  Each heading is a row too: Enter opens or closes its group (S.settingsOpen, all closed at first, the first heading
+ *  focused); a closed one shows its values in short on its line, and ↑↓ skip its rows (they aren't drawn). Every box and pick list has a Cancel button (x), and
  *  Enter on an empty edit box cancels it too; Back (b) goes to the board list. None of it needs Esc, which
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
+  const { Box, Text, Button, Input, act, C, header, footer } = pane
   // scout_findings, tests_with_changes and checker are not in the panel's view of the board: read them from the board file
   const file = await load(claudeHost($)).catch(() => null)
   const v = { ...pane.v, scout_findings: file?.scout_findings, tests_with_changes: file?.tests_with_changes, checker: file?.checker }
@@ -555,11 +556,19 @@ export async function settingsPage($: $, pane: PaneParts) {
       </Box>
     )
   }
-  const first = SETTING_GROUPS.flatMap(g => g.items)[0]
+  /** Enter on a heading: opens or closes its group (and closes a box or pick list left open in it). */
+  const toggleGroup = (title: string) => () => {
+    const open = S.settingsOpen.includes(title)
+    S.settingsOpen = open ? S.settingsOpen.filter(t => t !== title) : [...S.settingsOpen, title]
+    const g = SETTING_GROUPS.find(x => x.title === title)
+    const inIt = (n?: string) => !!n && !!g?.items.includes(n as SettingName)
+    if (open && (inIt(S.settingEdit?.name) || inIt(S.settingPick?.name))) ((S.settingEdit = null), (S.settingPick = null))
+    $.ui.invalidate('ui.render')
+  }
   const settingRow = (name: SettingName) => {
     const x = SETTINGS.find(s => s.name === name)!
     return [
-      <Button key={row(`setting:${x.name}`)} plain autoFocus={x.name === first && !S.settingEdit && !S.settingPick ? true : undefined} onPress={pressRow(x.name)}>
+      <Button key={row(`setting:${x.name}`)} plain onPress={pressRow(x.name)}>
         <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
         {x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
@@ -585,13 +594,19 @@ export async function settingsPage($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column">
       {header()}
-      {SETTING_GROUPS.flatMap((g, gi) => [
-        ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),
-        <Box key={`group:${g.title}`}>{heading(g.title)}</Box>,
-        ...g.items.flatMap(item => (isSettingPage(item) ? [pageRow(item)] : settingRow(item))),
-      ])}
+      {SETTING_GROUPS.flatMap((g, gi) => {
+        const open = S.settingsOpen.includes(g.title)
+        const label = open ? `▾ ${g.title}` : `▸ ${groupSummary(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })}`
+        return [
+          ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),
+          <Button key={row(`group:${g.title}`)} plain label={label} autoFocus={gi === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={toggleGroup(g.title)}>
+            <Text bold color={C('suggestion')}>{label}</Text>
+          </Button>,
+          ...(open ? g.items.flatMap(item => (isSettingPage(item) ? [pageRow(item)] : settingRow(item))) : []),
+        ]
+      })}
       <Text key="settings-blank"> </Text>
-      <Text color={C('inactive')}>Enter changes a setting (on/off flips) or opens a page · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
+      <Text color={C('inactive')}>Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
       <Text key="settings-back-blank"> </Text>
       <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
       {footer(settingsKeys(), 'settings-keys')}

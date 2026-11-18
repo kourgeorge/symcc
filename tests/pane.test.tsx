@@ -2,7 +2,7 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { SETTING_GROUPS, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
+import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/plugin/ui/arrows'
 import { sayQueue } from '../hooks/plugin/state'
 import { inProject } from './project'
@@ -820,6 +820,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   const tasksTab = await ui.find({ type: 'Text', text: /^\[t\]: Tasks \(1\)$/ })
   expect(tasksTab?.props.bold).toBeFalsy()
   expect(tasksTab?.props.color).toBe('inactive')
+  for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
   expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
@@ -851,15 +852,16 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   await ui.unmount()
 })
 
-test('Settings groups its rows under 5 headings, in order; ↑↓ go through every row across them and never stop on a heading', async ($, on) => {
+test('Settings groups its rows under 5 headings, in order; with every group open ↑↓ go heading, its rows, next heading', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], notify: 'off', notify_choices: ['off'] } } })
   fakeFiles(on, ROLE_FILES)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-settings' })
-  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const titles = ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']
   expect(SETTING_GROUPS.map(g => g.title)).toEqual(titles)
-  const at = titles.map(t => texts.indexOf(`▍${t}`))
+  for (const t of titles) await ui.press({ key: `group:${t}` })
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const at = titles.map(t => texts.indexOf(`▾ ${t}`))
   expect(at.every(i => i >= 0)).toBe(true)
   expect([...at].sort((a, b) => a - b)).toEqual(at)
   // each row's name sits under its own heading, before the next one
@@ -879,16 +881,62 @@ test('Settings groups its rows under 5 headings, in order; ↑↓ go through eve
       expect(k).toBeLessThan(to)
     }
   })
-  // the headings are no Buttons, and the ↑↓ stops are every row, category after category
-  expect((await ui.findAll({ type: 'Button' })).some(b => String(b.key ?? '').startsWith('group'))).toBe(false)
-  const rows = Object.values(under).flat().map(n => (n === 'Roles' ? 'settings-roles' : n === 'Kinds' ? 'settings-kinds' : `setting:${n}`))
-  const stops = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(k => k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds')
+  // the ↑↓ stops are each heading then its rows, category after category
+  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Kinds' ? 'settings-kinds' : `setting:${n}`))])
+  const isStop = (k: string) => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds'
+  const stops = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(isStop)
   expect(stops).toEqual(rows)
-  // ↓ on the last Work row goes to the first row of Checks before merging, past the heading
-  expect(arrowTarget(stops, 'setting:enabled', 1)).toBe('setting:test_commands')
-  expect(arrowTarget(stops, 'setting:test_commands', -1)).toBe('setting:enabled')
-  expect(arrowTarget(stops, 'settings-kinds', 1)).toBe('setting:scout_findings')
+  expect(arrowTarget(stops, 'setting:enabled', 1)).toBe('group:Checks before merging')
+  expect(arrowTarget(stops, 'group:Checks before merging', 1)).toBe('setting:test_commands')
+  expect(arrowTarget(stops, 'settings-kinds', 1)).toBe('group:Scouts')
   await ui.unmount()
+})
+
+test('Settings groups start closed with the first heading focused; Enter opens and closes one; a closed one shows its summary and ↑↓ skip its rows; it stays open after leaving the page', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One')], working: [], scouts: [], mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: 2, notify: 'off', notify_choices: ['off'] } } })
+  fakeFiles(on, ROLE_FILES)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-settings' })
+  const isStop = (k: string) => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds'
+  const stops = async () => (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(isStop)
+  // all closed: only the 5 headings, each a focusable row with its summary; the first one has the focus
+  expect(await stops()).toEqual(SETTING_GROUPS.map(g => `group:${g.title}`))
+  const work = await ui.find({ key: 'group:Work' })
+  expect(work?.props.plain).toBe(true)
+  expect(work?.props.autoFocus).toBe(true)
+  expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
+  expect(work?.props.label).toBe('▸ Work · auto · 3 at once · 45 min · 2 retries')
+  expect(await ui.find({ type: 'Text', text: '▸ Work · auto · 3 at once · 45 min · 2 retries' })).toBeDefined()
+  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ kinds?/)
+  expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
+  // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
+  await ui.press({ key: 'group:Work' })
+  expect((await ui.find({ key: 'group:Work' }))?.props.label).toBe('▾ Work')
+  const open = await stops()
+  expect(open).toEqual(['group:Work', 'setting:mode', 'setting:max_parallel', 'setting:max_minutes', 'setting:auto_retries', 'setting:enabled', ...SETTING_GROUPS.slice(1).map(g => `group:${g.title}`)])
+  expect(arrowTarget(open, 'setting:enabled', 1)).toBe('group:Checks before merging')
+  expect(arrowTarget(open, 'group:Checks before merging', 1)).toBe('group:Workers')
+  // a setting's pick list opens inside its open group, as before
+  await ui.press({ key: 'setting:mode' })
+  expect(await ui.find({ key: 'pick:review' })).toBeDefined()
+  await ui.press({ key: 'setting-cancel' })
+  // leaving the page and coming back keeps Work open and the rest closed
+  await ui.press({ key: 'tab-tasks' })
+  expect(await ui.find({ key: 'T-1' })).toBeDefined()
+  await ui.press({ key: 'tab-settings' })
+  expect(await stops()).toEqual(open)
+  // Enter again closes it
+  await ui.press({ key: 'group:Work' })
+  expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
+  expect((await ui.find({ key: 'group:Work' }))?.props.label).toMatch(/^▸ Work · /)
+  await ui.unmount()
+})
+
+test('a closed group summary is cut to fit', () => {
+  const work = SETTING_GROUPS[0]!
+  expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 80)).toBe('Work · auto · 3 at once · 45 min · 2 retries')
+  expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 20)).toBe('Work · auto · 3 at…')
+  expect(groupSummary(work, { mode: 'auto', enabled: false }, 80)).toContain('plugin off')
 })
 
 /**
@@ -1845,7 +1893,8 @@ test('↑↓ on the Scouts, Settings and Roles lists stop at their first and las
   await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('scout:')), ['scouts-back', 'tab-scouts'])
   await ui.press({ key: 'tab-settings' })
   expect(await ui.find({ key: 'settings-back' })).toBeDefined()
-  await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('setting:') || k === 'settings-roles'), ['settings-back', 'tab-settings'])
+  await ui.press({ key: 'group:Workers' })
+  await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles'), ['settings-back', 'tab-settings'])
   await ui.press({ key: 'settings-roles' })
   expect(await ui.find({ key: 'roles-back' })).toBeDefined()
   await scrollsPastTheEnds(keys, await rowKeys(ui, k => k.startsWith('roleRow:')), ['roles-back'])
@@ -1868,7 +1917,9 @@ test('the Scouts, Settings and Roles rows are plain Buttons like the task rows: 
   await plainRows(k => k.startsWith('scout:'))
   expect(String((await ui.find({ key: 'scout:gaps-bot' }))?.text).trimEnd()).toMatch(/^  ◎ gaps-bot\s+every hour/)
   await ui.press({ key: 'tab-settings' })
-  await plainRows(k => k.startsWith('setting:') || k === 'settings-roles')
+  await ui.press({ key: 'group:Work' })
+  await ui.press({ key: 'group:Workers' })
+  await plainRows(k => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles')
   await ui.press({ key: 'settings-roles' })
   await plainRows(k => k.startsWith('roleRow:'))
   await ui.press({ key: 'roles-back' })

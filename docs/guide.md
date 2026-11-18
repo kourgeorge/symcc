@@ -458,9 +458,13 @@ are about changes; under "How tasks ended" a read investigation shows as
   - **Scouts**: `scout_findings`
   - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
 
-  The headings are only labels: ↑↓ go from the last row of one group to the first of the
-  next. The lead's `settings` tool and `/symcc-settings` text list the settings under the
-  same headings. Enter on a row changes it: `open_on_start`
+  Each heading is a group you open and close with Enter. When the page opens, all groups
+  are closed and the first heading has the focus; a closed group shows its values in short
+  on its heading line, e.g. `▸ Work · auto · 3 at once · 45 min · 2 retries`, and an open
+  one shows `▾ Work` with its rows under it. ↑↓ go over the headings and the rows of open
+  groups only. The panel remembers which groups are open until the session ends. The lead's
+  `settings` tool and `/symcc-settings` text always list every setting under the same
+  headings. Enter on a row changes it: `open_on_start`
   `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,

@@ -104,6 +104,7 @@ test('the Settings view shows scout_findings from the board and Enter opens auto
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-settings' })
+  await ui.press({ key: 'group:Scouts' })
   const row = await ui.find({ key: 'setting:scout_findings' })
   expect(row).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ backlog$/ })).toBeDefined()

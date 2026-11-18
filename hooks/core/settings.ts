@@ -2,7 +2,7 @@
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
-import { num } from './text'
+import { ellipsis, num } from './text'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
 const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' => ((tries ?? 0) < max ? 'retry' : 'fail')
@@ -169,6 +169,47 @@ export const isSettingPage = (x: string): x is SettingPage => (SETTING_PAGES as 
 export const groupSettings = (g: SettingGroup): SettingInfo[] => g.items.flatMap(x => (isSettingPage(x) ? [] : [settingInfo(x)!]))
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
+
+/** One setting's value in a few words, for a closed group's summary line ("3 at once", "45 min"); '' leaves it out. */
+function shortValue(b: Partial<Board>, name: SettingName): string {
+  const v = settingValue(b, name)
+  switch (name) {
+    case 'max_parallel':
+      return `${v} at once`
+    case 'max_minutes':
+      return `${v} min`
+    case 'auto_retries':
+      return `${v} ${v === '1' ? 'retry' : 'retries'}`
+    case 'enabled':
+      return v === 'on' ? '' : 'plugin off'
+    case 'test_commands':
+      return v === 'none' ? 'no tests' : v
+    case 'tests_with_changes':
+      return `untested: ${v}`
+    case 'checker':
+      return `checker ${v}`
+    case 'scout_findings':
+      return `findings: ${v}`
+    case 'notify':
+      return `notify ${v}`
+    case 'open_on_start':
+      return `open on start ${v}`
+    case 'archive_days':
+      return `archive after ${v} day${v === '1' ? '' : 's'}`
+    default:
+      return v
+  }
+}
+
+/**
+ * A closed group's line on the Settings page: its title and its values in short, cut to `width`
+ * ("Work · auto · 3 at once · 45 min · 2 retries"). `pages` gives the text of its page rows
+ * (roles, kinds), which are not on the board.
+ */
+export function groupSummary(g: SettingGroup, b: Partial<Board>, width: number, pages: Partial<Record<SettingPage, string>> = {}): string {
+  const parts = g.items.map(x => (isSettingPage(x) ? (pages[x] ?? '') : shortValue(b, x))).filter(Boolean)
+  return ellipsis([g.title, ...parts].join(' · '), Math.max(width, g.title.length))
+}
 
 /**
  * Test commands as text: one command as it is ("cd web && npm test" is one shell line),
