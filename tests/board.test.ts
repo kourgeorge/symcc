@@ -3291,6 +3291,11 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 1 }] }, true)).not.toContain('try')
   expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true)).toContain('T-369 doing (try 2)')
   expect(statusLine({ tasks: [{ id: 'T-1', status: 'doing', attempts: 1 }, { id: 'T-2', status: 'doing', attempts: 3 }] }, true)).toContain('T-1, T-2 doing (T-2 try 3)')
+  // the try marks never push the parts that need attention past the line's room: they are left out first
+  const busy = [{ id: 'T-371', status: 'doing', attempts: 2 }, { id: 'T-372', status: 'doing', attempts: 3 }, { id: 'T-369', status: 'review' }, { id: 'T-368', status: 'failed' }] as const
+  expect(statusLine({ tasks: [...busy] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-371, T-372 doing · 1 to review (T-369) · 1 failed (T-368)')
+  expect(statusLine({ tasks: [...busy] }, true)).toContain('T-371, T-372 doing (T-371 try 2, T-372 try 3)')
+  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-369 doing (try 2)')
   // the band above the prompt
   expect(bandStatus({ id: 'T-369', status: 'doing', attempts: 1 })).toBe('T-369 doing')
   expect(bandStatus({ id: 'T-369', status: 'doing', attempts: 2 })).toBe('T-369 doing (try 2)')

@@ -68,7 +68,7 @@ export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ $
  * The short status text Claude Code shows after "symcc:", e.g. "⏵ auto · 1/3 workers · T-26 doing · 1 to do · 5 scouts (next: gaps-bot in 1h 00m)".
  * It starts with the board mode (modeLabel: "⏹ off", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
  * With `crew` (see withCrew): the busy workers right after the mode (left out while none run) and the scouts after the
- * counts; when the text is wider than `width`, the "(next: …)" part goes first, then the scouts.
+ * counts; when the text is wider than `width`, the try marks of the doing tasks go first, then the "(next: …)" part, then the scouts.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
  * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏹ off").
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
@@ -84,16 +84,24 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
   const c = crew && { ...crew, mode: m, plan_mode: plan }
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
-    const parts = [
-      doing.length && `${idList(doing)} ${STATUS_WORD.doing}${triesNote(b.tasks.filter(t => t.status === 'doing'))}`,
-      review.length && `${review.length} to review (${idList(review)})`,
-      ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
-      failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
-    ].filter((x): x is string => !!x)
-    // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
-    const parked = ids('backlog').length
-    const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
-    return withCrew((w, s) => join([label, w, counts, s, branch_note]), c, nowMs, width)
+    const note = triesNote(b.tasks.filter(t => t.status === 'doing'))
+    const line = (tries: string) => {
+      const parts = [
+        doing.length && `${idList(doing)} ${STATUS_WORD.doing}${tries}`,
+        review.length && `${review.length} to review (${idList(review)})`,
+        ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
+        failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
+      ].filter((x): x is string => !!x)
+      // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
+      const parked = ids('backlog').length
+      const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
+      return withCrew((w, s) => join([label, w, counts, s, branch_note]), c, nowMs, width)
+    }
+    // the try marks are extra: they are kept only when they fit without cutting anything else (scouts, "(next: …)")
+    const plain = line('')
+    if (!note) return plain
+    const full = line(note)
+    return full.length <= width && full.length === plain.length + note.length ? full : plain
   }
   if (!driving) return withCrew((w, s) => join([label, w, 'empty' + other, s, branch_note]), c, nowMs, width)
   // an empty board in mode auto stays quiet (unless there are scouts), so a fresh project shows nothing
