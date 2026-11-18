@@ -958,6 +958,58 @@ function findExecTextArgs(words: string[]): Set<number> {
   return out
 }
 
+/** Whether the command splitter may misread `text`: it has a newline, a backslash, `$'` or a `#` that starts a word. */
+const unsplit_ = (text: string) => /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(text)
+
+/**
+ * `text` with each '...' outside double quotes and outside a backslash's reach replaced by `''` (what is in it is
+ * plain text to bash). An unclosed one is kept as it is.
+ */
+function dropSingleQuoted(text: string): string {
+  let out = ''
+  let dq = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\') (out += c + (text[i + 1] ?? '')), i++
+    else if (c === '"') (dq = !dq), (out += c)
+    else if (c === "'" && !dq) {
+      const end = text.indexOf("'", i + 1)
+      if (end < 0) return out + text.slice(i)
+      out += "''"
+      i = end
+    } else out += c
+  }
+  return out
+}
+
+/** Whether word `w` is a shell assignment (`x=...`, `x+=...`). */
+const isAssign = (w: string) => /^[A-Za-z_]\w*\+?=/.test(w)
+
+/** Whether word `w` is echo or printf (by name, or by its full path in TOOL_DIR). */
+const isPrint = (w: string | undefined) => w !== undefined && (!w.includes('/') || TOOL_DIR.test(w)) && /^(echo|printf)$/.test(progName(w))
+
+/**
+ * Whether simple command `p` only sets variables and prints text: leading `x=` words, then nothing or echo/printf,
+ * with no command run inside it, no here-document and no redirection (`>`, `<`).
+ */
+const printOrAssign = (p: { text: string; doc?: boolean; words: string[] }) => {
+  if (p.doc || RUNS_INSIDE.test(p.text) || /[<>]/.test(p.text)) return false
+  const cmd = p.words.find(w => !isAssign(w))
+  return cmd === undefined || isPrint(cmd)
+}
+
+/**
+ * The places in simple command `p` of words whose braces never spell a command: its leading `x=` words (bash doesn't
+ * brace-expand an assignment), and the words given to echo or printf right after them.
+ */
+function braceTextArgs(p: { words: string[] }): Set<number> {
+  const out = new Set<number>()
+  let i = 0
+  for (; i < p.words.length && isAssign(p.words[i]!); i++) out.add(i)
+  if (isPrint(p.words[i])) for (let k = i + 1; k < p.words.length; k++) out.add(k)
+  return out
+}
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
 function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
@@ -984,16 +1036,24 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     out.git = true
     // xargs and parallel add words from their input (`stash`, `--output=x`), so what that git does can't be known
     if (adds || words.slice(0, at).some(a => ADDS_WORDS.has(progName(a)))) return { bad: 'xargs git' }
-    // bash's brace expansion makes new words (`git {stash,}` runs `git stash`, `git -C {.,} stash` runs `git -C . stash`),
-    // so what a git command with a "{" in its words does can't be told from its text (T-446)
-    if (braced || braces.slice(at + 1).some(hasBrace)) return { bad: `git ${BRACE_WHAT}` }
+    if (braced) return { bad: `git ${BRACE_WHAT}` }
     let j = at + 1
     let sub = dashed
+    let refused: string | undefined
     if (!dashed) {
       for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
-        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { bad: `git ${words[j]!.split('=')[0]}` }
+        if (!refused && GIT_GLOBAL_REFUSED.test(words[j]!)) refused = words[j]!.split('=')[0]
       sub = words[j++]
     }
+    // bash's brace expansion makes new words (`git {stash,}` runs `git stash`, `git -C {.,} stash` runs `git -C . stash`),
+    // so what a git command with a "{" in its words does can't be told from its text (T-446). Only words after a `--`
+    // of a read-only command (GIT_READ) may have braces (`git diff -- hooks/{a,b}.ts`): they are paths, and when that
+    // `--` is an option's value (`git log --grep -- {--output=x,}`) none of the words they make may start with "-" (T-450).
+    const dashes = sub !== undefined && GIT_READ.has(sub) ? words.indexOf('--', j) : -1
+    const own = dashes < 0 ? braces.slice(at + 1) : braces.slice(at + 1, dashes)
+    const paths = dashes < 0 ? [] : braces.slice(dashes + 1).filter(hasBrace)
+    if (own.some(hasBrace) || paths.some(w => braceExpand(w)?.every(e => !e.startsWith('-')) !== true)) return { bad: `git ${BRACE_WHAT}` }
+    if (refused) return { bad: `git ${refused}` }
     if (sub === undefined) return {}
     const args = words.slice(j)
     if (allow?.(sub, args)) return {}
@@ -1026,12 +1086,18 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     out.env ??= inner.env
     return inner.bad ? { ...out, bad: inner.bad } : undefined
   }
-  const unsplit = /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(command)
+  const unsplit = unsplit_(command)
   // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
   const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
   broad ||= unsplit || gitProgram || !simple.every(exempt)
+  // T-450: a brace word in a leading `x=` assignment (bash doesn't brace-expand it) or given to echo or printf is only
+  // text, when every other command in the line is exempt or one of these too, so nothing runs that text again
+  // (`echo {git,stash} | sh` and `x={git,stash}; eval $x` stay refused)
+  // (a backslash inside '...' is plain text to bash and to the splitter, as in `printf '%s\n' {a,b}`)
+  const quiet = !unsplit_(dropSingleQuoted(command)) && !gitProgram && simple.every(p => exempt(p) || printOrAssign(p))
   for (const p of simple) {
     const words = p.words
+    const textBraces = quiet ? braceTextArgs(p) : new Set<number>()
     for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
     if (!broad && exempt(p)) continue
     // text a shell runs again (`bash -c '{git,stash}'`, `eval '{git,stash}'`) is a whole command of its own, with its
@@ -1051,7 +1117,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
       // a word given to a text tool run by find -exec is its text, not a git command (`find . -exec grep -l git {} +`)
-      const g = toolArgs.has(i) ? undefined : gitAt(words, i, p.adds, p.braces)
+      const g = toolArgs.has(i) || (textBraces.has(i) && hasBrace(p.braces[i] ?? '')) ? undefined : gitAt(words, i, p.adds, p.braces)
       if (g?.bad) return { ...out, bad: g.bad }
       if (g) continue
       const at = w.search(/git(?!\w)/i)
