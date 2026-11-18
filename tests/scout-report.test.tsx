@@ -9,6 +9,7 @@ import { SCOUT_REPORT_CHARS, emptyBoard } from '../hooks/board'
 import { scoutFinished } from '../hooks/plugin/scouts'
 import { S, scoutRuns, scoutState, heard, leadQueue, meanwhile } from '../hooks/plugin/state'
 import { claudeHost } from '../hooks/claude/host'
+import { turnComplete } from './turn-hook'
 
 const ROOT = '/repo'
 const MEMORY = `${ROOT}/.symcc/scouts.json`
@@ -61,6 +62,7 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
       },
       list: async () => [],
     },
+    plugin: { root: '/plugin', name: 'symcc' },
     session: { id: async () => 'me', send: async () => undefined },
     agent: { list: async () => [] },
     env: { get: async () => undefined },
@@ -254,3 +256,23 @@ test('with board.json broken, a stopped scout run still shows the "was stopped" 
   expect(w.toasts.some(t => t.includes('scout bugs was stopped; nothing reported'))).toBe(true)
   expect(w.files.get(BOARD)).toBe('{ not json')
 })
+
+// ---------------- a run that ended on an API error or a refusal (T-402) ----------------
+
+for (const end of [{ reason: 'error' }, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help' } }]) {
+  test(`through turn.complete, a scout run that ended on ${end.reason === 'error' ? 'an error' : 'a refusal'} sends nothing to the lead and keeps its last real run and report`, async () => {
+    const w = world({ memory: JSON.stringify({ scouts: { bugs: { last_run: BEFORE, last_report: '1. The old finding.' } } }) })
+    w.st.last_report = '1. The old finding.'
+    await turnComplete(w.claude, 's1', '1. Let me look at src/a.ts next.', end)
+    // scoutFinished runs on without being waited for: let its work finish (its toast is the last step)
+    for (let i = 0; i < 20_000 && !w.toasts.length; i++) await Promise.resolve()
+    expect(w.toLead()).toEqual([])
+    expect(w.st.running).toBe(false)
+    expect(w.st.last_report).toBe('1. The old finding.')
+    // the saved last report is the old one; only the run's usage is counted
+    expect(w.memory().scouts!.bugs).toEqual({ last_run: BEFORE, last_report: '1. The old finding.' })
+    expect(w.memory().usage!.bugs!.runs).toBe(1)
+    expect(scoutRuns.has('s1')).toBe(false)
+    expect(w.toasts.join('\n')).toContain(end.reason === 'error' ? "scout bugs's run ended on an error; nothing reported" : "scout bugs's run ended on a refusal; nothing reported")
+  })
+}
