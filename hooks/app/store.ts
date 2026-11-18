@@ -21,10 +21,11 @@ export const path = (rel: string) => {
 }
 
 /**
- * The main project folder for `dir`, even when `dir` is a worker's worktree (T-472): git's shared folder
- * (`git rev-parse --git-common-dir`) is the main project's .git, so its parent is the main project. When git can't
- * tell (no git, a bare repo, a host that runs nothing), a path inside .<name>/worktrees/ is cut back to the project
- * above it; any other folder is answered as it is.
+ * The main project folder for `dir` when `dir` is one of symcc's own worker folders (T-472), else `dir` itself.
+ * git's shared folder (`git rev-parse --git-common-dir`) is the main project's .git, so its parent is the main
+ * project; `dir` only counts as a worker's folder when it lies inside <main project>/.<name>/worktrees/ (real paths
+ * compared), so an owner's own second checkout (another `git worktree`) keeps its own root. When git can't tell (no
+ * git, a bare repo, a host that runs nothing), a path inside .<name>/worktrees/ is cut back to the project above it.
  */
 export async function mainRoot(host: Host, dir: string): Promise<string> {
   if (!dir) return ''
@@ -34,11 +35,40 @@ export async function mainRoot(host: Host, dir: string): Promise<string> {
   if (common && /(^|[\\/])\.git$/.test(common)) {
     // git answers ".git" (or a relative path) in the main project, an absolute path (/..., C:/... or \\server\...) from a worktree
     const abs = isAbsolute(common) ? common : `${clean}/${common}`
-    return normalPath(abs.slice(0, -'.git'.length))
+    const main = normalPath(abs.slice(0, -'.git'.length))
+    // the main project itself or a folder inside it (git may answer "../.git" there); else only symcc's worker folders
+    if (within(normalPath(clean), main)) return main
+    return (await isWorkerFolder(host, clean, main)) ? main : clean
   }
   const mark = `/${S.N.worktrees}/`
   const at = clean.indexOf(mark)
   return at > 0 ? clean.slice(0, at) : clean
+}
+
+/** Where `p` really is (symbolic links followed), with "/" between its parts; `p` as written when the disk can't tell. */
+async function realOf(host: Host, p: string): Promise<string> {
+  const real = await Promise.resolve()
+    .then(() => host.fs.stat(p, { resolve: true }))
+    .then(st => st.realPath, () => undefined)
+  return normalPath(real || p).replace(/\\/g, '/')
+}
+
+/** True when path `p` is folder `dir` or inside it ("\" read as "/"). */
+const within = (p: string, dir: string) => {
+  const slash = (x: string) => x.replace(/\\/g, '/').replace(/\/+$/, '')
+  const a = slash(p)
+  const d = slash(dir)
+  return a === d || a.startsWith(`${d}/`)
+}
+
+/**
+ * True when folder `dir` lies inside `main`'s .<name>/worktrees/ folder (real paths compared): one of symcc's worker
+ * folders, where a copy of the plugin only guards (see guardStart). Any other folder, an owner's own second checkout too, is not.
+ */
+export async function isWorkerFolder(host: Host, dir: string, main: string): Promise<boolean> {
+  if (!dir || !main) return false
+  const [d, w] = await Promise.all([realOf(host, dir), realOf(host, `${main}/${S.N.worktrees}`)])
+  return d !== w && within(d, w)
 }
 
 /** True for a path from the top of a disk: "/...", a Windows drive ("C:/..." or "C:\...") or a share ("\\server\..."). */
@@ -296,6 +326,8 @@ export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Pro
     await saveBoard(host, after)
     return [after, value] as const
   }).then(async ([after, value]) => {
+    // a guard-only copy (guardStart, in a worker's folder) saves the board but never shows it: no panel, no status line
+    if (S.guardOnly) return value
     await publish(host, after)
     checkHealth(host, after)
     return value

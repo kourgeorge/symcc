@@ -29,7 +29,7 @@ import { loadKinds } from './kinds'
 import { checkerFinished } from './checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './scouts'
 import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from './state'
-import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, startingText } from './store'
+import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
 import { noteForLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
@@ -91,10 +91,11 @@ export function leadBeat(host: Host) {
  * claims the lead, loads scouts, roles and kinds, starts the timers and opens the board panel.
  */
 export async function sessionStart(host: Host) {
-  // A session in a worker's worktree (its folder's git shares the main project's .git) only guards (see guardStart).
+  // A session in one of symcc's worker folders (<main project>/.<name>/worktrees/...) only guards (see guardStart);
+  // any other folder, an owner's own second checkout too, runs normally with its own root.
   const own = await sessionFolder(host)
   const main = await mainRoot(host, own).catch(() => own)
-  if (own && main && main !== own.replace(/\/+$/, '')) return guardStart(host, main)
+  if (await isWorkerFolder(host, own, main).catch(() => false)) return guardStart(host, main)
   S.guardOnly = false
   // claimLead may wait on the clock: for the board lock (up to 5 s), for old workers it stopped
   // to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (2 s). A hook has 10 s and

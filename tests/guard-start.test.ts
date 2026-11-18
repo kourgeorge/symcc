@@ -15,8 +15,9 @@ const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
 
 /** A fake host whose session is in the worker's folder, with a board on disk; it records every write, command and timer. */
-function inWorktree(gitAnswers = true) {
+function inWorktree(gitAnswers = true, dir = WT, common = `${ROOT}/.git`) {
   const files = new Map<string, string>()
+  const statuses: (string | undefined)[] = []
   const at = '2026-11-18T00:00:00.000Z'
   const [added] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a change', files: ['src/a.ts'] }, at)
   const b = patchTask(added, 'T-1', { status: 'doing', agent: 'ag1', session: 'driver' }, at)
@@ -25,17 +26,18 @@ function inWorktree(gitAnswers = true) {
   const runs: string[][] = []
   const timers: number[] = []
   const mem = memoryFs(files)
-  const { host } = fakeHost({
-    session: { id: async () => 'guard-session', repo: async () => ({ root: WT }), root: async () => WT },
+  const { host, panel } = fakeHost({
+    session: { id: async () => 'guard-session', repo: async () => ({ root: dir }), root: async () => dir },
     fs: { ...mem, write: async (p, t) => (writes.push(p), mem.write(p, t)) },
     run: async argv => {
       runs.push([...argv])
-      if (gitAnswers && argv.join(' ') === 'git rev-parse --git-common-dir') return done({ stdout: `${ROOT}/.git\n` })
+      if (gitAnswers && argv.join(' ') === 'git rev-parse --git-common-dir') return done({ stdout: `${common}\n` })
       return done()
     },
     clock: { every: ms => (timers.push(ms), { cancel: () => undefined }), after: ms => (timers.push(ms), { cancel: () => undefined }) },
+    ui: { status: t => void statuses.push(t) },
   })
-  return { host, files, writes, runs, timers }
+  return { host, files, writes, runs, timers, statuses, panel }
 }
 
 /** No write, no timer, no lead claim, and no command but git's read of its shared folder. */
@@ -114,6 +116,31 @@ test('mainRoot: a Windows git folder (drive or share) is kept as git wrote it', 
   expect(isAbsolute('../.git')).toBe(false)
   expect(normalPath('C:/proj/a/../b/./')).toBe('C:/proj/b')
   expect(normalPath('/')).toBe('/')
+})
+
+test('a guard-only refusal saves the main board but never publishes: no status line, no panel change', async () => {
+  const w = inWorktree()
+  await guardStart(w.host)
+  const view = w.panel.view()
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
+  expect(await toolCheck(w.host, 'ag1', { path: `${WT}/src/b.ts` }, WT)).toBe(blockedEditText('src/b.ts'))
+  workers.clear()
+  expect(w.writes.some(p => p.startsWith(`${ROOT}/.symcc/board.`))).toBe(true)
+  expect(w.statuses).toEqual([])
+  expect(w.panel.view()).toBe(view)
+})
+
+test("an owner's own second checkout (another git worktree) is not a worker's folder: it keeps its own root and runs normally", async () => {
+  const own = '/home/me/proj-feature'
+  const w = inWorktree(true, own, '/home/me/proj/.git')
+  expect(await mainRoot(w.host, own)).toBe(own)
+  await sessionStart(w.host)
+  expect(S.root).toBe(own)
+  expect(S.guardOnly).toBe(false)
+  expect(await toolCall(w.host, 'board', undefined, {})).not.toEqual({ result: expect.stringContaining('only guards') })
+  S.root = ''
+  expect(await findRoot(w.host)).toBe(true)
+  expect(S.root).toBe(own)
 })
 
 test('/clear in a guard-only copy follows the new id but writes nothing and claims no lead', async () => {
