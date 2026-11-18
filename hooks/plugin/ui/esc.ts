@@ -1,11 +1,11 @@
 // Esc in the board panel: one step back, the innermost first, when Claude Code sends the Esc to `ui.close`
-// (origin person); register.tsx calls escBack there and keeps the panel open when it went back. Claude Code
+// (origin person); paneClosing calls escBack there and keeps the panel open when it went back. Claude Code
 // only does that for a panel opened with closeOnEscape, and the owner saw no step from the search box (see
 // docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
 // (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
 import { cancelScoutEdit } from '../scouts'
-import { type $, S, panelValues } from '../state'
-import { resetPane } from './open'
+import { type $, S, panelValues, openDays, changesCache } from '../state'
+import { resetPane, takeKeysBack } from './open'
 import { claudeHost } from '../../claude/host'
 
 /** What Esc does on the board panel; null: nothing left to go back from, the panel closes. */
@@ -55,4 +55,42 @@ export async function escBack($: $): Promise<boolean> {
     $.ui.invalidate('ui.render')
   }
   return true
+}
+
+/** The board panel closed: the opened days, the search, every open box and the active view are forgotten. */
+export async function forgetPane($: $) {
+  openDays.clear()
+  S.backlogOpen = false
+  S.backlogAll = false
+  S.doneOpen = false
+  S.droppedOpen = false
+  S.search = null
+  S.draft = null
+  S.naming = null
+  S.diffOpen = null
+  S.rejecting = null
+  S.rolePick = null
+  S.answering = null
+  S.settingEdit = null
+  S.settingPick = null
+  changesCache.clear()
+  await panelValues($).updateTab(() => '').catch(() => undefined)
+  await panelValues($).updateScoutOpen(() => '').catch(() => undefined)
+}
+
+/**
+ * The board panel is closing (`origin`: who closed it). Esc from the owner goes one step back (see escBack) and keeps
+ * the panel open, then asks for the keyboard back, which Claude Code gave to its prompt on Esc: answers true. Else the
+ * panel closes and forgets its place (forgetPane): false. Each close is written to the debug log (claude --debug), to
+ * see whether an Esc reached the panel at all (docs/research/esc-in-panels.md).
+ */
+export async function paneClosing($: $, origin: string): Promise<boolean> {
+  const back = origin === 'person' && (await escBack($))
+  $.ui.log(`${S.N.name} board: ui.close from ${origin}${back ? ', went one step back' : ''}`, { to: 'debug' })
+  if (back) {
+    takeKeysBack($)
+    return true
+  }
+  await forgetPane($)
+  return false
 }

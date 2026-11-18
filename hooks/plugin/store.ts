@@ -145,7 +145,7 @@ export async function isOn(host: Host): Promise<boolean> {
 /**
  * session.start sets `mark` while it runs claimLead: a clock wait in claimLead's path (the board
  * lock, old workers ending, the reload settle) calls it first, so session.start can go on
- * without waiting (see register.tsx). Called from other hooks meanwhile it does no harm.
+ * without waiting (see sessionStart in app/symcc.ts). Called from other hooks meanwhile it does no harm.
  */
 export const startWait: { mark: (() => void) | null } = { mark: null }
 export const aboutToWait = () => startWait.mark?.()
