@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, endedEarly, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, type BoardTask } from '../hooks/board'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
@@ -18,6 +18,7 @@ const CASES: [string, BoardTask, RegExp][] = [
   ["couldn't start", failed({ note: "couldn't start: no such agent type" }), /^The worker could not start: no such agent type\.$/],
   ['merge conflict', failed({ note: 'conflicts with the latest main, still after 2 tries to merge it in' }), /^Its work clashes with the latest main/],
   ['stopped', failed({ note: 'the worker was stopped' }), /^The worker was stopped before it finished\.$/],
+  ['ended early', failed({ note: ENDED_EARLY_NOTE }), /^The worker ended its turn before its work finished/],
 ]
 
 test('a failed task: one plain sentence says why, for every way a task can fail', () => {
@@ -141,7 +142,11 @@ test('kept test output: a huge error is cut to its first lines, and past the roo
   const long = Array.from({ length: 200 }, (_, i) => `diff line ${i} ${'y'.repeat(400)}`)
   const many = Array.from({ length: 40 }, (_, i) => ({ at: 10 + i * 20, name: `broken test ${i}`, error: [`Error: wrong ${i}`, ...long] }))
   const kept = testTail(runnerOutput(many))
-  for (let i = 0; i < 40; i++) expect(kept).toContain(`(fail) broken test ${i} [5001.00ms]`)
+  // the first one with its error, then the next FAIL_LINES_SHOWN as short lines, then only a count of the rest
+  for (let i = 0; i <= FAIL_LINES_SHOWN; i++) expect(kept).toContain(`(fail) broken test ${i} [5001.00ms]`)
+  expect(kept).not.toContain(`(fail) broken test ${FAIL_LINES_SHOWN + 1} [`)
+  expect(kept).toContain(moreFailingLine(40 - 1 - FAIL_LINES_SHOWN))
+  expect(failCount(kept)).toBe(40)
   expect(kept).toContain('  Error: wrong 0')
   expect(kept).toContain(`  … (${long.length + 1 - FAIL_ERROR_LINES} more error lines)`)
   expect(kept).not.toContain('Error: wrong 39')
@@ -149,6 +154,36 @@ test('kept test output: a huge error is cut to its first lines, and past the roo
   // no line is longer than 300 characters, and the whole stays near its two limits
   expect(Math.max(...kept.split('\n').map(l => l.length))).toBeLessThanOrEqual(300)
   expect(kept.length).toBeLessThan(FAIL_BLOCK_CHARS + TEST_OUTPUT_CHARS + 40 * 120)
+})
+
+test('kept test output: 400 failing tests stay under a fixed size, with "… and N more failing tests" and the right total', () => {
+  const many = Array.from({ length: 400 }, (_, i) => ({ at: Math.floor(i * 2.2), name: `a shared helper broke test number ${i} of the board panel`, error: [`Error: helper threw on call ${i}`, '  at helper (hooks/core/x.ts:1:1)'] }))
+  const full = runnerOutput(many)
+  const kept = testTail(full)
+  expect(kept.length).toBeLessThan(FAIL_BLOCK_CHARS + TEST_OUTPUT_CHARS + FAIL_LINES_CHARS)
+  const lines = kept.split('\n')
+  expect(lines[1]).toBe(failedTestsHead(400))
+  const shown = lines.filter(l => l.startsWith('(fail)')).length
+  const withError = failBlocks(kept.slice(0, kept.indexOf('… and '))).filter(b => b.includes('Error:')).length
+  expect(withError).toBeGreaterThan(0)
+  expect(kept).toContain(moreFailingLine(400 - withError - FAIL_LINES_SHOWN))
+  expect(shown).toBeLessThanOrEqual(withError + FAIL_LINES_SHOWN + 5)
+  // the real total, from the heading (and the runner's " 400 fail" line), not only the lines kept
+  expect(failCount(kept)).toBe(400)
+  expect(failingLines(kept, 2)).toContain('(and 398 more)')
+  expect(whyFailed(failed({ note: 'tests failed: `claude plugin test .` (exit 1)', test_output: kept }))).toContain('400 failing tests: ')
+  // the next worker is told what it gets: the failing tests, then the end
+  expect(testOutputHeading(kept)).toBe('The failing tests and the end of the test output:')
+  expect(testOutputHeading('…the end only')).toBe('The end of the test output:')
+  expect(testOutputHeading('$ npm test (exit 1)\nall of it')).toBe('The test output:')
+  // the lead's give-up text is short: the count, the first failing tests with their errors, how many more, where the rest is
+  const lead = gaveUpTestsText(kept)
+  expect(lead.length).toBeLessThan(2000)
+  expect(lead.startsWith('400 failing tests, the first 3:\ntests/file-0.test.ts:\n(fail) a shared helper broke test number 0 of the board panel [5001.00ms]\n  Error: helper threw on call 0')).toBe(true)
+  expect(lead).toContain(moreFailingLine(397))
+  expect(lead).toContain("on the task's page")
+  // output with no "(fail)" line gives its first errors
+  expect(gaveUpTestsText('$ sh scripts/typecheck.sh (exit 1)\nhooks/a.ts(1,1): error TS2322: nope')).toContain('First errors: hooks/a.ts(1,1): error TS2322: nope')
 })
 
 test('kept test output: plain bun output, with the error printed above "(fail)", keeps that error too', () => {
@@ -282,4 +317,62 @@ test("a failing command that isn't bun's test runner: its first error lines are 
 test('a NEED FILES line that already ends in "." or "…" gets no second one', () => {
   expect(failAsks('NEED FILES: src/b.ts, because the tokens live there.')).toBe('The worker asks for more files: src/b.ts, because the tokens live there. Ask the lead in the chat to add them to the task, then Retry.')
   expect(failAsks(`NEED FILES: ${'a/b.ts '.repeat(40)}`)).toMatch(/… Ask the lead in the chat to add them to the task, then Retry\.$/)
+})
+
+// T-411: a final answer whose last paragraph says something still runs and the writer goes on when it finishes
+// (T-399's try 1) reads as unfinished (only a warning note, see warnEndedEarly); normal reports, offers and quotes do not.
+test('endedEarlyLine gives the sentence that counted; endedEarlyNote is the warning', () => {
+  const s = "The background runs are still going; I'll continue when they finish."
+  expect(endedEarlyLine(`Changed a.ts.\n\nStarted the tests. ${s}`)).toBe(s)
+  expect(endedEarlyLine('Changed a.ts; tests/a.test.ts covers it.')).toBe('')
+  // a fenced code block with a blank line in it is code, not the writer's words (checker's example): must not flag
+  expect(endedEarlyLine("Changed it.\n\n```\nfoo\n\nbar still running; I'll continue when done\n```")).toBe('')
+  expect(endedEarlyNote('T-5', s)).toBe(`T-5's answer may have ended before its work finished: "${s}" (only a warning: its try goes on to the tests and merge as usual)`)
+})
+
+test('endedEarly: still running + the writer going on when it finishes counts; normal reports, offers and quotes do not', () => {
+  const later = [
+    "The background runs are still going; I'll continue when they finish.",
+    // T-399's try 1, its real last paragraph: must flag
+    "Changed the prompts and the check.\n\nThe background runs are still going; I'll continue when they finish.",
+    'Changed hooks/a.ts and added a test.\n\nThe full test run is still running in the background; I will report back once it ends.',
+    "The tests are still running and I'm waiting for them.",
+  ]
+  for (const a of later) expect([a, endedEarly(a)]).toEqual([a, true])
+  const normal = [
+    'Added the line to prompts/change.ts and a test in tests/prompts.test.tsx; `claude plugin test .` and typecheck pass.',
+    '',
+    // T-386's try 1, its real last paragraph (a bullet list): must not flag
+    'Fixed the reload.\n\n- A checker still running at the reload is stopped. Its try is not counted.\n- When the stopped checker\'s "stopped" answer comes in, a new checker starts right away without waiting for a check.',
+    'A checker still running at the reload is stopped. A new checker starts right away without waiting for a check.',
+    'The checker is still running, so a new one starts without waiting for it.',
+    'Changed the merge so a try still in progress makes the lead wait for it; tests/merge.test.ts covers it.',
+    'A checker still running at the reload stops waiting for a verdict.',
+    "A checker that is still running isn't waiting for the lead any more.",
+    "The checker is still running when the merge starts, so I'll note it in the docs.",
+    'Fixed it so the worker will report back its findings; tests/x.test.ts covers it.',
+    // nothing still running: plain "I'll continue / resume / report back" is not enough
+    "I'll resume once the typecheck is done.",
+    'Will report back.',
+    "I'll continue to keep the old name in the docs.\n\nChanged hooks/core/failure.ts; tests/failure.test.ts covers it.",
+    // the checker's five sentences (offers and quotes): must not flag
+    "Still unsure: whether the cache is shared. If you'd like, I'll come back to it in a follow-up task.",
+    "If you want, I'll continue with the other files next.",
+    'Let me continue with the summary: changed a.ts and b.ts.',
+    'Changed the endedEarly check so "I\'ll report back" is caught; tests/failure.test.ts covers it.',
+    'Added endedEarly, which flags answers like "The background runs are still going; I\'ll continue when they finish."',
+    // the same in other quotes and code
+    "Added endedEarly, which flags answers like `The background runs are still going; I'll continue when they finish.`",
+    "Added endedEarly, which flags answers like “The tests are still running; I'll report back when they end.”",
+    "Added endedEarly, which flags 'The tests are still running; I'll report back when they end.' answers.",
+    // the checker's later false alarms: "waiting for" / "will" about a task or checker, not the writer
+    'The scout found T-12 still in progress, waiting for files from T-9.',
+    'A task still in progress: waiting for T-3 to merge first.',
+    'Fixed the stall: a checker still running, waiting for the merge lock, now times out after 5 minutes; tests/checker.test.ts covers it.',
+    'Answer: the lead sees the worker as still running; waiting for it is what blocks T-12 (hooks/plugin/workers.ts:640).',
+    'Changed workers.ts so a try still running — will finish when its tests end — is not stopped.',
+    // a hypothetical about the rule itself
+    "If a command is still running, I'll now wait for it before I answer, as the prompt says.",
+  ]
+  for (const a of normal) expect([a, endedEarly(a)]).toEqual([a, false])
 })

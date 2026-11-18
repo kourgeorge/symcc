@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, workerGitWriteText, untestedChange, testTail } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
@@ -261,6 +261,16 @@ test('a checker that finds problems sends the task back to its worker with the r
   expect(prompt).not.toContain('Your last try failed these tests')
 })
 
+test("failing tests sent back to the worker come under a heading that says what follows", async () => {
+  const w = world()
+  const kept = testTail(['$ npm test (exit 1)', 'tests/a.test.ts:', '(fail) x [1ms]', '  Error: y', ...Array.from({ length: 200 }, (_, i) => `(pass) filler ${i} ${'z'.repeat(40)}`), ' 200 pass', ' 1 fail'].join('\n'))
+  const b = boardWith(false, { status: 'todo', test_tries: 1, test_output: kept })
+  await saveBoard(w.$, b)
+  const prompt = WORKER_PROMPT(find(b, 'T-1')!, b, WT)
+  expect(prompt).toContain('Your last try failed these tests; fix it. The failing tests and the end of the test output:\n```\n$ npm test (exit 1)\n1 failed test')
+  expect(prompt).not.toContain('fix it. The end of the test output:')
+})
+
 test('when its retries are used up, a checker report fails the task with the report', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
@@ -494,7 +504,7 @@ test('the checker prompt tells it not to run git commands that change anything',
   expect(w.spawns[0]!.prompt).toContain('Read-only ones like git diff, git log, git show and git status are fine.')
 })
 
-test("a checker's git commands that change anything are refused, read-only ones are allowed, and a worker's git is not changed by this", async () => {
+test("a checker's git commands that change anything are refused, read-only ones are allowed, and a worker's git writes are refused too (T-432)", async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
   await finish(w, async id => {
@@ -560,9 +570,11 @@ test("a checker's git commands that change anything are refused, read-only ones 
       expect(await bash(command)).toBeUndefined()
     checkerFinished(id, 'OK')
   })
-  // a worker's own git commands in its folder are not refused
+  // a worker's git writes in its folder are refused as well (with the worker's own reason), its reads are not
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  for (const command of ['git commit -am x', 'git stash', 'git reset --hard', 'git checkout -b x'])
+  for (const [command, what] of [['git commit -am x', 'git commit'], ['git stash', 'git stash'], ['git reset --hard', 'git reset'], ['git checkout -b x', 'git checkout']] as const)
+    expect(await checkEdit(w.$, 'ag2', { command })).toBe(workerGitWriteText(what))
+  for (const command of ['git diff', 'git log -3', 'git status'])
     expect(await checkEdit(w.$, 'ag2', { command })).toBeUndefined()
 })
 
@@ -731,3 +743,36 @@ test("T-386: a restarted checker whose agent type is still not loaded after 3 st
   expect(t.attempts).toBe(1)
   expect(w.spawns.length).toBe(1)
 })
+
+// ---------------- a checker symcc stopped answers "stopped" (T-428) ----------------
+
+for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is in stopped) and then answers']) {
+  test(`T-428: a checker that ${how} gives no verdict: the task doesn't go back to its worker, no retry is used, and a new checker starts`, async () => {
+    const w = world()
+    S.driving = true
+    await saveBoard(w.$, boardWith(true))
+    const answer = how.startsWith('answers') ? 'stopped' : 'Stopped as asked; I had not finished looking at src/a.ts.'
+    const t = await finish(w, async id => {
+      // as a halt does (a reload's orphan stop, haltChecker): stopped, then its answer comes in as an ordinary turn end
+      stopped.add(id)
+      w.$.agents.list = async () => [{ id, name: 'symcc-T-1-checker', kind: 'scout', status: 'completed' }]
+      checkerFinished(id, answer)
+    })
+    expect(t.status).toBe('doing')
+    expect(t.attempts).toBe(1)
+    expect(t.test_tries ?? 0).toBe(0)
+    expect(t.history.some(h => h.includes('checker found problems'))).toBe(false)
+    expect(t.history).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
+    expect(leadQueue.join('\n')).not.toContain('sent back by the checker')
+    // a new checker starts on the same work, without waiting for a regular check
+    await until(() => w.spawns.length === 2 && checkerRuns.size > 0)
+    expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+    checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+    await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+    await until(() => w.git.main !== M1)
+    const end = (await load(w.$)).tasks.find(x => x.id === 'T-1')!
+    expect(end.status).toBe('done')
+    expect(end.attempts).toBe(1)
+    expect(end.test_tries ?? 0).toBe(0)
+  })
+}

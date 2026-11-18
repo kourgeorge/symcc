@@ -3,7 +3,7 @@
 // only does that for a panel opened with closeOnEscape, and the owner saw no step from the search box (see
 // docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
 // (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
-import { cancelScoutEdit } from '../scouts'
+import { cancelScoutEdit, scoutPlace } from '../scouts'
 import { S, openDays, changesCache } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import { resetPane, takeKeysBack } from './open'
@@ -13,6 +13,7 @@ import { claudeHost } from '../../claude/host'
 export type EscStep =
   | 'cancel setting' // a setting's edit box or pick list
   | 'cancel scout edit' // a scout's edit page or the new scout name box
+  | 'close run' // a scout's run (its full report): back to the scout's page
   | 'scouts list' // an opened scout goes back to the Scouts list
   | 'cancel role pick'
   | 'cancel reject'
@@ -22,13 +23,14 @@ export type EscStep =
   | 'clear search' // the board list's search: its box, or the filter kept
   | null
 
-/** Where the panel is: its view ('scouts', 'settings', else the tasks), the opened task and scout ('' = none). */
-export type PanePlace = { tab: string; opened: string; scout: string }
+/** Where the panel is: its view ('scouts', 'settings', else the tasks), the opened task and scout ('' = none),
+ *  and whether one of that scout's runs is open (its report page). */
+export type PanePlace = { tab: string; opened: string; scout: string; run?: boolean }
 
 /** The step Esc takes from `at`, given the panel's open boxes in `s` (S, or a test's copy). */
 export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settingPick' | 'draft' | 'naming' | 'rolePick' | 'rejecting' | 'diffOpen' | 'answering' | 'search'>): EscStep {
   if (at.tab === 'settings') return s.settingEdit || s.settingPick ? 'cancel setting' : 'board list'
-  if (at.tab === 'scouts') return s.draft || s.naming ? 'cancel scout edit' : at.scout ? 'scouts list' : 'board list'
+  if (at.tab === 'scouts') return s.draft || s.naming ? 'cancel scout edit' : at.scout && at.run ? 'close run' : at.scout ? 'scouts list' : 'board list'
   if (at.opened) {
     if (s.rolePick) return 'cancel role pick'
     if (s.rejecting) return 'cancel reject'
@@ -41,11 +43,14 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
 
 /** Takes the board panel one step back (see escStep) and says whether it did; false: the panel closes. */
 export async function escBack($: $): Promise<boolean> {
-  const step = escStep({ tab: await panelValues($).readTab(), opened: await panelValues($).readOpened(), scout: await panelValues($).readScoutOpen() }, S)
+  const { scout, run: ended } = scoutPlace(await panelValues($).readScoutOpen())
+  const run = !!scout && !!ended
+  const step = escStep({ tab: await panelValues($).readTab(), opened: await panelValues($).readOpened(), scout, run }, S)
   if (!step) return false
   if (step === 'cancel scout edit') cancelScoutEdit(claudeHost($))
   else if (step === 'scouts list') await resetPane(claudeHost($), 'scouts')
   else if (step === 'board list') await resetPane(claudeHost($), 'tasks')
+  else if (step === 'close run') await panelValues($).updateScoutOpen(v => scoutPlace(v).scout)
   else {
     if (step === 'cancel setting') (S.settingEdit = null), (S.settingPick = null)
     if (step === 'cancel role pick') S.rolePick = null
@@ -72,6 +77,7 @@ export async function forgetPane($: $) {
   S.rejecting = null
   S.rolePick = null
   S.answering = null
+  S.taskFolds = null
   S.settingEdit = null
   S.settingPick = null
   changesCache.clear()

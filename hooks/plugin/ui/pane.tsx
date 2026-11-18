@@ -1,4 +1,4 @@
-// The board panel: picks the page to draw (Settings, a scout, the Scouts list, a task, or the task list).
+// The board panel: picks the page to draw (Settings, a scout, the Scouts list, a task, a question for the owner, or the task list).
 import { S } from '../state'
 import { type $ } from '../../claude/panel'
 import { arrows, rowStops } from './arrows'
@@ -7,6 +7,8 @@ import { type PaneEvent, type PaneHook, type PaneParts, paneParts } from './part
 import { scoutEditPage, scoutsPage } from './scouts-page'
 import { settingsPage } from './settings'
 import { taskPage } from './task-page'
+import { questionPage } from './question-page'
+import { listPageVs } from './vscode-list'
 
 /** The board panel: the list (each task a button), or one task with its actions; or the Scouts or Settings view. */
 export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[2]) {
@@ -25,5 +27,7 @@ function page($: $, pane: PaneParts) {
   if (pane.onScouts && S.draft) return scoutEditPage($, pane)
   if (pane.onScouts) return scoutsPage($, pane)
   if (pane.t) return taskPage($, pane, pane.t)
-  return listPage($, pane)
+  if (pane.q) return questionPage($, pane, pane.q)
+  // VS Code's side panel has its own Tasks page: readable rows, buttons, no key hints (see vscode-list.tsx)
+  return pane.vscode ? listPageVs($, pane) : listPage($, pane)
 }

@@ -1,11 +1,12 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
+import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from './open'
+import { scoutPageVs, scoutsListVs } from './vscode-scouts'
 import { claudeHost } from '../../claude/host'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
@@ -17,7 +18,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
   // (renderPane calls this only while S.draft is set)
   const d = S.draft!
   const sc = scouts.find(x => x.name === d.scout)
-  const r = sc ? scoutRow(sc, Date.now()) : undefined
+  const r = sc ? scoutRow(sc, pane.nowMs) : undefined
   const file = scoutFile(d.scout, S.N.name)
   return (
     <Box flexDirection="column" gap={1}>
@@ -66,13 +67,55 @@ export function scoutEditPage($: $, pane: PaneParts) {
 /** The Scouts view: one scout's page when one is open, else the list of scouts. */
 export async function scoutsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, width, act, C, scouts, header, footer, buttonRows, heading, paragraphs } = pane
-  const nowMs = Date.now()
-  const opener = await panelValues($).readScoutOpen()
-  const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
+  const { nowMs } = pane
+  const place = scoutPlace(await panelValues($).readScoutOpen())
+  const sc = place.scout ? scouts.find(x => x.name === place.scout) : undefined
+  // VS Code's side panel: readable rows and pages, with buttons and no key hints (see vscode-scouts.tsx)
+  if (pane.vscode) return sc ? scoutPageVs($, pane, sc, place.run) : scoutsListVs($, pane)
   if (sc) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
     const report = scoutReport(sc.last_report)
+    const host = claudeHost($)
+    // its runs, newest first, each with the tasks made from it (the board's tasks from this scout)
+    const runs = await loadScoutRunHistory(host, sc.name)
+    const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
+    const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
+    const problem = scoutLastRunProblem(runs)
+    const opened = place.run ? shown.find(x => x.run.ended === place.run) : undefined
+    // the open run is kept in the panel's saved scout value, next to the scout (scoutPlace); then the page is drawn again
+    const showRun = (run: string) => act(async () => (await panelValues($).updateScoutOpen(() => scoutPlaceValue(sc.name, run)), $.ui.invalidate('ui.render')))
+    const closeRun = showRun('')
+    if (opened) {
+      // one run's page: its line, then its full report (from its file)
+      const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Box flexDirection="column">
+            <Text>
+              <Text bold color={C('claude')}>{sc.name}</Text>
+              <Text color={C('inactive')}> · run that ended {opened.run.ended}</Text>
+            </Text>
+            <Text color={C(scoutOutcomeTone(opened.run.outcome))}>{scoutRunLine(opened.run, opened.tasks, nowMs)}</Text>
+            {opened.run.why ? <Text color={C('error')}>{opened.run.why}</Text> : null}
+          </Box>
+          {buttonRows([<Button key="scout-run-back" label="Back" hotkey="b" autoFocus onPress={closeRun} />], 'scout-run-buttons')}
+          <Box flexDirection="column">
+            {heading('Report')}
+            {text ? paragraphs(text) : <Text color={C('inactive')}>{opened.run.report ? `(its report file ${opened.run.report} can't be read)` : '(this run reported nothing)'}</Text>}
+          </Box>
+          {opened.run.report ? (
+            <Box flexDirection="column">
+              {heading('File')}
+              <Text>
+                {'  '}
+                <Text color={C('autoAccept')}>{opened.run.report}</Text>
+              </Text>
+            </Box>
+          ) : null}
+        </Box>
+      )
+    }
     // the subheader: the summary from the file's front matter, else the first line of the instructions (in the inactive colour)
     const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
     const title = sc.summary?.trim() || firstLine
@@ -97,6 +140,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             </Text>
           ) : null}
           {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
+          {problem && !sc.running ? <Text color={C('error')}>{problem}</Text> : null}
         </Box>
 
         {buttonRows([
@@ -116,6 +160,17 @@ export async function scoutsPage($: $, pane: PaneParts) {
           {heading('Last report')}
           {report === 'nothing found' ? <Text color={C('inactive')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : paragraphs(report)}
         </Box>
+
+        {shown.length ? (
+          <Box key="scout-runs" flexDirection="column">
+            {heading('Runs')}
+            {shown.map(x => (
+              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={showRun(x.run.ended)}>
+                <Text color={C(scoutOutcomeTone(x.run.outcome))}>{`  ${scoutRunLine(x.run, x.tasks, nowMs)}`}</Text>
+              </Button>
+            ))}
+          </Box>
+        ) : null}
 
         <Box flexDirection="column">
           {heading('File')}

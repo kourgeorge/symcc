@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion } from '../../board'
 import { openDays, S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -14,7 +14,7 @@ import { row } from './arrows'
  *  while a filter is on (not typing) [x] clear search, next to [f] change search, takes it off. */
 export function listPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, width, mark, act, C, banner, tabs, footer } = pane
-  const nowMs = Date.now()
+  const { nowMs } = pane
   const offset = localOffset(nowMs)
   const search = S.search
   const query = search?.text.trim() ?? ''
@@ -39,11 +39,14 @@ export function listPage($: $, pane: PaneParts) {
   const showAllBacklog = () => ((S.backlogAll = true), $.ui.invalidate('ui.render'))
   /** A list row: a task (`indent`: 2 or 4 columns); a row one can press (`day`: 'backlog', 'done', 'dropped',
    *  'backlog-more' or an older day of Done); a section label (`head`); a secondary-color line (`line`); or a blank line. */
-  type Row = { task: SymccTask; indent: number } | { day: string; label: string; extra?: string; indent: number } | { head: string } | { line: string } | { blank: true }
+  type Row = { task: SymccTask; indent: number } | { question: OwnerQuestion } | { day: string; label: string; extra?: string; indent: number } | { head: string } | { line: string } | { blank: true }
   const tasksOf = (ts: SymccTask[], indent: number): Row[] => ts.map(task => ({ task, indent }))
   // active work first (always open): NEEDS YOU under its label, then one untitled list of what runs and what
   // waits to run (the mark and status column tell them apart), a blank line between; then the folded groups
+  // the lead's open questions for the owner come first of all: "Questions for you (2)", one row each (not while searching)
+  const questions = filtering ? [] : (v.questions ?? [])
   const active: Row[][] = [
+    questions.length ? [{ head: questionsLabel(questions.length) }, ...questions.map(question => ({ question }))] : [],
     parts.needsYou.length ? [{ head: SECTION_LABEL.needsYou }, ...tasksOf(parts.needsYou, 2)] : [],
     tasksOf([...parts.doing, ...parts.todo], 2),
   ].filter(s => s.length)
@@ -80,7 +83,7 @@ export function listPage($: $, pane: PaneParts) {
     ...(folded.length ? [...(active.length || !filtering ? [blank] : []), ...folded] : []),
   ]
   // while the search box is open it has the focus, not a row
-  const firstButton = typing ? -1 : list.findIndex(r => 'task' in r || 'day' in r)
+  const firstButton = typing ? -1 : list.findIndex(r => 'task' in r || 'day' in r || 'question' in r)
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const cells = new Map(shown.map(x => [x.id, statusCell(x, nowMs, since(x.id))]))
@@ -132,6 +135,17 @@ export function listPage($: $, pane: PaneParts) {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>
         if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('inactive')}>{`  ${r.line}`}</Text>
         if ('head' in r) return <Text key={`head:${r.head}`} bold color={C('text')}>{r.head}</Text>
+        if ('question' in r) {
+          const q = r.question
+          return (
+            <Button key={row(q.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => q.id))}>
+              <Text>{'  '}</Text>
+              <Text bold color={C('claude')}>{q.id.padEnd(idWidth)}</Text>
+              <Text color={C('warning')}>{' ? '}</Text>
+              <Text bold color={C('text')}>{fitRow(2 + idWidth + 3, q.text, '', width, false).title}</Text>
+            </Button>
+          )
+        }
         if (!('task' in r)) {
           const top = r.day === 'backlog' || r.day === 'done' || r.day === 'dropped'
           return (

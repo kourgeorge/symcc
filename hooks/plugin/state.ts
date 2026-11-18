@@ -2,7 +2,7 @@
 // other modules change. They all use these (S, the maps and sets) directly, never a copy, so a change made in one
 // module is seen by all.
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, versionOf } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, versionOf } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 import { type Host, type HostWords, type PanelValues, SYMCC_WORDS } from '../host'
@@ -91,6 +91,9 @@ export const startS = () => ({
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
   driving: false,
+  /** board.json's mtime (ms) when this session last read, saved or looked at it; null = not known yet. A session that
+   *  does not drive reloads and redraws the board on its heartbeat when the file's mtime differs from this (T-429) */
+  boardMtime: null as number | null,
   beat: null as { cancel(): void } | null,
   /** the Settings view's edit box (numbers, test_commands): which setting, what is typed, the last error */
   settingEdit: null as { name: SettingName; value: string; error: string } | null,
@@ -129,6 +132,10 @@ export const startS = () => ({
   answering: null as string | null,
   /** which try's report the open task shows (its try number); null = the latest */
   reportTry: null as { task: string; try: number } | null,
+  /** the task whose report is shown whole on VS Code's task page (else only its first part); null = none */
+  reportAll: null as string | null,
+  /** the folds opened on VS Code's task page (Files it may change, Waits for, Time and cost: closed by default), for the task shown; null = all closed */
+  taskFolds: null as { task: string; open: string[] } | null,
   sayTimer: null as { cancel(): void } | null,
   saying: false,
   /** this machine's speech and sound commands (see voice.ts), found once per session; null until looked for */
@@ -177,7 +184,7 @@ export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
 export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

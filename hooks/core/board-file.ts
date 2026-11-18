@@ -4,6 +4,7 @@ import { dataDir } from '../name'
 import { cleanTokens } from './runs'
 import { parseStamp } from './text'
 import type { WorkerQuestion } from './ask'
+import { type OwnerQuestion, cleanQuestions } from './questions'
 
 export type Board = {
   version: 1
@@ -48,6 +49,10 @@ export type Board = {
   archived?: ArchivedTotals
   /** the ids of archived tasks that were done, so a task waiting on one still starts */
   archived_done?: string[]
+  /** the lead's questions for the owner that are not about one task (see core/questions.ts); absent until the first one */
+  questions?: OwnerQuestion[]
+  /** the next question number ("Q-n"); absent until the first question */
+  next_question?: number
 }
 
 /** What plays when a task is merged or waits for the owner. */
@@ -179,8 +184,31 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
+
+/**
+ * The project-wide test lock (<data folder>/tests.lock): symcc's merge step runs only one task's test commands at a time,
+ * across tasks and sessions (see withTestLock in plugin/review.ts). The holder writes its task, session and time, and
+ * dates it again before each test command; older than TEST_LOCK_STALE_MS (more than one command's TEST_TIMEOUT_MS) it is stale.
+ */
+export const TEST_LOCK_FILE = 'tests.lock'
+export const TEST_LOCK_STALE_MS = 20 * 60_000
+export type TestLock = { task: string; session: string; at: number }
+export const testLockText = (task: string, session: string, at: number) => JSON.stringify({ task, session, at }) + '\n'
+export function parseTestLock(text: string | null): TestLock | null {
+  const l = parseStamp(text, 'at', true)
+  if (!l) return null
+  try {
+    const task = (JSON.parse(text ?? '') as Record<string, unknown>).task
+    return typeof task === 'string' && task ? { task, session: l.session, at: l.at } : null
+  } catch {
+    return null
+  }
+}
+/** A task's note while its tests wait for task `holder`'s tests to end. */
+export const waitingTestsNote = (holder: string) => `waiting for another task's tests (${holder})`
+
 /** The files of the data folder that are saved through a temp file (see tmpName). */
-const TMP_OWNERS = ['board.lock', 'lead.json', 'board.json', 'scouts.json', 'archive.json']
+const TMP_OWNERS = ['board.lock', 'tests.lock', 'lead.json', 'board.json', 'scouts.json', 'archive.json']
 
 /**
  * The temp file a save of `file` writes first (then renames over `file`): `<file>.<session>.<n>.tmp`, where `n`
@@ -197,7 +225,7 @@ const LEFTOVER_TMP = new RegExp(`^(?:${TMP_OWNERS.map(n => n.replace(/\./g, '\\.
 
 /**
  * Which files in the data folder are leftover temp files that may be deleted: only
- * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, lead.json, board.json, scouts.json,
+ * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, tests.lock, lead.json, board.json, scouts.json,
  * archive.json), and only once they are older than maxAgeMs (a fresh one may still be in use by another
  * session). A file with no usable time, or dated in the future, is kept. Anything else (board.json, lead.json,
  * ...) is never chosen.
@@ -245,7 +273,7 @@ const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 
 /** Each setting with the test its value must pass; a value that fails is replaced by the default. */
-const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done'>]: (v: unknown) => boolean } = {
+const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
   max_parallel: v => isNum(v) && v >= 0,
@@ -436,6 +464,13 @@ export function readBoard(text: string | null): BoardRead {
   if ('target_branch' in raw) migrated++
   if (Array.isArray(raw.archived_done)) board.archived_done = [...new Set(raw.archived_done.filter((x): x is string => typeof x === 'string').map(normId))]
   else if ('archived_done' in raw) fixed.push('archived_done')
+  const questions = cleanQuestions(raw.questions)
+  if (questions) board.questions = questions
+  else if ('questions' in raw) fixed.push('questions')
+  if (questions?.length || 'next_question' in raw) {
+    const top = Math.max(0, ...(questions ?? []).map(q => Number(/^Q-(\d+)$/.exec(q.id)?.[1] ?? 0)))
+    board.next_question = Math.max(isNum(raw.next_question) && Number.isInteger(raw.next_question) && raw.next_question >= 1 ? raw.next_question : 1, top + 1)
+  }
   let skipped = 0
   const seen = new Set<string>()
   for (const t of (raw.tasks as unknown[] | undefined) ?? []) {

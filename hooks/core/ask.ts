@@ -103,20 +103,56 @@ function inside(abs: string, dir: string, exact: boolean): string | undefined {
   return a === d ? '' : a.startsWith(`${d}/`) ? abs.slice(dir.length + 1) : undefined
 }
 
+/** Folders macOS gives two names: the first is a symbolic link to the second (T-417). */
+const MAC_LINKS: readonly [string, string][] = [
+  ['/tmp', '/private/tmp'],
+  ['/var', '/private/var'],
+  ['/etc', '/private/etc'],
+]
+
+/** Clean absolute path `p` and, when it is under /tmp, /var or /etc (or their /private names), its other macOS name too. */
+export function pathAliases(p: string): string[] {
+  const out = [p]
+  for (const [a, b] of MAC_LINKS) {
+    for (const [from, to] of [[a, b], [b, a]] as const) if (p === from || p.startsWith(`${from}/`)) out.push(to + p.slice(from.length))
+  }
+  return out
+}
+
+/** One folder, or the same folder by several names (as written, then where its links lead); the first is the main one. */
+export type Folders = string | readonly string[]
+
+/** Folders `f` as clean absolute paths, each with its macOS other name (pathAliases), the main one first; relative ones are left out. */
+function folderList(f: Folders): string[] {
+  const list = (typeof f === 'string' ? [f] : f).filter(x => typeof x === 'string' && x.startsWith('/')).map(x => resolvePath('/', x))
+  return [...new Set(list.flatMap(pathAliases))]
+}
+
+/** `abs` relative to the first of `dirs` it is inside (see inside), or undefined. */
+function insideAny(abs: string, dirs: readonly string[], exact: boolean): string | undefined {
+  for (const d of dirs) {
+    const rel = inside(abs, d, exact)
+    if (rel !== undefined) return rel
+  }
+  return undefined
+}
+
 /**
  * Where an edit of `path` would write when it lands inside the project folder `root` but outside the
  * worker's own folder `worktree` (for example the owner's README.md, the board, or another worker's folder): the path
  * relative to `root`. Relative paths are taken from the worker's folder. Undefined for no path, for edits inside
  * the worker's folder, and for paths outside the project (such as /tmp). The project check ignores letter case (macOS
- * folders usually do), so a path that only differs in case is refused too.
+ * folders usually do), so a path that only differs in case is refused too. Each folder may be given by several names
+ * (as written and its real path), and /tmp, /var and /etc also match their macOS /private names (T-417).
  */
-export function editOutsideFolder(path: string | undefined, worktree: string, root: string): string | undefined {
+export function editOutsideFolder(path: string | undefined, worktree: Folders, root: Folders): string | undefined {
   const p = editTarget(path)
-  if (!p || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
-  const abs = resolvePath(worktree, p)
-  const wt = resolvePath('/', worktree)
-  if (inside(abs, wt, true) !== undefined) return undefined
-  return inside(abs, resolvePath('/', root), false)
+  const wts = folderList(worktree)
+  const tops = folderList(root)
+  if (!p || !wts.length || !tops.length) return undefined
+  const abs = resolvePath(wts[0]!, p)
+  if (insideAny(abs, wts, true) !== undefined) return undefined
+  return insideAny(abs, tops, false)
 }
 
 /**
@@ -140,19 +176,24 @@ const SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/
 /** Characters (besides spaces outside quotes) that end a word in shellWords. */
 const WORD_END = /[;&|<>(){}$=:,`]/
 
+/** A word of a shell command, and whether any of it was inside quotes (or a here-document's text). */
+type ShellWord = { w: string; q: boolean }
+
 /**
  * The words of simple command `text` as the shell reads them, so a path with a space in it stays whole: quotes are
  * dropped and what is inside them kept together, and a backslash keeps the next character (a space too) in the word.
  * Unlike the shell, `WORD_END` characters end a word even inside quotes, so `"--out=/x"` and `"$(cat /x)"` still give
  * `/x`. A best effort, not a shell parser.
  */
-function shellWords(text: string): string[] {
-  const out: string[] = []
+function shellWords(text: string): ShellWord[] {
+  const out: ShellWord[] = []
   let w = ''
+  let q = false
   let quote = ''
   const cut = () => {
-    if (w) out.push(w)
+    if (w) out.push({ w, q })
     w = ''
+    q = false
   }
   for (let i = 0; i < text.length; i++) {
     let c = text[i]!
@@ -176,53 +217,131 @@ function shellWords(text: string): string[] {
       continue
     }
     if (WORD_END.test(c)) cut()
-    else w += c
+    else (w += c), (q ||= !!quote)
   }
   cut()
   return out
 }
 
+/** For each character of `text`, whether it is inside quotes (the quote marks themselves are not). */
+function quoteMask(text: string): boolean[] {
+  const mask: boolean[] = []
+  let quote = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\' && quote !== "'") {
+      mask[i] = mask[i + 1] = !!quote
+      i++
+    } else if (quote) {
+      if (c === quote) quote = ''
+      else mask[i] = true
+    } else if (c === "'" || c === '"') quote = c
+  }
+  return mask
+}
+
+/**
+ * The words bashOutsideFolder checks in piece `p`: those of shellWords and those cut at every quote and operator
+ * (SHELL_SPLIT), with backslashes dropped. A word counts as quoted only when every time it shows up it is inside
+ * quotes, or it is a here-document's text.
+ */
+function pieceWords(p: { text: string; doc?: boolean }): Map<string, boolean> {
+  const words = new Map<string, boolean>()
+  const add = (word: string, q: boolean) => {
+    const w = word.replace(/\\/g, '')
+    if (w) words.set(w, (words.get(w) ?? true) && (q || !!p.doc))
+  }
+  const mask = quoteMask(p.text)
+  let at = 0
+  for (const part of p.text.split(SHELL_SPLIT_KEEP)) {
+    if (part && !SHELL_SPLIT_KEEP.test(part)) add(part, mask[at] === true)
+    at += part.length
+  }
+  for (const { w, q } of shellWords(p.text)) add(w, q)
+  return words
+}
+
+/** SHELL_SPLIT, keeping the separators when splitting (so where each word starts can be counted). */
+const SHELL_SPLIT_KEEP = new RegExp(`(${SHELL_SPLIT.source})`)
+
 /** `s` with every character that means something in a regular expression escaped. */
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')
 
-/** A piece of a shell command as bashOutsideFolder walks it: a simple command's text, or the operator between two. */
-type ShellPiece = { text: string } | { op: '&&' | '||' | ';' | '|' | '&' | '(' | ')' }
+/**
+ * A piece of a shell command as bashOutsideFolder walks it: a simple command's text (`doc`: a here-document's text), or
+ * the operator between two. An opening "(" is a subshell (`sub`) for "(", "$(" and "`", and not for "{".
+ */
+type ShellPiece = { text: string; doc?: boolean } | { op: '&&' | '||' | ';' | '|' | '&' | ')' } | { op: '('; sub: boolean }
+
+/** Where a here-document starts (`<<EOF`, `<<-'EOF'`, `<< "EOF"`, `<<\EOF`): its end word and whether tabs before it are dropped. */
+const HEREDOC = /^<<(-?)[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|\\?([^\s;&|<>()'"`]+))/
 
 /**
  * `command` cut into simple commands and the operators between them (&&, ||, ;, newline as ";", |, a lone "&", and
- * "(", "{", "`" as opening and ")", "}", "`" as closing a group). Nothing is cut inside quotes or after a backslash, and
- * the "&" of a redirect (`2>&1`, `&>`) is no operator. A best effort, not a shell parser.
+ * "(", "{", "`" as opening and ")", "}", "`" as closing a group; "{" and "}" only as a word of their own at a command's start). Nothing is cut inside quotes or after a backslash, and
+ * the "&" of a redirect (`2>&1`, `&>`) is no operator. The lines of a here-document (`cat > f <<'EOF'` ... `EOF`) come
+ * as pieces marked `doc`, cut the same way but with quotes read as plain characters (an apostrophe in a here-document
+ * opens no quote). A best effort, not a shell parser.
  */
-function shellPieces(command: string): ShellPiece[] {
+function shellPieces(command: string, doc = false): ShellPiece[] {
   const out: ShellPiece[] = []
   let text = ''
   let quote = ''
   let tick = false
-  const op = (o: Extract<ShellPiece, { op: string }>['op']) => {
-    out.push({ text }, { op: o })
+  const docs: { end: string; tabs: boolean }[] = []
+  const op = (o: '&&' | '||' | ';' | '|' | '&' | ')' | '(', sub = true) => {
+    out.push(doc ? { text, doc } : { text }, o === '(' ? { op: o, sub } : { op: o })
     text = ''
   }
   for (let i = 0; i < command.length; i++) {
     const c = command[i]!
     const n = command[i + 1]
-    if (quote) {
+    // "<<<" is a here-string, not a here-document
+    const hereString = !doc && !quote && c === '<' && n === '<' && command[i + 2] === '<'
+    const here = !doc && !quote && !hereString && c === '<' && n === '<' ? HEREDOC.exec(command.slice(i)) : null
+    if (hereString) (text += '<<<'), (i += 2)
+    else if (quote) {
       if (c === '\\' && quote === '"') text += c + (n ?? ''), i++
       else {
         text += c
         if (c === quote) quote = ''
       }
     } else if (c === '\\') text += c + (n ?? ''), i++
-    else if (c === "'" || c === '"') (quote = c), (text += c)
-    else if ((c === '&' || c === '|') && n === c) op(c === '&' ? '&&' : '||'), i++
+    else if (!doc && (c === "'" || c === '"')) (quote = c), (text += c)
+    else if (here) {
+      docs.push({ end: here[2] ?? here[3] ?? here[4]!, tabs: here[1] === '-' })
+      text += here[0]
+      i += here[0].length - 1
+    } else if ((c === '&' || c === '|') && n === c) op(c === '&' ? '&&' : '||'), i++
     else if (c === '|') op('|'), n === '&' && i++
     else if (c === '&' && n !== '>' && !/[<>]$/.test(text)) op('&')
-    else if (c === ';' || c === '\n') op(';')
-    else if (c === '(' || c === '{') op('(')
-    else if (c === ')' || c === '}') op(')')
-    else if (c === '`') op((tick = !tick) ? '(' : ')')
+    else if (c === '\n' && docs.length) {
+      // the here-documents started on this line: their lines, up to each one's end word
+      op(';')
+      let j = i + 1
+      for (const d of docs.splice(0)) {
+        const lines: string[] = []
+        while (j < command.length) {
+          const e = command.indexOf('\n', j)
+          const line = command.slice(j, e < 0 ? command.length : e)
+          j = e < 0 ? command.length : e + 1
+          if ((d.tabs ? line.replace(/^\t+/, '') : line) === d.end) break
+          lines.push(line)
+        }
+        out.push(...shellPieces(lines.join('\n'), true), { op: ';' })
+      }
+      i = j - 1
+    } else if (c === ';' || c === '\n') op(';')
+    // a "{" or "}" opens or closes a `{ ...; }` group only as a word of its own at the start of a command; inside a
+    // word (`git {stash,}`, `HEAD@{1}`, `find -exec ... {} +`) it is part of that word, as bash reads it (T-446)
+    else if (c === '{' && !text.trim() && (n === undefined || /\s/.test(n))) op('(', false)
+    else if (c === '}' && !text.trim() && (n === undefined || /[\s;&|)<>]/.test(n))) op(')')
+    else if (c === '(') op('(')
+    else if (c === ')') op(')')
+    else if (c === '`') (tick = !tick) ? op('(') : op(')')
     else text += c
   }
-  out.push({ text })
+  out.push(doc ? { text, doc } : { text })
   return out
 }
 
@@ -247,57 +366,62 @@ function cdTarget(text: string, home: string | undefined): string | null | undef
 }
 
 /**
- * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
- * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. A word counts as a path when
- * it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part. Relative words are taken from the
- * folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller knows it and it is inside
- * the worker's folder) or else the worker's folder, and a plain `cd` or `pushd` earlier in the command moves it ("cd src && cat ../package.json" reads the
- * worker's own file). When it can't be told for sure (a `cd` that may fail before ";" or "||", a group in parentheses),
- * every folder the command may be in is tried, and a `cd` that can't be followed (a variable, `cd -`) goes back to the
- * worker's folder, so nothing is let through that the plain check from the worker's folder would refuse. A ".." word is
- * also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too. Any mention is refused, reading included:
- * telling a safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`),
- * and a worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A
- * best effort, not a sandbox: a path built at run time (variables, base64) or a symbolic link gets through, and the
- * merge-time scope check stays the backstop for the worker's folder.
+ * Walks shell `command` of a worker whose own folder is `wts` (the main name first) and calls `visit` with each clean
+ * absolute path a word of it may name, stopping at (and answering) the first answer that is not undefined. A word
+ * counts as a path when it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part. Relative words
+ * are taken from the folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller
+ * knows it and it is inside the worker's folder) or else the worker's folder, and a plain `cd` or `pushd` earlier in the
+ * command moves it ("cd src && cat ../package.json" reads the worker's own file). When it can't be told for sure (a `cd`
+ * that may fail before ";" or "||", a group in parentheses), every folder the command may be in is tried, and a `cd`
+ * that can't be followed (a variable, `cd -`) goes back to the worker's folder. Words inside quotes (an import path in
+ * `bun -e "..."`) and here-document text are checked the same way, from every folder the command may be in, since
+ * code passed as text may still read the path; a `cd` in here-document text only adds a folder it may be in, and `<<<` is a
+ * here-string, not a here-document (T-417). A ".." word is also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too.
  */
-export function bashOutsideFolder(command: unknown, worktree: string, root: string, home?: string, cwd?: string): string | undefined {
-  if (typeof command !== 'string' || !root.startsWith('/') || !worktree.startsWith('/')) return undefined
-  const wt = resolvePath('/', worktree)
-  const top = resolvePath('/', root)
-  const check = (abs: string) => (inside(abs, wt, true) !== undefined ? undefined : inside(abs, top, false))
+function walkBash(command: string, wts: readonly string[], home: string | undefined, cwd: string | undefined, visit: (abs: string) => string | undefined): string | undefined {
+  const wt = wts[0]!
   // the shell's folder counts only inside the worker's own folder; anywhere else it starts from the worker's folder
   const sh = cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
-  const start = [sh !== undefined && inside(sh, wt, true) !== undefined ? sh : wt]
+  const start = [sh !== undefined && insideAny(sh, wts, true) !== undefined ? sh : wt]
   const join = (...lists: string[][]) => [...new Set(lists.flat())]
+  // every folder the command may be in at this point
   let here = start
   let seen = start
-  const groups: string[][] = []
+  const groups: { here: string[] }[] = []
   const pieces = shellPieces(command)
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i]!
     if ('op' in p) {
-      if (p.op === '(') groups.push(here)
-      // a group may be a subshell (its cd stays inside) or not: either folder
-      else if (p.op === ')') here = join(groups.pop() ?? start, here)
+      if (p.op === '(') groups.push({ here })
+      else if (p.op === ')') {
+        // a group may be a subshell (its cd stays inside) or not: either folder
+        const g = groups.pop()
+        here = join(g?.here ?? start, here)
+      }
       // what runs after "||" may follow a failed cd anywhere before it
       else if (p.op === '||') here = join(here, seen)
       continue
     }
-    for (const word of new Set([...p.text.split(SHELL_SPLIT), ...shellWords(p.text)])) {
-      const w = word.replace(/\\/g, '')
+    for (const w of pieceWords(p).keys()) {
       const climbs = w.split('/').includes('..')
       const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
       if (!w.startsWith('/') && !homeWord && !climbs) continue
-      const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : here.map(d => resolvePath(d, w))
-      if (climbs && w.startsWith('/')) tries.push(...here.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
+      const dirs = here
+      const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : dirs.map(d => resolvePath(d, w))
+      if (climbs && w.startsWith('/')) tries.push(...dirs.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
       for (const abs of tries) {
-        const rel = check(abs)
+        const rel = visit(abs)
         if (rel !== undefined) return rel
       }
     }
     const to = cdTarget(p.text, home)
     if (to === undefined) continue
+    // a "cd" in a here-document's text may run (`bash <<X`) or be only text (`cat > f <<X`): it adds a folder the
+    // command may be in, and never drops the one it was in (T-417)
+    if (p.doc) {
+      if (to !== null) (here = join(here, here.map(d => resolvePath(d, to)))), (seen = join(seen, here))
+      continue
+    }
     const before = pieces[i - 1]
     const after = pieces[i + 1]
     const op = (x: ShellPiece | undefined) => (x && 'op' in x ? x.op : undefined)
@@ -308,22 +432,67 @@ export function bashOutsideFolder(command: unknown, worktree: string, root: stri
     here = op(after) === '&&' ? moved : join(here, moved)
     seen = join(seen, moved)
   }
+  return undefined
+}
+
+/**
+ * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
+ * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. Which words count as paths,
+ * and from which folder relative ones are taken, is told at walkBash. Each folder may be given by several names (as
+ * written, and where its links lead), and /tmp, /var and /etc also match their macOS /private names, so the project
+ * named through /tmp is refused like through /private/tmp (T-417). Any mention is refused, reading included: telling a
+ * safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a
+ * worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A best
+ * effort, not a sandbox: a path built at run time (variables, base64) gets through; symbolic links elsewhere on disk
+ * are followed by the caller (bashPathsOutside). It checks paths only: git writes run from the worker's own folder
+ * (a commit, `git update-ref refs/heads/main`, a push) are refused by the caller with gitWriteIn. The merge-time scope
+ * check only looks at which files the task's commits change, so it catches files written through the shell inside the
+ * worker's folder outside the task's files, not a branch the worker moved.
+ */
+export function bashOutsideFolder(command: unknown, worktree: Folders, root: Folders, home?: string, cwd?: string): string | undefined {
+  const wts = folderList(worktree)
+  const tops = folderList(root)
+  if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
+  const check = (abs: string) => (insideAny(abs, wts, true) !== undefined ? undefined : insideAny(abs, tops, false))
+  const found = walkBash(command, wts, home, cwd, check)
+  if (found !== undefined) return found
   // backstop: the project folder written out whole anywhere in the text (plain, quoted, with "\ " for spaces, or
   // from "~/"), up to the next space or operator, even where the words above came out wrong (a quote mid-path)
-  if (top === '/') return undefined
   const flat = command.replace(/\\\n/g, '').replace(/["'\\]/g, '')
   const homeDir = home?.startsWith('/') ? resolvePath('/', home) : undefined
-  const fromHome = homeDir ? inside(top, homeDir, false) : undefined
   const B = String.raw`\s;&|<>(){}$=:,\``
-  const starts: [string, string][] = [[reEscape(top), '/']]
-  if (fromHome) starts.push([`~/${reEscape(fromHome)}`, homeDir!])
-  for (const [start, base] of starts) {
-    for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, 'gi'))) {
-      const rel = check(resolvePath(base, m[0].replace(/^~\/?/, '')))
-      if (rel !== undefined) return rel
+  for (const top of tops) {
+    if (top === '/') continue
+    const fromHome = homeDir ? inside(top, homeDir, false) : undefined
+    const starts: [string, string][] = [[reEscape(top), '/']]
+    if (fromHome) starts.push([`~/${reEscape(fromHome)}`, homeDir!])
+    for (const [start, base] of starts) {
+      for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, 'gi'))) {
+        const rel = check(resolvePath(base, m[0].replace(/^~\/?/, '')))
+        if (rel !== undefined) return rel
+      }
     }
   }
   return undefined
+}
+
+/** The most paths bashPathsOutside answers, so a long command costs a bounded number of disk lookups. */
+export const BASH_PATHS_MAX = 20
+
+/**
+ * The absolute paths (at most BASH_PATHS_MAX, the same walk as bashOutsideFolder) a worker's Bash `command` names
+ * outside its own folder `worktree`: the caller looks each up on disk, so a symbolic link elsewhere that leads into the
+ * owner's copy (`~/link/README.md`) is judged by where it leads (T-417).
+ */
+export function bashPathsOutside(command: unknown, worktree: Folders, home?: string, cwd?: string): string[] {
+  const wts = folderList(worktree)
+  if (typeof command !== 'string' || !wts.length) return []
+  const out = new Set<string>()
+  walkBash(command, wts, home, cwd, abs => {
+    if (insideAny(abs, wts, true) === undefined) out.add(abs)
+    return out.size >= BASH_PATHS_MAX ? '' : undefined
+  })
+  return [...out]
 }
 
 /** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree`. */
@@ -331,7 +500,7 @@ export const bashOutsideText = (rel: string, worktree: string) =>
   `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
 
 /** git commands a checker may run as they are: they only read. Anything not listed (and not in gitReadOnly below) is refused. */
-const GIT_READ = new Set(['diff', 'log', 'show', 'status', 'blame', 'grep', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'rev-list', 'merge-base', 'describe', 'shortlog', 'show-branch', 'whatchanged', 'name-rev', 'diff-tree', 'diff-index', 'diff-files', 'annotate', 'help', 'version', 'count-objects', 'var', 'check-ignore', 'check-attr'])
+const GIT_READ = new Set(['diff', 'log', 'show', 'status', 'blame', 'grep', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file', 'rev-list', 'merge-base', 'describe', 'shortlog', 'show-branch', 'whatchanged', 'name-rev', 'diff-tree', 'diff-index', 'diff-files', 'annotate', 'help', 'version', 'count-objects', 'var', 'check-ignore', 'check-attr', 'show-ref'])
 
 /** git's own options (before the command name) that take the next word as their value. */
 const GIT_GLOBAL_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix'])
@@ -350,7 +519,7 @@ const LONG_REFUSED = ['output', 'ext-diff', 'textconv', 'open-files-in-pager', '
 const LONG_OK = new Set(['text'])
 
 /** git commands that take diff options, where `-o <file>` writes the output to a file. */
-const DIFF_LIKE = new Set(['diff', 'log', 'show', 'whatchanged', 'diff-tree', 'diff-index', 'diff-files', 'format-patch', 'rev-list', 'shortlog'])
+const DIFF_LIKE = new Set(['diff', 'log', 'show', 'reflog', 'whatchanged', 'diff-tree', 'diff-index', 'diff-files', 'format-patch', 'rev-list', 'shortlog'])
 
 /** `git branch` options that change branches. */
 const BRANCH_WRITE = /^(-[a-zA-Z]*[dDfmMcCu]|--(delete|force|move|copy|set-upstream-to|unset-upstream|edit-description|track|no-track|create-reflog|recurse-submodules)(=|$))/
@@ -389,6 +558,31 @@ function plainWords(text: string): string[] {
   return out
 }
 
+/**
+ * plainWords' words of `text` with each quoted or backslashed "{", "}" and "," turned into "_", so what is left of
+ * them is what bash's brace expansion may read (`'{"h":"%h"}'` is text, `{git,stash}` is not).
+ */
+function braceWords(text: string): string[] {
+  const out: string[] = []
+  let w = ''
+  let has = false
+  let quote = ''
+  const lit = (c: string) => (/[{},]/.test(c) ? '_' : c)
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\' && quote !== "'") (w += lit(text[++i] ?? '')), (has = true)
+    else if (quote) c === quote ? (quote = '') : (w += lit(c))
+    else if (c === "'" || c === '"') (quote = c), (has = true)
+    else if (/\s/.test(c)) {
+      if (w || has) out.push(w)
+      w = ''
+      has = false
+    } else w += c
+  }
+  if (w || has) out.push(w)
+  return out
+}
+
 /** Short options of git grep that take a value right after them (`-e<pattern>`, `-A3`). */
 const GREP_VALUE = 'efABCmO'
 /** Short options of diff-like git commands that take a value right after them (`-S<text>`, `-G<regex>`, `-L<range>`, `-n3`); shortlog's -n takes none. */
@@ -408,6 +602,8 @@ function shortFlags(a: string, value: string): string {
 function gitBadOption(sub: string, args: string[]): string | undefined {
   for (const a of args) {
     const long = /^--([^=]+)/.exec(a)?.[1]
+    // cat-file --filters runs the repository's filter programs (any unique start of it: --fi, --filter)
+    if (sub === 'cat-file' && long && long.length > 1 && 'filters'.startsWith(long)) return a.split('=')[0]
     if (long && !LONG_OK.has(long) && !long.startsWith('no-') && LONG_REFUSED.some(n => n.startsWith(long))) return a.split('=')[0]
     // short options may be put together (`-nO`); -O runs its value as a command in grep, -o writes a file in diff-like
     // commands. The letters after an option that takes a value are that value (`-Sfoo`, `-G"checkout"`), not options.
@@ -417,9 +613,31 @@ function gitBadOption(sub: string, args: string[]): string | undefined {
   return undefined
 }
 
+/** `git config` options that only pick where to read or how to show it; any other option (--add, --unset, --edit, --file...) is refused. */
+const CONFIG_SHOW = /^(--(global|local|system|worktree|show-origin|show-scope|name-only|null|includes|no-includes|bool|int|bool-or-int|path|expiry-date|type=[\w-]+)|-z)$/
+
+/** `git config` options (or, in newer git, first words) that read a setting; one of them is needed. */
+const CONFIG_GET = new Set(['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l'])
+
+/** Whether `git config args` only reads: one of CONFIG_GET (or `get`/`list` first), and else only CONFIG_SHOW options. */
+function configReadOnly(args: string[]): boolean {
+  let get = args[0] === 'get' || args[0] === 'list'
+  for (const a of get ? args.slice(1) : args) {
+    if (CONFIG_GET.has(a)) get = true
+    else if (a.startsWith('-') && !CONFIG_SHOW.test(a)) return false
+  }
+  return get
+}
+
 /** Whether git `args` (the words after the command name `sub`) only read. */
 function gitReadOnly(sub: string, args: string[]): boolean {
   if (GIT_READ.has(sub)) return true
+  // `git remote` and `-v` list the remotes, get-url shows one; show, prune, update and the rest may reach the network or change them
+  if (sub === 'remote') return args.length === 0 || args.every(a => a === '-v' || a === '--verbose') || args[0] === 'get-url'
+  if (sub === 'config') return configReadOnly(args)
+  // only `git reflog` (options alone) and `git reflog show ...` show; every other subcommand (expire, delete, drop,
+  // write, and any git adds later) may change it, and a plain ref (`git reflog HEAD`) can't be told from one
+  if (sub === 'reflog') return args[0] === 'show' || args.every(a => a.startsWith('-'))
   if (sub === 'stash' || sub === 'worktree') return args[0] === 'list' || (sub === 'stash' && args[0] === 'show')
   if (sub !== 'branch') return false
   let list = false
@@ -442,62 +660,252 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * The first git command in Bash `command` that may change anything or run another program (a commit, a branch, the
  * stash, the index, a tag, a push, `--output=<file>`, `grep -O<cmd>`, `-c core.pager=...`, `GIT_EXTERNAL_DIFF=...`), as
  * `git <command>` (or `git <command> <option>`, or the setting's name), or undefined when every git command in it only
- * reads (diff, log, show, status, branch --list, stash list...). Looks inside compound commands (&&, ;, |, `$(...)`),
- * after `cd`, `env` or `xargs`, past git's own options (`git -C <dir>`), and inside any word that has `git` in it (quoted
- * text run by `sh -c`, a `VAR=` value, an option value like `-O"git stash"`). Any word `git` (or ending in `/git`) counts,
- * so an odd read may be refused too; that is the safe side.
+ * reads (diff, log, show, status, branch --list, stash list, remote -v, config --get, reflog...). Looks inside compound
+ * commands (&&, ;, |, `$(...)`), past git's own options (`git -C <dir>`), and inside any word that has `git` in it
+ * (quoted text run by `sh -c`, a `VAR=` value, an option value like `-O"git stash"`). Any word `git` (or ending in
+ * `/git`, or `git-xyz`) counts, so an odd read may be refused too; that is the safe side. Two exceptions (T-439): a
+ * command run by a read-only text tool (grep, rg, cat, ls, find without -exec... see TEXT_TOOLS), where `git` is only
+ * a pattern or a name (`grep -n "git stash" docs`), and a read-only git command, whose words aren't read again
+ * (`git log --grep="git stash"`). They hold only when every command in the whole line is one of them, so
+ * `grep -h git notes | sh` and `grep -h git notes > s; $SHELL s` are refused, and never in a line with a newline, a
+ * `#` comment, `$'` or a backslash (`grep x #'` + newline + `git stash`, `grep x a\>& git stash`). git run by xargs is
+ * refused.
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
  */
-export function gitWriteIn(command: unknown): string | undefined {
+export function gitWriteIn(command: unknown, allow?: GitAllow): string | undefined {
   if (typeof command !== 'string') return undefined
-  const { bad, git, env } = gitScan(command, 0)
+  const { bad, git, env } = gitScan(command, 0, allow)
   return bad ?? (git && env ? env : undefined)
 }
 
+/** A git command (`sub`, and the words after it) that gitWriteIn lets through although it writes. */
+export type GitAllow = (sub: string, args: string[]) => boolean
+
+/** Options a "merge it in" try's `git merge` may have: none of them commits anything the plain merge wouldn't. */
+const MERGE_STEP_OPTIONS = new Set(['--no-edit', '--no-ff', '--no-commit'])
+
+/**
+ * The git writes a worker may run in a "merge it in" try (a task whose branch conflicts with `into`, see merge_main):
+ * `git merge <into>` (with only --no-edit, --no-ff or --no-commit) and `git merge --abort`. Nothing else: the worker
+ * resolves the conflicts in the files, and symcc adds and commits them (git add -A) as for any try.
+ */
+export const mergeStepAllow =
+  (into: string): GitAllow =>
+  (sub, args) => {
+    if (sub !== 'merge') return false
+    // output redirections (`2>&1`, `> log`) don't change what git does; their target is checked as a path elsewhere
+    const rest: string[] = []
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]!
+      const redir = /^(\d*|&)>>?(&\d+)?(.*)$/.exec(a)
+      if (!redir) rest.push(a)
+      else if (!redir[2] && !redir[3]) i++
+    }
+    if (rest.length === 1 && rest[0] === '--abort') return true
+    const names = rest.filter(a => !MERGE_STEP_OPTIONS.has(a))
+    return names.length === 1 && names[0] === into
+  }
+
+/**
+ * Read-only text tools: in a command run by one of these, the word `git` in an argument is only text (a search
+ * pattern, a file name), never run. Each value: an option of that tool that runs another program or deletes, which
+ * puts the piece back under the broad rule (rg --pre, ag/ack --pager, sort --compress-program, less +!cmd, find -exec).
+ */
+const TEXT_TOOLS: Record<string, RegExp | undefined> = {
+  grep: undefined,
+  egrep: undefined,
+  fgrep: undefined,
+  rg: /^--(p|hostname-bin)/,
+  ag: /^--p/,
+  ack: /^--p/,
+  cat: undefined,
+  head: undefined,
+  tail: undefined,
+  less: /^(\+|-k|--lesskey)/,
+  more: /^(\+|-k|--lesskey)/,
+  wc: undefined,
+  sort: /^--co/,
+  uniq: undefined,
+  cut: undefined,
+  ls: undefined,
+  file: undefined,
+  stat: undefined,
+  diff: undefined,
+  find: /^-(exec|execdir|ok|okdir|delete)$/,
+}
+
+/** Folders a text tool may be run from by its full path (`/usr/bin/grep`); any other path may be a script of the same name. */
+const TOOL_DIR = /^(\/usr\/local\/bin|\/opt\/homebrew\/bin|\/usr\/bin|\/bin)\/[^/]+$/
+
+/** The program name of word `w` (`/usr/bin/sudo` gives `sudo`), in small letters. */
+const progName = (w: string) => w.slice(w.lastIndexOf('/') + 1).toLowerCase()
+
+/** Programs that add words from their input to the command they run (`echo stash | xargs git`). */
+const ADDS_WORDS = new Set(['xargs', 'parallel'])
+
+/** Whether simple command `words` is a read-only text tool (TEXT_TOOLS), first word and without its refused options. */
+function textTool(words: string[]): boolean {
+  const w = words[0]
+  if (w === undefined || (w.includes('/') && !TOOL_DIR.test(w))) return false
+  const name = progName(w)
+  if (!Object.hasOwn(TEXT_TOOLS, name)) return false
+  const refused = TEXT_TOOLS[name]
+  return !refused || !words.slice(1).some(a => refused.test(a))
+}
+
+/**
+ * Whether simple command `p` is a plain `cd` or `pushd`: no folder, or one plain path (no `$`, quotes, `(`, `<`, `;`,
+ * glob, and not an option), so it only changes folder (`cd hooks && grep -n git ask.ts`).
+ */
+const plainCd = (p: { text: string; words: string[] }) =>
+  (p.words[0] === 'cd' || p.words[0] === 'pushd') && p.words.length <= 2 && /^\s*(cd|pushd)(\s+(?!-)[\w./~+,:%-]+)?\s*$/.test(p.text)
+
+/** Whether text holds a command run inside it (`$(...)`, backquotes, `<(...)`, `>(...)`). */
+const RUNS_INSIDE = /\$\(|`|<\(|>\(/
+
+/** Programs that run their text words as a new command line (`bash -c '...'`, `eval '...'`). */
+const RERUNS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'eval'])
+
+/** What gitWriteIn names for a git command with brace expansion in it. */
+const BRACE_WHAT = 'with {braces}'
+
+/**
+ * Whether word `w` (from braceWords, so quoted braces are gone) has a "{" that bash's brace expansion may read: not a
+ * git revision's `@{...}` (`HEAD@{1}`), not a `${...}` setting and not an empty `{}` (bash keeps it as text, as in
+ * `find -exec git log {} +`).
+ */
+const hasBrace = (w: string) =>
+  w.replace(/[@$]\{[^{}]*\}/g, '').replace(/\{\}/g, '').includes('{')
+
+/**
+ * Whether braceWords word `w` may become git through brace expansion: with the braces and commas gone it reads git
+ * (`{git,} stash`, `g{i,}t stash`), or one of its comma-separated parts, or that part's last path piece, is git or
+ * `git-...` (`{git,stash}`, `{/usr/bin/git,stash}`).
+ */
+const braceGit = (w: string) =>
+  hasBrace(w) &&
+  (/(?:^|[/=])git$/i.test(w.replace(/[{},]/g, '')) ||
+    w.split(/[{},]/).some(part => /^git(?:$|-)/i.test(part.split(/[/=]/).pop() ?? '')))
+
+/**
+ * The places in simple command `words` of the words given to a read-only text tool (TEXT_TOOLS) that find runs with
+ * -exec, -execdir, -ok or -okdir, up to the ending `;` or `+` (`grep`'s `-l git {}` in `find . -exec grep -l git {} +`).
+ * The command find runs is the word right after -exec; when it is a text tool, a `git` among its words is only text.
+ */
+function findExecTextArgs(words: string[]): Set<number> {
+  const out = new Set<number>()
+  if (!words.some(w => progName(w) === 'find')) return out
+  for (let i = 0; i < words.length; i++) {
+    if (!/^-(exec|execdir|ok|okdir)$/.test(words[i]!)) continue
+    let end = i + 1
+    while (end < words.length && !/^(\\?;|\+)$/.test(words[end]!)) end++
+    if (textTool(words.slice(i + 1, end))) for (let k = i + 2; k < end; k++) out.add(k)
+    i = end
+  }
+  return out
+}
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
-function gitScan(command: string, depth: number): { bad?: string; git: boolean; env?: string } {
+function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
   if (depth > 4) return out
-  for (const p of shellPieces(command)) {
-    if ('op' in p) continue
+  const pieces = shellPieces(command)
+  // `adds`: an xargs or parallel comes before it in the line (`xargs -I{} git {}` is cut at the braces)
+  let seen = false
+  const simple = pieces.flatMap(p => {
+    if ('op' in p) return []
     const words = plainWords(p.text)
+    const adds = seen
+    seen ||= words.some(a => ADDS_WORDS.has(progName(a)))
+    return [{ ...p, words, braces: braceWords(p.text), adds }]
+  })
+  /** The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined when it isn't git. */
+  const gitAt = (words: string[], at: number, adds: boolean, braces: string[]): { bad?: string } | undefined => {
+    const w = words[at]!
+    // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
+    const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
+    // an option whose value is git runs it with the words after (`rg --pre=git stash .` runs `git stash`)
+    // brace expansion may spell git (`{git,} stash`, `{git,stash}`, `g{i,}t stash`)
+    const braced = !dashed && !isGit(w) && braceGit(braces[at] ?? w)
+    if (!dashed && !isGit(w) && !/=git$/i.test(w) && !braced) return undefined
+    out.git = true
+    // xargs and parallel add words from their input (`stash`, `--output=x`), so what that git does can't be known
+    if (adds || words.slice(0, at).some(a => ADDS_WORDS.has(progName(a)))) return { bad: 'xargs git' }
+    // bash's brace expansion makes new words (`git {stash,}` runs `git stash`, `git -C {.,} stash` runs `git -C . stash`),
+    // so what a git command with a "{" in its words does can't be told from its text (T-446)
+    if (braced || braces.slice(at + 1).some(hasBrace)) return { bad: `git ${BRACE_WHAT}` }
+    let j = at + 1
+    let sub = dashed
+    if (!dashed) {
+      for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
+        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { bad: `git ${words[j]!.split('=')[0]}` }
+      sub = words[j++]
+    }
+    if (sub === undefined) return {}
+    const args = words.slice(j)
+    if (allow?.(sub, args)) return {}
+    if (!gitReadOnly(sub, args)) return { bad: `git ${sub}` }
+    const opt = gitBadOption(sub, args)
+    return opt ? { bad: `git ${sub} ${opt}` } : {}
+  }
+  /**
+   * Whether a simple command's `git` words are only text: a TEXT_TOOLS command, or a read-only git command (checked
+   * by gitAt), with no command run inside it and not in a here-document.
+   */
+  const exempt = (p: { text: string; doc?: boolean; words: string[]; braces: string[]; adds: boolean }): boolean => {
+    if (p.words.length === 0) return true
+    if (p.doc || RUNS_INSIDE.test(p.text)) return false
+    if (textTool(p.words) || plainCd(p)) return true
+    const w = p.words[0]!
+    // `HEAD@{1}` braces were cut at before T-439's round 6, so a line with `@{` gets no read-only git exception
+    if (command.includes('@{')) return false
+    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds, p.braces)?.bad === undefined
+  }
+  // Text one command prints may be run by another (`grep -h git notes | sh`, `grep ... > s; $SHELL s`, `./s`), and a
+  // list of programs that run their input or a file can never be complete. So the exceptions hold only when every
+  // command in the whole line is exempt; one other command anywhere (sh, $SHELL, ./s, chmod, echo, tee...) keeps
+  // main's broad rule for all of it. The command splitter doesn't know `#` comments or `$'...'` quoting, so with a
+  // newline, a `#` that starts a word or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
+  // Nor with a backslash anywhere: an escape like `a\>&` hides a background `&` from the splitter (T-439 round 7).
+  const unsplit = /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(command)
+  // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
+  const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
+  broad ||= unsplit || gitProgram || !simple.every(exempt)
+  for (const p of simple) {
+    const words = p.words
+    for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
+    if (!broad && exempt(p)) continue
+    // text a shell runs again (`bash -c '{git,stash}'`, `eval '{git,stash}'`) is a whole command of its own, with its
+    // own brace expansion and splitting, so each word after a shell or eval is checked as one (T-446)
+    const shellAt = words.findIndex(w => RERUNS.has(progName(w)))
+    if (shellAt >= 0) {
+      const rest = words.slice(shellAt + 1)
+      const texts = progName(words[shellAt]!) === 'eval' ? [rest.join(' ')] : rest.filter(w => !/^[-+]/.test(w))
+      for (const t of texts) {
+        const inner = gitScan(t, depth + 1, allow, true)
+        out.git ||= inner.git
+        out.env ??= inner.env
+        if (inner.bad) return { ...out, bad: inner.bad }
+      }
+    }
+    const toolArgs = findExecTextArgs(words)
+    // main's broad rule: any word `git` (or ending in `/git`, or `git-xyz`) counts, and text from a `git` on in any
+    // word that holds more than one word or command (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
-      out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
-      // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
-      const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
-      if (dashed) {
-        out.git = true
-        const args = words.slice(i + 1)
-        if (!gitReadOnly(dashed, args)) return { ...out, bad: `git ${dashed}` }
-        const opt = gitBadOption(dashed, args)
-        if (opt) return { ...out, bad: `git ${dashed} ${opt}` }
-        continue
+      // a word given to a text tool run by find -exec is its text, not a git command (`find . -exec grep -l git {} +`)
+      const g = toolArgs.has(i) ? undefined : gitAt(words, i, p.adds, p.braces)
+      if (g?.bad) return { ...out, bad: g.bad }
+      if (g) continue
+      const at = w.search(/git(?!\w)/i)
+      if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
+        const inner = gitScan(w.slice(at), depth + 1, allow, broad)
+        out.git ||= inner.git
+        out.env ??= inner.env
+        if (inner.bad) return { ...out, bad: inner.bad }
       }
-      if (!isGit(w)) {
-        // text from the first "git" that ends a word on, in a word that holds more than one word or command
-        // (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
-        const at = w.search(/git(?!\w)/i)
-        if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
-          const inner = gitScan(w.slice(at), depth + 1)
-          out.git ||= inner.git
-          out.env ??= inner.env
-          if (inner.bad) return { ...out, bad: inner.bad }
-        }
-        continue
-      }
-      out.git = true
-      let j = i + 1
-      for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
-        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { ...out, bad: `git ${words[j]!.split('=')[0]}` }
-      const sub = words[j]
-      if (sub === undefined) continue
-      const args = words.slice(j + 1)
-      if (!gitReadOnly(sub, args)) return { ...out, bad: `git ${sub}` }
-      const opt = gitBadOption(sub, args)
-      if (opt) return { ...out, bad: `git ${sub} ${opt}` }
     }
   }
   return out
@@ -505,7 +913,38 @@ function gitScan(command: string, depth: number): { bad?: string; git: boolean; 
 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
-  `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
+  `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
+
+/**
+ * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
+ * something: its branch names, tags and stash are shared with the owner's folder (main too), and symcc commits, tests
+ * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
+ */
+export const workerGitWriteText = (what: string, into?: string) =>
+  `Refused: ${what} may change the repository or run another program, and a worker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
+
+/**
+ * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change
+ * something: a scout runs in the owner's own folder, so a git write there changes the owner's branch, files or stash.
+ */
+export const scoutGitWriteText = (what: string) =>
+  `Refused: ${what} may change the repository or run another program, and a scout may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`
+
+/**
+ * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative
+ * paths are taken from the project folder. Undefined for no path and for paths outside the project (such as /tmp).
+ * As editOutsideFolder, letter case is ignored and /tmp, /var and /etc also match their macOS /private names.
+ */
+export function editInProject(path: string | undefined, root: Folders): string | undefined {
+  const p = editTarget(path)
+  const tops = folderList(root)
+  if (!p || !tops.length) return undefined
+  return insideAny(resolvePath(tops[0]!, p), tops, false)
+}
+
+/** The reason a scout reads when its edit of project path `rel` is refused: scouts never change the project. */
+export const scoutEditText = (rel: string) =>
+  `Refused: ${rel || 'that path'} is in the owner's project, and a scout never changes the project's files. Write throwaway files under /tmp if you need them, and report what you find instead.`
 
 /**
  * The project path (relative to the worker's folder `worktree`) an edit of `path` would change, when it lies outside
@@ -513,10 +952,11 @@ export const gitWriteText = (what: string) =>
  * path, or is outside the worker's folder (see
  * editOutsideFolder for those). Relative paths are taken from the worker's folder, and ".." is worked out first.
  */
-export function blockedEdit(path: string | undefined, worktree: string, files: string[], dataDir: string): string | undefined {
+export function blockedEdit(path: string | undefined, worktree: Folders, files: string[], dataDir: string): string | undefined {
   const p = editTarget(path)
-  if (!p || !worktree.startsWith('/')) return undefined
-  const rel = inside(resolvePath(worktree, p), resolvePath('/', worktree), true)
+  const wts = folderList(worktree)
+  if (!p || !wts.length) return undefined
+  const rel = insideAny(resolvePath(wts[0]!, p), wts, true)
   if (!rel) return undefined
   return outOfScope([rel], files, dataDir).length ? rel : undefined
 }

@@ -34,7 +34,7 @@ The same names are used in the [README](../README.md) and in this guide.
 | **Lead** | Orchestrator agent (your normal Claude Code chat) | Plans, breaks work into tasks, supervises the workers, decides what to do when something fails, reports to you |
 | **Board** | Task board (a plain file at `.symcc/board.json`) | One board (todo / doing / review / done) for requested work (from you) and discovered work (from scouts) |
 | **Workers** | Parallel agents (one per task) | Each builds one task in an isolated git worktree on its own branch, then stops |
-| **Scouts** (optional) | Scheduled background agents for discovery | On a timer, look for bugs, missing tests, outdated dependencies or security notices, and report to the lead; read-only, they never change files |
+| **Scouts** (optional) | Scheduled background agents for discovery | On a timer, look for bugs, missing tests, outdated dependencies or security notices, and report to the lead; symcc refuses their file edits and git writes in the project (see [scouts](#scouts)) |
 
 And the ideas that tie them together:
 
@@ -129,6 +129,24 @@ changed is kept.
   sends the task back to work.
 - **Any other question** has a text box: type the answer and press Enter.
 
+### When the lead asks you something
+
+Questions from the lead that are not about one task ("raise the version?", "add a scout?",
+a settings choice) used to live only in the chat, where they scroll away. Now the lead puts
+each one on the board with its `question` tool, with 2 to 6 short choices, and asks it
+briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` (under
+`questions`), not in the chat.
+
+- The board list shows **Questions for you (2)** at the top, above the tasks. Enter on one
+  opens its page: the question, one button per choice (also on the number keys) and
+  **Answer…** for your own words, the same as a waiting task.
+- The band above the prompt and the status line say **2 questions for you** while any is
+  open, and with `notify` on you hear "needs you" once per question.
+- Answer on the board and the question closes and leaves the list (it stays in the file as
+  history). The lead hears it in its next board update, as a line like "The owner answered
+  Q-3 (…): Yes". Answer in the chat instead and the lead closes it with your words. The
+  lead can also drop a question that no longer matters.
+
 ---
 
 ## What happens when a worker finishes
@@ -198,11 +216,18 @@ happens, never the words in its hand-back:
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
    a new try as usual.
+   **One task's tests at a time.** Tests run for one task at a time across all tasks,
+   sessions and target branches, oldest first. A task that has to wait shows the note
+   "waiting for another task's tests (T-x)", where T-x is the task running its tests now.
+   So when several tasks finish together, merges can take longer. The turn is kept with
+   the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
+   you never need to delete it by hand.
    **Time limit.** Each test command may run up to 10 minutes. The whole checking and
    merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
    and the board: 15 minutes with one test command, 35 with three. Only the task's own
    work counts: the clock stops while it waits in line behind other merges into the same
-   branch (each of those has its own limit, so the line keeps moving), and starts again
+   branch (each of those has its own limit, so the line keeps moving) and while it waits for
+   another task's tests (see below), and starts again
    from zero when its turn begins, and again each time it is brought up to date and
    tested again because the branch moved meanwhile. A step still running past the limit
    is taken as stuck and given up: a finished worker's task goes back to `todo` for a
@@ -527,6 +552,70 @@ are about changes; under "How tasks ended" a read investigation shows as
   total, e.g. `total: 1h 12m · 1.2M tokens in all over 4 tries`. "In all" means every kind of
   token added up; `/symcc-stats` shows the kinds apart (see below).
 
+### In VS Code
+
+In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: you click a button
+(or Tab to it and press Enter). So the board there has its own layout; the terminal's is
+unchanged.
+
+- **Header**: the symcc logo (the clef, in the accent color; it sways now and then and turns
+  into a check mark, a robot or a note on a merge, a start or a scout finding, as in the
+  terminal) with four short lines beside it: the name, version and folder; the board mode as a
+  colored pill (`⏵ auto`) with what it means, dim; the branch and who drives; the tests (the
+  first command, then "(+1 more)") and the limits. Under it the counts as small badges
+  (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each dot in its status color. Every line
+  wraps, never cut.
+- **Tabs**: a segmented row of small boxes, `Tasks 20`, `Scouts 1`, `Settings`. The one shown
+  has a bold border in the accent color, its name bold and its count in a filled badge; the
+  others have a dim border. Click a tab to switch.
+- **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
+  To do), each with its colored mark and its count in a badge (`▶ Doing  2 `), a blank line
+  between them. Each task is one button: the ID dim and the title (up to two lines; a longer
+  one ends with "(more)", and its page has it whole), then a dim line with the status in its
+  color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the kind or role, the
+  try, and the question or why it failed. A task that needs you starts with a `●` and has a
+  bold title. The lead's questions look the same, in the warning color. Backlog, Done and
+  Dropped are folded headings (`▸ Backlog  3 `), closed until you click them. With nothing
+  open the list says "All clear" and has one main button, `Tell the lead what to do next`,
+  which puts "Next task: " in the prompt box (only when the box is empty).
+- **Footer**: a `Switch to review merge` (or `Switch to auto`) button and a search box that
+  filters as you type, with `Clear search` while a search is on. No key hints; other pages
+  say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
+  (`Back`, not `Back (b)`).
+- **A task's page** reads like a card. It uses the whole panel width and wraps every line,
+  never cutting it with "…". From the top: a `← Tasks` button back to the list; the task ID and
+  title, large and bold; a status badge in its color (`▶ doing`, `◆ ready for review`,
+  `? waiting for you`, `✗ failed`, `◆ answered: read it`), with the kind, role, try and time
+  as small dim tags beside it. What needs you comes next, in a box in its color with its
+  buttons inside: the **Question for you** (yellow) with its answers as buttons and a box for
+  your own answer (a file request has `Allow files` and `Don't allow`); **Why it failed** (red)
+  with `Retry`; **Waiting for your files** (yellow) with `Merge now`. Then one row of the other
+  buttons that fit the status (for example Approve, Reject, Show changes, Drop, Copy for a task
+  in review), with at most one main button on the page. Then the sections, each under a clear
+  heading: **Why / where it came from**; **What to do** (the details, drawn as Markdown); the
+  **Changes** of a task in review; **History**, a timeline with the newest first (a mark, when
+  that try ran, then the whole line; merges in green, failures in red); and the latest
+  **Report** as Markdown: its first lines, with `Show all` for the rest and a button for each
+  try. Last come three folds, closed until you click them, each with a count:
+  `▸ Files it may change (3)`, `▸ Waits for (2)` (each task ID a button that opens it) and
+  `▸ Time and cost (2)`.
+- **Scouts**: each scout is one button of a few lines, wrapped, never cut: its name and its
+  state as a filled badge in its color (`◉ running now`, `○ paused`, `◎ next in 3h`,
+  `◎ on demand`); then a dim line with how often it runs, its model and when it last ran; its
+  summary; and, dim, the start of its last report (`last report: found 2: …` with the first
+  finding, or `last report: nothing`). Under the list: `+ New scout` and `← Tasks`. With no
+  scouts yet, a short how-to in a box and `+ New scout` as the main button.
+- **A scout's page**: a `← Scouts` button; the name and state; when it runs, its model, the next
+  run and the last run; buttons `Run now` (not while it runs), `Pause` or `Resume`, and `Edit`;
+  then its **Instructions** and its whole **Last report**, both as Markdown, and its **File**.
+- **Settings**: every group is a heading (Work, Checks before merging, Workers, Scouts, Board
+  and alerts) with its settings under it, each on its own row with its value. A setting with
+  a fixed set of choices (mode, notify, checker, scout_findings, tests_with_changes,
+  open_on_start, enabled) is a drop-down: pick a value and it is saved at once. Numbers and the
+  test commands are boxes: type and press `Save` (a wrong value says why and saves nothing; an
+  empty test commands box clears them). Under each row, a dim line says the default and what
+  the setting does. Roles and Kinds are buttons that open their pages. No key hints.
+
 ---
 
 ## Tracing a task back
@@ -578,10 +667,26 @@ Look for risky code that has no tests. Point at file:line and say what could go 
 ```
 
 A scout does what its file says. It can read files, run shell commands (these follow your
-normal permission rules, like workers) and search or fetch web pages. It can't edit or write
-files, and it is told not to change the project at all: no installs, no git commands that
-change anything. Changes only go through board tasks. It also sees the open tasks, so it
-doesn't suggest them again.
+normal permission rules, like workers) and search or fetch web pages. Changes only go through
+board tasks. A scout runs in your own project folder, so symcc stops some things outright and
+only asks for the rest:
+
+- **Stopped by symcc:** editing or writing any file inside the project (it has no edit tools,
+  and an edit that gets there anyway is refused), and any git command that changes something
+  (commit, checkout, switch, reset, stash, branch or tag changes, merge, rebase, push and so on),
+  with the same rules as the checker's below.
+- **Allowed:** read-only git (`git status`, `git diff`, `git log`, ...), running your tests, and
+  throwaway files outside the project, such as under `/tmp`.
+- **Only asked in its prompt:** no installs, and no changing files with other shell commands
+  (`echo ... > file`, `rm`, `sed -i` and such). symcc does not check these; your normal
+  permission rules still apply.
+
+The git check works on the command text and is a best effort, not a sandbox. It also sees the open tasks, so it
+doesn't suggest them again. To look further at the board it has symcc's two read-only tools:
+`board` (no arguments: the open tasks; `status` and `search` narrow it; `task`: one task in full
+with its latest report) and `stats`. Every symcc tool that changes something (`add`, `change`,
+`drop`, `approve`, `settings`, ...) is refused for a scout with "scouts can only read the board".
+A checker gets the same read-only tools.
 
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
 tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message.
@@ -621,6 +726,21 @@ the optional `summary:` line in the file's front matter, e.g. `summary: Looks fo
 Without one, the page shows the first line of the instructions there instead, in a dimmer
 colour.
 
+Under the last report, **Runs** lists the scout's recent runs, newest first, one line each:
+when it ended, how it ended (found, nothing, stopped, API error, refusal or couldn't start),
+how many findings its report numbers, and the tasks made from it (a task the lead adds from
+this scout's finding is saved in the scout's latest run that reported something, so it stays
+listed after the task is archived). Open one to read that run's whole report; in VS Code's
+side panel each run is a button, and "← <scout>" goes back. Esc on a run's page goes back to
+the scout's page too, and leaving the scout's page any other way (Esc again, another view,
+closing the panel) closes the run, so the scout opens on its own page next time.
+When the last run ended on an API error or a refusal, the page says so under the header
+("Its last run ended on an API error, so nothing was reported."). Each scout keeps its last
+50 runs in `.symcc/scouts/<name>.runs.json` and each run's full report in
+`.symcc/reports/scouts/<name>-<time>.md`; older runs and their report files are removed.
+The first time, a scout's last report from `.symcc/scouts.json` becomes its first run (its
+tasks are worked out from the board: the scout's tasks added after it).
+
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
 header line, then the same names in the same order, one box each: **Runs every** (in
@@ -631,8 +751,8 @@ matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` 
 
 Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
 like "every 2 days" or "on demand", whether it is paused or running, its next and last run
-and the first lines of its last report), show one in full (its instructions and whole last
-report), add or change one (name of lowercase letters, digits and dashes, every_minutes with
+and the first lines of its last report), show one in full (its instructions, whole last
+report and its last few runs), add or change one (name of lowercase letters, digits and dashes, every_minutes with
 0 for only on demand, an optional model, and the instructions), remove one (it checks with
 you first) and run one now, just like "run now" (a paused scout runs too, once, and stays paused;
 refused, with the reason, when the scout is already running or git isn't set up). Every change shows on the board at once. Only
@@ -1077,10 +1197,11 @@ your-project/
     ├── archive.json      old done and dropped tasks, moved off the board (see archive_days)
     ├── board.lock        held for a moment while a window saves the board
     ├── lead.json         which window drives the board (with a heartbeat)
-    ├── scouts/           your scout files (*.md)
+    ├── scouts/           your scout files (*.md) and each scout's recent runs (*.runs.json)
     ├── scouts.json       each scout's last run and report, and whether it is paused
     ├── roles/            your own worker roles (*.md), see Worker roles
-    ├── reports/          each try's full worker report (T-3-try-2.md)
+    ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
+    │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged

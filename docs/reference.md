@@ -133,7 +133,7 @@ setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_wit
 
 | Setting | Default | Allowed | Meaning |
 |---|---|---|---|
-| `test_commands` | none | one shell line (`cd web && npm test` is one command), or up to 5 as a list: `["npm test", "npm run lint"]` | Shell commands that must pass before anything is merged; each runs as one shell line from the task's folder. Each may run 10 minutes; the whole check and merge may take 10 minutes per command plus 5, not counting time waiting in line behind other merges (a stuck one goes back to `todo`, and fails the second time in a row) |
+| `test_commands` | none | one shell line (`cd web && npm test` is one command), or up to 5 as a list: `["npm test", "npm run lint"]` | Shell commands that must pass before anything is merged; each runs as one shell line from the task's folder. Each may run 10 minutes; the whole check and merge may take 10 minutes per command plus 5, not counting time waiting in line behind other merges or for another task's tests (only one task's tests run at a time, across all tasks, kept with `.symcc/tests.lock`) (a stuck one goes back to `todo`, and fails the second time in a row) |
 | `max_parallel` | 3 | 1–8 | How many workers at once |
 | `max_minutes` | 45 | 5–600 | A worker running longer keeps working while you are asked "Give it more time?" (+30 min, +60 min or Stop it). Stop it, or no answer by twice the limit, lets the worker write down and hand back what it has (about 3 min), then stops it; the task fails with its work kept in its folder, branch and report, so a retry continues from there |
 | `auto_retries` | 2 | 0–10 | New tries after failing tests before a task is marked failed |

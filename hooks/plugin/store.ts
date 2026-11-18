@@ -116,7 +116,19 @@ export function fixText(skipped: number, fixed: string[]): string {
   ].filter(Boolean).join('; ')
 }
 
+/** board.json's mtime (ms) now, or null when it is missing or can't be looked at. Never throws. */
+export async function boardMtime(host: Host): Promise<number | null> {
+  const st = await host.fs.stat(path(S.N.boardFile)).catch(() => null)
+  return st ? st.mtimeMs : null
+}
+
+/** Notes board.json's mtime as seen by this session (after its own load or save), so it causes no extra redraw (T-429). */
+async function noteMtime(host: Host) {
+  S.boardMtime = await boardMtime(host).catch(() => null)
+}
+
 export async function load(host: Host): Promise<Board> {
+  await noteMtime(host)
   const exists = await host.fs.exists(path(S.N.boardFile))
   if (!exists) {
     const b = emptyBoard()
@@ -184,7 +196,7 @@ export async function takeLock(host: Host): Promise<string> {
       const st = await host.fs.stat(lock).catch(() => null)
       if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs)) {
         // remove it only if it is still the same stale lock we just read
-        if ((await host.fs.read(lock).catch(() => null)) === held) await host.run(['rm', '-f', lock])
+        await dropIfSame(host, lock, held)
         continue
       }
       if (Date.now() > until) throw new Error(`the board is busy (another session holds ${S.N.lockFile}); try again`)
@@ -197,13 +209,32 @@ export async function takeLock(host: Host): Promise<string> {
 }
 
 export async function dropLock(host: Host, mine: string) {
-  const lock = path(S.N.lockFile)
-  if ((await host.fs.read(lock).catch(() => null)) === mine) await host.run(['rm', '-f', lock]).catch(() => undefined)
+  await dropIfSame(host, path(S.N.lockFile), mine)
+}
+
+/** Removes lock file `file` only while it still holds `text` (ours, or the stale one just read). Never throws. */
+export async function dropIfSame(host: Host, file: string, text: string) {
+  if ((await host.fs.read(file).catch(() => null)) === text) await host.run(['rm', '-f', file]).catch(() => undefined)
+}
+
+/**
+ * One try at taking lock file `file` with `text`, the same safe way as takeLock: written to its own temp file,
+ * then hard-linked into place (`ln` fails if the lock exists). True when the lock is ours now.
+ */
+export async function tryLock(host: Host, file: string, text: string): Promise<boolean> {
+  const tmp = tmpFor(file)
+  await host.fs.write(tmp, text)
+  try {
+    return (await host.run(['ln', tmp, file])).exitCode === 0
+  } finally {
+    await host.run(['rm', '-f', tmp]).catch(() => undefined)
+  }
 }
 
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
 export async function saveBoard(host: Host, b: Board) {
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
+  await noteMtime(host)
 }
 
 /**
