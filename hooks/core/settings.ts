@@ -195,7 +195,7 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
     case 'open_on_start':
       return `open on start ${v}`
     case 'archive_days':
-      return `archive after ${v} day${v === '1' ? '' : 's'}`
+      return v === '0' ? 'never archive' : `archive after ${v} day${v === '1' ? '' : 's'}`
     default:
       return v
   }

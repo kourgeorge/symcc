@@ -937,6 +937,10 @@ test('a closed group summary is cut to fit', () => {
   expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 80)).toBe('Work · auto · 3 at once · 45 min · 2 retries')
   expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 20)).toBe('Work · auto · 3 at…')
   expect(groupSummary(work, { mode: 'auto', enabled: false }, 80)).toContain('plugin off')
+  const board = SETTING_GROUPS.find(g => g.title === 'Board and alerts')!
+  expect(groupSummary(board, { archive_days: 0 }, 80)).toContain('never archive')
+  expect(groupSummary(board, { archive_days: 0 }, 80)).not.toContain('archive after')
+  expect(groupSummary(board, { archive_days: 1 }, 80)).toContain('archive after 1 day')
 })
 
 /**
