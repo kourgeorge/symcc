@@ -338,7 +338,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'open':
     case 'tasks':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
-      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name) : `${loaded.broken} Then try again.`)
+      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, undefined, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
       return say(BOARD_OPENED)
     case 'scouts': {

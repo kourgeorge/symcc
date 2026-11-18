@@ -52,12 +52,20 @@ test('no panel: /symcc and /symcc-tasks answer with the text board and open noth
   const w = world()
   const b = oneTask()
   putBoard(w, b)
-  for (const cmd of [S.N.name, `${S.N.name}-tasks`]) {
-    const r = await runCommand(w.host, cmd, '')
-    expect(r?.text).toContain('T-1')
-    expect(r?.text).toContain('Add search')
-    expect(r?.text).toBe(boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name))
-    expect(r?.isTextDisplayOnly).toBe(true)
+  const was = S.version
+  S.version = '1.2.3'
+  try {
+    for (const cmd of [S.N.name, `${S.N.name}-tasks`]) {
+      const r = await runCommand(w.host, cmd, '')
+      expect(r?.text).toContain('T-1')
+      expect(r?.text).toContain('Add search')
+      // the title carries the plugin's version, as the board tool's answer does
+      expect(r?.text?.split('\n')[0]).toContain('v1.2.3')
+      expect(r?.text).toBe(boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, {}, '1.2.3'))
+      expect(r?.isTextDisplayOnly).toBe(true)
+    }
+  } finally {
+    S.version = was
   }
   expect(w.opened).toEqual([])
   // a task's command still answers with the task's text, with no panel opened
