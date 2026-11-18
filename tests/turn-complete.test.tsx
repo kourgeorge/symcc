@@ -343,6 +343,25 @@ test("an Edit outside a worker's files is refused with the reason and recorded; 
   expect(w.git.state.main).toBe(main)
 })
 
+test("T-390: when the check itself fails (the board can't be read), a worker's Edit outside its files is refused, not let through; the lead's call goes on", async ($, on) => {
+  const logs: string[] = []
+  on('ui.log', (_, e) => (logs.push(String((e as unknown as { text: string }).text)), { value: undefined }) as never)
+  const w = await trackedWorker($, on)
+  // the worker is known (an edit inside its files goes on as usual)
+  expect((await check($, 'a1', 'Write', { file_path: `${WT1}/src/b.ts`, content: 'x' })).decision).toBe('allow')
+  // the board breaks: checkEdit throws, and the hook's .catch refuses the worker's edit with the reason
+  w.files.set(BOARD, '{ not json')
+  const out = await check($, 'a1', 'Edit', { file_path: `${WT1}/README.md`, old_string: 'a', new_string: 'b' })
+  expect(out.decision).toBe('deny')
+  expect(out.reason).toMatch(/^symcc couldn't check this call, so it was refused: it failed \(/)
+  // an edit inside its files is refused too: nothing is let through unchecked
+  expect((await check($, 'a1', 'Write', { file_path: `${WT1}/src/b.ts`, content: 'x' })).decision).toBe('deny')
+  // the lead's own call is never blocked by a symcc error
+  expect(((await $.tool.check({ tool: 'Edit', input: { file_path: `${ROOT}/README.md` } } as never)) as { decision: string }).decision).toBe('allow')
+  // the failure is logged once, not on every call
+  expect(logs.filter(l => /the tool\.check hook it failed/.test(l)).length).toBe(1)
+})
+
 test("a worker's Bash command starts from its shell's current folder (session.cwd in the hook), when that is inside its folder (T-317)", async ($, on) => {
   let here = `${WT1}/src`
   on('session.cwd', () => ({ value: here }) as never)
