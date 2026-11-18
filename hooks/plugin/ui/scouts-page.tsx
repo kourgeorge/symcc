@@ -17,7 +17,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
   // (renderPane calls this only while S.draft is set)
   const d = S.draft!
   const sc = scouts.find(x => x.name === d.scout)
-  const r = sc ? scoutRow(sc, Date.now()) : undefined
+  const r = sc ? scoutRow(sc, pane.nowMs) : undefined
   const file = scoutFile(d.scout, S.N.name)
   return (
     <Box flexDirection="column" gap={1}>
@@ -66,7 +66,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
 /** The Scouts view: one scout's page when one is open, else the list of scouts. */
 export async function scoutsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, width, act, C, scouts, header, footer, buttonRows, heading, paragraphs } = pane
-  const nowMs = Date.now()
+  const { nowMs } = pane
   const opener = await panelValues($).readScoutOpen()
   const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
   if (sc) {

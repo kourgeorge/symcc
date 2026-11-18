@@ -2,7 +2,7 @@
 // the desktop it draws exactly as before (task-page-snapshot.ts holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, plainTree, steadyTree } from './board-fixture'
+import { PANE, T0, plainTree, changedTree } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
@@ -58,7 +58,7 @@ for (const id of RICH_IDS) {
     seedRich(on, id)
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
-      expect(steadyTree(await ui.drawn()), `${surface} ${id}`).toEqual(steadyTree(TASK_BEFORE[`${surface} ${id}`]))
+      expect(plainTree(await ui.drawn()), `${surface} ${id}`).toEqual(plainTree(TASK_BEFORE[`${surface} ${id}`]))
       await ui.unmount()
     }
   })
@@ -99,6 +99,35 @@ for (const id of RICH_IDS) {
     await ui.unmount()
   })
 }
+
+// T-437: T-504's try is running, so its page shows running times; they follow the host's clock, not the computer's.
+const TEN_MIN = 10 * 60_000
+/** T-504's running times at T0 (in the snapshot) and 10 minutes later. */
+const T504_LATER: [string, string][] = [
+  ['" · 25m · 4.6k tokens in all ·"', '" · 35m · 4.6k tokens in all ·"'],
+  ['"  try 2: 5m (running)"', '"  try 2: 15m (running)"'],
+  ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
+]
+
+test("T-504's task page follows the host clock: 10 minutes later only its running times change", async ($, on) => {
+  const clock = seedRich(on, 'T-504')
+  await clock.set(T0 + TEN_MIN)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect(plainTree(await ui.drawn()), surface).toEqual(changedTree(TASK_BEFORE[`${surface} T-504`], T504_LATER))
+    await ui.unmount()
+  }
+})
+
+test("T-504's task page snapshot comparison still fails when the drawn tree really changes", async ($, on) => {
+  seedRich(on, 'T-504')
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = plainTree(await ui.drawn())
+  expect(drawn).toEqual(plainTree(TASK_BEFORE['terminal T-504']))
+  expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"Runs (time and cost)"', '"Runs"']]))
+  expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"  try 2: 5m (running)"', '"  try 2: 6m (running)"']]))
+  await ui.unmount()
+})
 
 test('in VS Code a long report shows its first part, and "Show all" shows the rest', async ($, on) => {
   seedRich(on, 'T-508')

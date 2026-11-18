@@ -1,4 +1,5 @@
 // What every page of the board panel shares: the view it shows, the banner, the tabs, key hints and text styles.
+import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
 import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows } from '../../board'
@@ -26,6 +27,8 @@ export async function paneParts($: $, e: PaneEvent) {
   // in VS Code a Button shows its label only, and letter keys do nothing: take the key marks off the labels
   const Button = vscode ? vscodeButton(els.Button) : els.Button
   const v: PaneView = await panelValues($).readView()
+  /** The time the page is drawn at (the host's clock: see now.ts). */
+  const nowMs = await drawNow($)
   const open = await panelValues($).readOpened()
   const width = Math.max(20, e.props.bodyColumns ?? 60)
   noteLogoWidth(width)
@@ -52,7 +55,7 @@ export async function paneParts($: $, e: PaneEvent) {
     noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
   /** What the VS Code pieces (vscode.tsx) draw with. */
-  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, C, width, surface: e.surface }
+  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, C, width, nowMs, surface: e.surface }
   /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
     if (vscode) return vsBanner(vs, v, mode, gitRow())
@@ -61,7 +64,7 @@ export async function paneParts($: $, e: PaneEvent) {
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
     return [
-      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, Date.now(), S.N.name, logoNow(), S.version).map((l, i) => (
+      ...bannerLines({ ...facts, mode }, S.root, S.home, v.driving ?? S.driving, width, nowMs, S.N.name, logoNow(), S.version).map((l, i) => (
         <Text key={`banner-${i}`} wrap="truncate">
           {l.art ? <Text bold color={C(l.art.trim() ? 'ide' : 'subtle')}>{l.art}</Text> : null}
           {l.parts.map(p => (
@@ -217,6 +220,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, q, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, t, q, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>
