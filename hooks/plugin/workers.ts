@@ -54,7 +54,10 @@ export async function startWorker($: $, id: string) {
   try {
     const listed = await agentsNow($)
     if (!listed) return // can't see which agents run; try again on the next pump
-    const agents = [...listed, ...knownWorkers()]
+    // An agent this copy stopped (an orphan, see stopOrphans) doesn't hold its task any more, even
+    // while it stays listed: every tool it tries is refused, so a fresh worker may start (sendBackIdle
+    // sent its task back to todo for exactly that).
+    const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id))
     const b = await load($)
     const t0 = find(b, id)
     if (!mayStart(t0, agents, S.N.name)) return
@@ -172,10 +175,11 @@ export const ORPHAN_WAIT_MS = 20_000
 export async function waitEnded($: $, ids: string[], ms: number): Promise<AgentInfo[]> {
   if (!ids.length) return []
   const until = Date.now() + ms
-  for (;;) {
+  // The time waited is also counted in $.clock sleeps, so the wait ends on $.clock's time too (not only the wall clock's).
+  for (let waited = 0; ; waited += 500) {
     const agents = await agentsNow($)
     const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED_STATUSES.includes(a.status)) : ids.map(id => ({ id, type: S.N.worker, status: 'running' }))
-    if (!alive.length || Date.now() > until) return alive
+    if (!alive.length || waited >= ms || Date.now() > until) return alive
     aboutToWait()
     await $.clock.sleep(500)
   }

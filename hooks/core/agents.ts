@@ -73,11 +73,10 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
  * (its in-memory list of workers is empty after a reload, but the agents keep running):
  * - "adopt": the worker's task is still "doing" for this session (`me`) and the task names
  *   this agent (or no agent yet), and no other worker was adopted for it (`taken`): keep it
- *   working and track it again, so a reload does not stop it.
+ *   working and track it again, so a reload does not stop it. It is also adopted when the task
+ *   names this very agent but a session that no longer drives the board ($.agent.list() lists
+ *   this process's agents, so it is ours; the session id may have changed over the reload).
  * - "leave": the task belongs to another session that drives the board now: not ours to touch.
- *   It is also adopted when the task names this very agent but a session that no longer drives
- *   the board ($.agent.list() lists this process's agents, so it is ours; the session id may
- *   have changed over the reload).
  * - "stop": anything else (task gone, not "doing", another worker named on it, a dead
  *   session's task found only by the worker's name): a real orphan.
  * Ended agents are always left alone. The task is found by the agent id recorded on it,

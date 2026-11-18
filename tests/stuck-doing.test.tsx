@@ -168,3 +168,22 @@ test('the hand-back of a worker stopped as an orphan does not leave its task stu
   expect(w.task('T-1').status).toBe('todo')
   expect(w.task('T-1').branch).toBe('symcc/T-1')
 })
+
+test('a task sent back to todo because its worker was stopped gets a fresh worker even while the stopped agent stays listed', async ($, on) => {
+  const agents = [{ id: 'w9', name: 'symcc-T-1', status: 'running' }]
+  const w = world(on, agents)
+  w.files.set(BOARD, JSON.stringify({ ...doing('s1', 'w1'), max_parallel: 2 }))
+  await start($, w)
+  expect(w.sent).toEqual(['w9'])
+  await $.turn.complete({ agentId: 'w9', answer: 'Stopped', isAborted: false, reason: 'answer', durationMs: 1000, turnId: 'turn-w9' } as never)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('todo')
+  // w9 stays listed as running, but this copy stopped it: it does not hold T-1, so a new worker starts
+  for (let i = 0; i < 5 && !w.spawned.length; i++) {
+    await w.clock.advance(2 * 60_000)
+    await w.clock.settle()
+  }
+  // (the test kit can't hand the plugin the new agent's id, so the start itself then counts as failed)
+  expect(w.spawned).toEqual(['symcc-T-1'])
+  expect(w.task('T-1').branch).toBe('symcc/T-1')
+})
