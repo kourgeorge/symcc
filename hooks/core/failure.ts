@@ -5,7 +5,7 @@ import { CHECKER_MARK, isCheckerOutput } from './checker'
 import { cutLine } from './reports'
 
 /** Every way a task can end as failed (see workers.ts, review.ts and checker.ts in hooks/plugin). */
-export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'other'
+export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'ended early' | 'other'
 
 type Failed = Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>>
 
@@ -18,6 +18,7 @@ export function failedHow(t: Failed): FailedHow {
   if (/^the worker's turn ended on an error/i.test(note)) return 'api error'
   if (/^the model refused/i.test(note)) return 'refused'
   if (/^the worker was stopped/i.test(note)) return 'stopped'
+  if (note.toLowerCase().startsWith(ENDED_EARLY_NOTE)) return 'ended early'
   if (/ran over .* twice in a row/i.test(note)) return 'hung'
   if (/^stopped: ran over/i.test(note) || last?.ended_by === 'timed out') return 'timed out'
   if (/^the checker found problems/i.test(note) || isCheckerOutput(t.test_output)) return 'checker'
@@ -26,6 +27,27 @@ export function failedHow(t: Failed): FailedHow {
   if (/^the worker made no change/i.test(note)) return 'no change'
   if (/^conflicts with the latest/i.test(note)) return 'clash'
   return 'other'
+}
+
+/** The note of a try whose worker ended its turn while saying it would go on later (see endedEarly). */
+export const ENDED_EARLY_NOTE = 'the worker ended its turn before its work finished'
+
+/** "I'll continue / resume / report back / wait ..." said about later (not bare "will continue", which reports quote about retries). */
+const LATER = /\b(?:I['’]ll|I will|I['’]m going to|I am going to|let me)\s+(?:then\s+|now\s+)?(?:continue|resume|report back|get back|check back|come back|wait)\b|\bwill report back\b/i
+/** "still running / going / in progress": only counts together with "I'll ..." or "waiting for" (a report may say something is still running). */
+const STILL = /\bstill (?:running|going|in progress)\b/i
+const WAITS = /\b(?:I['’]ll|I will|I['’]m waiting|waiting for|wait for)\b/i
+
+/**
+ * Whether a worker's final answer only says it will go on later ("The background runs are still going; I'll continue
+ * when they finish."): ending its turn ends its work, so such a try is unfinished. Kept narrow: only the answer's last
+ * paragraph is read, and it must say "I'll continue / resume / report back / wait..." or "still running" with a wait.
+ */
+export function endedEarly(answer: string | null | undefined): boolean {
+  const paras = String(answer ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  const last = paras.at(-1) ?? ''
+  if (!last) return false
+  return LATER.test(last) || (STILL.test(last) && WAITS.test(last))
 }
 
 /** What the worker said in its last try that ended with `detail` (from the history line "try N: <said> → <detail>"); '' if none. */
@@ -203,6 +225,8 @@ export function whyFailed(t: Failed): string {
       return `Its work clashes with the latest ${/^conflicts with the latest (\S+?),? /.exec(note)?.[1] ?? 'branch'}, and merging that in did not work.`
     case 'stopped':
       return 'The worker was stopped before it finished.'
+    case 'ended early':
+      return 'The worker ended its turn before its work finished (it said it would go on later), so nothing was checked or merged.'
     case 'hung':
       return `Checking and merging its work hung twice in a row and was given up, so nothing was merged (${note}).`
     default:
@@ -231,6 +255,7 @@ export function failNext(t: Failed): string {
     case 'hung':
       return 'Look at why the test commands are slow or hang, then Retry; or Drop it.'
     case 'no result':
+    case 'ended early':
     case 'api error':
     case 'refused':
     case 'stopped':

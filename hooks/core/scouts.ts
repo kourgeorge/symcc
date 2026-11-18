@@ -453,6 +453,7 @@ What makes a good finding:
 Rules:
 - Don't change, create or delete files in the project: no edits, no installs, no git commands that change anything (commit, checkout, reset, stash, ...). Changes are made through board tasks, not by you.
 - You may read files, run shell commands that only look, and search or fetch pages on the web.
+- Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later.
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
 

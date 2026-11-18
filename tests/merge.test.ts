@@ -2339,6 +2339,17 @@ test('a try that asks ends as asked (a question, or files outside its list); one
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
+test('T-411: a try whose answer only says it will continue later fails with that reason; nothing is checked or merged', async () => {
+  const early = await tryEnds(answers("Started the full test run in the background.\n\nThe background runs are still going; I'll continue when they finish."))
+  expect(early.t.status).toBe('failed')
+  expect(early.t.note).toBe('the worker ended its turn before its work finished')
+  expect(early.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
+  expect(early.t.history.at(-1)).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
+  expect(leadQueue.some(x => x.includes('T-1') && x.includes('ended its turn before its work finished'))).toBe(true)
+  // a normal report is unaffected
+  expect((await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.'))).end).toEqual(['finished', 'merged'])
+})
+
 test('a try stopped by the lead says why: changed (which fields), paused, dropped, asked, backlog', async () => {
   const changed = await tryEnds(w => runTool(w.$, 'change', { task: 'T-1', details: 'new plan', after: [] }))
   expect(changed.end).toEqual(['restarted', 'the task was changed (details)'])

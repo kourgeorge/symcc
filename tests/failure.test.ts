@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, endedEarly, ENDED_EARLY_NOTE, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
@@ -18,6 +18,7 @@ const CASES: [string, BoardTask, RegExp][] = [
   ["couldn't start", failed({ note: "couldn't start: no such agent type" }), /^The worker could not start: no such agent type\.$/],
   ['merge conflict', failed({ note: 'conflicts with the latest main, still after 2 tries to merge it in' }), /^Its work clashes with the latest main/],
   ['stopped', failed({ note: 'the worker was stopped' }), /^The worker was stopped before it finished\.$/],
+  ['ended early', failed({ note: ENDED_EARLY_NOTE }), /^The worker ended its turn before its work finished/],
 ]
 
 test('a failed task: one plain sentence says why, for every way a task can fail', () => {
@@ -282,4 +283,24 @@ test("a failing command that isn't bun's test runner: its first error lines are 
 test('a NEED FILES line that already ends in "." or "…" gets no second one', () => {
   expect(failAsks('NEED FILES: src/b.ts, because the tokens live there.')).toBe('The worker asks for more files: src/b.ts, because the tokens live there. Ask the lead in the chat to add them to the task, then Retry.')
   expect(failAsks(`NEED FILES: ${'a/b.ts '.repeat(40)}`)).toMatch(/… Ask the lead in the chat to add them to the task, then Retry\.$/)
+})
+
+// T-411: a final answer that only says it goes on later (T-399's try 1) is unfinished; normal reports are not.
+test('endedEarly: an answer that says it will continue later counts; normal reports do not', () => {
+  const later = [
+    "The background runs are still going; I'll continue when they finish.",
+    'Changed hooks/a.ts and added a test.\n\nThe full test run is still running in the background; I will report back once it ends.',
+    'Tests are still running, waiting for them to finish.',
+    "I'll resume once the typecheck is done.",
+    'Will report back.',
+  ]
+  for (const a of later) expect([a, endedEarly(a)]).toEqual([a, true])
+  const normal = [
+    'Added the line to prompts/change.ts and a test in tests/prompts.test.tsx; `claude plugin test .` and typecheck pass.',
+    "Fixed the cache key. A retry will continue from the work so far, and the lead is told it is still running only while it is.",
+    "I'll continue to keep the old name in the docs.\n\nChanged hooks/core/failure.ts; tests/failure.test.ts covers it.",
+    'The worker is still running when the check sees it, so it is kept doing (tests/merge.test.ts covers it).',
+    '',
+  ]
+  for (const a of normal) expect([a, endedEarly(a)]).toEqual([a, false])
 })

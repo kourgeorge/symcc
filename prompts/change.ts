@@ -16,6 +16,7 @@ Task {{task_id}}: {{title}}
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.
 Do not run git commit, push or merge: {{name}} commits, tests and merges your work.
 {{merge_main}}{{test_output}}{{earlier_tries}}
+Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later.
 When you are done, answer in one or two plain sentences: what you changed.
 {{ask}}
 `
