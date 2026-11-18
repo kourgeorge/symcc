@@ -9,7 +9,8 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers } from './checker'
 import { loadKinds } from './kinds'
-import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import { S, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import type { Host } from '../host'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -25,7 +26,7 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
   return fillPrompt(kind, { ...values, role: roleSection(role, values) })
 }
 
-export async function pump($: $) {
+export async function pump($: Host) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!S.driving) return // another session drives the board and starts its work
   if (inPlan(S.plan)) return // plan mode: nothing starts; workers already running keep going
@@ -47,7 +48,7 @@ export async function pump($: $) {
  * Starts a worker on task `id`, but only if it is still "todo" and no live agent works on it
  * (see mayStart). The claim happens inside change(), so two starts can't both win.
  */
-export async function startWorker($: $, id: string) {
+export async function startWorker($: Host, id: string) {
   // Not while its last try is still being checked (it was resumed or retried meanwhile): it starts when the check ends.
   if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return
   starting.add(id)
@@ -120,7 +121,7 @@ export async function startWorker($: $, id: string) {
  * and alreadyMerged), whatever ended that try (a reload, a timeout, a retry): then it is marked done
  * here, and the lead is told, instead of starting a new try.
  */
-async function mergedBeforeStart($: $, t: BoardTask): Promise<boolean> {
+async function mergedBeforeStart($: Host, t: BoardTask): Promise<boolean> {
   if (!(t.attempts > 0)) return false
   const sha = mergedThisTry(t) ?? (await alreadyMerged($, t).catch(() => null))
   if (!sha) return false
@@ -140,7 +141,7 @@ async function mergedBeforeStart($: $, t: BoardTask): Promise<boolean> {
  * or its work was about to be merged. Returns whether the branch is gone (then nothing else happens).
  * Written only while the task is still as it was (same status and try).
  */
-export async function waitIfBranchGone($: $, b: Board, t: SymccTask, when: 'start' | 'merge'): Promise<boolean> {
+export async function waitIfBranchGone($: Host, b: Board, t: SymccTask, when: 'start' | 'merge'): Promise<boolean> {
   const into = intoOf(t)
   if (await branchExists($, into)) return false
   const instead = await homeBranch($)
@@ -161,7 +162,7 @@ export async function waitIfBranchGone($: $, b: Board, t: SymccTask, when: 'star
 }
 
 /** The agents of this session as $.agent.list() reports them; null if the list can't be read. */
-export async function agentsNow($: $): Promise<AgentInfo[] | null> {
+export async function agentsNow($: Host): Promise<AgentInfo[] | null> {
   const listed = (await $.agent.list().catch(() => null)) as AgentInfo[] | null
   return listed ? asBaseWorkers(listed, S.N.name) : null
 }
@@ -173,7 +174,7 @@ export const knownWorkers = (): AgentInfo[] => [...workers].map(([id, w]) => ({ 
 export const ORPHAN_WAIT_MS = 20_000
 
 /** Waits up to `ms` until the agents `ids` have ended; returns those still alive (all of them if the list can't be read). */
-export async function waitEnded($: $, ids: string[], ms: number): Promise<AgentInfo[]> {
+export async function waitEnded($: Host, ids: string[], ms: number): Promise<AgentInfo[]> {
   if (!ids.length) return []
   const until = Date.now() + ms
   // The time waited is also counted in $.clock sleeps, so the wait ends on $.clock's time too (not only the wall clock's).
@@ -190,7 +191,7 @@ export async function waitEnded($: $, ids: string[], ms: number): Promise<AgentI
 export type TurnEnd = { reason: TurnCompleteReason; refusal?: TurnRefusal }
 
 /** A worker's hand-back `answer` arrived; `end`: why its turn ended. */
-export async function workerFinished($: $, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {
+export async function workerFinished($: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
@@ -242,7 +243,7 @@ const OVER = Symbol('over')
  * `turn` (stepLimit's, only with a limit). Returns the step's result, or OVER when it ran over: then
  * the step is left to end on its own, its errors ignored.
  */
-async function withLimit<T>($: $, ms: number | null, run: (gaveUp: () => boolean, over: Promise<unknown>, turn?: (go: boolean) => void) => Promise<T>): Promise<T | typeof OVER> {
+async function withLimit<T>($: Host, ms: number | null, run: (gaveUp: () => boolean, over: Promise<unknown>, turn?: (go: boolean) => void) => Promise<T>): Promise<T | typeof OVER> {
   let gaveUp = false
   let letGo = () => {}
   const over = new Promise<typeof OVER>(r => (letGo = () => r(OVER)))
@@ -260,7 +261,7 @@ async function withLimit<T>($: $, ms: number | null, run: (gaveUp: () => boolean
  * its merge turn (the merge in front has its own limit); `turn(true)` starts it again from zero when
  * the step's own go begins (see checkAndMerge), so only the task's own work counts.
  */
-function stepLimit($: $, ms: number, over: () => void) {
+function stepLimit($: Host, ms: number, over: () => void) {
   let fired = false
   const fire = () => void (fired || ((fired = true), over()))
   let timer = afterMs($, ms, fire)
@@ -270,7 +271,7 @@ function stepLimit($: $, ms: number, over: () => void) {
 }
 
 /** A one-time timer, if this Claude Code has one ($.clock.after); null when it has none. */
-function afterMs($: $, ms: number, f: () => void): { cancel(): void } | null {
+function afterMs($: Host, ms: number, f: () => void): { cancel(): void } | null {
   try {
     return $.clock.after(ms, f) ?? null
   } catch {
@@ -284,7 +285,7 @@ function afterMs($: $, ms: number, f: () => void): { cancel(): void } | null {
  * (its folder and branch are kept), or is done when its work already reached its branch. When its
  * try before was given up the same way, it is failed instead, so it never loops. The lead is told once.
  */
-async function finishRanOver($: $, id: string, tryNo: number, limitMs: number) {
+async function finishRanOver($: Host, id: string, tryNo: number, limitMs: number) {
   const min = Math.round(limitMs / 60_000)
   const still = (t: BoardTask | undefined): t is BoardTask => t?.status === 'doing' && t.attempts === tryNo
   const before = find(await load($).catch(() => null) ?? emptyBoard(), id)
@@ -312,7 +313,7 @@ function ranOverFailed(t: BoardTask, note: string, end: string): BoardTask {
 }
 
 /** A given-up step of task `t` ended late: when its work reached the branch anyway (`merged`, or else alreadyMerged), landedLate marks it done. */
-async function landIfMerged($: $, t: SymccTask, merged: string | undefined, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
+async function landIfMerged($: Host, t: SymccTask, merged: string | undefined, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
   const sha = merged ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
   if (sha) await landedLate($, t, sha, made, kind, status)
 }
@@ -325,7 +326,7 @@ async function landIfMerged($: $, t: SymccTask, merged: string | undefined, made
  * that commit and the step's commits (`made`) are recorded. Otherwise the lead is told the work landed,
  * so they can decide. The lead is told once either way.
  */
-async function landedLate($: $, t: SymccTask, sha: string, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
+async function landedLate($: Host, t: SymccTask, sha: string, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
   const fits = (cur: BoardTask) => cur.attempts === t.attempts && (kind === 'finish' ? ['doing', 'todo', 'failed'].includes(cur.status) : cur.status === status)
   const short = shortSha(sha)
   const into = intoOf(t)
@@ -352,7 +353,7 @@ async function landedLate($: $, t: SymccTask, sha: string, made: readonly string
 }
 
 /** A repeating timer, if this Claude Code has one ($.clock.every); null when it has none. */
-function everyMs($: $, ms: number, f: () => void): { cancel(): void } | null {
+function everyMs($: Host, ms: number, f: () => void): { cancel(): void } | null {
   try {
     return $.clock.every(ms, f)
   } catch {
@@ -361,7 +362,7 @@ function everyMs($: $, ms: number, f: () => void): { cancel(): void } | null {
 }
 
 /** Refreshes (`on`) or removes task `id`'s "being tested and merged" mark and its check step (BoardTask.checking), only while it is still "doing" with try `tryNo`. */
-async function markFinishing($: $, id: string, tryNo: number, on = true) {
+async function markFinishing($: Host, id: string, tryNo: number, on = true) {
   // nothing to remove (the task already left "doing", which drops the mark): don't write the board
   if (!on && !hasMark(find(await load($), id))) return
   await change($, x => {
@@ -374,7 +375,7 @@ async function markFinishing($: $, id: string, tryNo: number, on = true) {
 const hasMark = (t: BoardTask | undefined) => !!(t?.finishing || t?.checking)
 
 /** Refreshes (`on`) or removes the check step of task `id` (an approve or a merge waiting for files), only while it is still `status` with try `tryNo`. */
-async function markChecking($: $, id: string, status: SymccTask['status'], tryNo: number, on = true) {
+async function markChecking($: Host, id: string, status: SymccTask['status'], tryNo: number, on = true) {
   if (!find(await load($), id)?.checking) return
   await change($, x => {
     const t = find(x, id)
@@ -388,7 +389,7 @@ async function markChecking($: $, id: string, status: SymccTask['status'], tryNo
  * hadn't found the worker again yet): when the board still has the agent's task "doing" for this
  * session, the report is taken as that worker's, so its work is still checked and merged.
  */
-export async function lateHandBack($: $, agentId: string): Promise<boolean> {
+export async function lateHandBack($: Host, agentId: string): Promise<boolean> {
   if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId) || checkerRuns.has(agentId)) return false
   const b = await load($).catch(() => null)
   const t = b?.tasks.find(x => x.agent === agentId)
@@ -401,7 +402,7 @@ export async function lateHandBack($: $, agentId: string): Promise<boolean> {
 }
 
 /** The worker behind `agentId`: from memory, or (after a plugin reload) picked back up from the board by lateHandBack. Undefined when it can't be found. */
-export async function workerOf($: $, agentId: string): Promise<Worker | undefined> {
+export async function workerOf($: Host, agentId: string): Promise<Worker | undefined> {
   if (!workers.has(agentId)) await lateHandBack($, agentId).catch(() => false)
   return workers.get(agentId)
 }
@@ -424,7 +425,7 @@ export const offAsked = new Map<string, string>()
  * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
  * stays in review. Tasks already stopped another way are left alone. Returns the ids of both kinds.
  */
-export async function stopChecks($: $, why: string): Promise<{ back: string[]; review: string[] }> {
+export async function stopChecks($: Host, why: string): Promise<{ back: string[]; review: string[] }> {
   const back: string[] = []
   const review: string[] = []
   for (const id of [...finishing, ...approving]) {
@@ -465,7 +466,7 @@ export const mergingNow = (id: string) => approving.has(id)
 export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a moment`
 
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
-export async function endCheck($: $, id: string) {
+export async function endCheck($: Host, id: string) {
   offAsked.delete(id)
   if (!stopAsked.has(id)) return
   stopAsked.delete(id)
@@ -481,7 +482,7 @@ export async function endCheck($: $, id: string) {
  * status and try number as when its check began. Returns null when written, else the task as the
  * board has it now ('gone' when it is not on the board any more), and nothing is written.
  */
-async function writeIfSame($: $, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
+async function writeIfSame($: Host, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
   return change<SymccTask | 'gone' | null>($, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, 'gone']
@@ -495,7 +496,7 @@ async function writeIfSame($: $, t: SymccTask, patch: (cur: SymccTask) => Partia
  * Its new status and history are kept and `line` is added to them; but when the merge already
  * happened, it is done, with a line saying the stop came too late.
  */
-async function changedMeanwhile($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
+async function changedMeanwhile($: Host, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
   const merged = r.ok && !r.review && !!r.merged
   const off = offAsked.get(t.id)
   const was = await change($, x => {
@@ -542,7 +543,7 @@ let reportWarned = false
  * and a rename, cut at REPORT_MAX_CHARS) and puts its path on the try's run. A failure is told
  * once and never stops the task.
  */
-export async function saveReport($: $, t: SymccTask, answer: string) {
+export async function saveReport($: Host, t: SymccTask, answer: string) {
   if (!answer.trim()) return
   const rel = reportFile(S.N.dir, t.id, t.attempts)
   try {
@@ -573,7 +574,7 @@ export async function saveReport($: $, t: SymccTask, answer: string) {
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
  * an API error or a refusal → failed with the reason; else done: checked and merged (an investigation: its answer).
  */
-export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
+export async function finishWork($: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
   const b = await load($)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
@@ -647,7 +648,7 @@ export async function finishWork($: $, agentId: string, w: Pick<Worker, 'task' |
  * failing tests, with the checker's report, so settle sends it back to its worker (counting a retry) or fails it.
  * No verdict (the checker was stopped, ran over its time or didn't start): it waits for the owner's review.
  */
-async function afterChecker($: $, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
+async function afterChecker($: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
   turn?.(false)
   const c = await runChecker($, t, b, dir, stop)
   turn?.(true)
@@ -674,7 +675,7 @@ export const ANSWERED_LATE_NOTE = 'answered (time ran out); waiting for you to r
  * review for the owner to read it, in every board mode. Its folder stays as it is for now. `limit`: set when
  * its time ran out (it was told to wrap up), so the answer is only what it had so far.
  */
-async function answered($: $, t: SymccTask, answer: string, summary: string, limit?: number) {
+async function answered($: Host, t: SymccTask, answer: string, summary: string, limit?: number) {
   const text = answer.trim() || '(no answer)'
   const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
   const late = limit !== undefined
@@ -686,7 +687,7 @@ async function answered($: $, t: SymccTask, answer: string, summary: string, lim
  * Task `t`'s try merged `sha`, but settle could not write that: it is marked done now (unless it
  * already is), whatever happened to it meanwhile. Returns whether the board says done afterwards.
  */
-async function doneAfterMerge($: $, t: SymccTask, sha: string): Promise<boolean> {
+async function doneAfterMerge($: Host, t: SymccTask, sha: string): Promise<boolean> {
   const done = await change($, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, false] as [Board, boolean]
@@ -705,7 +706,7 @@ async function doneAfterMerge($: $, t: SymccTask, sha: string): Promise<boolean>
  * way. The lead is told the first time only (not when it already waited for files). `line` goes
  * into its history that first time. Written only while the task is still as it was.
  */
-async function holdForFiles($: $, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
+async function holdForFiles($: Host, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
   const files = r.blocked!
   const note = waitFilesNote(intoOf(t), files)
   const res = await change<SymccTask | 'gone' | boolean>($, x => {
@@ -730,7 +731,7 @@ async function holdForFiles($: $, t: SymccTask, b: Board, r: CheckResult, line: 
  * (BoardTask.merge_wait): each one whose files are out of the way now (or whose branch is not
  * checked out any more) is merged again, with no worker (see mergeWaiting). Not in mode off.
  */
-export async function retryFileWaits($: $) {
+export async function retryFileWaits($: Host) {
   const b = await load($)
   if (modeOf(b) === 'off') return
   const waiting = b.tasks.filter(t => waitsForFiles(t) && !checkingNow(t.id))
@@ -760,7 +761,7 @@ export async function retryFileWaits($: $) {
  * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
  * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
-export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false) {
+export async function settle($: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false) {
   const line = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   // A finished worker's try ends with the check's outcome (an approve is not a try: its task is in review, so nothing is set).
@@ -806,7 +807,7 @@ export async function settle($: $, t: SymccTask, b: Board, r: CheckResult, summa
  * The owner approved task `id` (in "review"): the same checked merge as for a finished worker. An answered
  * investigation has nothing to merge: approve is its Done (see endInvestigation), and `keepNote` its Keep as a note.
  */
-export async function approve($: $, id: string, keepNote = false): Promise<string> {
+export async function approve($: Host, id: string, keepNote = false): Promise<string> {
   const b = await load($)
   const t = reviewTask(b, id, 'approve')
   if (isInvestigation(t)) return endInvestigation($, t, keepNote)
@@ -815,7 +816,7 @@ export async function approve($: $, id: string, keepNote = false): Promise<strin
 }
 
 /** The full answer of investigation `t`: its latest saved report (and that file), else the answer kept on the task. */
-export async function fullAnswer($: $, t: BoardTask): Promise<{ text: string; file?: string }> {
+export async function fullAnswer($: Host, t: BoardTask): Promise<{ text: string; file?: string }> {
   const last = taskReports(t).at(-1)
   const text = last ? await $.fs.read(path(last.file)).then(x => String(x), () => null) : null
   return text?.trim() ? { text: text.trim(), file: last!.file } : { text: t.answer?.trim() ?? '', ...(last ? { file: last.file } : {}) }
@@ -832,7 +833,7 @@ const everyReport = (t: BoardTask, latest?: string): string[] => [...new Set([..
  * note) a new small docs task is added too, made by the owner as a follow-up of `t`, that writes
  * docs/research/<topic>.md from the saved answer and merges as usual.
  */
-async function endInvestigation($: $, t: BoardTask, keepNote: boolean): Promise<string> {
+async function endInvestigation($: Host, t: BoardTask, keepNote: boolean): Promise<string> {
   const full = keepNote ? await fullAnswer($, t) : { text: '' }
   const merge_into = keepNote ? await homeBranch($) : undefined
   // notes already written: a new note never overwrites one (it gets -2, -3… instead)
@@ -860,7 +861,7 @@ async function endInvestigation($: $, t: BoardTask, keepNote: boolean): Promise<
  * step runs again, with no worker (brought up to date, tested only if its branch moved, then
  * merged). A task in review (an approve that was blocked) is approved again.
  */
-export async function mergeWaiting($: $, id: string): Promise<string> {
+export async function mergeWaiting($: Host, id: string): Promise<string> {
   const b = await load($)
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
@@ -872,7 +873,7 @@ export async function mergeWaiting($: $, id: string): Promise<string> {
  * Merges task `t`'s finished work: `kind` 'approve' (the owner approved it, in "review") or 'merge'
  * (it was "waiting" only for the owner's files). The same checked merge as for a finished worker.
  */
-async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
+async function mergeFinished($: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
   if (!(await gitReady($, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
@@ -909,7 +910,7 @@ async function mergeFinished($: $, b: Board, t: SymccTask, kind: 'approve' | 'me
  * way (mergeRanOverBefore), it is failed instead, so the regular check never starts it again on
  * its own; the lead is told once. Should it still land later, landedLate marks it done.
  */
-async function mergeRanOver($: $, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
+async function mergeRanOver($: Host, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
   const min = Math.round(limitMs / 60_000)
   const again = kind === 'approve' ? 'approve it again' : `${S.N.name} retry ${id}`
   const what = kind === 'approve' ? 'approved by the owner' : 'merging once your files were out of the way'
@@ -948,7 +949,7 @@ const mergeRanOverBefore = (t: BoardTask) => /^try [^:]*: merging once your file
 const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)
 
 /** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`, `turn`: as for finishWork. */
-async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, turn?: (go: boolean) => void): Promise<string> {
+async function mergeWork($: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, turn?: (go: boolean) => void): Promise<string> {
   const status = t.status
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   const by = kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
@@ -1040,7 +1041,7 @@ async function mergeWork($: $, t: SymccTask, b: Board, kind: 'approve' | 'merge'
 }
 
 /** Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. */
-export async function halt($: $, agentId: string, why: string) {
+export async function halt($: Host, agentId: string, why: string) {
   stopped.add(agentId)
   await $.session.send({ to: { agentId }, text: `Stop now: ${why}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
 }
@@ -1063,7 +1064,7 @@ function ageOnPurpose(b: Board) {
 }
 
 /** Stops the workers `which` picks (all by default), one by one; `then` runs after each is told to stop. */
-export async function haltWorkers($: $, why: string, which: (w: Worker) => boolean = () => true, then?: (w: Worker) => Promise<unknown>) {
+export async function haltWorkers($: Host, why: string, which: (w: Worker) => boolean = () => true, then?: (w: Worker) => Promise<unknown>) {
   for (const [agentId, w] of [...workers]) {
     if (!which(w)) continue
     onPurpose.set(w.task, 0)
@@ -1074,7 +1075,7 @@ export async function haltWorkers($: $, why: string, which: (w: Worker) => boole
 }
 
 /** Stops every worker, then every scout run; `then` runs after each worker is told to stop. */
-export async function haltAll($: $, why: string, then?: (w: Worker) => Promise<unknown>) {
+export async function haltAll($: Host, why: string, then?: (w: Worker) => Promise<unknown>) {
   await haltWorkers($, why, undefined, then)
   for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, why)
   scoutRuns.clear()
@@ -1082,7 +1083,7 @@ export async function haltAll($: $, why: string, then?: (w: Worker) => Promise<u
   await haltCheckers($, why)
 }
 
-export async function stopWorker($: $, taskId: string, why: string) {
+export async function stopWorker($: Host, taskId: string, why: string) {
   await haltWorkers($, why, w => w.task === taskId)
   await publish($, await load($))
 }
@@ -1093,7 +1094,7 @@ export async function stopWorker($: $, taskId: string, why: string) {
  * "review" or "auto" from "off" starts work again. Going to "auto" does not merge tasks already
  * in review. Returns one short line: the new mode, what it means, and what happened.
  */
-export async function setBoardMode($: $, m: SymccMode, who: string): Promise<string> {
+export async function setBoardMode($: Host, m: SymccMode, who: string): Promise<string> {
   const before = modeOf(await load($))
   const b = await change($, x => {
     const y = setMode(x, m)
@@ -1128,7 +1129,7 @@ export async function setBoardMode($: $, m: SymccMode, who: string): Promise<str
  * told anything and the lead's guide leaves the system prompt from the next message. The board,
  * its mode, tasks and scouts are kept, so on brings everything back as it was.
  */
-export async function setSymcc($: $, on: boolean): Promise<string> {
+export async function setSymcc($: Host, on: boolean): Promise<string> {
   const before = symccOn(await load($))
   const b = await change($, x => {
     const y = setEnabled(x, on)
@@ -1167,7 +1168,7 @@ export const LIVE = new Set(['pending', 'running', 'waiting'])
  * tracked again (adopted) and keeps working, so a reload never stops a worker mid-task.
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
-export async function stopOrphans($: $, leadNow?: string | null): Promise<string[]> {
+export async function stopOrphans($: Host, leadNow?: string | null): Promise<string[]> {
   // Every worker type (worker, worker-web, ...) counts as a worker here.
   const agents = asBaseWorkers(await $.agent.list().catch(() => []), S.N.name)
   // $.agent.list() names this session's agents only, but in case it ever lists another
@@ -1221,7 +1222,7 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
 export const RELOAD_SETTLE_MS = 2_000
 
 /** Whether a "doing" task of this session has no live worker (in `agents`), no merge mark and nothing in this copy working on it. */
-async function waitingOnOld($: $, agents: AgentInfo[]): Promise<boolean> {
+async function waitingOnOld($: Host, agents: AgentInfo[]): Promise<boolean> {
   if (!(await $.fs.exists(path(S.N.boardFile)).catch(() => false))) return false
   const b = await load($).catch(() => emptyBoard())
   const mine = new Set([...workers.values()].map(w => w.task))
@@ -1233,7 +1234,7 @@ async function waitingOnOld($: $, agents: AgentInfo[]): Promise<boolean> {
  * A file that is gone by the time we get to it is fine; other errors are reported once per
  * file in a toast, and never stop the check.
  */
-export async function cleanLeftoverTmp($: $) {
+export async function cleanLeftoverTmp($: Host) {
   const dir = path(S.N.dir)
   const entries = await $.fs.list(dir).catch(() => [])
   const files: { name: string; mtimeMs?: number }[] = []
@@ -1259,7 +1260,7 @@ export async function cleanLeftoverTmp($: $) {
  * is still "doing" on the same try (`t`, as the check read it), it fails, with a note that its work so far
  * is kept; but when that try's work is already on its branch, it is done instead. The lead is told.
  */
-async function timedOut($: $, id: string, t: BoardTask | undefined, max: number, minutes: number) {
+async function timedOut($: Host, id: string, t: BoardTask | undefined, max: number, minutes: number) {
   const same = (cur: BoardTask | undefined): cur is BoardTask => cur?.status === 'doing' && (!t || cur.attempts === t.attempts)
   const before = find(await load($), id)
   if (!same(before)) return
@@ -1280,7 +1281,7 @@ export const overtimeLeadText = (id: string, title: string, limit: number) =>
   `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.`
 
 /** Task `id`'s worker runs over its limit: the task keeps "doing" with the question, the owner hears "needs you", the lead is told. */
-async function askOvertime($: $, b: Board, id: string, limit: number) {
+async function askOvertime($: Host, b: Board, id: string, limit: number) {
   const t = await change($, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.time_ask || cur.wrap_up) return [x, null] as [Board, null]
@@ -1292,7 +1293,7 @@ async function askOvertime($: $, b: Board, id: string, limit: number) {
 }
 
 /** Task `id`'s time is up (`why`): its worker is told to write down what it has and hand back; it is stopped WRAP_UP_GRACE_MS later. */
-async function wrapUp($: $, id: string, why: string) {
+async function wrapUp($: Host, id: string, why: string) {
   const t = await change($, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.wrap_up) return [x, null] as [Board, null]
@@ -1308,7 +1309,7 @@ async function wrapUp($: $, id: string, why: string) {
  * limit N minutes later and the worker goes on; "Stop it" tells the worker to wrap up. Returns what to say,
  * or undefined when the task has no such question (the answer is then handled like any other).
  */
-export async function answerOvertime($: $, id: string, answer: string): Promise<string | undefined> {
+export async function answerOvertime($: Host, id: string, answer: string): Promise<string | undefined> {
   const b = await load($)
   const t = find(b, id)
   if (t?.status !== 'doing' || !t.time_ask) return undefined
@@ -1335,7 +1336,7 @@ export const seenEnded = new Set<string>()
 export const ENDED_GRACE_MS = 20_000
 
 /** A tracked worker whose agent ended with no hand-back: its task fails (not "todo", so a crashing worker doesn't start again and again). */
-async function failLost($: $, agentId: string, w: Worker) {
+async function failLost($: Host, agentId: string, w: Worker) {
   if (workers.get(agentId) !== w || finishing.has(w.task)) return
   const t = find(await load($), w.task)
   if (t && handedBack(t)) return
@@ -1372,7 +1373,7 @@ function sameTry(cur: BoardTask, was: BoardTask, agentId?: string) {
  * tool it tries is refused, even while it is still listed. Only tasks this session may take over
  * (ownedHere) are touched, and never one whose worker is being stopped on purpose (onPurpose).
  */
-export async function sendBackIdle($: $, agents: AgentInfo[]) {
+export async function sendBackIdle($: Host, agents: AgentInfo[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
   const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
   const working = agents.filter(a => !stopped.has(a.id))
@@ -1407,7 +1408,7 @@ export async function sendBackIdle($: $, agents: AgentInfo[]) {
  * A hand-back from an agent this copy had stopped (e.g. an orphan after a reload): its report is not
  * taken, but its task must not stay "doing" with nobody on it, so it is put back right away (see sendBackIdle).
  */
-export async function stoppedHandBack($: $, agentId: string) {
+export async function stoppedHandBack($: Host, agentId: string) {
   if (!S.driving || !stopped.has(agentId)) return
   const agents = await $.agent.list().catch(() => undefined)
   if (agents) await sendBackIdle($, asBaseWorkers(agents as AgentInfo[], S.N.name))
@@ -1415,7 +1416,7 @@ export async function stoppedHandBack($: $, agentId: string) {
 }
 
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
-export async function check($: $) {
+export async function check($: Host) {
   if (!S.driving) return
   await cleanLeftoverTmp($).catch(() => undefined)
   await stopOrphans($)

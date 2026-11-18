@@ -5,7 +5,8 @@ import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
-import { S, type $, heard, workers } from './state'
+import { S, heard, workers } from './state'
+import type { Host } from '../host'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
@@ -18,7 +19,7 @@ import { haltChecker } from './checker'
 export const when = (iso: string) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?')
 
 /** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
-export async function latestReport($: $, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
+export async function latestReport($: Host, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
   const r = taskReports(t).at(-1)
   if (!r) return null
   return { ...r, text: await $.fs.read(path(r.file)).then(x => String(x), () => null) }
@@ -358,7 +359,7 @@ export const TOOLS = () => [
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
  * `args` (or `full`) gives the full view with every explanation; else the summary view.
  */
-export async function statsText($: $, args: string, full?: boolean): Promise<string> {
+export async function statsText($: Host, args: string, full?: boolean): Promise<string> {
   const words = parseStatsArgs(args)
   const range = parseStatsRange(words.range, S.N.name)
   if (range.kind === 'bad') return range.message
@@ -380,7 +381,7 @@ export async function statsText($: $, args: string, full?: boolean): Promise<str
  * only this project's folder, only the usage numbers (see leadCalls). For a days range, logs not written to since
  * the range began are skipped.
  */
-async function leadUsage($: $, range: StatsRange, nowMs: number): Promise<Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem'>> {
+async function leadUsage($: Host, range: StatsRange, nowMs: number): Promise<Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem'>> {
   const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
   const base = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
   if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
@@ -408,14 +409,14 @@ export const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 export const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : undefined)
 
 /** Task `id` from the board; throws "<id> is not on the board" if there is none. */
-export async function taskOrThrow($: $, id: string) {
+export async function taskOrThrow($: Host, id: string) {
   const t = find(await load($), id)
   if (!t) throw new Error(`${id} is not on the board`)
   return t
 }
 
 /** The owner pressed Allow on a waiting task's file request: its files grow and it goes back to work, in one change; the lead hears of it later ("Meanwhile"). */
-export async function allowAskedFiles($: $, id: string): Promise<string> {
+export async function allowAskedFiles($: Host, id: string): Promise<string> {
   const files = await change($, x => [allowFiles(x, id, now(), S.N.dir), (find(x, id) as BoardTask | undefined)?.asked_files ?? []] as [Board, string[]])
   void pump($)
   noteForLead(`The owner allowed ${files.join(', ')} for ${id}; it went back to work.`)
@@ -423,7 +424,7 @@ export async function allowAskedFiles($: $, id: string): Promise<string> {
 }
 
 /** The owner pressed Don't allow on a waiting task's file request: it keeps waiting, and the lead is told now (drop it or narrow the plan). */
-export async function refuseAskedFiles($: $, id: string): Promise<string> {
+export async function refuseAskedFiles($: Host, id: string): Promise<string> {
   const files = await change($, x => [refuseFiles(x, id, now()), (find(x, id) as BoardTask | undefined)?.asked_files ?? []] as [Board, string[]])
   tellLead($, filesRefusedText(id, files))
   return `${id}: files not allowed; the lead will drop it or narrow the plan`
@@ -439,7 +440,7 @@ function alreadyAnsweredText(t: SymccTask, a: In): string {
 }
 
 /** The checked kind a tool call gives (undefined when not given), read from the kind files again; an unknown one is refused, naming the known kinds. */
-async function kindIn($: $, a: In): Promise<string | undefined> {
+async function kindIn($: Host, a: In): Promise<string | undefined> {
   if (a.kind === undefined) return undefined
   return checkKind(await loadKinds($).catch(() => S.kinds), a.kind)
 }
@@ -447,7 +448,7 @@ async function kindIn($: $, a: In): Promise<string | undefined> {
 /** The lead's tools that act on one task. */
 const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'pause', 'resume']
 
-export async function runTool($: $, name: string, a: In): Promise<string> {
+export async function runTool($: Host, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   // A task moved to archive.json is read-only; only retry brings back a dropped one.
   if (id && TASK_TOOLS.includes(name) && !find(await load($), id)) {
@@ -707,7 +708,7 @@ export async function runTool($: $, name: string, a: In): Promise<string> {
  * view): the same checks and limits (see applySettings). `error` when nothing changed because
  * mode or notify is wrong; `mode` is setBoardMode's answer when the mode was set.
  */
-export async function saveSettings($: $, a: SettingsInput, who: string): Promise<{ error?: string; changes: SettingChange[]; mode?: string }> {
+export async function saveSettings($: Host, a: SettingsInput, who: string): Promise<{ error?: string; changes: SettingChange[]; mode?: string }> {
   if (a.mode !== undefined && !isMode(a.mode)) return { error: `mode must be "off", "review" or "auto" (got ${JSON.stringify(a.mode)})`, changes: [] }
   if (a.scout_findings !== undefined && !isScoutFindings(a.scout_findings)) return { error: `scout_findings must be "auto" or "backlog" (got ${JSON.stringify(a.scout_findings)})`, changes: [] }
   if (a.tests_with_changes !== undefined && !isTestsWithChanges(a.tests_with_changes)) return { error: `tests_with_changes must be "off", "ask" or "review" (got ${JSON.stringify(a.tests_with_changes)})`, changes: [] }
@@ -727,7 +728,7 @@ export async function saveSettings($: $, a: SettingsInput, who: string): Promise
 }
 
 /** The owner changes settings (/<name>-settings or the Settings view): the answer to show, e.g. "max_parallel set to 5"; the lead is told too. */
-export async function ownerSettings($: $, a: SettingsInput, where: string): Promise<string> {
+export async function ownerSettings($: Host, a: SettingsInput, where: string): Promise<string> {
   // the on/off switch is the owner's alone and works like /<name>-off and /<name>-on
   if (typeof a.enabled === 'boolean') {
     const { enabled, ...rest } = a

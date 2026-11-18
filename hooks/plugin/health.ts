@@ -1,5 +1,6 @@
 import { type Board, boardHealth, healthText, newFindings, symccOn } from '../board'
-import { S, type $, healthTold } from './state'
+import { S, healthTold } from './state'
+import type { Host } from '../host'
 import { tellLead } from './tell'
 
 // ---------------- the board health check ----------------
@@ -7,7 +8,7 @@ import { tellLead } from './tell'
 // lead (one "triage needed" message) only about problems not told before; a healthy board,
 // or one whose problems were all told already, sends nothing.
 
-export function checkHealth($: $, b: Board, nowMs = Date.now()) {
+export function checkHealth($: Host, b: Board, nowMs = Date.now()) {
   if (!S.driving || !symccOn(b)) return
   const r = newFindings(boardHealth(b, nowMs), healthTold)
   healthTold.clear()

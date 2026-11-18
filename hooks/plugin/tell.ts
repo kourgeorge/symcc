@@ -1,5 +1,6 @@
 import { cutLine } from '../core/reports'
-import { type $, S, leadQueue, meanwhile } from './state'
+import { S, leadQueue, meanwhile } from './state'
+import type { Host } from '../host'
 
 // ---------------- telling the lead ----------------
 // Workers and scouts report to the main chat as a prompt from this plugin. Several
@@ -18,7 +19,7 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
 }
 
 /** Tells the lead `text` now (in the next board update, sent in a moment when the chat is idle). */
-export function tellLead($: $, text: string) {
+export function tellLead($: Host, text: string) {
   if (!S.enabledNow) return // the plugin is off: no "[name] Board update" messages
   leadQueue.push(text)
   if (S.leadTimer) return

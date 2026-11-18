@@ -5,12 +5,13 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
-import { S, type $, type Worker, scoutRuns, checkerRuns } from './state'
+import { S, type Worker, scoutRuns, checkerRuns } from './state'
+import type { Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
-function recordOnTry($: $, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
+function recordOnTry($: Host, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
   return change($, (b: Board) => {
     const cur = find(b, w.task)
     const p = cur && cur.status === 'doing' && cur.attempts === attempts ? patch(cur) : null
@@ -30,7 +31,7 @@ export const ASK_TOOL_DEF = () => ({
  * worker whose task is still "doing" (a worker this copy lost in a reload is found again from the board, see
  * workerOf); the question is written to its try on the board (a later call replaces it). Everyone else is refused.
  */
-export async function askCall($: $, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
+export async function askCall($: Host, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
   const tool = S.N.tool(ASK_TOOL)
   if (!agentId) return `Refused: ${tool} is only for ${S.N.name} workers; the lead (the main chat) never calls it (use ${S.N.tool('ask')} to make a task wait for the owner).`
   if (scoutRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not scouts. End with your report as usual.`
@@ -50,7 +51,7 @@ export async function askCall($: $, agentId: string | undefined, a: Record<strin
  * When any of the three can't be looked up, all three stay as written (the checks then work as before T-303).
  * Null when the path goes through a link that leads nowhere.
  */
-async function realEdit($: $, tool: string, input: unknown, worktree: string, root: string): Promise<{ input: unknown; worktree: string; root: string } | null> {
+async function realEdit($: Host, tool: string, input: unknown, worktree: string, root: string): Promise<{ input: unknown; worktree: string; root: string } | null> {
   const asIs = { input, worktree, root }
   const p = editTarget(tool, input)
   if (!p || !worktree.startsWith('/') || !root.startsWith('/')) return asIs
@@ -75,7 +76,7 @@ async function realEdit($: $, tool: string, input: unknown, worktree: string, ro
  * for files written through Bash inside its folder. `cwd` is the folder the worker's shell is in (the Bash tool keeps it
  * between calls); relative paths start there when it is inside the worker's folder.
  */
-export async function checkEdit($: $, agentId: string | undefined, tool: string, input: unknown, cwd?: string): Promise<string | undefined> {
+export async function checkEdit($: Host, agentId: string | undefined, tool: string, input: unknown, cwd?: string): Promise<string | undefined> {
   if (!agentId || (!EDIT_PATH_FIELD[tool] && tool !== 'Bash')) return undefined
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
   const chk = checkerRuns.get(agentId)
@@ -102,7 +103,7 @@ export async function checkEdit($: $, agentId: string | undefined, tool: string,
  * Why a Bash command or an edit of a checker in folder `worktree` is refused: it names a path in the project outside
  * that folder (the owner's copy, the board, another worker's folder). Undefined: allowed.
  */
-async function outsideOwnFolder($: $, tool: string, input: unknown, worktree: string, cwd?: string): Promise<string | undefined> {
+async function outsideOwnFolder($: Host, tool: string, input: unknown, worktree: string, cwd?: string): Promise<string | undefined> {
   if (tool === 'Bash') {
     const cmd = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined
     const rel = S.root ? bashOutsideFolder(cmd, worktree, S.root, S.home || undefined, cwd) : undefined

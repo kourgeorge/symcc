@@ -1,7 +1,8 @@
 import type { SymccTask } from '../../types'
 import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
-import { S, type $, changesCache } from './state'
+import { S, changesCache } from './state'
+import type { Host } from '../host'
 import { change, now } from './store'
 import { tellLead } from './tell'
 
@@ -10,7 +11,7 @@ import { tellLead } from './tell'
 /** The changes of a task: from where its work branch left the branch it merges into (the merge base) to the branch's tip. */
 export const diffRange = (target: string, t: Pick<SymccTask, 'id' | 'branch'>) => `${target}...${taskBranch(t)}`
 
-export function gitDiff($: $, target: string, t: SymccTask, opts: string[], file = ''): Promise<string> {
+export function gitDiff($: Host, target: string, t: SymccTask, opts: string[], file = ''): Promise<string> {
   const key = `${t.id}|${t.updated_at}|${target}|${opts.join(' ')}|${file}`
   let p = changesCache.get(key)
   if (!p) {
@@ -27,7 +28,7 @@ export function gitDiff($: $, target: string, t: SymccTask, opts: string[], file
  * uncommitted changes (new files too), and the files of commits newer than the reviewed one
  * (see reviewedCommit). Sorted, no repeats; the board folder is skipped.
  */
-export async function ownerEdits($: $, t: SymccTask, dir: string): Promise<string[]> {
+export async function ownerEdits($: Host, t: SymccTask, dir: string): Promise<string[]> {
   const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all'], dir)
   if (st.exitCode !== 0) throw new Error(`git status: ${(st.stderr || st.stdout).trim().slice(0, 300)}`)
   const files = parseStatusZ(st.stdout).map(e => e.path)
@@ -49,7 +50,7 @@ export async function ownerEdits($: $, t: SymccTask, dir: string): Promise<strin
  * the diff shows them; approve commits them anyway. `edits`: see ownerEdits. With no folder or
  * no edits, this is the branch's diff (gitDiff, cached).
  */
-export async function folderDiff($: $, target: string, t: SymccTask, opts: string[], file = ''): Promise<{ text: string; edits: string[] }> {
+export async function folderDiff($: Host, target: string, t: SymccTask, opts: string[], file = ''): Promise<{ text: string; edits: string[] }> {
   const dir = worktreeDir(t.id)
   const edits = (await $.fs.exists(`${dir}/.git`)) ? await ownerEdits($, t, dir) : []
   if (!edits.length) return { text: await gitDiff($, target, t, opts, file), edits }
@@ -62,7 +63,7 @@ export async function folderDiff($: $, target: string, t: SymccTask, opts: strin
 }
 
 /** The files a task changed, with +/- line counts, as its folder has them now (see folderDiff); the owner's edited files are marked. */
-export async function changedFiles($: $, target: string, t: SymccTask): Promise<DiffFile[]> {
+export async function changedFiles($: Host, target: string, t: SymccTask): Promise<DiffFile[]> {
   const d = await folderDiff($, target, t, ['--stat=1000,800'])
   return parseDiffStat(d.text).map(f => (d.edits.includes(f.file) ? { ...f, edited: true } : f))
 }
@@ -72,7 +73,7 @@ export async function changedFiles($: $, target: string, t: SymccTask): Promise<
  * the merge base. When the owner's edits are in it, it starts with a line saying so (YOUR_EDITS).
  */
 // A function declaration, not an arrow: the plugin loader follows $ past an import only into one.
-export async function changesText($: $, target: string, t: SymccTask, file = '') {
+export async function changesText($: Host, target: string, t: SymccTask, file = '') {
   const d = await folderDiff($, target, t, [], file)
   const mine = d.edits.length && d.text.trim() && (!file || d.edits.includes(file))
   return mine ? `${YOUR_EDITS}\n${d.text}` : d.text
@@ -107,7 +108,7 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
  * is `held` (with `review` too when the task waits for review): the checker runs next (see plugin/checker.ts).
  */
-export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
+export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -157,7 +158,7 @@ export async function checkAndMerge($: $, t: SymccTask, dir: string, b: Board, m
  * folder starts clean and keeps the work inside the task's files. Returns '' when done, or a note
  * to add to the failure when it could not be undone.
  */
-async function undoOutOfScope($: $, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
+async function undoOutOfScope($: Host, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
   // :(literal): names are taken as they are, never as patterns.
   for (let i = 0; i < bad.length; i += 100) {
     const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
@@ -181,7 +182,7 @@ function gitFailText(r: { stdout: string; stderr: string }): string {
  * unchanged); only a new HEAD counts as a commit of this try and is added to `made`.
  * Returns '' when fine, or git's error when the commit failed for another reason (e.g. signing).
  */
-async function commitTry($: $, t: SymccTask, dir: string, made: string[], subject?: string): Promise<string> {
+async function commitTry($: Host, t: SymccTask, dir: string, made: string[], subject?: string): Promise<string> {
   const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   // The message ends with trailers (task, origin, why, try); see commitMessage.
   const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}) })], dir)
@@ -221,7 +222,7 @@ export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Pro
  * shows it; only while the task is still as it was when the check began and the check was not
  * stopped or given up. Never fails the check: a board that can't be written only misses the word.
  */
-export async function markStep($: $, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
+export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
   if (stopped()) return
   await change($, x => {
     const cur = find(x, t.id)
@@ -231,7 +232,7 @@ export async function markStep($: $, t: SymccTask, step: CheckStep, stopped: () 
 }
 
 /** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
-async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], hold?: (changed: readonly string[]) => boolean): Promise<{ result: CheckResult; raced?: boolean }> {
+async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], hold?: (changed: readonly string[]) => boolean): Promise<{ result: CheckResult; raced?: boolean }> {
   const res = (result: CheckResult) => ({ result })
   // First, before touching the folder: a step stopped or given up while it waited for its merge
   // turn does nothing, as the next try may already be using the folder.
@@ -291,7 +292,7 @@ async function upToDateTestMove($: $, t: SymccTask, dir: string, b: Board, mode:
 }
 
 /** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */
-async function onTarget($: $, id: string, sha: string, target: string, tryNo?: number): Promise<boolean> {
+async function onTarget($: Host, id: string, sha: string, target: string, tryNo?: number): Promise<boolean> {
   if (!sha) return false
   const msg = await git($, ['log', '-1', '--format=%B', sha])
   if (msg.exitCode !== 0 || !isTaskCommit(msg.stdout, id, S.N.name, tryNo)) return false
@@ -303,7 +304,7 @@ async function onTarget($: $, id: string, sha: string, target: string, tryNo?: n
  * work branch, when that tip was made by this try and is on that branch); null when this try's
  * work isn't merged. A task like that is done: a reload must not send it back for another try.
  */
-export async function alreadyMerged($: $, t: Pick<SymccTask, 'id' | 'branch' | 'merge_into' | 'attempts'>): Promise<string | null> {
+export async function alreadyMerged($: Host, t: Pick<SymccTask, 'id' | 'branch' | 'merge_into' | 'attempts'>): Promise<string | null> {
   if (!(t.attempts > 0)) return null
   const tip = (await git($, ['rev-parse', '-q', '--verify', `refs/heads/${taskBranch(t)}`])).stdout.trim()
   return tip && (await onTarget($, t.id, tip, intoOf(t), t.attempts)) ? tip : null
@@ -314,7 +315,7 @@ export async function alreadyMerged($: $, t: Pick<SymccTask, 'id' | 'branch' | '
  * landed on the target branch (`merged`). Read fresh inside the change, so no other write is lost.
  * A failure to save is told to the lead, never hidden; the merge itself already happened.
  */
-export async function recordCommits($: $, id: string, made: readonly string[], merged?: string) {
+export async function recordCommits($: Host, id: string, made: readonly string[], merged?: string) {
   if (!made.length && !merged) return
   try {
     await change($, x => {

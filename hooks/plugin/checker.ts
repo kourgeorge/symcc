@@ -7,7 +7,8 @@ import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
-import { S, type $, type CheckerEnd, checkerRuns, stopped } from './state'
+import { S, type CheckerEnd, checkerRuns, stopped } from './state'
+import type { Host } from '../host'
 import { change, now } from './store'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
@@ -26,7 +27,7 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  * `stop`: why the task was stopped (dropped, paused, sent to the owner), if it was; looked at once the checker
  * started too, so a stop that came while it was starting up (before haltChecker could see it) still stops it at once.
  */
-export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined): Promise<CheckerOutcome> {
+export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined): Promise<CheckerOutcome> {
   await markStep($, t, 'checking', () => undefined)
   await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: 'a checker is trying to break it before it merges' }, now()) : x)).catch(() => undefined)
   const into = intoOf(t)
@@ -95,7 +96,7 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop
 }
 
 /** The checker's verdict (`v`, or none with `why`) as a history line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */
-async function record($: $, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string) {
+async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string) {
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
@@ -105,7 +106,7 @@ async function record($: $, t: SymccTask, v: CheckerVerdict | null, why?: string
 }
 
 /** Throws away anything the checker changed in folder `dir` (symcc committed the work before it ran, so nothing of the task's is lost). */
-async function cleanFolder($: $, dir: string) {
+async function cleanFolder($: Host, dir: string) {
   const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all'], dir).catch(() => null)
   if (!st || st.exitCode !== 0 || !st.stdout) return
   await git($, ['reset', '-q', '--hard', 'HEAD'], dir).catch(() => undefined)
@@ -114,7 +115,7 @@ async function cleanFolder($: $, dir: string) {
 
 /** Where folder `dir` is in git: the commit of HEAD, the branch HEAD is on (empty when detached), and the commit of the task's branch `branch`. Null when HEAD can't be read. */
 type Place = { head: string; on: string; tip: string; branch: string }
-async function gitPlace($: $, dir: string, branch: string): Promise<Place | null> {
+async function gitPlace($: Host, dir: string, branch: string): Promise<Place | null> {
   const [h, on, tip] = await Promise.all([
     git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null),
     git($, ['symbolic-ref', '-q', 'HEAD'], dir).catch(() => null),
@@ -130,7 +131,7 @@ async function gitPlace($: $, dir: string, branch: string): Promise<Place | null
  * the task's branch moved from `saved`, the task's branch is put back at the saved commit and checked out again, so
  * only the tested work can merge. 'same': nothing moved; 'moved': it moved and was put back; 'failed': it couldn't be.
  */
-async function putBack($: $, dir: string, saved: Place | null): Promise<'same' | 'moved' | 'failed'> {
+async function putBack($: Host, dir: string, saved: Place | null): Promise<'same' | 'moved' | 'failed'> {
   if (!saved) return 'same'
   const now = await gitPlace($, dir, saved.branch)
   if (now && now.head === saved.head && now.on === saved.on && now.tip === saved.tip) return 'same'
@@ -149,16 +150,16 @@ export function checkerFinished(agentId: string, answer: string, aborted = false
 }
 
 /** Stops every running checker (`why`, e.g. the board was turned off): each one's step goes on with no verdict. */
-export async function haltCheckers($: $, why: string) {
+export async function haltCheckers($: Host, why: string) {
   await haltCheckersOf($, why, () => true)
 }
 
 /** Stops the running checker of task `taskId` (it was dropped, paused or sent to the owner): its step goes on at once with no verdict. */
-export async function haltChecker($: $, taskId: string, why: string) {
+export async function haltChecker($: Host, taskId: string, why: string) {
   await haltCheckersOf($, why, task => task === taskId)
 }
 
-async function haltCheckersOf($: $, why: string, which: (task: string) => boolean) {
+async function haltCheckersOf($: Host, why: string, which: (task: string) => boolean) {
   for (const [agentId, run] of [...checkerRuns]) {
     if (!which(run.task)) continue
     stopped.add(agentId)

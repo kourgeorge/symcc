@@ -6,6 +6,7 @@ import type { SymccView, SymccScout, SymccTokens } from '../../types'
 import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
+import type { Host } from '../host'
 
 export type $ = EngineInterface
 
@@ -27,29 +28,33 @@ const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], workin
 
 // The loader lets read and update take only an atom written in the same file, so the other
 // modules read and change these four through the functions below.
-export function readOpened($: $) {
-  return read($, opened)
+// They take a Host, because the logic (publish, saveScout, openPane) calls them with one. Only Claude Code's `$`
+// holds these values, and every Host symcc runs on today is that `$` (see hooks/host.ts), so `$ as $` hands
+// the Host on as the `$` it is. It is a type-only cast: the loader must see `$` passed as it is, not through
+// a helper. A host with no panel state gets its own way to show the board in a later step.
+export function readOpened($: Host) {
+  return read($ as $, opened)
 }
-export function updateOpened($: $, change: (value: string) => string) {
-  return update($, opened, change)
+export function updateOpened($: Host, change: (value: string) => string) {
+  return update($ as $, opened, change)
 }
-export function readTab($: $) {
-  return read($, tab)
+export function readTab($: Host) {
+  return read($ as $, tab)
 }
-export function updateTab($: $, change: (value: string) => string) {
-  return update($, tab, change)
+export function updateTab($: Host, change: (value: string) => string) {
+  return update($ as $, tab, change)
 }
-export function readScoutOpen($: $) {
-  return read($, scoutOpen)
+export function readScoutOpen($: Host) {
+  return read($ as $, scoutOpen)
 }
-export function updateScoutOpen($: $, change: (value: string) => string) {
-  return update($, scoutOpen, change)
+export function updateScoutOpen($: Host, change: (value: string) => string) {
+  return update($ as $, scoutOpen, change)
 }
-export function readView($: $) {
-  return read($, view)
+export function readView($: Host) {
+  return read($ as $, view)
 }
-export function updateView($: $, change: (value: SymccView) => SymccView) {
-  return update($, view, change)
+export function updateView($: Host, change: (value: SymccView) => SymccView) {
+  return update($ as $, view, change)
 }
 
 // ---------------- what this module holds while it is loaded ----------------
@@ -137,7 +142,7 @@ export const startS = () => ({
 export const S = startS()
 
 /** Takes the plugin's name from plugin.json (via $.plugin.name), once; DEFAULT_NAME if it has none. */
-export function useName($: $) {
+export function useName($: Host) {
   if (S.named) return
   S.named = true
   const name = cleanName($.plugin.name)

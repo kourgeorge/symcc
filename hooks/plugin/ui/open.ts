@@ -3,6 +3,7 @@ import { boardTitle } from '../../board'
 import { type $, S, updateOpened, updateScoutOpen, updateTab } from '../state'
 import { resetRoleView } from '../roles'
 import { resetKindView } from '../kinds'
+import type { Host } from '../../host'
 
 /** The board panel's views: its tabs. */
 export type PaneTab = 'tasks' | 'scouts' | 'settings'
@@ -11,7 +12,7 @@ export type PaneTab = 'tasks' | 'scouts' | 'settings'
  * Sets what the board panel shows: task `task` opened ('' = the list). With `which`, it also
  * switches to that view ('tasks', 'scouts' or 'settings') with no scout and no role opened; without, the view stays.
  */
-export async function resetPane($: $, which?: PaneTab, task = '') {
+export async function resetPane($: Host, which?: PaneTab, task = '') {
   await updateOpened($, () => task)
   if (!which) return
   resetRoleView()
@@ -24,7 +25,7 @@ export async function resetPane($: $, which?: PaneTab, task = '') {
  * Opens the board panel (see resetPane for `tab` and `task`). `focus` (default on) moves the
  * cursor into it and lets Esc close it; `quiet` ignores errors (the panel then just isn't shown).
  */
-export async function openPane($: $, o: { tab?: PaneTab; task?: string; focus?: boolean; quiet?: boolean } = {}) {
+export async function openPane($: Host, o: { tab?: PaneTab; task?: string; focus?: boolean; quiet?: boolean } = {}) {
   const go = async () => {
     await resetPane($, o.tab, o.task)
     return $.ui.open(paneArgs(o.focus !== false))

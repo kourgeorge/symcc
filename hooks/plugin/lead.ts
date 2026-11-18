@@ -1,6 +1,7 @@
 import { whoDrives, leadText, resetDoing, liveWorkersFor, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
 import { homeBranch } from './git'
-import { type $, S, workers, type PaneView, scoutState, updateView } from './state'
+import { S, workers, type PaneView, scoutState, updateView } from './state'
+import type { Host } from '../host'
 import { path, locked, change, now, load, safeWrite } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
@@ -11,7 +12,7 @@ import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers } from './
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
 // It keeps .<name>/lead.json fresh; the others read and change the board but start nothing.
 
-export async function writeLead($: $, text: string) {
+export async function writeLead($: Host, text: string) {
   await safeWrite($, path(S.N.leadFile), text, S.N.leadFile)
 }
 
@@ -21,7 +22,7 @@ export async function writeLead($: $, text: string) {
  * steps down if another session drives. `fresh` = this copy of the plugin just loaded,
  * so any worker it had is gone. Returns whether this session drives now.
  */
-export async function claimLead($: $, fresh = false): Promise<boolean> {
+export async function claimLead($: Host, fresh = false): Promise<boolean> {
   const was = S.driving
   const [move, leadBefore] = await locked($, async () => {
     const text = await $.fs.read(path(S.N.leadFile)).catch(() => null)
@@ -63,7 +64,7 @@ export async function claimLead($: $, fresh = false): Promise<boolean> {
 }
 
 /** On session end the driver lets go of lead.json, so another session can take over at once. */
-export async function releaseLead($: $) {
+export async function releaseLead($: Host) {
   if (!S.driving) return
   S.driving = false
   await locked($, async () => {
@@ -77,7 +78,7 @@ export async function releaseLead($: $) {
  * "doing" tasks move to the new id (so our own live workers aren't taken for a dead
  * session's), and the board panel is shown again for the new session.
  */
-export async function handOver($: $) {
+export async function handOver($: Host) {
   const old = S.me
   const fresh = await $.session.id().catch(() => old)
   if (fresh && fresh !== old) {
@@ -94,7 +95,7 @@ export async function handOver($: $) {
   if (openOnStart(b)) await openPane($, { focus: false, quiet: true })
 }
 
-export async function publish($: $, b: Board) {
+export async function publish($: Host, b: Board) {
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   // (new tasks merge into it; a task that merges elsewhere shows "→ branch" in the list)
@@ -113,11 +114,11 @@ export async function publish($: $, b: Board) {
 
 let statusText: (() => string | undefined) | undefined
 /** Shows `text()` as the line above the prompt; refreshStatus draws it again later. */
-function showStatus($: $, text: () => string | undefined) {
+function showStatus($: Host, text: () => string | undefined) {
   statusText = text
   $.ui.status(text())
 }
 /** Draws the line above the prompt again, so "next: x in 38m" counts down (scouts.ts calls it every minute). */
-export function refreshStatus($: $) {
+export function refreshStatus($: Host) {
   if (statusText) $.ui.status(statusText())
 }

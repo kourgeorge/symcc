@@ -2,7 +2,8 @@ import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
-import { S, type $ } from './state'
+import { S } from './state'
+import type { Host } from '../host'
 
 // ---------------- the board on disk ----------------
 
@@ -23,7 +24,7 @@ export const path = (rel: string) => {
  * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does.
  * A hook that runs before session.start (a plugin reload starts the module over) uses this; true once the root is known.
  */
-export async function findRoot($: $): Promise<boolean> {
+export async function findRoot($: Host): Promise<boolean> {
   if (S.root) return true
   const repo = await $.session.repo().catch(() => null)
   const root = repo?.root || (await $.session.root().catch(() => '')) || ''
@@ -42,7 +43,7 @@ export const tmpFor = (file: string) => tmpName(file, S.me || 'unknown', `${++tm
  * mid-write never leaves half a file and two saves at once never break each other. A failed rename throws
  * "couldn't save <what>: ..."; a failed write throws its own error. Either way the temp file is removed.
  */
-export async function safeWrite($: $, file: string, text: string, what: string): Promise<void> {
+export async function safeWrite($: Host, file: string, text: string, what: string): Promise<void> {
   const tmp = tmpFor(file)
   let r: { exitCode: number; stdout: string; stderr: string }
   try {
@@ -88,7 +89,7 @@ export function resetStore() {
  * Keep a copy of board.json's text beside it (board.json.<what>-<time>) and tell the owner
  * (a toast) and the lead, once per distinct text. Returns the copy's name ('' if it couldn't be written).
  */
-async function keepCopy($: $, text: string, what: string, say: (copy: string) => string): Promise<string> {
+async function keepCopy($: Host, text: string, what: string, say: (copy: string) => string): Promise<string> {
   const known = reported.get(text)
   if (known !== undefined) return known
   const copy = `${S.N.boardFile}.${what}-${now().replace(/[:.]/g, '-')}`
@@ -101,7 +102,7 @@ async function keepCopy($: $, text: string, what: string, say: (copy: string) =>
   return name
 }
 
-export async function load($: $): Promise<Board> {
+export async function load($: Host): Promise<Board> {
   const exists = await $.fs.exists(path(S.N.boardFile))
   if (!exists) {
     const b = emptyBoard()
@@ -126,7 +127,7 @@ export async function load($: $): Promise<Board> {
  * Saves board.json once in the current shape when reading it brought old tasks up to date (see
  * migrateTask), keeping a copy of the file as it was. Nothing happens for a board already current.
  */
-export async function saveMigrated($: $): Promise<void> {
+export async function saveMigrated($: Host): Promise<void> {
   const text = await $.fs.read(path(S.N.boardFile)).catch(() => null)
   if (typeof text !== 'string') return
   const r = readBoard(text)
@@ -136,7 +137,7 @@ export async function saveMigrated($: $): Promise<void> {
 }
 
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
-export async function isOn($: $): Promise<boolean> {
+export async function isOn($: Host): Promise<boolean> {
   const text = await $.fs.read(path(S.N.boardFile)).catch(() => null)
   return (S.enabledNow = symccOn(parseBoard(typeof text === 'string' ? text : null)))
 }
@@ -155,7 +156,7 @@ export const aboutToWait = () => startWait.mark?.()
  * `ln` fails if the lock exists, so only one session can win, and nobody ever sees
  * a half-written lock. A stale lock (its session died) is removed and taken over.
  */
-export async function takeLock($: $): Promise<string> {
+export async function takeLock($: Host): Promise<string> {
   const lock = path(S.N.lockFile)
   const me = `${await $.session.id().catch(() => 'unknown')}:${Math.random().toString(36).slice(2, 10)}`
   const mine = lockText(me, Date.now())
@@ -181,13 +182,13 @@ export async function takeLock($: $): Promise<string> {
   }
 }
 
-export async function dropLock($: $, mine: string) {
+export async function dropLock($: Host, mine: string) {
   const lock = path(S.N.lockFile)
   if ((await $.fs.read(lock).catch(() => null)) === mine) await $.process.run(['rm', '-f', lock]).catch(() => undefined)
 }
 
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
-export async function saveBoard($: $, b: Board) {
+export async function saveBoard($: Host, b: Board) {
   await safeWrite($, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
 }
 
@@ -195,7 +196,7 @@ export async function saveBoard($: $, b: Board) {
  * Every change goes through here, one at a time, so two workers finishing together
  * never lose an update; the lock file does the same between sessions.
  */
-export function change<T>($: $, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+export function change<T>($: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
   return locked($, async () => {
     const before = await load($)
     const out = fn(before)
@@ -210,7 +211,7 @@ export function change<T>($: $, fn: (b: Board) => [Board, T] | Board): Promise<T
 }
 
 /** Runs fn while holding the board lock, one at a time within this session too. */
-export function locked<T>($: $, fn: () => Promise<T>): Promise<T> {
+export function locked<T>($: Host, fn: () => Promise<T>): Promise<T> {
   const run = S.writing.then(async () => {
     const mine = await takeLock($)
     try {

@@ -1,6 +1,7 @@
 import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, archiveText, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, symccOn, toArchive } from '../board'
 import { publish } from './lead'
-import { S, type $ } from './state'
+import { S } from './state'
+import type { Host } from '../host'
 import { load, locked, now, path, safeWrite, saveBoard } from './store'
 import { tellLead } from './tell'
 
@@ -9,7 +10,7 @@ import { tellLead } from './tell'
 // file stays small. The archive is written first; only then are the tasks taken off the board.
 
 /** archive.json as it is now: missing is an empty archive; `broken` (with its text) when it can't be read. */
-async function readArchiveFile($: $): Promise<{ archive: Archive; text: string | null; broken?: string; migrated?: number }> {
+async function readArchiveFile($: Host): Promise<{ archive: Archive; text: string | null; broken?: string; migrated?: number }> {
   const file = path(S.N.archiveFile)
   if (!(await $.fs.exists(file).catch(() => false))) return { archive: emptyArchive(), text: null }
   const text = await $.fs.read(file)
@@ -17,7 +18,7 @@ async function readArchiveFile($: $): Promise<{ archive: Archive; text: string |
 }
 
 /** Keeps a copy of a broken archive.json beside it and tells the owner and the lead, once per text. */
-async function reportBroken($: $, text: string, reason: string) {
+async function reportBroken($: Host, text: string, reason: string) {
   if (S.archiveBroken === text) return
   S.archiveBroken = text
   const copy = `${S.N.archiveFile}.broken-${now().replace(/[:.]/g, '-')}`
@@ -28,12 +29,12 @@ async function reportBroken($: $, text: string, reason: string) {
 }
 
 /** Writes archive.json through a temp file and a rename, like board.json, so a crash never leaves half a file. */
-export async function saveArchive($: $, a: Archive) {
+export async function saveArchive($: Host, a: Archive) {
   await safeWrite($, path(S.N.archiveFile), archiveText(a), 'the archive')
 }
 
 /** Saves archive.json once in the current shape when reading it brought old tasks up to date (see readArchive's `migrated`). */
-export async function saveArchiveMigrated($: $): Promise<void> {
+export async function saveArchiveMigrated($: Host): Promise<void> {
   await locked($, async () => {
     const r = await readArchiveFile($)
     if (r.broken || !r.migrated) return
@@ -46,7 +47,7 @@ export async function saveArchiveMigrated($: $): Promise<void> {
  * at most once an hour (`force` skips that wait). The archive is written first; if that fails, or
  * archive.json can't be read, nothing leaves the board. Returns the ids moved.
  */
-export async function archiveOld($: $, nowMs = Date.now(), force = false): Promise<string[]> {
+export async function archiveOld($: Host, nowMs = Date.now(), force = false): Promise<string[]> {
   if (!S.driving) return []
   if (!force && nowMs - S.lastArchive < ARCHIVE_EVERY_MS) return []
   S.lastArchive = nowMs
@@ -77,7 +78,7 @@ export async function archiveOld($: $, nowMs = Date.now(), force = false): Promi
 }
 
 /** Task `id` from archive.json, or undefined when it isn't there (or the archive can't be read). */
-export async function findArchived($: $, id: string): Promise<BoardTask | undefined> {
+export async function findArchived($: Host, id: string): Promise<BoardTask | undefined> {
   const r = await readArchiveFile($).catch(() => null)
   if (!r || r.broken) return undefined
   const n = normId(id)
@@ -91,7 +92,7 @@ export const archivedText = (id: string) => `${id} is archived (in ${S.N.archive
  * Brings an archived dropped task back to the board as "todo", with a history line. The board is
  * saved first, then the task leaves the archive (so it is never lost on the way). Throws for a done one.
  */
-export async function bringBackArchived($: $, id: string): Promise<string> {
+export async function bringBackArchived($: Host, id: string): Promise<string> {
   const t = await findArchived($, id)
   if (!t) throw new Error(`${normId(id)} is not on the board`)
   if (t.status !== 'dropped') throw new Error(archivedText(t.id))

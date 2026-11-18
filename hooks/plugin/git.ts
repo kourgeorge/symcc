@@ -1,7 +1,8 @@
 import type { SymccTask } from '../../types'
 import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, liveWorkersFor, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
 import { publish } from './lead'
-import { type $, S, workers, starting, finishing, approving, keptDirty } from './state'
+import { S, workers, starting, finishing, approving, keptDirty } from './state'
+import type { Host } from '../host'
 import { load, change, path } from './store'
 import { tellLead, noteForLead, brief } from './tell'
 import { pump, agentsNow } from './workers'
@@ -11,29 +12,29 @@ import { pump, agentsNow } from './workers'
 /** git options that make a commit (or merge) authored by symcc: put them before the git command. */
 export const asSymcc = () => ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`]
 
-export async function git($: $, args: string[], cwd = S.root, timeoutMs = 120_000) {
+export async function git($: Host, args: string[], cwd = S.root, timeoutMs = 120_000) {
   return $.process.run(['git', ...args], { cwd, timeoutMs })
 }
-export async function gitOk($: $, args: string[], cwd = S.root, timeoutMs = 120_000) {
+export async function gitOk($: Host, args: string[], cwd = S.root, timeoutMs = 120_000) {
   const r = await git($, args, cwd, timeoutMs)
   if (r.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`)
   return r.stdout.trim()
 }
 
 /** The branch checked out in the project, '' when none (a detached HEAD). */
-export async function currentBranch($: $): Promise<string> {
+export async function currentBranch($: Host): Promise<string> {
   if (!S.root) return ''
   return (await git($, ['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => null))?.stdout.trim() ?? ''
 }
 
 /** The project's local branches. */
-export async function branchList($: $): Promise<string[]> {
+export async function branchList($: Host): Promise<string[]> {
   const r = await git($, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).catch(() => null)
   return (r?.stdout ?? '').split('\n').map(x => x.trim()).filter(Boolean)
 }
 
 /** Whether `name` is a local branch. */
-export async function branchExists($: $, name: string): Promise<boolean> {
+export async function branchExists($: Host, name: string): Promise<boolean> {
   if (!name || name.startsWith('-')) return false
   return (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${name}`]).catch(() => null))?.exitCode === 0
 }
@@ -42,14 +43,14 @@ export async function branchExists($: $, name: string): Promise<boolean> {
  * The branch a task added now merges into: the branch checked out in the main project folder; on
  * a detached checkout, the repo's main branch (see startBranch).
  */
-export async function homeBranch($: $): Promise<string> {
+export async function homeBranch($: Host): Promise<string> {
   if (!S.root) return 'main'
   const origin = (await git($, ['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD']).catch(() => null))?.stdout.trim() ?? ''
   return startBranch(await currentBranch($), origin, await branchList($))
 }
 
 /** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
-export async function probeGit($: $): Promise<GitState> {
+export async function probeGit($: Host): Promise<GitState> {
   if (!S.root) return 'ok'
   const run = (args: string[]) => git($, args, S.root, 15_000).catch(() => null)
   const v = await run(['--version'])
@@ -64,7 +65,7 @@ export async function probeGit($: $): Promise<GitState> {
  * banner and status line say so, and the lead (only the driver) is told once per state: how
  * to install git, or the question whether to set up a repo.
  */
-export async function gitReady($: $, b?: Board): Promise<boolean> {
+export async function gitReady($: Host, b?: Board): Promise<boolean> {
   const s = await probeGit($)
   if (s !== S.gitState) {
     S.gitState = s
@@ -84,7 +85,7 @@ export async function gitReady($: $, b?: Board): Promise<boolean> {
  * files, leaving out files that look like secrets or are over 50 MB (they go in .gitignore).
  * Never pushes, never adds a remote. Then the open tasks (made before there was any branch) merge into the new branch, and work starts.
  */
-export async function setupGit($: $, who: string): Promise<string> {
+export async function setupGit($: Host, who: string): Promise<string> {
   if (S.settingUp) return 'git is being set up already'
   const s = await probeGit($)
   if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
@@ -140,7 +141,7 @@ export const worktreeDir = (id: string) => `${S.root}/${S.N.worktrees}/${id}`
 /** The branch task `t` works on: its own, or the usual one for its id. */
 export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S.N.branch(t.id)
 
-export async function prepareWorktree($: $, t: SymccTask, target: string) {
+export async function prepareWorktree($: Host, t: SymccTask, target: string) {
   const dir = worktreeDir(t.id)
   const branch = taskBranch(t)
   if (!(await $.fs.exists(`${dir}/.git`))) {
@@ -163,7 +164,7 @@ export const TYPES_DIR = '.claude-plugin/types'
  * when the main folder has none, and when git in `dir` would not ignore it, so it never lands in the task's
  * commit or scope check. Returns whether the folder has the copy.
  */
-export async function copyTypes($: $, dir: string): Promise<boolean> {
+export async function copyTypes($: Host, dir: string): Promise<boolean> {
   const from = `${S.root}/${TYPES_DIR}`
   const to = `${dir}/${TYPES_DIR}`
   if (!(await $.fs.exists(from))) return false
@@ -187,7 +188,7 @@ export async function copyTypes($: $, dir: string): Promise<boolean> {
  * dir keeps them out of the commit even where the project's .gitignore lacks it. Returns the files copied; a report
  * that can't be read is skipped.
  */
-export async function copyReports($: $, t: Pick<SymccTask, 'details'>, dir: string): Promise<string[]> {
+export async function copyReports($: Host, t: Pick<SymccTask, 'details'>, dir: string): Promise<string[]> {
   const files = namedReports(t.details, S.N.dir)
   if (!files.length) return []
   const copied: string[] = []
@@ -210,7 +211,7 @@ export async function copyReports($: $, t: Pick<SymccTask, 'details'>, dir: stri
  * merges into doesn't have (0 when it has no branch; null when git could not tell), and `dirty`, whether
  * its folder has uncommitted changes (false when it has no folder).
  */
-export async function taskWork($: $, t: SymccTask): Promise<{ commits: number | null; dirty: boolean }> {
+export async function taskWork($: Host, t: SymccTask): Promise<{ commits: number | null; dirty: boolean }> {
   const branch = taskBranch(t)
   let commits: number | null = 0
   if (await branchExists($, branch)) {
@@ -228,7 +229,7 @@ export async function taskWork($: $, t: SymccTask): Promise<{ commits: number | 
 }
 
 /** Throws away the uncommitted changes in task `id`'s folder (an investigation's scratch edits), if it has one. Commits stay. */
-export async function resetScratch($: $, id: string): Promise<void> {
+export async function resetScratch($: Host, id: string): Promise<void> {
   const dir = worktreeDir(id)
   if (!(await $.fs.exists(`${dir}/.git`))) return
   await gitOk($, ['reset', '-q', '--hard'], dir)
@@ -240,7 +241,7 @@ export async function resetScratch($: $, id: string): Promise<void> {
  * worker that just finished there), and never while its work is being checked or approved and
  * merged there, unless that check itself is done with it (`ownCheck`). Returns whether it was removed.
  */
-export async function removeWorktree($: $, taskId: string, dir: string, except?: string, ownCheck = false): Promise<boolean> {
+export async function removeWorktree($: Host, taskId: string, dir: string, except?: string, ownCheck = false): Promise<boolean> {
   if (!ownCheck && (finishing.has(taskId) || approving.has(taskId))) return false
   const agents = await agentsNow($)
   if (!agents) return false
@@ -256,7 +257,7 @@ export async function removeWorktree($: $, taskId: string, dir: string, except?:
  * --force, never while a worker runs there) and deletes the branches of done tasks that git
  * lists as merged into the branch they merged into. Only the plugin's own branches (N.branch) are touched.
  */
-export async function cleanupMerged($: $, b: Board) {
+export async function cleanupMerged($: Host, b: Board) {
   const agents = await agentsNow($)
   if (!agents) return
   const busy = new Set([...workers.values()].map(w => w.task))

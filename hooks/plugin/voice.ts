@@ -1,7 +1,8 @@
 // Notify: a chime (sound) or "symcc: T-3 done" said out loud (voice) when a task is merged or a question waits.
 import type { SymccTask } from '../../types'
 import { type Board, type Notify, type NotifySystem, type Playable, notifyOf, canPlay, unplayableNote, symccOn, spokenLine, NEEDS_YOU_MARK } from '../board'
-import { type $, S, sayQueue } from './state'
+import { S, sayQueue } from './state'
+import type { Host } from '../host'
 
 /** One command to run: the text is always its own argument (or, on Windows, an environment value), never part of a shell string. */
 export type Play = { argv: string[]; env?: Record<string, string> }
@@ -20,15 +21,15 @@ const winChime = (name: string) => `[System.Media.SystemSounds]::${name}.Play();
 const MAC_SOUNDS = '/System/Library/Sounds'
 const FD_SOUNDS = '/usr/share/sounds/freedesktop/stereo'
 
-function run($: $, argv: string[]) {
+function run($: Host, argv: string[]) {
   return $.process.run(argv, { timeoutMs: 5000 }).catch(() => null)
 }
-async function okRun($: $, argv: string[]) {
+async function okRun($: Host, argv: string[]) {
   return (await run($, argv))?.exitCode === 0
 }
 
 /** Which system this is: uname first; where there is no uname (Windows), `cmd /c ver`. */
-export async function systemOf($: $): Promise<NotifySystem> {
+export async function systemOf($: Host): Promise<NotifySystem> {
   const r = await run($, ['uname', '-s'])
   const os = r && r.exitCode === 0 ? String(r.stdout ?? '').trim() : ''
   if (os === 'Darwin') return 'mac'
@@ -40,21 +41,21 @@ export async function systemOf($: $): Promise<NotifySystem> {
 }
 
 /** Is the program `name` installed? Looked up only (command -v, or where on Windows), never run. */
-function hasProgram($: $, system: NotifySystem, name: string) {
+function hasProgram($: Host, system: NotifySystem, name: string) {
   return system === 'windows' ? okRun($, ['where', name]) : okRun($, ['sh', '-c', 'command -v "$1" >/dev/null 2>&1', 'sh', name])
 }
-function hasFile($: $, path: string) {
+function hasFile($: Host, path: string) {
   return okRun($, ['test', '-f', path])
 }
 /** The freedesktop "complete" and "bell" sounds with extension `ext`, or null when there is no "complete" one. */
-async function fdSounds($: $, ext: string) {
+async function fdSounds($: Host, ext: string) {
   if (!(await hasFile($, `${FD_SOUNDS}/complete.${ext}`))) return null
   const done = `${FD_SOUNDS}/complete.${ext}`
   return { done, needs: (await hasFile($, `${FD_SOUNDS}/bell.${ext}`)) ? `${FD_SOUNDS}/bell.${ext}` : done }
 }
 
 /** Finds this machine's speech and sound commands by looking for the programs (and sound files), playing nothing. */
-export async function findPlayers($: $): Promise<Players> {
+export async function findPlayers($: Host): Promise<Players> {
   const system = await systemOf($)
   const voice: Player[] = []
   const sound: Player[] = []
@@ -83,13 +84,13 @@ export async function findPlayers($: $): Promise<Players> {
 }
 
 /** This machine's players, found once per session. */
-export function players($: $): Promise<Players> {
+export function players($: Host): Promise<Players> {
   S.players ??= findPlayers($).catch(() => ({ system: 'other' as const, voice: [], sound: [] }))
   return S.players
 }
 
 /** Which of sound and voice this machine can play (found once per session). */
-export async function playable($: $): Promise<Playable> {
+export async function playable($: Host): Promise<Playable> {
   const p = await players($)
   return { system: p.system, sound: p.sound.length > 0, voice: p.voice.length > 0 }
 }
@@ -112,7 +113,7 @@ export function withProject(text: string, root: string): string {
 }
 
 /** Says "symcc: T-3 done" (or chimes) for a merged task, if this session drives the board and notify is on. Never waits, never shows an error. */
-export function sayDone($: $, b: Board, id: string) {
+export function sayDone($: Host, b: Board, id: string) {
   queueSay($, b, id)
 }
 
@@ -123,14 +124,14 @@ export const saidNeedsYou = new Set<string>()
  * Says "symcc: T-5 needs you" (or chimes) when task `t`'s worker asked the owner something (its ask_owner
  * call, or files outside its list), once per waiting question, under the same rules and in the same queue as "T-3 done".
  */
-export function sayNeedsYou($: $, b: Board, t: Pick<SymccTask, 'id' | 'attempts'>, question = '') {
+export function sayNeedsYou($: Host, b: Board, t: Pick<SymccTask, 'id' | 'attempts'>, question = '') {
   const key = `${t.id}#${t.attempts}#${question}`
   if (saidNeedsYou.has(key)) return
   if (queueSay($, b, NEEDS_YOU_MARK + t.id)) saidNeedsYou.add(key)
 }
 
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
-function queueSay($: $, b: Board, item: string): boolean {
+function queueSay($: Host, b: Board, item: string): boolean {
   if (!S.driving || !symccOn(b) || b.notify === 'off') return false
   S.notifyWanted = b.notify ?? null
   sayQueue.push(item)
@@ -143,7 +144,7 @@ function queueSay($: $, b: Board, item: string): boolean {
 }
 
 /** The commands to try for one queued line, in order; [] when nothing plays (off, or it can't play here: told once). */
-export async function playsFor($: $, wanted: Notify | null, items: string[]): Promise<Play[]> {
+export async function playsFor($: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
   const text = spokenLine(items)
   if (!text) return []
   const p = await players($)
@@ -163,7 +164,7 @@ export async function playsFor($: $, wanted: Notify | null, items: string[]): Pr
   return p[n].map(make => make(line, needsYou))
 }
 
-export async function sayNext($: $) {
+export async function sayNext($: Host) {
   if (S.saying) return
   const items = sayQueue.splice(0)
   if (!items.length) return

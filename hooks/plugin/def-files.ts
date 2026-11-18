@@ -1,7 +1,8 @@
 // What the roles and the kinds share on the plugin side: reading their files, the lead's tool (list, add, edit, reset,
 // remove, off, on) and the panel's "New ..." button. roles.ts and kinds.ts give the parts that differ as a DefKind.
 import { type Def, type BrokenDef, brokenNamed, defNamed, defSource, type DefSource } from '../core/def-files'
-import { type $, S } from './state'
+import { S } from './state'
+import type { Host } from '../host'
 import { path } from './store'
 import { tellLead } from './tell'
 import { skippedRoleNote } from '../board'
@@ -54,7 +55,7 @@ export type DefKind<D extends Def, A extends DefInput> = {
 
 /** The files in folder `dir`, shown as `shown` (e.g. ".symcc/roles"); a file that can't be used is skipped with a note (see skippedDef)
  *  and, when `broken` is given, added to it with the reason. */
-export async function defFiles<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>, dir: string, shown: string, broken?: BrokenDef[]): Promise<D[]> {
+export async function defFiles<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>, dir: string, shown: string, broken?: BrokenDef[]): Promise<D[]> {
   if (!(await $.fs.exists(dir).catch(() => false))) return []
   const out: D[] = []
   for (const f of await $.fs.list(dir).catch(() => [])) {
@@ -76,7 +77,7 @@ export async function defFiles<D extends Def, A extends DefInput>($: $, k: DefKi
 }
 
 /** Says once (a toast for the owner, a note for the lead) that a file was skipped and why; again only when the reason changes. */
-function skippedDef<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>, file: string, reason: string) {
+function skippedDef<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>, file: string, reason: string) {
   const note = skippedRoleNote(file, reason, S.N.name)
   $.ui.log(note, { to: 'debug' })
   if (k.skipped.get(file) === reason) return
@@ -86,19 +87,19 @@ function skippedDef<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>, f
 }
 
 /** The built-in ones: read from the plugin's folder, or from their texts. */
-async function builtInDefs<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>): Promise<D[]> {
+async function builtInDefs<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>): Promise<D[]> {
   return typeof k.builtIn === 'string' ? defFiles($, k, `${$.plugin.root}/${k.builtIn}`, k.builtIn) : k.builtIn()
 }
 
 /** Reads them again: the built-in ones, then the project's .<name>/<plural>/ over them. */
-export async function loadDefs<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>): Promise<D[]> {
+export async function loadDefs<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>): Promise<D[]> {
   const builtIn = await builtInDefs($, k)
   k.set(k.merge(builtIn, S.root ? await defFiles($, k, path(`${S.N.dir}/${k.plural}`), `${S.N.dir}/${k.plural}`) : []))
   return k.get()
 }
 
 /** The built-in ones and the project's own, read again (the loaded ones too); `broken` is the project's files that can't be read, with why. */
-export async function defLists<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>): Promise<{ builtIn: D[]; project: D[]; broken: BrokenDef[]; dir: string }> {
+export async function defLists<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>): Promise<{ builtIn: D[]; project: D[]; broken: BrokenDef[]; dir: string }> {
   const dir = `${S.N.dir}/${k.plural}`
   const builtIn = await builtInDefs($, k)
   const broken: BrokenDef[] = []
@@ -113,12 +114,12 @@ export async function defLists<D extends Def, A extends DefInput>($: $, k: DefKi
  * (letters, digits, - and _ only), so nothing outside <dir>/<plural> is touched. They are read again after a change.
  * `ok` says a file was written or removed.
  */
-export async function manageDefs<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>, a: A): Promise<{ ok: boolean; text: string }> {
+export async function manageDefs<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>, a: A): Promise<{ ok: boolean; text: string }> {
   const r = await manageText($, k, a)
   return typeof r === 'string' ? { ok: false, text: r } : r
 }
 
-async function manageText<D extends Def, A extends DefInput>($: $, k: DefKind<D, A>, a: A): Promise<string | { ok: true; text: string }> {
+async function manageText<D extends Def, A extends DefInput>($: Host, k: DefKind<D, A>, a: A): Promise<string | { ok: true; text: string }> {
   const { noun } = k
   const action = typeof a.action === 'string' && a.action.trim() ? a.action.trim().toLowerCase() : 'list'
   const asked = typeof a.name === 'string' ? a.name.trim() : ''
@@ -207,7 +208,7 @@ export type DefView<Draft> = { list: boolean; open: string; draft: Draft | null;
 
 /** "New role" / "New kind": makes the file from `template` through the tool's add and opens it in the edit mode; a bad, taken
  *  or broken name stays in the name box with the reason. */
-export async function newDefFile<D extends Def, A extends DefInput, Draft>($: $, k: DefKind<D, A>, view: DefView<Draft>, name: string, template: Omit<A, 'action' | 'name'>, draftOf: (d: D) => Draft): Promise<string> {
+export async function newDefFile<D extends Def, A extends DefInput, Draft>($: Host, k: DefKind<D, A>, view: DefView<Draft>, name: string, template: Omit<A, 'action' | 'name'>, draftOf: (d: D) => Draft): Promise<string> {
   const n = name.trim()
   // A file with that name is there but can't be read: say what the page offers for it (the tool's own words name its actions).
   const lists = k.nameError(n) ? undefined : await defLists($, k)

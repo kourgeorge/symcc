@@ -1,6 +1,7 @@
 import { type RoleDef, type RolePromptKind, NEW_ROLE_TEMPLATE, parseRole, roleSkipReason, mergeRoles, EXTRA_TOOLS, DEFAULT_ROLE, roleNameError, roleTools, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
 import type { BrokenDef } from '../core/def-files'
-import { type $, skippedRoles, S } from './state'
+import { skippedRoles, S } from './state'
+import type { Host } from '../host'
 import { type DefKind, loadDefs, defLists, manageDefs, newDefFile } from './def-files'
 
 // ---------------- worker roles ----------------
@@ -56,12 +57,12 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
 }
 
 /** Reads the roles again: the plugin's roles/, then the project's .<name>/roles/ over them. */
-export function loadRoles($: $): Promise<RoleDef[]> {
+export function loadRoles($: Host): Promise<RoleDef[]> {
   return loadDefs($, ROLES)
 }
 
 /** The plugin's roles and the project's own, read again (S.roles too); `broken` is the project's files that can't be read, with why. */
-export function roleLists($: $): Promise<{ builtIn: RoleDef[]; project: RoleDef[]; broken: BrokenDef[]; dir: string }> {
+export function roleLists($: Host): Promise<{ builtIn: RoleDef[]; project: RoleDef[]; broken: BrokenDef[]; dir: string }> {
   return defLists($, ROLES)
 }
 
@@ -70,12 +71,12 @@ export function roleLists($: $): Promise<{ builtIn: RoleDef[]; project: RoleDef[
  * reset (back to the built-in), remove (an added role), off / on. Every name is checked before any path is made
  * (letters, digits, - and _ only), so nothing outside <dir>/roles is touched. The roles are read again after a change.
  */
-export async function leadRoles($: $, a: LeadRoleInput): Promise<string> {
+export async function leadRoles($: Host, a: LeadRoleInput): Promise<string> {
   return (await changeRole($, a)).text
 }
 
 /** The roles tool's work (see leadRoles); `ok` says a role file was written or removed. */
-export function changeRole($: $, a: LeadRoleInput): Promise<{ ok: boolean; text: string }> {
+export function changeRole($: Host, a: LeadRoleInput): Promise<{ ok: boolean; text: string }> {
   return manageDefs($, ROLES, a)
 }
 
@@ -112,7 +113,7 @@ export function roleDraftOf(r: RoleDef): RoleDraft {
 }
 
 /** Saves the edit mode through the roles tool's edit (a built-in is copied to the project's folder first); says what happened, or keeps the edit mode open with the error. */
-export async function saveRoleDraft($: $): Promise<string> {
+export async function saveRoleDraft($: Host): Promise<string> {
   const d = roleView.draft
   if (!d) return ''
   if (!d.description.trim()) {
@@ -132,6 +133,6 @@ export async function saveRoleDraft($: $): Promise<string> {
 }
 
 /** "New role": makes .<name>/roles/<role>.md from the short template and opens it in the edit mode; a bad, taken or broken name stays in the name box with the reason. */
-export function newRoleFile($: $, name: string): Promise<string> {
+export function newRoleFile($: Host, name: string): Promise<string> {
   return newDefFile($, ROLES, roleView, name, NEW_ROLE_TEMPLATE, roleDraftOf)
 }
