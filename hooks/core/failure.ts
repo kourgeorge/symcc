@@ -63,21 +63,53 @@ export function failingLines(output: string, n = 1): string {
   return cutLine(picks.join(' | ') + (more > 0 ? ` (and ${more} more)` : ''), 240)
 }
 
-/** A line naming a file and line, the way checkers list their problems: "path:12 - …" or "path:12-20 — …". */
-const PROBLEM_LINE = /^[-*\s]*`?\S+:\d+(?:-\d+)?`?\s+[—–-]\s/
-const NAMES_FILE = /(^|[\s(`/])(hooks|tests)\/\S/
+/**
+ * The first lines that look like errors in test output from a command that isn't bun's test runner (a
+ * typecheck, a shell script): lines with "error", "Error:", "TS1234" or "FAIL", up to `n` of them. Bun's
+ * "(pass)" / "(skip)" / "(todo)" lines and the "$ command" line are never taken; '' when there is none.
+ */
+export function errorLines(output: string, n = 2): string {
+  const picks = output.split('\n').map(l => l.trim())
+    .filter(l => l && !/^\$ /.test(l) && !/^\((pass|skip|todo)\)\s/.test(l) && /\berror\b|Error:|\bTS\d+\b|\bFAIL\b/.test(l))
+    .slice(0, n)
+  return picks.length ? cutLine(picks.join(' | '), 240) : ''
+}
 
 /**
- * The first problem in a checker's report: the first "path:line — …" line (after a "Problems:" line when there
- * is one), else the first line naming a file under hooks/ or tests/, else its first line.
+ * A line naming a file and line, the way checkers list their problems: "path:12 — …", "path:12-20 - …",
+ * "path:12, what is wrong" (symcc's checker prompt), "1. path:12 …" or "- **path:12** — …".
+ */
+const PROBLEM_LINE = /^(?:[-*]|\d+[.)])?\s*(?:\*\*)?`?[^\s`*]*[./][^\s`*]*:\d+(?:-\d+)?`?(?:\*\*)?(?:[,:]|\s+[—–-])?\s+\S/
+const NAMES_FILE = /(^|[\s(`/*])(hooks|tests)\/\S/
+/** A short heading line such as "Problems:", "**What passed:**" or "## What works:". */
+const heading = (l: string) => /^[\w '’/()-]{1,40}:$/.test(l.replace(/[*#]/g, '').trim())
+const isProblemsHead = (l: string) => heading(l) && /^problems?\b/i.test(l.replace(/[*#\s]/g, ''))
+const isPassHead = (l: string) => heading(l) && /^what\s+(passed|works|worked|is fine|went well|i checked)/i.test(l.replace(/[*#]/g, '').trim())
+
+/**
+ * The first problem in a checker's report. It looks only in the problems part: after a "Problems:" /
+ * "Problem:" line when there is one, else the report's last lines; never in a "What passed" / "What works"
+ * part. There it takes the first "path:line …" line, else the first line naming a file under hooks/ or
+ * tests/; when nothing matches, the report's first line.
  */
 export function firstProblem(report: string): string {
   const lines = report.split('\n').map(l => l.trim()).filter(l => l && l !== CHECKER_MARK && l !== '…')
-  const head = lines.findIndex(l => /^\**problems?:?\**:?$/i.test(l))
-  const pick = (head >= 0 ? lines.slice(head + 1).find(l => PROBLEM_LINE.test(l)) : undefined)
-    ?? lines.find(l => PROBLEM_LINE.test(l)) ?? lines.find(l => NAMES_FILE.test(l)) ?? lines[0] ?? ''
-  // a worktree's long absolute path says nothing the short one doesn't
-  return cutLine(pick.replace(/^[-*]\s+/, '').replace(/\S*\/\.symcc\/worktrees\/[^/\s]+\//g, ''), 240)
+  const head = lines.findIndex(isProblemsHead)
+  let part: string[]
+  if (head >= 0) {
+    const stop = lines.findIndex((l, i) => i > head && isPassHead(l))
+    part = lines.slice(head + 1, stop < 0 ? undefined : stop)
+  } else {
+    // drop every "What passed" part (from its heading to the next heading), then keep the last lines
+    let inPass = false
+    part = lines.filter(l => {
+      if (heading(l)) inPass = isPassHead(l)
+      return !inPass
+    }).slice(-8)
+  }
+  const pick = part.find(l => PROBLEM_LINE.test(l)) ?? part.find(l => NAMES_FILE.test(l)) ?? (head >= 0 ? part[0] : undefined) ?? lines[0] ?? ''
+  // a worktree's long absolute path says nothing the short one doesn't; list marks and bold add nothing either
+  return cutLine(pick.replace(/^(?:[-*]|\d+[.)])\s+/, '').replace(/\*\*/g, '').replace(/\S*\/\.symcc\/worktrees\/[^/\s]+\//g, ''), 240)
 }
 
 const end = (s: string) => (/[.!?…]$/.test(s) ? s : `${s}.`)
@@ -95,7 +127,8 @@ export function whyFailed(t: Failed): string {
     case 'tests': {
       const cmd = /^\$ (.+?) \(exit (\d+)\)/m.exec(out) ?? /^tests failed: `(.+?)` \(exit (\d+)\)/.exec(note)
       const lines = out ? failingLines(out) : ''
-      const which = lines ? `First failing test: ${end(lines)}` : out ? "The saved test output doesn't show which test failed." : ''
+      const errors = out && !lines && !/^\(fail\)\s/m.test(out) ? errorLines(out) : ''
+      const which = lines ? `First failing test: ${end(lines)}` : errors ? `First error: ${end(errors)}` : out ? "The saved test output doesn't show which test failed." : ''
       return `The tests failed${cmd ? ` (\`${cmd[1]}\`, exit ${cmd[2]})` : ''}.${which ? ` ${which}` : ''}`
     }
     case 'checker': {

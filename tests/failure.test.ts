@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
@@ -100,6 +100,24 @@ test("the checker's first problem is taken from its list of problems, not its op
   // no list: the first line naming a file; nothing at all: the first line
   expect(firstProblem('I found a problem.\nThe save in tests/a.test.ts never runs.\nAll else fine.')).toBe('The save in tests/a.test.ts never runs.')
   expect(firstProblem('The save button is never enabled.\nAlso no test.')).toBe('The save button is never enabled.')
+})
+
+test("the checker's first problem: symcc's own comma format, numbered and bold lines, never a 'What passed' line", () => {
+  const comma = 'I found one real problem.\n\nWhat passed:\n- The tests in tests/failure.test.ts pass.\n\nProblems:\nhooks/core/failure.ts:37, strips only "try N:"'
+  expect(firstProblem(checkerOutput(comma))).toBe('hooks/core/failure.ts:37, strips only "try N:"')
+  const numbered = 'One problem.\n\nWhat works:\n- tests/pane.test.tsx passes.\n\nProblems:\n1. hooks/x.ts:37 strips only the short label\n2. hooks/y.ts:9 bad'
+  expect(firstProblem(checkerOutput(numbered))).toBe('hooks/x.ts:37 strips only the short label')
+  const bold = 'One problem.\n\n**What passed:**\n- tests/a.test.ts passes\n\n**Problems:**\n- **hooks/a.ts:12** — bad'
+  expect(firstProblem(checkerOutput(bold))).toBe('hooks/a.ts:12 — bad')
+  // no "Problems:" heading: a "What passed" part is still skipped
+  expect(firstProblem('Checked it.\nWhat passed:\n- tests/a.test.ts passes\nIssues:\n- hooks/b.ts:4, wrong count')).toBe('hooks/b.ts:4, wrong count')
+})
+
+test("a failing command that isn't bun's test runner: its first error lines are quoted", () => {
+  const out = '$ sh scripts/typecheck.sh (exit 2)\nhooks/a.ts(3,4): error TS2322: bad\n'
+  expect(whyFailed(failed({ note: 'tests failed: `sh scripts/typecheck.sh` (exit 2). x', test_output: out })))
+    .toBe('The tests failed (`sh scripts/typecheck.sh`, exit 2). First error: hooks/a.ts(3,4): error TS2322: bad.')
+  expect(errorLines('$ x (exit 1)\nok line\nError: one\nFAIL two\nerror three')).toBe('Error: one | FAIL two')
 })
 
 test('a NEED FILES line that already ends in "." or "…" gets no second one', () => {
