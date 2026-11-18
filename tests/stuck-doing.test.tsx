@@ -284,7 +284,7 @@ test('a tracked worker that vanishes from the agent list: its task fails at the 
   expect(t.note).toBe('the worker ended without a result')
 })
 
-test('a task dropped from elsewhere while its ended worker is in its short grace stays dropped, not failed',async ($, on) => {
+test('a task dropped from elsewhere while its ended worker is in its short grace stays dropped, not failed', async ($, on) => {
   const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
   const w = world(on, agents)
   w.files.set(BOARD, JSON.stringify(doing('s1', 'w1', new Date(Date.now() - 10 * 60_000).toISOString())))
