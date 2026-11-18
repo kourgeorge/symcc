@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS } from '../hooks/app/review'
-import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS } from '../hooks/board'
+import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree } from '../hooks/app/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -2700,6 +2700,20 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/new/b.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  // the same links in Bash: a read through a link inside the worker's folder is refused like the edit (T-436)
+  const bash = (command: string, cwd?: string) => checkEdit(f.$, 'ag1', { command }, cwd)
+  expect(await bash(`cat ${wt5}/link/README.md`)).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('cat link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('cat "link/README.md"')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('cd link && cat README.md')).toMatch(/^Refused: this command names the project folder in the owner's copy/)
+  expect(await bash('cd src && cat ../link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
+  expect(await bash('cat README.md', `${wt5}/link`)).toMatch(/names README\.md in the owner's copy/)
+  expect(await bash(`python3 - <<'EOF'\nprint(open('link/README.md').read())\nEOF`)).toMatch(/names README\.md in the owner's copy/)
+  // links that lead elsewhere, a link that leads nowhere, and the worker's own files: allowed
+  expect(await bash('cat scratch/notes.txt broken src/a.ts && ls src')).toBeUndefined()
+  expect(await bash(`cat ${wt5}/src/a.ts`)).toBeUndefined()
+  // too many paths to look up: refused, not cut short
+  expect(await bash(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i}`).join(' ')} link/README.md`)).toBe(bashTooManyText(wt5))
   workers.clear()
 })
 

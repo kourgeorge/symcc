@@ -20,6 +20,9 @@ function setup() {
 }
 
 const READS = [
+  // T-436: a range that spells no git is no git
+  'echo {1..3}',
+  'echo {a..f}it',
   'grep -n "git" docs/guide.md',
   'grep -rn git hooks',
   'rg "git stash" .',
@@ -246,6 +249,13 @@ const WRITES: [string, string][] = [
   ['bash -c "{,git} stash"', 'git with {braces}'],
   ["bash -c 'echo; {git,stash}'", 'git with {braces}'],
   ["bash -c 'cd x && {git,stash}'", 'git with {braces}'],
+  // T-436: a letter range spells git too (`g{i..i}t` is `git`, `{g..h}it` is `git hit`)
+  ['g{i..i}t stash', 'git with {braces}'],
+  ['{g..g}it push origin main', 'git with {braces}'],
+  ['gi{t..t} reset --hard', 'git with {braces}'],
+  ['bash -c "g{i..i}t stash"', 'git with {braces}'],
+  ['{g..h}it stash', 'git with {braces}'],
+  ['{f,{g..g}}it stash', 'git with {braces}'],
   ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],

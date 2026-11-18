@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsOutside, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
@@ -81,7 +81,8 @@ async function realEdit($: Host, path: string, worktree: string, root: string): 
 /**
  * Why worker shell `command` is refused for naming a path in the project `root` outside its own folder `worktree`
  * (bashOutsideFolder, with both folders by both their names), or for naming a path elsewhere that a symbolic link
- * leads into the project (each looked up on disk, see bashPathsOutside). Undefined: allowed.
+ * leads into the project, in its own folder or elsewhere (each looked up on disk, see bashPathsToCheck), or for
+ * having too many paths or folder changes to check (T-436). Undefined: allowed.
  */
 async function bashOutside($: Host, command: string, worktree: string, root: string, cwd?: string): Promise<string | undefined> {
   if (!root) return undefined
@@ -90,9 +91,14 @@ async function bashOutside($: Host, command: string, worktree: string, root: str
   const [wts, tops] = await Promise.all([bothNames(look, worktree), bothNames(look, root)])
   const rel = bashOutsideFolder(command, wts, tops, home, cwd)
   if (rel !== undefined) return bashOutsideText(rel, worktree)
-  const reals = await Promise.all(bashPathsOutside(command, wts, home, cwd).map(abs => realPathOf('/', abs, look).catch(() => undefined)))
-  for (const real of reals) {
-    const via = real ? editOutsideFolder(real, wts, tops) : undefined
+  const { paths, tooMany } = bashPathsToCheck(command, wts, home, cwd, tops)
+  if (tooMany) return bashTooManyText(worktree)
+  // only where links lead matters here (a link that leads nowhere is no way into the project), so no folder is listed
+  const bashLook: PathLookup = { real: look.real, isLink: async () => false }
+  const reals = await Promise.all(paths.map(abs => realPathOf('/', abs, bashLook).catch(() => undefined)))
+  for (const [i, real] of reals.entries()) {
+    // a path that can't be looked up is judged as written
+    const via = editOutsideFolder(real || paths[i]!, wts, tops)
     if (via !== undefined) return bashOutsideText(via, worktree)
   }
   return undefined
