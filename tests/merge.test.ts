@@ -1719,7 +1719,7 @@ test("a worker's question with options saves the options, and the lead is told t
   expect(t.question).toBe('Which colour?')
   expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
   expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
-  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"')
+  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
 })
 
 test('a change worker whose edits outside its files were refused waits for those files, and nothing is merged even with half-done edits', async () => {
