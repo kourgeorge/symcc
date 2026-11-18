@@ -10,7 +10,7 @@ import type { Host, HostAgentStart } from '../hooks/host'
 import { ALL_FEATURES, noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/app/state'
 import { queuedNeverStarted, unclaimQueued } from '../hooks/app/workers'
-import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/app/starts'
+import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE, STARTING_NOTE } from '../hooks/app/starts'
 import { ran } from './fakes'
 import { fakeHost as sharedFakeHost } from './fake-host'
 
@@ -358,4 +358,15 @@ test('T-428: a doing task whose worker started (no longer the queued note) is no
   expect(u.attempts).toBe(0)
   expect(u.runs).toBeUndefined()
   expect(u.history).toEqual(t.history)
+})
+
+test('T-470: a claim cut off before its worker started on a host with no start queue (note STARTING_NOTE) is unclaimed too, with no try counted', () => {
+  const [b0] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'One', files: ['a/'] }, ISO)
+  const t = { ...b0.tasks[0]!, status: 'doing' as const, session: 'old', attempts: 1, note: STARTING_NOTE, runs: [{ started: ISO }] }
+  expect(STARTING_NOTE).toBe('worker starting')
+  expect(queuedNeverStarted(t)).toBe(true)
+  const u = unclaimQueued({ ...b0, tasks: [t] }, 'old', null, ISO).tasks[0]!
+  expect(u.status).toBe('todo')
+  expect(u.attempts).toBe(0)
+  expect(u.runs).toBeUndefined()
 })

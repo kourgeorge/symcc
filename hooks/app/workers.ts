@@ -10,7 +10,7 @@ import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
-import { startAgent, cancelStarts, startCancelled, claimNote, QUEUED_NOTE } from './starts'
+import { startAgent, cancelStarts, startCancelled, claimNote, isClaimNote } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -1705,11 +1705,11 @@ function sameTry(cur: BoardTask, was: BoardTask, agentId?: string) {
  * (ownedHere) are touched, and never one whose worker is being stopped on purpose (onPurpose).
  */
 /**
- * T-428: whether "doing" task `t` was only claimed and its worker queued (note QUEUED_NOTE, see queueWorker), but its
+ * T-428: whether "doing" task `t` was only claimed and its worker queued or starting (a claim note, see isClaimNote), but its
  * worker never started and this copy no longer has it in its start queue (a reload emptied the queue, or the queued
  * start was taken back). Its worker didn't end: it never began. Such a task is unclaimed (see unclaimed), not sent back.
  */
-export const queuedNeverStarted = (t: BoardTask) => t.status === 'doing' && t.note === QUEUED_NOTE && !t.finishing && !handedBack(t) && !starting.has(t.id) && !queuedWorkers.has(t.id)
+export const queuedNeverStarted = (t: BoardTask) => t.status === 'doing' && isClaimNote(t.note) && !t.finishing && !handedBack(t) && !starting.has(t.id) && !queuedWorkers.has(t.id)
 
 /**
  * T-428: task `t`'s claim undone, as if it had never been claimed: "todo" again, its try not counted (attempts back
