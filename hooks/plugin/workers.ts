@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarly, ENDED_EARLY_NOTE } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -231,7 +231,8 @@ export async function waitEnded(host: Host, ids: string[], ms: number): Promise<
 /**
  * Why a worker's turn ended (from turn.complete): answered, stopped, refused (with what the API said) or an API error.
  * `background`: the agent's background commands the host saw still running when its turn ended ([] for none);
- * absent when the host can't tell, and then the answer's text decides (endedEarly).
+ * absent when the host can't tell. Only a non-empty list fails the try (ENDED_EARLY_NOTE); the answer's text alone
+ * (endedEarlyLine) only adds a warning (see warnEndedEarly).
  */
 export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal; background?: readonly string[] }
 /** Why a turn ended: the model answered, it was interrupted, the model refused, or an error ended it. */
@@ -542,6 +543,21 @@ export async function endCheck(host: Host, id: string) {
  * status and try number as when its check began. Returns null when written, else the task as the
  * board has it now ('gone' when it is not on the board any more), and nothing is written.
  */
+/**
+ * T-411: when the answer's text reads as ended before its work finished (endedEarlyLine), a warning note goes to the
+ * task's history and the lead's board update. Only a warning: the text check can be wrong, so the try goes on as usual.
+ */
+async function warnEndedEarly(host: Host, t: SymccTask, answer: string) {
+  const line = endedEarlyLine(answer)
+  if (!line) return
+  const note = endedEarlyNote(t.id, line)
+  await change(host, x => {
+    const cur = find(x, t.id)
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: [...cur.history, `${tryLabel(t)}: warning: ${note}`] }, now()) : x
+  })
+  tellLead(host, note)
+}
+
 async function writeIfSame(host: Host, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
   return change<SymccTask | 'gone' | null>(host, x => {
     const cur = find(x, t.id)
@@ -633,9 +649,10 @@ export async function saveReport(host: Host, t: SymccTask, answer: string) {
  * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
  * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
  * What happens is decided from what the try recorded on the board (try_question, try_refused) and why its turn ended, never from the hand-back's text (which
- * stays its report, an investigation's answer; the one exception is endedEarly), in this order: a question (ask_owner) → waiting with it; edits refused
+ * stays its report, an investigation's answer; it only adds a warning, see warnEndedEarly), in this order: a question (ask_owner) → waiting with it; edits refused
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
- * an API error or a refusal → failed with the reason; an answer that only says it goes on later → failed (ENDED_EARLY_NOTE); else done: checked and merged (an investigation: its answer).
+ * an API error or a refusal → failed with the reason; the host saw a background command still running (end.background) → failed (ENDED_EARLY_NOTE);
+ * else done: checked and merged (an investigation: its answer).
  */
 export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
   const b = await load(host)
@@ -676,15 +693,18 @@ export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 't
     const why = endFailure(end)
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
     tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
-  } else if (end.background ? end.background.length > 0 : endedEarly(answer)) {
-    // Its turn ended while a background command still ran (the host saw it, or else its answer says so): its work isn't done.
+  } else if (end.background?.length) {
+    // The host saw a background command of it still running when its turn ended: its work isn't done.
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: [...cur.history, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${ENDED_EARLY_NOTE}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return
     tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
   } else if (isInvestigation(t)) {
     if (gaveUp()) return
+    await warnEndedEarly(host, t, answer)
     await answered(host, t, answer, summary)
   } else {
-    if (gaveUp() || (await waitIfBranchGone(host, b, t, 'merge'))) return
+    if (gaveUp()) return
+    await warnEndedEarly(host, t, answer)
+    if (await waitIfBranchGone(host, b, t, 'merge')) return
     await change(host, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))

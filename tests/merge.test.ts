@@ -2343,20 +2343,28 @@ test('a try that asks ends as asked (a question, or files outside its list); one
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
-test('T-411: a try whose answer only says it will continue later fails with that reason; nothing is checked or merged', async () => {
-  const early = await tryEnds(answers("Started the full test run in the background.\n\nThe background runs are still going; I'll continue when they finish."))
-  expect(early.t.status).toBe('failed')
-  expect(early.t.note).toBe('the worker ended its turn before its work finished')
-  expect(early.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
-  expect(early.t.history.at(-1)).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
-  expect(leadQueue.some(x => x.includes('T-1') && x.includes('ended its turn before its work finished'))).toBe(true)
-  // a normal report is unaffected
-  expect((await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.'))).end).toEqual(['finished', 'merged'])
-  // the host's own signal comes first: a background command still running fails the try whatever the answer says,
-  // and when the host saw none, the answer's text is not read
+test('T-411: only the host seeing a background command still running fails a try; an answer that only says it will continue later just adds a warning', async () => {
+  // the host's signal: a background command still running when the turn ended fails the try, whatever the answer says
   const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'] }))
   expect([ran.t.status, ran.t.note]).toEqual(['failed', 'the worker ended its turn before its work finished'])
+  expect(ran.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
+  expect(ran.t.history.at(-1)).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
+  expect(leadQueue.some(x => x.includes('T-1') && x.includes('ended its turn before its work finished'))).toBe(true)
+  // T-399's try 1: the text alone only warns (history and the lead's update); the try still goes to the tests and merge
+  leadQueue.length = 0
+  const early = await tryEnds(answers("Started the full test run in the background.\n\nThe background runs are still going; I'll continue when they finish."))
+  expect(early.end).toEqual(['finished', 'merged'])
+  const warning = `T-1's answer may have ended before its work finished: "The background runs are still going; I'll continue when they finish."`
+  expect(early.t.history.some(h => h.includes(`warning: ${warning}`))).toBe(true)
+  expect(leadQueue.some(x => x.includes(warning))).toBe(true)
+  // the same with the host saying nothing ran: still only a warning
   expect((await tryEnds(answers("The background runs are still going; I'll continue when they finish.", { reason: 'answer', background: [] }))).end).toEqual(['finished', 'merged'])
+  // a normal report: no warning
+  leadQueue.length = 0
+  const normal = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.'))
+  expect(normal.end).toEqual(['finished', 'merged'])
+  expect(normal.t.history.some(h => h.includes('warning:'))).toBe(false)
+  expect(leadQueue.some(x => x.includes('may have ended before'))).toBe(false)
 })
 
 test('a try stopped by the lead says why: changed (which fields), paused, dropped, asked, backlog', async () => {
