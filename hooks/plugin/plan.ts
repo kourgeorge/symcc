@@ -1,4 +1,5 @@
 import { notePlan, planEndText } from '../board'
+import { planFromMode } from '../claude/plan'
 import { publish } from './lead'
 import { S } from './state'
 import type { Host } from '../host'
@@ -23,4 +24,10 @@ export async function seePlan($: Host, on: boolean | null) {
   const text = planEndText(r.left, b.tasks, S.N.name)
   if (text) tellLead($, text)
   void pump($)
+}
+
+/** A classic.* event of the main session (no agent_id; a worker's or scout's is left out): its permission_mode. */
+export function seeMainMode($: Host, e: { permission_mode?: string; agent_id?: string }) {
+  if (e.agent_id) return
+  void seePlan($, planFromMode(e.permission_mode)).catch(() => undefined)
 }
