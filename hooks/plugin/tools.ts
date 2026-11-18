@@ -12,6 +12,7 @@ import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
 import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, fullAnswer } from './workers'
 import { haltChecker } from './checker'
+import { questionTool } from './questions'
 
 // ---------------- the lead's tools ----------------
 
@@ -163,6 +164,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   removes or turns off / on worker roles; kinds does the same for the task kinds (roles are how you shape what a worker
   does: a role fills the {{role}} slot of the fixed, built-in worker prompt); stats shows time and token use;
   setup_git sets up git in a folder without it (only after you say yes).
+  question puts a question for you that is not about one task on the board ("Questions for you" at the
+  top of the task list, and "1 question for you" in the band); answer it there with a button or your own
+  words, or in the chat (the lead closes it then).
   board lists the open tasks and the backlog (done / dropped only as counts); it takes status
   and search to narrow the list, and task to see one task with its latest report.
   Each task merges into the branch you were on when it was made (there is no branch
@@ -287,6 +291,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / order, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
+- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer comes as a "Meanwhile the owner answered Q-3 (…)" line, already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board".${S.W.askPopup ? ` Never use ${S.W.askPopup} for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep ${S.W.askPopup} only for questions that are not on the board.` : ''}
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
@@ -336,6 +341,11 @@ export const TOOLS = () => [
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question).' } } } },
   { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. For a task whose finished work only waits for the owner\'s files on its branch ("waiting for your files on ..."), it only tries the merge again, with no worker. Not for a done task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'ask', description: 'Make a task wait for the owner with a question. Not for a done or dropped task (retry it first).', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
+  {
+    name: 'question',
+    description: `Put a question for the owner that is not about one task (a settings choice, "add a scout?", "raise the version?") on the board, so it can't scroll away in the chat. action "add": text (the question, plain and short) and options (2 to 6 short choices; the owner can always type their own answer too); it gets an id like Q-3, shows in the board panel under "Questions for you", in the band and the status line ("1 question for you"), and the owner hears "needs you" once. "list" (the default): the open questions and the last closed ones. "answer": id and answer: the owner answered in the chat; closes it with their words (says so when it was already answered on the board). "drop": id: takes a question back that no longer matters. When the owner answers on the board you get a "Meanwhile the owner answered Q-3 (…): <answer>" line in the next board update, and the question is already closed. For a question about one task use ${S.N.name} ask instead.`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['add', 'list', 'answer', 'drop'], description: 'What to do; list when left out.' }, text: { type: 'string', description: 'For add: the question, plain and short.' }, options: { type: 'array', items: { type: 'string' }, description: 'For add: 2 to 6 short choices (buttons on the board).' }, id: { type: 'string', description: 'For answer / drop: the question, e.g. Q-3.' }, answer: { type: 'string', description: "For answer: the owner's answer from the chat, their words or the option they picked." } } },
+  },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
@@ -450,6 +460,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     }
   }
   switch (name) {
+    case 'question':
+      return questionTool($, a)
     case 'board': {
       const b = await load($)
       if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search) }, S.version)

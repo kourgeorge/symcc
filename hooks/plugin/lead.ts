@@ -1,4 +1,4 @@
-import { liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { openQuestions, liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView } from './state'
 import { type Host, agentState } from '../host'
@@ -103,7 +103,7 @@ export async function publish(host: Host, b: Board) {
   const branch_note = gitNote(S.gitState)
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable(host)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   await updateView(host, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)
