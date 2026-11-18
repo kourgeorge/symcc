@@ -64,7 +64,9 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     await record($, t, null, why)
     return { verdict: null, why }
   }
-  const end = await new Promise<CheckerEnd>(resolve => {
+  // checkerRuns is set at once (in the promise below, before any await), and the board then names the checker too, so
+  // the guards of another session's copy of the plugin know it (T-471); it is taken off when the checker ends
+  const ended = new Promise<CheckerEnd>(resolve => {
     let timer: { cancel(): void } | null = null
     const done = (e: CheckerEnd) => {
       if (checkerRuns.get(agentId)?.end !== done) return
@@ -88,6 +90,9 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
       done({ answer: null, why: `the task was ${late}` })
     }
   })
+  await markChecker($, t, agentId, true)
+  const end = await ended
+  await markChecker($, t, agentId, false)
   await cleanFolder($, dir)
   const back = await putBack($, dir, saved)
   let verdict = end.answer === null ? null : checkerVerdict(end.answer)
@@ -99,6 +104,20 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   }
   await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined)
   return { verdict, ...(why ? { why } : {}) }
+}
+
+/**
+ * Names checker `agentId` on task `t`'s current try on the board (`on`), or takes it off (only when it is still that
+ * checker), while the task is still "doing" on that try. Never throws: a board that can't be written leaves only
+ * this copy's own memory (checkerRuns) to know the checker.
+ */
+async function markChecker($: Host, t: SymccTask, agentId: string, on: boolean) {
+  await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== 'doing' || cur.attempts !== t.attempts) return x
+    if (on ? cur.checker === agentId : cur.checker !== agentId) return x
+    return patchTask(x, t.id, { checker: on ? agentId : undefined }, cur.updated_at)
+  }).catch(() => undefined)
 }
 
 /** The checker's verdict (`v`, or none with `why`) as a history line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */

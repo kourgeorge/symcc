@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, workerGitWriteText, untestedChange, testTail } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/app/workers'
 import { checkerFinished } from '../hooks/app/checker'
@@ -512,6 +512,23 @@ test("a checker's Bash aimed at the owner's project folder is refused as a worke
     expect(await checkEdit(w.$, id, { command: `cat ${WT}/src/a.ts && npm test` })).toBeUndefined()
     checkerFinished(id, 'OK')
   })
+})
+
+test("T-471: the board names the running checker, so a copy that doesn't hold it still refuses its git write; it is taken off when it ends", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => {
+    for (let i = 0; i < 200 && find(await load(w.$), 'T-1')?.checker !== id; i++) await turn()
+    expect(find(await load(w.$), 'T-1')!.checker).toBe(id)
+    // as another session's copy sees it: not in its checkerRuns
+    const run = checkerRuns.get(id)!
+    checkerRuns.delete(id)
+    expect(await checkEdit(w.$, id, { command: 'git commit -am x' })).toBe(gitWriteText(gitWriteIn('git commit -am x')!))
+    expect(await checkEdit(w.$, id, { path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
+    checkerRuns.set(id, run)
+    checkerFinished(id, 'OK')
+  })
+  expect(t.checker).toBeUndefined()
 })
 
 test('the checker prompt tells it not to run git commands that change anything', async () => {
