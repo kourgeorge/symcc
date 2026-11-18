@@ -40,6 +40,13 @@ export function resetPlugin() {
 }
 
 /**
+ * The time a test may run unless it says otherwise. The runtime's own 5000 ms is too short for a test that loads
+ * the whole plugin when the machine is busy (the suite runs every file at once, often beside running workers):
+ * such tests take 1-3 s alone but went over 5 s under load and failed at random.
+ */
+export const SLOW_MS = 20_000
+
+/**
  * The runtime's test(), but each test starts with resetPlugin() (the runtime has no beforeEach).
  * Use it in place of the plain test() in a file whose tests touch the plugin's memory. What the runtime passes
  * a test (`$` and a hook test's `on`) is passed on, and options given before the body (timeoutMs, ...) too.
@@ -49,6 +56,6 @@ export const test = (name: string, ...rest: TestRest): void => {
     resetPlugin()
     return body($, on)
   }
-  if (rest.length === 1) plainTest(name, fresh(rest[0]))
-  else plainTest(name, rest[0], fresh(rest[1]))
+  if (rest.length === 1) plainTest(name, { timeoutMs: SLOW_MS }, fresh(rest[0]))
+  else plainTest(name, { timeoutMs: SLOW_MS, ...rest[0] }, fresh(rest[1]))
 }
