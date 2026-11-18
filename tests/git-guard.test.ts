@@ -65,6 +65,11 @@ const READS = [
   'pushd docs && grep -rn "git stash" .',
   'cd && ls .git',
   'git reflog show HEAD -3 && cd hooks/core',
+  // T-446: `@{` revisions and an empty `{}` are no brace expansion
+  'git log HEAD@{1}',
+  'git log -1 HEAD@{u}',
+  'find . -name x -exec git log -1 {} +',
+  '{ grep -n git README.md; }',
 ]
 
 const WRITES: [string, string][] = [
@@ -210,6 +215,22 @@ const WRITES: [string, string][] = [
   ['cd `git stash`', 'git stash'],
   ['cd -P x && grep "git stash" y', 'git stash'],
   ['cd x y && grep "git stash" y', 'git stash'],
+  // T-446: brace expansion makes new words (`git {stash,}` runs `git stash`), so a "{" inside a word never cuts the
+  // command, and a git command with a "{" in its words (outside `@{` and an empty `{}`) is refused
+  ['git {stash,}', 'git with {braces}'],
+  ['git {push,origin}', 'git with {braces}'],
+  ['git {commit,-m,x}', 'git with {braces}'],
+  ['git -C {.,} stash', 'git with {braces}'],
+  ['git log {--output=/tmp/x,}', 'git with {braces}'],
+  ['{git,} stash', 'git with {braces}'],
+  ['g{i,}t stash', 'git with {braces}'],
+  ['rg --pre={git,} stash .', 'git with {braces}'],
+  ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
+  ['find . -exec git stash {} +', 'git stash'],
+  ['{ git stash; }', 'git stash'],
+  ['{ git stash; } && echo', 'git stash'],
+  ['echo x && { git push; }', 'git push'],
+  ['if true; then { git stash; }; fi', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {

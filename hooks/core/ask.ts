@@ -278,7 +278,7 @@ const HEREDOC = /^<<(-?)[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|\\?([^\s;&|<>()'"`]+))/
 
 /**
  * `command` cut into simple commands and the operators between them (&&, ||, ;, newline as ";", |, a lone "&", and
- * "(", "{", "`" as opening and ")", "}", "`" as closing a group). Nothing is cut inside quotes or after a backslash, and
+ * "(", "{", "`" as opening and ")", "}", "`" as closing a group; "{" and "}" only as a word of their own at a command's start). Nothing is cut inside quotes or after a backslash, and
  * the "&" of a redirect (`2>&1`, `&>`) is no operator. The lines of a here-document (`cat > f <<'EOF'` ... `EOF`) come
  * as pieces marked `doc`, cut the same way but with quotes read as plain characters (an apostrophe in a here-document
  * opens no quote). A best effort, not a shell parser.
@@ -288,8 +288,6 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
   let text = ''
   let quote = ''
   let tick = false
-  // open `@{` braces (`HEAD@{1}`): a git revision, not a command group, so neither brace cuts the command
-  let atBrace = 0
   const docs: { end: string; tabs: boolean }[] = []
   const op = (o: '&&' | '||' | ';' | '|' | '&' | ')' | '(', sub = true) => {
     out.push(doc ? { text, doc } : { text }, o === '(' ? { op: o, sub } : { op: o })
@@ -334,10 +332,12 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
       }
       i = j - 1
     } else if (c === ';' || c === '\n') op(';')
-    else if (c === '{' && text.endsWith('@')) (text += c), atBrace++
-    else if (c === '}' && atBrace) (text += c), atBrace--
-    else if (c === '(' || c === '{') op('(', c === '(')
-    else if (c === ')' || c === '}') op(')')
+    // a "{" or "}" opens or closes a `{ ...; }` group only as a word of its own at the start of a command; inside a
+    // word (`git {stash,}`, `HEAD@{1}`, `find -exec ... {} +`) it is part of that word, as bash reads it (T-446)
+    else if (c === '{' && !text.trim() && (n === undefined || /\s/.test(n))) op('(', false)
+    else if (c === '}' && !text.trim() && (n === undefined || /[\s;&|)<>]/.test(n))) op(')')
+    else if (c === '(') op('(')
+    else if (c === ')') op(')')
     else if (c === '`') (tick = !tick) ? op('(') : op(')')
     else text += c
   }
@@ -740,6 +740,15 @@ const plainCd = (p: { text: string; words: string[] }) =>
 /** Whether text holds a command run inside it (`$(...)`, backquotes, `<(...)`, `>(...)`). */
 const RUNS_INSIDE = /\$\(|`|<\(|>\(/
 
+/** What gitWriteIn names for a git command with brace expansion in it. */
+const BRACE_WHAT = 'with {braces}'
+
+/**
+ * Whether word `w` has a "{" that bash's brace expansion may read: not a git revision's `@{...}` (`HEAD@{1}`) and not
+ * an empty `{}` (bash keeps it as text, as in `find -exec git log {} +`).
+ */
+const hasBrace = (w: string) => w.replace(/@\{[^{}]*\}/g, '').replace(/\{\}/g, '').includes('{')
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
 function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
@@ -760,10 +769,15 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
     const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
     // an option whose value is git runs it with the words after (`rg --pre=git stash .` runs `git stash`)
-    if (!dashed && !isGit(w) && !/=git$/i.test(w)) return undefined
+    // brace expansion may spell git (`{git,} stash`, `g{i,}t stash`): with the braces and commas gone it reads git
+    const braced = !dashed && !isGit(w) && hasBrace(w) && /(?:^|[/=])git$/i.test(w.replace(/[{},]/g, ''))
+    if (!dashed && !isGit(w) && !/=git$/i.test(w) && !braced) return undefined
     out.git = true
     // xargs and parallel add words from their input (`stash`, `--output=x`), so what that git does can't be known
     if (adds || words.slice(0, at).some(a => ADDS_WORDS.has(progName(a)))) return { bad: 'xargs git' }
+    // bash's brace expansion makes new words (`git {stash,}` runs `git stash`, `git -C {.,} stash` runs `git -C . stash`),
+    // so what a git command with a "{" in its words does can't be told from its text (T-446)
+    if (braced || words.slice(at + 1).some(hasBrace)) return { bad: `git ${BRACE_WHAT}` }
     let j = at + 1
     let sub = dashed
     if (!dashed) {
