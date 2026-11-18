@@ -2,7 +2,7 @@
 // other modules change. They all use these (S, the maps and sets) directly, never a copy, so a change made in one
 // module is seen by all.
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, versionOf } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 import { type Host, type HostWords, type PanelValues, SYMCC_WORDS } from '../host'
@@ -73,6 +73,9 @@ export const startS = () => ({
   /** the host's words (see HostWords); toolName below makes a tool's name from them */
   W: SYMCC_WORDS as HostWords,
   named: false,
+  /** the plugin's version from plugin.json, for the board's titles; '' = not known (see loadVersion) */
+  version: '',
+  versionRead: false,
   root: '',
   /** whether the plugin is on, as the board said when it was last read (see load); for the places that can't wait */
   enabledNow: true,
@@ -159,6 +162,15 @@ export function useName(host: Pick<Host, 'plugin' | 'words'>) {
   const name = cleanName(host.plugin.name)
   if (name === S.N.name) return
   S.N = namesFor(name)
+}
+
+/** Reads the plugin's version from its plugin.json (in host.plugin.root) into S.version, once, for the titles.
+ *  A missing or broken file leaves no version (''); it never throws. */
+export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
+  if (S.versionRead) return
+  S.versionRead = true
+  const text = await host.fs.read(`${host.plugin.root}/.claude-plugin/plugin.json`).catch(() => '')
+  S.version = versionOf(text)
 }
 
 /** What the model calls symcc's tool `tool` (e.g. "board") on this host (see HostWords). */
