@@ -9,6 +9,7 @@ import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRol
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
+import { claudeHost } from '../../claude/host'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
@@ -37,7 +38,7 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
       </Box>
       <Box flexDirection="row" gap={1}>
         <Button key="role-save" label="Save" onPress={act(async () => {
-          const said = await saveRoleDraft($)
+          const said = await saveRoleDraft(claudeHost($))
           if (said) $.ui.toast(S.N.toast(said))
         })} />
         <Button key="role-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
@@ -59,7 +60,7 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
 function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker: boolean) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => act(async () => {
-    const res = await changeRole($, input)
+    const res = await changeRole(claudeHost($), input)
     if (res.ok && after) after()
     roleView.confirmRemove = false
     $.ui.toast(S.N.toast(res.text))
@@ -179,7 +180,7 @@ function rolePromptPage($: $, pane: PaneParts, r: RoleDef, kind: RolePromptKind)
 function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[]) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows } = pane
   const run = (input: Parameters<typeof changeRole>[1]) => act(async () => {
-    const res = await changeRole($, input)
+    const res = await changeRole(claudeHost($), input)
     if (res.ok) roleView.open = ''
     roleView.confirmRemove = false
     $.ui.toast(S.N.toast(res.text))
@@ -251,7 +252,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
           submitLabel="make it"
           onInput={value => void (roleView.naming && (roleView.naming.name = value))}
           onSubmit={value => (value.trim() ? act(async () => {
-            const said = await newRoleFile($, value)
+            const said = await newRoleFile(claudeHost($), value)
             if (said) $.ui.toast(S.N.toast(said))
           })() : cancel())}
         />
@@ -318,7 +319,7 @@ function kindEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
       </Box>
       <Box flexDirection="row" gap={1}>
         <Button key="kind-save" label="Save" onPress={act(async () => {
-          const said = await saveKindDraft($)
+          const said = await saveKindDraft(claudeHost($))
           if (said) $.ui.toast(S.N.toast(said))
         })} />
         <Button key="kind-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
@@ -338,7 +339,7 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSour
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const name = k?.name ?? broken!.name
   const run = (input: Parameters<typeof changeKind>[1], after?: () => void) => act(async () => {
-    const res = await changeKind($, input)
+    const res = await changeKind(claudeHost($), input)
     if (res.ok && after) after()
     kindView.confirmRemove = false
     $.ui.toast(S.N.toast(res.text))
@@ -417,7 +418,7 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
           submitLabel="make it"
           onInput={value => void (kindView.naming && (kindView.naming.name = value))}
           onSubmit={value => (value.trim() ? act(async () => {
-            const said = await newKindFile($, value)
+            const said = await newKindFile(claudeHost($), value)
             if (said) $.ui.toast(S.N.toast(said))
           })() : cancel())}
         />
@@ -462,9 +463,9 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
 export async function settingsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, header, footer } = pane
   // scout_findings, tests_with_changes and checker are not in the panel's view of the board: read them from the board file
-  const file = await load($).catch(() => null)
+  const file = await load(claudeHost($)).catch(() => null)
   const v = { ...pane.v, scout_findings: file?.scout_findings, tests_with_changes: file?.tests_with_changes, checker: file?.checker }
-  const { builtIn, project, broken } = await roleLists($)
+  const { builtIn, project, broken } = await roleLists(claudeHost($))
   const roles = mergeRoles(builtIn, project)
   const openedBroken = roleView.open ? broken.find(b => b.name === roleView.open) : undefined
   if (openedBroken) return brokenRolePage($, pane, openedBroken, builtIn)
@@ -474,7 +475,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (opened && roleView.prompt) return rolePromptPage($, pane, opened, roleView.prompt)
   if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, checkerOn(file))
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
-  const kl = await kindLists($)
+  const kl = await kindLists(claudeHost($))
   const kinds = mergeKinds(kl.builtIn, kl.project)
   const openedKind = kindView.open ? findKind(kinds, kindView.open) : undefined
   const openedBrokenKind = kindView.open ? brokenNamed(kl.broken, kindView.open) : undefined
@@ -490,7 +491,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
   const cancelButton = <Button key="setting-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
   const saveIt = (input: SettingsInput) => act(async () => {
-    const r = await ownerSettings($, input, 'from the board')
+    const r = await ownerSettings(claudeHost($), input, 'from the board')
     S.settingEdit = null
     S.settingPick = null
     $.ui.toast(S.N.toast(r))
@@ -578,7 +579,7 @@ export async function settingsPage($: $, pane: PaneParts) {
         <Text color={C('inactive')}> · Enter opens the Kinds page: the task kinds, to open, edit, turn off or add</Text>
       </Button>
       <Text key="settings-blank"> </Text>
-      <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
+      <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
       {footer(settingsKeys(), 'settings-keys')}
     </Box>
   )

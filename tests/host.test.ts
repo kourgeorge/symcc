@@ -1,16 +1,17 @@
 // The Host type (hooks/host.ts, T-240): the plugin's logic asks for a Host, not for Claude Code's `$`.
-// Claude Code's real `$` must fit a Host as it is (checked by the type check, below), and a Host written by hand,
+// Claude Code's real `$` with the adapter's parts added (claude/host.ts) must fit a Host (checked by the type check, below), and a Host written by hand,
 // as another program (an OpenCode plugin, a standalone app) would build one, must be enough to run the logic.
 import { expect } from 'claude-code/testing'
 import type { EngineInterface } from 'claude-code'
-import type { Host, HostRunResult } from '../hooks/host'
+import { type Host, type HostRunResult, notReadyYet } from '../hooks/host'
 import { S } from '../hooks/plugin/state'
 import { findRoot, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { addTask, emptyBoard } from '../hooks/board'
 import { test } from './reset'
+import { claudeHost } from '../hooks/claude/host'
 
-// Fails the type check (scripts/typecheck.sh) if Claude Code's `$` stops fitting a Host with no wrapper.
-const fromClaude = (claude: EngineInterface): Host => claude
+// Fails the type check (scripts/typecheck.sh) if Claude Code's `$`, with the adapter's agents added, stops fitting a Host.
+const fromClaude = (claude: EngineInterface): Host => claudeHost(claude)
 
 /** A Host over files kept in memory, written out in full with no casts: what a second adapter has to give. */
 function memoryHost(root: string) {
@@ -25,10 +26,9 @@ function memoryHost(root: string) {
       repo: async () => ({ root }),
       root: async () => root,
       usage: async () => ({}),
-      send: async () => undefined,
     },
     prompt: { submit: async () => undefined },
-    agent: { spawn: async () => ({ agentId: 'agent-1' }), list: async () => [] },
+    agents: { spawn: async () => ({ agentId: 'agent-1' }), list: async () => [], send: async () => undefined, stop: async () => undefined },
     env: { get: async () => undefined },
     fs: {
       read: async p => {
@@ -70,7 +70,7 @@ function memoryHost(root: string) {
   return { host, files, ran }
 }
 
-test("Claude Code's $ fits a Host as it is (the type check proves it; nothing to run)", () => {
+test("Claude Code's $ fits a Host once the adapter adds the agents (the type check proves it; nothing to run)", () => {
   expect(typeof fromClaude).toBe('function')
 })
 
@@ -94,4 +94,66 @@ test('a Host written by hand runs the board store: find the project, take the lo
   expect([...files.keys()]).toEqual([`/proj/${S.N.boardFile}`])
   // Not yet: change() also publishes the board to the panel, and that still needs Claude Code's own panel state
   // (state.ts); a Host with no panel gets its own way to show the board in a later step of the plan.
+})
+
+/** Claude Code's `$`, only the agent parts claudeHost's `agents` use: what it was asked to spawn and send, and what spawn and list answer. */
+function claudeAgentsWorld(answer: (input: Record<string, unknown>) => Promise<{ agentId?: string; deny?: string }> = async () => ({ agentId: 'ag1' })) {
+  const spawns: Record<string, unknown>[] = []
+  const sends: { to: { agentId: string }; text: string }[] = []
+  let listed: { id: string; type: string; status: string; description: string }[] = []
+  const claude = {
+    agent: { spawn: async (input: Record<string, unknown>) => (spawns.push(input), answer(input)), list: async () => listed },
+    session: { send: async (m: { to: { agentId: string }; text: string }) => void sends.push(m) },
+  }
+  return { host: claudeHost(claude as unknown as EngineInterface), spawns, sends, list: (l: typeof listed) => void (listed = l) }
+}
+
+test("host.agents.spawn starts a Claude Code subagent of the agent type that fits: a worker's by its role's tools, scouts and checkers as scouts", async () => {
+  const w = claudeAgentsWorld()
+  expect(await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-1', description: 'Do it', cwd: '/wt/T-1' })).toEqual({ agentId: 'ag1' })
+  await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-2', description: 'Look', tools: ['WebSearch', 'WebFetch'], cwd: '/wt/T-2', model: 'sonnet' })
+  await w.host.agents.spawn({ kind: 'scout', prompt: 'p', name: 'symcc-scout-bugs', description: 'Look for bugs' })
+  await w.host.agents.spawn({ kind: 'checker', prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', cwd: '/wt/T-1' })
+  expect(w.spawns).toEqual([
+    { prompt: 'p', name: 'symcc-T-1', description: 'Do it', subagentType: 'symcc:worker', cwd: '/wt/T-1' },
+    { prompt: 'p', name: 'symcc-T-2', description: 'Look', subagentType: 'symcc:worker-web', cwd: '/wt/T-2', model: 'sonnet' },
+    { prompt: 'p', name: 'symcc-scout-bugs', description: 'Look for bugs', subagentType: 'symcc:scout' },
+    { prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', subagentType: 'symcc:scout', cwd: '/wt/T-1' },
+  ])
+})
+
+test("a refused or failed start rejects; only Claude Code's \"agent type not found\" for symcc's own type is marked not ready", async () => {
+  const fails = (why: string, how: 'deny' | 'throw') => claudeAgentsWorld(async () => (how === 'deny' ? { deny: why } : Promise.reject(new Error(why)))).host.agents
+  const caught = (p: Promise<unknown>) => p.then(() => null, (e: Error) => ({ message: e.message, notReady: notReadyYet(e) }))
+  const worker = { kind: 'worker', prompt: 'p', name: 'symcc-T-1', description: 'Do it' } as const
+  const scout = { kind: 'scout', prompt: 'p', name: 'symcc-scout-bugs', description: 'Look' } as const
+  expect(await caught(fails("Agent type 'symcc:worker' not found", 'throw').spawn(worker))).toEqual({ message: "Agent type 'symcc:worker' not found", notReady: true })
+  expect(await caught(fails("Agent type 'symcc:worker' not found", 'deny').spawn(worker))).toEqual({ message: "Agent type 'symcc:worker' not found", notReady: true })
+  expect(await caught(fails('no agents allowed here', 'deny').spawn(worker))).toEqual({ message: 'no agents allowed here', notReady: false })
+  expect(await caught(fails("Agent type 'symcc:scout' not found", 'throw').spawn(scout))).toEqual({ message: "Agent type 'symcc:scout' not found", notReady: true })
+  expect(await caught(fails("Agent type 'symcc:scout' not found", 'throw').spawn(worker))).toEqual({ message: "Agent type 'symcc:scout' not found", notReady: false })
+  // no id and no refusal: it answers no id, and the caller says it didn't start
+  expect(await claudeAgentsWorld(async () => ({})).host.agents.spawn(worker)).toEqual({})
+})
+
+test('host.agents lists every worker type as "<name>:worker", and send and stop are messages to the agent', async () => {
+  const w = claudeAgentsWorld()
+  w.list([
+    { id: 'a1', type: 'symcc:worker-web', status: 'running', description: 'T-1' },
+    { id: 'a2', type: 'symcc:worker', status: 'completed', description: 'T-2' },
+    { id: 'a3', type: 'symcc:scout', status: 'waiting', description: 'bugs' },
+    { id: 'a4', type: 'general-purpose', status: 'running', description: 'other' },
+  ])
+  expect((await w.host.agents.list()).map(a => [a.id, a.type, a.status])).toEqual([
+    ['a1', 'symcc:worker', 'running'],
+    ['a2', 'symcc:worker', 'completed'],
+    ['a3', 'symcc:scout', 'waiting'],
+    ['a4', 'general-purpose', 'running'],
+  ])
+  await w.host.agents.send('a1', 'wrap up')
+  await w.host.agents.stop('a1', 'Stop now')
+  expect(w.sends).toEqual([
+    { to: { agentId: 'a1' }, text: 'wrap up' },
+    { to: { agentId: 'a1' }, text: 'Stop now' },
+  ])
 })

@@ -3,8 +3,9 @@
 // so the logic doesn't depend on Claude Code's types.
 //
 // First version (T-240, step 1 of docs/research/host-independence.md): the members have the same names and
-// shapes as the parts of Claude Code's `$` that symcc uses, so the real `$` fits a Host as it is, with no
-// wrapper. tests/host.test.ts checks that. Each parameter is only what symcc passes, and each answer only
+// shapes as the parts of Claude Code's `$` that symcc uses. Since T-243 (step 4) the agents are the first part
+// in symcc's own words (`agents`): Claude Code's adapter (claude/host.ts) adds them to its `$`, and tests/host.test.ts
+// checks that the result fits. Each parameter is only what symcc passes, and each answer only
 // what symcc reads, so another program (an OpenCode plugin's ctx, or plain Node/Bun in a standalone app)
 // can be made to fit it too. Later steps rename the members to symcc's own words.
 
@@ -20,14 +21,34 @@ export type HostFileStat = { kind: 'file' | 'dir' | 'other'; size: number; mtime
 /** A started timer. */
 export type HostTimer = { cancel: () => void }
 
-/** An agent (worker, scout or checker) of this session, as the agent list answers it. */
+/** What symcc starts an agent for: a worker builds one task, a scout does its scout file's job, a checker reviews a finished task. */
+export type HostAgentKind = 'worker' | 'scout' | 'checker'
+
+/**
+ * An agent (worker, scout or checker) of this session, as the agent list answers it, in symcc's words whatever runs it:
+ * `type` is "<name>:worker" for every worker (whatever tools it has) and "<name>:scout" for a scout or a checker (any
+ * other agent has some other type); `status` is "pending", "running" or "waiting" while it is alive, and "completed",
+ * "failed" or "killed" once it has ended.
+ */
 export type HostAgent = { id: string; description: string; type: string; status: string; name?: string }
 
-/** How to start an agent: its prompt, its name and short description, its agent type, the folder it works in and its model. */
-export type HostAgentStart = { prompt: string; name?: string; description?: string; subagentType?: string; cwd?: string; model?: string }
+/**
+ * How to start an agent: what kind it is, its prompt, its name and short description, the extra tools its role asks
+ * for (a worker's; see roles), the folder it works in and its model. The host picks how to run it (for Claude Code,
+ * a background subagent of the agent type that fits; elsewhere a child session, or a process of its own).
+ */
+export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; cwd?: string; model?: string }
 
-/** What starting an agent answers: its id, or why it was refused. */
-export type HostAgentStarted = { agentId?: string; deny?: undefined } | { deny: string; agentId?: undefined }
+/** What starting an agent answers: its id (none: it didn't start). */
+export type HostAgentStarted = { agentId?: string }
+
+/**
+ * Whether an error from host.agents.spawn only means the host can't start that kind of agent yet (e.g. just after a
+ * reload): then the start is tried again shortly. The host marks such an error with `notReady: true`.
+ */
+export function notReadyYet(err: unknown): boolean {
+  return (err as { notReady?: unknown } | null)?.notReady === true
+}
 
 /** A panel symcc can open (the board): its id and title; `focus` gives it the keyboard and lets Esc close it. */
 export type HostPaneOpen = { id: string; title?: string; focus?: true; closeOnEscape?: true }
@@ -47,16 +68,19 @@ export interface Host {
     root: () => Promise<string>
     /** what this session has cost so far, when known */
     usage: () => Promise<{ cost?: { usd: number } }>
-    /** a message to one of this session's agents (how a worker, scout or checker is told to stop) */
-    send: (input: { to: { agentId: string }; text: string }) => Promise<unknown>
   }
   /** a prompt for the lead, as if typed: how an idle lead is woken with a board update */
   prompt: { submit: (input: { text: string }) => Promise<unknown> }
-  agent: {
-    /** starts a background agent */
+  /** the workers, scouts and checkers symcc runs; for Claude Code see claude/host.ts */
+  agents: {
+    /** starts an agent in the background; rejects when it can't start (see notReadyYet) */
     spawn: (input: HostAgentStart) => Promise<HostAgentStarted>
-    /** this session's agents */
+    /** this session's agents; rejects when they can't be told */
     list: () => Promise<HostAgent[]>
+    /** a message to a running agent (e.g. a worker told to wrap up) */
+    send: (agentId: string, text: string) => Promise<unknown>
+    /** ends an agent's work: `text` tells it to stop and end (a host that can, may also end it outright) */
+    stop: (agentId: string, text: string) => Promise<unknown>
   }
   env: { get: (name: string) => Promise<string | undefined> }
   fs: {
