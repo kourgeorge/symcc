@@ -6,7 +6,16 @@
 import { test, expect } from 'bun:test'
 import { readFile, readdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { runCommand, PLUGIN_ROOT } from '../host'
-import { claudePermissions, claudeResult, editRule } from '../runner'
+import { claudePermissions, claudeResult, editRule, withBasePrompt } from '../runner'
+import { WORKER_BASE, SCOUT_BASE } from '../../../hooks/core/prompts'
+import { SYMCC_WORDS } from '../../../hooks/host'
+
+test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s', () => {
+  const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)
+  expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1' })).toBe(`${WORKER_BASE('symcc', tool)}\n\nTask T-1`)
+  expect(withBasePrompt({ kind: 'scout', prompt: 'Look' })).toBe(`${SCOUT_BASE('symcc', tool)}\n\nLook`)
+  expect(withBasePrompt({ kind: 'checker', prompt: 'Check' })).toBe(`${SCOUT_BASE('symcc', tool)}\n\nCheck`)
+})
 
 const NODE = `${PLUGIN_ROOT}/hosts/node`
 const MAIN = `${NODE}/main.ts`
@@ -99,7 +108,10 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     expect(args).toContain('dontAsk')
     expect(args).toContain('Edit(./hello.txt)')
     expect(args).not.toContain('Edit(./**)')
-    expect(await readFile(`${log}.prompt`, 'utf8')).toContain('Task T-1: Say hello')
+    // the prompt starts with the worker's base prompt (T-473), in symcc's own words, then the task's prompt
+    const prompt = await readFile(`${log}.prompt`, 'utf8')
+    expect(prompt.startsWith(`${WORKER_BASE('symcc', t => SYMCC_WORDS.tool('symcc', t))}\n\n`)).toBe(true)
+    expect(prompt).toContain('Task T-1: Say hello')
 
     // merged into main, and the board keeps the try's tokens and cost
     expect((await git('log', '--format=%s', 'main')).stdout).toContain('T-1: Say hello')

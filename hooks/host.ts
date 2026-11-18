@@ -56,6 +56,11 @@ export function agentState(a: HostAgent): AgentState {
  * `files`: for a worker on a change task with a file list, the files and folders it may change (relative to `cwd`; a
  * folder ends with "/"). Claude Code's adapter doesn't need it (its tool hook asks symcc, see toolCheck); a host with
  * no such hook (e.g. hosts/node/, a `claude -p` process) turns it into its own permission rules. Absent: anywhere in `cwd`.
+ *
+ * `prompt` is the task's own prompt only. Every agent also gets a base prompt from core/prompts.ts: WORKER_BASE for a
+ * worker, SCOUT_BASE for a scout or a checker (basePromptFor picks one), given the plugin's name and the host's
+ * `words.tool`. Claude Code's adapter gives them as its agent types' prompts (claude/registration.ts); a host with no
+ * agent types puts the base in front of `prompt` (hosts/node/runner.ts withBasePrompt).
  */
 export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; files?: readonly string[]; cwd?: string; model?: string }
 

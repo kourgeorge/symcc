@@ -6,6 +6,17 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import type { Host, HostAgent, HostAgentStart } from '../../hooks/host'
 import type { AgentRunEnd } from '../../hooks/app/symcc'
 import { cleanTokens } from '../../hooks/core/runs'
+import { basePromptFor } from '../../hooks/core/prompts'
+import { SYMCC_WORDS } from '../../hooks/host'
+import { DEFAULT_NAME } from '../../hooks/name'
+
+/**
+ * The prompt agent `a` is run with: its base prompt (WORKER_BASE for a worker, SCOUT_BASE for a scout or checker, in
+ * symcc's own words, as this host names its tools), then its task's prompt. Claude Code gives the base as the agent
+ * type's prompt instead; a process has no agent type, so the base goes in front.
+ */
+export const withBasePrompt = (a: Pick<HostAgentStart, 'kind' | 'prompt'>): string =>
+  `${basePromptFor(a.kind, DEFAULT_NAME, t => SYMCC_WORDS.tool(DEFAULT_NAME, t))}\n\n${a.prompt}`
 
 /** What a finished agent process gave: its output, exit code, and whether symcc ended it (stop). */
 export type ProcessOutput = { stdout: string; stderr: string; exitCode: number; killed: boolean }
@@ -58,7 +69,7 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
   }
   return {
     async spawn(a) {
-      const { argv, stdin, env } = runner.command(a)
+      const { argv, stdin, env } = runner.command({ ...a, prompt: withBasePrompt(a) })
       const [cmd, ...args] = argv
       if (!cmd) throw new Error(`${runner.name}: no command for ${a.name}`)
       const id = `${runner.name}-${++n}-${Date.now().toString(36)}`

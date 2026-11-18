@@ -5,6 +5,8 @@
 import CHANGE from '../../prompts/change'
 import INVESTIGATION from '../../prompts/investigation'
 import CHECKER from '../../prompts/checker'
+import { ASK_TOOL } from './ask'
+import { WEB_SAFETY_LINE } from './roles'
 
 /** The prompts there are: one per task kind. */
 export type PromptKind = 'change' | 'investigation'
@@ -89,3 +91,20 @@ export const ROLE_SLOT = '{{role}}'
 export function placeholdersIn(text: string): string[] {
   return [...new Set([...text.matchAll(PLACEHOLDER)].map(m => m[1]!))]
 }
+
+/**
+ * The base prompt every worker gets, before its task's prompt: who it is and how it hands back. `name` is the plugin's
+ * name, `tool` what the model calls symcc's tool `t` by (HostWords.tool with the name filled in), and `web` adds
+ * WEB_SAFETY_LINE (a worker whose role has web tools). Claude Code's adapter gives it as the worker agent types' prompt
+ * (claude/registration.ts); a host with no agent types puts it in front of the task prompt (see basePromptFor).
+ */
+export const WORKER_BASE = (name: string, tool: (t: string) => string, web = false): string =>
+  `You are a ${name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. To ask the owner something, call the ${tool(ASK_TOOL)} tool; if an edit is refused as outside your files, stop and hand back.${web ? ` ${WEB_SAFETY_LINE}` : ''}`
+
+/** The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE. */
+export const SCOUT_BASE = (name: string, tool: (t: string) => string): string =>
+  `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools (they only read), not the board file.`
+
+/** The base prompt for an agent of `kind`: WORKER_BASE for a worker, SCOUT_BASE for a scout or a checker. */
+export const basePromptFor = (kind: 'worker' | 'scout' | 'checker', name: string, tool: (t: string) => string): string =>
+  kind === 'worker' ? WORKER_BASE(name, tool) : SCOUT_BASE(name, tool)
