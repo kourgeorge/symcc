@@ -20,6 +20,13 @@ function setup() {
 }
 
 const READS = [
+  // T-436: a range that spells no git is no git
+  'echo {1..3}',
+  'echo {a..f}it',
+  // T-436: a range too big to spell out, of numbers only, can never spell git
+  'echo {1..2000}',
+  'touch f{1..1100}.txt',
+  'mkdir -p d{0..9}{0..9}{0..9}{0..9}',
   'grep -n "git" docs/guide.md',
   'grep -rn git hooks',
   'rg "git stash" .',
@@ -246,6 +253,16 @@ const WRITES: [string, string][] = [
   ['bash -c "{,git} stash"', 'git with {braces}'],
   ["bash -c 'echo; {git,stash}'", 'git with {braces}'],
   ["bash -c 'cd x && {git,stash}'", 'git with {braces}'],
+  // T-436: a letter range spells git too (`g{i..i}t` is `git`, `{g..h}it` is `git hit`)
+  ['g{i..i}t stash', 'git with {braces}'],
+  ['{g..g}it push origin main', 'git with {braces}'],
+  ['gi{t..t} reset --hard', 'git with {braces}'],
+  ['bash -c "g{i..i}t stash"', 'git with {braces}'],
+  ['{g..h}it stash', 'git with {braces}'],
+  ['{f,{g..g}}it stash', 'git with {braces}'],
+  // too big to spell out, but its letters and letter ranges could still make git
+  ['{a..z}{a..z}{a..z} stash', 'git with {braces}'],
+  ['{1..2000}g{h..j}t stash', 'git with {braces}'],
   ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],
@@ -275,4 +292,30 @@ test('git run as a command still refuses its writes, for a worker, a scout and a
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText(what))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText(what))
   }
+})
+
+test('long odd brace words stay cheap for the git check, and a long word with git letters still counts (T-436)', () => {
+  const t0 = Date.now()
+  expect(gitWriteIn('echo ' + '{'.repeat(50000))).toBeUndefined()
+  expect(gitWriteIn('echo ' + '{a,'.repeat(60) + '}'.repeat(60))).toBeUndefined()
+  expect(gitWriteIn(`cat > a.json <<'EOF'\n${'{"a":'.repeat(2000)}1${'}'.repeat(2000)}\nEOF`)).toBeUndefined()
+  expect(Date.now() - t0).toBeLessThan(1500)
+  // past the work cap a word is judged by its letters: these could make git
+  expect(gitWriteIn(`${'{g,i}'.repeat(60)}{t..t} stash`)).toBe('git with {braces}')
+})
+
+test('the git write reasons keep their exact text, and quoted braces stay text (T-447)', () => {
+  const head = (who: string) =>
+    `Refused: git stash may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
+  expect(gitWriteText('git stash')).toBe(`${head('the checker')} Check the work without changing any branch, commit, tag or the stash.`)
+  const worker = `${head('a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.`
+  expect(workerGitWriteText('git stash')).toBe(worker)
+  expect(workerGitWriteText('git stash', 'main')).toBe(`${worker} In this try you may also run \`git merge main\` (or \`git merge --abort\`) to merge main in; then resolve the conflicts in the files and don't commit.`)
+  expect(scoutGitWriteText('git stash')).toBe(`${head('a scout')} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`)
+  // quoted or backslashed braces are text; bare ones may spell git; an inner bash -c or a word holding a command is folded in
+  expect(gitWriteIn(`git log --format='{"h":"%h"}'`)).toBeUndefined()
+  expect(gitWriteIn(`git log --format=\\{x\\,y\\}`)).toBeUndefined()
+  expect(gitWriteIn('{git,} stash')).toBe('git with {braces}')
+  expect(gitWriteIn(`bash -c 'git stash'`)).toBe('git stash')
+  expect(gitWriteIn(`X='ls; git stash'`)).toBe('git stash')
 })

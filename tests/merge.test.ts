@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS } from '../hooks/app/review'
-import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS } from '../hooks/board'
+import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree } from '../hooks/app/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -2755,6 +2755,44 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/new/b.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  // the same links in Bash: a read through a link inside the worker's folder is refused like the edit (T-436)
+  const bash = (command: string, cwd?: string) => checkEdit(f.$, 'ag1', { command }, cwd)
+  expect(await bash(`cat ${wt5}/link/README.md`)).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('cat link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('cat "link/README.md"')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('cd link && cat README.md')).toMatch(/^Refused: this command names the project folder in the owner's copy/)
+  expect(await bash('cd src && cat ../link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
+  expect(await bash('cat README.md', `${wt5}/link`)).toMatch(/names README\.md in the owner's copy/)
+  expect(await bash(`python3 - <<'EOF'\nprint(open('link/README.md').read())\nEOF`)).toMatch(/names README\.md in the owner's copy/)
+  // wildcards: the folder part before the first wildcard piece is looked up, so a link there is followed too
+  for (const glob of ['cat link/*.md', 'cat link/R?ADME.md', 'cat link/[R]EADME.md', 'cat ./link/README*', 'head -n1 link/READM*', 'cat "link"/*.md'])
+    expect(await bash(glob), glob).toMatch(/^Refused: this command names the project folder in the owner's copy/)
+  expect(await bash('cat src/*.ts scratch/*.txt *.md')).toBeUndefined()
+  // links that lead elsewhere, a link that leads nowhere, and the worker's own files: allowed
+  expect(await bash('cat scratch/notes.txt broken src/a.ts && ls src')).toBeUndefined()
+  expect(await bash(`cat ${wt5}/src/a.ts`)).toBeUndefined()
+  // too many paths to look up: refused, not cut short
+  expect(await bash(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i}`).join(' ')} link/README.md`)).toBe(bashTooManyText(wt5))
+  // ordinary long commands main allowed are still allowed, and only paths that may go through a link are looked up
+  // the slow way: one folder listing each, not a lookup per path (T-436)
+  let slow = 0
+  const realStat = fs.stat as (p: string, o?: { resolve?: boolean }) => Promise<unknown>
+  fs.stat = async (p: string, o?: { resolve?: boolean }) => (o?.resolve && slow++, realStat(p, o))
+  const files = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i)).join(' ')
+  expect(await bash(`rm ${files(129, i => `f${i}.txt`)}`)).toBeUndefined()
+  expect(await bash(`cat ${files(130, i => `src/f${i}.ts`)}`)).toBeUndefined()
+  expect(await bash(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`)).toBeUndefined()
+  expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
+  expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
+  expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
+  const t0 = Date.now()
+  expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
+  expect(Date.now() - t0).toBeLessThan(1000)
+  // the folder lookups of the worker's own folder and the project, not one per path
+  expect(slow).toBeLessThan(30)
+  // a link among many plain paths is still followed
+  expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
+  fs.stat = realStat
   workers.clear()
 })
 
