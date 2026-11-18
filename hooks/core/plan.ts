@@ -15,23 +15,6 @@ export const emptyPlan = (): PlanState => ({ on: null, added: [] })
 /** The words shown on the band and the status line while in plan mode. */
 export const PLAN_NOTE = 'plan mode: nothing starts'
 
-// The two below are the host adapter's mapping (for Claude Code, its permission mode and attachment names). They
-// stay here only because register.tsx imports them from ./board and may not change in T-242; claude/plan.ts
-// re-exports them and is where new code takes them from. They move there with the register.tsx step (T-243).
-
-/** A permission mode name read from an event → plan mode on (true), off (false), or not known (null). */
-export function planFromMode(mode: unknown): boolean | null {
-  if (typeof mode !== 'string' || !mode.trim()) return null
-  return mode.trim() === 'plan'
-}
-
-/** A prompt.attachment type → plan mode on (true), off (false), or says nothing about it (null). */
-export function planFromAttachment(type: unknown): boolean | null {
-  if (type === 'plan_mode' || type === 'plan_mode_reentry') return true
-  if (type === 'plan_mode_exit') return false
-  return null
-}
-
 /** Whether the session is in plan mode now; an unknown mode counts as not (behave as before). */
 export const inPlan = (p: Pick<PlanState, 'on'>) => p.on === true
 

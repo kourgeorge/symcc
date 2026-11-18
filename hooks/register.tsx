@@ -12,7 +12,7 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, planFromMode, planFromAttachment, openOnStart, symccOn, offAnswer, usageTokens, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, WEB_SAFETY_LINE, intoOf, ASK_TOOL } from './board'
+import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, WEB_SAFETY_LINE, intoOf, ASK_TOOL } from './board'
 import { workerAgentTypes, isWorkerType, EXTRA_TOOLS, SCOUT_TOOLS } from './claude/agent-types'
 import { findArchived, saveArchiveMigrated } from './plugin/archive'
 import { ASK_TOOL_DEF, askCall, checkEdit } from './plugin/ask'
@@ -25,7 +25,9 @@ import { checkerFinished } from './plugin/checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './plugin/scouts'
 import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
-import { seePlan, seeMainMode } from './plugin/plan'
+import { seePlan } from './plugin/plan'
+import { planFromMode, planFromAttachment, seeMainMode } from './claude/plan'
+import { usageTokens, turnEnd } from './claude/usage'
 import { noteForLead, brief } from './plugin/tell'
 import { playable } from './plugin/voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
@@ -274,7 +276,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     useName($)
     const r = await next(e)
-    const end = { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}) }
+    const end = turnEnd(e)
     if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, end, usageTokens(e.usage))
     else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     // a checker's verdict (the checker setting) goes to the finish step waiting for it

@@ -41,7 +41,7 @@ test('core finds live workers from AgentState; the Claude adapter makes those fr
 
 // T-242: core/ knows no Claude Code plan mode fields, usage field names or session log format either.
 test('plan mode, usage and session log readers live in the Claude adapter, not in core', () => {
-  for (const name of ['leadCalls', 'projectFolderName', 'leadUsage', 'LEAD_LOGS']) expect(name in board).toBe(false)
+  for (const name of ['leadCalls', 'projectFolderName', 'leadUsage', 'LEAD_LOGS', 'planFromMode', 'planFromAttachment', 'usageTokens', 'seeMainMode']) expect(name in board).toBe(false)
   expect(usageTokens({ input_tokens: 3, cache_creation_input_tokens: 2 })).toEqual({ input: 3, cache_write: 2 })
   // how a turn ended: Claude Code's turn.complete fields become symcc's TurnEnd; a refusal only rides along on a refusal
   expect(turnEnd({ reason: 'refusal', refusal: { category: 'c', explanation: null } })).toEqual({ reason: 'refusal', refusal: { category: 'c', explanation: null } })
