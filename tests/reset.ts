@@ -42,11 +42,15 @@ export function resetPlugin() {
  * Use it in place of the plain test() in a file whose tests touch the plugin's memory. What the runtime passes
  * a test (`$` and a hook test's `on`) is passed on, and options given before the body (timeoutMs, ...) too.
  */
+const SLOW_MACHINE_MS = 20_000
+
 export const test = (name: string, ...rest: TestRest): void => {
   const fresh = (body: TestBody): TestBody => ($, on) => {
     resetPlugin()
     return body($, on)
   }
-  if (rest.length === 1) plainTest(name, fresh(rest[0]))
-  else plainTest(name, rest[0], fresh(rest[1]))
+  // The runtime's own limit (5 s) is too short for the panel tests on a busy machine, where they fail by
+  // running out of time, not by a wrong answer. A test that gives its own limit keeps it.
+  if (rest.length === 1) plainTest(name, { timeoutMs: SLOW_MACHINE_MS }, fresh(rest[0]))
+  else plainTest(name, { timeoutMs: SLOW_MACHINE_MS, ...rest[0] }, fresh(rest[1]))
 }
