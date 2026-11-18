@@ -10,6 +10,7 @@ import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 import { test, resetPlugin } from './reset'
+import { agentFinished } from '../hooks/app/symcc'
 import { fakeHost, memoryFs } from './fake-host'
 import type { HostAgent } from '../hooks/host'
 
@@ -271,6 +272,25 @@ test('a checker stopped before its verdict merges nothing: the task waits for th
   expect(t.status).toBe('review')
   expect(t.note).toBe('ready for review: the tests passed, but the checker gave no verdict (it was stopped), nothing merged yet')
   expect(w.git.main).toBe(M1)
+})
+
+test('T-402: through agentFinished (turn.complete), a checker whose turn ended on an error or a refusal gives no verdict: no problems, no retry used, the task waits for review', async () => {
+  for (const [end, why] of [
+    [{ reason: 'error' }, 'its turn ended on an error (retries used up or the context limit)'],
+    [{ reason: 'refusal', refusal: { category: null, explanation: 'cannot help' } }, 'the model refused to go on (cannot help)'],
+  ] as const) {
+    resetPlugin()
+    const w = world()
+    await saveBoard(w.$, boardWith(true))
+    const before = find(await load(w.$), 'T-1')!
+    const t = await finish(w, async id => agentFinished(w.$, id, { answer: 'Let me look at src/a.ts next.', end, isAborted: false, tokens: undefined }))
+    expect(t.status).toBe('review')
+    expect(t.note).toBe(`ready for review: the tests passed, but the checker gave no verdict (${why}), nothing merged yet`)
+    expect(t.attempts).toBe(before.attempts)
+    expect(t.test_tries ?? 0).toBe(0)
+    expect(t.history.some(h => h.includes('checker found problems'))).toBe(false)
+    expect(w.git.main).toBe(M1)
+  }
 })
 
 test('a docs-only change skips the checker and merges as before', async () => {

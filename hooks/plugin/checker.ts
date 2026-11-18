@@ -9,6 +9,7 @@ import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
 import { S, type CheckerEnd, checkerRuns, stopped } from './state'
 import { type Host, notReadyYet } from '../host'
+import type { TurnEnd } from './workers'
 import { change, now } from './store'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
@@ -147,11 +148,27 @@ async function putBack($: Host, dir: string, saved: Place | null): Promise<'same
   return after && after.head === saved.head && after.tip === saved.head ? 'moved' : 'failed'
 }
 
-/** A checker's turn ended (turn.complete): its answer goes to the step waiting for it; `aborted`: it was stopped, so there is no verdict. */
-export function checkerFinished(agentId: string, answer: string, aborted = false, tokens?: SymccTokens) {
+/**
+ * A checker's turn ended (turn.complete): its answer goes to the step waiting for it. `end`: why it ended (true:
+ * it was stopped); a turn that was stopped, or ended on an API error or a refusal, gives no verdict, as its last
+ * text is only half an answer.
+ */
+export function checkerFinished(agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens) {
   const run = checkerRuns.get(agentId)
   if (!run) return
-  run.end(aborted ? { answer: null, why: 'it was stopped', ...(tokens ? { tokens } : {}) } : { answer, ...(tokens ? { tokens } : {}) })
+  const why = checkerNoVerdict(end === true ? { reason: 'aborted' } : end === false ? { reason: 'answer' } : end)
+  run.end(why ? { answer: null, why, ...(tokens ? { tokens } : {}) } : { answer, ...(tokens ? { tokens } : {}) })
+}
+
+/** Why a checker's turn that ended this way gives no verdict, or undefined when it answered. */
+function checkerNoVerdict(end: TurnEnd): string | undefined {
+  if (end.reason === 'aborted') return 'it was stopped'
+  if (end.reason === 'error') return 'its turn ended on an error (retries used up or the context limit)'
+  if (end.reason === 'refusal') {
+    const said = [end.refusal?.category, end.refusal?.explanation].filter(Boolean).join(': ')
+    return `the model refused to go on${said ? ` (${cutLine(said, 300)})` : ''}`
+  }
+  return undefined
 }
 
 /** Stops every running checker (`why`, e.g. the board was turned off): each one's step goes on with no verdict. */
