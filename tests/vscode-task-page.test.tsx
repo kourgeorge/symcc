@@ -2,7 +2,7 @@
 // the desktop it draws exactly as before (task-page-snapshot.ts holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, T0, plainTree, changedTree } from './board-fixture'
+import { PANE, T0, drawnData, changedTree } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
@@ -58,7 +58,7 @@ for (const id of RICH_IDS) {
     seedRich(on, id)
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
-      expect(plainTree(await ui.drawn()), `${surface} ${id}`).toEqual(plainTree(TASK_BEFORE[`${surface} ${id}`]))
+      expect(drawnData(await ui.drawn()), `${surface} ${id}`).toEqual(TASK_BEFORE[`${surface} ${id}`])
       await ui.unmount()
     }
   })
@@ -114,7 +114,7 @@ test("T-504's task page follows the host clock: 10 minutes later only its runnin
   await clock.set(T0 + TEN_MIN)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect(plainTree(await ui.drawn()), surface).toEqual(changedTree(TASK_BEFORE[`${surface} T-504`], T504_LATER))
+    expect(drawnData(await ui.drawn()), surface).toEqual(changedTree(TASK_BEFORE[`${surface} T-504`], T504_LATER))
     await ui.unmount()
   }
 })
@@ -122,8 +122,8 @@ test("T-504's task page follows the host clock: 10 minutes later only its runnin
 test("T-504's task page snapshot comparison still fails when the drawn tree really changes", async ($, on) => {
   seedRich(on, 'T-504')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const drawn = plainTree(await ui.drawn())
-  expect(drawn).toEqual(plainTree(TASK_BEFORE['terminal T-504']))
+  const drawn = drawnData(await ui.drawn())
+  expect(drawn).toEqual(TASK_BEFORE['terminal T-504'])
   expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"Runs (time and cost)"', '"Runs"']]))
   expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"  try 2: 5m (running)"', '"  try 2: 6m (running)"']]))
   await ui.unmount()
