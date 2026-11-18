@@ -1,4 +1,4 @@
-import { liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
+import { liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver } from '../board'
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView } from './state'
 import { type Host, agentState } from '../host'
@@ -6,7 +6,7 @@ import { path, locked, change, now, load, safeWrite } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
-import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers } from './workers'
+import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers, unclaimQueued } from './workers'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
@@ -44,7 +44,13 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await host.fs.exists(path(S.N.boardFile)))
-      await change(host, b => resetDoing(b, S.me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id) || queuedWorkers.has(t.id)).map(t => t.id)))
+      await change(host, b => {
+        const keep = b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id) || queuedWorkers.has(t.id)).map(t => t.id)
+        // T-428: a task whose worker was only queued when the plugin reloaded (the reload emptied the queue) never
+        // started: its claim is undone with no try counted and no "restarted" line, and the next pump queues it again
+        const unqueued = unclaimQueued(b, S.me, liveDriver(leadBefore, Date.now()), now(), keep)
+        return resetDoing(unqueued, S.me, leadBefore, Date.now(), note, now(), keep)
+      })
     if (move === 'takeover' && !fresh) host.ui.toast(S.N.toast('the session driving the board stopped answering; this session drives it now'))
   }
   if (was && !S.driving) {

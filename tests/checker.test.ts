@@ -385,6 +385,25 @@ for (const [tool, args, status, again, againText] of [
   })
 }
 
+test('a checker that runs over max_minutes is stopped with the one stop text (halt), and gives no verdict', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { max_minutes: 7 }))
+  let fire: (() => void) | undefined
+  const clock = (w.$ as unknown as { clock: { after: (ms: number, f: () => void) => { cancel(): void } } }).clock
+  const after = clock.after
+  clock.after = (ms, f) => (ms === 7 * 60_000 ? ((fire = f), { cancel() {} }) : after(ms, f))
+  const t = await finish(w, async id => {
+    expect(fire).toBeDefined()
+    fire!()
+    expect(stopped.has(id)).toBe(true)
+    expect(checkerRuns.has(id)).toBe(false)
+    expect(w.sends.filter(m => m.to === id).map(m => m.text)).toEqual(["Stop now: your time is up. Don't change anything else; answer \"stopped\" and end."])
+  })
+  expect(t.status).toBe('review')
+  expect(t.note).toContain('it ran over 7 min and was stopped')
+  expect(w.git.main).toBe(M1)
+})
+
 test('a drop that comes before the checker is spawned starts no checker at all', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
@@ -712,3 +731,36 @@ test("T-386: a restarted checker whose agent type is still not loaded after 3 st
   expect(t.attempts).toBe(1)
   expect(w.spawns.length).toBe(1)
 })
+
+// ---------------- a checker symcc stopped answers "stopped" (T-428) ----------------
+
+for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is in stopped) and then answers']) {
+  test(`T-428: a checker that ${how} gives no verdict: the task doesn't go back to its worker, no retry is used, and a new checker starts`, async () => {
+    const w = world()
+    S.driving = true
+    await saveBoard(w.$, boardWith(true))
+    const answer = how.startsWith('answers') ? 'stopped' : 'Stopped as asked; I had not finished looking at src/a.ts.'
+    const t = await finish(w, async id => {
+      // as a halt does (a reload's orphan stop, haltChecker): stopped, then its answer comes in as an ordinary turn end
+      stopped.add(id)
+      w.$.agents.list = async () => [{ id, name: 'symcc-T-1-checker', kind: 'scout', status: 'completed' }]
+      checkerFinished(id, answer)
+    })
+    expect(t.status).toBe('doing')
+    expect(t.attempts).toBe(1)
+    expect(t.test_tries ?? 0).toBe(0)
+    expect(t.history.some(h => h.includes('checker found problems'))).toBe(false)
+    expect(t.history).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
+    expect(leadQueue.join('\n')).not.toContain('sent back by the checker')
+    // a new checker starts on the same work, without waiting for a regular check
+    await until(() => w.spawns.length === 2 && checkerRuns.size > 0)
+    expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+    checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+    await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+    await until(() => w.git.main !== M1)
+    const end = (await load(w.$)).tasks.find(x => x.id === 'T-1')!
+    expect(end.status).toBe('done')
+    expect(end.attempts).toBe(1)
+    expect(end.test_tries ?? 0).toBe(0)
+  })
+}

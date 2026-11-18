@@ -7,7 +7,7 @@ import { test } from './reset'
 import { fakeHost, memoryFs } from './fake-host'
 import { type FileTouch, type HostFeatures, ALL_FEATURES, SYMCC_WORDS } from '../hooks/host'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
-import { editTouch } from '../hooks/claude/tools'
+import { FILE_PATH_FIELD, editTouch, fileTouch } from '../hooks/claude/tools'
 import { addTask, emptyBoard, boardText, shortHome, inPlan, bashOutsideText } from '../hooks/board'
 import { S, checkerRuns, useName } from '../hooks/plugin/state'
 import type { Board } from '../hooks/board'
@@ -164,16 +164,33 @@ test('the edit guard only sees what a call touches: a host whose tools have othe
   expect(await toolCheck(w.host, undefined, otherTouch('edit', { filePath: `${ROOT}/README.md` }))).toBeUndefined()
 })
 
-test("Claude Code's tool calls for the edit guard: Edit, Write and NotebookEdit a file, Bash a command, others nothing", () => {
+test("Claude Code's tool calls for the edit guard: Edit, Write, MultiEdit and NotebookEdit a file, Bash a command, others nothing", () => {
   expect(editTouch('Edit', { file_path: '/a' })).toEqual({ path: '/a' })
   expect(editTouch('Write', { file_path: '/b' })).toEqual({ path: '/b' })
+  expect(editTouch('MultiEdit', { file_path: '/m', edits: [] })).toEqual({ path: '/m' })
   expect(editTouch('NotebookEdit', { notebook_path: '/c.ipynb' })).toEqual({ path: '/c.ipynb' })
+  // a NotebookEdit's path is in notebook_path only: a file_path beside it is not taken
+  expect(editTouch('NotebookEdit', { file_path: '/x' })).toEqual({ path: '' })
+  // names every object has are not file tools
+  expect(editTouch('toString', { file_path: '/a' })).toBe(null)
+  expect(editTouch('constructor', { file_path: '/a' })).toBe(null)
   expect(editTouch('Bash', { command: 'ls' })).toEqual({ command: 'ls' })
   // an odd input still counts as that kind of call, with nothing in it
   expect(editTouch('Edit', { file_path: 3 })).toEqual({ path: '' })
   expect(editTouch('Bash', null)).toEqual({ command: '' })
   expect(editTouch('Read', { file_path: '/a' })).toBe(null)
   expect(editTouch('Grep', { pattern: 'x' })).toBe(null)
+})
+
+test('T-419: the edit guard (editTouch) and the after-a-call list (fileTouch) cover the same four file tools, from one list', () => {
+  expect(Object.keys(FILE_PATH_FIELD).sort()).toEqual(['Edit', 'MultiEdit', 'NotebookEdit', 'Write'])
+  expect(Object.isFrozen(FILE_PATH_FIELD)).toBe(true)
+  for (const [tool, field] of Object.entries(FILE_PATH_FIELD)) {
+    expect(editTouch(tool, { [field]: `/p/${tool}` })).toEqual({ path: `/p/${tool}` })
+    expect(fileTouch({ tool, [field]: `/p/${tool}` })).toEqual({ path: `/p/${tool}` })
+  }
+  expect(fileTouch({ tool: 'NotebookEdit', notebook_path: '/n.ipynb' })).toEqual({ path: '/n.ipynb' })
+  expect(fileTouch({ tool: 'toString', file_path: '/a' })).toBe(null)
 })
 
 test("no pop-up question tool: the lead guide and lead notes don't name one; Claude Code's AskUserQuestion text stays word for word", () => {
