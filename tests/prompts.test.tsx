@@ -5,7 +5,7 @@ import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccTask } from '../types'
-import { addTask, emptyBoard, patchTask, fillPrompt, placeholdersIn, fillRole, ROLE_PLACEHOLDERS, type RoleDef, BUILT_IN_PROMPTS, PROMPT_KINDS, PROMPT_PLACEHOLDERS, type Board } from '../hooks/board'
+import { addTask, emptyBoard, patchTask, fillPrompt, placeholdersIn, fillRole, ROLE_PLACEHOLDERS, type RoleDef, BUILT_IN_PROMPTS, PROMPT_KINDS, scoutPrompt, ROLE_PROMPTS, PROMPT_PLACEHOLDERS, type Board } from '../hooks/board'
 import { S } from '../hooks/plugin/state'
 import { WORKER_PROMPT } from '../hooks/plugin/workers'
 import { TOOLS } from '../hooks/plugin/tools'
@@ -52,6 +52,13 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(q).toContain('This task is an investigation')
   expect(q).not.toContain(TEST_RULE)
   expect(q.endsWith(ASK)).toBe(true)
+  // T-411: every built-in prompt (and the scout prompt) says to wait for background commands before answering
+  const BG = "Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later."
+  expect(p).toContain(BG)
+  expect(q).toContain(BG)
+  for (const k of Object.keys(ROLE_PROMPTS) as (keyof typeof ROLE_PROMPTS)[]) expect([k, ROLE_PROMPTS[k].includes(BG)]).toEqual([k, true])
+  expect(Object.keys(ROLE_PROMPTS)).toContain('checker')
+  expect(scoutPrompt({ scout: 's', root: ROOT, instructions: 'Go.', open: [] })).toContain(BG)
   // every placeholder written in a built-in prompt is one symcc knows
   for (const k of PROMPT_KINDS) for (const p of placeholdersIn(BUILT_IN_PROMPTS[k])) expect(PROMPT_PLACEHOLDERS[k]).toHaveProperty(p)
 })
