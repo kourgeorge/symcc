@@ -539,11 +539,6 @@ export async function endCheck(host: Host, id: string) {
 }
 
 /**
- * Patches task `t` (read fresh, inside the change) only if it is still the same try: the same
- * status and try number as when its check began. Returns null when written, else the task as the
- * board has it now ('gone' when it is not on the board any more), and nothing is written.
- */
-/**
  * T-411: when the answer's text reads as ended before its work finished (endedEarlyLine), a warning note goes to the
  * task's history and the lead's board update. Only a warning: the text check can be wrong, so the try goes on as usual.
  */
@@ -558,6 +553,11 @@ async function warnEndedEarly(host: Host, t: SymccTask, answer: string) {
   tellLead(host, note)
 }
 
+/**
+ * Patches task `t` (read fresh, inside the change) only if it is still the same try: the same
+ * status and try number as when its check began. Returns null when written, else the task as the
+ * board has it now ('gone' when it is not on the board any more), and nothing is written.
+ */
 async function writeIfSame(host: Host, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
   return change<SymccTask | 'gone' | null>(host, x => {
     const cur = find(x, t.id)

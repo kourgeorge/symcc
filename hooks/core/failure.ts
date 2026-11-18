@@ -57,10 +57,11 @@ const QUOTED = /```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|‘[^’\n]*�
  * Returns the sentence that counted, '' if none.
  */
 export function endedEarlyLine(answer: string | null | undefined): string {
-  const paras = String(answer ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  // quotes and code go first, so a fenced code block with a blank line in it is not cut into paragraphs
+  const paras = String(answer ?? '').replace(QUOTED, ' (quote) ').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
   const last = paras.at(-1) ?? ''
   if (!last || last.split('\n').some(l => BULLET.test(l))) return ''
-  const sentences = last.replace(QUOTED, ' (quote) ').split(/(?<=[.!?])\s+|\n+/)
+  const sentences = last.split(/(?<=[.!?])\s+|\n+/)
   return sentences.find(s => !/^\s*if\b/i.test(s) && STILL.test(s) && GOES_ON.test(s))?.trim() ?? ''
 }
 

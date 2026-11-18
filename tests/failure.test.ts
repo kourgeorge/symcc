@@ -325,6 +325,8 @@ test('endedEarlyLine gives the sentence that counted; endedEarlyNote is the warn
   const s = "The background runs are still going; I'll continue when they finish."
   expect(endedEarlyLine(`Changed a.ts.\n\nStarted the tests. ${s}`)).toBe(s)
   expect(endedEarlyLine('Changed a.ts; tests/a.test.ts covers it.')).toBe('')
+  // a fenced code block with a blank line in it is code, not the writer's words (checker's example): must not flag
+  expect(endedEarlyLine("Changed it.\n\n```\nfoo\n\nbar still running; I'll continue when done\n```")).toBe('')
   expect(endedEarlyNote('T-5', s)).toBe(`T-5's answer may have ended before its work finished: "${s}" (only a warning: its try goes on to the tests and merge as usual)`)
 })
 
