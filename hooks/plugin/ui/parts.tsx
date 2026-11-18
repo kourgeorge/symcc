@@ -50,7 +50,7 @@ export async function paneParts($: $, e: PaneEvent) {
     noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
   /** What the VS Code pieces (vscode.tsx) draw with. */
-  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, C, width, surface: e.surface }
+  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, Select: (els as { Select?: unknown }).Select as never, C, width, surface: e.surface }
   /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
     if (vscode) return vsBanner(vs, v, mode, gitRow())

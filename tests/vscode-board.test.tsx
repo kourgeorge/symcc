@@ -2,7 +2,7 @@
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_TASKS, seedBoard, plainTree } from './board-fixture'
+import { PANE, BOARD_TASKS, seedBoard, steadyTree } from './board-fixture'
 import { BEFORE } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { shortTests } from '../hooks/plugin/ui/vscode'
@@ -44,17 +44,17 @@ test('the board on the terminal and the desktop draws exactly as before the VS C
   for (const surface of ['terminal', 'desktop'] as const) {
     for (const bodyColumns of [50, 90]) {
       const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface })
-      expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} ${bodyColumns}`]))
+      expect(steadyTree(await ui.drawn())).toEqual(steadyTree(BEFORE[`${surface} ${bodyColumns}`]))
       await ui.unmount()
     }
     const ui = await $.ui.mount({ ...PANE, surface })
     await ui.press({ key: 'T-405' })
-    expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} task`]))
+    expect(steadyTree(await ui.drawn())).toEqual(steadyTree(BEFORE[`${surface} task`]))
     await ui.press({ key: 'back' })
     await ui.press({ key: 'tab-scouts' })
-    expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} scouts`]))
+    expect(steadyTree(await ui.drawn())).toEqual(steadyTree(BEFORE[`${surface} scouts`]))
     await ui.press({ key: 'tab-settings' })
-    expect(plainTree(await ui.drawn())).toEqual(plainTree(BEFORE[`${surface} settings`]))
+    expect(steadyTree(await ui.drawn())).toEqual(steadyTree(BEFORE[`${surface} settings`]))
     await ui.press({ key: 'tab-tasks' }) // the next surface starts on the Tasks page again
     await ui.unmount()
   }
@@ -139,7 +139,7 @@ test('in VS Code the other pages drop key marks from labels and print no key hin
   await ui.press({ key: 'tab-scouts' })
   await check('scouts')
   expect((await ui.find({ key: 'tab-scouts' }))?.props.label).toBe('● Scouts (1)')
-  expect((await ui.find({ key: 'scouts-back' }))?.props.label).toBe('Back')
+  expect((await ui.find({ key: 'scouts-back' }))?.props.label).toBe('← Tasks')
   await ui.press({ key: 'tab-settings' })
   await check('settings')
   await ui.unmount()

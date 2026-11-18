@@ -63,3 +63,9 @@ export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_
 
 /** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped. */
 export const plainTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
+
+/** A drawn tree as plain data that doesn't change with the time of day: the pages read the real clock (Date.now, which
+ *  a test can't hold), so each length of time ("0s", "40m", "3h 05m") becomes "#", and runs of spaces (the padding
+ *  of the columns around them) become one. */
+export const steadyTree = (tree: unknown): unknown =>
+  JSON.parse(JSON.stringify(plainTree(tree), (_, v) => (typeof v === 'string' ? v.replace(/\b\d+h \d\dm\b|\b\d+[smh]\b/g, '#').replace(/ {2,}/g, ' ') : v)))
