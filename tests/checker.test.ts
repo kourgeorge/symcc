@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
@@ -473,14 +473,46 @@ test("a checker's git commands that change anything are refused, read-only ones 
       ['git log | git update-ref refs/heads/main HEAD', 'git update-ref'],
       ['echo $(git rebase main)', 'git rebase'],
       ['sh -c "git merge main"', 'git merge'],
-      ['git -c user.name=x --no-pager cherry-pick abc', 'git cherry-pick'],
+      ['git --no-pager cherry-pick abc', 'git cherry-pick'],
       ['/usr/bin/git push', 'git push'],
       ['git worktree add /tmp/x', 'git worktree'],
       ['git restore --staged a.ts', 'git restore'],
       ['git clean -fd', 'git clean'],
       ['git apply --index p.diff', 'git apply'],
-    ] as const) expect(await bash(command)).toMatch(new RegExp(`^Refused: ${what} may change the repository, and the checker may only read with git`))
-    for (const command of ['git diff', 'git log -3', 'git status', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test'])
+      // read-only commands with options that write a file or run a program (the try-1 checker's three probes first)
+      ['git log -1 --format=%H --output=$(git rev-parse --git-common-dir)/refs/heads/main feat', 'git log --output'],
+      ['git grep -O"git stash;:" x', 'git grep -O'],
+      ["GIT_EXTERNAL_DIFF='git stash;:' git diff", 'git stash'],
+      ['git diff --output=/tmp/x', 'git diff --output'],
+      ['git diff --outp /tmp/x', 'git diff --outp'],
+      ['git show -o /tmp/x HEAD', 'git show -o'],
+      ['git grep -nOvim foo', 'git grep -O'],
+      ['git grep --open-files-in-pager=vim foo', 'git grep --open-files-in-pager'],
+      ['git diff --ext-diff', 'git diff --ext-diff'],
+      ['git log -p --textconv', 'git log --textconv'],
+      ['git -c core.pager=x log', 'git -c'],
+      ['git -c diff.external=x diff', 'git -c'],
+      ['git -c alias.st=!x status', 'git -c'],
+      ['git --config-env=core.pager=X log', 'git --config-env'],
+      ['git --exec-path=/tmp diff', 'git --exec-path'],
+      // settings that make git run a program or use another repository, when git runs
+      ['GIT_EXTERNAL_DIFF=/tmp/x git diff', 'GIT_EXTERNAL_DIFF'],
+      ['GIT_PAGER=x git -p log', 'GIT_PAGER'],
+      ['PAGER=x git log', 'PAGER'],
+      ['env GIT_SSH_COMMAND=x git log', 'GIT_SSH_COMMAND'],
+      ['export EDITOR=x; git log', 'EDITOR'],
+      ['GIT_DIR=/x git log', 'GIT_DIR'],
+      ['GIT_CONFIG_GLOBAL=/tmp/c git diff', 'GIT_CONFIG_GLOBAL'],
+      ["GIT_PAGER=x sh -c 'git log'", 'GIT_PAGER'],
+      // git inside a VAR= value, an option value, or in capitals (macOS finds GIT too)
+      ["X='git stash;:' true", 'git stash'],
+      ['echo -X"git reset --hard"', 'git reset'],
+      ['GIT stash', 'git stash'],
+      ['/usr/libexec/git-core/git-stash', 'git stash'],
+      ['git-core/git-log --output=/tmp/x', 'git log --output'],
+    ] as const) expect(await bash(command)).toBe(gitWriteText(what))
+    expect(gitWriteText('git stash')).toMatch(/^Refused: git stash may change the repository or run another program, and the checker may only read with git/)
+    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git diff --text --stat', 'git diff --no-ext-diff', 'git ls-files -o', 'git grep -n foo', '/usr/libexec/git-core/git-diff', 'echo "use git diff"', 'export GIT_PAGER=cat', 'grep -rn "gitWriteIn(" hooks', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test'])
       expect(await bash(command)).toBeUndefined()
     checkerFinished(id, 'OK')
   })

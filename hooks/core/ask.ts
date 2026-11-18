@@ -341,11 +341,34 @@ const GIT_READ = new Set(['diff', 'log', 'show', 'status', 'blame', 'grep', 'rev
 /** git's own options (before the command name) that take the next word as their value. */
 const GIT_GLOBAL_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--super-prefix'])
 
+/** git's own options a checker may not use: `-c` and `--config-env` set any setting (core.pager, diff.external, alias.*...) and `--exec-path` picks where git finds its programs, so each can make git run another program. */
+const GIT_GLOBAL_REFUSED = /^(-c|--config-env|--exec-path)/
+
+/**
+ * Long options of read-only git commands that write a file or run another program: `--output` (log, diff, show...),
+ * `--ext-diff`, `--textconv`, `--open-files-in-pager` (grep), `--exec-path`. git takes any unique start of a long
+ * option name (`--outp`), so a start of these names is refused too, except the exact names in LONG_OK.
+ */
+const LONG_REFUSED = ['output', 'ext-diff', 'textconv', 'open-files-in-pager', 'exec-path', 'exec']
+
+/** Long options that start like one in LONG_REFUSED but are a different, harmless option of their own. */
+const LONG_OK = new Set(['text'])
+
+/** git commands that take diff options, where `-o <file>` writes the output to a file. */
+const DIFF_LIKE = new Set(['diff', 'log', 'show', 'whatchanged', 'diff-tree', 'diff-index', 'diff-files', 'format-patch', 'rev-list', 'shortlog'])
+
 /** `git branch` options that change branches. */
 const BRANCH_WRITE = /^(-[a-zA-Z]*[dDfmMcCu]|--(delete|force|move|copy|set-upstream-to|unset-upstream|edit-description|track|no-track|create-reflog|recurse-submodules)(=|$))/
 
 /** `git branch` options that take the next word as their value. */
 const BRANCH_VALUE = new Set(['--contains', '--no-contains', '--merged', '--no-merged', '--points-at', '--format', '--sort', '--column'])
+
+/**
+ * Settings that make git run another program, use another repository or settings file, or write a file
+ * (GIT_EXTERNAL_DIFF, GIT_PAGER, GIT_SSH_COMMAND, GIT_DIR, GIT_CONFIG*, GIT_TRACE...: every GIT_ name), set as
+ * `NAME=value` (alone, after `env` or `export`) in a command that also runs git.
+ */
+const GIT_ENV_REFUSED = /^(GIT_\w*|PAGER|EDITOR|VISUAL|LESS\w*|SSH_ASKPASS|BROWSER|HOME|XDG_CONFIG_HOME)=/
 
 /**
  * The words of simple command `text`, split at spaces outside quotes; quotes are dropped and a backslash keeps the next
@@ -371,6 +394,17 @@ function plainWords(text: string): string[] {
   return out
 }
 
+/** The option of git `args` (the words after read-only command `sub`) that writes a file or runs another program, or undefined. */
+function gitBadOption(sub: string, args: string[]): string | undefined {
+  for (const a of args) {
+    const long = /^--([^=]+)/.exec(a)?.[1]
+    if (long && !LONG_OK.has(long) && !long.startsWith('no-') && LONG_REFUSED.some(n => n.startsWith(long))) return a.split('=')[0]
+    // short options may be put together (`-nO`); -O runs its value as a command in grep, -o writes a file in diff-like commands
+    if (/^-[^-]/.test(a) && ((sub === 'grep' && a.includes('O')) || (DIFF_LIKE.has(sub) && a.includes('o')))) return sub === 'grep' && a.includes('O') ? '-O' : '-o'
+  }
+  return undefined
+}
+
 /** Whether git `args` (the words after the command name `sub`) only read. */
 function gitReadOnly(sub: string, args: string[]): boolean {
   if (GIT_READ.has(sub)) return true
@@ -389,40 +423,77 @@ function gitReadOnly(sub: string, args: string[]): boolean {
   return list || !named
 }
 
+/** Whether word `w` names the git program (`git`, `/usr/bin/git`; any letter case, since macOS finds `GIT` too). */
+const isGit = (w: string) => /(^|\/)git$/i.test(w)
+
 /**
- * The first git command in Bash `command` that may change anything (a commit, a branch, the stash, the index, a tag, a
- * push...), as `git <command>`, or undefined when every git command in it only reads (diff, log, show, status, branch
- * --list, stash list...). Looks inside compound commands (&&, ;, |, `$(...)`), after `cd`, `env` or `xargs`, past git's
- * own options (`git -C <dir>`, `-c k=v`), and inside quoted text run as a command (`sh -c "git commit"`). Any word
- * `git` (or ending in `/git`) counts, so an odd read may be refused too; that is the safe side. A best effort, not a
- * sandbox: a git run through a variable or a script file gets through.
+ * The first git command in Bash `command` that may change anything or run another program (a commit, a branch, the
+ * stash, the index, a tag, a push, `--output=<file>`, `grep -O<cmd>`, `-c core.pager=...`, `GIT_EXTERNAL_DIFF=...`), as
+ * `git <command>` (or `git <command> <option>`, or the setting's name), or undefined when every git command in it only
+ * reads (diff, log, show, status, branch --list, stash list...). Looks inside compound commands (&&, ;, |, `$(...)`),
+ * after `cd`, `env` or `xargs`, past git's own options (`git -C <dir>`), and inside any word that has `git` in it (quoted
+ * text run by `sh -c`, a `VAR=` value, an option value like `-O"git stash"`). Any word `git` (or ending in `/git`) counts,
+ * so an odd read may be refused too; that is the safe side.
+ *
+ * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
+ * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
  */
-export function gitWriteIn(command: unknown, depth = 0): string | undefined {
-  if (typeof command !== 'string' || depth > 4) return undefined
+export function gitWriteIn(command: unknown): string | undefined {
+  if (typeof command !== 'string') return undefined
+  const { bad, git, env } = gitScan(command, 0)
+  return bad ?? (git && env ? env : undefined)
+}
+
+/** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
+function gitScan(command: string, depth: number): { bad?: string; git: boolean; env?: string } {
+  const out: { bad?: string; git: boolean; env?: string } = { git: false }
+  if (depth > 4) return out
   for (const p of shellPieces(command)) {
     if ('op' in p) continue
     const words = plainWords(p.text)
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
-      // quoted text with a space in it may be a command run by sh -c, eval and such
-      if (/\s/.test(w) && /git/.test(w)) {
-        const inner = gitWriteIn(w, depth + 1)
-        if (inner) return inner
+      out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
+      // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
+      const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
+      if (dashed) {
+        out.git = true
+        const args = words.slice(i + 1)
+        if (!gitReadOnly(dashed, args)) return { ...out, bad: `git ${dashed}` }
+        const opt = gitBadOption(dashed, args)
+        if (opt) return { ...out, bad: `git ${dashed} ${opt}` }
+        continue
       }
-      if (w !== 'git' && !w.endsWith('/git')) continue
+      if (!isGit(w)) {
+        // text from the first "git" that ends a word on, in a word that holds more than one word or command
+        // (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
+        const at = w.search(/git(?!\w)/i)
+        if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
+          const inner = gitScan(w.slice(at), depth + 1)
+          out.git ||= inner.git
+          out.env ??= inner.env
+          if (inner.bad) return { ...out, bad: inner.bad }
+        }
+        continue
+      }
+      out.git = true
       let j = i + 1
-      while (j < words.length && words[j]!.startsWith('-')) j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1
+      for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
+        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { ...out, bad: `git ${words[j]!.split('=')[0]}` }
       const sub = words[j]
       if (sub === undefined) continue
-      if (!gitReadOnly(sub, words.slice(j + 1))) return `git ${sub}`
+      const args = words.slice(j + 1)
+      if (!gitReadOnly(sub, args)) return { ...out, bad: `git ${sub}` }
+      const opt = gitBadOption(sub, args)
+      if (opt) return { ...out, bad: `git ${sub} ${opt}` }
     }
   }
-  return undefined
+  return out
 }
 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
-  `Refused: ${what} may change the repository, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show). Check the work without changing any branch, commit, tag or the stash.`
+  `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
 
 /**
  * The project path (relative to the worker's folder `worktree`) an Edit, Write or NotebookEdit call of `tool`
