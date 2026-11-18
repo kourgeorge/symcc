@@ -136,7 +136,11 @@ export function closedText(q: OwnerQuestion): string {
 }
 
 /** The block the lead gets, in a board update sent at once, when the owner answered its question on the board. */
-export const boardAnswerLine = (q: OwnerQuestion) => `The owner answered your question ${q.id} ("${q.text}"): ${q.answer ?? ''}. The question is closed. Act on it.`
+export function boardAnswerLine(q: OwnerQuestion): string {
+  const answer = (q.answer ?? '').trim()
+  const end = /[.?!]$/.test(answer) ? '' : '.'
+  return `The owner answered your question ${q.id} ("${q.text}"): ${answer}${end} The question is closed. Act on it.`
+}
 
 /** The question tool's list: the open questions, then the last few closed ones. */
 export function questionsText(b: WithQuestions, recent = 5): string {

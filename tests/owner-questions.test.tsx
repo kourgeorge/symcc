@@ -8,6 +8,7 @@ import { fakeHost, memoryFs, done } from './fake-host'
 import { ran, readText, entry, pause } from './fakes'
 import { inProject } from './project'
 import { type Board, emptyBoard, readBoard, statusLine, boardText, addQuestion, answerQuestion, openQuestions, NEEDS_YOU_MARK } from '../hooks/board'
+import { boardAnswerLine } from '../hooks/core/questions'
 import { S, sayQueue, meanwhile } from '../hooks/app/state'
 import { runTool, leadGuide, TOOLS } from '../hooks/app/tools'
 import { answerOnBoard } from '../hooks/app/questions'
@@ -236,4 +237,14 @@ test('the band says "2 questions for you" and lists them, also with no task on t
   expect(await ui.find({ type: 'Text', text: /^Q-1 for you$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Add a scout\?/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('the act-on-it block adds a full stop only when the answer has no end mark of its own (T-434)', () => {
+  const q = { id: 'Q-3', text: 'Raise the version?', options: [], asked_at: ISO }
+  const start = 'The owner answered your question Q-3 ("Raise the version?"): '
+  const end = ' The question is closed. Act on it.'
+  expect(boardAnswerLine({ ...q, answer: 'Yes' })).toBe(`${start}Yes.${end}`)
+  expect(boardAnswerLine({ ...q, answer: 'Yes, raise it to 0.5.' })).toBe(`${start}Yes, raise it to 0.5.${end}`)
+  expect(boardAnswerLine({ ...q, answer: 'Why?' })).toBe(`${start}Why?${end}`)
+  expect(boardAnswerLine({ ...q, answer: 'Do it now!' })).toBe(`${start}Do it now!${end}`)
 })
