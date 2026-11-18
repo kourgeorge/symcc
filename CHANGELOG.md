@@ -4,6 +4,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.4.1 (2026-11-18)
+
 ### Added
 - Tests now run one task at a time across all tasks (a `.symcc/tests.lock` file keeps the turn), so merges can take longer when several tasks finish at once. A waiting task shows "waiting for another task's tests (T-x)" and its time limit's clock is stopped meanwhile.
 - Scouts keep their run history: each of a scout's last 50 runs is kept with when it ran, how it ended (found, nothing, stopped, API error, refusal or couldn't start), its findings, tokens, the tasks made from it (saved when the lead adds them, so archived tasks still count) and its full report (in `.symcc/reports/scouts/`). The scout's page, in the terminal and in VS Code's side panel, lists them under **Runs** (newest first) and opens one's whole report, and says when the last run ended on an API error or a refusal, so nothing was reported. The lead's `scouts` list with a name shows the last few runs too. A scout's last report becomes its first run once.
@@ -14,6 +16,12 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - The board's header in VS Code's side panel looks like a real side panel: the symcc logo (with its sway and little moves) beside the name, version and folder, the board mode as a colored pill with its meaning, the branch and driver on one line and the tests and limits on another, the counts as small badges, and tabs drawn as a segmented row of boxes with the shown one marked by a bold accent border and its count in a badge ("Tasks 20"). The terminal, desktop and mobile boards are unchanged.
 - A task's page in VS Code's side panel reads like a card: the ID and title large and bold, a status badge in its color with the kind, role, try and time as small tags, the question, why it failed or the files it waits for boxed at the top in their color with their buttons (`Retry`, `Merge now`, the answers) right there, the history as a timeline (newest first, merges in green, failures in red), and Files it may change, Waits for and Time and cost as folds, closed by default. The terminal, desktop and mobile pages are unchanged.
 - The lists in VS Code's side panel are easier to scan. Section headings show their colored mark and a count badge, with space between them; Backlog, Done and Dropped stay folded until clicked. Each task is one button: the ID dim, the title (up to two lines, then "(more)"), and a dim line with the status in color and how long it has run or waited, the kind, the try and the question or why it failed; a task that needs you starts with "●". The lead's questions look the same in the warning color. Each scout is one button with its state as a colored badge and the start of its last report dim. An empty board has one main button, "Tell the lead what to do next", and an empty Scouts list makes "+ New scout" the main button. The terminal, desktop and mobile boards are unchanged.
+
+### Fixed
+- Workers and scouts can no longer change git history: their git writes (commit, push, merge, branch, reset, stash and the like) are refused in Bash, also when hidden with brace expansion such as `git {stash,}`. Plain text that only mentions "git" (`grep "git"`) and read-only git (`remote -v`, `config --get`, `reflog`) still work.
+- The folder guard now matches paths through symlinks, so `/tmp` and `/private/tmp` on macOS count as the same place.
+- The board's drawing tests no longer depend on the clock.
+- Workers, checkers and scouts are told not to end their turn while a background command is still running.
 
 ## 0.4.0 (2026-11-18)
 
