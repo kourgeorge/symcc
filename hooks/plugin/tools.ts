@@ -6,7 +6,7 @@ import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBr
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, toolName } from './state'
-import type { Host } from '../host'
+import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
@@ -61,7 +61,8 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   return L.join('\n')
 }
 
-export const MANUAL = (): Record<string, string> => ({
+/** The /symcc-help manual, for the host's `features` (every one on unless given): without a panel /symcc shows the board as text. */
+export const MANUAL = (features: HostFeatures = ALL_FEATURES): Record<string, string> => ({
   overview: `${S.N.name} turns this session into a small team.
   • The board (${S.N.dir}/board.json) holds the tasks. You and the lead manage it by talking.
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
@@ -81,9 +82,11 @@ export const MANUAL = (): Record<string, string> => ({
   (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
   (approve, reject, diff), and mode and settings change how the board works. The "board" is
   the whole panel: tasks, scouts and settings.
-  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / s / c switch views)
+${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / s / c switch views)
   /${S.N.name}-tasks               open the panel on the tasks view
-  /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files
+  /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
+  /${S.N.name}-tasks               show the tasks
+  /${S.N.name}-scouts              show the scouts and reload the scout files`}
   /${S.N.name}-task T-3            open one task
   /${S.N.name}-approve T-5         merge a task that is ready for review
   /${S.N.name}-reject T-5 REASON   send it back to "todo" with the reason
@@ -260,15 +263,19 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     over 50 MB. It never pushes or adds a remote. With git not installed nothing starts at all.`,
 })
 
-export function manual(arg: string): string {
-  const MAN = MANUAL()
+export function manual(arg: string, features: HostFeatures = ALL_FEATURES): string {
+  const MAN = MANUAL(features)
   const key = arg.trim().toLowerCase()
   if (!key) return Object.values(MAN).join('\n\n')
   const hit = Object.keys(MAN).find(k => k.startsWith(key))
   return hit ? MAN[hit]! : `No topic "${arg.trim()}". Topics: ${Object.keys(MAN).join(', ')}`
 }
 
-export const leadGuide = () => `## ${S.N.name}: you are the lead (main conversation only)
+/**
+ * The lead's guide, for the host's `features` (see HostFeatures; every one on unless given): without plan mode the
+ * plan mode paragraph is left out. The host's words (S.W) name its plan mode.
+ */
+export const leadGuide = (features: HostFeatures = ALL_FEATURES) => `## ${S.N.name}: you are the lead (main conversation only)
 This section is for the main conversation only. If you are a subagent (a ${S.N.name} worker or scout, or any other), ignore it and do the job you were given.
 
 The project has a shared task board (${S.N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
@@ -280,7 +287,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / order, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board". Never use AskUserQuestion for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep AskUserQuestion only for questions that are not on the board.
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board".${S.W.askPopup ? ` Never use ${S.W.askPopup} for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep ${S.W.askPopup} only for questions that are not on the board.` : ''}
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - Investigation or change (kind in ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
@@ -298,8 +305,8 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run on its timer until the owner resumes it, but "run now" (the owner's, or your scouts run) still runs it once and it stays paused. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. The scout_findings setting (${S.N.name} settings): "auto" (the default) lets you decide where a scout finding goes; "backlog" puts every task you add with origin_by scout in the backlog, whatever you ask (the answer says "scout_findings is backlog: added to the backlog"); it starts only when the owner moves it to todo (or you do, on the owner's word). With backlog, still tell the owner what the scout found, so they can decide. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
-- Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
-- ${S.N.name} checks every two minutes on its own: it starts ready tasks, asks the owner for more time for a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
+${features.planMode ? `- Plan mode (${S.W.planMode}): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
+` : ''}- ${S.N.name} checks every two minutes on its own: it starts ready tasks, asks the owner for more time for a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
 ${kindsLeadText(S.kinds, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off; checker can't be turned on or off and is never a task's role: the checker setting runs it). An off role is never picked for a new task.
@@ -360,6 +367,9 @@ export const TOOLS = () => [
   },
 ]
 
+/** Why the stats leave the lead out on a host that can't tell its model calls (features.leadUsage off). */
+export const LEAD_USAGE_UNREAD = "the lead's calls can't be read here"
+
 /**
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
@@ -375,7 +385,7 @@ export async function statsText($: Host, args: string, full?: boolean): Promise<
   const r = readArchive(text)
   const archiveProblem = r.broken ? `${S.N.archiveFile} can't be read (${r.broken})` : !r.archive.tasks.length && archivedCount(b) ? `${archivedCount(b)} archived tasks, but ${S.N.archiveFile} holds none` : undefined
   const nowMs = Date.now()
-  const team: TeamInput = { ...(await $.lead.usage(S.root, range, nowMs)), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
+  const team: TeamInput = { ...($.features.leadUsage ? await $.lead.usage(S.root, range, nowMs) : { leadProblem: LEAD_USAGE_UNREAD }), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
   return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })

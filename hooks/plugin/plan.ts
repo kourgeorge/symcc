@@ -12,8 +12,9 @@ import { pump } from './workers'
 // A change is shown at once (band and status line). Leaving plan mode tells the lead once which tasks
 // went to the backlog during it, and lets ready work start again; backlog tasks are never moved by themselves.
 
-/** A signal about the main session's plan mode: true on, false off, null says nothing. */
+/** A signal about the main session's plan mode: true on, false off, null says nothing. A host without plan mode (features.planMode off) is never in it. */
 export async function seePlan($: Host, on: boolean | null) {
+  if (!$.features.planMode) return
   const r = notePlan(S.plan, on)
   if (!r.changed) return
   S.plan = r.plan

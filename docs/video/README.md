@@ -70,7 +70,7 @@ and `docs/video/symcc_scouts_thumbnail.png` (1080x1920). The same checks work: `
 
 ## Second short: many hands, the holes, and the scouts
 
-`make_swarm_video.py` builds a second vertical short in the same manuscript look, voice
+`make_organization_video.py` builds a second vertical short in the same manuscript look, voice
 and captions (about 71 seconds, 178 spoken words, 8 scenes, 1080x1920). It tells the
 multi-agent story first: one agent makes you wait; the owner asks the lead for a feature
 (the "investigation tasks" request, T-253); the lead splits it into T-253, T-257 and T-258
@@ -79,11 +79,11 @@ fails its tests six times before it passes on try 7. Then every change leaves ho
 scouts find them (T-263 by test-gaps, T-264 by gaps-bot, and T-266 by recent-changes,
 a hole left by T-264's own fix), workers close them, and T-264's page shows where its
 change came from. All tasks and numbers are from this project's own board. The words
-are in `swarm_narration.md`. It needs the same setup as above, and draws with the pieces
+are in `organization_narration.md`. It needs the same setup as above, and draws with the pieces
 of `make_scouts_video.py` (only its scenes and thumbnail are new).
 
-    ~/.cache/symcc-video/venv/bin/python docs/video/make_swarm_video.py
+    ~/.cache/symcc-video/venv/bin/python docs/video/make_organization_video.py
 
-It writes `docs/video/out/symcc_swarm.mp4` (not committed), `docs/video/symcc_swarm.srt`
-and `docs/video/symcc_swarm_thumbnail.png`. The same checks work: `--times`, `--frame 12`,
+It writes `docs/video/out/symcc_organization.mp4` (not committed), `docs/video/symcc_organization.srt`
+and `docs/video/symcc_organization_thumbnail.png`. The same checks work: `--times`, `--frame 12`,
 `--clip 2` and `--thumbnail`.

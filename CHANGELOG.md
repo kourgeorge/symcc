@@ -4,6 +4,15 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.4.0 (2026-11-18)
+
+### Breaking changes
+- The Prompts page, the lead's `prompts` tool and the `.symcc/prompts/*.md` overrides are gone. Roles shape workers now.
+- The `target_branch` setting is gone. A task merges into the branch it was made on.
+- Workers ask through the `ask_owner` tool. symcc no longer reads `QUESTION:`, `OPTIONS:` or `NEED FILES:` lines.
+- The old `voice` setting and the scout `every` key are no longer read. Use `notify` and `every_minutes`.
+- Old `board.json` files are converted once.
+
 ### Added
 - The board in VS Code's side panel has its own layout: a wrapped header, tabs without key labels, tasks grouped by status with whole titles and the status color on the mark only, Backlog / Done / Dropped as fold rows, and a footer with a mode switch button and a search box instead of key hints. The terminal board is unchanged.
 - A failed task says clearly why: its page starts with a "Why it failed" block (the reason in one plain sentence, what the worker's report asks for, and what to do next), and its board row and the lead's board show the same sentence instead of the bare note.
@@ -68,7 +77,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - The `checker` role can't be turned on or off any more (its page has no Turn on button and points to the `checker` setting instead), and it is never offered as a task role.
 - A worker whose run ended on an API error or a refusal now fails its task with the reason, instead of being checked and merged as if it had finished.
 - Merge: the owner's branch is no longer left half-updated by a clashing untracked file, and git-ignored files are not silently overwritten.
-- A `board.json` that cannot be read is never overwritten, and a broken one is reported once without failing the hook.
+- A `board.json` that cannot be read is never overwritten, and a broken one is reported once. While it is broken, every Edit or Write of a worker is refused, even inside its own files, since symcc can't check it.
+- When symcc's own guard fails (it throws or runs out of time), calls from symcc's own agents (workers, checkers, scouts) are refused with "symcc couldn't check this call", and the lead's calls go on as if symcc weren't there; the lead's call of a symcc tool gets an error answer. Each failure is logged once.
+- symcc's other hooks no longer fail open: when the agent listing hook fails, symcc's worker and scout types stay hidden from the lead's own chat (so the lead's model can't start a "worker" by itself), and when the agent start hook fails, the start of a symcc agent type is refused. The prompt, command, plan mode and board panel hooks pass the event on as if symcc weren't there. Each failure is logged once.
 - Safe writes use a unique temp file, so two saves at once cannot break each other.
 - Finishing a task no longer overwrites one that was dropped, paused or changed meanwhile.
 - Scouts: failed starts and stopped runs are handled, "run now" says why it did not start, scout files from the lead show up at once, the next run counts from the last run, and a report starting with "NOTHING" counts as nothing found.
@@ -128,7 +139,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - README and guide: new text on traceability and observability.
 - README: a presentation video, with a GIF preview.
 - Slide deck in `docs/slides/symcc.pptx`.
-- README: a "Swarm Harness" vision line under the tagline.
+- README: an "Agent Organization" vision line under the tagline.
 
 ## 0.2.0
 
