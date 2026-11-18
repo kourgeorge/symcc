@@ -3,11 +3,14 @@
 // so the logic doesn't depend on Claude Code's types.
 //
 // First version (T-240, step 1 of docs/research/host-independence.md): the members have the same names and
-// shapes as the parts of Claude Code's `$` that symcc uses. Since T-243 (step 4) the agents are the first part
-// in symcc's own words (`agents`): Claude Code's adapter (claude/host.ts) adds them to its `$`, and tests/host.test.ts
-// checks that the result fits. Each parameter is only what symcc passes, and each answer only
+// shapes as the parts of Claude Code's `$` that symcc uses. Since T-243 (step 4) the agents are in symcc's own words
+// (`agents`), and since T-244 (step 5) the lead (`lead`) and the screen (`ui`: `refresh`, and the board panel's values
+// in `panel`, or `noUi` for a host with no screen): Claude Code's adapter (claude/host.ts) builds them from its `$`,
+// and tests/host.test.ts checks that the result fits. Each parameter is only what symcc passes, and each answer only
 // what symcc reads, so another program (an OpenCode plugin's ctx, or plain Node/Bun in a standalone app)
 // can be made to fit it too. Later steps rename the members to symcc's own words.
+
+import type { SymccView } from '../types'
 
 /** What a command's run answers: its exit code and its output. */
 export type HostRunResult = { exitCode: number; stdout: string; stderr: string }
@@ -56,6 +59,29 @@ export type HostPaneOpen = { id: string; title?: string; focus?: true; closeOnEs
 /** A panel as the panel list answers it. */
 export type HostPane = { id: string; isShown: boolean; isPlaced: boolean }
 
+/**
+ * The lead: the main chat symcc reports to. `send` gives it a message from symcc (a board update) as if the owner
+ * typed it: an idle lead wakes up and answers it, a busy one gets it once its turn ends. For Claude Code it is a
+ * submitted prompt; for OpenCode a queued session prompt; a standalone app that runs the lead chat itself adds it to
+ * that chat. Rejects when it can't be given.
+ */
+export type HostLead = { send: (text: string) => Promise<unknown> }
+
+/**
+ * The board panel's values the panel draws from: which task is open ('' = the list), which view (tab) and which scout
+ * ('' = the list), and the published board view. A host with a panel keeps them where its panel can read them.
+ */
+export type PanelValues = {
+  readOpened: () => Promise<string>
+  updateOpened: (change: (value: string) => string) => Promise<unknown>
+  readTab: () => Promise<string>
+  updateTab: (change: (value: string) => string) => Promise<unknown>
+  readScoutOpen: () => Promise<string>
+  updateScoutOpen: (change: (value: string) => string) => Promise<unknown>
+  readView: () => Promise<SymccView>
+  updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
+}
+
 export interface Host {
   /** this plugin: its name (from plugin.json) and its folder, where roles/, kinds/ and examples/ ship */
   plugin: { name: string; root: string }
@@ -69,8 +95,8 @@ export interface Host {
     /** what this session has cost so far, when known */
     usage: () => Promise<{ cost?: { usd: number } }>
   }
-  /** a prompt for the lead, as if typed: how an idle lead is woken with a board update */
-  prompt: { submit: (input: { text: string }) => Promise<unknown> }
+  /** the lead: the main chat symcc reports to (see HostLead) */
+  lead: HostLead
   /** the workers, scouts and checkers symcc runs; for Claude Code see claude/host.ts */
   agents: {
     /** starts an agent in the background; rejects when it can't start (see notReadyYet) */
@@ -104,10 +130,25 @@ export interface Host {
     /** a line in the debug log */
     log: (text: string, options?: { to?: 'transcript' | 'debug' }) => void
     /** asks for the board panel to be drawn again */
-    invalidate: (event: 'ui.render') => void
+    refresh: () => void
     /** opens a panel; isPlaced false = open but not drawn (no room, or no screen that shows panels) */
     open: (pane: HostPaneOpen) => Promise<{ isPlaced: boolean }>
     /** the panels open now */
     panes: () => Promise<readonly HostPane[]>
+    /** the board panel's own values (see PanelValues); none: a host with no board panel (they read as their start values) */
+    panel?: PanelValues
   }
+}
+
+/**
+ * A ui for a host with no screen at all (e.g. a standalone app run headless, or a test): nothing is shown, no panel
+ * opens (isPlaced false), and none is open.
+ */
+export const noUi: Host['ui'] = {
+  toast: () => undefined,
+  status: () => undefined,
+  log: () => undefined,
+  refresh: () => undefined,
+  open: async () => ({ isPlaced: false }),
+  panes: async () => [],
 }

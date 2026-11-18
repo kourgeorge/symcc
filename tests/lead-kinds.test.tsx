@@ -56,7 +56,7 @@ function setup(mine: Record<string, string> = {}) {
         return { exitCode: 0, stdout: '', stderr: '' }
       },
     },
-    ui: { invalidate: () => undefined, toast: () => undefined, log: () => undefined, status: () => undefined },
+    ui: { refresh: () => undefined, toast: () => undefined, log: () => undefined, status: () => undefined },
     // A skipped role file tells the lead (through a timer); nothing is sent here.
     clock: { after: () => undefined },
   }

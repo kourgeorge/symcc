@@ -152,7 +152,7 @@ test('there is no logo_motion setting: an old board.json with logo_motion false 
 function fake$(shown = true) {
   const ticks: (() => void)[] = []
   const $ = {
-    ui: { panes: async () => [{ id: 'symcc-board', title: '', isShown: shown, isFocused: false, isPlaced: true }], invalidate: () => void $.redraws++ },
+    ui: { panes: async () => [{ id: 'symcc-board', title: '', isShown: shown, isFocused: false, isPlaced: true }], refresh: () => void $.redraws++ },
     clock: { every: (_ms: number, f: () => void) => (ticks.push(f), { cancel: () => void ticks.splice(ticks.indexOf(f), 1) }) },
     redraws: 0,
     tick: () => ticks.slice().forEach(f => f()),

@@ -4,7 +4,6 @@ import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, br
 import { type $, S } from '../state'
 import { resetPane } from './open'
 import { ownerSettings } from '../tools'
-import { load } from '../store'
 import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../roles'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
 import type { PaneParts } from './parts'
@@ -463,9 +462,8 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
  *  doesn't reach the panel from a text box. */
 export async function settingsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
-  // scout_findings, tests_with_changes and checker are not in the panel's view of the board: read them from the board file
-  const file = await load(claudeHost($)).catch(() => null)
-  const v = { ...pane.v, scout_findings: file?.scout_findings, tests_with_changes: file?.tests_with_changes, checker: file?.checker }
+  // every setting comes from the panel's view of the board (publish in lead.ts puts them there)
+  const v = pane.v
   const { builtIn, project, broken } = await roleLists(claudeHost($))
   const roles = mergeRoles(builtIn, project)
   const openedBroken = roleView.open ? broken.find(b => b.name === roleView.open) : undefined
@@ -474,7 +472,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (roleView.open && !opened) resetRoleOpen()
   if (opened && roleView.draft) return roleEditPage($, pane, defSource(opened.name, builtIn, project))
   if (opened && roleView.prompt) return rolePromptPage($, pane, opened, roleView.prompt)
-  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, checkerOn(file))
+  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, checkerOn(v))
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
   const kl = await kindLists(claudeHost($))
   const kinds = mergeKinds(kl.builtIn, kl.project)

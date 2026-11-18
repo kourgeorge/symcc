@@ -1,17 +1,18 @@
 // Claude Code's side of the Host (hooks/host.ts): claudeHost makes a Host from one hook's `$`. Most members are the
 // same calls under the same names; `agents` is in Claude Code's terms here: symcc's workers, scouts and checkers are
 // background subagents of the agent types register.tsx registers ("<name>:worker", "<name>:worker-web", ...,
-// "<name>:scout"), listed by $.agent.list() and told to stop with $.session.send. It also carries the board panel's
-// values (`panel`), which only Claude Code's `$` holds.
+// "<name>:scout"), listed by $.agent.list() and told to stop with $.session.send. The lead is the main chat, sent a
+// prompt with $.prompt.submit; `ui.refresh` is $.ui.invalidate('ui.render'), and `ui.panel` carries the board panel's
+// values, which only Claude Code's `$` holds.
 import type { EngineInterface } from 'claude-code'
 import type { Host, HostAgent, HostAgentStart } from '../host'
 import { namesFor } from '../name'
-import { S, panelValues, type PanelValues } from '../plugin/state'
+import { S, panelValues } from '../plugin/state'
 import { asBaseWorkers, workerTypeFor } from './agent-types'
 import { isNotReady, scoutNotReady } from './agents'
 
-/** The Host register.tsx hands the logic: Host, plus the board panel's values (see plugin/state.ts panelValues). */
-export type ClaudeHost = Host & { panel: PanelValues }
+/** The Host register.tsx hands the logic (the board panel's values are its ui.panel). */
+export type ClaudeHost = Host
 
 /** The Claude Code agent type an agent of this kind is started as: a worker's fits its role's extra tools; scouts and checkers are scouts. */
 export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: string = S.N.name): string {
@@ -60,7 +61,7 @@ function envGet($: EngineInterface, name: string): Promise<string | undefined> {
 
 /**
  * The hook's `$` as a Host: each member makes the same call on the same `$` (so a hook's waits still count against its
- * own time), plus `agents`, and `panel`, the board panel's values (plugin/state.ts). Cheap and holds
+ * own time), plus `agents`, `lead`, and `ui.panel`, the board panel's values (plugin/state.ts). Cheap and holds
  * nothing, so each hook makes its own. Written out member by member: Claude Code's loader only lets `$` be used as
  * `$.noun.event(...)` or handed to the plugin's own functions, so `$` can't be wrapped as a whole (and some calls want
  * their first argument written out: see envGet).
@@ -76,7 +77,7 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       },
     },
     session: { id: () => $.session.id(), repo: () => $.session.repo(), root: () => $.session.root(), usage: () => $.session.usage() },
-    prompt: { submit: input => $.prompt.submit(input) },
+    lead: { send: text => $.prompt.submit({ text }) },
     agents: claudeAgents($),
     env: { get: name => envGet($, name) },
     fs: {
@@ -92,11 +93,11 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       toast: text => $.ui.toast(text),
       status: text => $.ui.status(text),
       log: (text, options) => $.ui.log(text, options),
-      // its only event is 'ui.render'; the loader wants the event written out
-      invalidate: () => $.ui.invalidate('ui.render'),
+      // the board panel is drawn on 'ui.render'; the loader wants the event written out
+      refresh: () => $.ui.invalidate('ui.render'),
       open: pane => $.ui.open(pane),
       panes: () => $.ui.panes(),
+      panel: panelValues($),
     },
-    panel: panelValues($),
   }
 }

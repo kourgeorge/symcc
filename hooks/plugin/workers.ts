@@ -27,20 +27,20 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
   return fillPrompt(kind, { ...values, role: roleSection(role, values) })
 }
 
-export async function pump($: Host) {
+export async function pump(host: Host) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!S.driving) return // another session drives the board and starts its work
   if (inPlan(S.plan)) return // plan mode: nothing starts; workers already running keep going
-  const b = await load($)
+  const b = await load(host)
   if (modeOf(b) === 'off' || !symccOn(b)) return
   if (!ready(b).length) return
-  if (!(await gitReady($, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
+  if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
   for (const t of ready(b)) {
     if (workers.size >= b.max_parallel) break
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
-    await startWorker($, t.id).catch(async (err: Error) => {
-      await change($, x => patchTask(x, t.id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, t.id), now(), 'stopped', "couldn't start") }, now()))
-      tellLead($, `${t.id} couldn't start: ${err.message.slice(0, 300)}`)
+    await startWorker(host, t.id).catch(async (err: Error) => {
+      await change(host, x => patchTask(x, t.id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, t.id), now(), 'stopped', "couldn't start") }, now()))
+      tellLead(host, `${t.id} couldn't start: ${err.message.slice(0, 300)}`)
     })
   }
 }
@@ -49,33 +49,33 @@ export async function pump($: Host) {
  * Starts a worker on task `id`, but only if it is still "todo" and no live agent works on it
  * (see mayStart). The claim happens inside change(), so two starts can't both win.
  */
-export async function startWorker($: Host, id: string) {
+export async function startWorker(host: Host, id: string) {
   // Not while its last try is still being checked (it was resumed or retried meanwhile): it starts when the check ends.
   if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return
   starting.add(id)
   onPurpose.delete(id) // a new try: an old stop on purpose is over
   try {
-    const listed = await agentsNow($)
+    const listed = await agentsNow(host)
     if (!listed) return // can't see which agents run; try again on the next pump
     // An agent this copy stopped (an orphan, see stopOrphans) doesn't hold its task any more, even
     // while it stays listed: every tool it tries is refused, so a fresh worker may start (sendBackIdle
     // sent its task back to todo for exactly that).
     const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id))
-    const b = await load($)
+    const b = await load(host)
     const t0 = find(b, id)
     if (!mayStart(t0, agents, S.N.name)) return
     // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
     // the owner retried it after it was wrongly failed): it is done, not tried again.
-    if (await mergedBeforeStart($, t0!)) return
+    if (await mergedBeforeStart(host, t0!)) return
     // the branch it merges into is gone: it waits for the owner instead of failing
-    if (await waitIfBranchGone($, b, t0!, 'start')) return
-    const { dir, branch } = await prepareWorktree($, t0!, intoOf(t0!))
+    if (await waitIfBranchGone(host, b, t0!, 'start')) return
+    const { dir, branch } = await prepareWorktree(host, t0!, intoOf(t0!))
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
-    await copyReports($, t0!, dir).catch(() => [])
-    const roles = await loadRoles($)
+    await copyReports(host, t0!, dir).catch(() => [])
+    const roles = await loadRoles(host)
     // the kind files are read again too, so the prompt has the kind's description as it is now
-    await loadKinds($).catch(() => undefined)
-    const t = await change($, x => {
+    await loadKinds(host).catch(() => undefined)
+    const t = await change(host, x => {
       const cur = find(x, id)
       if (!mayStart(cur, agents, S.N.name)) return [x, null]
       const at = now()
@@ -87,7 +87,7 @@ export async function startWorker($: Host, id: string) {
     let agentId: string
     try {
       const role = findRole(roles, roleOf(t))
-      const spawned = await $.agents.spawn({ kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+      const spawned = await host.agents.spawn({ kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
       if (!spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
     } catch (err) {
@@ -99,7 +99,7 @@ export async function startWorker($: Host, id: string) {
       // Not the task's fault: the worker type isn't there yet (e.g. just after a reload).
       // Put the task back as it was, with no try counted; the next pump or check tries again.
       notReady.set(id, misses + 1)
-      await change($, x =>
+      await change(host, x =>
         find(x, id)?.status === 'doing' && find(x, id)?.session === S.me
           ? patchTask(x, id, { status: 'todo', session: before.session, attempts: before.attempts, branch: before.branch, note: before.note, runs: before.runs }, now())
           : x,
@@ -109,7 +109,7 @@ export async function startWorker($: Host, id: string) {
     notReady.delete(id)
     workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
     // Record which agent works on the task, so a reloaded copy can find it.
-    await change($, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId }, now()) : x))
+    await change(host, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId }, now()) : x))
   } finally {
     starting.delete(id)
   }
@@ -120,16 +120,16 @@ export async function startWorker($: Host, id: string) {
  * and alreadyMerged), whatever ended that try (a reload, a timeout, a retry): then it is marked done
  * here, and the lead is told, instead of starting a new try.
  */
-async function mergedBeforeStart($: Host, t: BoardTask): Promise<boolean> {
+async function mergedBeforeStart(host: Host, t: BoardTask): Promise<boolean> {
   if (!(t.attempts > 0)) return false
-  const sha = mergedThisTry(t) ?? (await alreadyMerged($, t).catch(() => null))
+  const sha = mergedThisTry(t) ?? (await alreadyMerged(host, t).catch(() => null))
   if (!sha) return false
-  const done = await change($, x => {
+  const done = await change(host, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== 'todo' || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     return [putTask(x, mergedDone(cur, sha, 'tried again', now())), true] as [Board, boolean]
   })
-  if (done) tellLead($, `✓ ${t.id} "${t.title}" is done: its work (${tryLabel(t)}) was already merged into ${intoOf(t)} (${shortSha(sha)}), so no new try starts.`)
+  if (done) tellLead(host, `✓ ${t.id} "${t.title}" is done: its work (${tryLabel(t)}) was already merged into ${intoOf(t)} (${shortSha(sha)}), so no new try starts.`)
   return done
 }
 
@@ -140,29 +140,29 @@ async function mergedBeforeStart($: Host, t: BoardTask): Promise<boolean> {
  * or its work was about to be merged. Returns whether the branch is gone (then nothing else happens).
  * Written only while the task is still as it was (same status and try).
  */
-export async function waitIfBranchGone($: Host, b: Board, t: SymccTask, when: 'start' | 'merge'): Promise<boolean> {
+export async function waitIfBranchGone(host: Host, b: Board, t: SymccTask, when: 'start' | 'merge'): Promise<boolean> {
   const into = intoOf(t)
-  if (await branchExists($, into)) return false
-  const instead = await homeBranch($)
+  if (await branchExists(host, into)) return false
+  const instead = await homeBranch(host)
   const question = goneBranchQuestion(into, instead)
   const options = goneBranchOptions(into, instead)
-  const asked = await change($, x => {
+  const asked = await change(host, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     const line = `${when === 'start' ? 'not started' : 'not merged'}: branch ${into} is gone; asked the owner whether to merge into ${instead} instead`
     return [patchTask(x, t.id, { status: 'waiting', question, options, merge_wait: undefined, note: 'waiting for you', history: [...cur.history, line], ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
   })
   if (asked) {
-    sayNeedsYou($, b, t, question)
-    tellLead($, `${t.id} "${t.title}" ${when === 'start' ? "can't start" : "can't be merged"}: the branch it merges into, ${into}, is gone. It now waits for the owner: ${question} An answer of yes moves it to ${instead}; or ${S.N.name} change ${t.id} with merge_into set to an existing branch.`)
-    await publish($, await load($))
+    sayNeedsYou(host, b, t, question)
+    tellLead(host, `${t.id} "${t.title}" ${when === 'start' ? "can't start" : "can't be merged"}: the branch it merges into, ${into}, is gone. It now waits for the owner: ${question} An answer of yes moves it to ${instead}; or ${S.N.name} change ${t.id} with merge_into set to an existing branch.`)
+    await publish(host, await load(host))
   }
   return true
 }
 
 /** The agents of this session as host.agents.list() reports them; null if the list can't be read. */
-export async function agentsNow($: Host): Promise<AgentInfo[] | null> {
-  return $.agents.list().catch(() => null)
+export async function agentsNow(host: Host): Promise<AgentInfo[] | null> {
+  return host.agents.list().catch(() => null)
 }
 
 /** The workers this copy of the plugin started, as agents (they may not be listed yet). */
@@ -172,16 +172,16 @@ export const knownWorkers = (): AgentInfo[] => [...workers].map(([id, w]) => ({ 
 export const ORPHAN_WAIT_MS = 20_000
 
 /** Waits up to `ms` until the agents `ids` have ended; returns those still alive (all of them if the list can't be read). */
-export async function waitEnded($: Host, ids: string[], ms: number): Promise<AgentInfo[]> {
+export async function waitEnded(host: Host, ids: string[], ms: number): Promise<AgentInfo[]> {
   if (!ids.length) return []
   const until = Date.now() + ms
-  // The time waited is also counted in $.clock sleeps, so the wait ends on $.clock's time too (not only the wall clock's).
+  // The time waited is also counted in host.clock sleeps, so the wait ends on host.clock's time too (not only the wall clock's).
   for (let waited = 0; ; waited += 500) {
-    const agents = await agentsNow($)
+    const agents = await agentsNow(host)
     const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED_STATUSES.includes(a.status)) : ids.map(id => ({ id, type: S.N.worker, status: 'running' }))
     if (!alive.length || waited >= ms || Date.now() > until) return alive
     aboutToWait()
-    await $.clock.sleep(500)
+    await host.clock.sleep(500)
   }
 }
 
@@ -193,7 +193,7 @@ export type TurnEndReason = 'answer' | 'aborted' | 'refusal' | 'error'
 export type TurnRefusal = { category: string | null; explanation: string | null }
 
 /** A worker's hand-back `answer` arrived; `end`: why its turn ended. */
-export async function workerFinished($: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {
+export async function workerFinished(host: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
@@ -210,30 +210,30 @@ export async function workerFinished($: Host, agentId: string, answer: string, e
     // The task is marked as being tested and merged (refreshed while that runs), so a reloaded
     // copy of the plugin sees it and doesn't send the task back to "todo" meanwhile.
     const ended = now()
-    tryNo = await change($, x => {
+    tryNo = await change(host, x => {
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
       limitMs = finishLimitMs(x.test_commands.length)
       return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens }) } : {}) }, ended), t.attempts] as [Board, number]
     })
-    if (tryNo !== undefined) beat = everyMs($, FINISH_BEAT_MS, () => void markFinishing($, w.task, tryNo!).catch(() => undefined))
+    if (tryNo !== undefined) beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, w.task, tryNo!).catch(() => undefined))
     // The whole step has a time limit (finishLimitMs: it grows with the test commands): the heartbeat above keeps going even when
     // the step hangs, so without it a stuck step would keep its task "doing" forever. Past the limit
     // the step is given up: it may still wake up later, but then it writes nothing (gaveUp).
-    const how = await withLimit($, tryNo === undefined ? null : limitMs, (gaveUp, over, turn) => finishWork($, agentId, w, answer, end, gaveUp, over, turn))
+    const how = await withLimit(host, tryNo === undefined ? null : limitMs, (gaveUp, over, turn) => finishWork(host, agentId, w, answer, end, gaveUp, over, turn))
     if (how === OVER) {
       beat?.cancel()
       beat = null
       finishing.delete(w.task)
-      await finishRanOver($, w.task, tryNo!, limitMs)
+      await finishRanOver(host, w.task, tryNo!, limitMs)
     }
   } finally {
     beat?.cancel()
-    if (tryNo !== undefined) await markFinishing($, w.task, tryNo, false).catch(() => undefined)
+    if (tryNo !== undefined) await markFinishing(host, w.task, tryNo, false).catch(() => undefined)
     finishing.delete(w.task)
-    await endCheck($, w.task)
+    await endCheck(host, w.task)
   }
-  await pump($)
+  await pump(host)
 }
 
 /** What withLimit gives back when the step ran over its limit. */
@@ -245,11 +245,11 @@ const OVER = Symbol('over')
  * `turn` (stepLimit's, only with a limit). Returns the step's result, or OVER when it ran over: then
  * the step is left to end on its own, its errors ignored.
  */
-async function withLimit<T>($: Host, ms: number | null, run: (gaveUp: () => boolean, over: Promise<unknown>, turn?: (go: boolean) => void) => Promise<T>): Promise<T | typeof OVER> {
+async function withLimit<T>(host: Host, ms: number | null, run: (gaveUp: () => boolean, over: Promise<unknown>, turn?: (go: boolean) => void) => Promise<T>): Promise<T | typeof OVER> {
   let gaveUp = false
   let letGo = () => {}
   const over = new Promise<typeof OVER>(r => (letGo = () => r(OVER)))
-  const limit = ms === null ? null : stepLimit($, ms, () => ((gaveUp = true), letGo()))
+  const limit = ms === null ? null : stepLimit(host, ms, () => ((gaveUp = true), letGo()))
   const step = run(() => gaveUp, over, limit?.turn)
   const how = limit?.on ? await Promise.race([step, over]) : await step
   limit?.cancel()
@@ -263,19 +263,19 @@ async function withLimit<T>($: Host, ms: number | null, run: (gaveUp: () => bool
  * its merge turn (the merge in front has its own limit); `turn(true)` starts it again from zero when
  * the step's own go begins (see checkAndMerge), so only the task's own work counts.
  */
-function stepLimit($: Host, ms: number, over: () => void) {
+function stepLimit(host: Host, ms: number, over: () => void) {
   let fired = false
   const fire = () => void (fired || ((fired = true), over()))
-  let timer = afterMs($, ms, fire)
+  let timer = afterMs(host, ms, fire)
   const on = timer !== null
   const cancel = () => void (timer?.cancel(), (timer = null))
-  return { on, cancel, turn: (go: boolean) => void (cancel(), go && on && !fired && (timer = afterMs($, ms, fire))) }
+  return { on, cancel, turn: (go: boolean) => void (cancel(), go && on && !fired && (timer = afterMs(host, ms, fire))) }
 }
 
-/** A one-time timer, if this Claude Code has one ($.clock.after); null when it has none. */
-function afterMs($: Host, ms: number, f: () => void): { cancel(): void } | null {
+/** A one-time timer, if this Claude Code has one (host.clock.after); null when it has none. */
+function afterMs(host: Host, ms: number, f: () => void): { cancel(): void } | null {
   try {
-    return $.clock.after(ms, f) ?? null
+    return host.clock.after(ms, f) ?? null
   } catch {
     return null
   }
@@ -287,14 +287,14 @@ function afterMs($: Host, ms: number, f: () => void): { cancel(): void } | null 
  * (its folder and branch are kept), or is done when its work already reached its branch. When its
  * try before was given up the same way, it is failed instead, so it never loops. The lead is told once.
  */
-async function finishRanOver($: Host, id: string, tryNo: number, limitMs: number) {
+async function finishRanOver(host: Host, id: string, tryNo: number, limitMs: number) {
   const min = Math.round(limitMs / 60_000)
   const still = (t: BoardTask | undefined): t is BoardTask => t?.status === 'doing' && t.attempts === tryNo
-  const before = find(await load($).catch(() => null) ?? emptyBoard(), id)
+  const before = find(await load(host).catch(() => null) ?? emptyBoard(), id)
   if (!still(before)) return
-  const sha = mergedThisTry(before) ?? (S.gitState === 'ok' ? await alreadyMerged($, before).catch(() => null) : null)
+  const sha = mergedThisTry(before) ?? (S.gitState === 'ok' ? await alreadyMerged(host, before).catch(() => null) : null)
   const twice = `its checking and merging ran over ${min} min twice in a row and was given up both times; nothing was merged`
-  const out = await change($, x => {
+  const out = await change(host, x => {
     const cur = find(x, id)
     if (!still(cur)) return [x, null] as [Board, null]
     const again = !sha && ranOverBefore(cur)
@@ -303,9 +303,9 @@ async function finishRanOver($: Host, id: string, tryNo: number, limitMs: number
   })
   if (!out) return
   const { t, again } = out
-  if (sha) tellLead($, `✓ ${id} "${t.title}" is done: its checking and merging ran over ${min} minutes, but its work was already merged (${shortSha(sha)}).`)
-  else if (again) tellLead($, `✗ ${id} "${t.title}" failed: its checking and merging ran over ${min} minutes twice in a row and was given up both times, so no new try starts. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
-  else tellLead($, `${id} "${t.title}": its checking and merging ran over ${min} minutes and seemed stuck, so I stopped waiting for it and sent it back to todo for a fresh try (its folder and branch are kept). Nothing to do unless it gets stuck again.`)
+  if (sha) tellLead(host, `✓ ${id} "${t.title}" is done: its checking and merging ran over ${min} minutes, but its work was already merged (${shortSha(sha)}).`)
+  else if (again) tellLead(host, `✗ ${id} "${t.title}" failed: its checking and merging ran over ${min} minutes twice in a row and was given up both times, so no new try starts. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
+  else tellLead(host, `${id} "${t.title}": its checking and merging ran over ${min} minutes and seemed stuck, so I stopped waiting for it and sent it back to todo for a fresh try (its folder and branch are kept). Nothing to do unless it gets stuck again.`)
 }
 
 /** Task `t` failed with `note`, its running try ended as stopped (`end`): its checking and merging was given up a second time in a row. */
@@ -315,9 +315,9 @@ function ranOverFailed(t: BoardTask, note: string, end: string): BoardTask {
 }
 
 /** A given-up step of task `t` ended late: when its work reached the branch anyway (`merged`, or else alreadyMerged), landedLate marks it done. */
-async function landIfMerged($: Host, t: SymccTask, merged: string | undefined, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
-  const sha = merged ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
-  if (sha) await landedLate($, t, sha, made, kind, status)
+async function landIfMerged(host: Host, t: SymccTask, merged: string | undefined, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
+  const sha = merged ?? (S.gitState === 'ok' ? await alreadyMerged(host, t).catch(() => null) : null)
+  if (sha) await landedLate(host, t, sha, made, kind, status)
 }
 
 /**
@@ -328,46 +328,46 @@ async function landIfMerged($: Host, t: SymccTask, merged: string | undefined, m
  * that commit and the step's commits (`made`) are recorded. Otherwise the lead is told the work landed,
  * so they can decide. The lead is told once either way.
  */
-async function landedLate($: Host, t: SymccTask, sha: string, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
+async function landedLate(host: Host, t: SymccTask, sha: string, made: readonly string[], kind: 'finish' | 'approve' | 'merge', status: SymccTask['status']) {
   const fits = (cur: BoardTask) => cur.attempts === t.attempts && (kind === 'finish' ? ['doing', 'todo', 'failed'].includes(cur.status) : cur.status === status)
   const short = shortSha(sha)
   const into = intoOf(t)
-  const r = await change($, x => {
+  const r = await change(host, x => {
     const cur = find(x, t.id)
     if (!cur || !fits(cur)) return [x, { done: false, cur }] as [Board, { done: boolean; cur?: BoardTask }]
     const next = mergedDone({ ...cur, runs: addCommits(cur.runs, [...made, sha]) }, sha, 'left as given up', now())
     const line = `${tryLabel(cur)}: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}), so it is done`
     return [putTask(x, { ...next, history: [...(cur.history ?? []), line] }), { done: true, cur }] as [Board, { done: boolean; cur?: BoardTask }]
   }).catch((e: Error) => {
-    tellLead($, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short}), but the board could not be updated (${e.message.slice(0, 200)}).`)
+    tellLead(host, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short}), but the board could not be updated (${e.message.slice(0, 200)}).`)
     return null
   })
   if (!r) return
   if (r.done) {
-    tellLead($, `✓ ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}).`)
-    if (await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => false)) await git($, ['branch', '-d', taskBranch(t)]).catch(() => undefined)
-    void pump($)
+    tellLead(host, `✓ ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}).`)
+    if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) await git(host, ['branch', '-d', taskBranch(t)]).catch(() => undefined)
+    void pump(host)
     return
   }
   if (r.cur?.status === 'done' && r.cur.merged) return // already found merged (or merged again) and told
   const now_ = r.cur ? `it is now ${r.cur.status}${r.cur.attempts !== t.attempts ? `, on try ${r.cur.attempts}` : ''}` : 'it is no longer on the board'
-  tellLead($, `${t.id} "${t.title}": its checking and merging (${tryLabel(t)}) was given up as stuck, but it ended late and its work was merged into ${into} (${short}) after all. The task moved on meanwhile (${now_}), so I left it as it is: decide whether it is done (then drop the new try) or still needs work.`)
+  tellLead(host, `${t.id} "${t.title}": its checking and merging (${tryLabel(t)}) was given up as stuck, but it ended late and its work was merged into ${into} (${short}) after all. The task moved on meanwhile (${now_}), so I left it as it is: decide whether it is done (then drop the new try) or still needs work.`)
 }
 
-/** A repeating timer, if this Claude Code has one ($.clock.every); null when it has none. */
-function everyMs($: Host, ms: number, f: () => void): { cancel(): void } | null {
+/** A repeating timer, if this Claude Code has one (host.clock.every); null when it has none. */
+function everyMs(host: Host, ms: number, f: () => void): { cancel(): void } | null {
   try {
-    return $.clock.every(ms, f)
+    return host.clock.every(ms, f)
   } catch {
     return null
   }
 }
 
 /** Refreshes (`on`) or removes task `id`'s "being tested and merged" mark and its check step (BoardTask.checking), only while it is still "doing" with try `tryNo`. */
-async function markFinishing($: Host, id: string, tryNo: number, on = true) {
+async function markFinishing(host: Host, id: string, tryNo: number, on = true) {
   // nothing to remove (the task already left "doing", which drops the mark): don't write the board
-  if (!on && !hasMark(find(await load($), id))) return
-  await change($, x => {
+  if (!on && !hasMark(find(await load(host), id))) return
+  await change(host, x => {
     const t = find(x, id)
     if (t?.status !== 'doing' || t.attempts !== tryNo || (!on && !hasMark(t))) return x
     const at = now()
@@ -377,9 +377,9 @@ async function markFinishing($: Host, id: string, tryNo: number, on = true) {
 const hasMark = (t: BoardTask | undefined) => !!(t?.finishing || t?.checking)
 
 /** Refreshes (`on`) or removes the check step of task `id` (an approve or a merge waiting for files), only while it is still `status` with try `tryNo`. */
-async function markChecking($: Host, id: string, status: SymccTask['status'], tryNo: number, on = true) {
-  if (!find(await load($), id)?.checking) return
-  await change($, x => {
+async function markChecking(host: Host, id: string, status: SymccTask['status'], tryNo: number, on = true) {
+  if (!find(await load(host), id)?.checking) return
+  await change(host, x => {
     const t = find(x, id)
     if (!t?.checking || t.status !== status || t.attempts !== tryNo) return x
     return patchTask(x, id, { checking: on ? { ...t.checking, at: now() } : undefined }, t.updated_at)
@@ -391,9 +391,9 @@ async function markChecking($: Host, id: string, status: SymccTask['status'], tr
  * hadn't found the worker again yet): when the board still has the agent's task "doing" for this
  * session, the report is taken as that worker's, so its work is still checked and merged.
  */
-export async function lateHandBack($: Host, agentId: string): Promise<boolean> {
+export async function lateHandBack(host: Host, agentId: string): Promise<boolean> {
   if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId) || checkerRuns.has(agentId)) return false
-  const b = await load($).catch(() => null)
+  const b = await load(host).catch(() => null)
   const t = b?.tasks.find(x => x.agent === agentId)
   // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
   if (!t || t.status !== 'doing' || t.session !== S.me || finishing.has(t.id) || starting.has(t.id) || handedBack(t)) return false
@@ -404,8 +404,8 @@ export async function lateHandBack($: Host, agentId: string): Promise<boolean> {
 }
 
 /** The worker behind `agentId`: from memory, or (after a plugin reload) picked back up from the board by lateHandBack. Undefined when it can't be found. */
-export async function workerOf($: Host, agentId: string): Promise<Worker | undefined> {
-  if (!workers.has(agentId)) await lateHandBack($, agentId).catch(() => false)
+export async function workerOf(host: Host, agentId: string): Promise<Worker | undefined> {
+  if (!workers.has(agentId)) await lateHandBack(host, agentId).catch(() => false)
   return workers.get(agentId)
 }
 
@@ -427,12 +427,12 @@ export const offAsked = new Map<string, string>()
  * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
  * stays in review. Tasks already stopped another way are left alone. Returns the ids of both kinds.
  */
-export async function stopChecks($: Host, why: string): Promise<{ back: string[]; review: string[] }> {
+export async function stopChecks(host: Host, why: string): Promise<{ back: string[]; review: string[] }> {
   const back: string[] = []
   const review: string[] = []
   for (const id of [...finishing, ...approving]) {
     if (stopAsked.has(id) || back.includes(id) || review.includes(id)) continue
-    const kind = await change($, x => {
+    const kind = await change(host, x => {
       const cur = find(x, id)
       if ((cur?.status === 'review' || cur?.status === 'waiting') && approving.has(id)) return [x, 'review'] as [Board, string]
       if (cur?.status !== 'doing' || !finishing.has(id)) return [x, null] as [Board, null]
@@ -468,12 +468,12 @@ export const mergingNow = (id: string) => approving.has(id)
 export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a moment`
 
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
-export async function endCheck($: Host, id: string) {
+export async function endCheck(host: Host, id: string) {
   offAsked.delete(id)
   if (!stopAsked.has(id)) return
   stopAsked.delete(id)
   try {
-    if (find(await load($), id)?.status === 'dropped') await removeWorktree($, id, worktreeDir(id))
+    if (find(await load(host), id)?.status === 'dropped') await removeWorktree(host, id, worktreeDir(id))
   } catch {
     // the regular check removes leftover folders of dropped tasks (cleanupMerged)
   }
@@ -484,8 +484,8 @@ export async function endCheck($: Host, id: string) {
  * status and try number as when its check began. Returns null when written, else the task as the
  * board has it now ('gone' when it is not on the board any more), and nothing is written.
  */
-async function writeIfSame($: Host, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
-  return change<SymccTask | 'gone' | null>($, x => {
+async function writeIfSame(host: Host, t: SymccTask, patch: (cur: SymccTask) => Partial<BoardTask>): Promise<SymccTask | 'gone' | null> {
+  return change<SymccTask | 'gone' | null>(host, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, 'gone']
     if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur]
@@ -498,10 +498,10 @@ async function writeIfSame($: Host, t: SymccTask, patch: (cur: SymccTask) => Par
  * Its new status and history are kept and `line` is added to them; but when the merge already
  * happened, it is done, with a line saying the stop came too late.
  */
-async function changedMeanwhile($: Host, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
+async function changedMeanwhile(host: Host, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string) {
   const merged = r.ok && !r.review && !!r.merged
   const off = offAsked.get(t.id)
-  const was = await change($, x => {
+  const was = await change(host, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, null] as [Board, null]
     const late = off ? `${off} while it was being merged, too late` : `it was ${cur.status} while being merged, too late`
@@ -512,18 +512,18 @@ async function changedMeanwhile($: Host, t: SymccTask, b: Board, r: CheckResult,
   })
   if (!was) return
   if (!merged) {
-    tellLead($, off ? `${t.id} "${t.title}" was stopped while its work was being checked (${off}); nothing was merged and it is ${was} again, its files kept.` : `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
+    tellLead(host, off ? `${t.id} "${t.title}" was stopped while its work was being checked (${off}); nothing was merged and it is ${was} again, its files kept.` : `${t.id} "${t.title}" was ${was} while its work was being checked; nothing was merged and it stays ${was}.`)
     return
   }
   if (off) {
-    sayDone($, b, t.id)
-    if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', taskBranch(t)])
-    tellLead($, `✓ ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`)
+    sayDone(host, b, t.id)
+    if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await git(host, ['branch', '-d', taskBranch(t)])
+    tellLead(host, `✓ ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`)
     return
   }
-  sayDone($, b, t.id)
-  if (await removeWorktree($, t.id, worktree, agentId, true).catch(() => false)) await git($, ['branch', '-d', taskBranch(t)])
-  tellLead($, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
+  sayDone(host, b, t.id)
+  if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await git(host, ['branch', '-d', taskBranch(t)])
+  tellLead(host, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
 /** Why a try whose turn ended on an API error or a refusal failed: "the worker's turn ended on an error", or "the model refused: <its explanation>". */
@@ -545,13 +545,13 @@ let reportWarned = false
  * and a rename, cut at REPORT_MAX_CHARS) and puts its path on the try's run. A failure is told
  * once and never stops the task.
  */
-export async function saveReport($: Host, t: SymccTask, answer: string) {
+export async function saveReport(host: Host, t: SymccTask, answer: string) {
   if (!answer.trim()) return
   const rel = reportFile(S.N.dir, t.id, t.attempts)
   try {
-    await $.process.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
-    await safeWrite($, path(rel), reportText(answer), 'the report')
-    await change($, x => {
+    await host.process.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
+    await safeWrite(host, path(rel), reportText(answer), 'the report')
+    await change(host, x => {
       const cur = find(x, t.id)
       if (!cur?.runs?.length || cur.attempts !== t.attempts) return x
       const runs = [...cur.runs]
@@ -562,8 +562,8 @@ export async function saveReport($: Host, t: SymccTask, answer: string) {
     if (reportWarned) return
     reportWarned = true
     const msg = `${t.id}: could not save the worker's report to ${rel} (${(e as Error).message.slice(0, 200)}); the task goes on. Later reports that fail are not told again.`
-    $.ui.toast(S.N.toast(msg))
-    tellLead($, msg)
+    host.ui.toast(S.N.toast(msg))
+    tellLead(host, msg)
   }
 }
 
@@ -576,11 +576,11 @@ export async function saveReport($: Host, t: SymccTask, answer: string) {
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
  * an API error or a refusal → failed with the reason; else done: checked and merged (an investigation: its answer).
  */
-export async function finishWork($: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
-  const b = await load($)
+export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd = { reason: 'answer' }, gaveUp: () => boolean = () => false, release?: Promise<unknown>, turn?: (go: boolean) => void) {
+  const b = await load(host)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return // changed or dropped meanwhile
-  await saveReport($, t, answer)
+  await saveReport(host, t, answer)
   const summary = cutLine(answer, 600) || '(no summary)'
   // Its time was up: what it handed back is its report; the task fails with its work kept, nothing is merged.
   if (t.wrap_up) {
@@ -588,11 +588,11 @@ export async function finishWork($: Host, agentId: string, w: Pick<Worker, 'task
     // An investigation's hand-back is its answer so far: it still goes to review for the owner to read.
     if (isInvestigation(t)) {
       if (gaveUp()) return
-      await answered($, t, answer, summary, limit)
+      await answered(host, t, answer, summary, limit)
       return
     }
-    if (await writeIfSame($, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: [...cur.history, `${tryLabel(t)}: out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`], ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return
-    tellLead($, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: [...cur.history, `${tryLabel(t)}: out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`], ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return
+    tellLead(host, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
     return
   }
   const q = t.try_question
@@ -600,45 +600,45 @@ export async function finishWork($: Host, agentId: string, w: Pick<Worker, 'task
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
     const { question, options } = q
-    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'question') }))) return
-    sayNeedsYou($, b, t, question)
-    tellLead($, workerQuestionText(t.id, question, options))
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'question') }))) return
+    sayNeedsYou(host, b, t, question)
+    tellLead(host, workerQuestionText(t.id, question, options))
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need)
-    if (await writeIfSame($, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`], ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return
-    sayNeedsYou($, b, t, question)
-    tellLead($, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`], ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return
+    sayNeedsYou(host, b, t, question)
+    tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
   } else if (end.reason === 'aborted') {
-    if (await writeIfSame($, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
-    tellLead($, `${t.id} "${t.title}": the worker was stopped before finishing.`)
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return
+    tellLead(host, `${t.id} "${t.title}": the worker was stopped before finishing.`)
   } else if (end.reason === 'error' || end.reason === 'refusal') {
     const why = endFailure(end)
-    if (await writeIfSame($, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
-    tellLead($, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
+    tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
   } else if (isInvestigation(t)) {
     if (gaveUp()) return
-    await answered($, t, answer, summary)
+    await answered(host, t, answer, summary)
   } else {
-    if (gaveUp() || (await waitIfBranchGone($, b, t, 'merge'))) return
-    await change($, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
+    if (gaveUp() || (await waitIfBranchGone(host, b, t, 'merge'))) return
+    await change(host, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: 'checking and merging' }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
     // The checker setting: a change that is not docs only is held before it merges (or goes to review), and a checker tries to break it first.
     const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
-    let r: CheckResult = await checkAndMerge($, t, w.worktree, b, 'finish', made, stop, false, release, turn, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    if (r.ok && r.held && !gaveUp() && !stop()) r = await afterChecker($, t, b, r, w.worktree, made, stop, release, turn)
+    let r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, turn, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    if (r.ok && r.held && !gaveUp() && !stop()) r = await afterChecker(host, t, b, r, w.worktree, made, stop, release, turn)
     // Given up meanwhile: the task was already sent back (or found merged); this late outcome is not
     // written over it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
-      await landIfMerged($, t, r.merged, made, 'finish', 'doing')
+      await landIfMerged(host, t, r.merged, made, 'finish', 'doing')
       return
     }
-    await recordCommits($, t.id, made, r.merged)
-    if (r.blocked) await holdForFiles($, t, b, r, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`, w.worktree, agentId)
+    await recordCommits(host, t.id, made, r.merged)
+    if (r.blocked) await holdForFiles(host, t, b, r, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`, w.worktree, agentId)
     else
-      await settle($, t, b, r, summary, w.worktree, agentId).catch(async (e: unknown) => {
+      await settle(host, t, b, r, summary, w.worktree, agentId).catch(async (e: unknown) => {
         // Merged, but the outcome could not be written: the work is on its branch, so it still ends done.
-        if (!r.ok || r.review || !r.merged || !(await doneAfterMerge($, t, r.merged).catch(() => false))) throw e
+        if (!r.ok || r.review || !r.merged || !(await doneAfterMerge(host, t, r.merged).catch(() => false))) throw e
       })
   }
 }
@@ -650,14 +650,14 @@ export async function finishWork($: Host, agentId: string, w: Pick<Worker, 'task
  * failing tests, with the checker's report, so settle sends it back to its worker (counting a retry) or fails it.
  * No verdict (the checker was stopped, ran over its time or didn't start): it waits for the owner's review.
  */
-async function afterChecker($: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
+async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
   turn?.(false)
-  const c = await runChecker($, t, b, dir, stop)
+  const c = await runChecker(host, t, b, dir, stop)
   turn?.(true)
   const { held: _held, ...passed } = r
   if (c.verdict?.ok) {
     if (passed.review) return passed
-    return checkAndMerge($, t, dir, b, 'merge', made, stop, false, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    return checkAndMerge(host, t, dir, b, 'merge', made, stop, false, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
   }
   if (c.verdict && 'report' in c.verdict) return { ok: false, checker: true, detail: `the checker found problems: ${cutLine(c.verdict.report, 300)}`, testOutput: checkerOutput(c.verdict.report) }
   const why = stop()
@@ -677,26 +677,26 @@ export const ANSWERED_LATE_NOTE = 'answered (time ran out); waiting for you to r
  * review for the owner to read it, in every board mode. Its folder stays as it is for now. `limit`: set when
  * its time ran out (it was told to wrap up), so the answer is only what it had so far.
  */
-async function answered($: Host, t: SymccTask, answer: string, summary: string, limit?: number) {
+async function answered(host: Host, t: SymccTask, answer: string, summary: string, limit?: number) {
   const text = answer.trim() || '(no answer)'
   const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
   const late = limit !== undefined
-  if (await writeIfSame($, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: [...cur.history, `${tryLabel(t)}: answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`], ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
-  tellLead($, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
+  if (await writeIfSame(host, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: [...cur.history, `${tryLabel(t)}: answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`], ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
+  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
 }
 
 /**
  * Task `t`'s try merged `sha`, but settle could not write that: it is marked done now (unless it
  * already is), whatever happened to it meanwhile. Returns whether the board says done afterwards.
  */
-async function doneAfterMerge($: Host, t: SymccTask, sha: string): Promise<boolean> {
-  const done = await change($, x => {
+async function doneAfterMerge(host: Host, t: SymccTask, sha: string): Promise<boolean> {
+  const done = await change(host, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, false] as [Board, boolean]
     if (cur.status === 'done') return [x, true] as [Board, boolean]
     return [putTask(x, mergedDone({ ...cur, runs: addCommits(cur.runs, [sha]) }, sha, 'marked done', now())), true] as [Board, boolean]
   })
-  if (done) tellLead($, `✓ ${t.id} "${t.title}" merged into ${intoOf(t)} (${shortSha(sha)}); it is done.`)
+  if (done) tellLead(host, `✓ ${t.id} "${t.title}" merged into ${intoOf(t)} (${shortSha(sha)}); it is done.`)
   return done
 }
 
@@ -708,10 +708,10 @@ async function doneAfterMerge($: Host, t: SymccTask, sha: string): Promise<boole
  * way. The lead is told the first time only (not when it already waited for files). `line` goes
  * into its history that first time. Written only while the task is still as it was.
  */
-async function holdForFiles($: Host, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
+async function holdForFiles(host: Host, t: SymccTask, b: Board, r: CheckResult, line: string, worktree: string, agentId?: string, quiet = false) {
   const files = r.blocked!
   const note = waitFilesNote(intoOf(t), files)
-  const res = await change<SymccTask | 'gone' | boolean>($, x => {
+  const res = await change<SymccTask | 'gone' | boolean>(host, x => {
     const cur = find(x, t.id)
     if (!cur) return [x, 'gone']
     if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur]
@@ -721,11 +721,11 @@ async function holdForFiles($: Host, t: SymccTask, b: Board, r: CheckResult, lin
     return [y, first]
   })
   if (res === 'gone') return
-  if (typeof res !== 'boolean') return changedMeanwhile($, t, b, r, line, worktree, agentId)
+  if (typeof res !== 'boolean') return changedMeanwhile(host, t, b, r, line, worktree, agentId)
   if (!res) return
   const text = `${t.id} "${t.title}" passed its checks, but its merge into ${intoOf(t)} waits for the owner's files there (${note.replace(/^waiting for your files on \S+: /, '')}). It merges on its own at the next regular check once they are out of the way, with no new worker; ${S.N.name} retry ${t.id} merges it at once. Tell the owner.`
   if (quiet) noteForLead(text)
-  else tellLead($, text)
+  else tellLead(host, text)
 }
 
 /**
@@ -733,23 +733,23 @@ async function holdForFiles($: Host, t: SymccTask, b: Board, r: CheckResult, lin
  * (BoardTask.merge_wait): each one whose files are out of the way now (or whose branch is not
  * checked out any more) is merged again, with no worker (see mergeWaiting). Not in mode off.
  */
-export async function retryFileWaits($: Host) {
-  const b = await load($)
+export async function retryFileWaits(host: Host) {
+  const b = await load(host)
   if (modeOf(b) === 'off') return
   const waiting = b.tasks.filter(t => waitsForFiles(t) && !checkingNow(t.id))
   let current: string | null = null
   let status: string | null = null
   for (const t of waiting) {
-    current ??= (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
+    current ??= (await git(host, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
     if (current === intoOf(t)) {
       if (status === null) {
-        const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
+        const st = await git(host, ['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
         if (st.exitCode !== 0) return
         status = st.stdout
       }
       if (stillBlocks(status, blockerFiles(asBlockers(t.merge_wait)!), S.N.dir)) continue
     }
-    await mergeWaiting($, t.id).catch(() => undefined)
+    await mergeWaiting(host, t.id).catch(() => undefined)
     // that merge may have changed the owner's files: look again for the next one
     current = null
     status = null
@@ -763,30 +763,30 @@ export async function retryFileWaits($: Host) {
  * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
  * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
-export async function settle($: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false) {
+export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false) {
   const line = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   // A finished worker's try ends with the check's outcome (an approve is not a try: its task is in review, so nothing is set).
   const write = async (patch: (cur: SymccTask) => Partial<SymccTask>) => {
-    const moved = await writeIfSame($, t, cur => ({ ...patch(cur), ...endedBy(cur, now(), 'finished', finishedNote(r)) }))
-    if (moved && moved !== 'gone') await changedMeanwhile($, t, b, r, line, worktree, agentId)
+    const moved = await writeIfSame(host, t, cur => ({ ...patch(cur), ...endedBy(cur, now(), 'finished', finishedNote(r)) }))
+    if (moved && moved !== 'gone') await changedMeanwhile(host, t, b, r, line, worktree, agentId)
     return !moved
   }
   if (r.ask) {
     // The change was only files whose names look like secrets (see checkAndMerge): nothing merged, the task waits for the owner.
     const ask = r.ask
-    const moved = await writeIfSame($, t, cur => ({ status: 'waiting', question: ask.slice(0, 1000), note: 'waiting for you', merge_main: false, test_output: undefined, history: [...cur.history, line], ...endedBy(cur, now(), 'asked', 'only secret-looking files') }))
+    const moved = await writeIfSame(host, t, cur => ({ status: 'waiting', question: ask.slice(0, 1000), note: 'waiting for you', merge_main: false, test_output: undefined, history: [...cur.history, line], ...endedBy(cur, now(), 'asked', 'only secret-looking files') }))
     if (moved) {
-      if (moved !== 'gone') await changedMeanwhile($, t, b, r, line, worktree, agentId)
+      if (moved !== 'gone') await changedMeanwhile(host, t, b, r, line, worktree, agentId)
       return
     }
-    sayNeedsYou($, b, t, ask)
-    tellLead($, `${ask} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`)
+    sayNeedsYou(host, b, t, ask)
+    tellLead(host, `${ask} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`)
     return
   }
   if (r.review) {
     if (!(await write(cur => ({ status: 'review', note: `ready for review: ${r.noVerdict ? `the tests passed, but ${r.noVerdict}` : 'the checks passed'}, nothing merged yet${r.untested ? ` (${r.untested})` : ''}`, merge_main: false, test_output: undefined, history: [...cur.history, line] })))) return
-    tellLead($, `${r.noVerdict ? `${t.id}: ${r.noVerdict}. ` : ''}${r.untested ? `${r.untested}. ` : ''}${r.secrets?.length ? `${t.id}: ${secretsLeftText(r.secrets)}. ` : ''}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
+    tellLead(host, `${r.noVerdict ? `${t.id}: ${r.noVerdict}. ` : ''}${r.untested ? `${r.untested}. ` : ''}${r.secrets?.length ? `${t.id}: ${secretsLeftText(r.secrets)}. ` : ''}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
   const tries = t.conflict_tries ?? 0
@@ -794,7 +794,7 @@ export async function settle($: Host, t: SymccTask, b: Board, r: CheckResult, su
     // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
     const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
     if (!(await write(cur => ({ status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
+    tellLead(host, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
     return
   }
   const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
@@ -803,36 +803,36 @@ export async function settle($: Host, t: SymccTask, b: Board, r: CheckResult, su
     // Don't fail yet: a new worker gets the failing test output (or the checker's report) and fixes it.
     const note = `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${testTries + 1} of ${retries})`
     if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: [...cur.history, line] })))) return
-    tellLead($, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : 'failed its tests'}; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
+    tellLead(host, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : 'failed its tests'}; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)}, still after ${tries} tries to merge it in` : r.detail
   const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
   if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
-  if (r.ok) sayDone($, b, t.id)
+  if (r.ok) sayDone(host, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
-  if (r.ok && (await removeWorktree($, t.id, worktree, agentId, true))) await git($, ['branch', '-d', taskBranch(t)])
+  if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await git(host, ['branch', '-d', taskBranch(t)])
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? "The checker's report" : 'The end of the last test output'}:\n${r.checker ? r.testOutput.replace(/^[^\n]*\n/, '') : r.testOutput}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
-  tellLead($, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
+  tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
 /**
  * The owner approved task `id` (in "review"): the same checked merge as for a finished worker. An answered
  * investigation has nothing to merge: approve is its Done (see endInvestigation), and `keepNote` its Keep as a note.
  */
-export async function approve($: Host, id: string, keepNote = false): Promise<string> {
-  const b = await load($)
+export async function approve(host: Host, id: string, keepNote = false): Promise<string> {
+  const b = await load(host)
   const t = reviewTask(b, id, 'approve')
-  if (isInvestigation(t)) return endInvestigation($, t, keepNote)
+  if (isInvestigation(t)) return endInvestigation(host, t, keepNote)
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
-  return mergeFinished($, b, t, 'approve')
+  return mergeFinished(host, b, t, 'approve')
 }
 
 /** The full answer of investigation `t`: its latest saved report (and that file), else the answer kept on the task. */
-export async function fullAnswer($: Host, t: BoardTask): Promise<{ text: string; file?: string }> {
+export async function fullAnswer(host: Host, t: BoardTask): Promise<{ text: string; file?: string }> {
   const last = taskReports(t).at(-1)
-  const text = last ? await $.fs.read(path(last.file)).then(x => String(x), () => null) : null
+  const text = last ? await host.fs.read(path(last.file)).then(x => String(x), () => null) : null
   return text?.trim() ? { text: text.trim(), file: last!.file } : { text: t.answer?.trim() ?? '', ...(last ? { file: last.file } : {}) }
 }
 
@@ -847,25 +847,25 @@ const everyReport = (t: BoardTask, latest?: string): string[] => [...new Set([..
  * note) a new small docs task is added too, made by the owner as a follow-up of `t`, that writes
  * docs/research/<topic>.md from the saved answer and merges as usual.
  */
-async function endInvestigation($: Host, t: BoardTask, keepNote: boolean): Promise<string> {
-  const full = keepNote ? await fullAnswer($, t) : { text: '' }
-  const merge_into = keepNote ? await homeBranch($) : undefined
+async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean): Promise<string> {
+  const full = keepNote ? await fullAnswer(host, t) : { text: '' }
+  const merge_into = keepNote ? await homeBranch(host) : undefined
   // notes already written: a new note never overwrites one (it gets -2, -3… instead)
-  const notes = keepNote ? (await Promise.resolve().then(() => $.fs.list(path('docs/research'))).catch(() => [])).map(f => `docs/research/${f.name}`) : []
-  const added = await change($, x => {
+  const notes = keepNote ? (await Promise.resolve().then(() => host.fs.list(path('docs/research'))).catch(() => [])).map(f => `docs/research/${f.name}`) : []
+  const added = await change(host, x => {
     if (!keepNote) return [investigationDone(x, t.id, now()), undefined] as [Board, BoardTask | undefined]
     const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into }, now(), S.N.dir)
     return [investigationDone(y, t.id, now(), n.id), n] as [Board, BoardTask | undefined]
   })
   const branch = taskBranch(t)
-  await resetScratch($, t.id).catch(() => undefined)
-  const { commits } = await taskWork($, t).catch(() => ({ commits: null }))
+  await resetScratch(host, t.id).catch(() => undefined)
+  const { commits } = await taskWork(host, t).catch(() => ({ commits: null }))
   const keep = commits !== 0
   const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${commits} commit${commits === 1 ? '' : 's'} from an earlier change try that ${intoOf(t)} doesn't have`
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : ''
-  if ((await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => false)) && !keep) await git($, ['branch', '-D', branch])
-  if (kept) tellLead($, `${t.id} "${t.title}" is done.${kept}`)
-  void pump($)
+  if ((await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) && !keep) await git(host, ['branch', '-D', branch])
+  if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`)
+  void pump(host)
   if (!added) return `${t.id} done: the answer was read; nothing was merged${kept ? `.${kept}` : ''}`
   return `${t.id} done: the answer was read; nothing was merged. Added ${added.id} "${added.title}": it writes ${added.files[0]} from the answer and merges as usual${kept ? `.${kept}` : ''}`
 }
@@ -875,43 +875,43 @@ async function endInvestigation($: Host, t: BoardTask, keepNote: boolean): Promi
  * step runs again, with no worker (brought up to date, tested only if its branch moved, then
  * merged). A task in review (an approve that was blocked) is approved again.
  */
-export async function mergeWaiting($: Host, id: string): Promise<string> {
-  const b = await load($)
+export async function mergeWaiting(host: Host, id: string): Promise<string> {
+  const b = await load(host)
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
   if (!waitsForFiles(t)) return `${t.id} is not waiting for your files`
-  return mergeFinished($, b, t, t.status === 'review' ? 'approve' : 'merge')
+  return mergeFinished(host, b, t, t.status === 'review' ? 'approve' : 'merge')
 }
 
 /**
  * Merges task `t`'s finished work: `kind` 'approve' (the owner approved it, in "review") or 'merge'
  * (it was "waiting" only for the owner's files). The same checked merge as for a finished worker.
  */
-async function mergeFinished($: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
+async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
-  if (!(await gitReady($, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
-  if (await waitIfBranchGone($, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
+  if (!(await gitReady(host, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
+  if (await waitIfBranchGone(host, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
   // The same time limit as a finished worker's check (finishLimitMs): past it the merge is
   // given up (mergeRanOver), so it no longer holds the task, its id or the branch's merge turn.
   // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
   const limitMs = finishLimitMs(b.test_commands.length)
   // The step shown on the board (BoardTask.checking) is refreshed like a finishing mark, and removed when the merge ends or is given up.
-  const beat = everyMs($, FINISH_BEAT_MS, () => void markChecking($, t.id, t.status, t.attempts).catch(() => undefined))
+  const beat = everyMs(host, FINISH_BEAT_MS, () => void markChecking(host, t.id, t.status, t.attempts).catch(() => undefined))
   try {
-    const how = await withLimit($, limitMs, (gaveUp, over, turn) => mergeWork($, t, b, kind, gaveUp, over, turn))
+    const how = await withLimit(host, limitMs, (gaveUp, over, turn) => mergeWork(host, t, b, kind, gaveUp, over, turn))
     if (how !== OVER) return how
     beat?.cancel()
-    await markChecking($, t.id, t.status, t.attempts, false).catch(() => undefined)
+    await markChecking(host, t.id, t.status, t.attempts, false).catch(() => undefined)
     approving.delete(t.id)
-    await endCheck($, t.id)
-    const out = await mergeRanOver($, t.id, t.status, kind, limitMs)
-    void pump($)
+    await endCheck(host, t.id)
+    const out = await mergeRanOver(host, t.id, t.status, kind, limitMs)
+    void pump(host)
     return out
   } finally {
     beat?.cancel()
-    await markChecking($, t.id, t.status, t.attempts, false).catch(() => undefined)
+    await markChecking(host, t.id, t.status, t.attempts, false).catch(() => undefined)
   }
 }
 
@@ -924,13 +924,13 @@ async function mergeFinished($: Host, b: Board, t: SymccTask, kind: 'approve' | 
  * way (mergeRanOverBefore), it is failed instead, so the regular check never starts it again on
  * its own; the lead is told once. Should it still land later, landedLate marks it done.
  */
-async function mergeRanOver($: Host, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
+async function mergeRanOver(host: Host, id: string, status: SymccTask['status'], kind: 'approve' | 'merge', limitMs: number): Promise<string> {
   const min = Math.round(limitMs / 60_000)
   const again = kind === 'approve' ? 'approve it again' : `${S.N.name} retry ${id}`
   const what = kind === 'approve' ? 'approved by the owner' : 'merging once your files were out of the way'
   const twice = `its merge ran over ${min} min twice in a row and was given up both times; nothing was merged`
   let secondTime = false
-  const t = await change($, x => {
+  const t = await change(host, x => {
     const cur = find(x, id)
     if (cur?.status !== status) return [x, null] as [Board, null]
     secondTime = kind === 'merge' && mergeRanOverBefore(cur)
@@ -938,17 +938,17 @@ async function mergeRanOver($: Host, id: string, status: SymccTask['status'], ki
     const y = patchTask(x, id, { note: `${kind === 'approve' ? 'approved, but the' : 'the'} merge ran over ${min} min and was given up; ${again}`, ...(kind === 'approve' ? { merge_wait: undefined } : {}), history: [...cur.history, `${tryLabel(cur)}: ${what} → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`] }, now())
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
-  const late = t ? null : find(await load($).catch(() => null) ?? emptyBoard(), id)
+  const late = t ? null : find(await load(host).catch(() => null) ?? emptyBoard(), id)
   if (late?.status === 'done' && late.merged) return `${id} is done: its checking and merging ran over ${min} minutes, but its work was merged into ${intoOf(late)} (${shortSha(late.merged)}) after all.`
   if (kind === 'approve') {
-    if (t) tellLead($, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
+    if (t) tellLead(host, `${id} "${t.title}": the owner's approve ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It stays in review; approve it again to retry the merge.`)
     return `${id} was not merged and stays in review: its checking and merging ran over ${min} minutes and was given up. Approve it again.`
   }
   if (secondTime) {
-    if (t) tellLead($, `✗ ${id} "${t.title}" failed: its merge ran over ${min} minutes twice in a row and was given up both times, so it is not started again on its own. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
+    if (t) tellLead(host, `✗ ${id} "${t.title}" failed: its merge ran over ${min} minutes twice in a row and was given up both times, so it is not started again on its own. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${id}.`)
     return `${id} was not merged and failed: its checking and merging ran over ${min} minutes twice in a row and was given up both times.`
   }
-  if (t) tellLead($, `${id} "${t.title}": its merge ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It keeps waiting for the owner's files and merges on its own at the next regular check once they are out of the way; ${S.N.name} retry ${id} tries the merge again at once.`)
+  if (t) tellLead(host, `${id} "${t.title}": its merge ran over ${min} minutes and seemed stuck, so I stopped waiting for it. It keeps waiting for the owner's files and merges on its own at the next regular check once they are out of the way; ${S.N.name} retry ${id} tries the merge again at once.`)
   return `${id} was not merged and keeps waiting: its checking and merging ran over ${min} minutes and was given up. Retry it.`
 }
 
@@ -963,46 +963,46 @@ const mergeRanOverBefore = (t: BoardTask) => /^try [^:]*: merging once your file
 const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)
 
 /** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`, `turn`: as for finishWork. */
-async function mergeWork($: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, turn?: (go: boolean) => void): Promise<string> {
+async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, turn?: (go: boolean) => void): Promise<string> {
   const status = t.status
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   const by = kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
   try {
     const dir = worktreeDir(t.id)
-    if (!(await $.fs.exists(`${dir}/.git`))) await prepareWorktree($, t, intoOf(t))
+    if (!(await host.fs.exists(`${dir}/.git`))) await prepareWorktree(host, t, intoOf(t))
     // The owner's own edits in the folder since review (or edits whose tests failed on an
     // earlier approve, kept as test_output): those are committed with the task and always tested.
-    const edits = await ownerEdits($, t, dir).catch(() => [] as string[])
+    const edits = await ownerEdits(host, t, dir).catch(() => [] as string[])
     const retest = edits.length > 0 || (kind === 'approve' && t.test_output !== undefined)
     if (gaveUp()) return ''
-    await change($, x => {
+    await change(host, x => {
       const cur = find(x, t.id)
       if (cur?.status !== status || gaveUp()) return x
       return patchTask(x, t.id, { note: kind === 'approve' ? 'approved; checking and merging' : 'your files are out of the way; merging', ...(edits.length ? { history: [...cur.history, ownerEditedLine(edits)] } : {}) }, now())
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge($, t, dir, b, kind, made, stop, retest, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge(host, t, dir, b, kind, made, stop, retest, release, turn).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
     // it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
-      await landIfMerged($, t, r.merged, made, kind, status)
+      await landIfMerged(host, t, r.merged, made, kind, status)
       return ''
     }
-    await recordCommits($, t.id, made, r.merged)
-    const cur = find(await load($), t.id)
+    await recordCommits(host, t.id, made, r.merged)
+    const cur = find(await load(host), t.id)
     if (r.merged) {
       // The work is on the target branch: the task is done, whatever happened to it meanwhile
       // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
       const sha = shortSha(r.merged)
       if (!cur) {
-        tellLead($, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
+        tellLead(host, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
         return `${t.id} was merged into ${intoOf(t)} (${sha}), but it is no longer on the board`
       }
-      await settle($, t, b, r, by, dir, undefined, kind === 'approve')
+      await settle(host, t, b, r, by, dir, undefined, kind === 'approve')
       const off = offAsked.get(t.id)
       if (off && cur.status === status) {
-        await change($, x => {
+        await change(host, x => {
           const c = find(x, t.id)
           return c?.status === 'done' ? patchTask(x, t.id, { history: [...c.history, `${tryLabel(t)}: ${off} while it was being merged, too late: the work was already merged, so it stays done`] }, now()) : x
         })
@@ -1014,7 +1014,7 @@ async function mergeWork($: Host, t: SymccTask, b: Board, kind: 'approve' | 'mer
     const off = offAsked.get(t.id)
     if (off) {
       const again = kind === 'approve' ? 'approve it again' : 'it merges at a later check'
-      await change($, x => {
+      await change(host, x => {
         const c = find(x, t.id)
         return c?.status === status ? patchTask(x, t.id, { note: `${kind === 'approve' ? 'approved, but ' : ''}not merged: ${off} first; ${again}`, history: [...c.history, `${tryLabel(t)}: ${by.replace(/^merged /, 'merging ')} → not merged: ${off} while it was being merged; it ${stays}`] }, now()) : x
       })
@@ -1022,42 +1022,42 @@ async function mergeWork($: Host, t: SymccTask, b: Board, kind: 'approve' | 'mer
     }
     if (r.blocked) {
       // Only the owner's files are in the way: it waits for them (merge_wait); the regular check merges it once they are clear.
-      await holdForFiles($, t, b, r, `${tryLabel(t)}: ${kind === 'approve' ? 'approved by the owner' : 'merging again'} → ${r.detail}`, dir, undefined, kind === 'approve')
+      await holdForFiles(host, t, b, r, `${tryLabel(t)}: ${kind === 'approve' ? 'approved by the owner' : 'merging again'} → ${r.detail}`, dir, undefined, kind === 'approve')
       return `${t.id} was not merged and ${stays}: ${r.detail}.`
     }
     if (kind === 'approve' && retest && r.testOutput !== undefined) {
       // The owner's edits fail the tests: it stays in review with the output, not sent to a worker.
       const folder = `${S.N.dir}/worktrees/${t.id}`
-      await change($, x => {
+      await change(host, x => {
         const c = find(x, t.id)
         return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, merge_wait: undefined, test_output: r.testOutput, history: [...c.history, `${tryLabel(t)}: approved by the owner → not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`] }, now()) : x
       })
-      tellLead($, `${t.id} "${t.title}" was not merged: with the owner's edits the tests fail. It stays in review; the owner can fix the files in ${folder} and approve again.\n${r.testOutput}`)
+      tellLead(host, `${t.id} "${t.title}" was not merged: with the owner's edits the tests fail. It stays in review; the owner can fix the files in ${folder} and approve again.\n${r.testOutput}`)
       return `${t.id} was not merged and stays in review: ${r.detail}. Fix the files in ${folder}, then approve it again (the tests run again).`
     }
     if (kind === 'approve' && !r.ok && !r.conflict && r.testOutput === undefined) {
       // Not the work's fault (e.g. the owner's files could not be updated): it stays in review.
-      await change($, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}`, merge_wait: undefined }, now()) : x))
+      await change(host, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}`, merge_wait: undefined }, now()) : x))
       // An answer that already says to approve again needs no more advice; anything else gets it here.
       return `${t.id} was not merged and stays in review: ${r.detail}${/approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'}`
     }
-    await settle($, cur, b, r, by, dir)
+    await settle(host, cur, b, r, by, dir)
     const label = kind === 'approve' ? 'approved, but not merged' : 'not merged'
     return r.ok ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} ${label}: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
   } finally {
     // Given up: mergeFinished already let go of the id (a new merge may hold it now) and ended the check.
     if (!gaveUp()) {
       approving.delete(t.id)
-      await endCheck($, t.id)
-      void pump($) // after the check: a task sent back to "todo" (or resumed meanwhile) starts again
+      await endCheck(host, t.id)
+      void pump(host) // after the check: a task sent back to "todo" (or resumed meanwhile) starts again
     }
   }
 }
 
 /** Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. */
-export async function halt($: Host, agentId: string, why: string) {
+export async function halt(host: Host, agentId: string, why: string) {
   stopped.add(agentId)
-  await $.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
+  await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
 }
 
 /**
@@ -1078,28 +1078,28 @@ function ageOnPurpose(b: Board) {
 }
 
 /** Stops the workers `which` picks (all by default), one by one; `then` runs after each is told to stop. */
-export async function haltWorkers($: Host, why: string, which: (w: Worker) => boolean = () => true, then?: (w: Worker) => Promise<unknown>) {
+export async function haltWorkers(host: Host, why: string, which: (w: Worker) => boolean = () => true, then?: (w: Worker) => Promise<unknown>) {
   for (const [agentId, w] of [...workers]) {
     if (!which(w)) continue
     onPurpose.set(w.task, 0)
     workers.delete(agentId)
-    await halt($, agentId, why)
+    await halt(host, agentId, why)
     await then?.(w)
   }
 }
 
 /** Stops every worker, then every scout run; `then` runs after each worker is told to stop. */
-export async function haltAll($: Host, why: string, then?: (w: Worker) => Promise<unknown>) {
-  await haltWorkers($, why, undefined, then)
-  for (const agentId of [...scoutRuns.keys()]) await halt($, agentId, why)
+export async function haltAll(host: Host, why: string, then?: (w: Worker) => Promise<unknown>) {
+  await haltWorkers(host, why, undefined, then)
+  for (const agentId of [...scoutRuns.keys()]) await halt(host, agentId, why)
   scoutRuns.clear()
   for (const s of scoutState.values()) s.running = false
-  await haltCheckers($, why)
+  await haltCheckers(host, why)
 }
 
-export async function stopWorker($: Host, taskId: string, why: string) {
-  await haltWorkers($, why, w => w.task === taskId)
-  await publish($, await load($))
+export async function stopWorker(host: Host, taskId: string, why: string) {
+  await haltWorkers(host, why, w => w.task === taskId)
+  await publish(host, await load(host))
 }
 
 /**
@@ -1108,31 +1108,31 @@ export async function stopWorker($: Host, taskId: string, why: string) {
  * "review" or "auto" from "off" starts work again. Going to "auto" does not merge tasks already
  * in review. Returns one short line: the new mode, what it means, and what happened.
  */
-export async function setBoardMode($: Host, m: SymccMode, who: string): Promise<string> {
-  const before = modeOf(await load($))
-  const b = await change($, x => {
+export async function setBoardMode(host: Host, m: SymccMode, who: string): Promise<string> {
+  const before = modeOf(await load(host))
+  const b = await change(host, x => {
     const y = setMode(x, m)
     return [y, y] as [Board, Board]
   })
   const extra: string[] = []
   if (m === 'off') {
     const ids: string[] = []
-    await haltAll($, `${who} turned the board off`, async w => {
+    await haltAll(host, `${who} turned the board off`, async w => {
       ids.push(w.task)
-      await change($, x => {
+      await change(host, x => {
         const cur = find(x, w.task)
         return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again`, ...(cur ? { history: [...cur.history, stoppedLine(cur, `${who} turned the board off`)], ...endedBy(cur, now(), 'stopped', `${who} turned the board off`) } : {}) }, now())
       })
     })
     if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
-    const checks = stoppedChecksText(await stopChecks($, 'the board was turned off'))
+    const checks = stoppedChecksText(await stopChecks(host, 'the board was turned off'))
     if (checks) extra.push(checks)
-    await publish($, await load($))
+    await publish(host, await load(host))
   } else {
     const inReview = b.tasks.filter(t => t.status === 'review').length
     if (m === 'auto' && inReview) extra.push(`${inReview} already in review still ${inReview === 1 ? 'waits' : 'wait'} for approve or reject`)
     if (before === 'off') extra.push('work starts again')
-    void pump($)
+    void pump(host)
   }
   return [modeText(m), ...extra].join('; ')
 }
@@ -1143,32 +1143,32 @@ export async function setBoardMode($: Host, m: SymccMode, who: string): Promise<
  * told anything and the lead's guide leaves the system prompt from the next message. The board,
  * its mode, tasks and scouts are kept, so on brings everything back as it was.
  */
-export async function setSymcc($: Host, on: boolean): Promise<string> {
-  const before = symccOn(await load($))
-  const b = await change($, x => {
+export async function setSymcc(host: Host, on: boolean): Promise<string> {
+  const before = symccOn(await load(host))
+  const b = await change(host, x => {
     const y = setEnabled(x, on)
     return [y, y] as [Board, Board]
   })
   S.enabledNow = on
   if (!on) {
     const ids: string[] = []
-    await haltAll($, `you turned ${S.N.name} off`, async w => {
+    await haltAll(host, `you turned ${S.N.name} off`, async w => {
       ids.push(w.task)
-      await change($, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was turned off; continues when it is on again`, ...endedBy(find(x, w.task), now(), 'stopped', `${S.N.name} was turned off`) }, now()))
+      await change(host, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was turned off; continues when it is on again`, ...endedBy(find(x, w.task), now(), 'stopped', `${S.N.name} was turned off`) }, now()))
     })
-    const checks = stoppedChecksText(await stopChecks($, `${S.N.name} was turned off`))
+    const checks = stoppedChecksText(await stopChecks(host, `${S.N.name} was turned off`))
     leadQueue.splice(0)
     meanwhile.splice(0)
     S.leadTimer?.cancel()
     S.leadTimer = null
     sayQueue.splice(0)
-    await publish($, await load($))
+    await publish(host, await load(host))
     const stopped = `${ids.length ? ` Stopped ${ids.join(', ')}.` : ''}${checks ? ` ${checks[0]!.toUpperCase()}${checks.slice(1)}.` : ''}`
     return `${S.N.name} is ${before ? 'now ' : ''}off: Claude works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${S.N.name}-on.`
   }
-  await publish($, b)
-  void pump($)
-  if (!before) tellLead($, `The owner turned ${S.N.name} back on with /${S.N.name}-on. You are the lead again; the board is in mode ${modeOf(b)}.`)
+  await publish(host, b)
+  void pump(host)
+  if (!before) tellLead(host, `The owner turned ${S.N.name} back on with /${S.N.name}-on. You are the lead again; the board is in mode ${modeOf(b)}.`)
   return `${S.N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}`
 }
 
@@ -1182,16 +1182,16 @@ export const LIVE = new Set(['pending', 'running', 'waiting'])
  * tracked again (adopted) and keeps working, so a reload never stops a worker mid-task.
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
-export async function stopOrphans($: Host, leadNow?: string | null): Promise<string[]> {
+export async function stopOrphans(host: Host, leadNow?: string | null): Promise<string[]> {
   // Every worker type (worker, worker-web, ...) is listed as a worker (see HostAgent).
-  const agents = await $.agents.list().catch(() => [])
+  const agents = await host.agents.list().catch(() => [])
   // host.agents.list() names this session's agents only, but in case it ever lists another
   // session's too: never stop a worker whose task the live driver (another session) owns.
-  const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(S.N.leadFile)).catch(() => null)
+  const lead = leadNow !== undefined ? leadNow : await host.fs.read(path(S.N.leadFile)).catch(() => null)
   const live = liveDriver(lead, Date.now())
   // A board that can't be read (being fixed, or a read failing now) says nothing about whose
   // worker is whose: then no worker is stopped (the next check looks again), only scouts are.
-  const b = agents.some(a => a.type === S.N.worker) ? await load($).catch(() => null) : emptyBoard()
+  const b = agents.some(a => a.type === S.N.worker) ? await load(host).catch(() => null) : emptyBoard()
   const out: string[] = []
   for (const a of agents) {
     if (a.type !== S.N.worker && a.type !== S.N.scout) continue
@@ -1214,20 +1214,20 @@ export async function stopOrphans($: Host, leadNow?: string | null): Promise<str
         const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
         workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
         // The task is recorded as this session's, with this agent (its session id may have changed over the reload).
-        if (t.agent !== a.id || t.session !== S.me) await change($, x => (find(x, t.id)?.status === 'doing' && (find(x, t.id)?.agent ?? a.id) === a.id ? patchTask(x, t.id, { agent: a.id, session: S.me }, now()) : x)).catch((e: Error) => $.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
+        if (t.agent !== a.id || t.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (find(x, t.id)?.agent ?? a.id) === a.id ? patchTask(x, t.id, { agent: a.id, session: S.me }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue
       }
     }
     stopped.add(a.id)
-    if (LIVE.has(a.status)) await halt($, a.id, `${S.N.name} was reloaded and a new worker took over this task`)
+    if (LIVE.has(a.status)) await halt(host, a.id, `${S.N.name} was reloaded and a new worker took over this task`)
     out.push(a.id)
   }
   // Just loaded (called from claimLead, with lead.json as it was): a "doing" task of this session
   // with no live worker and no merge mark may be one whose worker has only just handed back to the
   // old copy, which is about to mark it. Wait a moment and look again, so it is not sent back for nothing.
-  if (leadNow !== undefined && (await waitingOnOld($, agents))) {
+  if (leadNow !== undefined && (await waitingOnOld(host, agents))) {
     aboutToWait()
-    await $.clock.sleep(RELOAD_SETTLE_MS)
+    await host.clock.sleep(RELOAD_SETTLE_MS)
   }
   return out
 }
@@ -1236,9 +1236,9 @@ export async function stopOrphans($: Host, leadNow?: string | null): Promise<str
 export const RELOAD_SETTLE_MS = 2_000
 
 /** Whether a "doing" task of this session has no live worker (in `agents`), no merge mark and nothing in this copy working on it. */
-async function waitingOnOld($: Host, agents: AgentInfo[]): Promise<boolean> {
-  if (!(await $.fs.exists(path(S.N.boardFile)).catch(() => false))) return false
-  const b = await load($).catch(() => emptyBoard())
+async function waitingOnOld(host: Host, agents: AgentInfo[]): Promise<boolean> {
+  if (!(await host.fs.exists(path(S.N.boardFile)).catch(() => false))) return false
+  const b = await load(host).catch(() => emptyBoard())
   const mine = new Set([...workers.values()].map(w => w.task))
   return b.tasks.some(t => t.status === 'doing' && t.session === S.me && !t.finishing && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !liveWorkersFor(t, agents, S.N.name).length)
 }
@@ -1248,25 +1248,25 @@ async function waitingOnOld($: Host, agents: AgentInfo[]): Promise<boolean> {
  * A file that is gone by the time we get to it is fine; other errors are reported once per
  * file in a toast, and never stop the check.
  */
-export async function cleanLeftoverTmp($: Host) {
+export async function cleanLeftoverTmp(host: Host) {
   const dir = path(S.N.dir)
-  const entries = await $.fs.list(dir).catch(() => [])
+  const entries = await host.fs.list(dir).catch(() => [])
   const files: { name: string; mtimeMs?: number }[] = []
   for (const f of entries) {
     if (f.kind !== 'file' || !f.name.endsWith('.tmp')) continue
-    const st = await $.fs.stat(`${dir}/${f.name}`).catch(() => null)
+    const st = await host.fs.stat(`${dir}/${f.name}`).catch(() => null)
     if (st) files.push({ name: f.name, mtimeMs: st.mtimeMs })
   }
   const failed: string[] = []
   for (const name of leftoverTmpFiles(files, Date.now())) {
-    const r = await $.process.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
+    const r = await host.process.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
     if (r.exitCode !== 0) failed.push(`${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`)
   }
   // Say it once per file, not every two minutes.
   const nameOf = (f: string) => f.slice(0, f.indexOf(':'))
   const fresh = failed.filter(f => !tmpWarned.has(nameOf(f)))
   fresh.forEach(f => tmpWarned.add(nameOf(f)))
-  if (fresh.length) $.ui.toast(S.N.toast(`couldn't remove leftover temp files in ${S.N.dir}/: ${fresh.join('; ')}`))
+  if (fresh.length) host.ui.toast(S.N.toast(`couldn't remove leftover temp files in ${S.N.dir}/: ${fresh.join('; ')}`))
 }
 
 /**
@@ -1274,20 +1274,20 @@ export async function cleanLeftoverTmp($: Host) {
  * is still "doing" on the same try (`t`, as the check read it), it fails, with a note that its work so far
  * is kept; but when that try's work is already on its branch, it is done instead. The lead is told.
  */
-async function timedOut($: Host, id: string, t: BoardTask | undefined, max: number, minutes: number) {
+async function timedOut(host: Host, id: string, t: BoardTask | undefined, max: number, minutes: number) {
   const same = (cur: BoardTask | undefined): cur is BoardTask => cur?.status === 'doing' && (!t || cur.attempts === t.attempts)
-  const before = find(await load($), id)
+  const before = find(await load(host), id)
   if (!same(before)) return
-  const sha = mergedThisTry(before) ?? (S.gitState === 'ok' ? await alreadyMerged($, before).catch(() => null) : null)
-  const out = await change($, x => {
+  const sha = mergedThisTry(before) ?? (S.gitState === 'ok' ? await alreadyMerged(host, before).catch(() => null) : null)
+  const out = await change(host, x => {
     const cur = find(x, id)
     if (!same(cur)) return [x, null] as [Board, null]
     const next = sha ? putTask(x, mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now())) : patchTask(x, id, { status: 'failed', note: outOfTimeNote(max), history: [...cur.history, `${tryLabel(cur)}: stopped after ${Math.round(minutes)} min (out of time); its work so far is kept in its folder and branch`], ...endedBy(cur, now(), 'timed out', `ran over ${max} min`) }, now())
     return [next, cur] as [Board, BoardTask]
   })
   if (!out) return
-  if (sha) tellLead($, `✓ ${id} "${out.title}" is done: its worker ran over ${max} minutes and was stopped, but its work was already merged (${shortSha(sha)}).`)
-  else tellLead($, `${id} "${out.title}": its time (${max} minutes) was up, so I stopped the worker and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
+  if (sha) tellLead(host, `✓ ${id} "${out.title}" is done: its worker ran over ${max} minutes and was stopped, but its work was already merged (${shortSha(sha)}).`)
+  else tellLead(host, `${id} "${out.title}": its time (${max} minutes) was up, so I stopped the worker and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`)
 }
 
 /** What the lead is told when task `id`'s worker runs over its limit of `limit` minutes and the owner is asked. */
@@ -1295,26 +1295,26 @@ export const overtimeLeadText = (id: string, title: string, limit: number) =>
   `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these as choices they can pick (e.g. with AskUserQuestion), plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.`
 
 /** Task `id`'s worker runs over its limit: the task keeps "doing" with the question, the owner hears "needs you", the lead is told. */
-async function askOvertime($: Host, b: Board, id: string, limit: number) {
-  const t = await change($, x => {
+async function askOvertime(host: Host, b: Board, id: string, limit: number) {
+  const t = await change(host, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.time_ask || cur.wrap_up) return [x, null] as [Board, null]
     return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: [...cur.history, `${tryLabel(cur)}: ran ${limit} min, over its time limit; asked the owner for more time`] }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return
-  sayNeedsYou($, b, t, overtimeQuestion(id, limit))
-  tellLead($, overtimeLeadText(id, t.title, limit))
+  sayNeedsYou(host, b, t, overtimeQuestion(id, limit))
+  tellLead(host, overtimeLeadText(id, t.title, limit))
 }
 
 /** Task `id`'s time is up (`why`): its worker is told to write down what it has and hand back; it is stopped WRAP_UP_GRACE_MS later. */
-async function wrapUp($: Host, id: string, why: string) {
-  const t = await change($, x => {
+async function wrapUp(host: Host, id: string, why: string) {
+  const t = await change(host, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.wrap_up) return [x, null] as [Board, null]
     return [patchTask(x, id, { time_ask: undefined, wrap_up: now(), note: 'time is up: the worker was told to hand back', history: [...cur.history, `${tryLabel(cur)}: time is up (${why}); the worker was told to write down what it has and hand back`] }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return false
-  for (const [agentId, w] of workers) if (w.task === id) await $.agents.send(agentId, WRAP_UP_TEXT).catch(() => undefined)
+  for (const [agentId, w] of workers) if (w.task === id) await host.agents.send(agentId, WRAP_UP_TEXT).catch(() => undefined)
   return true
 }
 
@@ -1323,17 +1323,17 @@ async function wrapUp($: Host, id: string, why: string) {
  * limit N minutes later and the worker goes on; "Stop it" tells the worker to wrap up. Returns what to say,
  * or undefined when the task has no such question (the answer is then handled like any other).
  */
-export async function answerOvertime($: Host, id: string, answer: string): Promise<string | undefined> {
-  const b = await load($)
+export async function answerOvertime(host: Host, id: string, answer: string): Promise<string | undefined> {
+  const b = await load(host)
   const t = find(b, id)
   if (t?.status !== 'doing' || !t.time_ask) return undefined
   const pick = parseOvertimeAnswer(answer)
   if (!pick) throw new Error(`Nothing changed: ${t.id} asks for more time; answer one of ${OVERTIME_OPTIONS.join(', ')} (or "+N min").`)
   if ('stop' in pick) {
-    await wrapUp($, t.id, 'the owner said stop')
+    await wrapUp(host, t.id, 'the owner said stop')
     return `${t.id}: its worker was told to write down what it has and hand back; it is stopped in ${WRAP_UP_GRACE_MS / 60_000} min at the latest, and the task fails with its work kept.`
   }
-  const out = await change($, x => {
+  const out = await change(host, x => {
     const cur = find(x, t.id)
     if (cur?.status !== 'doing' || !cur.time_ask) return [x, null] as [Board, null]
     const extra = (cur.extra_minutes ?? 0) + pick.add
@@ -1350,9 +1350,9 @@ export const seenEnded = new Set<string>()
 export const ENDED_GRACE_MS = 20_000
 
 /** A tracked worker whose agent ended with no hand-back: its task fails (not "todo", so a crashing worker doesn't start again and again). */
-async function failLost($: Host, agentId: string, w: Worker) {
+async function failLost(host: Host, agentId: string, w: Worker) {
   if (workers.get(agentId) !== w || finishing.has(w.task)) return
-  const t = find(await load($), w.task)
+  const t = find(await load(host), w.task)
   if (t && handedBack(t)) return
   seenEnded.delete(agentId)
   workers.delete(agentId)
@@ -1360,15 +1360,15 @@ async function failLost($: Host, agentId: string, w: Worker) {
   // (from another session, a tool or a board edit), or taken by a new try, it is left as it is now.
   if (!t || !sameTry(t, t, agentId)) return
   let failed = false
-  await change($, x => {
+  await change(host, x => {
     const cur = find(x, w.task)
     if (!cur || !sameTry(cur, t, agentId) || handedBack(cur)) return x
     failed = true
     return patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...cur.history, `${tryLabel(cur)}: the worker ended without a result`], ...endedBy(cur, now(), 'stopped', 'the worker ended without a result') }, now())
   })
   if (!failed) return
-  tellLead($, `${w.task} "${t.title}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
-  await publish($, await load($))
+  tellLead(host, `${w.task} "${t.title}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
+  await publish(host, await load(host))
 }
 
 /** `cur` is still "doing" on the same try as `was` (same agent, if any, and same run): nothing took it over or ended it meanwhile. */
@@ -1387,22 +1387,22 @@ function sameTry(cur: BoardTask, was: BoardTask, agentId?: string) {
  * tool it tries is refused, even while it is still listed. Only tasks this session may take over
  * (ownedHere) are touched, and never one whose worker is being stopped on purpose (onPurpose).
  */
-export async function sendBackIdle($: Host, agents: AgentInfo[]) {
+export async function sendBackIdle(host: Host, agents: AgentInfo[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
-  const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
+  const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
   const working = agents.filter(a => !stopped.has(a.id))
   const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !onPurpose.has(t.id) && !finishingNow(t, Date.now())
   // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
-  const idle = (await load($)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working, S.N.name).length))
+  const idle = (await load(host)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working, S.N.name).length))
   const merged = new Map<string, string>()
   for (const t of idle) {
-    const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
+    const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged(host, t).catch(() => null) : null)
     if (sha) merged.set(t.id, sha)
   }
   const ids = idle.map(t => t.id)
   if (!ids.length) return
   const back: BoardTask[] = []
-  await change($, x => ({
+  await change(host, x => ({
     ...x,
     tasks: x.tasks.map(t => {
       // Re-read here: left as it is if its status, agent or run changed since it was picked.
@@ -1414,29 +1414,29 @@ export async function sendBackIdle($: Host, agents: AgentInfo[]) {
       return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
     }),
   }))
-  for (const id of merged.keys()) tellLead($, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
-  if (back.length) tellLead($, `${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
+  for (const id of merged.keys()) tellLead(host, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
+  if (back.length) tellLead(host, `${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
 }
 
 /**
  * A hand-back from an agent this copy had stopped (e.g. an orphan after a reload): its report is not
  * taken, but its task must not stay "doing" with nobody on it, so it is put back right away (see sendBackIdle).
  */
-export async function stoppedHandBack($: Host, agentId: string) {
+export async function stoppedHandBack(host: Host, agentId: string) {
   if (!S.driving || !stopped.has(agentId)) return
-  const agents = await $.agents.list().catch(() => undefined)
-  if (agents) await sendBackIdle($, agents)
-  await pump($)
+  const agents = await host.agents.list().catch(() => undefined)
+  if (agents) await sendBackIdle(host, agents)
+  await pump(host)
 }
 
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
-export async function check($: Host) {
+export async function check(host: Host) {
   if (!S.driving) return
-  await cleanLeftoverTmp($).catch(() => undefined)
-  await stopOrphans($)
-  const b = await load($)
+  await cleanLeftoverTmp(host).catch(() => undefined)
+  await stopOrphans(host)
+  const b = await load(host)
   if (!symccOn(b)) return
-  const agents = await $.agents.list().catch(() => undefined)
+  const agents = await host.agents.list().catch(() => undefined)
   const nowMs = Date.now()
   for (const id of seenEnded) if (!workers.has(id)) seenEnded.delete(id)
   for (const [agentId, w] of [...workers]) {
@@ -1448,7 +1448,7 @@ export async function check($: Host) {
     // Its worker already handed back (its work is being, or was, checked and merged): this entry is
     // left over. Only the merge's own time limit applies now, never max_minutes.
     if (finishing.has(w.task) || (t && handedBack(t))) {
-      const cur = find(await load($), w.task)
+      const cur = find(await load(host), w.task)
       if (finishing.has(w.task) || (cur && handedBack(cur))) {
         if (workers.get(agentId) === w) workers.delete(agentId)
         seenEnded.delete(agentId)
@@ -1462,16 +1462,16 @@ export async function check($: Host) {
         // Stopped on purpose: a "Stopped" answer meanwhile must not send it back to todo (it fails below).
         onPurpose.set(w.task, 0)
         workers.delete(agentId)
-        await halt($, agentId, `its time is up (it ran longer than ${limit} minutes)`)
-        await timedOut($, w.task, t, limit, minutes)
+        await halt(host, agentId, `its time is up (it ran longer than ${limit} minutes)`)
+        await timedOut(host, w.task, t, limit, minutes)
       }
       continue
     }
     // Running too long: it keeps working while the owner is asked for more time; with no answer by the
     // hard cap it is told to wrap up (and stopped after a short grace).
     if (t?.status === 'doing' && minutes > limit) {
-      if (!t.time_ask) await askOvertime($, b, w.task, limit)
-      else if (minutes > hardCapOf(b.max_minutes, t)) await wrapUp($, w.task, `no answer from the owner after ${Math.round(minutes)} min`)
+      if (!t.time_ask) await askOvertime(host, b, w.task, limit)
+      else if (minutes > hardCapOf(b.max_minutes, t)) await wrapUp(host, w.task, `no answer from the owner after ${Math.round(minutes)} min`)
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
     // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so the
@@ -1484,24 +1484,24 @@ export async function check($: Host) {
     }
     if (!seenEnded.has(agentId)) {
       seenEnded.add(agentId)
-      const timer = afterMs($, ENDED_GRACE_MS, () => void failLost($, agentId, w).catch(() => undefined))
+      const timer = afterMs(host, ENDED_GRACE_MS, () => void failLost(host, agentId, w).catch(() => undefined))
       if (timer) timers.push(timer)
       continue
     }
-    await failLost($, agentId, w)
+    await failLost(host, agentId, w)
   }
-  ageOnPurpose(await load($))
-  if (agents) await sendBackIdle($, agents)
+  ageOnPurpose(await load(host))
+  if (agents) await sendBackIdle(host, agents)
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
-  const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
+  const late = (await load(host)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
   for (const t of late) reminded.set(t.id, t.updated_at)
-  if (late.length) tellLead($, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
+  if (late.length) tellLead(host, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
   // Finished work waiting only for the owner's files: merged now (no worker) once they are out of the way.
-  await retryFileWaits($).catch(() => undefined)
-  if (S.gitState === 'ok') await cleanupMerged($, await load($)).catch(() => undefined)
+  await retryFileWaits(host).catch(() => undefined)
+  if (S.gitState === 'ok') await cleanupMerged(host, await load(host)).catch(() => undefined)
   // old done and dropped tasks move to archive.json (at most once an hour)
-  await archiveOld($).catch(() => undefined)
+  await archiveOld(host).catch(() => undefined)
   // stuck, starving or too-serial tasks, or ones waiting on the owner too long: told once each
-  checkHealth($, await load($))
-  await pump($)
+  checkHealth(host, await load(host))
+  await pump(host)
 }
