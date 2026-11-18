@@ -228,8 +228,12 @@ export async function waitEnded(host: Host, ids: string[], ms: number): Promise<
   }
 }
 
-/** Why a worker's turn ended (from turn.complete): answered, stopped, refused (with what the API said) or an API error. */
-export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal }
+/**
+ * Why a worker's turn ended (from turn.complete): answered, stopped, refused (with what the API said) or an API error.
+ * `background`: the agent's background commands the host saw still running when its turn ended ([] for none);
+ * absent when the host can't tell, and then the answer's text decides (endedEarly).
+ */
+export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal; background?: readonly string[] }
 /** Why a turn ended: the model answered, it was interrupted, the model refused, or an error ended it. */
 export type TurnEndReason = 'answer' | 'aborted' | 'refusal' | 'error'
 /** What was said about a refusal that ended a turn: its category and explanation, each null when none was given. */
@@ -672,10 +676,10 @@ export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 't
     const why = endFailure(end)
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: [...cur.history, `${tryLabel(t)}: ${why}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', why) }))) return
     tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
-  } else if (endedEarly(answer)) {
-    // It ended its turn while saying it would go on later (a background command still running): its work isn't done.
+  } else if (end.background ? end.background.length > 0 : endedEarly(answer)) {
+    // Its turn ended while a background command still ran (the host saw it, or else its answer says so): its work isn't done.
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: [...cur.history, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${ENDED_EARLY_NOTE}; nothing was checked or merged`], ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return
-    tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (it said it would go on later, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
+    tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
   } else if (isInvestigation(t)) {
     if (gaveUp()) return
     await answered(host, t, answer, summary)

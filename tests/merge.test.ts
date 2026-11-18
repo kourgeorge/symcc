@@ -2352,6 +2352,11 @@ test('T-411: a try whose answer only says it will continue later fails with that
   expect(leadQueue.some(x => x.includes('T-1') && x.includes('ended its turn before its work finished'))).toBe(true)
   // a normal report is unaffected
   expect((await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.'))).end).toEqual(['finished', 'merged'])
+  // the host's own signal comes first: a background command still running fails the try whatever the answer says,
+  // and when the host saw none, the answer's text is not read
+  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'] }))
+  expect([ran.t.status, ran.t.note]).toEqual(['failed', 'the worker ended its turn before its work finished'])
+  expect((await tryEnds(answers("The background runs are still going; I'll continue when they finish.", { reason: 'answer', background: [] }))).end).toEqual(['finished', 'merged'])
 })
 
 test('a try stopped by the lead says why: changed (which fields), paused, dropped, asked, backlog', async () => {

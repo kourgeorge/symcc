@@ -32,32 +32,34 @@ export function failedHow(t: Failed): FailedHow {
 /** The note of a try whose worker ended its turn while saying it would go on later (see endedEarly). */
 export const ENDED_EARLY_NOTE = 'the worker ended its turn before its work finished'
 
-/** "I'll continue / resume / report back / wait ..." said about later (not bare "will continue", which reports quote about retries). */
-const LATER = /\b(?:I['’]ll|I will|I['’]m going to|I am going to|let me)\s+(?:then\s+|now\s+)?(?:continue|resume|report back|get back|check back|come back|wait)\b|^\s*will (?:continue|resume|report back)\b/i
-/** "still running / going / in progress": only counts together with the writer's own wait in the same sentence. */
-const STILL = /\bstill (?:running|going|in progress)\b/i
+/** "something is still running / going / in progress" (or "running in the background"). */
+const STILL = /\bstill (?:running|going|in progress)\b|\brunning in the background\b/i
 /**
- * The writer's own wait: "I'm (still) waiting", or a "waiting for" with no subject that starts the sentence or a
- * clause ("…, waiting for them to finish"). Not someone else's ("makes the lead wait for it", "stops waiting for",
- * "isn't waiting for", "without waiting for").
+ * The writer going on once it finishes: "I'll / I will / will continue / resume / report back / come back / check back
+ * / get back ... when / once / after / as soon as ... ", or the writer's own wait ("I'm waiting for", "…, waiting for
+ * them to finish"). A bare "will" counts only at the start of a sentence or clause ("— will report back when done").
  */
-const WAITS = /\bI(?:['’]m| am)\s+(?:still\s+|now\s+)?waiting\b|(?:^|[,;:—–]\s*)(?:and\s+|now\s+|still\s+)?waiting for\b/i
+const GOES_ON = /(?:\bI['’]ll|\bI will|\bI['’]m going to|\bI am going to|(?:^|[,;:—–-]\s*)(?:and\s+|then\s+)?will)\s+(?:then\s+)?(?:continue|resume|report|come back|check back|get back|pick (?:it|this|them) up|finish)\b.*?\b(?:when|once|after|as soon as|until)\b|\bI(?:['’]m| am)\s+(?:still\s+|now\s+)?waiting\b|(?:^|[,;:—–]\s*)(?:and\s+|now\s+|still\s+)?waiting for\b/i
 /** A bullet or numbered list line ("- …", "* …", "• …", "1. …"). */
 const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
+/** Quoted text and code ("…", “…”, ‘…’, '…', `…`, ```…```): what a report quotes is not what the writer says. */
+const QUOTED = /```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|(?<=^|[\s(])'[^\n]*?'(?=[\s.,;:!?)]|$)/g
 
 /**
- * Whether a worker's final answer only says it will go on later ("The background runs are still going; I'll continue
- * when they finish."): ending its turn ends its work, so such a try is unfinished. Kept narrow: only the answer's last
- * paragraph is read (not when it is a bullet list, which describes the change), sentence by sentence, and a sentence
- * must say "I'll continue / resume / report back / wait..." (or start with "Will report back"), or "still running"
- * together with the writer's own wait.
+ * The text fallback for whether a worker ended its turn while its work still runs ("The background runs are still
+ * going; I'll continue when they finish."): ending its turn ends its work, so such a try is unfinished. The host's own
+ * signal (TurnEnd.background in plugin/workers.ts) comes first; this only runs when the host can't tell. Kept narrow,
+ * because a false alarm fails a good try: only the answer's last paragraph is read (not when it is a bullet list),
+ * with quotes and code taken out, sentence by sentence, and a sentence counts only when it says something is still
+ * running AND the writer goes on when it finishes (or is waiting for it). Offers ("If you want, I'll continue with …")
+ * and plain "I'll / let me continue" without anything still running never count.
  */
 export function endedEarly(answer: string | null | undefined): boolean {
   const paras = String(answer ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
   const last = paras.at(-1) ?? ''
   if (!last || last.split('\n').some(l => BULLET.test(l))) return false
-  const sentences = last.split(/(?<=[.!?])\s+|\n+/)
-  return sentences.some(s => LATER.test(s) || (STILL.test(s) && WAITS.test(s)))
+  const sentences = last.replace(QUOTED, ' (quote) ').split(/(?<=[.!?])\s+|\n+/)
+  return sentences.some(s => !/^\s*if\b/i.test(s) && STILL.test(s) && GOES_ON.test(s))
 }
 
 /** What the worker said in its last try that ended with `detail` (from the history line "try N: <said> → <detail>"); '' if none. */
@@ -236,7 +238,7 @@ export function whyFailed(t: Failed): string {
     case 'stopped':
       return 'The worker was stopped before it finished.'
     case 'ended early':
-      return 'The worker ended its turn before its work finished (it said it would go on later), so nothing was checked or merged.'
+      return 'The worker ended its turn before its work finished (something it started was still running), so nothing was checked or merged.'
     case 'hung':
       return `Checking and merging its work hung twice in a row and was given up, so nothing was merged (${note}).`
     default:

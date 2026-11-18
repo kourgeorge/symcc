@@ -285,38 +285,47 @@ test('a NEED FILES line that already ends in "." or "…" gets no second one', (
   expect(failAsks(`NEED FILES: ${'a/b.ts '.repeat(40)}`)).toMatch(/… Ask the lead in the chat to add them to the task, then Retry\.$/)
 })
 
-// T-411: a final answer that only says it goes on later (T-399's try 1) is unfinished; normal reports are not.
-test('endedEarly: an answer that says it will continue later counts; normal reports do not', () => {
+// T-411: a final answer whose last paragraph says something still runs and the writer goes on when it finishes
+// (T-399's try 1) is unfinished; normal reports, offers and quotes are not (a false alarm fails a good try).
+test('endedEarly: still running + the writer going on when it finishes counts; normal reports, offers and quotes do not', () => {
   const later = [
     "The background runs are still going; I'll continue when they finish.",
-    'Changed hooks/a.ts and added a test.\n\nThe full test run is still running in the background; I will report back once it ends.',
-    'Tests are still running, waiting for them to finish.',
-    "I'll resume once the typecheck is done.",
-    "The tests are still running and I'm waiting for them.",
-    'Will report back.',
     // T-399's try 1, its real last paragraph: must flag
     "Changed the prompts and the check.\n\nThe background runs are still going; I'll continue when they finish.",
+    'Changed hooks/a.ts and added a test.\n\nThe full test run is still running in the background; I will report back once it ends.',
+    'Tests are still running, waiting for them to finish.',
+    "The tests are still running and I'm waiting for them.",
+    'Background job still running — will report back when done.',
   ]
   for (const a of later) expect([a, endedEarly(a)]).toEqual([a, true])
   const normal = [
     'Added the line to prompts/change.ts and a test in tests/prompts.test.tsx; `claude plugin test .` and typecheck pass.',
-    "Fixed the cache key. A retry will continue from the work so far, and the lead is told it is still running only while it is.",
-    "I'll continue to keep the old name in the docs.\n\nChanged hooks/core/failure.ts; tests/failure.test.ts covers it.",
-    'The worker is still running when the check sees it, so it is kept doing (tests/merge.test.ts covers it).',
     '',
     // T-386's try 1, its real last paragraph (a bullet list): must not flag
     'Fixed the reload.\n\n- A checker still running at the reload is stopped. Its try is not counted.\n- When the stopped checker\'s "stopped" answer comes in, a new checker starts right away without waiting for a check.',
-    // the same two sentences as plain text: "still running" and "waiting for" in different sentences, and not the writer's own wait
     'A checker still running at the reload is stopped. A new checker starts right away without waiting for a check.',
     'The checker is still running, so a new one starts without waiting for it.',
-    // someone else's wait, or an "I'll" that has nothing to do with waiting (found by the checker): must not flag
     'Changed the merge so a try still in progress makes the lead wait for it; tests/merge.test.ts covers it.',
     'A checker still running at the reload stops waiting for a verdict.',
     "A checker that is still running isn't waiting for the lead any more.",
     "The checker is still running when the merge starts, so I'll note it in the docs.",
-    // "will report back" said about a scout or a worker, not the writer: must not flag
-    'Now a scout that finds nothing will report back NOTHING.',
     'Fixed it so the worker will report back its findings; tests/x.test.ts covers it.',
+    // nothing still running: plain "I'll continue / resume / report back" is not enough
+    "I'll resume once the typecheck is done.",
+    'Will report back.',
+    "I'll continue to keep the old name in the docs.\n\nChanged hooks/core/failure.ts; tests/failure.test.ts covers it.",
+    // the checker's five sentences (offers and quotes): must not flag
+    "Still unsure: whether the cache is shared. If you'd like, I'll come back to it in a follow-up task.",
+    "If you want, I'll continue with the other files next.",
+    'Let me continue with the summary: changed a.ts and b.ts.',
+    'Changed the endedEarly check so "I\'ll report back" is caught; tests/failure.test.ts covers it.',
+    'Added endedEarly, which flags answers like "The background runs are still going; I\'ll continue when they finish."',
+    // the same in other quotes and code
+    "Added endedEarly, which flags answers like `The background runs are still going; I'll continue when they finish.`",
+    "Added endedEarly, which flags answers like “The tests are still running; I'll report back when they end.”",
+    "Added endedEarly, which flags 'The tests are still running; I'll report back when they end.' answers.",
+    // a hypothetical about the rule itself
+    "If a command is still running, I'll now wait for it before I answer, as the prompt says.",
   ]
   for (const a of normal) expect([a, endedEarly(a)]).toEqual([a, false])
 })
