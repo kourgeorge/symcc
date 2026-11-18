@@ -28,7 +28,7 @@ import { loadRoles } from '../plugin/roles'
 import { loadKinds } from '../plugin/kinds'
 import { checkerFinished } from '../plugin/checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from '../plugin/scouts'
-import { S, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from '../plugin/state'
+import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from '../plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from '../plugin/store'
 import { noteForLead, brief } from '../plugin/tell'
 import { playable } from '../plugin/voice'
@@ -101,6 +101,7 @@ export async function sessionStart(host: Host) {
   let lead: Promise<unknown> = Promise.resolve()
   // Even if a later step throws, pump must not stay blocked for the whole session.
   try {
+    await loadVersion(host)
     S.root = (await host.session.repo())?.root ?? (await host.session.root())
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
