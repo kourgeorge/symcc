@@ -1,9 +1,8 @@
 import type { SymccScout, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError } from '../board'
-import { scoutNotReady } from '../claude/agents'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
-import type { Host } from '../host'
+import { type Host, notReadyYet } from '../host'
 import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 
@@ -112,16 +111,15 @@ export async function runScout($: Host, s: ScoutDef, misses = 0): Promise<string
   const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name })
   let agentId: string
   try {
-    const spawned = await $.agent.spawn({ prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), subagentType: S.N.scout, ...(s.model ? { model: s.model } : {}) })
-    if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
-    if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the scout did not start')
+    const spawned = await $.agents.spawn({ kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
+    if (!spawned.agentId) throw new Error('the scout did not start')
     agentId = spawned.agentId
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err)
     st.running = false
     st.last_run = lastRun
     await load($).then(b => publish($, b)).catch(() => undefined)
-    if (scoutNotReady(msg, S.N.name) && onNotReady(misses) === 'retry') {
+    if (notReadyYet(err) && onNotReady(misses) === 'retry') {
       timers.push($.clock.after(SCOUT_RETRY_MS, () => void runScout($, s, misses + 1)))
       return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`
     }
@@ -270,7 +268,7 @@ export async function scoutFinished($: Host, agentId: string, answer: string, is
 export const SCOUT_SOON_MS = 60_000
 export const SCOUT_SPREAD_MS = 30_000
 /** How often a paused scout whose time has come checks again whether it was resumed. */
-const PAUSED_RECHECK_MS = 60_000
+export const PAUSED_RECHECK_MS = 60_000
 
 /** When a scout runs next (ms): its last run + its interval, or `soon` when that is already past or it never ran. */
 export function nextRunFrom(lastRun: string | null, everyMinutes: number, soon: () => number): number {

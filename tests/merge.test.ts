@@ -17,6 +17,7 @@ import { commandsOf } from './fakes'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
+import { claudeHost } from '../hooks/claude/host'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -216,7 +217,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: $ as never, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
+  return { $: claudeHost($ as never) as never, claude: $, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
 }
 
 /** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
@@ -1421,7 +1422,7 @@ async function liveWorld() {
   const w = world()
   S.me = 'me'
   const spawned: string[] = []
-  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
   x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
   x.plugin = { root: '/plugin' }
   x.fs.list = async () => []
@@ -1491,7 +1492,7 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
 test('a new worker gets the built-in change prompt even when a .symcc/prompts/change.md file exists', async () => {
   const { w } = await liveWorld()
   const prompts: string[] = []
-  const x = w.$ as unknown as { agent: Record<string, unknown> }
+  const x = w.claude as unknown as { agent: Record<string, unknown> }
   x.agent.spawn = async (e: { prompt?: string }) => (prompts.push(String(e.prompt)), { agentId: `ag${prompts.length + 1}` })
   // a complete override, with every placeholder the old code needed, so old code would have used it (no warning path)
   w.put(`${ROOT}/.symcc/prompts/change.md`, 'MINE: {{details}}{{merge_main}}{{test_output}}\n{{ask}}\n')
@@ -2105,7 +2106,7 @@ function leadWorld() {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: $ as never, sent }
+  return { $: claudeHost($ as never) as never, claude: $, sent }
 }
 
 test("the owner's own actions are queued, not sent; the next real board update starts with them", () => {
@@ -2355,7 +2356,7 @@ test('a try stopped by turning symcc or the board off says so, and so does a sto
 /** Records what is sent to agents (halt's "Stop now", the wrap-up message). */
 const sentTo = (w: ReturnType<typeof world>) => {
   const sent: { to: string; text: string }[] = []
-  ;(w.$ as unknown as { session: Record<string, unknown> }).session.send = async (e: { to: { agentId: string }; text: string }) => void sent.push({ to: e.to.agentId, text: e.text })
+  ;(w.claude as unknown as { session: Record<string, unknown> }).session.send = async (e: { to: { agentId: string }; text: string }) => void sent.push({ to: e.to.agentId, text: e.text })
   return sent
 }
 /** T-1's worker (ag1) as started `min` minutes ago. */
@@ -2541,7 +2542,7 @@ test('a worker whose agent ended is failed only on a later check, unless its rep
     // still not handed back on the second check: failed
     const lost = await tryEnds(async w => {
       S.driving = true // world() sets it to false
-      ;(w.$ as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
+      ;(w.claude as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
       workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
       await check(w.$)
       expect(workers.has('ag1')).toBe(true)
@@ -2555,7 +2556,7 @@ test('a worker whose agent ended is failed only on a later check, unless its rep
     // the report arrives between the two checks: merged, not failed
     const late = await tryEnds(async w => {
       S.driving = true
-      ;(w.$ as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
+      ;(w.claude as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
       workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
       await check(w.$)
       await workerFinished(w.$, 'ag1', 'made the change')
@@ -2764,7 +2765,7 @@ test('a reload while a task is being tested and merged leaves it "doing"; it mer
   let during: BoardTask | undefined
   let spawned = 0
   const { w, t } = await finishing(async w => {
-    ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+    ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
     w.put(LEAD, leadText('me', Date.now()))
     forget()
     await claimLead(w.$, true)
@@ -2850,7 +2851,7 @@ test('a task sent back after its try already merged is done, not started again (
     if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return ok()
     return undefined
   } })
-  ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+  ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
   const [b0] = boardWith('auto', [], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   const b = { ...b0, tasks: [backToTodo(b0.tasks[0]!, 'restarted: the plugin reloaded and the old worker was gone', ISO)] }
   await saveBoard(w.$, b)
@@ -2896,7 +2897,7 @@ const t1Merged = (merged = true) => (args: string[]) => {
   return undefined
 }
 /** Makes the agent list show the handed-back worker ag1 as still there, only idle (not ended). */
-const idleAgent = (w: ReturnType<typeof world>) => void ((w.$ as unknown as { agent: Record<string, unknown> }).agent.list = async () => [{ id: 'ag1', type: 'symcc:worker', status: 'waiting', description: 'T-1' }])
+const idleAgent = (w: ReturnType<typeof world>) => void ((w.claude as unknown as { agent: Record<string, unknown> }).agent.list = async () => [{ id: 'ag1', type: 'symcc:worker', status: 'waiting', description: 'T-1' }])
 
 test('T-228: a try that merged but was left "doing" (its copy of the plugin stopped before writing done) ends done; max_minutes never stops it and nothing starts again', async () => {
   S.me = 'me'
@@ -2906,7 +2907,7 @@ test('T-228: a try that merged but was left "doing" (its copy of the plugin stop
       idleAgent(w)
       const sent: string[] = []
       let spawned = 0
-      const a = (w.$ as unknown as { agent: Record<string, unknown>; session: Record<string, unknown> })
+      const a = (w.claude as unknown as { agent: Record<string, unknown>; session: Record<string, unknown> })
       a.agent.spawn = async () => (spawned++, { agentId: 'ag2' })
       a.session.send = async (m: { text: string }) => void sent.push(m.text)
       // started long ago (far over max_minutes), handed back, merged and recorded; but never marked done
@@ -2940,7 +2941,7 @@ test('T-237: a worker hands back, the merge takes a while and the clock passes m
   const sent: string[] = []
   const r = await tryEnds(async w => {
     idleAgent(w)
-    ;(w.$ as unknown as { session: Record<string, unknown> }).session.send = async (m: { text: string }) => void sent.push(m.text)
+    ;(w.claude as unknown as { session: Record<string, unknown> }).session.send = async (m: { text: string }) => void sent.push(m.text)
     let once = false
     w.onRun(async cmd => {
       if (once || !/^\/bin\/sh -c /.test(cmd)) return
@@ -3011,7 +3012,7 @@ test('T-237: retrying a task whose last try is already on its branch marks it do
   S.me = 'me'
   const w = world({ answer: t1Merged() })
   let spawned = 0
-  ;(w.$ as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+  ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
   // failed by the timeout although its try had merged (as T-228 was); no merge recorded on the board
   const [b] = boardWith('auto', [], { status: 'failed', note: 'stopped: ran over 45 min', branch: 'symcc/T-1', history: ['created by the lead', 'try 1: stopped after 47 min (over the limit)'], runs: [{ started: ISO, ended: ISO, ended_by: 'timed out', ended_note: 'ran over 45 min' }] })
   await saveBoard(w.$, b)
@@ -3252,7 +3253,7 @@ async function finishedOnDirtyMain(status: string, test_commands = ['npm test'])
   const w = world({ current: 'main', status })
   S.me = 'me'
   const spawned: string[] = []
-  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
   x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
   x.plugin = { root: '/plugin' }
   x.fs.list = async () => []
@@ -3585,7 +3586,7 @@ test('a task whose checking and merging is given up twice in a row ends failed w
     const w = world()
     S.me = 'me'
     const spawned: string[] = []
-    const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+    const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
     x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
     x.plugin = { root: '/plugin' }
     x.fs.list = async () => []
@@ -4105,7 +4106,7 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   S.driving = true
   workers.clear()
   let prompt = ''
-  const x = w.$ as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
+  const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
   x.agent.spawn = async (e: { prompt: string }) => ((prompt = e.prompt), { agentId: 'ag9' })
   x.plugin = { root: '/plugin' }
   x.fs.list = async () => []

@@ -1,10 +1,11 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
 import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
-import { type $, S, readScoutOpen, updateScoutOpen } from '../state'
+import { type $, S, panelValues } from '../state'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from './open'
+import { claudeHost } from '../../claude/host'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
  *  page shows them: Runs every, Model, Summary, Instructions. Its Cancel button leaves it
@@ -30,8 +31,8 @@ export function scoutEditPage($: $, pane: PaneParts) {
       </Box>
 
       <Box flexDirection="row" gap={1}>
-        <Button key="scout-save" label="Save" onPress={act(() => saveScout($))} />
-        <Button key="scout-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit($)} />
+        <Button key="scout-save" label="Save" onPress={act(() => saveScout(claudeHost($)))} />
+        <Button key="scout-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit(claudeHost($))} />
       </Box>
 
       {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
@@ -65,7 +66,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
 export async function scoutsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, width, act, C, scouts, header, footer, buttonRows, heading, paragraphs } = pane
   const nowMs = Date.now()
-  const opener = await readScoutOpen($)
+  const opener = await panelValues($).readScoutOpen()
   const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
   if (sc) {
     const r = scoutRow(sc, nowMs)
@@ -98,11 +99,11 @@ export async function scoutsPage($: $, pane: PaneParts) {
         </Box>
 
         {buttonRows([
-          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => updateScoutOpen($, () => ''))} />,
+          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />,
           // no Run now while it runs: it couldn't start again until this run ends
-          !sc.running && <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow($, sc.name))))} />,
-          <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout($, sc))} />,
-          <Button key="scout-pause" label={sc.paused ? 'Resume' : 'Pause'} hotkey="p" onPress={act(async () => $.ui.toast(S.N.toast(await setScoutPaused($, sc.name, !sc.paused))))} />,
+          !sc.running && <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow(claudeHost($), sc.name))))} />,
+          <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout(claudeHost($), sc))} />,
+          <Button key="scout-pause" label={sc.paused ? 'Resume' : 'Pause'} hotkey="p" onPress={act(async () => $.ui.toast(S.N.toast(await setScoutPaused(claudeHost($), sc.name, !sc.paused))))} />,
         ], 'scout-buttons')}
 
         <Box flexDirection="column">
@@ -139,10 +140,10 @@ export async function scoutsPage($: $, pane: PaneParts) {
           autoFocus
           submitLabel="next"
           onInput={value => void (S.naming && (S.naming.name = value))}
-          onSubmit={value => (value.trim() ? act(() => newScout($, value, scouts.map(x => x.name)))() : cancelScoutEdit($))}
+          onSubmit={value => (value.trim() ? act(() => newScout(claudeHost($), value, scouts.map(x => x.name)))() : cancelScoutEdit(claudeHost($)))}
         />
         {S.naming.error ? <Text color={C('error')}>{S.naming.error}</Text> : null}
-        <Button key="scout-new-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit($)} />
+        <Button key="scout-new-cancel" label="Cancel (x)" hotkey="x" onPress={() => cancelScoutEdit(claudeHost($))} />
         <Text color={C('inactive')}>{boxHint('Enter goes on')}</Text>
       </Box>
     ) : (
@@ -161,7 +162,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
       {scouts.map((x, i) => {
         const r = rows[i]!
         return (
-          <Button key={row(`scout:${x.name}`)} plain label={`${x.name}: ${scoutRow(x, nowMs).state || 'waiting'}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => updateScoutOpen($, () => x.name))}>
+          <Button key={row(`scout:${x.name}`)} plain label={`${x.name}: ${scoutRow(x, nowMs).state || 'waiting'}`} autoFocus={i === 0 ? true : undefined} onPress={act(() => panelValues($).updateScoutOpen(() => x.name))}>
             <Text color={C(r.tone)}>{`  ${r.icon} `}</Text>
             <Text bold={!x.paused} color={C(x.paused ? 'inactive' : 'claude')}>{r.name}</Text>
             <Text color={C('inactive')}>{r.every}</Text>
@@ -172,7 +173,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
         )
       })}
       <Text key="scouts-blank"> </Text>
-      <Button key="scouts-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane($, 'tasks'))} />
+      <Button key="scouts-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
       {footer(scoutListKeys(), 'scouts-keys')}
     </Box>
   )

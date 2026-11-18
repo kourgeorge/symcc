@@ -10,6 +10,7 @@ import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 import { test } from './reset'
+import { claudeHost } from '../hooks/claude/host'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -124,7 +125,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: $ as never, git, calls, spawns, sends }
+  return { $: claudeHost($ as never) as never, claude: $, git, calls, spawns, sends }
 }
 
 /** A board with task T-1 (files src/) "doing" on try 1, with the checker setting `checker`. */
@@ -359,7 +360,7 @@ for (const [tool, args, status, again, againText] of [
   test(`${tool} while the checker is still starting up stops it as soon as it starts: nothing merges, the task is ${status}, and ${again} works right after`, async () => {
     const w = world()
     await saveBoard(w.$, boardWith(true))
-    const a = w.$ as unknown as { agent: { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> } }
+    const a = w.claude as unknown as { agent: { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> } }
     const real = a.agent.spawn
     let reply = ''
     a.agent.spawn = async o => {

@@ -23,7 +23,8 @@ import { loadRoles } from './plugin/roles'
 import { loadKinds } from './plugin/kinds'
 import { checkerFinished } from './plugin/checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './plugin/scouts'
-import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, updateScoutOpen, openDays, changesCache, updateTab } from './plugin/state'
+import { claudeHost, type ClaudeHost } from './claude/host'
+import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, openDays, changesCache, panelValues } from './plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
 import { seePlan } from './plugin/plan'
 import { planFromMode, planFromAttachment, seeMainMode } from './claude/plan'
@@ -91,14 +92,14 @@ export async function registerAll($: $) {
  * publishes the view again, so the board shows the change right away (scheduleScouts and loadRoles only
  * change what the plugin holds; the panel draws from the published view). Runs in the background.
  */
-function filesChanged($: $, hit: { scouts: boolean; roles: boolean }) {
+function filesChanged(host: ClaudeHost, hit: { scouts: boolean; roles: boolean }) {
   if (!hit.scouts && !hit.roles) return
   void (async () => {
     // before session.start (a plugin reload): learn the project folder first; unknown, change nothing
-    if (!(await findRoot($))) return
-    if (hit.scouts) await scheduleScouts($)
-    if (hit.roles) await loadRoles($).catch(() => undefined)
-    await publish($, await load($))
+    if (!(await findRoot(host))) return
+    if (hit.scouts) await scheduleScouts(host)
+    if (hit.roles) await loadRoles(host).catch(() => undefined)
+    await publish(host, await load(host))
   })().catch(() => undefined)
 }
 
@@ -108,6 +109,7 @@ let starts = 0
 export const register: Register = on => {
   // Every hook starts with useName($), so S.N (the plugin's name) is right everywhere.
   on('session.start', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     S.startupDone = false
     // Register the agent types, tools and commands first, before anything that can wait
@@ -131,52 +133,52 @@ export const register: Register = on => {
       S.me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
       // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
       // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
-      await saveMigrated($).catch(() => undefined)
-      await saveArchiveMigrated($).catch(() => undefined)
-      await saveScoutsMigrated($).catch(() => undefined)
+      await saveMigrated(host).catch(() => undefined)
+      await saveArchiveMigrated(host).catch(() => undefined)
+      await saveScoutsMigrated(host).catch(() => undefined)
       // Become the driver if nobody drives the board. As the driver, old workers still running
       // from before a reload are stopped first and their tasks go back to "todo".
       const waits = new Promise<void>(r => (startWait.mark = r))
       leadDone = false
-      lead = claimLead($, true)
+      lead = claimLead(host, true)
         .catch(() => (S.driving = false))
         .finally(() => (leadDone = true))
       await Promise.race([lead, waits])
       startWait.mark = null
-      if (!(await $.fs.exists(path(S.N.boardFile)))) await publish($, await load($))
+      if (!(await $.fs.exists(path(S.N.boardFile)))) await publish(host, await load(host))
       // A new project (no scouts folder yet) gets the plugin's example scouts, all paused (no timer runs them; run now still does); never stops the start.
-      await seedExampleScouts($).catch(() => undefined)
-      await scheduleScouts($).catch(() => undefined)
-      await loadRoles($).catch(() => undefined)
-      await loadKinds($).catch(() => undefined)
-      await cleanLeftoverTmp($).catch(() => undefined)
+      await seedExampleScouts(host).catch(() => undefined)
+      await scheduleScouts(host).catch(() => undefined)
+      await loadRoles(host).catch(() => undefined)
+      await loadKinds(host).catch(() => undefined)
+      await cleanLeftoverTmp(host).catch(() => undefined)
       S.watchdog?.cancel()
-      S.watchdog = $.clock.every(2 * 60_000, () => void check($).catch(() => undefined))
+      S.watchdog = $.clock.every(2 * 60_000, () => void check(host).catch(() => undefined))
       // The driver refreshes its heartbeat; the others look whether it went stale and take over.
       S.beat?.cancel()
       S.beat = $.clock.every(LEAD_BEAT_MS, () =>
-        void claimLead($)
-          .then(async d => (d ? pump($) : undefined))
+        void claimLead(host)
+          .then(async d => (d ? pump(host) : undefined))
           .catch(() => undefined),
       )
       // A board.json that can't be read: load already kept a copy and told the owner (once); nothing
       // more happens now and board.json is left as it is. The heartbeat's pump starts work once it is fixed.
-      const b = await load($).catch(() => null)
+      const b = await load(host).catch(() => null)
       if (b) {
         // Look at git once now: with no git, no repo or no commit, the lead is told (once) and nothing starts.
-        await gitReady($, b).catch(() => undefined)
-        await publish($, b)
+        await gitReady(host, b).catch(() => undefined)
+        await publish(host, b)
         // Open the board panel by itself (every session, driver or not), without taking the cursor
         // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
         // that is fine: the band above the prompt and /<name> still work.
-        if (openOnStart(b) && symccOn(b)) await openPane($, { focus: false, quiet: true })
+        if (openOnStart(b) && symccOn(b)) await openPane(host, { focus: false, quiet: true })
       }
     } finally {
       startWait.mark = null
       const done = () => {
         if (run !== starts) return
         S.startupDone = true
-        void pump($).catch(() => undefined)
+        void pump(host).catch(() => undefined)
       }
       if (leadDone) done()
       else void lead.then(done)
@@ -185,12 +187,13 @@ export const register: Register = on => {
   })
 
   on('session.end', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     // /clear ends the session but the process goes on under a new session id, and no
     // session.start follows: keep the timers, workers and scouts, and hand over to the new id.
     if ((e as { reason?: string }).reason === 'clear') {
       const result = await next(e)
-      await handOver($).catch(() => undefined)
+      await handOver(host).catch(() => undefined)
       return result
     }
     for (const t of timers.splice(0)) t.cancel()
@@ -198,18 +201,19 @@ export const register: Register = on => {
     S.watchdog = null
     S.beat?.cancel()
     S.beat = null
-    await releaseLead($)
+    await releaseLead(host)
     return next(e)
   })
 
   // The lead's guide, appended to the system prompt.
   on('prompt.compose', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     const r = await next(e)
     // Before session.start set the project folder (a plugin reload): learn it first; unknown, add nothing.
-    if (!(await findRoot($))) return r
+    if (!(await findRoot(host))) return r
     // Read on every render (prompt.compose is not cached), so /<name>-off and /<name>-on count from the next message.
-    if (!(await isOn($))) return r
+    if (!(await isOn(host))) return r
     return { sections: [...r.sections, { id: `${S.N.name}:lead`, text: leadGuide(), scope: 'session' as const }] }
   })
 
@@ -238,24 +242,25 @@ export const register: Register = on => {
   // The workers' question tool, mcp__<name>__ask_owner, runs here too: it knows the calling worker from the agentId.
   const toolNames = TOOLS().map(t => t.name)
   on('tool.call', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     if (e.agentId && stopped.has(e.agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
     if (e.tool === S.N.tool(ASK_TOOL)) {
-      if (!(await findRoot($))) return { result: startingText() }
-      return { result: await askCall($, e.agentId, e as unknown as Record<string, unknown>).catch((err: Error) => `error: ${err.message}`) }
+      if (!(await findRoot(host))) return { result: startingText() }
+      return { result: await askCall(host, e.agentId, e as unknown as Record<string, unknown>).catch((err: Error) => `error: ${err.message}`) }
     }
     const name = toolNames.find(t => e.tool === S.N.tool(t))
     if (!name) {
       const r = await next(e)
-      filesChanged($, fileToolHits(e as unknown as Record<string, unknown>, S.N.scouts, `${S.N.dir}/roles`))
+      filesChanged(host, fileToolHits(e as unknown as Record<string, unknown>, S.N.scouts, `${S.N.dir}/roles`))
       return r
     }
     // Before session.start set the project folder (e.g. right after a plugin reload), learn it from the
     // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
-    if (!(await findRoot($))) return { result: startingText() }
-    if (!(await isOn($))) return { result: offAnswer(S.N.name) }
+    if (!(await findRoot(host))) return { result: startingText() }
+    if (!(await isOn(host))) return { result: offAnswer(S.N.name) }
     try {
-      return { result: await runTool($, name, e as unknown as In) }
+      return { result: await runTool(host, name, e as unknown as In) }
     } catch (err) {
       return { result: `error: ${(err as Error).message}` }
     }
@@ -265,42 +270,45 @@ export const register: Register = on => {
   // recorded as a request to the owner; an edit or Bash command reaching the owner's copy outside the worker's
   // folder is refused (see checkEdit). Everything else is decided as usual.
   on('tool.check', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
     const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
-    const deny = e.agentId ? await checkEdit($, e.agentId, e.tool, e.input, cwd).catch(() => undefined) : undefined
+    const deny = e.agentId ? await checkEdit(host, e.agentId, e.tool, e.input, cwd).catch(() => undefined) : undefined
     return deny ? { decision: 'deny', reason: deny } : next(e)
   })
 
   // A worker's or scout's run ended: its final answer arrives here, with why it ended (e.reason).
   on('turn.complete', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     const r = await next(e)
     const end = turnEnd(e)
-    if (e.agentId && workers.has(e.agentId)) void workerFinished($, e.agentId, e.answer, end, usageTokens(e.usage))
-    else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished($, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
+    if (e.agentId && workers.has(e.agentId)) void workerFinished(host, e.agentId, e.answer, end, usageTokens(e.usage))
+    else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished(host, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
     // a checker's verdict (the checker setting) goes to the finish step waiting for it
     else if (e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, e.isAborted || e.reason === 'aborted', usageTokens(e.usage))
     // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
     // (a worker this copy stopped, e.g. an orphan after a reload: its task is put back to "todo" at once instead)
-    else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, end, usageTokens(e.usage)) : stoppedHandBack($, e.agentId!))).catch(() => undefined)
+    else if (e.agentId) void lateHandBack(host, e.agentId).then(ok => (ok ? workerFinished(host, e.agentId!, e.answer, end, usageTokens(e.usage)) : stoppedHandBack(host, e.agentId!))).catch(() => undefined)
     return r
   })
 
   // Every slash command starts with the plugin's name (see parseCommand): /<name> opens the
   // panel, /<name>-<word> does one thing. Registered under the plugin's name, so matched here.
   on('command.run', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
     const isStats = e.command === `${S.N.name}-stats`
     if (!isStats && !commandNames(S.N.name).includes(e.command)) return next(e)
     // Before session.start set the project folder (a plugin reload): learn it from the session first;
     // if it still isn't known, answer and write nothing (never a board or lock path from "/").
-    if (!(await findRoot($))) return { text: startingText(), isTextDisplayOnly: true }
+    if (!(await findRoot(host))) return { text: startingText(), isTextDisplayOnly: true }
     // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
-    if (isStats) return { text: await statsText($, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
+    if (isStats) return { text: await statsText(host, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
     // A broken board.json makes load throw (it is never written over): the commands that don't need the
     // board (help, opening the panel, a usage line) still work; the others answer with the reason.
-    const loaded = await load($).then(
+    const loaded = await load(host).then(
       board => ({ board, broken: '' }),
       (err: Error) => ({ board: null, broken: err.message }),
     )
@@ -316,13 +324,13 @@ export const register: Register = on => {
         return say(manual(cmd.topic))
       case 'open':
       case 'tasks':
-        await openPane($, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
+        await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
         return say(BOARD_OPENED)
       case 'scouts': {
-        const defs = await scheduleScouts($)
-        await publish($, await load($))
+        const defs = await scheduleScouts(host)
+        await publish(host, await load(host))
         // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
-        const placed = await openPane($, { tab: 'scouts' }).then(r => r?.isPlaced ?? false).catch(() => false)
+        const placed = await openPane(host, { tab: 'scouts' }).then(r => r?.isPlaced ?? false).catch(() => false)
         const skipped = unreadableScoutsText()
         const withSkipped = (text: string) => (skipped ? `${text}\n${skipped}` : text)
         if (placed) return say(withSkipped(`Scouts opened: Enter opens a scout, t tasks, b goes back to the tasks.`))
@@ -331,23 +339,23 @@ export const register: Register = on => {
         return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') + (skipped ? `\n${skipped}` : '') }
       }
       case 'scout':
-        return { text: await runScoutNow($, cmd.name) }
+        return { text: await runScoutNow(host, cmd.name) }
       case 'scout-pause':
-        return say(await setScoutPaused($, cmd.name, cmd.paused))
+        return say(await setScoutPaused(host, cmd.name, cmd.paused))
       case 'settings': {
         S.settingEdit = null
         S.settingPick = null
-        const placed = await openPane($, { tab: 'settings' }).then(r => r?.isPlaced ?? false).catch(() => false)
+        const placed = await openPane(host, { tab: 'settings' }).then(r => r?.isPlaced ?? false).catch(() => false)
         if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, b goes back to the tasks.`)
-        return say(settingsText({ ...b, notify: notifyOf(b, await playable($)) }, S.N.name))
+        return say(settingsText({ ...b, notify: notifyOf(b, await playable(host)) }, S.N.name))
       }
       case 'set':
-        return say(await ownerSettings($, cmd.input, `with /${S.N.name}-settings`))
+        return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))
       case 'off':
       case 'on':
-        return say(await setSymcc($, cmd.kind === 'on'))
+        return say(await setSymcc(host, cmd.kind === 'on'))
       case 'mode': {
-        const r = await setBoardMode($, cmd.mode, 'you')
+        const r = await setBoardMode(host, cmd.mode, 'you')
         noteForLead(`The owner set the board mode to ${cmd.mode}: ${brief(r)}`)
         return say(r)
       }
@@ -355,32 +363,32 @@ export const register: Register = on => {
         const t = find(b, cmd.id)
         if (!t) {
           // not on the board: it may have been moved to archive.json (read-only, shown as text)
-          const old = await findArchived($, cmd.id)
+          const old = await findArchived(host, cmd.id)
           if (!old) return say(`${cmd.id} is not on the board.`)
           return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
         }
-        await openPane($, { tab: 'tasks', task: t.id })
-        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done))
+        await openPane(host, { tab: 'tasks', task: t.id })
+        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
       }
       case 'approve':
       case 'reject': {
         const t = find(b, cmd.id)
-        if (!t) return say((await findArchived($, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
+        if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}).`)
-        const r = await runTool($, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
+        const r = await runTool(host, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
         noteForLead(cmd.kind === 'approve' ? `The owner approved ${t.id}: ${brief(r)}` : `The owner rejected ${t.id} ("${brief(cmd.reason)}"): ${brief(r)}`)
         return say(r)
       }
       case 'diff': {
         const t = find(b, cmd.id)
-        if (!t) return say((await findArchived($, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
+        if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
         if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`)
         try {
-          const files = await changedFiles($, intoOf(t), t)
+          const files = await changedFiles(host, intoOf(t), t)
           if (!cmd.file) return say(statText(t.id, files, S.N.name))
           const f = cmd.file.replace(/^\.\//, '')
           if (!files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${files.map(x => x.file).join(', ') || 'nothing'}`)
-          const text = await changesText($, intoOf(t), t, f)
+          const text = await changesText(host, intoOf(t), t, f)
           return say(cutDiff(text, t.id, 5000, f, S.N.name).join('\n') || `${f}: no text changes (binary?)`)
         } catch (err) {
           return say(`Could not read the changes of ${t.id}: ${(err as Error).message}`)
@@ -393,37 +401,43 @@ export const register: Register = on => {
   // Plan mode (see core/plan.ts): Claude Code has no call for the mode and no event when it changes, so it is
   // read from these events of the main session (never a worker's or scout's). Each passes the event on unchanged.
   on('classic.UserPromptSubmit', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    seeMainMode($, e)
+    seeMainMode(host, e)
     return next(e)
   })
   on('classic.Stop', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    seeMainMode($, e)
+    seeMainMode(host, e)
     return next(e)
   })
   on('classic.SessionStart', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    seeMainMode($, e)
+    seeMainMode(host, e)
     return next(e)
   })
   // a spawn from the main chat carries the main chat's mode
   on('agent.spawn', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    if (!e.parentAgentId) void seePlan($, planFromMode(e.permissionMode)).catch(() => undefined)
+    if (!e.parentAgentId) void seePlan(host, planFromMode(e.permissionMode)).catch(() => undefined)
     return next(e)
   })
   // plan_mode / plan_mode_reentry: the reminder sent while plan mode is on; plan_mode_exit: it has ended
   on('prompt.attachment', async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    if (!e.agentId) void seePlan($, planFromAttachment(e.type)).catch(() => undefined)
+    if (!e.agentId) void seePlan(host, planFromAttachment(e.type)).catch(() => undefined)
     return next(e)
   })
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    await findRoot($)
+    await findRoot(host)
     return renderAbovePrompt($, e, next)
   })
 
@@ -456,15 +470,16 @@ export const register: Register = on => {
     S.settingEdit = null
     S.settingPick = null
     changesCache.clear()
-    await updateTab($, () => '').catch(() => undefined)
-    await updateScoutOpen($, () => '').catch(() => undefined)
+    await panelValues($).updateTab(() => '').catch(() => undefined)
+    await panelValues($).updateScoutOpen(() => '').catch(() => undefined)
     return next(e)
   })
 
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    const host = claudeHost($)
     useName($)
-    await findRoot($)
+    await findRoot(host)
     return renderPane($, e, next)
   })
 

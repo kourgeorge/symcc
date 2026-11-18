@@ -48,9 +48,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const saved = await gitPlace($, dir, taskBranch(t))
   let agentId: string
   try {
-    const spawned = await $.agent.spawn({ prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, subagentType: S.N.scout, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
-    if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
-    if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the checker did not start')
+    const spawned = await $.agents.spawn({ kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+    if (!spawned.agentId) throw new Error('the checker did not start')
     agentId = spawned.agentId
   } catch (err) {
     const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
@@ -70,7 +69,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     try {
       timer = $.clock.after(min * 60_000, () => {
         stopped.add(agentId)
-        void $.session.send({ to: { agentId }, text: 'Stop now: your time is up. Answer "stopped" and end.' }).catch(() => undefined)
+        void $.agents.stop(agentId, 'Stop now: your time is up. Answer "stopped" and end.').catch(() => undefined)
         done({ answer: null, why: `it ran over ${min} min and was stopped` })
       }) ?? null
     } catch {
@@ -79,7 +78,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     const late = stop()
     if (late) {
       stopped.add(agentId)
-      void $.session.send({ to: { agentId }, text: `Stop now: the task was ${late}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
+      void $.agents.stop(agentId, `Stop now: the task was ${late}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
       done({ answer: null, why: `the task was ${late}` })
     }
   })
@@ -164,7 +163,7 @@ async function haltCheckersOf($: Host, why: string, which: (task: string) => boo
   for (const [agentId, run] of [...checkerRuns]) {
     if (!which(run.task)) continue
     stopped.add(agentId)
-    await $.session.send({ to: { agentId }, text: `Stop now: ${why}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
+    await $.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
     run.end({ answer: null, why })
   }
 }

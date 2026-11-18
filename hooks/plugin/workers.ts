@@ -1,7 +1,7 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText } from '../board'
-import { roleSection, workerTypeFor, asBaseWorkers } from '../claude/agent-types'
-import { mayStart, isNotReady, type AgentInfo, ENDED_STATUSES, orphanMove, liveWorkersFor } from '../claude/agents'
+import { roleSection } from '../claude/agent-types'
+import { mayStart, type AgentInfo, ENDED_STATUSES, orphanMove, liveWorkersFor } from '../claude/agents'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -11,7 +11,7 @@ import { loadRoles } from './roles'
 import { runChecker, haltCheckers } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
-import type { Host } from '../host'
+import { type Host, notReadyYet } from '../host'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -87,14 +87,12 @@ export async function startWorker($: Host, id: string) {
     let agentId: string
     try {
       const role = findRole(roles, roleOf(t))
-      const spawned = await $.agent.spawn({ prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), subagentType: workerTypeFor(role, S.N.name), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
-      if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
-      if (!('agentId' in spawned) || !spawned.agentId) throw new Error('the worker did not start')
+      const spawned = await $.agents.spawn({ kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+      if (!spawned.agentId) throw new Error('the worker did not start')
       agentId = spawned.agentId
     } catch (err) {
-      const msg = (err as Error)?.message ?? String(err)
       const misses = notReady.get(id) ?? 0
-      if (!isNotReady(msg, S.N.name) || onNotReady(misses) === 'fail') {
+      if (!notReadyYet(err) || onNotReady(misses) === 'fail') {
         notReady.delete(id)
         throw err
       }
@@ -162,10 +160,9 @@ export async function waitIfBranchGone($: Host, b: Board, t: SymccTask, when: 's
   return true
 }
 
-/** The agents of this session as $.agent.list() reports them; null if the list can't be read. */
+/** The agents of this session as host.agents.list() reports them; null if the list can't be read. */
 export async function agentsNow($: Host): Promise<AgentInfo[] | null> {
-  const listed = (await $.agent.list().catch(() => null)) as AgentInfo[] | null
-  return listed ? asBaseWorkers(listed, S.N.name) : null
+  return $.agents.list().catch(() => null)
 }
 
 /** The workers this copy of the plugin started, as agents (they may not be listed yet). */
@@ -1060,7 +1057,7 @@ async function mergeWork($: Host, t: SymccTask, b: Board, kind: 'approve' | 'mer
 /** Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. */
 export async function halt($: Host, agentId: string, why: string) {
   stopped.add(agentId)
-  await $.session.send({ to: { agentId }, text: `Stop now: ${why}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
+  await $.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
 }
 
 /**
@@ -1186,9 +1183,9 @@ export const LIVE = new Set(['pending', 'running', 'waiting'])
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
 export async function stopOrphans($: Host, leadNow?: string | null): Promise<string[]> {
-  // Every worker type (worker, worker-web, ...) counts as a worker here.
-  const agents = asBaseWorkers(await $.agent.list().catch(() => []), S.N.name)
-  // $.agent.list() names this session's agents only, but in case it ever lists another
+  // Every worker type (worker, worker-web, ...) is listed as a worker (see HostAgent).
+  const agents = await $.agents.list().catch(() => [])
+  // host.agents.list() names this session's agents only, but in case it ever lists another
   // session's too: never stop a worker whose task the live driver (another session) owns.
   const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(S.N.leadFile)).catch(() => null)
   const live = liveDriver(lead, Date.now())
@@ -1317,7 +1314,7 @@ async function wrapUp($: Host, id: string, why: string) {
     return [patchTask(x, id, { time_ask: undefined, wrap_up: now(), note: 'time is up: the worker was told to hand back', history: [...cur.history, `${tryLabel(cur)}: time is up (${why}); the worker was told to write down what it has and hand back`] }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return false
-  for (const [agentId, w] of workers) if (w.task === id) await $.session.send({ to: { agentId }, text: WRAP_UP_TEXT }).catch(() => undefined)
+  for (const [agentId, w] of workers) if (w.task === id) await $.agents.send(agentId, WRAP_UP_TEXT).catch(() => undefined)
   return true
 }
 
@@ -1427,8 +1424,8 @@ export async function sendBackIdle($: Host, agents: AgentInfo[]) {
  */
 export async function stoppedHandBack($: Host, agentId: string) {
   if (!S.driving || !stopped.has(agentId)) return
-  const agents = await $.agent.list().catch(() => undefined)
-  if (agents) await sendBackIdle($, asBaseWorkers(agents as AgentInfo[], S.N.name))
+  const agents = await $.agents.list().catch(() => undefined)
+  if (agents) await sendBackIdle($, agents)
   await pump($)
 }
 
@@ -1439,7 +1436,7 @@ export async function check($: Host) {
   await stopOrphans($)
   const b = await load($)
   if (!symccOn(b)) return
-  const agents = await $.agent.list().catch(() => undefined)
+  const agents = await $.agents.list().catch(() => undefined)
   const nowMs = Date.now()
   for (const id of seenEnded) if (!workers.has(id)) seenEnded.delete(id)
   for (const [agentId, w] of [...workers]) {
@@ -1494,7 +1491,7 @@ export async function check($: Host) {
     await failLost($, agentId, w)
   }
   ageOnPurpose(await load($))
-  if (agents) await sendBackIdle($, agents as AgentInfo[])
+  if (agents) await sendBackIdle($, agents)
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
   for (const t of late) reminded.set(t.id, t.updated_at)

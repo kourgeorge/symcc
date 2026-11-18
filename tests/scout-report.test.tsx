@@ -8,6 +8,7 @@ import type { SymccScout } from '../types'
 import { SCOUT_REPORT_CHARS, emptyBoard } from '../hooks/board'
 import { scoutFinished } from '../hooks/plugin/scouts'
 import { S, scoutRuns, scoutState, heard, leadQueue, meanwhile } from '../hooks/plugin/state'
+import { claudeHost } from '../hooks/claude/host'
 
 const ROOT = '/repo'
 const MEMORY = `${ROOT}/.symcc/scouts.json`
@@ -98,7 +99,7 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
     return sent
   }
   const memory = () => JSON.parse(files.get(MEMORY) ?? '{}') as { scouts?: Record<string, { last_run: string | null; last_report?: string; paused?: boolean }>; usage?: Record<string, { runs: number }> }
-  return { $: $ as never, files, st, sent, toasts, toLead, memory }
+  return { $: claudeHost($ as never) as never, claude: $, files, st, sent, toasts, toLead, memory }
 }
 
 // ---------------- a report with findings ----------------
