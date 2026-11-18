@@ -46,12 +46,12 @@ export function versionOf(text: string): string {
 /** " v0.3.0", or '' with no version. */
 export const versionMark = (v: string) => (v ? ` v${v}` : '')
 
-/** "<icon> <name> v<version> board": the bold, colored part of a title (ICON from name.ts, then the name, the version
- *  when known and "board"). */
-export const boardBrand = (name: string = DEFAULT_NAME, v: string = '') => `${ICON} ${namesFor(name).name}${versionMark(v)} board`
+/** "<icon> <name> v<version>": the bold, colored part of a title (ICON from name.ts, then the name and the version);
+ *  with no version known it is "<icon> <name> board". */
+export const boardBrand = (name: string = DEFAULT_NAME, v: string = '') => (v ? `${ICON} ${namesFor(name).name}${versionMark(v)}` : `${ICON} ${namesFor(name).boardName}`)
 /** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
-/** The board's title: "<icon> <name> v<version> board · <folder>" (no version when `v` is ''), without " · <folder>" when the folder is unknown. */
+/** The board's title: "<icon> <name> v<version> · <folder>" ("<icon> <name> board · <folder>" with no version when `v` is ''), without " · <folder>" when the folder is unknown. */
 export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = '') => `${boardBrand(name, v)}${boardWhere(root)}`
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
@@ -203,7 +203,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const off = b.enabled === false ? offStatusLine(name) : b.mode && modeOf({ mode: b.mode }) === 'off' ? `${modeLabel('off')}: nothing starts` : ''
   const line1 = (v: string): BannerPart[] => [
     ...(v
-      ? [{ text: namesFor(name).name, tone: 'accent' as const, bold: true }, { text: versionMark(v), tone: 'plain' as const }, { text: ' board', tone: 'accent' as const, bold: true }]
+      ? [{ text: namesFor(name).name, tone: 'accent' as const, bold: true }, { text: versionMark(v), tone: 'plain' as const }]
       : [{ text: namesFor(name).boardName, tone: 'accent' as const, bold: true }]),
     ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : []),
     ...(off ? [sep, { text: off, tone: 'warning' as const }] : []),

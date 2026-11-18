@@ -10,7 +10,7 @@ import { claudeHost } from '../host'
 export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt' }>
 
 /**
- * The band's first line: the brand ("𝄞 symcc v0.3.0 board") and the facts after it, made by `facts(room)` for the room
+ * The band's first line: the brand ("𝄞 symcc v0.3.0") and the facts after it, made by `facts(room)` for the room
  * left in `columns` beside the brand and the "open board" button. The version is dropped first: it stays only when the
  * facts are as long with it as without it (nothing else had to be cut or left out for it) and the line still fits.
  */
