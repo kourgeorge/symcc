@@ -37,7 +37,7 @@ const SUMMARY_LINE = /^\s*(\d+ (pass|fail|skip|todo)|\d+ expect\(\) calls?|Ran \
 /**
  * Every failing test in test output, as one block each: the test file's line (for the first failure in that
  * file), then the "(fail) <name>" line with its error in the order printed: the indented lines right after it
- * (`claude plugin test`), or the lines from "error:" down to it (plain `bun test` prints the error above). Each error keeps at most
+ * (`claude plugin test`), or the lines from "error:" (or a named error such as "TypeError:") down to it (plain `bun test` prints the error above). Each error keeps at most
  * FAIL_ERROR_LINES lines of at most 300 characters. [] when nothing failed.
  */
 export function failBlocks(output: string): string[] {
@@ -59,7 +59,7 @@ export function failBlocks(output: string): string[] {
       continue
     }
     const prev = lines.slice(lastMark + 1, i)
-    const from = prev.findIndex(a => /^error:/i.test(a.trim()))
+    const from = prev.findIndex(a => /^\w*error:/i.test(a.trim()))
     const before = from < 0 ? [] : prev.slice(from)
     const after: string[] = []
     let j = i + 1

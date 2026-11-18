@@ -76,7 +76,7 @@ export const failCount = (output: string): number => failures(output).length
 
 /**
  * The failing tests in test output: each "(fail) <name>" line with the first error lines of the first one,
- * whether the runner prints them above it (plain bun: "error:" / "Expected" lines) or indented right after it
+ * whether the runner prints them above it (plain bun: "error:", "TypeError:"-style and "Expected" lines) or indented right after it
  * (`claude plugin test`). Later failures show only their name, so up to `n` of them fit. "(pass)" lines are never
  * taken. '' when the saved output has no "(fail)" line (it was cut before it), so nothing is guessed.
  */
@@ -92,7 +92,7 @@ export function failingLines(output: string, n = 1): string {
     }
     const why: string[] = []
     for (let j = i - 1; j >= 0 && !/^\((pass|fail|skip|todo)\)\s/.test(lines[j]!); j--) {
-      if (/^(error:|expected)/i.test(lines[j]!)) why.unshift(lines[j]!)
+      if (/^(\w*error:|expected)/i.test(lines[j]!)) why.unshift(lines[j]!)
     }
     for (let j = i + 1; j < raw.length && /^\s/.test(raw[j]!) && !/^\s*\d+ (pass|fail)\b/.test(raw[j]!); j++) {
       if (lines[j]) why.push(lines[j]!)

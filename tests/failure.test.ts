@@ -172,6 +172,17 @@ test('kept test output: two failures in a row with "Error:" lines each keep only
   expect(failBlocks(filed)).toEqual(['tests/a.test.ts:\n(fail) one [1ms]\n  Error: first', '(fail) two [1ms]\n  Error: second'])
 })
 
+test('plain bun output: a named error such as "TypeError:" or "RangeError:" above "(fail)" is kept as its error', () => {
+  const bun = ['$ bun test (exit 1)', 'tests/t.test.ts:', '1 | test("t", () => { const o: any = undefined; o.x.y })', '                                                  ^',
+    'TypeError: undefined is not an object (evaluating \'o.x\')', '      at <anonymous> (/x/tests/t.test.ts:1:51)', '(fail) t [0.50ms]',
+    '1 | test("r", () => { new Array(-1) })', 'RangeError: Array size must be a positive integer', '(fail) r [0.20ms]', '', ' 0 pass', ' 2 fail'].join('\n')
+  expect(failBlocks(bun)).toEqual([
+    'tests/t.test.ts:\nTypeError: undefined is not an object (evaluating \'o.x\')\n      at <anonymous> (/x/tests/t.test.ts:1:51)\n(fail) t [0.50ms]',
+    'RangeError: Array size must be a positive integer\n(fail) r [0.20ms]',
+  ])
+  expect(failingLines(bun, 2)).toBe('(fail) t | TypeError: undefined is not an object (evaluating \'o.x\'); (fail) r')
+})
+
 test('failing tests with the same name in two test files both count, and a failure shown twice still counts once', () => {
   // shaped like real `claude plugin test` output where tests/a.test.ts and tests/b.test.ts both fail "same"
   const out = [
