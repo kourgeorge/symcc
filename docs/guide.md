@@ -670,8 +670,11 @@ get through. The real fix is the worker sandbox (T-365).
 - **Skipped** for investigations and for changes that touch only prose or media. Only these count:
   `README`, `CHANGELOG`, `LICENSE`-style names (no extension, `.txt` or `.rst`), `.md` files that are not
   instructions for agents, and images, video, audio, subtitles and fonts. A `.md` file is instructions
-  for agents, and so is checked, when it is under `roles/`, `kinds/`, `.claude/`, `.symcc/` or `skills/`,
-  or is named `CLAUDE.md`, `AGENTS.md` or `SKILL.md`. Everything else is checked, even under `docs/`:
+  for agents, and so is checked, when it is under `roles/`, `kinds/`, `agents/`, `commands/`, `skills/`,
+  `examples/scouts/`, `.claude/`, `.symcc/`, `.github/instructions/`, `.cursor/`, `.windsurf/`, `.clinerules/`,
+  `.opencode/`, `.gemini/`, `.codex/` or `.roo/`, or is named `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `GEMINI.md`,
+  `CONVENTIONS.md`, `copilot-instructions.md` or `*.instructions.md` (and `.cursorrules`, `.windsurfrules` and
+  `.clinerules` files are always checked). Everything else is checked, even under `docs/`:
   `.mdx` files (they hold code), and config, build and CI files such as `package.json`, `.yaml`,
   `.toml`, `Makefile` and `.github/workflows/`. (`tests_with_changes` keeps its wider docs rule: a role
   file or a docs config file is not code that needs a test.)
