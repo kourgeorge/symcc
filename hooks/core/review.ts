@@ -15,7 +15,7 @@ export function needsReview(b: { mode?: unknown }, t: Pick<SymccTask, 'needs_rev
 // ---------------- a code change with no test ----------------
 
 const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec', 'e2e', 'cypress'])
-const DOC_NAMES = new Set(['readme', 'changelog', 'license', 'licence', 'copying', 'notice', 'authors', 'contributing'])
+export const DOC_NAMES = new Set(['readme', 'changelog', 'license', 'licence', 'copying', 'notice', 'authors', 'contributing'])
 
 /**
  * Whether `path` is a test file: under a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder or a
@@ -38,8 +38,8 @@ export function isTestFile(path: string): boolean {
   return stem.split(/[-._]/).some(w => /Tests?$/.test(w))
 }
 
-const CODE_EXTS = new Set(['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'py', 'sh', 'bash', 'zsh', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'pl', 'lua', 'vue', 'svelte'])
-const MEDIA_EXTS = new Set(['svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'tif', 'tiff', 'ico', 'icns', 'mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'srt', 'vtt', 'ass', 'woff', 'woff2', 'ttf', 'otf', 'eot'])
+export const CODE_EXTS = new Set(['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'py', 'sh', 'bash', 'zsh', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'pl', 'lua', 'vue', 'svelte'])
+export const MEDIA_EXTS = new Set(['svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'tif', 'tiff', 'ico', 'icns', 'mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'srt', 'vtt', 'ass', 'woff', 'woff2', 'ttf', 'otf', 'eot'])
 
 /**
  * Whether `path` is only docs: a .md / .mdx file, a README / CHANGELOG / LICENSE-style name (README, README.txt),

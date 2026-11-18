@@ -34,7 +34,7 @@ const KINDS: DefKind<KindDef, LeadKindInput> = {
   added: (a, description) => ({ description, body: typeof a.body === 'string' ? a.body : '' }),
   edited: (cur, a, description) => ({ description, body: typeof a.body === 'string' ? a.body : cur.body, ...(cur.off ? { off: true } : {}) }),
   turned: (cur, off) => ({ description: cur.description, body: cur.body, off }),
-  alwaysOn: name => (ALWAYS_ON_KINDS.includes(name) ? `${name} can't be turned off: it is one of the two ways a task runs (${ALWAYS_ON_KINDS.join(' and ')})` : ''),
+  alwaysOn: (name, off) => (off && ALWAYS_ON_KINDS.includes(name) ? `${name} can't be turned off: it is one of the two ways a task runs (${ALWAYS_ON_KINDS.join(' and ')})` : ''),
   offSaid: "the lead won't pick it for a new task and add refuses it; tasks that already have it keep it",
 }
 

@@ -4,6 +4,7 @@ import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, entry } from './fakes'
+import { emptyBoard } from '../hooks/board'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -25,8 +26,9 @@ const VIEW = { view: { shape: 'view-1', value: { tasks: [], working: [], scouts:
 /**
  * Fake roles folders: `builtIn` is the plugin's roles/ folder, `mine` the project's .symcc/roles (file name -> text).
  * fs.write and `rm -f` change `mine`, so what the panel writes or deletes is seen by the next read.
+ * `board`, when given, is the board file's content, read each time.
  */
-function fakeRoles(on: On, mine: Record<string, string>) {
+function fakeRoles(on: On, mine: Record<string, string>, board?: () => unknown) {
   const builtIn: Record<string, string> = {
     'general.md': '---\ndescription: a plain worker\n---\n',
     'tester.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n',
@@ -40,6 +42,7 @@ function fakeRoles(on: On, mine: Record<string, string>) {
     return b ? [builtIn, b[1] ?? ''] : null
   }
   on('fs.exists', (_, e, next) => {
+    if (board && e.path.endsWith('/board.json')) return { value: true }
     const w = where(e.path)
     return w ? { value: w[1] === '' || w[1] in w[0] } : next(e)
   })
@@ -48,6 +51,7 @@ function fakeRoles(on: On, mine: Record<string, string>) {
     return w && w[1] === '' ? { value: Object.keys(w[0]).map(name => entry(name)) } : next(e)
   })
   on('fs.read', (_, e, next) => {
+    if (board && e.path.endsWith('/board.json')) return { value: JSON.stringify(board()) }
     const w = where(e.path)
     if (!w) return next(e)
     if (!(w[1] in w[0])) throw new Error('no file')
@@ -294,6 +298,27 @@ test("the checker role's page shows the checker's own built-in prompt, the one i
   expect(await ui.find({ type: 'Text', text: /role checker's checklist goes here/ })).toBeDefined()
   expect(await ui.find({ key: 'role-prompt-change' })).toBeUndefined()
   expect(await ui.find({ key: 'role-prompt-investigation' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test("the checker role has no Turn on / off: its page points to the checker setting and says whether it is on", async ($, on) => {
+  stateOf(on, VIEW)
+  let checker = false
+  fakeRoles(on, { 'checker.md': '---\ndescription: tries to break a change\noff: true\n---\n- try empty input\n' }, () => ({ ...emptyBoard(), checker }))
+  const ui = await settings($)
+  expect((await ui.find({ key: 'roleRow:checker' }))?.props.label).toBe('checker: added')
+  await ui.press({ key: 'roleRow:checker' })
+  expect(await ui.find({ key: 'role-off' })).toBeUndefined()
+  expect(await ui.find({ key: 'role-edit' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /the checker setting runs it \(Settings → checker, now off\)/ })).toBeDefined()
+  await ui.press({ key: 'role-back' })
+  checker = true
+  await ui.press({ key: 'roleRow:checker' })
+  expect(await ui.find({ type: 'Text', text: /Settings → checker, now on/ })).toBeDefined()
+  // another role's page has no such line
+  await ui.press({ key: 'role-back' })
+  await ui.press({ key: 'roleRow:tester' })
+  expect(await ui.find({ type: 'Text', text: /Settings → checker/ })).toBeUndefined()
   await ui.unmount()
 })
 

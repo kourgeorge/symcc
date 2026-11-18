@@ -34,6 +34,16 @@ export type RoleTools = { extra: readonly string[]; web: readonly string[] }
 /** The role a task gets when none is set: today's plain worker. */
 export const DEFAULT_ROLE = 'general'
 
+/** The role a checker runs as (roles/checker.md; the owner's .<name>/roles/checker.md is used instead). It is never a task's
+ *  role and can't be turned on or off: the checker setting decides whether the checker runs. */
+export const CHECKER_ROLE = 'checker'
+
+/** Whether `name` is the checker role (any case). */
+export const isCheckerRole = (name: string | undefined): boolean => String(name ?? '').trim().toLowerCase() === CHECKER_ROLE
+
+/** Why the checker role can't be turned on or off, or given to a task: the checker setting decides when it runs. */
+export const CHECKER_ROLE_TEXT = `the ${CHECKER_ROLE} role can't be turned on or off and is never a task's role: it is only used by the ${CHECKER_ROLE} setting (Settings → ${CHECKER_ROLE}), which turns the checker on or off. Its checklist can still be edited.`
+
 /** A front matter list: "[a, b]" or "a, b", quotes dropped. */
 function frontMatterList(value: string): string[] {
   return value
@@ -110,6 +120,7 @@ export function findRole(roles: RoleDef[], name: string | undefined): RoleDef | 
 export function checkRole(roles: RoleDef[], name: string): string {
   const r = findRole(roles, name)
   const on = onRoles(roles)
+  if (isCheckerRole(name)) throw new Error(`${CHECKER_ROLE_TEXT} The roles are: ${roleChoices(on).join(', ')}`)
   if (r?.off) throw new Error(`role "${r.name}" is turned off (the owner can turn it on again: roles action "on"); the roles are: ${roleChoices(on).join(', ')}`)
   if (r) return r.name
   if (name.trim().toLowerCase() === DEFAULT_ROLE) return DEFAULT_ROLE
@@ -180,8 +191,8 @@ export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): st
 - One task, one role. When a request needs several kinds of work (e.g. code, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
 }
 
-/** The roles that are not turned off (general always counts as on). */
-export const onRoles = (roles: RoleDef[]): RoleDef[] => roles.filter(r => !r.off || r.name.toLowerCase() === DEFAULT_ROLE)
+/** The roles a task can have: those not turned off (general always counts as on), never the checker role. */
+export const onRoles = (roles: RoleDef[]): RoleDef[] => roles.filter(r => !isCheckerRole(r.name) && (!r.off || r.name.toLowerCase() === DEFAULT_ROLE))
 
 /** Why `name` can't be a role name (it goes into a file path), or null when it can. */
 export const roleNameError = (name: string): string | null => defNameError('role', name)
@@ -209,7 +220,7 @@ export function roleFileText(r: Omit<RoleDef, 'name'>): string {
 
 /** One role's line for the lead's roles list: "tester (built-in): writes tests · model sonnet", with ", off" when it is off and its warning, if any, at the end. */
 function leadRoleLine(r: RoleDef, source: DefSource): string {
-  return `- ${r.name} (${sourceLabel(source, r.off)}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
+  return `- ${r.name} (${sourceLabel(source, r.off && !isCheckerRole(r.name))}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
 }
 
 /** The lead's line for a broken role file: what it is, why, and the way out (reset for a built-in's name, remove for an added role). */

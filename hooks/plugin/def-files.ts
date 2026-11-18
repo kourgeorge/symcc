@@ -47,8 +47,8 @@ export type DefKind<D extends Def, A extends DefInput> = {
   edited(cur: D, a: A, description: string): Omit<D, 'name'> | string
   /** the fields with off set */
   turned(cur: D, off: boolean): Omit<D, 'name'>
-  /** why `name` can't be turned off, or '' */
-  alwaysOn(name: string): string
+  /** why `name` can't be turned off (`off`) or on, or '' */
+  alwaysOn(name: string, off: boolean): string
   /** what "off" says after "turned x off (copied ...)" */
   offSaid: string
 }
@@ -192,7 +192,7 @@ async function manageText<D extends Def, A extends DefInput>($: Host, k: DefKind
   const copied = !p && !!b ? ` (copied the built-in ${noun} to ${file} first)` : ''
   if (action === 'off' || action === 'on') {
     const off = action === 'off'
-    const stays = off ? k.alwaysOn(name) : ''
+    const stays = k.alwaysOn(name, off)
     if (stays) return stays
     if (!!cur.off === off) return `${name} is already ${action}`
     const err = await save(k.turned(cur, off))
