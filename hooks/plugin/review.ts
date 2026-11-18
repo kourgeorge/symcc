@@ -1,6 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, endedBy, tryLabel } from '../board'
-import { sayNeedsYou } from './voice'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -32,7 +31,9 @@ export function gitDiff($: Host, target: string, t: SymccTask, opts: string[], f
 export async function ownerEdits($: Host, t: SymccTask, dir: string): Promise<string[]> {
   const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all'], dir)
   if (st.exitCode !== 0) throw new Error(`git status: ${(st.stderr || st.stdout).trim().slice(0, 300)}`)
-  const files = parseStatusZ(st.stdout).map(e => e.path)
+  // Secret-looking files (see secretFiles) never merge, so they are not edits that count: a file a check left out stays
+  // in the folder, and must not show in the task's diff as the owner's edit or make approve retest. Deleting one still counts.
+  const files = parseStatusZ(st.stdout).filter(e => !leftOutKind(e)).map(e => e.path)
   const seen = reviewedCommit(t)
   if (seen) {
     const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
@@ -56,12 +57,19 @@ export async function folderDiff($: Host, target: string, t: SymccTask, opts: st
   const edits = (await $.fs.exists(`${dir}/.git`)) ? await ownerEdits($, t, dir) : []
   if (!edits.length) return { text: await gitDiff($, target, t, opts, file), edits }
   const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all'], dir)
-  const fresh = parseStatusZ(st.stdout).filter(e => e.code === '??').map(e => e.path)
+  const entries = parseStatusZ(st.stdout)
+  const fresh = entries.filter(e => e.code === '??' && !leftOutKind(e)).map(e => e.path)
   if (fresh.length) await git($, ['add', '-N', '--', ...fresh], dir)
+  // secret-looking files left in the folder are never shown: they are not part of what merges
+  const hide = entries.filter(leftOutKind).map(e => `:(exclude,literal)${e.path}`)
+  const paths = file ? [file, ...hide] : hide
   const base = await gitOk($, ['merge-base', `refs/heads/${target}`, 'HEAD'], dir)
-  const text = await gitOk($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', ...opts, base, ...(file ? ['--', file] : [])], dir)
+  const text = await gitOk($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', ...opts, base, ...(paths.length ? ['--', ...paths] : [])], dir)
   return { text, edits }
 }
+
+/** Whether a `git status` entry is a secret-looking file (see secretFiles) that is there, not deleted: one a check leaves out of a task's change. */
+const leftOutKind = (e: { code: string; path: string }) => !e.code.includes('D') && secretFiles([e.path]).length > 0
 
 /** The files a task changed, with +/- line counts, as its folder has them now (see folderDiff); the owner's edited files are marked. */
 export async function changedFiles($: Host, target: string, t: SymccTask): Promise<DiffFile[]> {
@@ -123,7 +131,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
   // Files whose names look like secrets (.env, *.pem, *.key, id_rsa, ...) are taken out of what is staged
   // before the commit: they stay in the folder, but never reach a commit or the target branch.
-  const staged = await git($, ['diff', '--cached', '--name-only', '--no-renames', '-z'], dir)
+  // Deletions are kept (--diff-filter=d): removing such a file from the project is allowed.
+  const staged = await git($, ['diff', '--cached', '--name-only', '--no-renames', '--diff-filter=d', '-z'], dir)
   if (staged.exitCode !== 0) return { ok: false, detail: `symcc could not list the staged work (git diff --cached): ${gitFailText(staged)}` }
   const left = secretFiles(staged.stdout.split('\0').filter(Boolean))
   const unstaged = await unstage($, dir, left)
@@ -136,7 +145,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   let changed = await changedSince($, base, head)
   // Secret-looking files already in the branch's commits (the worker committed them, or an earlier try did):
   // the branch's work is made one commit again without them, so they are not in the history that merges.
-  const inBranch = secretFiles(changed)
+  // Deleted ones are not counted (see above).
+  const inBranch = secretFiles(await changedSince($, base, head, true))
   if (inBranch.length) {
     const why = await dropFromBranch($, t, dir, base, inBranch, made)
     if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${secretsLeftText(inBranch)}): ${why}` }
@@ -159,11 +169,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     if (await onTarget($, t.id, head, target)) return withSecrets({ ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` })
     if (secrets.length) {
       const ask = onlySecretsQuestion(t.id, secrets)
-      const r: CheckResult = { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
-      // A worker's try: the task waits for the owner with the question (still the same try only). The caller then finds
-      // it waiting and keeps that (its outcome line goes to the history as "not used"), so it never ends as failed.
-      if (mode === 'finish') await waitForOwner($, b, t, ask, `${tryLabel(t)}: ${r.detail}`)
-      return r
+      // Nothing merges: settle makes the task wait for the owner with the question.
+      return { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
     }
     return { ok: false, detail: 'the worker made no change' }
   }
@@ -184,18 +191,6 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold)), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
   }
-}
-
-/** Task `t` (still the same doing try) waits for the owner with `question`; `line` goes to its history, and the lead and the owner are told. */
-async function waitForOwner($: Host, b: Board, t: SymccTask, question: string, line: string) {
-  const written = await change($, x => {
-    const cur = find(x, t.id)
-    if (!cur || cur.status !== 'doing' || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
-    return [patchTask(x, t.id, { status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, line], ...endedBy(cur, now(), 'asked', 'only secret-looking files') }, now()), true] as [Board, boolean]
-  })
-  if (!written) return
-  sayNeedsYou($, b, t, question)
-  tellLead($, `${question} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`)
 }
 
 /**
@@ -224,9 +219,9 @@ async function keepLeftOut($: Host, id: string, dir: string, files: readonly str
   return moved.length === files.length ? `moved to ${rel}/, since the task's folder is removed after the merge` : `only ${moved.join(', ')} moved to ${rel}/; the rest was ${gone}`
 }
 
-/** The files changed from commit `base` to commit `head` (-z: names come through as they are; without it git quotes and escapes unusual ones, e.g. "caf\303\251.md"). */
-async function changedSince($: Host, base: string, head: string): Promise<string[]> {
-  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
+/** The files changed from commit `base` to commit `head` (`noDeleted`: files deleted there are not listed; -z: names come through as they are; without it git quotes and escapes unusual ones, e.g. "caf\303\251.md"). */
+async function changedSince($: Host, base: string, head: string, noDeleted = false): Promise<string[]> {
+  const d = await git($, ['diff', '--name-only', '--no-renames', ...(noDeleted ? ['--diff-filter=d'] : []), '-z', `${base}..${head}`])
   if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
   return d.stdout.split('\0').filter(Boolean)
 }
