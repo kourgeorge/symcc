@@ -10,6 +10,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { claimLead } from '../hooks/app/lead'
+import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
@@ -2851,11 +2852,15 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
   expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
   expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
-  const t0 = Date.now()
   expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  expect(Date.now() - t0).toBeLessThan(1000)
-  // the folder lookups of the worker's own folder and the project, not one per path
-  expect(slow).toBeLessThan(30)
+  const looked = slow
+  // the folder lookups of the worker's own folder and the project, not one per path (counted before the timed call).
+  // This count is what catches the old slow way (a lookup per path), so no tight time limit is needed (T-478)
+  expect(looked).toBeLessThan(30)
+  // and a generous time cap only: the work is not linear in the paths (4 times the paths took about 20 times as long
+  // under load), so a growth ratio would flake; the fastest of 3 runs keeps one busy moment from counting
+  const big = await bestMsOfAsync(() => bash(`cat ${files(1999, i => `src/f${i}.ts`)}`))
+  expect(big).toBeLessThan(SPEED_CAP_MS)
   // a link among many plain paths is still followed
   expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
   fs.stat = realStat

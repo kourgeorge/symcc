@@ -13,6 +13,11 @@ root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 cd "$root"
 fails=0
 bad() { echo "host-free: $1" >&2; fails=$((fails + 1)); }
+# tsc: scripts/typecheck.sh passes its cached copy in SYMCC_TSC (run with SYMCC_TSC_RUN, T-480); run alone, use bunx
+have_tsc() { [ -n "${SYMCC_TSC:-}" ] || command -v bunx >/dev/null 2>&1; }
+tsc() {
+  if [ -n "${SYMCC_TSC:-}" ]; then "${SYMCC_TSC_RUN:-node}" "$SYMCC_TSC" "$@"; else bunx -p typescript@5.9.3 tsc "$@"; fi
+}
 
 # the shared files (those that exist: scripts/typecheck.sh's own test runs it on a small copy)
 # every .ts and .tsx file under hooks/app/ and hooks/core/, sub-folders too
@@ -41,19 +46,19 @@ if [ -n "$hits" ]; then
 fi
 
 # They type-check on their own, with no Claude Code types: an import of 'claude-code' or 'node:...' can't be found then.
-if command -v bunx >/dev/null 2>&1; then
+if have_tsc; then
   tmp="$(mktemp -d)"
   list=$(printf '%s\n' $shared | grep . | sed "s|.*|\"$root/&\"|" | paste -sd, -)
   if [ -n "$list" ]; then
     printf '{ "compilerOptions": { "target": "es2023", "lib": ["es2023"], "module": "esnext", "jsx": "react-jsx", "moduleResolution": "bundler", "strict": true, "noUncheckedIndexedAccess": true, "noEmit": true, "skipLibCheck": false, "types": [], "typeRoots": [] }, "files": [%s] }\n' "$list" > "$tmp/tsconfig.json"
-    if ! out=$(bunx -p typescript@5.9.3 tsc --noEmit --pretty false -p "$tmp/tsconfig.json" 2>&1); then
+    if ! out=$(tsc --noEmit --pretty false -p "$tmp/tsconfig.json" 2>&1); then
       echo "$out" | grep "error TS" | sed "s|$root/||" | while IFS= read -r e; do echo "host-free: with no Claude Code types: $e" >&2; done
       fails=$((fails + 1))
     fi
   fi
   rm -rf "$tmp"
 else
-  bad "bunx (from bun) is not on PATH, so the type check with no Claude Code types was skipped"
+  bad "no tsc (bunx is not on PATH), so the type check with no Claude Code types was skipped"
 fi
 
 # The Node host (hosts/node/, T-377) runs symcc with no Claude Code: it may use Node and Bun, but never imports
@@ -70,8 +75,8 @@ if [ -n "$node_files" ]; then
     echo "$hits" | while IFS= read -r hit; do echo "host-free: hosts/node/ imports Claude Code (it must run without it): $hit" >&2; done
     fails=$((fails + 1))
   fi
-  if [ -f hosts/node/tsconfig.json ] && command -v bunx >/dev/null 2>&1; then
-    if ! out=$(bunx -p typescript@5.9.3 tsc --noEmit --pretty false -p hosts/node/tsconfig.json 2>&1); then
+  if [ -f hosts/node/tsconfig.json ] && have_tsc; then
+    if ! out=$(tsc --noEmit --pretty false -p hosts/node/tsconfig.json 2>&1); then
       echo "$out" | grep "error TS" | while IFS= read -r e; do echo "host-free: hosts/node/: $e" >&2; done
       fails=$((fails + 1))
     fi

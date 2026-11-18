@@ -68,7 +68,9 @@ test('an overdue scout runs at the first check, and a scout that never ran runs 
   const { views, clock } = setup(on, files)
   await write($, views, 'a-old', scoutFile(2880))
   const t0 = Date.now()
-  expect(nextAt(views, 'a-old') - t0).toBeGreaterThanOrEqual(SCOUT_SOON_MS - 1000)
+  // the timers are set from the real time somewhere between `start` and t0: check against both ends, so a slow
+  // board update can't fail it (T-478)
+  expect(nextAt(views, 'a-old') - start).toBeGreaterThanOrEqual(SCOUT_SOON_MS)
   expect(nextAt(views, 'a-old') - t0).toBeLessThanOrEqual(SCOUT_SOON_MS)
   expect(nextAt(views, 'b-new') - nextAt(views, 'a-old')).toBe(SCOUT_SPREAD_MS)
   const b = nextAt(views, 'b-new')
