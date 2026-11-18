@@ -2607,6 +2607,8 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(taskKeys('review', true))).toEqual(['a approve', 'x reject', 'd show changes', 'w watch worker', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(taskKeys('backlog'))).toEqual(['o move to todo', 'x drop', 'l role', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(taskKeys('todo', true))).toEqual(['w watch worker', 'k stash to backlog', 'l role', 'y copy', '↑↓ scroll', 'b back'])
+  // a failed task's key line lists the two actions its "Next:" text points to
+  expect(words(taskKeys('failed'))).toEqual(['r retry', 'x drop', 'k stash to backlog', 'l role', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(taskKeys('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
   expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
