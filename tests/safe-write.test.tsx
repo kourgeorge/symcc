@@ -1,5 +1,6 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
+import { fakeHost } from './fake-host'
 import { changeScoutMemory, recordScoutRun } from '../hooks/plugin/scouts'
 import { tmpFor } from '../hooks/plugin/store'
 import { parseScoutMemory, parseScoutUsage } from '../hooks/board'
@@ -14,7 +15,7 @@ const tick = () => pause(5)
 /** A fake $ over an in-memory folder: reads, writes and `mv`s are slow (a few ms each), so two saves overlap. Keeps every temp name written. */
 function fakeFiles(files: Map<string, string>) {
   const temps: string[] = []
-  const $ = {
+  const { host: $ } = fakeHost({
     fs: {
       read: async (p: string) => {
         await tick()
@@ -27,20 +28,18 @@ function fakeFiles(files: Map<string, string>) {
         files.set(p, String(text))
       },
     },
-    process: {
-      run: async (argv: string[]) => {
-        await tick()
-        if (argv[0] === 'mv') {
-          const [from, to] = argv.slice(-2) as [string, string]
-          if (!files.has(from)) return { exitCode: 1, stdout: '', stderr: `mv: rename ${from} to ${to}: No such file or directory` }
-          files.set(to, files.get(from)!)
-          files.delete(from)
-        }
-        if (argv[0] === 'rm') files.delete(argv[argv.length - 1]!)
-        return { exitCode: 0, stdout: '', stderr: '' }
-      },
+    run: async argv => {
+      await tick()
+      if (argv[0] === 'mv') {
+        const [from, to] = argv.slice(-2) as [string, string]
+        if (!files.has(from)) return { exitCode: 1, stdout: '', stderr: `mv: rename ${from} to ${to}: No such file or directory` }
+        files.set(to, files.get(from)!)
+        files.delete(from)
+      }
+      if (argv[0] === 'rm') files.delete(argv[argv.length - 1]!)
+      return { exitCode: 0, stdout: '', stderr: '' }
     },
-  } as unknown as Parameters<typeof changeScoutMemory>[0]
+  })
   return { $, temps }
 }
 

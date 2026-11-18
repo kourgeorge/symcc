@@ -1,9 +1,8 @@
 import type { SymccTask } from '../../types'
-import { startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
-import { liveWorkersFor } from '../claude/agents'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty } from './state'
-import type { Host } from '../host'
+import { type Host, agentState } from '../host'
 import { load, change, path } from './store'
 import { tellLead, noteForLead, brief } from './tell'
 import { pump, agentsNow } from './workers'
@@ -14,7 +13,7 @@ import { pump, agentsNow } from './workers'
 export const asSymcc = () => ['-c', `user.name=${S.N.author.name}`, '-c', `user.email=${S.N.author.email}`]
 
 export async function git($: Host, args: string[], cwd = S.root, timeoutMs = 120_000) {
-  return $.process.run(['git', ...args], { cwd, timeoutMs })
+  return $.run(['git', ...args], { cwd, timeoutMs })
 }
 export async function gitOk($: Host, args: string[], cwd = S.root, timeoutMs = 120_000) {
   const r = await git($, args, cwd, timeoutMs)
@@ -172,7 +171,7 @@ export async function copyTypes($: Host, dir: string): Promise<boolean> {
   // Only where git in `dir` ignores it (exit 0; tracked files are never "ignored"): else it could land in the
   // task's commit or scope check, or the old copy removed below could be the project's own files.
   if ((await git($, ['check-ignore', '-q', '--', `${TYPES_DIR}/tsconfig.json`], dir)).exitCode !== 0) return false
-  const run = async (argv: string[]) => (await $.process.run(argv, { cwd: dir })).exitCode === 0
+  const run = async (argv: string[]) => (await $.run(argv, { cwd: dir })).exitCode === 0
   if (!(await run(['rm', '-rf', to]))) return false
   if (!(await run(['mkdir', '-p', `${dir}/.claude-plugin`]))) return false
   if (!(await run(['cp', '-R', from, to]))) {
@@ -197,7 +196,7 @@ export async function copyReports($: Host, t: Pick<SymccTask, 'details'>, dir: s
     const text = await Promise.resolve().then(() => $.fs.read(path(f))).then(x => String(x), () => null)
     if (text === null) continue
     if (!copied.length) {
-      const mk = await $.process.run(['mkdir', '-p', `${dir}/${S.N.dir}/reports`])
+      const mk = await $.run(['mkdir', '-p', `${dir}/${S.N.dir}/reports`])
       if (mk.exitCode !== 0) return []
       await $.fs.write(`${dir}/${S.N.dir}/.gitignore`, '*\n')
     }
@@ -247,7 +246,7 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
   const agents = await agentsNow($)
   if (!agents) return false
   const t = find(await load($), taskId)
-  if (liveWorkersFor({ id: taskId, agent: t?.agent }, agents, S.N.name).some(a => a.id !== except)) return false
+  if (liveWorkersFor({ id: taskId, agent: t?.agent }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
   await git($, ['worktree', 'remove', '--force', dir])
   await git($, ['worktree', 'prune'])
   return true
@@ -267,7 +266,7 @@ export async function cleanupMerged($: Host, b: Board) {
   let dirs = 0
   for (const id of worktreesToRemove(b.tasks, existing)) {
     const t = find(b, id)
-    if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, agent: t?.agent }, agents, S.N.name).length) continue
+    if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, agent: t?.agent }, agents.map(agentState), S.N.name).length) continue
     const dir = worktreeDir(id)
     const st = await git($, ['status', '--porcelain'], dir)
     if (st.exitCode !== 0) continue

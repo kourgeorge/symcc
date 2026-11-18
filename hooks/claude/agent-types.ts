@@ -1,10 +1,20 @@
 // Claude Code's tool names and agent types for symcc's workers and scouts. Only the Claude Code adapter knows these:
 // core/roles.ts reads a role's `tools:` line with whatever tool names it is given (RoleTools), and this file gives
-// it Claude Code's, then binds the role functions to them under their usual names.
-import { DEFAULT_NAME, namesFor } from '../name'
+// it Claude Code's (claude/host.ts hands them to the logic as host.words.roleTools).
+import { DEFAULT_NAME, cleanName } from '../name'
 import { ASK_TOOL } from '../core/ask'
-import * as roles from '../core/roles'
 import type { RoleDef, RoleTools } from '../core/roles'
+
+/** Claude Code's names made from the plugin's name: its worker and scout agent types, and a tool's full name as the model sees it. */
+export function claudeNames(raw: string = DEFAULT_NAME) {
+  const name = cleanName(raw)
+  return {
+    worker: `${name}:worker`,
+    scout: `${name}:scout`,
+    /** "mcp__<name>__board" */
+    tool: (t: string) => `mcp__${name}__${t}`,
+  }
+}
 
 /** The tools every worker has. */
 export const BASE_WORKER_TOOLS: readonly string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash']
@@ -17,18 +27,6 @@ export const SCOUT_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash', '
 
 /** Claude Code's tool names for a role's `tools:` line: both extra tools reach the web. */
 export const ROLE_TOOLS: RoleTools = { extra: EXTRA_TOOLS, web: ['WebSearch', 'WebFetch'] }
-
-/** A role file as a RoleDef, or null when it can't be used (see core/roles.ts parseRole). */
-export const parseRole = (name: string, text: string): RoleDef | null => roles.parseRole(name, text, ROLE_TOOLS)
-
-/** Why a role file can't be used, or null when it can (see core/roles.ts roleSkipReason). */
-export const roleSkipReason = (name: string, text: string): string | null => roles.roleSkipReason(name, text, ROLE_TOOLS)
-
-/** The tools a role asks for, spelled as in EXTRA_TOOLS, or the reason one is not allowed. */
-export const roleTools = (tools: string[]): string[] | string => roles.roleTools(tools, ROLE_TOOLS)
-
-/** The worker prompt's role section (see core/roles.ts roleSection). */
-export const roleSection = (r: RoleDef | undefined, values: Record<string, string> = {}): string => roles.roleSection(r, values, ROLE_TOOLS)
 
 /** The agent type (without the "<name>:" part) for a set of extra tools: "worker" for none, "worker-web" for both web tools, else "worker-websearch" and so on. */
 export function workerTypeSuffix(tools: readonly string[] | undefined): string {
@@ -60,5 +58,5 @@ export function asBaseWorkers<A extends { type?: string }>(agents: A[], name: st
 export function workerAgentTypes(name: string = DEFAULT_NAME): { suffix: string; tools: string[] }[] {
   const sets: string[][] = [[]]
   for (const t of EXTRA_TOOLS) for (const s of [...sets]) sets.push([...s, t])
-  return sets.map(s => ({ suffix: workerTypeSuffix(s), tools: [...BASE_WORKER_TOOLS, ...EXTRA_TOOLS.filter(t => s.includes(t)), namesFor(name).tool(ASK_TOOL)] }))
+  return sets.map(s => ({ suffix: workerTypeSuffix(s), tools: [...BASE_WORKER_TOOLS, ...EXTRA_TOOLS.filter(t => s.includes(t)), claudeNames(name).tool(ASK_TOOL)] }))
 }

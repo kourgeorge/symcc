@@ -7,9 +7,9 @@ import { test } from './reset'
 import type { SymccScout } from '../types'
 import { SCOUT_REPORT_CHARS, emptyBoard } from '../hooks/board'
 import { scoutFinished } from '../hooks/plugin/scouts'
+import { agentFinished } from '../hooks/app/symcc'
 import { S, scoutRuns, scoutState, heard, leadQueue, meanwhile } from '../hooks/plugin/state'
-import { claudeHost } from '../hooks/claude/host'
-import { turnComplete } from './turn-hook'
+import { fakeHost, memoryFs } from './fake-host'
 
 const ROOT = '/repo'
 const MEMORY = `${ROOT}/.symcc/scouts.json`
@@ -32,8 +32,7 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
   const timers: (() => void)[] = []
   const sent: string[] = []
   const toasts: string[] = []
-  const state = new Map<string, unknown>()
-  const run = async (argv: string[]): Promise<Res> => {
+  const run = async (argv: readonly string[]): Promise<Res> => {
     const [cmd, ...rest] = argv
     if (cmd === 'mv') {
       const [, from, to] = rest
@@ -47,40 +46,13 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
     // no git, no players: every other command just works and prints nothing
     return ok()
   }
-  const $ = {
-    process: { run: (argv: string[]) => run(argv) },
-    fs: {
-      exists: async (p: string) => files.has(p),
-      read: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return files.get(p)!
-      },
-      write: async (p: string, text: string) => void files.set(p, text),
-      stat: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: 0 }
-      },
-      list: async () => [],
-    },
-    plugin: { root: '/plugin', name: 'symcc' },
-    session: { id: async () => 'me', send: async () => undefined },
-    agent: { list: async () => [] },
-    env: { get: async () => undefined },
-    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)), status: () => undefined },
-    clock: {
-      after: (_ms: number, f: () => void) => (timers.push(f), { cancel() {} }),
-      sleep: async () => undefined,
-    },
-    prompt: { submit: async (p: { text: string }) => void sent.push(p.text) },
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+  const { host } = fakeHost({
+    run: argv => run(argv),
+    fs: memoryFs(files),
+    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)) },
+    clock: { after: (_ms, f) => (timers.push(f), { cancel() {} }) },
+    lead: { send: async text => void sent.push(text) },
+  })
   S.root = ROOT
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -101,7 +73,7 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
     return sent
   }
   const memory = () => JSON.parse(files.get(MEMORY) ?? '{}') as { scouts?: Record<string, { last_run: string | null; last_report?: string; paused?: boolean }>; usage?: Record<string, { runs: number }> }
-  return { $: claudeHost($ as never) as never, claude: $, files, st, sent, toasts, toLead, memory }
+  return { $: host, files, st, sent, toasts, toLead, memory }
 }
 
 // ---------------- a report with findings ----------------
@@ -259,11 +231,11 @@ test('with board.json broken, a stopped scout run still shows the "was stopped" 
 
 // ---------------- a run that ended on an API error or a refusal (T-402) ----------------
 
-for (const end of [{ reason: 'error' }, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help' } }]) {
-  test(`through turn.complete, a scout run that ended on ${end.reason === 'error' ? 'an error' : 'a refusal'} sends nothing to the lead and keeps its last real run and report`, async () => {
+for (const end of [{ reason: 'error' }, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help' } }] as const) {
+  test(`through agentFinished (turn.complete), a scout run that ended on ${end.reason === 'error' ? 'an error' : 'a refusal'} sends nothing to the lead and keeps its last real run and report`, async () => {
     const w = world({ memory: JSON.stringify({ scouts: { bugs: { last_run: BEFORE, last_report: '1. The old finding.' } } }) })
     w.st.last_report = '1. The old finding.'
-    await turnComplete(w.claude, 's1', '1. Let me look at src/a.ts next.', end)
+    agentFinished(w.$, 's1', { answer: '1. Let me look at src/a.ts next.', end, isAborted: false, tokens: undefined })
     // scoutFinished runs on without being waited for: let its work finish (its toast is the last step)
     for (let i = 0; i < 20_000 && !w.toasts.length; i++) await Promise.resolve()
     expect(w.toLead()).toEqual([])

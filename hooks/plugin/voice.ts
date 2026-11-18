@@ -22,7 +22,7 @@ const MAC_SOUNDS = '/System/Library/Sounds'
 const FD_SOUNDS = '/usr/share/sounds/freedesktop/stereo'
 
 function run(host: Host, argv: string[]) {
-  return host.process.run(argv, { timeoutMs: 5000 }).catch(() => null)
+  return host.run(argv, { timeoutMs: 5000 }).catch(() => null)
 }
 async function okRun(host: Host, argv: string[]) {
   return (await run(host, argv))?.exitCode === 0
@@ -171,7 +171,7 @@ export async function sayNext(host: Host) {
   S.saying = true
   try {
     for (const c of await playsFor(host, S.notifyWanted, items)) {
-      const r = await host.process.run(c.argv, { timeoutMs: 30_000, ...(c.env ? { env: c.env } : {}) }).catch(() => null)
+      const r = await host.run(c.argv, { timeoutMs: 30_000, ...(c.env ? { env: c.env } : {}) }).catch(() => null)
       if (r && r.exitCode === 0) break
     }
   } catch {

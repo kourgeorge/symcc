@@ -145,7 +145,7 @@ async function manageText<D extends Def, A extends DefInput>(host: Host, k: DefK
   if (action === 'list') return cur && source ? k.oneText(cur, source, source === 'built-in' ? k.builtInFile(name) : file) : `no ${noun} named ${asked} (${have()})`
   const rm = async () => {
     // An argument list (no shell), with "--" so the path can never be read as an option.
-    const r = await host.process.run(['rm', '-f', '--', path(file)])
+    const r = await host.run(['rm', '-f', '--', path(file)])
     return r.exitCode === 0 ? '' : `could not remove ${file}: ${r.stderr || r.stdout || `exit ${r.exitCode}`}`
   }
   const save = async (fields: Omit<D, 'name'> | string) => {
@@ -153,7 +153,7 @@ async function manageText<D extends Def, A extends DefInput>(host: Host, k: DefK
     const text = k.fileText(fields)
     const why = k.skipReason(name, text)
     if (why) return why
-    await host.process.run(['mkdir', '-p', '--', path(dir)])
+    await host.run(['mkdir', '-p', '--', path(dir)])
     await host.fs.write(path(file), text)
     return ''
   }

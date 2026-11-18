@@ -1,22 +1,30 @@
-// Claude Code's side of the Host (hooks/host.ts): claudeHost makes a Host from one hook's `$`. Most members are the
-// same calls under the same names; `agents` is in Claude Code's terms here: symcc's workers, scouts and checkers are
-// background subagents of the agent types claude/registration.ts registers ("<name>:worker", "<name>:worker-web", ...,
+// Claude Code's side of the Host (hooks/host.ts): claudeHost makes a Host from one hook's `$`, mapping symcc's words
+// to Claude Code's: `run` is $.process.run, `env` is $.env.get, symcc's workers, scouts and checkers are background
+// subagents of the agent types claude/registration.ts registers ("<name>:worker", "<name>:worker-web", ...,
 // "<name>:scout"), listed by $.agent.list() and told to stop with $.session.send. The lead is the main chat, sent a
-// prompt with $.prompt.submit; `ui.refresh` is $.ui.invalidate('ui.render'), and `ui.panel` carries the board panel's
-// values, which only Claude Code's `$` holds.
+// prompt with $.prompt.submit, and its usage is read from Claude Code's session logs (claude/lead-usage.ts);
+// `ui.refresh` is $.ui.invalidate('ui.render'), `ui.panel` carries the board panel's values, which only Claude Code's
+// `$` holds (claude/panel.ts), and `words` gives symcc's tools their "mcp__<name>__<tool>" names.
 import type { EngineInterface } from 'claude-code'
-import type { Host, HostAgent, HostAgentStart } from '../host'
-import { namesFor } from '../name'
-import { S, panelValues } from '../plugin/state'
-import { asBaseWorkers, workerTypeFor } from './agent-types'
-import { isNotReady, scoutNotReady } from './agents'
+import type { Host, HostAgentStart, HostWords } from '../host'
+import { S } from '../plugin/state'
+import { ROLE_TOOLS, claudeNames, workerTypeFor } from './agent-types'
+import { hostAgent, isNotReady, scoutNotReady } from './agents'
+import { leadUsage } from './lead-usage'
+import { panelValues } from './panel'
 
 /** The Host register.tsx hands the logic (the board panel's values are its ui.panel). */
 export type ClaudeHost = Host
 
 /** The Claude Code agent type an agent of this kind is started as: a worker's fits its role's extra tools; scouts and checkers are scouts. */
 export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: string = S.N.name): string {
-  return a.kind === 'worker' ? workerTypeFor({ tools: a.tools ? [...a.tools] : undefined }, name) : namesFor(name).scout
+  return a.kind === 'worker' ? workerTypeFor({ tools: a.tools ? [...a.tools] : undefined }, name) : claudeNames(name).scout
+}
+
+/** Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role may add WebSearch and WebFetch. */
+export const CLAUDE_WORDS: HostWords = {
+  tool: (name, tool) => claudeNames(name).tool(tool),
+  roleTools: ROLE_TOOLS,
 }
 
 /** An error from a start, marked when it only means the agent type isn't there yet (see notReadyYet in host.ts). */
@@ -41,8 +49,8 @@ export function claudeAgents($: EngineInterface): Host['agents'] {
       if ('deny' in spawned && spawned.deny) throw startError(a, new Error(spawned.deny))
       return 'agentId' in spawned && spawned.agentId ? { agentId: spawned.agentId } : {}
     },
-    // Every worker type (worker, worker-web, ...) is listed as the base "<name>:worker", as Host's agent list says.
-    list: async () => asBaseWorkers((await $.agent.list()) as HostAgent[], S.N.name),
+    // Every worker type (worker, worker-web, ...) is listed as a 'worker', the scout type as a 'scout' (see HostAgent).
+    list: async () => (await $.agent.list()).map(a => hostAgent(a, S.N.name)),
     send: (agentId, text) => $.session.send({ to: { agentId }, text }),
     stop: (agentId, text) => $.session.send({ to: { agentId }, text }),
   }
@@ -61,13 +69,13 @@ function envGet($: EngineInterface, name: string): Promise<string | undefined> {
 
 /**
  * The hook's `$` as a Host: each member makes the same call on the same `$` (so a hook's waits still count against its
- * own time), plus `agents`, `lead`, and `ui.panel`, the board panel's values (plugin/state.ts). Cheap and holds
+ * own time), under symcc's names, plus `agents`, `lead`, `words` and `ui.panel`, the board panel's values (plugin/state.ts). Cheap and holds
  * nothing, so each hook makes its own. Written out member by member: Claude Code's loader only lets `$` be used as
  * `$.noun.event(...)` or handed to the plugin's own functions, so `$` can't be wrapped as a whole (and some calls want
  * their first argument written out: see envGet).
  */
 export function claudeHost($: EngineInterface): ClaudeHost {
-  return {
+  const host: ClaudeHost = {
     plugin: {
       get name() {
         return $.plugin.name
@@ -77,9 +85,10 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       },
     },
     session: { id: () => $.session.id(), repo: () => $.session.repo(), root: () => $.session.root(), usage: () => $.session.usage() },
-    lead: { send: text => $.prompt.submit({ text }) },
+    lead: { send: text => $.prompt.submit({ text }), usage: (root, range, nowMs) => leadUsage(host, root, range, nowMs) },
     agents: claudeAgents($),
-    env: { get: name => envGet($, name) },
+    words: CLAUDE_WORDS,
+    env: name => envGet($, name),
     fs: {
       read: p => $.fs.read(p),
       write: (p, text) => $.fs.write(p, text),
@@ -87,7 +96,7 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       list: p => $.fs.list(p),
       stat: (p, options) => $.fs.stat(p, options),
     },
-    process: { run: (argv, init) => $.process.run(argv, init) },
+    run: (argv, init) => $.process.run(argv, init),
     clock: { after: (ms, fn) => $.clock.after(ms, fn), every: (ms, fn) => $.clock.every(ms, fn), sleep: ms => $.clock.sleep(ms) },
     ui: {
       toast: text => $.ui.toast(text),
@@ -100,4 +109,5 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       panel: panelValues($),
     },
   }
+  return host
 }

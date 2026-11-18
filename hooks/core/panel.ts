@@ -313,9 +313,9 @@ export const diffKeys = (review: boolean, oneFile: boolean): KeyHint[] => [
   { key: 'b', word: 'back to the task' },
 ]
 
-/** The keys at the bottom of the Settings page. */
-export const settingsKeys = (): KeyHint[] => [
-  { key: 'Enter', word: 'change' },
+/** The keys at the bottom of the Settings page; `heading`: a group heading has the focus, so Enter opens or closes it. */
+export const settingsKeys = (heading = false): KeyHint[] => [
+  { key: 'Enter', word: heading ? 'open/close' : 'change' },
   { key: '↑↓', word: 'move' },
   { key: 't s c', word: 'views' },
   { key: 'b', word: 'back' },

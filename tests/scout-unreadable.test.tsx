@@ -7,7 +7,7 @@ import { LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { SCOUT_SOON_MS, scheduleScouts, scoutFinished } from '../hooks/plugin/scouts'
 import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
 import { ran, entry, pause, slash } from './fakes'
-import { claudeHost } from '../hooks/claude/host'
+import { fakeHost } from './fake-host'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -104,17 +104,15 @@ function memoryWorld() {
     [MEMORY, JSON.stringify({ scouts: { b: { last_run: B_RUN, last_report: 'b found things', paused: true } } })],
   ])
   const o = { bad: true, gone: false }
-  const $ = {
-    process: {
-      run: async (argv: string[]) => {
-        const [cmd, ...rest] = argv
-        if (cmd === 'mv') {
-          const [, from, to] = rest
-          files.set(to!, files.get(from!)!)
-          files.delete(from!)
-        }
-        return { exitCode: 0, stdout: '', stderr: '' }
-      },
+  const { host: $ } = fakeHost({
+    run: async argv => {
+      const [cmd, ...rest] = argv
+      if (cmd === 'mv') {
+        const [, from, to] = rest
+        files.set(to!, files.get(from!)!)
+        files.delete(from!)
+      }
+      return { exitCode: 0, stdout: '', stderr: '' }
     },
     fs: {
       exists: async (p: string) => p === DIR || files.has(p),
@@ -126,21 +124,11 @@ function memoryWorld() {
       write: async (p: string, text: string) => void files.set(p, text),
       stat: async (p: string) => {
         if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: 0 }
+        return { kind: 'file', size: 0, mtimeMs: 0, isLink: false }
       },
       list: async (p: string) => (p === DIR ? [entry('a.md'), ...(o.gone ? [] : [entry('b.md')])] : []),
     },
-    session: { id: async () => 'me', send: async () => undefined },
-    agent: { list: async () => [] },
-    env: { get: async () => undefined },
-    ui: { toast: () => undefined, status: () => undefined, invalidate: () => undefined },
-    clock: { after: () => ({ cancel() {} }), every: () => ({ cancel() {} }), sleep: async () => undefined },
-    prompt: { submit: async () => undefined },
-    state: {
-      get: async () => ({ value: undefined, version: 0 }),
-      set: async () => ({ isSet: true, version: 1 }),
-    },
-  }
+  })
   S.root = ROOT
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -152,9 +140,9 @@ function memoryWorld() {
   const finishA = async () => {
     scoutState.get('a')!.running = true
     scoutRuns.set('x1', 'a')
-    await scoutFinished(claudeHost($ as never), 'x1', '1. a found something.')
+    await scoutFinished($, 'x1', '1. a found something.')
   }
-  return { $: claudeHost($ as never) as never, claude: $, o, memory, finishA }
+  return { $, o, memory, finishA }
 }
 
 test("a paused scout whose file can't be read keeps its pause, last run and report when another scout finishes", async () => {

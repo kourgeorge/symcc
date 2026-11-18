@@ -1,9 +1,10 @@
 // What symcc registers with Claude Code at session start: the worker agent types (base, and one per set of extra role
 // tools), the scout agent type, the lead's tools, the workers' question tool and the slash commands (app/symcc.ts).
 import { WEB_SAFETY_LINE, ASK_TOOL } from '../board'
-import { workerAgentTypes, EXTRA_TOOLS, SCOUT_TOOLS } from './agent-types'
+import { claudeNames, workerAgentTypes, EXTRA_TOOLS, SCOUT_TOOLS } from './agent-types'
 import { ASK_TOOL_DEF } from '../plugin/ask'
-import { type $, S } from '../plugin/state'
+import { S } from '../plugin/state'
+import type { $ } from './panel'
 import { TOOLS } from '../plugin/tools'
 import { COMMANDS } from '../app/symcc'
 
@@ -16,7 +17,7 @@ export async function registerAll($: $) {
     await ok($.agent.register({
       name: w.suffix,
       description: `${S.N.name} worker${w.suffix === 'worker' ? '' : ` (with ${w.tools.filter(t => EXTRA_TOOLS.includes(t)).join(', ')})`}: builds one task from the ${S.N.name} board in its own worktree. Started by ${S.N.name} only.`,
-      prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. To ask the owner something, call the ${S.N.tool(ASK_TOOL)} tool; if an edit is refused as outside your files, stop and hand back.${w.suffix === 'worker' ? '' : ` ${WEB_SAFETY_LINE}`}`,
+      prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. To ask the owner something, call the ${claudeNames(S.N.name).tool(ASK_TOOL)} tool; if an edit is refused as outside your files, stop and hand back.${w.suffix === 'worker' ? '' : ` ${WEB_SAFETY_LINE}`}`,
       tools: w.tools,
       background: true,
       permissionMode: 'acceptEdits',
