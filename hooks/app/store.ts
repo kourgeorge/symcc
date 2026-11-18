@@ -122,9 +122,13 @@ export async function boardMtime(host: Host): Promise<number | null> {
   return st ? st.mtimeMs : null
 }
 
-/** Notes board.json's mtime as seen by this session (after its own load or save), so it causes no extra redraw (T-429). */
-async function noteMtime(host: Host) {
-  S.boardMtime = await boardMtime(host).catch(() => null)
+/**
+ * Notes board.json's mtime as read by this session (its own load or save). Only publish (which draws that state) counts
+ * it as seen, by copying it to S.boardMtime; a save counts at once, as its publish follows (T-429, T-431).
+ */
+async function noteMtime(host: Host, seen = false) {
+  S.readMtime = await boardMtime(host).catch(() => null)
+  if (seen) S.boardMtime = S.readMtime
 }
 
 export async function load(host: Host): Promise<Board> {
@@ -234,7 +238,7 @@ export async function tryLock(host: Host, file: string, text: string): Promise<b
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
 export async function saveBoard(host: Host, b: Board) {
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
-  await noteMtime(host)
+  await noteMtime(host, true)
 }
 
 /**
