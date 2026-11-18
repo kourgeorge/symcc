@@ -1,6 +1,6 @@
-<!-- Research note T-279, keeping the answer of T-277: Draft a Medium article about symcc: a harness for an autonomous coding swarm (story + lessons, ~1500 words). The ready-to-paste article comes first, then the extras. -->
+<!-- Research note T-279, keeping the answer of T-277: Draft a Medium article about symcc: a harness for an autonomous coding organization (story + lessons, ~1500 words). The ready-to-paste article comes first, then the extras. -->
 
-# I Built a Harness for a Swarm of Coding Agents, Then Let It Fix Itself
+# I Built a Harness for an Organization of Coding Agents, Then Let It Fix Itself
 
 *One lead you chat with, a shared task board, workers in their own branches, scouts on timers. Here is what a week of running it on its own code taught me.*
 
@@ -18,7 +18,7 @@ I like coding agents. But after months of using Claude Code every day, I kept hi
 
 **Three: it stops when you stop.** Close the laptop and nothing moves your project forward.
 
-The agent's speed was never the real problem. Keeping track of the work was. So I built **symcc**, a free plugin for Claude Code. It is a harness for a swarm of coding agents.
+The agent's speed was never the real problem. Keeping track of the work was. So I built **symcc**, a free plugin for Claude Code. It is a harness for an organization of coding agents.
 
 ## The idea: a team, not one agent
 
@@ -46,7 +46,7 @@ The board is where I go to understand things. Every commit starts with its task 
 
 If you'd rather watch than read, the video above shows one request going from chat to a merge in under two minutes.
 
-## Lessons from letting the swarm work on itself
+## Lessons from letting the agent organization work on itself
 
 For the past week I've used symcc mostly to build symcc. That turned out to be the toughest test I could give it, because its bugs show up in the very work it is doing. Here is what happened.
 
@@ -58,7 +58,7 @@ Then the scouts took over. The recent-changes scout saw that approving a task by
 
 Four tasks for one feature. I asked for one of them. The scouts found the other three.
 
-### The swarm can trip over its own changes
+### The agent organization can trip over its own changes
 
 T-228 was a small cleanup, and its third try merged fine. But the board never marked it done. It stayed "doing", was later stopped for running over the time limit, and ended up failed. Then I hit retry, which started a fourth try on work that was already on main.
 
@@ -82,7 +82,7 @@ Most of the lead's rules came from things going wrong:
 
 ### Where I still matter
 
-The swarm is good at finding and fixing problems. It is not good at deciding what the product should be. I make the decisions (should a paused scout still run when I press "Run now"? I said yes, T-272). I review the risky changes. And I pick the names: the lead's own note on T-257 says "Name decided by the owner: the kind is 'investigation' (not 'question')." Small things like that set how the whole tool feels, and they are still mine.
+The agent organization is good at finding and fixing problems. It is not good at deciding what the product should be. I make the decisions (should a paused scout still run when I press "Run now"? I said yes, T-272). I review the risky changes. And I pick the names: the lead's own note on T-257 says "Name decided by the owner: the kind is 'investigation' (not 'question')." Small things like that set how the whole tool feels, and they are still mine.
 
 ## The numbers
 
@@ -113,8 +113,8 @@ Video: https://github.com/kourgeorge/symcc/blob/main/docs/video/symcc.mp4 [or th
 ## Extras
 
 **Title options**
-1. I Built a Harness for a Swarm of Coding Agents, Then Let It Fix Itself
-2. One Chat, Many Agents: What I Learned Running a Coding Swarm on Its Own Code
+1. I Built a Harness for an Organization of Coding Agents, Then Let It Fix Itself
+2. One Chat, Many Agents: What I Learned Running an Agent Organization on Its Own Code
 3. My Coding Agents Found 63 of Their Own Tasks in a Week
 
 **Subtitle:** One lead you chat with, a shared task board, workers in their own branches, scouts on timers, and what broke along the way.
