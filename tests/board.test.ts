@@ -1519,7 +1519,7 @@ test('a folder without git: the state, the notes and the question asked first', 
 test('setup .gitignore: the safe lines are added once, never twice', async () => {
   const base = gitignoreBase()
   expect(base[0]).toBe('.symcc/')
-  for (const l of ['node_modules/', '.env', '.env.*', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/']) expect(base).toContain(l)
+  for (const l of ['node_modules/', '.env', '.env.*', '!.env.example', '!.env.defaults', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/']) expect(base).toContain(l)
   const fresh = gitignoreWith(null, base)
   expect(fresh).toBe(base.join('\n') + '\n')
   expect(gitignoreWith(fresh, base)).toBe(fresh)
@@ -1536,6 +1536,9 @@ test('setup .gitignore: the safe lines are added once, never twice', async () =>
 test('setup leaves secrets and big files out of the first commit', async () => {
   for (const f of ['.env', 'app/.env.local', 'certs/server.pem', 'k.key', '.ssh/id_rsa', 'id_ed25519']) expect(isSecretName(f)).toBe(true)
   for (const f of ['env.ts', 'id_rsa.pub', 'README.md', 'src/.envrc', 'keys.ts']) expect(isSecretName(f)).toBe(false)
+  // templates are committed on purpose: not secrets (T-393)
+  for (const f of ['.env.example', '.env.sample', '.env.template', '.env.dist', '.env.defaults', 'config/.env.defaults', 'id_rsa.example', '.env.local.example', '.env.EXAMPLE']) expect(isSecretName(f)).toBe(false)
+  for (const f of ['.env', '.env.local', '.env.production', 'server.key', 'id_rsa', 'tests/fixtures/test.pem', 'tests/fixtures/test.key']) expect(isSecretName(f)).toBe(true)
   const ls = ['100644 blob aaa 12\tsrc/a.ts', `100644 blob bbb ${BIG_FILE_BYTES + 1}\tdata/big.bin`, '100644 blob ccc 5\t.env', '160000 commit ddd -\tvendor/sub', '100644 blob eee 3\tdir with space/x y.txt'].join('\0') + '\0'
   const files = parseLsTree(ls)
   expect(files.map(f => f.file)).toEqual(['src/a.ts', 'data/big.bin', '.env', 'vendor/sub', 'dir with space/x y.txt'])

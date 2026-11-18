@@ -151,6 +151,11 @@ happens, never the words in its hand-back:
    **Secret-looking files.** Files whose names look like secrets (`.env`, `.env.*`, `*.pem`,
    `*.key`, `id_rsa` and other SSH private keys) are left out of the commit and the merge, even if
    they are in the task's file list. After a merge they are kept in `.symcc/left-out/<task>/`.
+   Templates are not secrets: a name ending in `.example`, `.sample`, `.template`, `.dist` or
+   `.defaults` (`.env.example`, `config/.env.defaults`, `id_rsa.example`) is committed and merged
+   like any file. Test keys are not treated differently: a `*.pem` or `*.key` under
+   `tests/fixtures/` is still left out, so a project that keeps test keys in git on purpose has to
+   commit them itself.
    Deleting such a file merges normally. If a task changed only such files, nothing is merged and
    the task waits for you with a question: try again without them, or drop it.
 2. **Scope check.** Every task lists the files it may change (its scope). If the worker changed
@@ -880,8 +885,8 @@ gets its own git worktree. It checks this when a session starts and before a wor
   Nothing starts until it's done. The setup:
   - runs `git init -b main` (skipped if a repo is already there);
   - writes a `.gitignore` (or adds to yours, never twice) with `.symcc/`,
-    `node_modules/`, `.env`, `.env.*`, `.DS_Store`, `dist/`, `build/`, `__pycache__/`
-    and `.venv/`;
+    `node_modules/`, `.env`, `.env.*` (but not `.env.example`, `.env.sample`, `.env.template`,
+    `.env.dist` or `.env.defaults`), `.DS_Store`, `dist/`, `build/`, `__pycache__/` and `.venv/`;
   - makes a first commit of the current files, "Initial commit (by symcc)", leaving
     out (and ignoring) files that look like secrets (`.env`, `*.pem`, `id_rsa`) or
     are over 50 MB; the result says which;
