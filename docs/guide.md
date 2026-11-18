@@ -195,7 +195,10 @@ happens, never the words in its hand-back:
    An investigation has no file list, so its edits in its own folder are never refused (they are not kept anyway).
    Each worker's folder has a `.scratch/` folder for throwaway scripts and notes. Workers and checkers may
    write there freely: it is never refused, never a file request, and never committed or scope checked
-   (symcc lists it in that checkout's local ignore list, `info/exclude`, not in your `.gitignore`).
+   (symcc adds a `/.scratch/` line to git's local ignore list, not to your `.gitignore`). Worker folders
+   share that list with your own project folder: it is your repository's `.git/info/exclude`, so a
+   `.scratch/` folder in your own project folder is ignored by git as well. To undo it, remove the
+   `/.scratch/` line from `.git/info/exclude`.
    symcc empties it when a try ends and when the folder is used again. If your project keeps files under
    `.scratch/` in git, all this is off: those are your files, checked and committed as usual.
    An edit (by any worker) that lands in your own copy of the project, outside the worker's own

@@ -72,6 +72,16 @@ test('claude -p gets the task\'s files as its permission rules, and its result l
   expect(claudePermissions({ kind: 'worker', tools: ['web'] }).allowed).toContain('WebFetch')
   expect(claudePermissions({ kind: 'scout' }).allowed).not.toContain('Edit(./**)')
   expect(claudePermissions({ kind: 'checker' }).denied).toContain('Edit')
+  // T-476: where the folder uses .scratch/, a worker and a checker may write there (a checker only there); a scout may not
+  const SCRATCH = ['Edit(./.scratch/**)', 'Write(./.scratch/**)']
+  expect(claudePermissions({ kind: 'worker', files: ['tests/'] }, true).allowed).toEqual([...w.allowed, ...SCRATCH])
+  const c = claudePermissions({ kind: 'checker' }, true)
+  expect(c.allowed).toEqual(['Read', 'Glob', 'Grep', 'Bash', ...SCRATCH])
+  expect(c.denied).not.toContain('Edit')
+  expect(c.denied).not.toContain('Write')
+  expect(c.denied).toContain('NotebookEdit')
+  expect(claudePermissions({ kind: 'scout' }, true).allowed).not.toContain(SCRATCH[0])
+  expect(claudePermissions({ kind: 'checker' }).allowed).not.toContain(SCRATCH[0])
   const line = JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0.5, usage: { input_tokens: 3, output_tokens: 4 }, permission_denials: [{ tool_name: 'Write', tool_input: { file_path: '/w/x.txt' } }] })
   expect(claudeResult({ stdout: `{"type":"system"}\n${line}\n`, stderr: '', exitCode: 0, killed: false })).toEqual({ answer: 'done', end: { reason: 'answer' }, isAborted: false, tokens: { input: 3, output: 4 }, cost: 0.5, denied: ['Write /w/x.txt'] })
   expect(claudeResult({ stdout: '', stderr: 'boom', exitCode: 1, killed: false })).toEqual({ answer: 'boom', end: { reason: 'error' }, isAborted: false, tokens: undefined })
