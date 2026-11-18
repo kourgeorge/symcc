@@ -2,11 +2,13 @@
 // the desktop it draws exactly as before (task-page-snapshot.ts holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, T0, drawnData, changedTree } from './board-fixture'
+import { PANE, T0, BOARD_VIEW, drawnData, changedTree, seedBoard } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
 import { TASK_BEFORE_MOBILE } from './task-page-mobile-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/claude/ui/surface'
+import { vsHref, mdLink, NO_TITLE } from '../hooks/claude/ui/vscode'
+import { ran } from './fakes'
 import { reportPart } from '../hooks/claude/ui/vscode-task'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -23,7 +25,9 @@ function elements(tree: unknown): Node[] {
   walk(tree)
   return out
 }
-/** All the text of a tree: string children, Button and Input labels and placeholders, Markdown texts. */
+/** A Markdown's text as it reads: each link its words, the bold marks and the escapes taken off. */
+const mdPlain = (md: string) => md.replace(/\[((?:\\.|[^\]\\])*)\]\([^)]*\)/g, '$1').replace(/\*\*/g, '').replace(/\\(.)/g, '$1')
+/** All the text of a tree: string children, Button and Input labels and placeholders, Markdown texts (as they read). */
 function texts(tree: unknown): string[] {
   const out: string[] = []
   const walk = (n: unknown) => {
@@ -31,15 +35,15 @@ function texts(tree: unknown): string[] {
     if (Array.isArray(n)) return n.forEach(walk)
     if (!n || typeof n !== 'object') return
     const e = n as Node
-    for (const p of ['label', 'placeholder', 'text'] as const) if (typeof e.props?.[p] === 'string') out.push(e.props[p] as string)
+    for (const p of ['label', 'placeholder', 'text'] as const) if (typeof e.props?.[p] === 'string') out.push(e.type === 'Markdown' && p === 'text' ? mdPlain(e.props[p] as string) : (e.props[p] as string))
     for (const c of e.children ?? []) walk(c)
   }
   walk(tree)
   return out
 }
 const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /Esc back/, /Enter sends/, /Enter on empty/, /Enter picks/, /\s\([a-z0-9]\)$/]
-/** A fold row ("▸ Waits for (2)") ends in its count, which is no key hint. */
-const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \(\d+\)$/.test(s))
+/** A fold row ("▸ Waits for 2") ends in its count, which is no key hint. */
+const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \d+$/.test(s))
 
 /** The action buttons each rich task shows in VS Code, in order, and the one primary (if any) on its page. */
 const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
@@ -85,7 +89,7 @@ for (const id of RICH_IDS) {
     // the id and the title on top, the status badge, then the sections
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
     expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(/^ \S+ .+ /)
-    const want = ['Why / where it came from', 'What to do', '▸ Files it may change (3)', '▸ Waits for (2)', `▸ Time and cost (${'runs' in t ? t.runs.length : 0})`]
+    const want = ['Why / where it came from', 'What to do', '▸ Files it may change 3', '▸ Waits for 2', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
     if (t.status === 'failed') want.push('✗ Why it failed')
@@ -99,10 +103,10 @@ for (const id of RICH_IDS) {
     expect(elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key), id).toEqual(ACTIONS[id]!.keys)
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
     expect(primary, id).toEqual(ACTIONS[id]!.primary ? [ACTIONS[id]!.primary] : [])
-    // the tasks it waits for (in their fold, closed at first) are buttons that open them; back to the list is a clear button; no key hints
+    // the tasks it waits for (in their fold, closed at first) are links that open them; back to the list is a clear button; no key hints
     expect(await ui.find({ key: 'after-T-499' })).toBeUndefined()
-    await ui.press({ key: 'fold-after' })
-    expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Button')
+    await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
+    expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Markdown')
     expect((await ui.find({ key: 'back' }))?.props.label).toBe('← Tasks')
     for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
     expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
@@ -178,11 +182,11 @@ test('in VS Code a file request shows the files, with Allow files and Don\'t all
 test('in VS Code a task it waits for opens by its button, and "← Tasks" goes back to the list', async ($, on) => {
   seedRich(on, '')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  await ui.press({ key: 'T-506' })
+  await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })
   expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ○ to do /)
-  await ui.press({ key: 'fold-after' })
-  await ui.press({ key: 'after-T-499' })
+  await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
+  await ui.press({ key: 'after-T-499', link: { href: vsHref('task', 'T-499') } })
   expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ✓ done /)
   await ui.press({ key: 'back' })
@@ -239,7 +243,7 @@ for (const [id, want] of Object.entries(CARDS))
       for (const h of ['Why / where it came from', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
       // the folds, closed by default, each with its count; pressing one opens it
       for (const f of ['files', 'after', 'time']) {
-        expect((await ui.find({ key: `fold-${f}` }))?.props.label, `${at} ${f}`).toMatch(/^▸ .+ \(\w+\)$/)
+        expect(mdPlain(String((await ui.find({ key: `fold-${f}` }))?.props.text)), `${at} ${f}`).toMatch(/^▸ .+ \w+$/)
         expect(await ui.find({ key: `vs-sec-${f}-body` }), `${at} ${f}`).toBeUndefined()
       }
       // what needs you: boxed at the top in its tone, its main button inside
@@ -265,9 +269,65 @@ for (const [id, want] of Object.entries(CARDS))
       expect(all.filter(s => s.includes('…')), at).toEqual([])
       for (const re of KEY_HINTS) expect(hints(all, re), `${at} ${re}`).toEqual([])
       // a fold opens on its press, and only for this task
-      await ui.press({ key: 'fold-time' })
-      expect((await ui.find({ key: 'fold-time' }))?.props.label, at).toMatch(/^▾ Time and cost/)
+      await ui.press({ key: 'fold-time', link: { href: vsHref('fold', 'fold-time') } })
+      expect(mdPlain(String((await ui.find({ key: 'fold-time' }))?.props.text)), at).toMatch(/^▾ Time and cost/)
       expect(await ui.find({ key: 'vs-sec-time-body' }), at).toBeDefined()
       expect(await ui.find({ key: 'vs-sec-files-body' }), at).toBeUndefined()
       await ui.unmount()
     })
+
+// T-448: a task or question with an empty title shows its ID link and a dim "(no title)", never "****" (empty bold marks)
+test('in VS Code a row with an empty title or question text shows a dim "(no title)", never "****"', async ($, on) => {
+  const blank = { ...RICH_TASKS[0]!, id: 'T-601', order: 601, title: '' }
+  const question = { id: 'Q-9', text: '  ', options: ['Yes', 'No'], asked_at: new Date(T0 - 60_000).toISOString() }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [blank], questions: [question] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [40, 80]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const raw = elements(await ui.drawn()).map(n => n.props?.text).filter((t): t is string => typeof t === 'string')
+    expect(raw.filter(t => t.includes('****')), `width ${bodyColumns}`).toEqual([])
+    for (const [id, kind, href] of [['T-601', 'vs-task', vsHref('task', 'T-601')], ['Q-9', 'vs-question', vsHref('question', 'Q-9')]] as const) {
+      const link = await ui.find({ key: id })
+      expect([link?.type, link?.props.text, link?.props.pressableLinks], id).toEqual(['Markdown', mdLink(id, href), [href]])
+      const none = elements(await ui.find({ key: `${kind}-${id}-top` })).find(n => n.type === 'Text' && texts(n).join('').trim() === NO_TITLE)
+      expect([texts(none).join('').trim(), none?.props?.color], id).toEqual([NO_TITLE, 'inactive'])
+    }
+    await ui.unmount()
+  }
+})
+
+// T-448: the files under "Changes" on a task's page in VS Code are links (no Buttons); a press on one opens its diff
+test('in VS Code the changed files of a task in review are links, and pressing one opens its diff', async ($, on) => {
+  const stat = ' hooks/a.ts | 3 ++-\n docs/b.md  | 1 +\n 2 files changed, 3 insertions(+), 1 deletion(-)\n'
+  const diff = 'diff --git a/hooks/a.ts b/hooks/a.ts\n--- a/hooks/a.ts\n+++ b/hooks/a.ts\n@@ -1 +1,2 @@\n-old\n+new\n+more\n'
+  seedRich(on, 'T-501', argv => (argv[0] === 'git' && argv[1] === 'diff' ? ran({ stdout: argv.some(a => a.startsWith('--stat')) ? stat : diff }) : ran()))
+  for (const bodyColumns of [40, 80]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    expect(elements(await ui.drawn()).filter(n => n.type === 'Button' && String(n.props?.key).startsWith('file:')), at).toEqual([])
+    for (const f of ['hooks/a.ts', 'docs/b.md']) {
+      const link = await ui.find({ key: `file:${f}` })
+      expect([link?.type, link?.props.text, link?.props.pressableLinks], `${at} ${f}`).toEqual(['Markdown', mdLink(f, vsHref('file', f)), [vsHref('file', f)]])
+    }
+    expect(texts(await ui.find({ key: 'vs-file-hooks/a.ts' })).join(''), at).toBe('hooks/a.ts+2 -1')
+    await ui.press({ key: 'file:hooks/a.ts', link: { href: vsHref('file', 'hooks/a.ts') } })
+    expect(await ui.find({ key: 'diff-back' }), at).toBeDefined()
+    expect(texts(await ui.drawn()).join(''), at).toContain('changes in hooks/a.ts')
+    await ui.press({ key: 'diff-back' })
+    expect(await ui.find({ key: 'file:hooks/a.ts' }), at).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+// T-448: a file name with an unmatched bracket keeps a whole link: "(" and ")" are encoded, so the markdown link ends
+// at its own ")" and the href is the one listed in pressableLinks
+test('vsHref encodes "(" and ")", so a file named src/a).ts or a(b.ts gets a whole link', () => {
+  for (const f of ['src/a).ts', 'a(b.ts']) {
+    const href = vsHref('file', f)
+    expect(href, f).not.toMatch(/[()]/)
+    expect(decodeURIComponent(href.slice(href.lastIndexOf('/') + 1)), f).toBe(f)
+    const md = mdLink(f, href)
+    expect(md.slice(md.indexOf('](') + 2, -1), f).toBe(href)
+  }
+  expect(vsHref('file', 'src/a).ts')).toBe('https://symcc.invalid/file/src%2Fa%29.ts')
+})

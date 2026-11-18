@@ -301,7 +301,7 @@ export function agentFinished(host: Host, agentId: string | undefined, run: Agen
   const { answer, end, isAborted, tokens, cost } = run
   // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
   const broken = !isAborted && (end.reason === 'error' || end.reason === 'refusal')
-  if (agentId && workers.has(agentId)) void workerFinished(host, agentId, answer, end, tokens, cost)
+  if (agentId && workers.has(agentId)) void workerFinished(host, agentId, answer, end, tokens, cost).catch(() => undefined)
   else if (agentId && scoutRuns.has(agentId)) void scoutFinished(host, agentId, answer, broken ? end : isAborted, tokens)
   // a checker's verdict (the checker setting) goes to the finish step waiting for it
   else if (agentId && checkerRuns.has(agentId)) checkerFinished(agentId, answer, broken ? end : isAborted || end.reason === 'aborted', tokens)

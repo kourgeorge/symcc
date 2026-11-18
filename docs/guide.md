@@ -65,7 +65,9 @@ picks up again next time.
    │         ├──▶ still failing / out of time ──▶ failed ───┘
    │         ├──▶ worker's edit outside its list refused ──▶ waiting (file request)
    │         ├──▶ worker asks (ask_owner tool) ──▶ waiting, "symcc: T-5 needs you"
-   │         └──▶ worker's run ends on an error or a refusal ──▶ failed (with the reason)
+   │         ├──▶ worker's run ends on an error or a refusal ──▶ failed (with the reason)
+   │         └──▶ worker ended its turn before its work finished (its own
+   │              background command still running) ──▶ failed
    │
    ├── review   (only in review mode) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
@@ -86,7 +88,7 @@ picks up again next time.
 | `waiting` | It needs an answer from you (shown under NEEDS YOU) |
 | `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
 | `paused` | Stopped on purpose, until resumed |
-| `failed` | It could not be finished; the lead decides what next. Its page starts with a "Why it failed" block: one plain sentence for the reason (tests failed, the checker found problems, files outside the task, no change, no result, out of time, an API error or refusal, could not start, a merge conflict), what the worker's report asks for (a `NEED FILES:` line or a question), and what to do next (Retry, ask the lead in the chat to change the task, or Drop). Its key line lists `r retry` and `x drop`. The board row and the lead's board show the same sentence |
+| `failed` | It could not be finished; the lead decides what next. Its page starts with a "Why it failed" block: one plain sentence for the reason (tests failed, the checker found problems, files outside the task, no change, no result, out of time, an API error or refusal, the worker ended its turn before its work finished, could not start, a merge conflict), what the worker's report asks for (a `NEED FILES:` line or a question), and what to do next (Retry, ask the lead in the chat to change the task, or Drop). Its key line lists `r retry` and `x drop`. The board row and the lead's board show the same sentence |
 | `done` | Merged into your branch. This is final |
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |
@@ -160,6 +162,11 @@ happens, never the words in its hand-back:
 - its run ended on an API error (retries used up, the context limit) or the model refused →
   the task fails with that reason, and nothing is checked or merged (its work stays in its
   folder and branch, so a retry continues from there);
+- one of its own background commands (for example a test run it sent to the background) was
+  still running when its turn ended → the task fails ("the worker ended its turn before its
+  work finished"), and nothing is checked or merged. Another agent's command still running
+  doesn't count; when symcc can't tell whose a command is, the worker only gets a warning if
+  its hand-back says work is still going;
 - otherwise it is finished, and its work goes through these steps (an investigation goes to
   review with its answer instead):
 
