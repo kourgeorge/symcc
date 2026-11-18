@@ -2,7 +2,7 @@
 // code that uses them). Every test file shares one copy, so what one test leaves there (an agent id in
 // `stopped`, a task in `finishing`, S.me, ...) changes what a later test sees. resetPlugin() empties them all
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
-import { test as plainTest, type TestBody, type TestRest } from 'claude-code/testing'
+import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
 import { emptyHeard } from '../hooks/board'
 import { S, startS, timers, workers, starting, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
 import { resetScoutRuns } from '../hooks/plugin/scouts'
@@ -38,15 +38,27 @@ export function resetPlugin() {
 }
 
 /**
- * The runtime's test(), but each test starts with resetPlugin() (the runtime has no beforeEach).
- * Use it in place of the plain test() in a file whose tests touch the plugin's memory. What the runtime passes
- * a test (`$` and a hook test's `on`) is passed on, and options given before the body (timeoutMs, ...) too.
+ * How long a test made with this test() may run, unless it says otherwise. The runtime's own limit is 5 s, and
+ * a test that loads the plugin (a screen or a hook test) takes 1-4 s alone, but more than 5 s when the machine is
+ * busy (several workers, checkers and test runs at once: T-244 and T-399 saw them time out at a load of ~150).
+ * The tests use the runtime's fake clock, so this only bounds real waiting; a hung test still fails, just later.
+ */
+export const RESET_TEST_TIMEOUT_MS = 30_000
+
+/** The options test() hands the runtime: RESET_TEST_TIMEOUT_MS unless the test gave its own timeoutMs. */
+export const withTimeout = (options: TestOptions = {}): TestOptions => ({ ...options, timeoutMs: options.timeoutMs ?? RESET_TEST_TIMEOUT_MS })
+
+/**
+ * The runtime's test(), but each test starts with resetPlugin() (the runtime has no beforeEach) and may run
+ * RESET_TEST_TIMEOUT_MS. Use it in place of the plain test() in a file whose tests touch the plugin's memory. What
+ * the runtime passes a test (`$` and a hook test's `on`) is passed on, and options given before the body
+ * (timeoutMs, ...) too.
  */
 export const test = (name: string, ...rest: TestRest): void => {
   const fresh = (body: TestBody): TestBody => ($, on) => {
     resetPlugin()
     return body($, on)
   }
-  if (rest.length === 1) plainTest(name, fresh(rest[0]))
-  else plainTest(name, rest[0], fresh(rest[1]))
+  if (rest.length === 1) plainTest(name, withTimeout(), fresh(rest[0]))
+  else plainTest(name, withTimeout(rest[0]), fresh(rest[1]))
 }
