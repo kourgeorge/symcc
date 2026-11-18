@@ -789,6 +789,24 @@ const braceGit = (w: string) =>
   (/(?:^|[/=])git$/i.test(w.replace(/[{},]/g, '')) ||
     w.split(/[{},]/).some(part => /^git(?:$|-)/i.test(part.split(/[/=]/).pop() ?? '')))
 
+/**
+ * The places in simple command `words` of the words given to a read-only text tool (TEXT_TOOLS) that find runs with
+ * -exec, -execdir, -ok or -okdir, up to the ending `;` or `+` (`grep`'s `-l git {}` in `find . -exec grep -l git {} +`).
+ * The command find runs is the word right after -exec; when it is a text tool, a `git` among its words is only text.
+ */
+function findExecTextArgs(words: string[]): Set<number> {
+  const out = new Set<number>()
+  if (!words.some(w => progName(w) === 'find')) return out
+  for (let i = 0; i < words.length; i++) {
+    if (!/^-(exec|execdir|ok|okdir)$/.test(words[i]!)) continue
+    let end = i + 1
+    while (end < words.length && !/^(\\?;|\+)$/.test(words[end]!)) end++
+    if (textTool(words.slice(i + 1, end))) for (let k = i + 2; k < end; k++) out.add(k)
+    i = end
+  }
+  return out
+}
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
 function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
@@ -872,11 +890,13 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
         if (inner.bad) return { ...out, bad: inner.bad }
       }
     }
+    const toolArgs = findExecTextArgs(words)
     // main's broad rule: any word `git` (or ending in `/git`, or `git-xyz`) counts, and text from a `git` on in any
     // word that holds more than one word or command (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
-      const g = gitAt(words, i, p.adds, p.braces)
+      // a word given to a text tool run by find -exec is its text, not a git command (`find . -exec grep -l git {} +`)
+      const g = toolArgs.has(i) ? undefined : gitAt(words, i, p.adds, p.braces)
       if (g?.bad) return { ...out, bad: g.bad }
       if (g) continue
       const at = w.search(/git(?!\w)/i)

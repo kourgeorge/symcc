@@ -74,6 +74,10 @@ const READS = [
   'git log ${x}',
   'find . -name x -exec git log -1 {} +',
   '{ grep -n git README.md; }',
+  // T-446: after find -exec the command run is the word right after it; grep's search word `git` is only text
+  'find . -exec grep -l git {} +',
+  'find . -name x -exec grep -n git {} \\;',
+  'find . -type f -exec grep -l "git" {} +',
 ]
 
 const WRITES: [string, string][] = [
@@ -245,6 +249,8 @@ const WRITES: [string, string][] = [
   ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],
+  ['find . -exec grep -l git {} \\; -exec git stash \\;', 'git stash'],
+  ['find . -exec env git stash {} +', 'git stash'],
   ['{ git stash; }', 'git stash'],
   ['{ git stash; } && echo', 'git stash'],
   ['echo x && { git push; }', 'git push'],
