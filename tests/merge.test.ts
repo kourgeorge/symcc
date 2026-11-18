@@ -1333,6 +1333,61 @@ test('a change while the task is being checked is refused, and the check goes on
   expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
 })
 
+/** T-440: from now on the fake git has no branch main (deleted by the owner): rev-parse of it fails as git does. */
+const deleteMain = (w: ReturnType<typeof world>) => {
+  w.git.answer = args => {
+    const s = args.join(' ')
+    if (s === 'rev-parse --verify -q refs/heads/main') return fail('', 1)
+    if (s === 'rev-parse refs/heads/main') return fail("fatal: ambiguous argument 'refs/heads/main': unknown revision", 128)
+    return undefined
+  }
+}
+
+/** T-440: task `t` waits with the "branch main is gone" question, its work kept: not failed, no failed try counted. */
+const waitsForGoneMain = (w: ReturnType<typeof world>, t: BoardTask) => {
+  expect(t.status).toBe('waiting')
+  expect(t.question).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
+  expect(t.history.at(-1)).toMatch(/^not merged: branch main is gone; asked the owner/)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(movedMain(w)).toBe(false)
+  expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
+  expect(leadQueue.join('\n')).toMatch(/can't be merged: the branch it merges into, main, is gone/)
+  expect(leadQueue.join('\n')).not.toMatch(/checking failed|was not merged/)
+}
+
+test('T-440: a target branch already gone when the worker hands back: the task waits with the branch-gone question', async () => {
+  const w = world()
+  deleteMain(w)
+  const [b] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  waitsForGoneMain(w, find(await load(w.$), 'T-1')!)
+  expect(ranTests(w)).toEqual([])
+})
+
+test('T-440: a target branch deleted while the tests run: the task waits with the branch-gone question at merge, not failed', async () => {
+  const { w, t } = await finishing(async w => deleteMain(w))
+  // the tests did run; the branch went during them
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  waitsForGoneMain(w, t)
+})
+
+test('T-440: a target branch deleted while an approve runs its tests: the task waits with the branch-gone question', async () => {
+  // main moved since review, so the tests run again
+  const w = await inReview({ upToDate: false })
+  let done = false
+  w.onRun(async cmd => {
+    if (done || !/^\/bin\/sh -c /.test(cmd)) return
+    done = true
+    deleteMain(w)
+  })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(String(out)).toMatch(/is gone; it now waits for your answer/)
+  waitsForGoneMain(w, find(await load(w.$), 'T-1')!)
+})
+
 test('a drop seen only after the merge keeps the task done, with a line saying the drop came too late', async () => {
   const { w, t } = await finishing(w => runTool(w.$, 'drop', { task: 'T-1' }), {}, /git update-ref/)
   expect(w.git.main).toBe(H1)

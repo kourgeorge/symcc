@@ -4,7 +4,7 @@ import { type Board, type QuestionClose, addQuestion, answerQuestion, dropQuesti
 import { S } from './state'
 import type { Host } from '../host'
 import { change, load, now } from './store'
-import { noteForLead } from './tell'
+import { tellLead } from './tell'
 import { sayQuestion } from './voice'
 
 type In = Record<string, unknown>
@@ -28,7 +28,7 @@ export async function questionTool(host: Host, a: In): Promise<string> {
       return [y, [q, y]] as [Board, [typeof q, Board]]
     })
     sayQuestion(host, b, q.id)
-    return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you as a "Meanwhile" line.`
+    return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").`
   }
   if (action === 'answer' || action === 'drop') {
     const id = normQid(a.id)
@@ -44,15 +44,16 @@ export async function questionTool(host: Host, a: In): Promise<string> {
 }
 
 /**
- * The owner answered question `id` on the board (a choice button or their own words): it is closed, and the lead
- * hears it as a "Meanwhile" line in the next board update. What to show the owner, in a toast.
+ * The owner answered question `id` on the board (a choice button or their own words): it is closed, and a board
+ * update goes to the lead right away (like a finished task), with the answer in its own "act on it" block. What to
+ * show the owner, in a toast.
  */
 export async function answerOnBoard(host: Host, id: string, answer: string): Promise<string> {
   const text = answer.trim()
   if (!text) throw new Error('type an answer first')
   const r = await change(host, x => answerQuestion(x, id, text, 'board', now()))
   if (!r.closed) return `${r.q.id} was already closed (${closedText(r.q)})`
-  noteForLead(boardAnswerLine(r.q))
+  tellLead(host, boardAnswerLine(r.q))
   return `${r.q.id} answered: ${r.q.answer}; the lead will take it from here`
 }
 

@@ -27,7 +27,8 @@ const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 
 /** In-memory files, a small fake git (main, the worker's HEAD, the changed files) and a fake agent spawn that records each checker started. */
 function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false }
+  // gone: branch main was deleted (T-440)
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false }
   const files = new Map<string, string>()
   const calls: string[] = []
   function runGit(a0: string[]): Res {
@@ -40,6 +41,8 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       return ok()
     }
     if (s === 'rev-parse -q --verify HEAD' || s === 'rev-parse HEAD') return ok(git.head)
+    if (git.gone && s === 'rev-parse --verify -q refs/heads/main') return fail()
+    if (git.gone && s === 'rev-parse refs/heads/main') return { exitCode: 128, stdout: '', stderr: "fatal: ambiguous argument 'refs/heads/main'" }
     if (s === 'rev-parse refs/heads/main') return ok(git.main)
     if (s === 'symbolic-ref -q HEAD') return git.detached ? fail() : ok('refs/heads/symcc/T-1')
     if (s === 'rev-parse -q --verify refs/heads/symcc/T-1') return ok(git.head)
@@ -220,6 +223,21 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(w.git.main).toBe(H1)
   expect(t.history).toContain('try 1: checker: OK')
   expect(t.runs!.at(-1)!.tokens).toEqual({ output: 500 })
+})
+
+test('T-440: the target branch deleted while the checker runs: after its OK the task waits with the branch-gone question, not failed', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => {
+    w.git.gone = true
+    checkerFinished(id, 'OK')
+  })
+  expect(t.status).toBe('waiting')
+  expect(t.question).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
+  expect(t.history.at(-1)).toMatch(/^not merged: branch main is gone; asked the owner/)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(w.git.main).toBe(M1)
+  expect(leadQueue.join('\n')).not.toMatch(/checking failed/)
 })
 
 test("a checker role's checklist gets its placeholders filled in, as a worker's role does ({{files}}, {{test_command}}, {{kind}}, ...)", async () => {

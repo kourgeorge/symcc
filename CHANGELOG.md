@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Fixed
+- When you answer one of the lead's questions on the board ("Questions for you"), the lead now gets a board update at once with your answer in its own block ("The owner answered your question Q-3 (…): Yes. … Act on it."), instead of a "Meanwhile" line that waited for some other update. Your other board actions still come as "Meanwhile" lines.
+
 ### Changed
 - Role files name their extra tools in symcc's own words: `tools: web` instead of `tools: WebSearch, WebFetch`, so a role means the same in every host (in Claude Code, `web` is still WebSearch and WebFetch). Your own `.symcc/roles/*.md` files with the old names are changed once when symcc reads them. The lead's `roles` tool and the Roles page take `web`.
 - The header shows just the name and version ("𝄞 symcc v0.4.1 · <folder>"), without the word "board" after them, in the board tool's text, the band above the prompt and the terminal, desktop and mobile header. With no version known it still reads "symcc board".
