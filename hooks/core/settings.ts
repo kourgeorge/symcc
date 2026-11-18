@@ -146,6 +146,28 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
 ]
 
+/** Rows on the Settings page that open a page of their own instead of holding a value. */
+export const SETTING_PAGES = ['roles', 'kinds'] as const
+export type SettingPage = (typeof SETTING_PAGES)[number]
+export type SettingGroup = { title: string; items: readonly (SettingName | SettingPage)[] }
+
+/**
+ * The settings in categories, in the order the Settings page, /<name>-settings and the lead's
+ * settings tool show them. Every setting is in exactly one category (a test checks it).
+ */
+export const SETTING_GROUPS: readonly SettingGroup[] = [
+  { title: 'Work', items: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'] },
+  { title: 'Checks before merging', items: ['test_commands', 'tests_with_changes', 'checker'] },
+  { title: 'Workers', items: ['roles', 'kinds'] },
+  { title: 'Scouts', items: ['scout_findings'] },
+  { title: 'Board and alerts', items: ['notify', 'open_on_start', 'archive_days'] },
+]
+
+export const isSettingPage = (x: string): x is SettingPage => (SETTING_PAGES as readonly string[]).includes(x)
+
+/** A category's settings (not the page rows), in its order. */
+export const groupSettings = (g: SettingGroup): SettingInfo[] => g.items.flatMap(x => (isSettingPage(x) ? [] : [settingInfo(x)!]))
+
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
 
 /**
@@ -322,7 +344,11 @@ export function parseSettingsCommand(args: string, name: string = DEFAULT_NAME):
 export function settingsText(b: Partial<Board>, name: string = DEFAULT_NAME): string {
   const w = Math.max(...SETTING_NAMES.map(n => n.length))
   return [
-    ...SETTINGS.map(s => `${s.name.padEnd(w)}  ${settingValue(b, s.name)}  (default ${s.default} · ${s.range}) ${s.meaning}`),
+    ...SETTING_GROUPS.flatMap(g => {
+      const rows = groupSettings(g)
+      const pages = g.items.some(isSettingPage) ? ['  roles and kinds: open them from the Settings view, or tell the lead'] : []
+      return [`${g.title}:`, ...rows.map(s => `  ${s.name.padEnd(w)}  ${settingValue(b, s.name)}  (default ${s.default} · ${s.range}) ${s.meaning}`), ...pages]
+    }),
     `Change one: /${name}-settings NAME VALUE, e.g. /${name}-settings max_parallel 5`,
   ].join('\n')
 }
@@ -333,12 +359,16 @@ export function settingsText(b: Partial<Board>, name: string = DEFAULT_NAME): st
  */
 export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' | 'voice'>): string {
   return [
-    'Settings now (name: value, default, what it does):',
-    ...SETTINGS.map(s => {
-      const value = s.name === 'notify' ? notifyOf(b, can) : settingValue(b, s.name)
-      const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
-      return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
-    }),
+    'Settings now, by category (name: value, default, what it does):',
+    ...SETTING_GROUPS.flatMap(g => [
+      `## ${g.title}`,
+      ...groupSettings(g).map(s => {
+        const value = s.name === 'notify' ? notifyOf(b, can) : settingValue(b, s.name)
+        const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
+        return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
+      }),
+      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)'] : []),
+    ]),
   ].join('\n')
 }
 

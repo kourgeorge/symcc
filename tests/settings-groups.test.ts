@@ -1,0 +1,38 @@
+import { expect, test } from 'claude-code/testing'
+import { SETTING_GROUPS, SETTING_NAMES, SETTING_PAGES, emptyBoard, leadSettingsText, settingsText } from '../hooks/board'
+
+test('every setting is in exactly one category (a new setting needs one), and so are the Roles and Kinds pages', () => {
+  const all = SETTING_GROUPS.flatMap(g => g.items)
+  for (const name of [...SETTING_NAMES, ...SETTING_PAGES]) expect(all.filter(x => x === name)).toHaveLength(1)
+  expect(all).toHaveLength(SETTING_NAMES.length + SETTING_PAGES.length)
+  expect(SETTING_GROUPS.map(g => g.title)).toEqual(['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts'])
+})
+
+/** The heading lines of a listing and the setting names under each, in order. */
+function sections(text: string, isHeading: (l: string) => string | null, nameOf: (l: string) => string | null) {
+  const out: [string, string[]][] = []
+  for (const l of text.split('\n')) {
+    const h = isHeading(l)
+    if (h !== null) out.push([h, []])
+    else if (out.length) {
+      const n = nameOf(l)
+      if (n) out.at(-1)![1].push(n)
+    }
+  }
+  return out
+}
+
+const expected = SETTING_GROUPS.map(g => [g.title, g.items.filter(x => (SETTING_NAMES as readonly string[]).includes(x))] as [string, string[]])
+
+test("the lead's settings listing shows the same headings, each with its settings under it", () => {
+  const text = leadSettingsText(emptyBoard(), { sound: true, voice: false })
+  const got = sections(text, l => (l.startsWith('## ') ? l.slice(3) : null), l => /^(\w+): /.exec(l)?.[1] ?? null)
+  expect(got.map(([t, names]) => [t, names.filter(n => n !== 'roles')])).toEqual(expected)
+  expect(text).toContain('roles and kinds: use the roles and kinds tools')
+})
+
+test("the owner's settings text (when the panel can't be shown) is grouped the same way", () => {
+  const text = settingsText(emptyBoard(), 'crew')
+  const got = sections(text, l => (/^\S.*:$/.test(l) ? l.slice(0, -1) : null), l => /^ {2}(\w+)\s/.exec(l)?.[1] ?? null)
+  expect(got.map(([t, names]) => [t, names.filter(n => n !== 'roles')])).toEqual(expected)
+})
