@@ -7,6 +7,7 @@ import { checkEdit } from '../hooks/app/ask'
 import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
+import { bestMsOf, growsSlowly } from './timing'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -295,13 +296,29 @@ test('git run as a command still refuses its writes, for a worker, a scout and a
 })
 
 test('long odd brace words stay cheap for the git check, and a long word with git letters still counts (T-436)', () => {
-  const t0 = Date.now()
-  expect(gitWriteIn('echo ' + '{'.repeat(50000))).toBeUndefined()
+  const words = (n: number) => () => {
+    expect(gitWriteIn('echo ' + '{'.repeat(1000 * n))).toBeUndefined()
+    expect(gitWriteIn('echo ' + '{a,'.repeat(n) + '}'.repeat(n))).toBeUndefined()
+    expect(gitWriteIn(`cat > a.json <<'EOF'\n${'{"a":'.repeat(40 * n)}1${'}'.repeat(40 * n)}\nEOF`)).toBeUndefined()
+  }
+  // the work grows slowly with the word length, with a generous cap (T-478): doubling per brace would make 2^50 steps
+  // for the big case and 2^25 for the small one. A long run of "{" costs about the square of its length (twice as long,
+  // about 4 times the time), so twice the length may take up to 10 times as long
+  const small = bestMsOf(words(25)), big = bestMsOf(words(50))
+  expect({ small, big, slow: growsSlowly(small, big, 10) }).toMatchObject({ slow: true })
   expect(gitWriteIn('echo ' + '{a,'.repeat(60) + '}'.repeat(60))).toBeUndefined()
-  expect(gitWriteIn(`cat > a.json <<'EOF'\n${'{"a":'.repeat(2000)}1${'}'.repeat(2000)}\nEOF`)).toBeUndefined()
-  expect(Date.now() - t0).toBeLessThan(1500)
   // past the work cap a word is judged by its letters: these could make git
   expect(gitWriteIn(`${'{g,i}'.repeat(60)}{t..t} stash`)).toBe('git with {braces}')
+})
+
+test('a brace word past the length or "{" limit is not expanded: it is judged by its letters, so the limit stays (T-436, T-478)', () => {
+  // `t{i,g}` expands to "ti" and "tg", never git, but its letters hold g, i and t. Under the limits the expansion is
+  // used, so it is no git; past them (more than 50 "{", or more than 2000 characters) the expansion is skipped and
+  // the letters count, so it is refused. Without the limit this word would be expanded and pass
+  expect(gitWriteIn(`t{i,g}${'{x}'.repeat(49)} stash`)).toBeUndefined()
+  expect(gitWriteIn(`t{i,g}${'{x}'.repeat(50)} stash`)).toBe('git with {braces}')
+  expect(gitWriteIn(`t{i,g}${'x'.repeat(1990)} stash`)).toBeUndefined()
+  expect(gitWriteIn(`t{i,g}${'x'.repeat(2000)} stash`)).toBe('git with {braces}')
 })
 
 test('the git write reasons keep their exact text, and quoted braces stay text (T-447)', () => {

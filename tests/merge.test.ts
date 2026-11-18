@@ -10,6 +10,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { claimLead } from '../hooks/app/lead'
+import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
@@ -2682,7 +2683,15 @@ test('the merge-main-in try is marked when it starts, and the first end reason i
 
 test('a worker may write and run a throwaway script under .scratch/ with no file request; the commit and scope check leave it out, and the folder is emptied after the try (T-456)', async () => {
   S.me = 'me'
-  const w = world()
+  // the staged list holds a file under .scratch/ too (the second safeguard, T-477); the branch's changes do not
+  let staged = ['src/a.ts', 'src/a.test.ts', '.scratch/edit.py']
+  const w = world({
+    answer: a => {
+      if (a[0] === 'restore' && a.includes('--staged')) return (staged = staged.filter(f => !a.includes(`:(literal)${f}`))), ok()
+      if (a[0] === 'diff' && a.includes('--cached')) return ok(staged.join('\0'))
+      return undefined
+    },
+  })
   const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -2704,9 +2713,15 @@ test('a worker may write and run a throwaway script under .scratch/ with no file
   await workerFinished(w.$, 'ag1', 'made the change')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  const add = w.calls.indexOf(`wt: git add -A -- . :(exclude).scratch`)
+  // the add is plain (T-477: real git refuses a pathspec naming an ignored path); anything under .scratch/ that was
+  // still staged is unstaged before the commit, so it never reaches it
+  const add = w.calls.indexOf(`wt: git add -A -- .`)
   expect(add).toBeGreaterThan(-1)
-  expect(w.calls.some(c => c.startsWith('wt: git add') && !c.includes(':(exclude).scratch'))).toBe(false)
+  expect(w.calls.some(c => c.includes(':(exclude)'))).toBe(false)
+  const restore = w.calls.indexOf(`wt: git restore --staged -- :(literal).scratch/edit.py`)
+  expect(restore).toBeGreaterThan(add)
+  expect(w.calls.findIndex(c => c.startsWith('wt: git') && c.includes(' commit '))).toBeGreaterThan(restore)
+  expect(w.calls.some(c => c.includes('restore --staged') && c.includes('src/a.ts'))).toBe(false)
   expect(t.history.join('\n')).not.toContain('outside the task')
   const rm = w.calls.indexOf(`rm -rf ${WT}/.scratch`)
   expect(rm).toBeGreaterThan(add)
@@ -2837,11 +2852,15 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
   expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
   expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
-  const t0 = Date.now()
   expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  expect(Date.now() - t0).toBeLessThan(1000)
-  // the folder lookups of the worker's own folder and the project, not one per path
-  expect(slow).toBeLessThan(30)
+  const looked = slow
+  // the folder lookups of the worker's own folder and the project, not one per path (counted before the timed call).
+  // This count is what catches the old slow way (a lookup per path), so no tight time limit is needed (T-478)
+  expect(looked).toBeLessThan(30)
+  // and a generous time cap only: the work is not linear in the paths (4 times the paths took about 20 times as long
+  // under load), so a growth ratio would flake; the fastest of 3 runs keeps one busy moment from counting
+  const big = await bestMsOfAsync(() => bash(`cat ${files(1999, i => `src/f${i}.ts`)}`))
+  expect(big).toBeLessThan(SPEED_CAP_MS)
   // a link among many plain paths is still followed
   expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
   fs.stat = realStat
@@ -4416,7 +4435,7 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   const [b2, t2] = [await load(w.$), find(await load(w.$), 'T-2')! as SymccTask]
   const r = await checkAndMerge(w.$, t2, wt, b2)
   expect(r.ok).toBe(true)
-  expect(w.calls).toContain(`${wt}: git add -A -- . :(exclude).scratch`)
+  expect(w.calls).toContain(`${wt}: git add -A -- .`)
   expect(t2.files).toEqual(['docs/research/do-it.md'])
 })
 

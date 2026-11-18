@@ -21,13 +21,88 @@ export const path = (rel: string) => {
 }
 
 /**
- * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does.
+ * The main project folder for `dir` when `dir` is one of symcc's own worker folders (T-472), else `dir` itself.
+ * git's shared folder (`git rev-parse --git-common-dir`) is the main project's .git, so its parent is the main
+ * project; `dir` is in the main project only when its `git rev-parse --show-toplevel` is that project. Else `dir` only counts as a worker's folder when it lies inside <main project>/.<name>/worktrees/ (real paths
+ * compared), so an owner's own second checkout (another `git worktree`) keeps its own root. When git can't tell (no
+ * git, a bare repo, a host that runs nothing), a path inside .<name>/worktrees/ is cut back to the project above it.
+ */
+export async function mainRoot(host: Host, dir: string): Promise<string> {
+  if (!dir) return ''
+  const clean = dir.replace(/\/+$/, '') || '/'
+  const r = await host.run(['git', 'rev-parse', '--git-common-dir'], { cwd: clean, timeoutMs: 15_000 }).catch(() => null)
+  const common = r && r.exitCode === 0 ? r.stdout.trim().replace(/\/+$/, '') : ''
+  if (common && /(^|[\\/])\.git$/.test(common)) {
+    // git answers ".git" (or a relative path) in the main project, an absolute path (/..., C:/... or \\server\...) from a worktree
+    const abs = isAbsolute(common) ? common : `${clean}/${common}`
+    const main = normalPath(abs.slice(0, -'.git'.length))
+    // git's own answer: the main project (or a folder inside it) has the main project as its toplevel; any other
+    // toplevel is a worktree, which is a worker's folder (guard-only) or the owner's own worktree (keeps its own root)
+    const t = await host.run(['git', 'rev-parse', '--show-toplevel'], { cwd: clean, timeoutMs: 15_000 }).catch(() => null)
+    const top = t && t.exitCode === 0 ? t.stdout.trim() : ''
+    const inMain = top && isAbsolute(top) ? within(normalPath(top), main) && within(main, normalPath(top)) : !isAbsolute(common)
+    if (inMain) return main
+    return (await isWorkerFolder(host, clean, main)) ? main : clean
+  }
+  const mark = `/${S.N.worktrees}/`
+  const at = clean.indexOf(mark)
+  return at > 0 ? clean.slice(0, at) : clean
+}
+
+/** Where `p` really is (symbolic links followed), with "/" between its parts; `p` as written when the disk can't tell. */
+async function realOf(host: Host, p: string): Promise<string> {
+  const real = await Promise.resolve()
+    .then(() => host.fs.stat(p, { resolve: true }))
+    .then(st => st.realPath, () => undefined)
+  return normalPath(real || p).replace(/\\/g, '/')
+}
+
+/** True when path `p` is folder `dir` or inside it ("\" read as "/"). */
+const within = (p: string, dir: string) => {
+  const slash = (x: string) => x.replace(/\\/g, '/').replace(/\/+$/, '')
+  const a = slash(p)
+  const d = slash(dir)
+  return a === d || a.startsWith(`${d}/`)
+}
+
+/**
+ * True when folder `dir` lies inside `main`'s .<name>/worktrees/ folder (real paths compared): one of symcc's worker
+ * folders, where a copy of the plugin only guards (see guardStart). Any other folder, an owner's own second checkout too, is not.
+ */
+export async function isWorkerFolder(host: Host, dir: string, main: string): Promise<boolean> {
+  if (!dir || !main) return false
+  const [d, w] = await Promise.all([realOf(host, dir), realOf(host, `${main}/${S.N.worktrees}`)])
+  return d !== w && within(d, w)
+}
+
+/** True for a path from the top of a disk: "/...", a Windows drive ("C:/..." or "C:\...") or a share ("\\server\..."). */
+export const isAbsolute = (p: string) => /^([\\/]|[A-Za-z]:[\\/])/.test(p)
+
+/**
+ * `p` with its "." and ".." parts worked out (git may answer e.g. "../../.git" from a folder inside the project).
+ * Its start is kept as written: "/", a drive "C:/" or a share "\\" (so "C:/proj/x/../" gives "C:/proj").
+ */
+export function normalPath(p: string): string {
+  const start = /^[A-Za-z]:[\\/]/.test(p) ? p.slice(0, 3) : /^[\\/]{2}[^\\/]/.test(p) ? p.slice(0, 2) : p.startsWith('/') ? '/' : ''
+  const out: string[] = []
+  for (const part of p.slice(start.length).split(/[\\/]/)) {
+    if (!part || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  const sep = start.includes('\\') ? '\\' : '/'
+  return `${start}${out.join(sep)}` || '/'
+}
+
+/**
+ * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does. It is
+ * always the main project, also for a session in a worker's worktree (see mainRoot).
  * A hook that runs before session.start (a plugin reload starts the module over) uses this; true once the root is known.
  */
 export async function findRoot(host: Host): Promise<boolean> {
   if (S.root) return true
   const repo = await host.session.repo().catch(() => null)
-  const root = repo?.root || (await host.session.root().catch(() => '')) || ''
+  const root = await mainRoot(host, repo?.root || (await host.session.root().catch(() => '')) || '').catch(() => '')
   if (root && !S.root) S.root = root
   return !!S.root
 }
@@ -92,6 +167,8 @@ export function resetStore() {
 async function keepCopy(host: Host, text: string, what: string, say: (copy: string) => string): Promise<string> {
   const known = reported.get(text)
   if (known !== undefined) return known
+  // a guard-only copy (guardStart, in a worker's folder) never writes; the copy that drives the board keeps it
+  if (S.guardOnly) return ''
   const copy = `${S.N.boardFile}.${what}-${now().replace(/[:.]/g, '-')}`
   const ok = await host.fs.write(path(copy), text).then(() => true, () => false)
   const name = ok ? copy : ''
@@ -253,6 +330,8 @@ export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Pro
     await saveBoard(host, after)
     return [after, value] as const
   }).then(async ([after, value]) => {
+    // a guard-only copy (guardStart, in a worker's folder) saves the board but never shows it: no panel, no status line
+    if (S.guardOnly) return value
     await publish(host, after)
     checkHealth(host, after)
     return value

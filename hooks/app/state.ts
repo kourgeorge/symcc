@@ -91,6 +91,8 @@ export const startS = () => ({
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
   driving: false,
+  /** set by guardStart: this copy runs in a worker's folder and only guards tool calls (no lead, no timers, no board writes) */
+  guardOnly: false,
   /** board.json's mtime (ms) of the state this session last drew (publish) or saved; null = not known yet. A session that
    *  does not drive reloads and redraws the board on its heartbeat when the file's mtime differs from this (T-429).
    *  A plain load does not set it, so reading the board just after another session wrote it still redraws (T-431) */
@@ -218,6 +220,19 @@ export const stopped = new Set<string>()
 /** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
 export const isOwnAgent = (agentId: string | undefined): agentId is string =>
   !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
+/**
+ * Agents the guards found on the board (T-471: a worker, checker or ended agent of a task, whatever copy of the plugin
+ * started it), so a guard that crashes later (guardFailed, which can't read the board) still refuses their calls.
+ * Only for that: a hand-back still goes by lateHandBack's own rule. Kept small (rememberOnBoard).
+ */
+export const boardAgents = new Set<string>()
+const BOARD_AGENTS_MAX = 500
+/** Notes agent `agentId` as found on the board (see boardAgents). */
+export function rememberOnBoard(agentId: string) {
+  if (boardAgents.has(agentId)) return
+  if (boardAgents.size >= BOARD_AGENTS_MAX) boardAgents.delete(boardAgents.values().next().value!)
+  boardAgents.add(agentId)
+}
 /**
  * Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. It is in `stopped`
  * before the first await, so a caller that doesn't wait (`void halt(...)`) still refuses its tools at once.

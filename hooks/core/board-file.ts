@@ -96,8 +96,10 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * What the running try recorded for its hand-back, kept here (not only in the plugin's memory) so a plugin
  * reload mid-try doesn't lose it; only while "doing" on one try: `try_question`: its worker's ask_owner call
  * (the last one wins); `try_refused`: the paths of its edits refused as outside the task's files.
+ * `checker`: the agent id of the checker running on this try now (the checker setting), so the guards of any copy
+ * of the plugin know it, not only the copy that started it (T-471); its folder is the task's own. Only while "doing" on one try.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[] }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -379,6 +381,7 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
     else x.kind = kindOf(x)
   }
   if ('answer' in x && typeof x.answer !== 'string') delete x.answer
+  if ('checker' in x && !(x.status === 'doing' && typeof x.checker === 'string' && x.checker)) delete x.checker
   if ('merge_wait' in x) {
     const mw = asBlockers(x.merge_wait)
     if (mw) x.merge_wait = mw
