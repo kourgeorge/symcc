@@ -711,6 +711,29 @@ export const workerGitWriteText = (what: string, into?: string) =>
   `Refused: ${what} may change the repository or run another program, and a worker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
 
 /**
+ * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change
+ * something: a scout runs in the owner's own folder, so a git write there changes the owner's branch, files or stash.
+ */
+export const scoutGitWriteText = (what: string) =>
+  `Refused: ${what} may change the repository or run another program, and a scout may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`
+
+/**
+ * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative
+ * paths are taken from the project folder. Undefined for no path and for paths outside the project (such as /tmp).
+ * As editOutsideFolder, letter case is ignored and /tmp, /var and /etc also match their macOS /private names.
+ */
+export function editInProject(path: string | undefined, root: Folders): string | undefined {
+  const p = editTarget(path)
+  const tops = folderList(root)
+  if (!p || !tops.length) return undefined
+  return insideAny(resolvePath(tops[0]!, p), tops, false)
+}
+
+/** The reason a scout reads when its edit of project path `rel` is refused: scouts never change the project. */
+export const scoutEditText = (rel: string) =>
+  `Refused: ${rel || 'that path'} is in the owner's project, and a scout never changes the project's files. Write throwaway files under /tmp if you need them, and report what you find instead.`
+
+/**
  * The project path (relative to the worker's folder `worktree`) an edit of `path` would change, when it lies outside
  * `files` (the same matching as the merge-time scope check, outOfScope); undefined when the edit is allowed, has no
  * path, or is outside the worker's folder (see

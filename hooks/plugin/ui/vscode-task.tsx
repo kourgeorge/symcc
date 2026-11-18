@@ -134,7 +134,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const { Box, Text, Button, Input, v, C, vs } = pane
   const { Markdown } = vs
   const on = x.on
-  const nowMs = Date.now()
+  const { nowMs } = pane
   /** Colored pieces in one Text that wraps to the panel. */
   const segs = (key: string, list: Seg[], extra: Record<string, unknown> = {}) => (
     <Text key={key} wrap="wrap" {...extra}>

@@ -14,7 +14,7 @@ import { row } from './arrows'
  *  while a filter is on (not typing) [x] clear search, next to [f] change search, takes it off. */
 export function listPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, width, mark, act, C, banner, tabs, footer } = pane
-  const nowMs = Date.now()
+  const { nowMs } = pane
   const offset = localOffset(nowMs)
   const search = S.search
   const query = search?.text.trim() ?? ''

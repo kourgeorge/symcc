@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, endedEarly, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, type BoardTask } from '../hooks/board'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
@@ -18,6 +18,7 @@ const CASES: [string, BoardTask, RegExp][] = [
   ["couldn't start", failed({ note: "couldn't start: no such agent type" }), /^The worker could not start: no such agent type\.$/],
   ['merge conflict', failed({ note: 'conflicts with the latest main, still after 2 tries to merge it in' }), /^Its work clashes with the latest main/],
   ['stopped', failed({ note: 'the worker was stopped' }), /^The worker was stopped before it finished\.$/],
+  ['ended early', failed({ note: ENDED_EARLY_NOTE }), /^The worker ended its turn before its work finished/],
 ]
 
 test('a failed task: one plain sentence says why, for every way a task can fail', () => {
@@ -316,4 +317,62 @@ test("a failing command that isn't bun's test runner: its first error lines are 
 test('a NEED FILES line that already ends in "." or "…" gets no second one', () => {
   expect(failAsks('NEED FILES: src/b.ts, because the tokens live there.')).toBe('The worker asks for more files: src/b.ts, because the tokens live there. Ask the lead in the chat to add them to the task, then Retry.')
   expect(failAsks(`NEED FILES: ${'a/b.ts '.repeat(40)}`)).toMatch(/… Ask the lead in the chat to add them to the task, then Retry\.$/)
+})
+
+// T-411: a final answer whose last paragraph says something still runs and the writer goes on when it finishes
+// (T-399's try 1) reads as unfinished (only a warning note, see warnEndedEarly); normal reports, offers and quotes do not.
+test('endedEarlyLine gives the sentence that counted; endedEarlyNote is the warning', () => {
+  const s = "The background runs are still going; I'll continue when they finish."
+  expect(endedEarlyLine(`Changed a.ts.\n\nStarted the tests. ${s}`)).toBe(s)
+  expect(endedEarlyLine('Changed a.ts; tests/a.test.ts covers it.')).toBe('')
+  // a fenced code block with a blank line in it is code, not the writer's words (checker's example): must not flag
+  expect(endedEarlyLine("Changed it.\n\n```\nfoo\n\nbar still running; I'll continue when done\n```")).toBe('')
+  expect(endedEarlyNote('T-5', s)).toBe(`T-5's answer may have ended before its work finished: "${s}" (only a warning: its try goes on to the tests and merge as usual)`)
+})
+
+test('endedEarly: still running + the writer going on when it finishes counts; normal reports, offers and quotes do not', () => {
+  const later = [
+    "The background runs are still going; I'll continue when they finish.",
+    // T-399's try 1, its real last paragraph: must flag
+    "Changed the prompts and the check.\n\nThe background runs are still going; I'll continue when they finish.",
+    'Changed hooks/a.ts and added a test.\n\nThe full test run is still running in the background; I will report back once it ends.',
+    "The tests are still running and I'm waiting for them.",
+  ]
+  for (const a of later) expect([a, endedEarly(a)]).toEqual([a, true])
+  const normal = [
+    'Added the line to prompts/change.ts and a test in tests/prompts.test.tsx; `claude plugin test .` and typecheck pass.',
+    '',
+    // T-386's try 1, its real last paragraph (a bullet list): must not flag
+    'Fixed the reload.\n\n- A checker still running at the reload is stopped. Its try is not counted.\n- When the stopped checker\'s "stopped" answer comes in, a new checker starts right away without waiting for a check.',
+    'A checker still running at the reload is stopped. A new checker starts right away without waiting for a check.',
+    'The checker is still running, so a new one starts without waiting for it.',
+    'Changed the merge so a try still in progress makes the lead wait for it; tests/merge.test.ts covers it.',
+    'A checker still running at the reload stops waiting for a verdict.',
+    "A checker that is still running isn't waiting for the lead any more.",
+    "The checker is still running when the merge starts, so I'll note it in the docs.",
+    'Fixed it so the worker will report back its findings; tests/x.test.ts covers it.',
+    // nothing still running: plain "I'll continue / resume / report back" is not enough
+    "I'll resume once the typecheck is done.",
+    'Will report back.',
+    "I'll continue to keep the old name in the docs.\n\nChanged hooks/core/failure.ts; tests/failure.test.ts covers it.",
+    // the checker's five sentences (offers and quotes): must not flag
+    "Still unsure: whether the cache is shared. If you'd like, I'll come back to it in a follow-up task.",
+    "If you want, I'll continue with the other files next.",
+    'Let me continue with the summary: changed a.ts and b.ts.',
+    'Changed the endedEarly check so "I\'ll report back" is caught; tests/failure.test.ts covers it.',
+    'Added endedEarly, which flags answers like "The background runs are still going; I\'ll continue when they finish."',
+    // the same in other quotes and code
+    "Added endedEarly, which flags answers like `The background runs are still going; I'll continue when they finish.`",
+    "Added endedEarly, which flags answers like “The tests are still running; I'll report back when they end.”",
+    "Added endedEarly, which flags 'The tests are still running; I'll report back when they end.' answers.",
+    // the checker's later false alarms: "waiting for" / "will" about a task or checker, not the writer
+    'The scout found T-12 still in progress, waiting for files from T-9.',
+    'A task still in progress: waiting for T-3 to merge first.',
+    'Fixed the stall: a checker still running, waiting for the merge lock, now times out after 5 minutes; tests/checker.test.ts covers it.',
+    'Answer: the lead sees the worker as still running; waiting for it is what blocks T-12 (hooks/plugin/workers.ts:640).',
+    'Changed workers.ts so a try still running — will finish when its tests end — is not stopped.',
+    // a hypothetical about the rule itself
+    "If a command is still running, I'll now wait for it before I answer, as the prompt says.",
+  ]
+  for (const a of normal) expect([a, endedEarly(a)]).toEqual([a, false])
 })

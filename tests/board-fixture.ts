@@ -1,6 +1,6 @@
 // A board of about twenty tasks in every status, for the tests that draw the panel on several surfaces
 // (see vscode-board.test.tsx). Long titles on purpose: the VS Code layout must show them whole.
-import { mock } from 'claude-code/testing'
+import { mock, type MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { inProject } from './project'
 
@@ -52,21 +52,27 @@ export const PANE = {
   props: { title: 'symcc board · symcc', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
 } as const
 
-/** Seeds the board view (and the project folder, and a fixed clock); once the plugin writes a value, the kit's own store answers it. */
-export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_VIEW }) {
+/** Seeds the board view (and the project folder, and a fixed clock at T0, which the pages are drawn at: see ui/now.ts);
+ *  once the plugin writes a value, the kit's own store answers it. Gives the clock, for a test that moves it. */
+export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_VIEW }): MockClock {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
   inProject(on)
-  mock.clock(on, { now: T0 })
+  const clock = mock.clock(on, { now: T0 })
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  return clock
 }
 
 /** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped. */
 export const plainTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
-/** A running task's time ("▶ 9m", "try 2: 6m (running)", "total: 26m") is counted on the real clock, which the kit's
- *  fake clock does not hold, so it grows once T0 has passed; it is blanked out for the trees compared with a snapshot. */
-const DUR = String.raw`\d+[smhd](?: \d+[smh])?`
-export const steadyTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(plainTree(tree), (_k, v) => typeof v !== 'string' ? v : v
-  .replace(new RegExp(`▶ ${DUR} *`, 'g'), '▶ ~ ')
-  .replace(new RegExp(`(try \\d+: )${DUR}( \\(running\\))`, 'g'), '$1~$2')
-  .replace(new RegExp(`(total: |^ · )${DUR}( · )`, 'g'), '$1~$2')))
+
+/** A saved tree with some of its text changed: each `[from, to]` replaces every `from` in the tree's text; it throws
+ *  when a `from` isn't there, so a test can't pass by changing nothing. */
+export function changedTree(tree: unknown, swaps: [string, string][]): unknown {
+  let s = JSON.stringify(plainTree(tree))
+  for (const [from, to] of swaps) {
+    if (!s.includes(from)) throw new Error(`changedTree: "${from}" is not in the tree`)
+    s = s.split(from).join(to)
+  }
+  return JSON.parse(s)
+}

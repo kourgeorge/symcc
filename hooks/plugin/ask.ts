@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsOutside, gitWriteIn, gitWriteText, workerGitWriteText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsOutside, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
@@ -121,6 +121,9 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
     if (git) return gitWriteText(git)
     return outsideOwnFolder($, touch, chk.worktree, cwd)
   }
+  // a scout runs in the owner's own folder: it may run tests and read with git, and write throwaway files outside the
+  // project (such as /tmp), but never write with git or edit a file inside the project
+  if (scoutRuns.has(agentId)) return scoutCheck($, touch)
   // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
   const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
@@ -153,6 +156,22 @@ async function workerGitWrite($: Host, w: Worker, command: string): Promise<stri
   const into = t?.merge_main ? intoOf(t) : undefined
   const git = gitWriteIn(command, into ? mergeStepAllow(into) : undefined)
   return git ? workerGitWriteText(git, into) : undefined
+}
+
+/**
+ * Why a scout's call that touches what `touch` says is refused: a shell command that writes with git (gitWriteIn), or
+ * an edit of a file inside the project (symbolic links followed, see realEdit). Its other shell commands are not
+ * checked here (it is only asked in its prompt not to install or change files that way). Undefined: allowed.
+ */
+async function scoutCheck($: Host, touch: FileTouch): Promise<string | undefined> {
+  if ('command' in touch) {
+    const git = gitWriteIn(touch.command)
+    return git ? scoutGitWriteText(git) : undefined
+  }
+  const real = await realEdit($, touch.path, S.root, S.root)
+  if (real === null) return brokenLinkText(editTarget(touch.path)!)
+  const rel = editInProject(real.path, real.root)
+  return rel !== undefined ? scoutEditText(rel) : undefined
 }
 
 /**

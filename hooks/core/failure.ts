@@ -6,7 +6,7 @@ import { cutLine } from './reports'
 import { failBlocks, moreFailingLine } from './settings'
 
 /** Every way a task can end as failed (see workers.ts, review.ts and checker.ts in hooks/plugin). */
-export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'other'
+export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'ended early' | 'other'
 
 type Failed = Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>>
 
@@ -19,6 +19,7 @@ export function failedHow(t: Failed): FailedHow {
   if (/^the worker's turn ended on an error/i.test(note)) return 'api error'
   if (/^the model refused/i.test(note)) return 'refused'
   if (/^the worker was stopped/i.test(note)) return 'stopped'
+  if (note.toLowerCase().startsWith(ENDED_EARLY_NOTE)) return 'ended early'
   if (/ran over .* twice in a row/i.test(note)) return 'hung'
   if (/^stopped: ran over/i.test(note) || last?.ended_by === 'timed out') return 'timed out'
   if (/^the checker found problems/i.test(note) || isCheckerOutput(t.test_output)) return 'checker'
@@ -27,6 +28,51 @@ export function failedHow(t: Failed): FailedHow {
   if (/^the worker made no change/i.test(note)) return 'no change'
   if (/^conflicts with the latest/i.test(note)) return 'clash'
   return 'other'
+}
+
+/** The note of a try whose worker ended its turn while the host saw a background command of it still running (TurnEnd.background). */
+export const ENDED_EARLY_NOTE = 'the worker ended its turn before its work finished'
+
+/** "something is still running / going / in progress" (or "running in the background"). */
+const STILL = /\bstill (?:running|going|in progress)\b|\brunning in the background\b/i
+/**
+ * The writer going on once it finishes: "I'll / I will / I'm going to continue / resume / report back / come back /
+ * check back / get back ... when / once / after / as soon as ... ", or the writer's own wait ("I'm waiting for").
+ * Only with "I": a bare "will …" or "…, waiting for …" is often about a task or checker, not the writer.
+ */
+const GOES_ON = /(?:\bI['’]ll|\bI will|\bI['’]m going to|\bI am going to)\s+(?:then\s+)?(?:continue|resume|report|come back|check back|get back|pick (?:it|this|them) up|finish)\b.*?\b(?:when|once|after|as soon as|until)\b|\bI(?:['’]m| am)\s+(?:still\s+|now\s+)?waiting\b/i
+/** A bullet or numbered list line ("- …", "* …", "• …", "1. …"). */
+const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
+/** Quoted text and code ("…", “…”, ‘…’, '…', `…`, ```…```): what a report quotes is not what the writer says. */
+const QUOTED = /```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|(?<=^|[\s(])'[^\n]*?'(?=[\s.,;:!?)]|$)/g
+
+/**
+ * The text check for whether a worker ended its turn while its work still runs ("The background runs are still
+ * going; I'll continue when they finish."). It never fails a try (only the host's signal, TurnEnd.background in
+ * plugin/workers.ts, does): it only adds a warning note (endedEarlyNote) to the lead's board update and the task's
+ * history, so a false alarm costs little. Still kept narrow: only the answer's last paragraph is read (not when it is a
+ * bullet list), with quotes and code taken out, sentence by sentence, and a sentence counts only when it says something
+ * is still running AND the writer goes on when it finishes (or is waiting for it). Offers ("If you want, I'll continue
+ * with …") and plain "I'll / let me continue" without anything still running never count.
+ * Returns the sentence that counted, '' if none.
+ */
+export function endedEarlyLine(answer: string | null | undefined): string {
+  // quotes and code go first, so a fenced code block with a blank line in it is not cut into paragraphs
+  const paras = String(answer ?? '').replace(QUOTED, ' (quote) ').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  const last = paras.at(-1) ?? ''
+  if (!last || last.split('\n').some(l => BULLET.test(l))) return ''
+  const sentences = last.split(/(?<=[.!?])\s+|\n+/)
+  return sentences.find(s => !/^\s*if\b/i.test(s) && STILL.test(s) && GOES_ON.test(s))?.trim() ?? ''
+}
+
+/** Whether the answer reads as ended before its work finished (see endedEarlyLine). */
+export function endedEarly(answer: string | null | undefined): boolean {
+  return endedEarlyLine(answer) !== ''
+}
+
+/** The warning note for task `id` whose answer reads as ended early on `sentence` (see endedEarlyLine). */
+export function endedEarlyNote(id: string, sentence: string): string {
+  return `${id}'s answer may have ended before its work finished: "${cutLine(sentence, 200)}" (only a warning: its try goes on to the tests and merge as usual)`
 }
 
 /** What the worker said in its last try that ended with `detail` (from the history line "try N: <said> → <detail>"); '' if none. */
@@ -234,6 +280,8 @@ export function whyFailed(t: Failed): string {
       return `Its work clashes with the latest ${/^conflicts with the latest (\S+?),? /.exec(note)?.[1] ?? 'branch'}, and merging that in did not work.`
     case 'stopped':
       return 'The worker was stopped before it finished.'
+    case 'ended early':
+      return 'The worker ended its turn before its work finished (something it started was still running), so nothing was checked or merged.'
     case 'hung':
       return `Checking and merging its work hung twice in a row and was given up, so nothing was merged (${note}).`
     default:
@@ -262,6 +310,7 @@ export function failNext(t: Failed): string {
     case 'hung':
       return 'Look at why the test commands are slow or hang, then Retry; or Drop it.'
     case 'no result':
+    case 'ended early':
     case 'api error':
     case 'refused':
     case 'stopped':

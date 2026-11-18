@@ -464,6 +464,7 @@ What makes a good finding:
 Rules:
 - Don't change, create or delete files in the project: no edits, no installs, no git commands that change anything (commit, checkout, reset, stash, ...). Changes are made through board tasks, not by you.
 - You may read files, run shell commands that only look, and search or fetch pages on the web.
+- Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later.
 - To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
