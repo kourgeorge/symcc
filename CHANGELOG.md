@@ -6,6 +6,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Added
 - The lead's questions that are not about one task ("raise the version?", "add a scout?") go on the board with its new `question` tool, so they no longer get lost in the chat. They show as "Questions for you (2)" at the top of the board list, with a button per choice plus "Answer…", and as "2 questions for you" in the band and the status line, with the "needs you" sound once per question. A board answer closes the question and reaches the lead in its next board update; a chat answer is closed by the lead.
+- Scouts (and checkers) can read the board with symcc's `board` (no arguments, `status`, `search` or `task`) and `stats` tools instead of reading `.symcc/board.json`. Every symcc tool that changes something is refused for them with "scouts can only read the board".
 
 ## 0.4.0 (2026-11-18)
 

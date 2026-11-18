@@ -87,11 +87,21 @@ export function failBlocks(output: string): string[] {
   return blocks
 }
 
+/** Past the room for errors, at most this many failing tests keep their short "(fail)" line (with its test file line); the rest are only counted. */
+export const FAIL_LINES_SHOWN = 30
+
+/** And those short lines take at most this many characters in all. */
+export const FAIL_LINES_CHARS = 3000
+
+/** The line after the short "(fail)" lines, for the `m` failing tests left out. */
+export const moreFailingLine = (m: number) => `… and ${m} more failing ${m === 1 ? 'test' : 'tests'}`
+
 /**
  * The test output a task keeps (test_output), so it fits in the next worker's prompt: all of it when it is at
- * most `n` characters; else every failing test with its error (failBlocks, FAIL_BLOCK_CHARS of them, then only
- * the "(fail)" lines of the rest, so no failure is ever left out), then the last `n` characters. The "$ command
- * (exit N)" first line stays first.
+ * most `n` characters; else the failing tests (failBlocks: with their error while FAIL_BLOCK_CHARS last, then
+ * only the "(fail)" lines, up to FAIL_LINES_SHOWN of them in FAIL_LINES_CHARS, then "… and M more failing tests"),
+ * then the last `n` characters. So it stays under about FAIL_BLOCK_CHARS + FAIL_LINES_CHARS + `n`, however many
+ * tests fail. The heading in front says how many failed in all. The "$ command (exit N)" first line stays first.
  */
 export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
   const s = String(output ?? '').trim()
@@ -102,13 +112,32 @@ export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
   const first = s.slice(0, s.indexOf('\n') < 0 ? s.length : s.indexOf('\n'))
   const kept: string[] = []
   let used = 0
+  let shortUsed = 0
+  let shortShown = 0
+  let left = 0
   for (const b of blocks) {
-    const short = b.split('\n').filter(l => FILE_LINE.test(l) || l.startsWith('(fail)')).join('\n')
-    const take = used + b.length <= FAIL_BLOCK_CHARS ? b : short
-    used += take.length
-    kept.push(take)
+    if (used + b.length <= FAIL_BLOCK_CHARS) {
+      used += b.length
+      kept.push(b)
+      continue
+    }
+    const short = b.split('\n').filter(l => FILE_LINE.test(l) || l.startsWith('(fail)')).map(l => (l.length > 300 ? l.slice(0, 299) + '…' : l)).join('\n')
+    if (shortShown < FAIL_LINES_SHOWN && shortUsed + short.length <= FAIL_LINES_CHARS) {
+      shortShown++
+      shortUsed += short.length
+      kept.push(short)
+    } else left++
   }
+  if (left) kept.push(moreFailingLine(left))
   return [...(first.startsWith('$ ') ? [first] : []), failedTestsHead(blocks.length), ...kept, end].join('\n')
+}
+
+/** The worker prompt's heading over kept test output (testTail), saying what follows: the failing tests and the end, only the end, or all of it. */
+export function testOutputHeading(kept: string): string {
+  const lines = kept.split('\n')
+  const head = lines[0]?.startsWith('$ ') ? lines[1] : lines[0]
+  if (head && /^\d+ failed tests?, each "\(fail\)" line/.test(head)) return 'The failing tests and the end of the test output:'
+  return kept.startsWith('…') ? 'The end of the test output:' : 'The test output:'
 }
 
 /** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */

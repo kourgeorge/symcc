@@ -2,7 +2,7 @@ import { openQuestions, liveWorkersFor, whoDrives, leadText, resetDoing, find, p
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView } from './state'
 import { type Host, agentState } from '../host'
-import { path, locked, change, now, load, safeWrite } from './store'
+import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
@@ -64,9 +64,23 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     await haltWorkers(host, 'the task was changed on the board', w => find(b, w.task)?.status !== 'doing')
   }
   if (was !== S.driving || fresh) await publish(host, await load(host))
+  else if (!S.driving) await followBoard(host)
   // the heartbeat (every 30 s) also looks whether the banner logo's idle sway is due
   void logoIdle(host).catch(() => undefined)
   return S.driving
+}
+
+/**
+ * A session that does not drive gets no "Board update" and runs no regular check, so on its heartbeat it looks
+ * whether board.json changed (its mtime differs from the one last seen) and, if so, loads it and redraws the panel
+ * and status line (T-429). A missing or unreadable (or broken) file does nothing: the heartbeat goes on.
+ */
+async function followBoard(host: Host) {
+  const m = await boardMtime(host).catch(() => null)
+  if (m === null || m === S.boardMtime) return
+  S.boardMtime = m
+  const b = await load(host).catch(() => null)
+  if (b) await publish(host, b).catch(() => undefined)
 }
 
 /** On session end the driver lets go of lead.json, so another session can take over at once. */
