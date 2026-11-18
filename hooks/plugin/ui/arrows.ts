@@ -41,9 +41,9 @@ export function focusStops(node: unknown): string[] {
   return focusStops(n.children ?? p.children)
 }
 
-/** True when a Settings group heading has the focus (its key line then says "Enter open/close"). The page opens with
- *  the focus on its first heading, so a focus still on a tab (or none known yet) counts as a heading too. */
-export const headingFocused = (focused: string | undefined) => focused === undefined || focused.startsWith('group:') || focused.startsWith('tab-')
+/** True only when a Settings group heading is known to have the focus (its key line then says "Enter open/close");
+ *  a focus on a tab, on any other button, or not known yet is not a heading, so the page keeps its normal hint. */
+export const headingFocused = (focused: string | undefined) => focused?.startsWith('group:') ?? false
 
 /** Notes that the focus moved to `to`; on the Settings page (its rows include group headings) a move between a
  *  heading and any other element redraws the page, so its key line follows the focus. */

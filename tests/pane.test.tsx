@@ -984,7 +984,18 @@ test('the Settings key line says "Enter open/close" on a group heading and "Ente
   const heading = /^Enter open\/close · ↑↓ move/
   const change = /^Enter change · ↑↓ move/
   await ui.press({ key: 'tab-settings' })
+  // the focus is not known yet (or is on a tab button): the normal page hint, not "open/close"
+  expect(await ui.find({ type: 'Text', text: change })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: heading })).toBeUndefined()
+  await keys.focus('tab-settings')
+  expect(await ui.find({ type: 'Text', text: change })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: heading })).toBeUndefined()
+  // a group heading gets the focus: "Enter open/close"
+  await keys.focus('group:Work')
   expect(await ui.find({ type: 'Text', text: heading })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: change })).toBeUndefined()
+  // the focus moves to a setting row of the open group: "Enter change"; back on a heading: "Enter open/close"
+  // (the test kit can't stand in for the plugin's own ↑↓ focus move, so the moves are made as Tab would)
   await ui.press({ key: 'group:Work' })
   await keys.focus('setting:mode')
   expect(await ui.find({ type: 'Text', text: change })).toBeDefined()
@@ -1779,7 +1790,7 @@ const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]]
   ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
   ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
   ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Cancel', word: 'leaves without saving' }]],
-  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'open/close' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
+  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
 ]
 for (const [name, seed, press, hints] of NO_MODE_PAGES)
   test(`the ${name} ends with a footer of its own key hints and has no mode line`, async ($, on) => {
@@ -1866,8 +1877,7 @@ test('every list page says "↑↓ move" in its key line; a task page says "↑�
   await ui.press({ key: 'tab-scouts' })
   expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t s c views · b back$/ })).toBeDefined()
   await ui.press({ key: 'tab-settings' })
-  // the page opens with the focus on its first group heading
-  expect(await ui.find({ type: 'Text', text: /^Enter open\/close · ↑↓ move · t s c views · b back$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter change · ↑↓ move · t s c views · b back$/ })).toBeDefined()
   await ui.press({ key: 'tab-tasks' })
   await ui.press({ key: 'T-1' })
   expect(await ui.find({ type: 'Text', text: /↑↓ scroll/ })).toBeDefined()
