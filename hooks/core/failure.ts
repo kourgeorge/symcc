@@ -3,6 +3,7 @@
 import type { SymccTask } from '../../types'
 import { CHECKER_MARK, isCheckerOutput } from './checker'
 import { cutLine } from './reports'
+import { failBlocks, moreFailingLine } from './settings'
 
 /** Every way a task can end as failed (see workers.ts, review.ts and checker.ts in hooks/plugin). */
 export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'ended early' | 'other'
@@ -105,8 +106,13 @@ function failures(output: string): { at: number; name: string }[] {
   return found
 }
 
-/** How many different tests failed in test output (each once, even when the kept output shows it twice; see failures). */
-export const failCount = (output: string): number => failures(output).length
+/** How many different tests failed in test output (each once, even when the kept output shows it twice; see failures), or the total the
+ *  kept output's heading or the runner's " N fail" line gives when that is more (kept output lists only some when many failed). */
+export const failCount = (output: string): number => {
+  // kept output (testTail) lists only some of them when many failed; its heading, and the runner's own " N fail" line, give the real total
+  const said = output.split('\n').map(l => /^(\d+) failed tests?, each "\(fail\)" line/.exec(l)?.[1] ?? /^\s*(\d+) fail$/.exec(l)?.[1]).filter(Boolean).map(Number)
+  return Math.max(failures(output).length, ...said)
+}
 
 /**
  * The failing tests in test output: each "(fail) <name>" line with the first error lines of the first one,
@@ -134,8 +140,33 @@ export function failingLines(output: string, n = 1): string {
     picks.push([name, ...why.slice(0, 2)].join(' | '))
   }
   if (!picks.length) return ''
-  const more = found.length - picks.length
+  const more = Math.max(found.length, failCount(output)) - picks.length
   return cutLine(picks.join('; ') + (more > 0 ? ` (and ${more} more)` : ''), 240)
+}
+
+/**
+ * The short form of a task's kept test output for the lead's chat when it gives up (its retries are used up): how
+ * many tests failed, the first few failing tests with their errors (at most 3, in about 1500 characters), how many
+ * more there are, and where to read the rest. Output with no "(fail)" line (a typecheck) gives its first error lines.
+ */
+export function gaveUpTestsText(out: string): string {
+  const where = "The whole kept test output is on the task's page (and in its test_output in board.json)."
+  const blocks = failBlocks(out)
+  if (!blocks.length) {
+    const errors = errorLines(out, 3)
+    return `${errors ? `First errors: ${errors}` : `The end of the test output:\n${out.length > 800 ? '…' + out.slice(-800) : out}`}\n${where}`
+  }
+  const total = Math.max(blocks.length, failCount(out))
+  const picked: string[] = []
+  let used = 0
+  for (const b of blocks.slice(0, 3)) {
+    const cut = b.length > 1500 ? b.slice(0, 1499) + '…' : b
+    if (picked.length && used + cut.length > 1500) break
+    picked.push(cut)
+    used += cut.length
+  }
+  const more = total - picked.length
+  return [`${total} failing ${total === 1 ? 'test' : 'tests'}${picked.length < total ? `, the first ${picked.length === 1 ? 'one' : picked.length}` : ''}:`, ...picked, ...(more > 0 ? [moreFailingLine(more)] : []), where].join('\n')
 }
 
 /**
