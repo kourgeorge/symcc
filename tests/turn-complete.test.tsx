@@ -105,7 +105,7 @@ function fakeGit(work: Record<string, string[]>) {
  * their turn.complete reaches the bottom (then completed).
  * What reaches the lead is in `prompts` once the clock passes its 1.5 s wait.
  */
-function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: string; type: string }[]; holdCommitOf?: string } = {}) {
+function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: string; type: string }[]; holdCommitOf?: string; noId?: string[] } = {}) {
   const files = new Map<string, string>()
   const key = (p: string) => (p.includes('/.symcc/') ? p.slice(p.indexOf('/.symcc/')) : p)
   const git = fakeGit(o.work ?? {})
@@ -150,7 +150,9 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   // a Bash command sent to the background answers with the id of its background task, as Claude Code's Bash does
   on('tool.call', (_, e) => {
     const c = e as unknown as { tool: string; command?: string; run_in_background?: boolean }
-    return { result: c.tool === 'Bash' && c.run_in_background ? ({ stdout: '', stderr: '', backgroundTaskId: `bg:${c.command}` } as never) : 'ran' }
+    if (c.tool !== 'Bash' || !c.run_in_background) return { result: 'ran' }
+    // a command in `noId` answers without its task id (the owner must not be guessed from its text)
+    return { result: (o.noId?.includes(c.command ?? '') ? { stdout: '', stderr: '' } : { stdout: '', stderr: '', backgroundTaskId: `bg:${c.command}` }) as never }
   })
   // beneath the plugin, every tool is allowed (the engine's own rules)
   on('tool.check', () => ({ decision: 'allow' }) as never)
@@ -293,8 +295,8 @@ test("a tracked worker's report is taken once: the same report again changes not
 // ---------------- how a tracked worker's try ends: ask_owner, refused edits, the turn's end reason ----------------
 
 /** T-1 (files src/, auto mode) is "doing" for worker a1, which still runs at session start, so it is tracked. */
-async function trackedWorker($: Eng, on: On, o: { investigation?: boolean } = {}) {
-  const w = world(on, { work: { 'T-1': ['src/a.ts'] }, agents: [{ id: 'a1', type: 'symcc:worker' }] })
+async function trackedWorker($: Eng, on: On, o: { investigation?: boolean; noId?: string[] } = {}) {
+  const w = world(on, { work: { 'T-1': ['src/a.ts'] }, agents: [{ id: 'a1', type: 'symcc:worker' }], ...(o.noId ? { noId: o.noId } : {}) })
   const b = doingBoard('auto', [{ agent: 'a1', files: ['src/'] }])
   w.files.set(BOARD, JSON.stringify(o.investigation ? patchTask(b, 'T-1', { kind: 'investigation' } as never, ISO) : b))
   await $.session.start({ cwd: ROOT } as never)
@@ -447,6 +449,18 @@ test("T-435: another agent's background command still running doesn't count; wit
   expect(w.task('T-1').status).toBe('done')
   expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
   expect(w.git.onMain()).toEqual([expect.stringMatching(/^T-1: /)])
+})
+
+test("T-457: a worker's id-less background command is done; another agent's same-text command still running doesn't fail its try", async ($, on) => {
+  const w = await trackedWorker($, on, { noId: ['bun test'] })
+  // a1's `bun test` answered without a task id and has finished; the lead's `bun test` (also without a known owner) still runs
+  await inBackground($, 'a1', 'bun test')
+  await inBackground($, undefined, 'bun test')
+  await subagentStop($, 'a1', [{ ...shell('bun test'), id: 'b7' }, { id: 'a1', type: 'subagent', status: 'running', description: 'T-1' }])
+  await finish($, 'a1', 'made the change')
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('done')
+  expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
 })
 
 test('T-435: with nothing in flight at its SubagentStop, a worker that says "still running" only gets a warning and is merged', async ($, on) => {
