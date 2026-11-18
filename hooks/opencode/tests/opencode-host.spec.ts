@@ -412,6 +412,37 @@ test('an OpenCode session agent: create (child of the lead) -> move into its fol
   }
 })
 
+test('stopped while its first prompt is still landing: it ends once as aborted, stays killed, and is interrupted again after the prompt lands', async () => {
+  const f = fakeSessions(0)
+  let release!: () => void
+  const api: OcSessionApi = {
+    ...f.api,
+    async prompt(input: Parameters<OcSessionApi['prompt']>[0]) {
+      await new Promise<void>(res => (release = res))
+      return f.api.prompt(input)
+    },
+  }
+  const main = await realpath(await mkdtemp('/tmp/symcc-oc-stop-'))
+  try {
+    const ends: string[] = []
+    const agents = opencodeAgents(api, { dir: main, lead: () => f.lead(main), onEnd: (_id, end) => void ends.push(end.end.reason), pollMs: 5, waitMs: 2000 })
+    const { agentId } = await agents.spawn({ kind: 'worker', prompt: 'do it', name: 'w', description: 'w' })
+    await until(() => release !== undefined)
+    await agents.stop(agentId!, 'stop')
+    expect(ends).toEqual(['aborted'])
+    release()
+    await until(() => f.calls.filter(c => c.startsWith('interrupt')).length === 2)
+    expect((await agents.list())[0]!.status).toBe('killed')
+    // the session's run (had it gone on) ends: no second end is handed on
+    f.end(agentId!, 'DONE')
+    await new Promise<void>(res => setTimeout(() => res(), 30))
+    expect(ends).toEqual(['aborted'])
+    expect(f.calls.slice(1)).toEqual([`interrupt ${agentId}`, `prompt ${agentId} in ${main} (queue)`, `interrupt ${agentId}`])
+  } finally {
+    await rm(main, { recursive: true, force: true })
+  }
+})
+
 test('sessionEnd: a failed run is an error with its message, a content filter a refusal', () => {
   const at = { directory: '/x' }
   expect(sessionEnd({ id: 's', outcome: 'failed', location: at }, [{ type: 'assistant', content: [], finish: 'error', error: { message: 'rate limited' } }])).toEqual({ answer: 'rate limited', end: { reason: 'error' }, isAborted: false, tokens: undefined })

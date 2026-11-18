@@ -165,6 +165,11 @@ export function opencodeAgents(api: OcSessionApi, o: OpencodeAgentsOptions): Ope
     if (runs.get(id)?.status !== 'pending') return
     try {
       await api.prompt({ sessionID: id, text: sessionPrompt(a, name), delivery: 'queue' })
+      // stopped while the prompt was landing: its interrupt came too early, so interrupt again, and don't hand on a second end
+      if (runs.get(id)?.status !== 'pending') {
+        await api.interrupt({ sessionID: id }).catch(() => undefined)
+        return
+      }
       runs.set(id, { ...runs.get(id)!, status: 'running' })
       log(`${a.kind} ${a.name} prompted in OpenCode session ${id}`)
       await api.wait({ sessionID: id })
