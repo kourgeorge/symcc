@@ -1,6 +1,6 @@
 // T-409: the lead's questions for the owner that are not about one task live on the board (board.questions), so
 // they don't scroll away in the chat: "Questions for you" in the panel, a count in the band and the status line,
-// "needs you" once, a board answer reaches the lead as a "Meanwhile" line, and a chat answer closes it through the tool.
+// "needs you" once, a board answer wakes the lead at once with an act-on-it block (T-434), and a chat answer closes it through the tool.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
@@ -8,10 +8,11 @@ import { fakeHost, memoryFs, done } from './fake-host'
 import { ran, readText, entry, pause } from './fakes'
 import { inProject } from './project'
 import { type Board, emptyBoard, readBoard, statusLine, boardText, addQuestion, answerQuestion, openQuestions, NEEDS_YOU_MARK } from '../hooks/board'
+import { boardAnswerLine } from '../hooks/core/questions'
 import { S, sayQueue, meanwhile } from '../hooks/app/state'
 import { runTool, leadGuide, TOOLS } from '../hooks/app/tools'
 import { answerOnBoard } from '../hooks/app/questions'
-import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
+import { tellLead, noteForLead } from '../hooks/app/tell'
 
 const ROOT = '/repo'
 const ISO = '2026-11-18T10:00:00.000Z'
@@ -77,8 +78,11 @@ test('a question needs a text and 2 to 6 options', async () => {
   expect(w.board().questions).toBeUndefined()
 })
 
-test('answering on the board closes the question and the lead gets it in the next board update', async () => {
+test('answering on the board closes the question and wakes the lead at once with an act-on-it block (T-434)', async () => {
   const w = world()
+  // a host that wakes the lead at once; its timer runs the job a moment later
+  w.host.features = { ...w.host.features, wakeLead: 'now' }
+  w.host.clock = { ...w.host.clock, after: (_ms, job) => (void Promise.resolve().then(job), { cancel: () => undefined }) }
   await call(w.host, { action: 'add', text: 'Raise the version?', options: ['Yes', 'No'] })
   expect(await answerOnBoard(w.host, 'Q-1', 'Yes')).toBe('Q-1 answered: Yes; the lead will take it from here')
   const q = w.board().questions![0]!
@@ -87,13 +91,20 @@ test('answering on the board closes the question and the lead gets it in the nex
   // gone from the panel's list and the status line, kept in the file as history
   expect((w.panel.view() as { questions?: unknown[] }).questions).toBeUndefined()
   expect(w.status.at(-1) ?? '').not.toContain('question')
-  // no message now: a "Meanwhile" line at the top of the next board update
-  expect(w.toLead).toEqual([])
-  expect(meanwhile).toEqual(['The owner answered Q-1 ("Raise the version?"): Yes (the question is closed; act on the answer)'])
+  // with nothing else happening on the board: one board update right away, the answer in its own block
+  await pause(0)
+  expect(w.toLead).toEqual([`[${S.N.name}] Board update:\n\nThe owner answered your question Q-1 ("Raise the version?"): Yes. The question is closed. Act on it.\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.`])
+  expect(w.toLead[0]).not.toContain('Meanwhile')
+  expect(meanwhile).toEqual([])
+  // other owner actions still come only as Meanwhile lines: no message of their own, at the top of the next update
+  noteForLead('The owner approved T-1')
+  await pause(0)
+  expect(w.toLead.length).toBe(1)
+  expect(meanwhile).toEqual(['The owner approved T-1'])
   tellLead(w.host, 'T-3 was merged.')
-  const update = takeBoardUpdate()!
-  expect(update).toContain('- The owner answered Q-1 ("Raise the version?"): Yes')
-  expect(update.indexOf('Q-1')).toBeLessThan(update.indexOf('T-3 was merged.'))
+  await pause(0)
+  expect(w.toLead.length).toBe(2)
+  expect(w.toLead[1]).toContain('Meanwhile the owner (nothing to answer):\n- The owner approved T-1\n\nT-3 was merged.')
   // the lead closing it again from the chat changes nothing and says the board answer was used
   expect(await call(w.host, { action: 'answer', id: 'Q-1', answer: 'No' })).toBe('Q-1 was already closed (answered on the board: "Yes"); nothing changed. Use that answer and tell the owner it was taken.')
   expect(w.board().questions![0]!.answer).toBe('Yes')
@@ -202,7 +213,7 @@ test('the panel lists the open questions above the tasks; a button answers one a
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
   await ui.press({ key: 'answer-cancel' })
-  // a button is the answer: the question is closed on the board (the lead's "Meanwhile" line for it is checked
+  // a button is the answer: the question is closed on the board (the lead's board update for it is checked
   // above, in "answering on the board ..."), and the panel goes back to the list, where it is gone
   await ui.press({ key: 'choice-1' })
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
@@ -226,4 +237,14 @@ test('the band says "2 questions for you" and lists them, also with no task on t
   expect(await ui.find({ type: 'Text', text: /^Q-1 for you$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Add a scout\?/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('the act-on-it block adds a full stop only when the answer has no end mark of its own (T-434)', () => {
+  const q = { id: 'Q-3', text: 'Raise the version?', options: [], asked_at: ISO }
+  const start = 'The owner answered your question Q-3 ("Raise the version?"): '
+  const end = ' The question is closed. Act on it.'
+  expect(boardAnswerLine({ ...q, answer: 'Yes' })).toBe(`${start}Yes.${end}`)
+  expect(boardAnswerLine({ ...q, answer: 'Yes, raise it to 0.5.' })).toBe(`${start}Yes, raise it to 0.5.${end}`)
+  expect(boardAnswerLine({ ...q, answer: 'Why?' })).toBe(`${start}Why?${end}`)
+  expect(boardAnswerLine({ ...q, answer: 'Do it now!' })).toBe(`${start}Do it now!${end}`)
 })

@@ -143,8 +143,8 @@ briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` 
 - The band above the prompt and the status line say **2 questions for you** while any is
   open, and with `notify` on you hear "needs you" once per question.
 - Answer on the board and the question closes and leaves the list (it stays in the file as
-  history). The lead hears it in its next board update, as a line like "The owner answered
-  Q-3 (…): Yes". Answer in the chat instead and the lead closes it with your words. The
+  history). The lead gets a board update right away (like a finished task), with a block like
+  "The owner answered your question Q-3 (…): Yes. … Act on it.". Answer in the chat instead and the lead closes it with your words. The
   lead can also drop a question that no longer matters.
 
 ---
@@ -262,7 +262,7 @@ task's details how it will be tested ("Done when: tests show …").
 
 The lead (the main chat) gets a "[symcc] Board update" message only when something needs it:
 a worker finished, failed or is ready for review, a task waits for you (a question or
-a file request), a scout found something, a conflict or failing tests need a decision, or the
+a file request), you answered one of its questions on the board, a scout found something, a conflict or failing tests need a decision, or the
 board file is broken. The worker's or scout's own report already reaches the chat as that
 agent's message, so the board update gives just the outcome ("T-3 merged into main (abc12345);
 tests passed") and doesn't repeat it. A scout that answers `NOTHING` sends nothing.
@@ -1043,6 +1043,12 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+To move driving to the window you are in, type `/symcc-drive` there. If another window
+drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
+ones), steps down, and your window starts driving and restarts those tasks from their kept
+folders and branches. A task stopped this way does not use up a try; its history says
+"restarted: the owner moved driving to another session". There are never two drivers at
+once. If the other window doesn't answer within 3 minutes, yours takes over anyway.
 
 ### How the lead keeps the board in order
 
