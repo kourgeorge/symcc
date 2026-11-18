@@ -183,6 +183,10 @@ const WRITES: [string, string][] = [
   ["ls #'\ngit stash\n#'", 'git stash'],
   ["grep $'\\'' x; git stash; echo $'\\''", 'git stash'],
   ['grep -h git notes\ngit stash', 'git notes'],
+  // round 7: a backslash turns the exceptions off (`a\>&` is a plain word then a background `&`)
+  ['grep x a\\>& git stash', 'git stash'],
+  ['grep x a\\<& git stash', 'git stash'],
+  ['cat x\\>& git stash', 'git stash'],
   ['sudo sh s; grep -h "git stash" notes > s', 'git stash'],
   // checker round 5: any command that isn't a text tool or read-only git turns the exceptions off for the line
   ['grep -h "git stash" notes > s; $SHELL s', 'git stash'],

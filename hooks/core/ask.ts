@@ -643,7 +643,8 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * a pattern or a name (`grep -n "git stash" docs`), and a read-only git command, whose words aren't read again
  * (`git log --grep="git stash"`). They hold only when every command in the whole line is one of them, so
  * `grep -h git notes | sh` and `grep -h git notes > s; $SHELL s` are refused, and never in a line with a newline, a
- * `#` comment or `$'` (`grep x #'` + newline + `git stash`). git run by xargs is refused.
+ * `#` comment, `$'` or a backslash (`grep x #'` + newline + `git stash`, `grep x a\>& git stash`). git run by xargs is
+ * refused.
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
@@ -795,7 +796,8 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
   // command in the whole line is exempt; one other command anywhere (sh, $SHELL, ./s, chmod, echo, tee...) keeps
   // main's broad rule for all of it. The command splitter doesn't know `#` comments or `$'...'` quoting, so with a
   // newline, a `#` that starts a word or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
-  const unsplit = /\n|\$'|(?:^|[\s;&|()<>`])#/.test(command)
+  // Nor with a backslash anywhere: an escape like `a\>&` hides a background `&` from the splitter (T-439 round 7).
+  const unsplit = /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(command)
   // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
   const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
   broad ||= unsplit || gitProgram || !simple.every(exempt)
