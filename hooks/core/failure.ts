@@ -5,7 +5,7 @@ import { CHECKER_MARK, isCheckerOutput } from './checker'
 import { cutLine } from './reports'
 import { failBlocks, moreFailingLine } from './settings'
 
-/** Every way a task can end as failed (see workers.ts, review.ts and checker.ts in hooks/plugin). */
+/** Every way a task can end as failed (see workers.ts, review.ts and checker.ts in hooks/app). */
 export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'ended early' | 'other'
 
 type Failed = Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>>

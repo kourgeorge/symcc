@@ -15,7 +15,10 @@ fails=0
 bad() { echo "host-free: $1" >&2; fails=$((fails + 1)); }
 
 # the shared files (those that exist: scripts/typecheck.sh's own test runs it on a small copy)
-files=$(ls hooks/app/*.ts hooks/core/*.ts hooks/board.ts hooks/name.ts hooks/host.ts types/index.d.ts prompts/*.ts kinds/*.ts 2>/dev/null)
+# every .ts and .tsx file under hooks/app/ and hooks/core/, sub-folders too
+shared=$(find hooks/app hooks/core -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
+files=$(printf '%s\n' $shared; ls hooks/board.ts hooks/name.ts hooks/host.ts types/index.d.ts prompts/*.ts kinds/*.ts 2>/dev/null)
+files=$(echo $files)
 [ -n "$files" ] || { echo "host-free: no shared files here, nothing to check"; exit 0; }
 
 # the code without its comment lines (// ..., and the * lines of /** ... */ blocks), as "file:line:text"
@@ -41,9 +44,9 @@ fi
 # They type-check on their own, with no Claude Code types: an import of 'claude-code' or 'node:...' can't be found then.
 if command -v bunx >/dev/null 2>&1; then
   tmp="$(mktemp -d)"
-  list=$(ls hooks/app/*.ts hooks/core/*.ts 2>/dev/null | sed "s|.*|\"$root/&\"|" | paste -sd, -)
+  list=$(printf '%s\n' $shared | grep . | sed "s|.*|\"$root/&\"|" | paste -sd, -)
   if [ -n "$list" ]; then
-    printf '{ "compilerOptions": { "target": "es2023", "lib": ["es2023"], "module": "esnext", "moduleResolution": "bundler", "strict": true, "noUncheckedIndexedAccess": true, "noEmit": true, "skipLibCheck": false, "types": [], "typeRoots": [] }, "files": [%s] }\n' "$list" > "$tmp/tsconfig.json"
+    printf '{ "compilerOptions": { "target": "es2023", "lib": ["es2023"], "module": "esnext", "jsx": "react-jsx", "moduleResolution": "bundler", "strict": true, "noUncheckedIndexedAccess": true, "noEmit": true, "skipLibCheck": false, "types": [], "typeRoots": [] }, "files": [%s] }\n' "$list" > "$tmp/tsconfig.json"
     if ! out=$(bunx -p typescript@5.9.3 tsc --noEmit --pretty false -p "$tmp/tsconfig.json" 2>&1); then
       echo "$out" | grep "error TS" | sed "s|$root/||" | while IFS= read -r e; do echo "host-free: with no Claude Code types: $e" >&2; done
       fails=$((fails + 1))

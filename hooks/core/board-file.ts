@@ -333,12 +333,41 @@ export function withoutStages<T extends object>(t: T): T | null {
   return out as T
 }
 
-/** A task entry from the file made usable, or null when it is not a task (it is then skipped). */
-function cleanTask(t: unknown): BoardTask | null {
+/** What each list field of a task may hold; anything else in it is dropped (see cleanTask). */
+const LIST_OK: Record<'files' | 'after' | 'history', (v: unknown) => boolean> = {
+  files: v => typeof v === 'string' && !!v.trim(),
+  after: v => typeof v === 'string' && /^T-\d+$/.test(normId(v)),
+  history: v => typeof v === 'string',
+}
+
+/**
+ * A task entry from the file made usable, or null when it is not a task (it is then skipped).
+ * What it had to drop from inside the task (bad list entries, bad tries) is added to `fixed`.
+ */
+function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   if (!isObj(t) || typeof t.id !== 'string' || !t.id.trim() || !STATUSES.includes(t.status as SymccStatus)) return null
   const x = { ...t } as Record<string, unknown>
+  const id = t.id
   for (const k of ['title', 'details', 'note']) if (typeof x[k] !== 'string') x[k] = ''
-  for (const k of ['files', 'after', 'history']) if (!Array.isArray(x[k])) x[k] = []
+  for (const k of ['files', 'after', 'history'] as const) {
+    if (!Array.isArray(x[k])) {
+      x[k] = []
+      continue
+    }
+    const all = x[k] as unknown[]
+    const ok = all.filter(LIST_OK[k])
+    if (ok.length < all.length) fixed.push(`${id}: ${all.length - ok.length} bad ${k} ${all.length - ok.length === 1 ? 'entry' : 'entries'} dropped`)
+    x[k] = k === 'after' ? [...new Set((ok as string[]).map(normId))] : ok
+  }
+  if ('runs' in x) {
+    if (!Array.isArray(x.runs)) {
+      fixed.push(`${id}: runs was not a list, cleared`)
+      x.runs = []
+    } else {
+      const bad = x.runs.filter(r => !isObj(r)).length
+      if (bad) fixed.push(`${id}: ${bad} bad ${bad === 1 ? 'try' : 'tries'} dropped`)
+    }
+  }
   if (!isNum(x.order)) x.order = 0
   if (!isNum(x.attempts)) x.attempts = 0
   if (x.question !== null && typeof x.question !== 'string') x.question = null
@@ -445,7 +474,7 @@ export function readBoard(text: string | null): BoardRead {
   let skipped = 0
   const seen = new Set<string>()
   for (const t of (raw.tasks as unknown[] | undefined) ?? []) {
-    const c = cleanTask(t)
+    const c = cleanTask(t, fixed)
     if (!c || seen.has(c.id)) {
       skipped++
       continue

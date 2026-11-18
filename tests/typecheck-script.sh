@@ -59,6 +59,11 @@ expect_host_bound "node: import" hooks/core/c.ts "import { readFileSync } from '
 expect_host_bound "import from hooks/claude/" hooks/app/a.ts "import { x } from '../claude/x'\nexport const a = x\n" "a host-bound import.*claude/x"
 expect_host_bound "Claude tool name" hooks/core/c.ts "export const c = ['Read', 'Edit']\n" "a Claude Code tool name.*hooks/core/c.ts:1"
 expect_host_bound "mcp__ tool name" hooks/app/a.ts "export const a = 'mcp__symcc__board'\n" "a Claude Code tool name"
+mkdir -p "$tmp/hooks/core/sub"
+expect_host_bound "claude-code import in a sub-folder" hooks/core/sub/x.ts "import { atom } from 'claude-code'\nexport const x = atom\n" "a host-bound import.*hooks/core/sub/x.ts:1"
+rm -rf "$tmp/hooks/core/sub"
+expect_host_bound "node: import in a .tsx file" hooks/app/y.tsx "import { readFileSync } from 'node:fs'\nexport const y = readFileSync\n" "a host-bound import.*hooks/app/y.tsx:1"
+rm -f "$tmp/hooks/app/y.tsx"
 expect_host_bound "needs Claude Code types" hooks/app/a.ts "export const a: EngineInterface | null = null\n" "with no Claude Code types.*TS2304"
 # and through scripts/typecheck.sh, on code that type-checks fine with Claude Code's types
 clean

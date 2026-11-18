@@ -3010,7 +3010,48 @@ test('inside a readable board.json, a bad task entry is skipped and counted; the
   expect(t.next_id).toBe(5)
 })
 
+test('readBoard drops bad entries inside files, after, history and runs, and names each fix', () => {
+  const base = { id: 'T-1', status: 'doing', title: 'x' }
+  // (1) files: only non-empty strings are kept, and the scope check works again
+  const r1 = readBoard(JSON.stringify({ tasks: [{ ...base, files: ['src/a.ts', 3, null] }] }))
+  const t1 = r1.board.tasks[0]!
+  expect(t1.files).toEqual(['src/a.ts'])
+  expect(r1.fixed).toContain('T-1: 2 bad files entries dropped')
+  expect(outOfScope(['src/b.ts'], t1.files)).toEqual(['src/b.ts'])
+  // (2) runs that is not a list becomes [], a try that is not an object is dropped
+  for (const runs of ['abc', { a: 1 }]) {
+    const r2 = readBoard(JSON.stringify({ tasks: [{ ...base, runs }] }))
+    expect(r2.board.tasks[0]!.runs).toEqual([])
+    expect(r2.fixed).toContain('T-1: runs was not a list, cleared')
+    const b = { ...r2.board, tasks: [{ ...r2.board.tasks[0]!, runs: startRun(r2.board.tasks[0]!.runs, T) }] }
+    expect(b.tasks[0]!.runs).toHaveLength(1)
+    const after = find(patchTask(b, 'T-1', { status: 'failed' }, T), 'T-1')!
+    expect(after.runs).toHaveLength(1)
+    expect(after.runs![0]!.started).toBe(T)
+    expect(typeof after.runs![0]!.ended).toBe('string')
+  }
+  const r2b = readBoard(JSON.stringify({ tasks: [{ ...base, runs: [{ started: T }, 'x', 4] }] }))
+  expect(r2b.board.tasks[0]!.runs).toHaveLength(1)
+  expect(r2b.fixed).toContain('T-1: 2 bad tries dropped')
+  // (3) after keeps only task ids (normalised), history only strings
+  const r3 = readBoard(JSON.stringify({ tasks: [{ ...base, after: [5, null, 'T-2'], history: [7, 'made'] }] }))
+  expect(r3.board.tasks[0]!.after).toEqual(['T-2'])
+  expect(r3.board.tasks[0]!.history).toEqual(['made'])
+  expect(r3.fixed).toEqual(['T-1: 2 bad after entries dropped', 'T-1: 1 bad history entry dropped'])
+  // a clean task reports nothing
+  expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], history: ['h'], runs: [] }] })).fixed).toEqual([])
+})
+
+test('fixText lists dropped task entries as they are and keeps "set to the default" for settings only', () => {
+  const r = readBoard(JSON.stringify({ mode: 'zzz', tasks: [{ id: 'T-1', status: 'doing', title: 'x', files: ['a', 3], runs: 'abc' }] }))
+  expect(fixText(0, r.fixed)).toBe('bad value for mode set to the default; T-1: 1 bad files entry dropped; T-1: runs was not a list, cleared')
+  expect(fixText(0, ['mode', 'next_id'])).toBe('bad values for mode, next_id set to the default')
+  expect(fixText(2, ['T-1: 2 bad tries dropped'])).toBe('skipped 2 task entries that are not a task; T-1: 2 bad tries dropped')
+  expect(fixText(1, [])).toBe('skipped 1 task entry that is not a task')
+})
+
 // ---------------- a scout run that fails to start, or is stopped ----------------
+import { fixText } from '../hooks/app/store'
 import { runScout, runScoutNow, scoutFinished } from '../hooks/app/scouts'
 import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as scoutLeadQueue } from '../hooks/app/state'
 
