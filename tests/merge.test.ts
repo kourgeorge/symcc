@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS } from '../hooks/plugin/review'
-import { testLockText, parseTestLock, waitingTestsNote } from '../hooks/board'
+import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -4622,6 +4622,52 @@ test('the test lock is held while the merge step tests, and let go after a faili
   expect(r.ok).toBe(false)
   expect(r.detail).toContain('tests failed')
   expect(during).toEqual(['T-1'])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('three tasks waiting for the test lock get it oldest first, even when the newest one looks first after it is let go', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b0] = boardWith('auto', ['npm test'])
+  let b = b0
+  for (const title of ['Second', 'Third', 'Holder']) [b] = addTask(b, { origin: { why: 'a test' }, title, files: ['lib/'] }, ISO)
+  for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) {
+    b = patchTask(b, id, { status: 'doing', attempts: 1 }, ISO)
+    b = patchTask(b, id, { note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() } }, ISO)
+  }
+  await saveBoard(w.$, b)
+  // T-4, in another session, holds the lock while T-1, T-2 and T-3 (in that order) come to their tests
+  w.put(TLOCK, testLockText('T-4', 'other-session', Date.now()))
+  const log: string[] = []
+  let looks3 = 0
+  // T-3 (the newest) lets T-4's lock go just before its own look, so it is the first to look once the lock is free
+  const stopped3 = () => {
+    if (++looks3 === 2) w.files.delete(TLOCK)
+    return undefined
+  }
+  const go = (t: SymccTask, stopped: () => undefined) => withTestLock(w.$, t, stopped, undefined, async () => (log.push(`${t.id} (lock ${lockTask(w)})`), t.id))
+  const runs = [go(find(b, 'T-1')!, () => undefined), go(find(b, 'T-2')!, () => undefined), go(find(b, 'T-3')!, stopped3)]
+  expect(await Promise.all(runs)).toEqual(['T-1', 'T-2', 'T-3'])
+  expect(looks3).toBeGreaterThanOrEqual(2)
+  expect(log).toEqual(['T-1 (lock T-1)', 'T-2 (lock T-2)', 'T-3 (lock T-3)'])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('the test lock is dated again before each test command, so a long run of several commands is never taken over as stale', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test', 'npm run e2e', 'npm run lint'])
+  await saveBoard(w.$, b)
+  // each command may take up to TEST_TIMEOUT_MS; three in a row are more than the 20 minutes after which a lock is stale
+  expect(3 * TEST_TIMEOUT_MS).toBeGreaterThan(TEST_LOCK_STALE_MS)
+  const steps: string[] = []
+  w.onRun(async cmd => {
+    if (cmd.startsWith('mv -f ') && cmd.endsWith(` ${TLOCK}`)) steps.push(`lock dated (${lockTask(w)})`)
+    if (cmd.startsWith('/bin/sh -c ')) steps.push(cmd.slice('/bin/sh -c '.length))
+  })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(true)
+  expect(steps).toEqual(['lock dated (T-1)', 'npm test', 'lock dated (T-1)', 'npm run e2e', 'lock dated (T-1)', 'npm run lint'])
   expect(w.files.has(TLOCK)).toBe(false)
 })
 
