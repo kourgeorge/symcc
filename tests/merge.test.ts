@@ -734,13 +734,15 @@ test('tests_with_changes review: a code change with no test file waits for revie
  * of a file takes it out of what is staged (git.changed), as real git does; `committed`: the worker already
  * committed these files itself, so they are in the branch before symcc's own commit (nothing is staged).
  */
-function secretWorld(changed: string[], committed = false, deleted: string[] = []) {
+function secretWorld(changed: string[], committed = false, deleted: string[] = [], history: string[] = []) {
   const w = world({ changed: [...changed] })
   const restored: string[] = []
   // --diff-filter=d: deleted files are not listed, as with real git
   const listed = (args: string[]) => (args.includes('--diff-filter=d') ? w.git.changed.filter(f => !deleted.includes(f)) : w.git.changed)
   w.git.answer = (args, cwd) => {
     if (cwd === WT && args[0] === 'diff' && args.includes('--cached')) return ok(committed ? '' : listed(args).join('\0'))
+    // `history`: files any of the branch's commits added or changed, even ones a later commit deleted again
+    if (args[0] === 'log' && args.includes('--name-only')) return ok(history.join('\0'))
     if (args[0] === 'diff' && args.includes('--name-only')) return ok(listed(args).join('\0'))
     if (cwd === WT && args[0] === 'restore' && args.includes('--staged') && !args.includes('--worktree')) {
       const files = args.slice(args.indexOf('--') + 1).map(a => a.replace(/^:\(literal\)/, ''))
@@ -755,8 +757,8 @@ function secretWorld(changed: string[], committed = false, deleted: string[] = [
 }
 
 /** T-1's worker (agent ag1) finished with `changed` (files src/ and tests/), on a board in mode auto. */
-async function finishedWithSecrets(changed: string[], committed = false, { deleted = [] as string[], mode = 'auto' as 'auto' | 'review' } = {}) {
-  const { w, restored } = secretWorld(changed, committed, deleted)
+async function finishedWithSecrets(changed: string[], committed = false, { deleted = [] as string[], mode = 'auto' as 'auto' | 'review', history = [] as string[] } = {}) {
+  const { w, restored } = secretWorld(changed, committed, deleted, history)
   const [b] = boardWith(mode, ['npm test'], { files: ['src/', 'tests/'] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -863,6 +865,27 @@ test('a deletion of a secret-looking file the worker committed is not put back b
   // no rewrite of the branch: the deletion stays in its commit and merges
   expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
   expect(w.git.main).toBe(w.git.head)
+})
+
+test('a secret the worker committed and then deleted in a later commit is taken out of the history that merges', async () => {
+  // the branch: commit tests/id_rsa, git rm it, commit src/a.ts; the net change is src/a.ts only
+  const { w, restored, t } = await finishedWithSecrets(['src/a.ts'], true, { history: ['src/a.ts', 'tests/id_rsa'] })
+  expect(t.status).toBe('done')
+  // the branch is made one commit again from the merge base, so the commit holding the key never reaches main
+  const reset = w.calls.findIndex(c => c === `wt: git reset -q --soft ${M1}`)
+  expect(reset).toBeGreaterThan(-1)
+  const commit = w.calls.findIndex((c, i) => i > reset && c.startsWith('wt: git ') && c.includes(' commit '))
+  expect(commit).toBeGreaterThan(reset)
+  // nothing to take out of the new commit: the file is gone already, and nothing is put back
+  expect(restored).toEqual([])
+  expect(w.git.changed).toEqual(['src/a.ts'])
+  expect(w.git.main).toBe(w.git.head)
+})
+
+test('a branch whose commits never held a secret-looking file is not rewritten', async () => {
+  const { w, t } = await finishedWithSecrets(['src/a.ts'], true, { history: ['src/a.ts', 'tests/id_rsa.pub'] })
+  expect(t.status).toBe('done')
+  expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
 })
 
 test('only secret-looking files: one question to the lead, and no "not used" line in the history', async () => {

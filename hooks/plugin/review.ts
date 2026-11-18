@@ -143,13 +143,16 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   let head = await gitOk($, ['rev-parse', 'HEAD'], dir)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
   let changed = await changedSince($, base, head)
-  // Secret-looking files already in the branch's commits (the worker committed them, or an earlier try did):
-  // the branch's work is made one commit again without them, so they are not in the history that merges.
-  // Deleted ones are not counted (see above).
+  // Secret-looking files in any of the branch's commits (the worker committed them, or an earlier try did),
+  // even ones a later commit deleted again: the branch's work is made one commit again without them,
+  // so they are not in the history that merges (a fast-forward would bring in every commit as it is).
+  // Only the ones still there at the end are taken out of the new commit (and reported); a deletion
+  // stays a deletion (commits that only delete such a file are not counted, see above).
+  const inHistory = secretFiles(await touchedSince($, base, head))
   const inBranch = secretFiles(await changedSince($, base, head, true))
-  if (inBranch.length) {
+  if (inHistory.length || inBranch.length) {
     const why = await dropFromBranch($, t, dir, base, inBranch, made)
-    if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${secretsLeftText(inBranch)}): ${why}` }
+    if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${secretsLeftText([...new Set([...inHistory, ...inBranch])].sort())}): ${why}` }
     head = await gitOk($, ['rev-parse', 'HEAD'], dir)
     changed = await changedSince($, base, head)
     left.push(...inBranch)
@@ -226,6 +229,17 @@ async function changedSince($: Host, base: string, head: string, noDeleted = fal
   return d.stdout.split('\0').filter(Boolean)
 }
 
+/**
+ * Every file added or changed by any single commit from `base` to `head` (not just the net change: a file
+ * added and later deleted again is listed too). Commits that only delete a file don't list it (--diff-filter=d);
+ * merge commits list nothing (git log's default).
+ */
+async function touchedSince($: Host, base: string, head: string): Promise<string[]> {
+  const d = await git($, ['log', '--format=', '--name-only', '--no-renames', '--diff-filter=d', '-z', `${base}..${head}`])
+  if (d.exitCode !== 0) throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
+  return [...new Set(d.stdout.split('\0').map(f => f.replace(/^\n+/, '')).filter(Boolean))]
+}
+
 /** Takes `files` out of what is staged in folder `dir` (back to how HEAD has them), leaving them on disk. Returns '' when done, or git's error. */
 async function unstage($: Host, dir: string, files: readonly string[]): Promise<string> {
   // :(literal): names are taken as they are, never as patterns.
@@ -239,7 +253,8 @@ async function unstage($: Host, dir: string, files: readonly string[]): Promise<
 /**
  * Secret-looking `files` are in the commits of task `t`'s branch since `base` (the merge base): the branch
  * goes back to `base` with its work kept staged (git reset --soft), the files are taken out of it (kept on
- * disk), and the rest is committed again as one commit of this try. Returns '' when done, or why not.
+ * disk), and the rest is committed again as one commit of this try. `files` may be empty: the secret was only
+ * in commits deleted again later, and the rewrite alone keeps those commits out. Returns '' when done, or why not.
  */
 async function dropFromBranch($: Host, t: SymccTask, dir: string, base: string, files: readonly string[], made: string[]): Promise<string> {
   const r = await git($, ['reset', '-q', '--soft', base], dir)
