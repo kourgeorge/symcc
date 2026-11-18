@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange, testTail } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, workerGitWriteText, untestedChange, testTail } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
@@ -504,7 +504,7 @@ test('the checker prompt tells it not to run git commands that change anything',
   expect(w.spawns[0]!.prompt).toContain('Read-only ones like git diff, git log, git show and git status are fine.')
 })
 
-test("a checker's git commands that change anything are refused, read-only ones are allowed, and a worker's git is not changed by this", async () => {
+test("a checker's git commands that change anything are refused, read-only ones are allowed, and a worker's git writes are refused too (T-432)", async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
   await finish(w, async id => {
@@ -570,9 +570,11 @@ test("a checker's git commands that change anything are refused, read-only ones 
       expect(await bash(command)).toBeUndefined()
     checkerFinished(id, 'OK')
   })
-  // a worker's own git commands in its folder are not refused
+  // a worker's git writes in its folder are refused as well (with the worker's own reason), its reads are not
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  for (const command of ['git commit -am x', 'git stash', 'git reset --hard', 'git checkout -b x'])
+  for (const [command, what] of [['git commit -am x', 'git commit'], ['git stash', 'git stash'], ['git reset --hard', 'git reset'], ['git checkout -b x', 'git checkout']] as const)
+    expect(await checkEdit(w.$, 'ag2', { command })).toBe(workerGitWriteText(what))
+  for (const command of ['git diff', 'git log -3', 'git status'])
     expect(await checkEdit(w.$, 'ag2', { command })).toBeUndefined()
 })
 
