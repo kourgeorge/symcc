@@ -16,7 +16,7 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (plugin/state.ts) with its plugin name, so S.N is right.
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason } from '../board'
+import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal } from '../board'
 import type { FileTouch, Host } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from '../plugin/archive'
@@ -205,11 +205,18 @@ export function isSymccTool(tool: string): boolean {
 /**
  * A tool is called (by the lead or by one of symcc's agents). Answers a refusal (`deny`) or symcc's tool's answer
  * (`result`); null: not symcc's call, the host runs it as usual and then calls otherToolDone.
- * A worker or scout symcc stopped can't do anything more, so every tool it tries is refused; the lead's own tools
+ * A worker or scout symcc stopped can't do anything more, so every tool it tries is refused. A scout or checker may
+ * only read the board (board and stats); its call of any other symcc tool is refused. The lead's own tools
  * and the workers' question tool (it knows the calling worker from `agentId`) run here.
  */
 export async function toolCall(host: Host, tool: string, agentId: string | undefined, input: Record<string, unknown>): Promise<{ deny: string } | { result: string } | null> {
   if (agentId && stopped.has(agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
+  // a scout or checker only reads the board: board and stats run, every other symcc tool (ask_owner too) is refused
+  if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId))) {
+    const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find(t => tool === toolName(t))
+    const why = short ? scoutToolRefusal(short, S.N.name) : null
+    if (why) return { deny: why }
+  }
   if (tool === toolName(ASK_TOOL)) {
     if (!(await findRoot(host))) return { result: startingText() }
     return { result: await askCall(host, agentId, input).catch((err: Error) => `error: ${err.message}`) }

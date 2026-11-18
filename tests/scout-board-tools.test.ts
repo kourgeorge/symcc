@@ -1,0 +1,101 @@
+// T-408: scouts (and checkers, which run as the scout type) get symcc's read-only board tools, board and stats.
+// Every other symcc tool is refused for them with a "scouts can only read the board" message; workers are unchanged.
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
+import { fakeHost } from './fake-host'
+import { setRoot } from './project'
+import { addTask, emptyBoard, scoutPrompt, SCOUT_BOARD_TOOLS } from '../hooks/board'
+import { S, scoutRuns, checkerRuns } from '../hooks/plugin/state'
+import { SCOUT_TOOLS, scoutAgentTools, workerAgentTypes, BASE_WORKER_TOOLS } from '../hooks/claude/agent-types'
+import * as app from '../hooks/app/symcc'
+
+const ROOT = '/p'
+
+/** A fake Host whose project has a board with an open task (T-1 "Fix login") and a done one (T-2 "Add notify sound"). */
+function withBoard() {
+  setRoot(ROOT)
+  const files = new Map<string, string>()
+  let b = emptyBoard()
+  ;[b] = addTask(b, { origin: { why: 'a test' }, title: 'Fix login', details: 'Login fails on empty password.' }, '2026-11-18T08:00:00.000Z')
+  ;[b] = addTask(b, { origin: { why: 'a test' }, title: 'Add notify sound', details: 'Play a chime.' }, '2026-11-18T08:00:00.000Z')
+  b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-2' ? { ...t, status: 'done' as const } : t)) }
+  files.set(`${ROOT}/${S.N.dir}/board.json`, JSON.stringify(b))
+  const { host } = fakeHost({
+    session: { id: async () => 's1', root: async () => ROOT },
+    fs: {
+      read: async p => (files.has(p) ? files.get(p)! : Promise.reject(new Error(`no file ${p}`))),
+      write: async (p, text) => void files.set(p, text),
+      exists: async p => files.has(p),
+    },
+  })
+  return { host, files }
+}
+
+const resultOf = (r: Awaited<ReturnType<typeof app.toolCall>>): string => (r && 'result' in r ? r.result : `not a result: ${JSON.stringify(r)}`)
+
+test("a scout's board calls are answered: no args, status, search and task", async () => {
+  const { host } = withBoard()
+  scoutRuns.set('scout-1', 'bugs')
+  const all = resultOf(await app.toolCall(host, 'board', 'scout-1', {}))
+  expect(all).toContain('Fix login')
+  const done = resultOf(await app.toolCall(host, 'board', 'scout-1', { status: ['done'] }))
+  expect(done).toContain('Add notify sound')
+  expect(done.includes('Fix login')).toBe(false)
+  const found = resultOf(await app.toolCall(host, 'board', 'scout-1', { search: 'notify' }))
+  expect(found).toContain('Add notify sound')
+  expect(found.includes('Fix login')).toBe(false)
+  const one = resultOf(await app.toolCall(host, 'board', 'scout-1', { task: 'T-1' }))
+  expect(one).toContain('Login fails on empty password.')
+})
+
+test("a scout's and a checker's stats call is answered", async () => {
+  const { host } = withBoard()
+  scoutRuns.set('scout-1', 'bugs')
+  checkerRuns.set('checker-1', { task: 'T-1', worktree: '/w', end: () => undefined })
+  for (const id of ['scout-1', 'checker-1']) {
+    const r = await app.toolCall(host, 'stats', id, {})
+    expect(r && 'result' in r).toBe(true)
+    expect(resultOf(r).startsWith('error')).toBe(false)
+  }
+})
+
+test("a scout's or checker's call of a tool that changes things is refused with the read-only message, and the board is not touched", async () => {
+  const { host, files } = withBoard()
+  scoutRuns.set('scout-1', 'bugs')
+  checkerRuns.set('checker-1', { task: 'T-1', worktree: '/w', end: () => undefined })
+  const before = files.get(`${ROOT}/${S.N.dir}/board.json`)
+  const changing = ['add', 'change', 'approve', 'reject', 'retry', 'ask', 'drop', 'pause', 'resume', 'scouts', 'roles', 'kinds', 'settings', 'setup_git', 'ask_owner']
+  for (const id of ['scout-1', 'checker-1'])
+    for (const tool of changing) {
+      const r = await app.toolCall(host, tool, id, { task: 'T-1', title: 'x', details: 'y', why: 'z', origin_by: 'scout', mode: 'off' })
+      expect(r && 'deny' in r ? r.deny : `not refused: ${tool}`).toContain('scouts can only read the board')
+    }
+  expect(files.get(`${ROOT}/${S.N.dir}/board.json`)).toBe(before)
+  // a tool that is not symcc's is left to the host as before
+  expect(await app.toolCall(host, 'Read', 'scout-1', {})).toBe(null)
+})
+
+test("the lead's and a worker's calls are not refused by the scouts' rule", async () => {
+  const { host } = withBoard()
+  const lead = await app.toolCall(host, 'settings', undefined, {})
+  expect(lead && 'result' in lead).toBe(true)
+  const worker = await app.toolCall(host, 'board', 'worker-1', {})
+  expect(resultOf(worker)).toContain('Fix login')
+})
+
+test('the scout agent type gets board and stats as mcp__ tools; the workers\' tools are unchanged', () => {
+  expect(SCOUT_BOARD_TOOLS).toEqual(['board', 'stats'])
+  expect(scoutAgentTools('symcc')).toEqual([...SCOUT_TOOLS, 'mcp__symcc__board', 'mcp__symcc__stats'])
+  for (const w of workerAgentTypes('symcc')) {
+    expect(w.tools.slice(0, BASE_WORKER_TOOLS.length)).toEqual([...BASE_WORKER_TOOLS])
+    expect(w.tools.some(t => t === 'mcp__symcc__board' || t === 'mcp__symcc__stats')).toBe(false)
+    expect(w.tools.at(-1)).toBe('mcp__symcc__ask_owner')
+  }
+})
+
+test('the scout prompt tells the scout to use board (no args, status, search, task) and stats instead of board.json', () => {
+  const p = scoutPrompt({ scout: 'bugs', root: '/p', instructions: 'Find crashes.', open: [], name: 'symcc' })
+  expect(p).toContain('use the symcc tools board and stats rather than reading .symcc/board.json')
+  for (const w of ['no arguments lists the open tasks', 'status', 'search', 'task (e.g. "T-12") shows one task in full with its latest report', 'stats shows time and token use']) expect(p).toContain(w)
+  expect(p).toContain('is refused for you')
+})
