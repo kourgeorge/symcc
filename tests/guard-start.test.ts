@@ -5,8 +5,8 @@
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../hooks/board'
 import { S, workers } from '../hooks/app/state'
-import { findRoot, mainRoot } from '../hooks/app/store'
-import { guardStart, sessionStart, sessionEnd, toolCheck, toolCall, runCommand } from '../hooks/app/symcc'
+import { findRoot, mainRoot, isAbsolute, normalPath } from '../hooks/app/store'
+import { guardStart, sessionStart, sessionCleared, sessionEnd, toolCheck, toolCall, runCommand } from '../hooks/app/symcc'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 import type { Host } from '../hooks/host'
@@ -101,4 +101,27 @@ test('mainRoot: the main project answers itself, a relative .git is worked out',
   expect(await mainRoot(at(`${ROOT}/.git\n`), `${WT}/`)).toBe(ROOT)
   expect(await mainRoot(at(''), '/plain')).toBe('/plain')
   expect(await mainRoot(at(''), '')).toBe('')
+})
+
+test('mainRoot: a Windows git folder (drive or share) is kept as git wrote it', async () => {
+  const at = (stdout: string): Host => fakeHost({ run: async () => done({ stdout }) }).host
+  expect(await mainRoot(at('C:/proj/.git\n'), 'C:/proj/.symcc/worktrees/T-1')).toBe('C:/proj')
+  expect(await mainRoot(at('C:\\proj\\.git\n'), 'C:\\proj\\.symcc\\worktrees\\T-1')).toBe('C:\\proj')
+  expect(await mainRoot(at('\\\\server\\share\\proj\\.git\n'), '\\\\server\\share\\proj\\.symcc\\worktrees\\T-1')).toBe('\\\\server\\share\\proj')
+  expect(await mainRoot(at('../.git\n'), 'C:/proj/sub')).toBe('C:/proj')
+  expect(isAbsolute('C:/x')).toBe(true)
+  expect(isAbsolute('\\\\server\\x')).toBe(true)
+  expect(isAbsolute('../.git')).toBe(false)
+  expect(normalPath('C:/proj/a/../b/./')).toBe('C:/proj/b')
+  expect(normalPath('/')).toBe('/')
+})
+
+test('/clear in a guard-only copy follows the new id but writes nothing and claims no lead', async () => {
+  const w = inWorktree()
+  await sessionStart(w.host)
+  let id = 'new-id'
+  ;(w.host.session as { id: () => Promise<string> }).id = async () => id
+  await sessionCleared(w.host)
+  expect(S.me).toBe(id)
+  nothingDone(w)
 })

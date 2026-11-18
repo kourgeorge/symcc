@@ -31,27 +31,33 @@ export async function mainRoot(host: Host, dir: string): Promise<string> {
   const clean = dir.replace(/\/+$/, '') || '/'
   const r = await host.run(['git', 'rev-parse', '--git-common-dir'], { cwd: clean, timeoutMs: 15_000 }).catch(() => null)
   const common = r && r.exitCode === 0 ? r.stdout.trim().replace(/\/+$/, '') : ''
-  if (common && /(^|\/)\.git$/.test(common)) {
-    // git answers ".git" (or a relative path) in the main project, an absolute path from a worktree
-    const abs = common.startsWith('/') ? common : `${clean}/${common}`
-    const parent = abs.slice(0, -'.git'.length)
-    // a Windows path (C:/...) is kept as git wrote it, only its .git cut off
-    return abs.startsWith('/') ? normalPath(parent) : parent.replace(/[\\/]+$/, '')
+  if (common && /(^|[\\/])\.git$/.test(common)) {
+    // git answers ".git" (or a relative path) in the main project, an absolute path (/..., C:/... or \\server\...) from a worktree
+    const abs = isAbsolute(common) ? common : `${clean}/${common}`
+    return normalPath(abs.slice(0, -'.git'.length))
   }
   const mark = `/${S.N.worktrees}/`
   const at = clean.indexOf(mark)
   return at > 0 ? clean.slice(0, at) : clean
 }
 
-/** `p` with its "." and ".." parts worked out (git may answer e.g. "../../.git" from a folder inside the project). */
-function normalPath(p: string): string {
+/** True for a path from the top of a disk: "/...", a Windows drive ("C:/..." or "C:\...") or a share ("\\server\..."). */
+export const isAbsolute = (p: string) => /^([\\/]|[A-Za-z]:[\\/])/.test(p)
+
+/**
+ * `p` with its "." and ".." parts worked out (git may answer e.g. "../../.git" from a folder inside the project).
+ * Its start is kept as written: "/", a drive "C:/" or a share "\\" (so "C:/proj/x/../" gives "C:/proj").
+ */
+export function normalPath(p: string): string {
+  const start = /^[A-Za-z]:[\\/]/.test(p) ? p.slice(0, 3) : /^[\\/]{2}[^\\/]/.test(p) ? p.slice(0, 2) : p.startsWith('/') ? '/' : ''
   const out: string[] = []
-  for (const part of p.split('/')) {
+  for (const part of p.slice(start.length).split(/[\\/]/)) {
     if (!part || part === '.') continue
     if (part === '..') out.pop()
     else out.push(part)
   }
-  return `/${out.join('/')}`
+  const sep = start.includes('\\') ? '\\' : '/'
+  return `${start}${out.join(sep)}` || '/'
 }
 
 /**

@@ -193,6 +193,11 @@ const guardOnlyText = () => `This ${S.N.name} copy runs in a worker's folder and
  * no session start follows: the timers, workers and scouts are kept, and the lead is handed over to the new id.
  */
 export async function sessionCleared(host: Host) {
+  // a guard-only copy only follows the new id: it never touches the lead or the board
+  if (S.guardOnly) {
+    S.me = (await host.session.id().catch(() => S.me)) || S.me
+    return
+  }
   await handOver(host).catch(() => undefined)
 }
 
