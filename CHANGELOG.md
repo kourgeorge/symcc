@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Added
+- `/symcc-drive` makes the session you type it in drive the board. If another session drives, it hands over within 30 s: it stops its workers, steps down, and your session restarts those tasks from their kept folders and branches, without using up a try. There are never two drivers at once, and a session that doesn't answer is taken over after the usual 3 minutes.
+
 ### Fixed
 - A worker's try no longer fails with "the worker ended its turn before its work finished" because another agent (the lead or another worker) was still running a background command with the same text as one of its own finished ones. symcc now only ties a background command to a worker by its task id, never by its text alone. The guide now describes this failure.
 - When you answer one of the lead's questions on the board ("Questions for you"), the lead now gets a board update at once with your answer in its own block ("The owner answered your question Q-3 (…): Yes. … Act on it."), instead of a "Meanwhile" line that waited for some other update. Your other board actions still come as "Meanwhile" lines.

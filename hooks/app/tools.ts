@@ -114,6 +114,9 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
+  /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
+                       a session that drives now hands over within 30 s, its running workers
+                       restart here without using up a try
   /${S.N.help} [TOPIC]           this manual
 On the board: t tasks · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and

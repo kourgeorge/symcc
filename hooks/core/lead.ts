@@ -16,12 +16,25 @@ export const LEAD_BEAT_MS = 30_000
 /** a heartbeat older than this means the driver is gone, and another session may take over */
 export const LEAD_STALE_MS = 3 * 60_000
 
-export type Lead = { session: string; heartbeat: number }
+/**
+ * lead.json: the driving `session` and its `heartbeat`. A hand-over the owner asked for (/<name>-drive, T-430) adds
+ * `handTo` (the session that asked to drive) and `handAt` (when it asked); the old driver answers on its next
+ * heartbeat by writing lead.json for `handTo` with `handFrom` (itself), and the new session then claims it.
+ */
+export type Lead = { session: string; heartbeat: number; handTo?: string; handAt?: number; handFrom?: string }
+type HandFields = Pick<Lead, 'handTo' | 'handAt' | 'handFrom'>
 
-export const leadText = (session: string, heartbeat: number) => JSON.stringify({ session, heartbeat }) + '\n'
+export const leadText = (session: string, heartbeat: number, hand: HandFields = {}) => JSON.stringify({ session, heartbeat, ...hand }) + '\n'
 
 export function parseLead(text: string | null): Lead | null {
-  return parseStamp(text, 'heartbeat', false)
+  const l = parseStamp(text, 'heartbeat', false)
+  if (!l) return null
+  const raw = JSON.parse(text!) as Record<string, unknown>
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
+  const handTo = str(raw.handTo)
+  const handFrom = str(raw.handFrom)
+  const handAt = typeof raw.handAt === 'number' && Number.isFinite(raw.handAt) ? raw.handAt : undefined
+  return { ...l, ...(handTo ? { handTo, ...(handAt !== undefined ? { handAt } : {}) } : {}), ...(handFrom ? { handFrom } : {}) }
 }
 
 /** Whether a heartbeat is no more than `staleMs` old (and not dated more than that in the future, a broken clock). */
@@ -33,17 +46,81 @@ export function isFresh(heartbeat: number, nowMs: number, staleMs = LEAD_STALE_M
  * Who should drive, as seen by session `me` reading lead.json (`text`) at `nowMs`:
  * - 'become': nobody drives (no file, or one we can't read); `me` starts driving.
  * - 'keep': `me` already drives; refresh the heartbeat.
- * - 'follow': another session drives and its heartbeat is fresh.
+ * - 'follow': another session drives and its heartbeat is fresh (also while `me` waits for a hand-over it asked for).
  * - 'takeover': another session's heartbeat is stale (or dated far in the future, a
- *   broken clock); `me` takes over and first stops what the old driver left running.
+ *   broken clock), or it didn't answer `me`'s hand-over request within `staleMs`; `me` takes over and first stops
+ *   what the old driver left running.
+ * - 'handover': `me` drives and another session asked for it (/<name>-drive): `me` stops its workers, writes
+ *   lead.json for that session and steps down.
+ * - 'claim': the old driver handed the board to `me` (lead.json names `me`, with `handFrom`): `me` drives now and
+ *   restarts the tasks the old driver stopped.
  */
-export type LeadMove = 'become' | 'keep' | 'follow' | 'takeover'
+export type LeadMove = 'become' | 'keep' | 'follow' | 'takeover' | 'handover' | 'claim'
 
 export function whoDrives(text: string | null, me: string, nowMs: number, staleMs = LEAD_STALE_MS): LeadMove {
   const l = parseLead(text)
   if (!l) return 'become'
-  if (l.session === me) return 'keep'
-  return isFresh(l.heartbeat, nowMs, staleMs) ? 'follow' : 'takeover'
+  if (l.session === me) return l.handTo && l.handTo !== me ? 'handover' : l.handFrom && l.handFrom !== me ? 'claim' : 'keep'
+  if (!isFresh(l.heartbeat, nowMs, staleMs)) return 'takeover'
+  // asked for the board and the driver let the stale time pass without answering: the normal stale takeover
+  if (l.handTo === me && l.handAt !== undefined && !isFresh(l.handAt, nowMs, staleMs)) return 'takeover'
+  return 'follow'
+}
+
+/** The moves of whoDrives in which the session drives the board after its heartbeat (all but 'follow' and 'handover'). */
+export const drivesAfter = (m: LeadMove): boolean => m !== 'follow' && m !== 'handover'
+
+/**
+ * What /<name>-drive does in session `me`, by lead.json `text` at `nowMs`:
+ * - 'already': `me` drives; nothing changes.
+ * - 'cancel': `me` drives but another session asked to take it: that request is dropped, `me` keeps driving.
+ * - 'now': nobody drives, the driver is gone (stale), or it already handed the board to `me`: `me` drives at once.
+ * - 'ask': another session drives with a fresh heartbeat: `me` writes a hand-over request (see handRequest).
+ * - 'asked': `me` already asked that session and waits for it.
+ */
+export type DriveAsk = 'already' | 'cancel' | 'now' | 'ask' | 'asked'
+
+export function driveAsk(text: string | null, me: string, nowMs: number, staleMs = LEAD_STALE_MS): DriveAsk {
+  const m = whoDrives(text, me, nowMs, staleMs)
+  if (m === 'keep') return 'already'
+  if (m === 'handover') return 'cancel'
+  // 'claim': the old driver already handed over and this session's heartbeat hasn't claimed yet: claim right away
+  if (m === 'become' || m === 'takeover' || m === 'claim') return 'now'
+  return parseLead(text)?.handTo === me ? 'asked' : 'ask'
+}
+
+/** lead.json `text` with session `me`'s hand-over request added (the driver and its heartbeat unchanged; an earlier request of `me` keeps its time). */
+export function handRequest(text: string | null, me: string, nowMs: number): string {
+  const l = parseLead(text)
+  if (!l) return leadText(me, nowMs)
+  const at = l.handTo === me && l.handAt !== undefined ? l.handAt : nowMs
+  return leadText(l.session, l.heartbeat, { handTo: me, handAt: at })
+}
+
+/** lead.json `text` with any hand-over request dropped (the driver and its heartbeat unchanged). */
+export function noHandRequest(text: string | null): string | null {
+  const l = parseLead(text)
+  return l ? leadText(l.session, l.heartbeat) : text
+}
+
+/** lead.json written by driver `from` when it hands the board to `to` (see whoDrives 'claim'). */
+export const handedText = (to: string, from: string, nowMs: number) => leadText(to, nowMs, { handFrom: from })
+
+/** The "restarted" line of a task whose worker was stopped because the owner moved driving to another session. */
+export const HANDOVER_NOTE = 'restarted: the owner moved driving to another session'
+
+/**
+ * Task `t` after its worker was stopped by a hand-over the owner asked for (/<name>-drive): back to "todo" with
+ * HANDOVER_NOTE and a history line saying so, but its try is not counted (attempts back one, the try's open run
+ * taken off, as T-428 does for a queued start), so the next worker goes on from the same folder and branch on the
+ * same try number. A task that is not "doing" is left as it is.
+ */
+export function handedOff(t: BoardTask, now: string): BoardTask {
+  if (t.status !== 'doing') return t
+  const { session: _s, finishing: _f, checking: _c, runs: _r, ...rest } = t
+  const last = t.runs?.at(-1)
+  const runs = last && !last.ended ? t.runs!.slice(0, -1) : t.runs
+  return { ...rest, status: 'todo' as const, note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now, history: [...(t.history ?? []), stoppedLine(t, HANDOVER_NOTE)], ...(runs?.length ? { runs } : {}) }
 }
 
 // ---------------- which session owns a running task ----------------

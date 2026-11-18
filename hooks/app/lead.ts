@@ -1,4 +1,4 @@
-import { openQuestions, liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver } from '../board'
+import { openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver } from '../board'
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView } from './state'
 import { type Host, agentState } from '../host'
@@ -6,7 +6,7 @@ import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
 import { playable } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
-import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers, unclaimQueued } from './workers'
+import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers, unclaimQueued, queuedNeverStarted, unclaimed } from './workers'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
@@ -27,10 +27,15 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   const [move, leadBefore] = await locked(host, async () => {
     const text = await host.fs.read(path(S.N.leadFile)).catch(() => null)
     const m = whoDrives(text, S.me, Date.now())
-    if (m !== 'follow') await writeLead(host, leadText(S.me, Date.now()))
+    if (drivesAfter(m)) await writeLead(host, leadText(S.me, Date.now()))
     return [m, text] as const
   })
-  S.driving = move !== 'follow'
+  // the owner asked another session to drive (/<name>-drive): stop the workers here, then hand lead.json over
+  if (move === 'handover') {
+    await stepDown(host, leadBefore)
+    return S.driving
+  }
+  S.driving = drivesAfter(move)
   if (S.driving && (!was || fresh)) {
     // Workers the old driver (or an earlier load of this plugin) left behind are stopped
     // first, and their tasks go back to "todo", so a task never has two workers.
@@ -40,7 +45,7 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     // A task whose old worker is still alive after that stays "doing"; the regular check
     // sends it back to "todo" once that worker has ended, so a task never has two workers.
     const alive = await waitEnded(host, orphans, ORPHAN_WAIT_MS)
-    const note = move === 'takeover' ? 'restarted: the session driving the board stopped answering' : move === 'keep' ? 'restarted: the plugin reloaded and the old worker was gone' : 'restarted after Claude Code was reopened'
+    const note = move === 'claim' ? HANDOVER_NOTE : move === 'takeover' ? 'restarted: the session driving the board stopped answering' : move === 'keep' ? 'restarted: the plugin reloaded and the old worker was gone' : 'restarted after Claude Code was reopened'
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await host.fs.exists(path(S.N.boardFile)))
@@ -52,6 +57,7 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
         return resetDoing(unqueued, S.me, leadBefore, Date.now(), note, now(), keep)
       })
     if (move === 'takeover' && !fresh) host.ui.toast(S.N.toast('the session driving the board stopped answering; this session drives it now'))
+    if (move === 'claim') host.ui.toast(S.N.toast('the other session handed the board over; this session drives it now'))
   }
   if (was && !S.driving) {
     // Another session took over (this one stopped answering for too long): its workers own the tasks now.
@@ -70,6 +76,74 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   return S.driving
 }
 
+/** Set while this session hands the board over, so a heartbeat meanwhile doesn't start a second hand-over. */
+let handing = false
+
+/**
+ * The hand-over the owner asked for (/<name>-drive in another session, T-430), seen on this driver's heartbeat
+ * (lead.json `leadBefore` names this session with `handTo`). This session stops driving first (S.driving false, so
+ * nothing new starts), stops its workers and scouts (the same haltAll as when another session drives the board now),
+ * puts their tasks back to "todo" without using up a try (see handedOff), waits a little for them to end, and only
+ * then writes lead.json for the new session: so the board never has two drivers, and a task never two workers.
+ */
+async function stepDown(host: Host, leadBefore: string | null) {
+  const to = parseLead(leadBefore)?.handTo
+  if (handing || !to) return
+  handing = true
+  try {
+    S.driving = false
+    const agents = [...workers.keys()]
+    await haltAll(host, 'the owner moved driving to another session', async w => {
+      await change(host, x => {
+        const cur = find(x, w.task)
+        if (cur?.status !== 'doing') return x
+        return putTask(x, queuedNeverStarted(cur) ? unclaimed(cur, now()) : handedOff(cur, now()))
+      }).catch(() => undefined)
+    })
+    await waitEnded(host, agents, ORPHAN_WAIT_MS)
+    await locked(host, async () => {
+      const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+      // still ours and still asked for by `to` (nobody took over meanwhile): hand it over
+      if (l && l.session === S.me && l.handTo === to) await writeLead(host, handedText(to, S.me, Date.now()))
+    })
+    host.ui.toast(S.N.toast('another session drives the board now; this one only shows and changes it'))
+    await publish(host, await load(host))
+  } finally {
+    handing = false
+  }
+}
+
+/** A session id as said to the owner: its first 8 characters. */
+const shortSession = (id: string) => id.slice(0, 8)
+
+/**
+ * /<name>-drive (T-430): makes this session drive the board. Already driving: nothing changes. Nobody drives, or the
+ * driver is gone (stale heartbeat): it takes over now, as claimLead does. Another session drives: a hand-over request
+ * goes into lead.json; that session hands over on its next heartbeat (see stepDown) and this one claims on its own
+ * after that. Answers plainly what happened, with the workers that will be stopped and restarted.
+ */
+export async function driveHere(host: Host): Promise<string> {
+  if (handing) return 'This session is handing the board over to another session right now; type it again in a minute.'
+  const [ask, text] = await locked(host, async () => {
+    const t = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+    const a = driveAsk(t, S.me, Date.now())
+    if (a === 'ask' || a === 'asked') await writeLead(host, handRequest(t, S.me, Date.now()))
+    if (a === 'cancel') await writeLead(host, noHandRequest(t)!)
+    return [a, t] as const
+  })
+  if (ask === 'already') return 'This session already drives the board; nothing changed.'
+  if (ask === 'cancel') return 'This session already drives the board; the hand-over another session asked for is cancelled.'
+  if (ask === 'now') {
+    const drives = await claimLead(host)
+    return drives ? 'This session drives the board now.' : 'Another session took the board just now; type it again to ask it to hand over.'
+  }
+  const driver = parseLead(text)!.session
+  const running = (await load(host).catch(() => null))?.tasks.filter(t => t.status === 'doing' && t.session === driver).map(t => t.id) ?? []
+  const restart = running.length ? ` Its ${running.length} running ${running.length === 1 ? 'worker' : 'workers'} (${running.join(', ')}) ${running.length === 1 ? 'stops' : 'stop'} and ${running.length === 1 ? 'is' : 'are'} restarted here from the kept folder and branch; that doesn't use up a try.` : ''
+  const head = ask === 'asked' ? `Already asked session ${shortSession(driver)} to hand over` : `Asked session ${shortSession(driver)} to hand over`
+  return `${head}; it will within 30 s, and this session drives the board within 30 s after that.${restart} If it doesn't answer within a few minutes, this session takes over anyway.`
+}
+
 /**
  * A session that does not drive gets no "Board update" and runs no regular check, so on its heartbeat it looks
  * whether board.json changed (its mtime differs from the one last seen) and, if so, loads it and redraws the panel
@@ -85,11 +159,17 @@ async function followBoard(host: Host) {
 
 /** On session end the driver lets go of lead.json, so another session can take over at once. */
 export async function releaseLead(host: Host) {
-  if (!S.driving) return
+  const was = S.driving
   S.driving = false
   await locked(host, async () => {
     const file = path(S.N.leadFile)
-    if (parseLead(await host.fs.read(file).catch(() => null))?.session === S.me) await host.run(['rm', '-f', file])
+    const text = await host.fs.read(file).catch(() => null)
+    const l = parseLead(text)
+    if (!l) return
+    // the driver, or a session the board was just handed to (before its heartbeat claimed it): let go at once
+    if (l.session === S.me && (was || l.handFrom)) await host.run(['rm', '-f', file])
+    // a hand-over this session asked for (/<name>-drive) is dropped: the driver keeps driving
+    else if (l.handTo === S.me) await writeLead(host, noHandRequest(text)!)
   }).catch(() => undefined)
 }
 
@@ -103,11 +183,18 @@ export async function handOver(host: Host) {
   const fresh = await host.session.id().catch(() => old)
   if (fresh && fresh !== old) {
     S.me = fresh
-    if (S.driving)
-      await locked(host, async () => {
-        const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
-        if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now()))
-      })
+    await locked(host, async () => {
+      const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+      if (S.driving) {
+        if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}))
+        return
+      }
+      if (!l) return
+      // a hand-over this session asked for (/<name>-drive) follows it to the new id, keeping its time
+      if (l.handTo === old) await writeLead(host, leadText(l.session, l.heartbeat, { handTo: S.me, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) }))
+      // the board was handed to this session and its heartbeat hasn't claimed it yet: the new id gets it
+      else if (l.session === old && l.handFrom) await writeLead(host, handedText(S.me, l.handFrom, l.heartbeat))
+    })
     if (await host.fs.exists(path(S.N.boardFile))) await change(host, b => relabelSession(b, old, S.me))
   }
   const b = await load(host)
