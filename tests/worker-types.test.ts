@@ -18,8 +18,9 @@ const EXCLUDE = `${ROOT}/.git/info/exclude`
 /**
  * `types`: the main folder has .claude-plugin/types; `ignored`: git ignores it (as this project's .gitignore does).
  * `excludes`: git names the checkout's info/exclude (`git rev-parse --git-path info/exclude`), and ignores what it lists.
+ * `tracked`: files the project keeps in git (relative to a folder), as `git ls-files` lists them.
  */
-function world({ types = true, ignored = true, excludes = false } = {}) {
+function world({ types = true, ignored = true, excludes = false, tracked = [] as string[] } = {}) {
   const files = new Map<string, string>()
   const calls: string[] = []
   if (types) {
@@ -36,6 +37,10 @@ function world({ types = true, ignored = true, excludes = false } = {}) {
       return ok()
     }
     if (a[0] === 'rev-parse') return excludes && a[1] === '--git-path' && a[2] === 'info/exclude' ? ok(EXCLUDE) : fail()
+    if (a[0] === 'ls-files') {
+      const want = a.slice(a.indexOf('--') + 1)
+      return ok(tracked.filter(f => want.some(w => f === w || f.startsWith(`${w}/`))).join('\n'))
+    }
     if (a[0] === 'check-ignore') return isIgnored(a.at(-1)!) ? ok() : fail()
     if (a[0] === 'status') {
       // new files only (the fake's tracked file is tsconfig.json): what the scope check and commit would see
@@ -138,4 +143,20 @@ test('.scratch/ is never emptied where git does not ignore it (it could be the p
   w.files.set(`${dir}/.scratch/tracked.txt`, 'mine')
   expect(await clearScratch(w.$, dir)).toBe(false)
   expect(w.files.get(`${dir}/.scratch/tracked.txt`)).toBe('mine')
+})
+
+test('a project that keeps files under .scratch/ in git: no exclude line is written and the folder is never emptied (T-456)', async () => {
+  const w = world({ excludes: true, tracked: ['.scratch/keep.txt'] })
+  w.files.set(EXCLUDE, '# local ignores\n')
+  const dir = worktreeDir('T-1')
+  w.files.set(`${dir}/.scratch/keep.txt`, 'mine')
+  await prepareWorktree(w.$, task, 'main')
+  expect(w.files.get(EXCLUDE)).toBe('# local ignores\n')
+  expect(w.files.get(`${dir}/.scratch/keep.txt`)).toBe('mine')
+  // even where git would ignore it (the line added by hand): the kept file decides
+  w.files.set(EXCLUDE, '/.scratch/\n')
+  expect(await clearScratch(w.$, dir)).toBe(false)
+  expect(w.files.get(`${dir}/.scratch/keep.txt`)).toBe('mine')
+  expect(w.calls.some(c => c.startsWith('rm ') && c.includes('.scratch'))).toBe(false)
+  expect(w.calls.some(c => c === `mkdir -p ${dir}/.scratch`)).toBe(false)
 })

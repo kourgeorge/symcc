@@ -2714,6 +2714,24 @@ test('a worker may write and run a throwaway script under .scratch/ with no file
   workers.clear()
 })
 
+test('a project that keeps files under .scratch/ in git: an edit there gets the normal file check, git add has no exclude, and the folder is not emptied (T-456)', async () => {
+  S.me = 'me'
+  const w = world({ answer: a => (a[0] === 'ls-files' && a.includes('.scratch') ? ok('.scratch/keep.txt') : undefined) })
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratch/keep.txt` })).toMatch(/^\.scratch\/keep\.txt is outside this task's files/)
+  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toEqual(['.scratch/keep.txt'])
+  await change(w.$, x => patchTask(x, 'T-1', { try_refused: undefined }, ISO))
+  await workerFinished(w.$, 'ag1', 'made the change')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.calls).toContain('wt: git add -A -- .')
+  expect(w.calls.some(c => c.includes(':(exclude).scratch'))).toBe(false)
+  expect(w.calls.some(c => c.startsWith('rm ') && c.includes('.scratch'))).toBe(false)
+  workers.clear()
+})
+
 test("a worker's edit in the owner's copy of the project is refused without a file request; its own folder works as before (T-299)", async () => {
   S.me = 'me'
   const f = world()

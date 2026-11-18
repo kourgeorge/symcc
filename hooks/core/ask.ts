@@ -1200,13 +1200,15 @@ export const scoutEditText = (rel: string) =>
  * `files` (the same matching as the merge-time scope check, outOfScope); undefined when the edit is allowed, has no
  * path, or is outside the worker's folder (see
  * editOutsideFolder for those). Relative paths are taken from the worker's folder, and ".." is worked out first.
+ * `scratch`: whether the folder uses SCRATCH_DIR (false when the project keeps files there in git); only then is an
+ * edit under it allowed without the file check.
  */
-export function blockedEdit(path: string | undefined, worktree: Folders, files: string[], dataDir: string): string | undefined {
+export function blockedEdit(path: string | undefined, worktree: Folders, files: string[], dataDir: string, scratch = true): string | undefined {
   const p = editTarget(path)
   const wts = folderList(worktree)
   if (!p || !wts.length) return undefined
   const rel = insideAny(resolvePath(wts[0]!, p), wts, true)
-  if (!rel || inScratch(rel)) return undefined
+  if (!rel || (scratch && inScratch(rel))) return undefined
   return outOfScope([rel], files, dataDir).length ? rel : undefined
 }
 

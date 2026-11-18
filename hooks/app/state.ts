@@ -256,6 +256,8 @@ export const sayQueue: string[] = []
 
 /** task ids whose leftover folder was skipped for uncommitted changes (told once each) */
 export const keptDirty = new Set<string>()
+/** worker folder → whether its .scratch/ throwaway folder is in use (false: the project keeps files there in git), worked out once (see scratchOn, T-456) */
+export const scratchUse = new Map<string, boolean>()
 /** read changes, by task, its last change and what was asked; forgotten when the panel closes */
 export const changesCache = new Map<string, Promise<string>>()
 

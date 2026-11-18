@@ -196,7 +196,8 @@ happens, never the words in its hand-back:
    Each worker's folder has a `.scratch/` folder for throwaway scripts and notes. Workers and checkers may
    write there freely: it is never refused, never a file request, and never committed or scope checked
    (symcc lists it in that checkout's local ignore list, `info/exclude`, not in your `.gitignore`).
-   symcc empties it when a try ends and when the folder is used again.
+   symcc empties it when a try ends and when the folder is used again. If your project keeps files under
+   `.scratch/` in git, all this is off: those are your files, checked and committed as usual.
    An edit (by any worker) that lands in your own copy of the project, outside the worker's own
    folder (for example your README.md, `.symcc/board.json` or another worker's folder), is always
    refused, without a file request: the worker is told to edit the file in its own folder instead.
