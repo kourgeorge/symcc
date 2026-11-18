@@ -416,3 +416,26 @@ test("T-460 a scout's edit page in VS Code: one Save Button and a Cancel link, n
   expect(await ui.find({ key: 'scout-save' })).toBeUndefined()
   await ui.unmount()
 })
+
+// the checker's case: a question's page in VS Code had its answers in a row of Buttons that doesn't wrap, plus a Back Button
+const QUESTION = { id: 'Q-3', text: 'Should the board open by itself?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
+for (const bodyColumns of [40, 80]) {
+  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers in a row that wraps, one primary, "← Tasks" a link`, async ($, on) => {
+    seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions: [QUESTION] } } })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await follow(ui, 'Q-3', vsHref('question', 'Q-3'))
+    const tree = await ui.drawn()
+    tidy(tree, `question at width ${bodyColumns}`)
+    expect(texts(tree).join(' ')).toContain(QUESTION.text)
+    const row = await ui.find({ key: 'vs-answers' })
+    expect([row?.props.flexDirection, row?.props.flexWrap]).toEqual(['row', 'wrap'])
+    expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.variant])).toEqual([['Yes', 'primary'], ['No', 'secondary']])
+    expect((await ui.find({ key: 'answer' }))?.type).toBe('Input')
+    expect((await ui.find({ key: 'question-back' }))?.props.pressableLinks).toEqual([vsHref('page', 'back/question-back')])
+    await follow(ui, 'question-back', vsHref('page', 'back/question-back'))
+    expect(await ui.find({ key: 'vs-answers' })).toBeUndefined()
+    expect(await ui.find({ key: 'Q-3' })).toBeDefined()
+    await ui.unmount()
+  })
+}
