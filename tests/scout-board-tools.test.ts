@@ -8,6 +8,7 @@ import { addTask, emptyBoard, scoutPrompt, SCOUT_BOARD_TOOLS } from '../hooks/bo
 import { S, scoutRuns, checkerRuns } from '../hooks/plugin/state'
 import { SCOUT_TOOLS, scoutAgentTools, workerAgentTypes, BASE_WORKER_TOOLS } from '../hooks/claude/agent-types'
 import * as app from '../hooks/app/symcc'
+import { registerAll } from '../hooks/claude/registration'
 
 const ROOT = '/p'
 
@@ -98,4 +99,28 @@ test('the scout prompt tells the scout to use board (no args, status, search, ta
   expect(p).toContain('use the symcc tools board and stats rather than reading .symcc/board.json')
   for (const w of ['no arguments lists the open tasks', 'status', 'search', 'task (e.g. "T-12") shows one task in full with its latest report', 'stats shows time and token use']) expect(p).toContain(w)
   expect(p).toContain('is refused for you')
+})
+
+test('registerAll registers the scout agent type with mcp__<name>__board and mcp__<name>__stats, and no worker type gets them', async () => {
+  const agents: { name: string; tools: string[] }[] = []
+  const none = async () => undefined
+  const $ = {
+    plugin: { name: S.N.name, root: '/plugin' },
+    agent: { register: async (a: { name: string; tools: string[] }) => void agents.push(a) },
+    tool: { register: none },
+    command: { register: none },
+  } as never
+  await registerAll($)
+  const board = `mcp__${S.N.name}__board`
+  const stats = `mcp__${S.N.name}__stats`
+  const scout = agents.find(a => a.name === 'scout')
+  expect(scout).toBeTruthy()
+  expect(scout!.tools).toContain(board)
+  expect(scout!.tools).toContain(stats)
+  const workerTypes = agents.filter(a => a.name.startsWith('worker'))
+  expect(workerTypes.length).toBe(workerAgentTypes(S.N.name).length)
+  for (const w of workerTypes) {
+    expect(w.tools).not.toContain(board)
+    expect(w.tools).not.toContain(stats)
+  }
 })
