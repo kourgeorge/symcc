@@ -15,16 +15,32 @@ export { CHECKER_ROLE }
 /** Whether the checker setting is on (off unless the board says on). */
 export const checkerOn = (b: Partial<Pick<Board, 'checker'>> | null | undefined): boolean => b?.checker === true
 
-/** Folders whose .md files are instructions for agents (roles, kinds, Claude's agents and commands, skills), not prose. */
-const AGENT_DIRS = new Set(['roles', 'kinds', '.claude', '.symcc', namesFor(DEFAULT_NAME).dir, 'skills'])
-/** File names that are instructions for agents, wherever they are. */
-const AGENT_FILES = new Set(['claude.md', 'agents.md', 'skill.md'])
+/**
+ * The one list of what counts as instructions for agents (so a change to it is checked, not skipped as prose).
+ * AGENT_DIRS: folder names; any file under one of them counts (symcc roles and kinds, plugin agents and commands,
+ * skills, and other tools' rule folders). AGENT_SUBDIRS: folder paths that count only as a whole (examples/scouts:
+ * seedExampleScouts copies them into every new project and scouts run from them). AGENT_FILES: file names, wherever
+ * they are. AGENT_SUFFIXES: file name endings (GitHub Copilot's *.instructions.md).
+ */
+const AGENT_DIRS = new Set(['roles', 'kinds', 'agents', 'commands', 'skills', '.claude', '.symcc', namesFor(DEFAULT_NAME).dir,
+  '.cursor', '.windsurf', '.clinerules', '.opencode', '.gemini', '.codex', '.roo'])
+const AGENT_SUBDIRS: readonly (readonly string[])[] = [['examples', 'scouts'], ['.github', 'instructions']]
+const AGENT_FILES = new Set(['claude.md', 'agents.md', 'skill.md', 'gemini.md', 'conventions.md', 'copilot-instructions.md',
+  '.cursorrules', '.windsurfrules', '.clinerules'])
+const AGENT_SUFFIXES = ['.instructions.md']
+
+/** Whether `parts` (a lower-case path split on /, file name last) is instructions for agents (see AGENT_DIRS). */
+function isAgentFile(parts: readonly string[]): boolean {
+  const name = parts.at(-1) ?? ''
+  const dirs = parts.slice(0, -1)
+  if (AGENT_FILES.has(name) || AGENT_SUFFIXES.some(s => name.endsWith(s)) || dirs.some(d => AGENT_DIRS.has(d))) return true
+  return AGENT_SUBDIRS.some(sub => dirs.some((_, i) => sub.every((d, j) => dirs[i + j] === d)))
+}
 
 /**
  * Whether `path` is only prose or media, so a change to it alone may skip the checker. Stricter than isDocFile
  * (which tests_with_changes uses): only README / CHANGELOG / LICENSE-style names (not code), .md files that are not
- * instructions for agents (not under roles/, kinds/, .claude/, .symcc/ or skills/, not named CLAUDE.md, AGENTS.md
- * or SKILL.md), and images, video, audio, subtitles and fonts. Everything else is checked, even under docs/:
+ * instructions for agents (see AGENT_DIRS), and images, video, audio, subtitles and fonts. Everything else is checked, even under docs/:
  * .mdx (it holds code), json, yaml, toml, Makefile, CI workflows.
  */
 export function isCheckerDocFile(path: string): boolean {
@@ -32,7 +48,7 @@ export function isCheckerDocFile(path: string): boolean {
   const name = parts.at(-1) ?? ''
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
   if (MEDIA_EXTS.has(ext)) return true
-  if (AGENT_FILES.has(name) || parts.slice(0, -1).some(d => AGENT_DIRS.has(d))) return false
+  if (isAgentFile(parts)) return false
   if (ext === 'md') return true
   return DOC_NAMES.has(name.split('.')[0] ?? '') && (ext === '' || ext === 'txt' || ext === 'rst')
 }
