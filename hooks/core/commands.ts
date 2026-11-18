@@ -24,13 +24,14 @@ export type Command =
   | { kind: 'mode'; mode: SymccMode }
   | { kind: 'off' }
   | { kind: 'on' }
+  | { kind: 'drive' }
   | { kind: 'help'; topic: string }
   | { kind: 'settings' }
   | { kind: 'set'; setting: SettingName; input: SettingsInput }
   | { kind: 'bad'; message: string }
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
-export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'off', 'on'] as const
+export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'off', 'on', 'drive'] as const
 
 /** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
 export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
@@ -95,6 +96,8 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return s ? use(`/${name}-off (turn ${name} off; /${name}-on turns it back on)`) : { kind: 'off' }
     case 'on':
       return s ? use(`/${name}-on`) : { kind: 'on' }
+    case 'drive':
+      return s ? use(`/${name}-drive (make this session drive the board)`) : { kind: 'drive' }
   }
   return null
 }
