@@ -148,6 +148,11 @@ happens, never the words in its hand-back:
 
 1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
+   **Secret-looking files.** Files whose names look like secrets (`.env`, `.env.*`, `*.pem`,
+   `*.key`, `id_rsa` and other SSH private keys) are left out of the commit and the merge, even if
+   they are in the task's file list. After a merge they are kept in `.symcc/left-out/<task>/`.
+   Deleting such a file merges normally. If a task changed only such files, nothing is merged and
+   the task waits for you with a question: try again without them, or drop it.
 2. **Scope check.** Every task lists the files it may change (its scope). If the worker changed
    anything else, nothing is merged (the note says which files; add them to `files` with
    `change`, or split the task). When a worker tries to edit (Edit, Write or
