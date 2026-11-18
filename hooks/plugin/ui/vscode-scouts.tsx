@@ -32,7 +32,14 @@ export function vsScoutState(s: SymccScout, nowMs: number): string {
 /** The first line of a report that says something (a heading or "1." taken off), whole; '' when there is none. */
 export function reportStart(report: string | undefined): string {
   const line = String(report ?? '').split('\n').map(l => l.trim()).find(l => l && !/^#{1,6}\s/.test(l)) ?? ''
-  return line.replace(/^(?:\*\*|__)?\d{1,2}[.):]\s+/, '').replace(/[*_`]/g, '')
+  const num = line.match(/^(\*\*|__)?\d{1,2}[.):]\s+/)
+  let t = num ? line.slice(num[0].length) : line
+  if (num?.[1] && t.endsWith(num[1])) t = t.slice(0, -num[1].length)
+  return t
+    .replace(/\*\*(\S(?:.*?\S)?)\*\*/g, '$1')
+    .replace(/__(\S(?:.*?\S)?)__/g, '$1')
+    .replace(/\*(\S(?:.*?\S)?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
 }
 
 /** The "last report" line of a scout row: "last report: found 2: <its first finding>", or "last report: nothing". */

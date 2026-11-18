@@ -11,6 +11,7 @@ import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
+import { reportStart } from '../hooks/plugin/ui/vscode-scouts'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -214,4 +215,9 @@ test('in VS Code a pick in a Select saves the setting, and a number box saves on
   await ui.input({ key: 'setting:test_commands', text: 'npm test' })
   expect(board().test_commands).toEqual(['npm test'])
   await ui.unmount()
+})
+
+test('a report start loses only Markdown markers, not the _ and ` inside names', async () => {
+  expect(reportStart('1. The setting `max_parallel` in board_file.json is ignored')).toBe('The setting max_parallel in board_file.json is ignored')
+  expect(reportStart('## Findings\n**2. A __big__ and *small* thing**')).toBe('A big and small thing')
 })
