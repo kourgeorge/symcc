@@ -3,7 +3,7 @@ import type { SymccTask } from '../../types'
 import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
-import { endRun } from './runs'
+import { endRun, keepAgentIds, withAgentId } from './runs'
 import { clean, num } from './text'
 
 /** The most a task's details may hold (addTask and patchTask cut the rest). */
@@ -61,6 +61,14 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   const next: BoardTask = { ...t, ...patch, updated_at: now }
   // Leaving "doing" ends the worker's try, however it ended (finished, stopped, over time, lost).
   if (t.status === 'doing' && next.status !== 'doing' && next.runs?.length && !next.runs[next.runs.length - 1]!.ended) next.runs = endRun(next.runs, now)
+  // T-479: each try keeps its worker's and its checkers' ids, after it ends too, so every copy of the plugin refuses them then
+  if (next.runs?.length) {
+    // a new try: the worker of the one before (from a board older than T-479) is kept on that try
+    if (next.attempts !== t.attempts && t.agent && t.runs?.length && !next.runs[t.runs.length - 1]?.agent) next.runs = withAgentId(next.runs, 'agent', t.agent, t.runs.length - 1)!
+    if (next.status === 'doing' && typeof patch.agent === 'string') next.runs = withAgentId(next.runs, 'agent', patch.agent)!
+    if (next.status === 'doing' && next.attempts === t.attempts && typeof patch.checker === 'string') next.runs = withAgentId(next.runs, 'checker', patch.checker)!
+    next.runs = keepAgentIds(next.runs)
+  }
   if (next.status !== 'doing' || !next.session) delete next.session
   // the "being tested and merged" mark only means something while the task is "doing"
   if (next.status !== 'doing' || !next.finishing) delete next.finishing

@@ -1,7 +1,7 @@
 // The board file itself: its shape, loading it safely, the lock, and finding a task.
 import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { dataDir } from '../name'
-import { cleanTokens } from './runs'
+import { cleanTokens, keepAgentIds } from './runs'
 import { parseStamp } from './text'
 import type { WorkerQuestion } from './ask'
 import { type OwnerQuestion, cleanQuestions } from './questions'
@@ -368,6 +368,12 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
     } else {
       const bad = x.runs.filter(r => !isObj(r)).length
       if (bad) fixed.push(`${id}: ${bad} bad ${bad === 1 ? 'try' : 'tries'} dropped`)
+      // T-479: the agent ids kept on its tries, cleaned (a bad or extra one is dropped)
+      const kept = keepAgentIds(x.runs as SymccRun[])
+      if (kept !== x.runs) {
+        fixed.push(`${id}: bad agent ids on its tries dropped`)
+        x.runs = kept
+      }
     }
   }
   if (!isNum(x.order)) x.order = 0

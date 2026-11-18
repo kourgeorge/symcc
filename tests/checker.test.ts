@@ -6,11 +6,11 @@ import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, check
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/app/workers'
 import { checkerFinished } from '../hooks/app/checker'
-import { checkEdit } from '../hooks/app/ask'
+import { checkEdit, stoppedText } from '../hooks/app/ask'
 import { load, saveBoard } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { test, resetPlugin } from './reset'
-import { agentFinished } from '../hooks/app/symcc'
+import { agentFinished, toolCall } from '../hooks/app/symcc'
 import { fakeHost, memoryFs } from './fake-host'
 import type { Host, HostAgent } from '../hooks/host'
 import { drainStarts, queuedStarts } from '../hooks/app/starts'
@@ -430,6 +430,46 @@ test('a checker that runs over max_minutes is stopped with the one stop text (ha
   expect(t.status).toBe('review')
   expect(t.note).toContain('it ran over 7 min and was stopped')
   expect(w.git.main).toBe(M1)
+})
+
+test("T-479: a checker that timed out stays on its try, so a copy that doesn't hold it refuses its git write and an edit in the owner's copy", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { max_minutes: 7 }))
+  let fire: (() => void) | undefined
+  const clock = (w.$ as unknown as { clock: { after: (ms: number, f: () => void) => { cancel(): void } } }).clock
+  const after = clock.after
+  clock.after = (ms, f) => (ms === 7 * 60_000 ? ((fire = f), { cancel() {} }) : after(ms, f))
+  let cid = ''
+  const t = await finish(w, async id => {
+    cid = id
+    for (let i = 0; i < 200 && find(await load(w.$), 'T-1')?.checker !== id; i++) await turn()
+    fire!()
+  })
+  expect(t.checker).toBeUndefined()
+  expect(t.runs!.at(-1)!.checkers).toEqual([cid])
+  // as another session's copy sees it: neither in its checkerRuns nor in its stopped list
+  checkerRuns.delete(cid)
+  stopped.delete(cid)
+  expect(await checkEdit(w.$, cid, { command: 'git commit -am x' })).toBe(stoppedText())
+  expect(await checkEdit(w.$, cid, { path: `${ROOT}/README.md` })).toBe(stoppedText())
+  expect(await toolCall(w.$, 'Bash', cid, {})).toEqual({ deny: stoppedText() })
+})
+
+test("T-479: a checker stopped by a drop (haltChecker) is refused every tool by a copy that doesn't hold it", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  let cid = ''
+  const t = await finish(w, async id => {
+    cid = id
+    for (let i = 0; i < 200 && find(await load(w.$), 'T-1')?.checker !== id; i++) await turn()
+    await runTool(w.$, 'drop', { task: 'T-1' })
+  })
+  expect(t.status).toBe('dropped')
+  expect(t.checker).toBeUndefined()
+  checkerRuns.delete(cid)
+  stopped.delete(cid)
+  expect(await toolCall(w.$, 'Bash', cid, {})).toEqual({ deny: stoppedText() })
+  expect(await checkEdit(w.$, cid, { command: 'git commit -am x' })).toBe(stoppedText())
 })
 
 test('a drop that comes before the checker is spawned starts no checker at all', async () => {
