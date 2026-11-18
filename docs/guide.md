@@ -34,7 +34,7 @@ The same names are used in the [README](../README.md) and in this guide.
 | **Lead** | Orchestrator agent (your normal Claude Code chat) | Plans, breaks work into tasks, supervises the workers, decides what to do when something fails, reports to you |
 | **Board** | Task board (a plain file at `.symcc/board.json`) | One board (todo / doing / review / done) for requested work (from you) and discovered work (from scouts) |
 | **Workers** | Parallel agents (one per task) | Each builds one task in an isolated git worktree on its own branch, then stops |
-| **Scouts** (optional) | Scheduled background agents for discovery | On a timer, look for bugs, missing tests, outdated dependencies or security notices, and report to the lead; read-only, they never change files |
+| **Scouts** (optional) | Scheduled background agents for discovery | On a timer, look for bugs, missing tests, outdated dependencies or security notices, and report to the lead; symcc refuses their file edits and git writes in the project (see [scouts](#scouts)) |
 
 And the ideas that tie them together:
 
@@ -626,9 +626,21 @@ Look for risky code that has no tests. Point at file:line and say what could go 
 ```
 
 A scout does what its file says. It can read files, run shell commands (these follow your
-normal permission rules, like workers) and search or fetch web pages. It can't edit or write
-files, and it is told not to change the project at all: no installs, no git commands that
-change anything. Changes only go through board tasks. It also sees the open tasks, so it
+normal permission rules, like workers) and search or fetch web pages. Changes only go through
+board tasks. A scout runs in your own project folder, so symcc stops some things outright and
+only asks for the rest:
+
+- **Stopped by symcc:** editing or writing any file inside the project (it has no edit tools,
+  and an edit that gets there anyway is refused), and any git command that changes something
+  (commit, checkout, switch, reset, stash, branch or tag changes, merge, rebase, push and so on),
+  with the same rules as the checker's below.
+- **Allowed:** read-only git (`git status`, `git diff`, `git log`, ...), running your tests, and
+  throwaway files outside the project, such as under `/tmp`.
+- **Only asked in its prompt:** no installs, and no changing files with other shell commands
+  (`echo ... > file`, `rm`, `sed -i` and such). symcc does not check these; your normal
+  permission rules still apply.
+
+The git check works on the command text and is a best effort, not a sandbox. It also sees the open tasks, so it
 doesn't suggest them again. To look further at the board it has symcc's two read-only tools:
 `board` (no arguments: the open tasks; `status` and `search` narrow it; `task`: one task in full
 with its latest report) and `stats`. Every symcc tool that changes something (`add`, `change`,
