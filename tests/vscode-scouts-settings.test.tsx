@@ -1,12 +1,13 @@
 // The Scouts and Settings pages in VS Code's side panel have their own layout (hooks/claude/ui/vscode-scouts.tsx and
 // vscode-settings.tsx); on the terminal, the desktop and mobile they draw exactly as before (scouts-settings-snapshot.ts
 // holds the trees captured from the code before the change).
-import { expect } from 'claude-code/testing'
+import { expect, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board-fixture'
 import { SCOUTS_SETTINGS_BEFORE } from './scouts-settings-snapshot'
-import { SCENES, OLD_SURFACES } from './scouts-settings-scenes'
-import { LONG_REPORT, SCOUTS, SCOUTS_VIEW, seedScouts } from './scouts-settings-fixture'
+import { SCENES, OLD_SURFACES, ROLE_KIND_SCENES, ROLE_KIND_PAGES } from './scouts-settings-scenes'
+import { ROLES_KINDS_BEFORE } from './roles-kinds-snapshot'
+import { LONG_REPORT, SCOUTS, SCOUTS_VIEW, seedScouts, seedRolesKinds } from './scouts-settings-fixture'
 import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
@@ -51,6 +52,21 @@ for (const sc of SCENES) {
       const ui = await $.ui.mount({ ...PANE, surface })
       await sc.go(ui as never)
       expect(drawnData(await ui.drawn()), `${surface} ${sc.name}`).toEqual(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`])
+      await ui.unmount()
+    })
+  }
+}
+
+// T-460: the Roles and Kinds pages (and a role's and a kind's page) on the terminal, the desktop and mobile, the same
+for (const sc of ROLE_KIND_SCENES) {
+  for (const surface of OLD_SURFACES) {
+    test(`${sc.name} on ${surface} draws exactly as before the VS Code Roles and Kinds pages`, async ($, on) => {
+      sc.seed(on)
+      const ui = await $.ui.mount({ ...PANE, surface })
+      await sc.go(ui as never)
+      const saved = ROLES_KINDS_BEFORE[`${surface} ${sc.name}`]
+      expect(saved, `${surface} ${sc.name}`).toBeDefined()
+      expect(drawnData(await ui.drawn()), `${surface} ${sc.name}`).toEqual(saved)
       await ui.unmount()
     })
   }
@@ -207,8 +223,9 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
   expect((await ui.find({ key: 'setting:scout_findings' }))?.props.value).toBe('backlog')
   for (const name of BOXES) expect((await ui.find({ key: `setting:${name}` }))?.type, name).toBe('Input')
   expect((await ui.find({ key: 'setting:max_parallel' }))?.props.value).toBe('2')
-  expect((await ui.find({ key: 'settings-roles' }))?.type).toBe('Button')
-  expect((await ui.find({ key: 'settings-kinds' }))?.type).toBe('Button')
+  // T-460: Roles and Kinds open their pages from links, not Buttons
+  expect((await ui.find({ key: 'settings-roles' }))?.props.pressableLinks).toEqual([vsHref('page', 'roles')])
+  expect((await ui.find({ key: 'settings-kinds' }))?.props.pressableLinks).toEqual([vsHref('page', 'kinds')])
   await ui.unmount()
 })
 
@@ -264,4 +281,138 @@ test('in VS Code a pick in a Select saves the setting, and a number box saves on
 test('a report start loses only Markdown markers, not the _ and ` inside names', async () => {
   expect(reportStart('1. The setting `max_parallel` in board_file.json is ignored')).toBe('The setting max_parallel in board_file.json is ignored')
   expect(reportStart('## Findings\n**2. A __big__ and *small* thing**')).toBe('A big and small thing')
+})
+
+// ---------------- T-460: Settings, Roles and Kinds in VS Code: links to go somewhere, no Button rows that run together ----------------
+
+/** The Box rows of a tree that hold more than one Button and don't wrap (VS Code's Buttons never wrap their labels, so
+ *  such a row overlaps or runs off the edge at a narrow width). */
+const crowdedRows = (tree: unknown) =>
+  elements(tree)
+    .filter(n => n.type === 'Box' && n.props?.flexDirection === 'row' && n.props?.flexWrap !== 'wrap')
+    .filter(n => (n.children ?? []).filter(c => (c as Node)?.type === 'Button').length > 1)
+    .map(n => String(n.props?.key))
+
+/** Checks a VS Code page as T-460 wants it: readable (no "…", no key hints) and no crowded Button row. */
+function tidy(tree: unknown, page: string) {
+  readable(tree, page)
+  expect(crowdedRows(tree), page).toEqual([])
+}
+
+/** Presses the link `href` in the Markdown keyed `key`. */
+const follow = (ui: { press: (t: { key: string; link: { href: string } }) => Promise<unknown> }, key: string, href: string) => ui.press({ key, link: { href } })
+const act = (key: string, id: string) => vsHref('do', `${key}/${id}`)
+
+for (const bodyColumns of [40, 80]) {
+  const at = (page: string) => `${page} at width ${bodyColumns}`
+  const mount = ($: Engine) => $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+
+  test(`T-460 Settings, Roles and one role in VS Code at width ${bodyColumns}: links to go somewhere, badges, no crowded Button rows`, async ($, on) => {
+    seedRolesKinds(on)
+    const ui = await mount($)
+    tidy(await ui.drawn(), at('settings'))
+    // Roles is a link that opens its page
+    await follow(ui, 'settings-roles', vsHref('page', 'roles'))
+    const list = await ui.drawn()
+    tidy(list, at('roles'))
+    expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key), at('roles')).toEqual(['role-new'])
+    for (const name of ROLE_KIND_PAGES.roles) {
+      const link = await ui.find({ key: `roleRow:${name}` })
+      expect([link?.type, link?.props.pressableLinks], name).toEqual(['Markdown', [vsHref('role', name)]])
+    }
+    // the badges sit beside the name, in the row's top line
+    const badges = async (key: string) => elements(await ui.find({ key })).filter(n => n.type === 'Text' && n.props?.backgroundColor).map(n => texts(n).join('').trim())
+    expect(await badges('vs-role-general-top')).toEqual(['built-in'])
+    expect(await badges('vs-role-tester-top')).toEqual(['replaced'])
+    expect(await badges('vs-role-docs-top')).toEqual(['replaced', 'off'])
+    expect(await badges('vs-role-mobile-apps-and-tablets-everywhere-top')).toEqual(['added'])
+    expect(await badges('vs-role-bad-top')).toEqual(["can't be read"])
+    // the description dim and wrapped
+    const about = elements(await ui.find({ key: 'vs-role-mobile-apps-and-tablets-everywhere' })).find(n => n.type === 'Text' && texts(n).join('').startsWith('builds and fixes'))
+    expect([about?.props?.wrap, about?.props?.color]).toEqual(['wrap', 'inactive'])
+    // New role: a box for the name with a Cancel link
+    await ui.press({ key: 'role-new' })
+    tidy(await ui.drawn(), at('new role'))
+    await follow(ui, 'role-new-cancel', act('role-new-cancel', 'cancel'))
+    expect(await ui.find({ key: 'role-new-name' })).toBeUndefined()
+    // each role's page
+    for (const name of ROLE_KIND_PAGES.roles) {
+      await follow(ui, `roleRow:${name}`, vsHref('role', name))
+      tidy(await ui.drawn(), at(`role ${name}`))
+      expect((await ui.find({ key: 'role-back' }))?.type, name).toBe('Markdown')
+      await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+      expect(await ui.find({ key: `roleRow:${name}` }), name).toBeDefined()
+    }
+    // an added role: Edit, See the prompt, Turn off and Remove are links on one line that wraps
+    await follow(ui, 'roleRow:mobile-apps-and-tablets-everywhere', vsHref('role', 'mobile-apps-and-tablets-everywhere'))
+    expect((await ui.find({ key: 'role-actions' }))?.props.pressableLinks).toEqual(['edit', 'prompt', 'off', 'remove'].map(id => act('role-actions', id)))
+    // Remove asks first: one "Yes, remove" Button and a Cancel link
+    await follow(ui, 'role-actions', act('role-actions', 'remove'))
+    tidy(await ui.drawn(), at('role remove'))
+    expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')
+    await follow(ui, 'role-remove-cancel', act('role-remove-cancel', 'cancel'))
+    expect(await ui.find({ key: 'role-remove-yes' })).toBeUndefined()
+    // the prompt page and the edit page
+    await follow(ui, 'role-actions', act('role-actions', 'prompt'))
+    tidy(await ui.drawn(), at('role prompt'))
+    await follow(ui, 'role-prompt-back', vsHref('page', 'back/role-prompt-back'))
+    await follow(ui, 'role-actions', act('role-actions', 'edit'))
+    tidy(await ui.drawn(), at('role edit'))
+    expect((await ui.find({ key: 'role-save' }))?.type).toBe('Button')
+    expect((await ui.find({ key: 'role-description' }))?.props.label).toBe('Description')
+    await follow(ui, 'role-edit-cancel', act('role-edit-cancel', 'cancel'))
+    expect(await ui.find({ key: 'role-save' })).toBeUndefined()
+    // a built-in role has no Remove; a replaced one has Reset to built-in
+    await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+    await follow(ui, 'roleRow:tester', vsHref('role', 'tester'))
+    expect((await ui.find({ key: 'role-actions' }))?.props.pressableLinks).toEqual(['edit', 'prompt', 'off', 'reset'].map(id => act('role-actions', id)))
+    // back to Settings
+    await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+    await follow(ui, 'roles-back', vsHref('page', 'back/roles-back'))
+    expect(await ui.find({ key: 'settings-roles' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test(`T-460 Kinds and one kind in VS Code at width ${bodyColumns}: links to go somewhere, badges, no crowded Button rows`, async ($, on) => {
+    const toasts: string[] = []
+    const { kinds } = seedRolesKinds(on, e => void toasts.push(JSON.stringify(e)))
+    const ui = await mount($)
+    await follow(ui, 'settings-kinds', vsHref('page', 'kinds'))
+    const list = await ui.drawn()
+    tidy(list, at('kinds'))
+    expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key), at('kinds')).toEqual(['kind-new'])
+    for (const name of ROLE_KIND_PAGES.kinds) expect((await ui.find({ key: `kindRow:${name}` }))?.props.pressableLinks, name).toEqual([vsHref('kind', name)])
+    for (const name of ROLE_KIND_PAGES.kinds) {
+      await follow(ui, `kindRow:${name}`, vsHref('kind', name))
+      tidy(await ui.drawn(), at(`kind ${name}`))
+      await follow(ui, 'kind-back', vsHref('page', 'back/kind-back'))
+    }
+    // change is always on: no Turn off; bug is off: Turn on writes its file
+    await follow(ui, 'kindRow:change', vsHref('kind', 'change'))
+    expect((await ui.find({ key: 'kind-actions' }))?.props.pressableLinks).toEqual([act('kind-actions', 'edit')])
+    await follow(ui, 'kind-back', vsHref('page', 'back/kind-back'))
+    await follow(ui, 'kindRow:bug', vsHref('kind', 'bug'))
+    await follow(ui, 'kind-actions', act('kind-actions', 'off'))
+    expect(kinds['bug.md'], toasts.join('\n')).not.toContain('off: true')
+    // the edit page: one Save Button and a Cancel link
+    await follow(ui, 'kind-actions', act('kind-actions', 'edit'))
+    tidy(await ui.drawn(), at('kind edit'))
+    await follow(ui, 'kind-edit-cancel', act('kind-edit-cancel', 'cancel'))
+    await follow(ui, 'kind-back', vsHref('page', 'back/kind-back'))
+    await follow(ui, 'kinds-back', vsHref('page', 'back/kinds-back'))
+    expect(await ui.find({ key: 'settings-kinds' })).toBeDefined()
+    await ui.unmount()
+  })
+}
+
+test("T-460 a scout's edit page in VS Code: one Save Button and a Cancel link, no crowded Button row", async ($, on) => {
+  seedScouts(on, 'scouts', 'docs-drift')
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+  await ui.press({ key: 'scout-edit' })
+  tidy(await ui.drawn(), 'scout edit')
+  expect((await ui.find({ key: 'scout-save' }))?.type).toBe('Button')
+  expect((await ui.find({ key: 'scout-every' }))?.props.label).toBe('Runs every')
+  await follow(ui, 'scout-cancel', vsHref('do', 'scout-edit/cancel'))
+  expect(await ui.find({ key: 'scout-save' })).toBeUndefined()
+  await ui.unmount()
 })
