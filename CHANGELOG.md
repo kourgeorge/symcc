@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Fixed
+- When you answer one of the lead's questions on the board ("Questions for you"), the lead now gets a board update at once with your answer in its own block ("The owner answered your question Q-3 (…): Yes. … Act on it."), instead of a "Meanwhile" line that waited for some other update. Your other board actions still come as "Meanwhile" lines.
+
 ### Changed
 - The header shows just the name and version ("𝄞 symcc v0.4.1 · <folder>"), without the word "board" after them, in the board tool's text, the band above the prompt and the terminal, desktop and mobile header. With no version known it still reads "symcc board".
 
