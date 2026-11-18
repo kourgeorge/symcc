@@ -6,6 +6,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Changed
 - The header shows just the name and version ("𝄞 symcc v0.4.1 · <folder>"), without the word "board" after them, in the board tool's text, the band above the prompt and the terminal, desktop and mobile header. With no version known it still reads "symcc board".
+- The band above the prompt shows each doing task's real state and time, like the board's Tasks list: "T-440 ▶ 12m", "T-373 ▶ test", "T-435 ▶ check", "T-436 ▶ merge", with the try after it from try 2 on ("T-434 ▶ check · try 2"), in lined-up columns. The word "doing" and the "— worker on it" note are gone, since the state says it.
 
 ## 0.4.1 (2026-11-18)
 

@@ -7,7 +7,7 @@ import { turnNow, withStarts } from './starts'
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
-import { putTask, tryMark, tryTone, bandStatus } from '../hooks/board'
+import { putTask, tryMark, tryTone, bandLeads } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -3457,8 +3457,8 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(statusLine({ tasks: [...busy] }, true)).toContain('T-371, T-372 doing (T-371 try 2, T-372 try 3)')
   expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-369 doing (try 2)')
   // the band above the prompt
-  expect(bandStatus({ id: 'T-369', status: 'doing', attempts: 1 })).toBe('T-369 doing')
-  expect(bandStatus({ id: 'T-369', status: 'doing', attempts: 2 })).toBe('T-369 doing (try 2)')
+  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 1 }], 0).get('T-369')).toBe('T-369 ▶ ')
+  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶  · try 2')
   // the lead's text board, with the auto retry limit while the retry is automatic
   let [b] = addTask(emptyBoard(), { origin: W, title: 'First' }, at)
   ;[b] = addTask(b, { origin: W, title: 'Second' }, at)

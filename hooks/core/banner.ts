@@ -1,7 +1,7 @@
 // Board titles, the status line, the banner at the top of the panel, and the board as text.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME, ICON, ICON_ART, namesFor } from '../name'
-import { type Board, modeOf, OPEN, STATUS_WORD } from './board-file'
+import { type Board, type BoardTask, modeOf, OPEN, STATUS_WORD } from './board-file'
 import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
@@ -10,7 +10,8 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, taskMatches } from './panel'
+import { type CrewBoard, withCrew, taskMatches, statusCell } from './panel'
+import { STATUS_MARK } from './details'
 import { whyFailed } from './failure'
 import { offStatusLine, testCommandsText } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
@@ -73,11 +74,31 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
   return doing.length === 1 ? ` (${marks[0]!.mark})` : ` (${marks.map(x => `${x.id} ${x.mark}`).join(', ')})`
 }
 
-/** A task's status in the band above the prompt: "T-369 doing", "T-369 doing (try 2)" on a later try (see tryMark). */
-export function bandStatus(t: Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>): string {
-  const mark = tryMark({ status: t.status, attempts: t.attempts ?? 0 })
-  return `${t.id} ${STATUS_WORD[t.status]}${mark ? ` (${mark})` : ''}`
+/**
+ * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
+ * state columns). A doing task shows its real state from the list's own statusCell, with the list's mark: "▶ 12m"
+ * (time on this try), "▶ test", "▶ check", "▶ merge", and its try after it from try 2 on ("T-434 ▶ check · try 2").
+ * Other tasks keep their status word ("T-2   waiting for you"). `since(id)` is when this session's worker started.
+ */
+export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined): Map<string, string> {
+  const idWidth = Math.max(4, ...tasks.map(t => t.id.length))
+  const doing = tasks.filter(t => t.status === 'doing')
+  const cells = new Map(doing.map(t => [t.id, statusCell(t, nowMs, since(t.id))]))
+  const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
+  const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
+  const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? ` · ${m}`.length : 0)))
+  return new Map(
+    tasks.map(t => {
+      const id = t.id.padEnd(idWidth)
+      if (t.status !== 'doing') return [t.id, `${id} ${STATUS_WORD[t.status]}`]
+      const mark = tries.get(t.id)
+      return [t.id, `${id} ${STATUS_MARK.doing} ${cells.get(t.id)!.padEnd(cellWidth)}${(mark ? ` · ${mark}` : '').padEnd(tryWidth)}`]
+    }),
+  )
 }
+
+/** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
+export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
 /** About how wide the line above the prompt may be: Claude Code puts "<name>: " (and its own mark) in front. */
 export const STATUS_WIDTH = 80

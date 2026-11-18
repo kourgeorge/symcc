@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandHasState, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -49,6 +49,13 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // the questions take the first rows, then the tasks that need you or run
   const asks = questions.slice(0, rows)
   const taskRows = Math.max(0, rows - asks.length)
+  // each row's front, lined up like the board list's: "T-434 ▶ check · try 2", "T-440 ▶ 12m" (see bandLeads)
+  const shownTasks = live.slice(0, taskRows)
+  const since = (id: string) => v?.working?.find(w => w.task === id)?.since
+  const leads = bandLeads(shownTasks, nowMs, since)
+  // a doing row's state says what goes on ("▶ 12m"), so its note ("worker on it") is left out; kept when it has none
+  const tail = (t: (typeof live)[number]) =>
+    fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note && !bandHasState(t, nowMs, since(t.id)) ? ` — ${t.note}` : ''
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -65,13 +72,13 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
           <Text color={'inactive' as never}>{` — ${q.options.join(' | ')}`}</Text>
         </Text>
       ))}
-      {live.slice(0, taskRows).map(t => (
+      {shownTasks.map(t => (
         <Text wrap="truncate">
           <Text color={color[t.status] as never}>
-            {bandStatus(t)}
+            {leads.get(t.id)}
           </Text>
           <Text> {t.title}</Text>
-          <Text color={'inactive' as never}>{fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
+          <Text color={'inactive' as never}>{tail(t)}</Text>
         </Text>
       ))}
       {live.length + questions.length > rows && <Text color={'inactive' as never}>+{live.length + questions.length - rows} more · /{S.N.name}</Text>}
