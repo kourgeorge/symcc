@@ -258,6 +258,6 @@ test("the lead's instructions say when to add an investigation, that it always w
   expect(g).toContain('A researcher task is an investigation unless you give kind: change.')
   expect(g).toContain('An investigation always waits for the owner to read its answer, even in mode auto')
   expect(g).toContain('Tell the owner the answer in the chat')
-  expect(g).toContain('offer the three choices: Done, Keep as a note, Ask more')
+  expect(g).toContain('offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more)')
   expect(rolesLeadText([parseRole('researcher', '---\ndescription: finds things out\n---\n')!])).toContain('A researcher task is an investigation unless you add it with kind: change')
 })

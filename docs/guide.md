@@ -111,7 +111,7 @@ question, shows under NEEDS YOU on the board, and with `notify` on you hear "sym
 (once per question, only in the session that drives the board). The lead is told too. It
 answers it itself only when you already clearly said the answer, and then tells you what it
 answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
-any) as choices you can pick. You can answer in the chat or on the board, whichever comes
+any) as numbered choices in plain text (not a pop-up dialog, which would stay open if you answer on the board). You can answer in the chat or on the board, whichever comes
 first (if you answer on the board, the lead doesn't ask again): the answer goes into the
 task and sends it back to work, and a new try continues with it. What the worker already
 changed is kept.
