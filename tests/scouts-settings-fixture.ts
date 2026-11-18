@@ -5,7 +5,7 @@ import type { On } from 'claude-code'
 import { BOARD_VIEW, T0, seedBoard } from './board-fixture'
 
 const iso = (ms: number) => new Date(ms).toISOString()
-/** The scouts' times are set from T0, the fixed clock seedBoard gives the pages (see hooks/plugin/ui/now.ts). */
+/** The scouts' times are set from T0, the fixed clock seedBoard gives the pages (see hooks/claude/ui/now.ts). */
 const NOW = T0
 const MIN = 60_000
 

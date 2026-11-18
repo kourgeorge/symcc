@@ -3,7 +3,7 @@
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { SCOUT_SOON_MS, SCOUT_SPREAD_MS, PAUSED_RECHECK_MS } from '../hooks/plugin/scouts'
+import { SCOUT_SOON_MS, SCOUT_SPREAD_MS, PAUSED_RECHECK_MS } from '../hooks/app/scouts'
 import { ran, entry } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
 

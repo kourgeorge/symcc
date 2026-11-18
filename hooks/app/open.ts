@@ -1,10 +1,10 @@
-// Opening the board panel, and choosing what it shows.
-import { boardTitle } from '../../board'
-import { S, updateOpened, updateScoutOpen, updateTab } from '../state'
-import { type $ } from '../../claude/panel'
-import { resetRoleView } from '../roles'
-import { resetKindView } from '../kinds'
-import type { Host } from '../../host'
+// Opening the board panel, and choosing what it shows. Host-free: a host with no panel (features.panel off) opens
+// nothing. What only Claude Code's panel needs (taking the keys back after an Esc) is in claude/ui/open.ts.
+import { boardTitle } from '../board'
+import { S, updateOpened, updateScoutOpen, updateTab } from './state'
+import { resetRoleView } from './roles'
+import { resetKindView } from './kinds'
+import type { Host } from '../host'
 
 /** The board panel's views: its tabs. */
 export type PaneTab = 'tasks' | 'scouts' | 'settings'
@@ -39,16 +39,4 @@ export async function openPane($: Host, o: { tab?: PaneTab; task?: string; focus
 /** What $.ui.open gets for the board panel; `focus` asks for the keyboard and lets Esc reach ui.close. A panel
  *  opened without it (the one that opens by itself at the start) has no closeOnEscape, so Esc there never
  *  reaches ui.close: it only gives the keys to the prompt (docs/research/esc-in-panels.md). */
-const paneArgs = (focus: boolean) => ({ id: S.N.pane, title: boardTitle(S.root, S.N.name, S.version), ...(focus ? { focus: true as const, closeOnEscape: true as const } : {}) })
-
-/**
- * Asks for the keyboard back after an Esc the panel kept open. Claude Code always hands the keys to its
- * prompt on Esc (from a text box, a button or a pick list) before the panel hears of it, and a plugin
- * can't stop that; so the panel asks for them again, at once and once more a moment later in case the
- * prompt took them after. Claude Code says no while the prompt holds text: the keys then stay there.
- */
-export function takeKeysBack($: $) {
-  const ask = () => void $.ui.open(paneArgs(true)).catch(() => undefined)
-  ask()
-  $.clock.after(50, ask)
-}
+export const paneArgs = (focus: boolean) => ({ id: S.N.pane, title: boardTitle(S.root, S.N.name, S.version), ...(focus ? { focus: true as const, closeOnEscape: true as const } : {}) })

@@ -1,8 +1,8 @@
-// T-391: symcc queues every agent start (hooks/plugin/starts.ts) and starts them only from session.start, the main
+// T-391: symcc queues every agent start (hooks/app/starts.ts) and starts them only from session.start, the main
 // loop's turn.start and turn.complete. Tests that call the plugin's code directly (not through the loaded plugin)
 // play that hook here: drainStarts with the test's host, as register.tsx's hooks do.
 import type { Host } from '../hooks/host'
-import { drainStarts, queuedStarts } from '../hooks/plugin/starts'
+import { drainStarts, queuedStarts } from '../hooks/app/starts'
 
 const later = () => new Promise<void>(r => (globalThis as unknown as { setTimeout(fn: () => void, ms: number): unknown }).setTimeout(r, 0))
 

@@ -1,16 +1,16 @@
 // The board panel's Settings view.
 import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
-import { S } from '../state'
-import { type $ } from '../../claude/panel'
-import { resetPane } from './open'
-import { ownerSettings } from '../tools'
-import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../roles'
-import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
+import { S } from '../../app/state'
+import { type $ } from '../panel'
+import { resetPane } from '../../app/open'
+import { ownerSettings } from '../../app/tools'
+import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../../app/roles'
+import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
 import type { PaneParts } from './parts'
 import { arrows, headingFocused, row } from './arrows'
 import { settingsPageVs } from './vscode-settings'
-import { claudeHost } from '../../claude/host'
+import { claudeHost } from '../host'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`

@@ -1,13 +1,13 @@
-// The board panel in VS Code's side panel has its own layout (hooks/plugin/ui/vscode.tsx, vscode-list.tsx); on the
+// The board panel in VS Code's side panel has its own layout (hooks/claude/ui/vscode.tsx, vscode-list.tsx); on the
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board-fixture'
 import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
-import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
-import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from '../hooks/plugin/ui/vscode'
-import { ASK_LEAD, ASK_LEAD_DRAFT } from '../hooks/plugin/ui/vscode-list'
-import { drawNow } from '../hooks/plugin/ui/now'
+import { plainLabel, CLICK_HINT } from '../hooks/claude/ui/surface'
+import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from '../hooks/claude/ui/vscode'
+import { ASK_LEAD, ASK_LEAD_DRAFT } from '../hooks/claude/ui/vscode-list'
+import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING } from '../hooks/board'
 

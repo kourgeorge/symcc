@@ -3,9 +3,9 @@
 // refuses a worker's or a scout's command; clearly read-only git (remote -v, config --get, reflog) passes too.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { checkEdit } from '../hooks/plugin/ask'
+import { checkEdit } from '../hooks/app/ask'
 import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText } from '../hooks/board'
-import { S, scoutRuns, workers, checkerRuns } from '../hooks/plugin/state'
+import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
 
 const ROOT = '/repo'

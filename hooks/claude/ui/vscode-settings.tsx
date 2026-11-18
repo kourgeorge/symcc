@@ -7,8 +7,8 @@
 //   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
 // Roles and Kinds are buttons that open their pages. No key hints.
 import { SETTINGS, SETTING_GROUPS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, isSettingPage, settingValue, parseSettingValue, type SettingName, type SettingsInput } from '../../board'
-import { S } from '../state'
-import { type $ } from '../../claude/panel'
+import { S } from '../../app/state'
+import { type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { vsFooter, vsSection } from './vscode'
 

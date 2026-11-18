@@ -1,18 +1,18 @@
-// The plugin keeps its memory in module-level sets and maps (hooks/plugin/state.ts and a few next to the
+// The plugin keeps its memory in module-level sets and maps (hooks/app/state.ts and a few next to the
 // code that uses them). Every test file shares one copy, so what one test leaves there (an agent id in
 // `stopped`, a task in `finishing`, S.me, ...) changes what a later test sees. resetPlugin() empties them all
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
 import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
 import { emptyHeard } from '../hooks/board'
-import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/plugin/state'
-import { resetScoutRuns } from '../hooks/plugin/scouts'
-import { resetStarts } from '../hooks/plugin/starts'
-import { resetStore } from '../hooks/plugin/store'
-import { resetMergeTurns, resetTestLine } from '../hooks/plugin/review'
-import { resetLogo } from '../hooks/plugin/logo'
-import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/plugin/workers'
-import { saidNeedsYou } from '../hooks/plugin/voice'
-import { guardLogged } from '../hooks/plugin/ask'
+import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
+import { resetScoutRuns } from '../hooks/app/scouts'
+import { resetStarts } from '../hooks/app/starts'
+import { resetStore } from '../hooks/app/store'
+import { resetMergeTurns, resetTestLine } from '../hooks/app/review'
+import { resetLogo } from '../hooks/app/logo'
+import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/app/workers'
+import { saidNeedsYou } from '../hooks/app/voice'
+import { guardLogged } from '../hooks/app/ask'
 
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {

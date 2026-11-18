@@ -2,7 +2,7 @@ import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { parseScout, safeScoutFile, resolveRel, SCOUT_FILE_NAME } from '../hooks/board'
-import { runScoutNow, setScoutPaused } from '../hooks/plugin/scouts'
+import { runScoutNow, setScoutPaused } from '../hooks/app/scouts'
 import { inProject } from './project'
 import { ran, readText, entry } from './fakes'
 

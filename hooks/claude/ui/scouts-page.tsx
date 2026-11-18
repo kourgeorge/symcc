@@ -1,13 +1,13 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
 import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../scouts'
-import { S } from '../state'
-import { type $, panelValues } from '../../claude/panel'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
+import { S } from '../../app/state'
+import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { resetPane } from './open'
+import { resetPane } from '../../app/open'
 import { scoutPageVs, scoutsListVs } from './vscode-scouts'
-import { claudeHost } from '../../claude/host'
+import { claudeHost } from '../host'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
  *  page shows them: Runs every, Model, Summary, Instructions. Its Cancel button leaves it

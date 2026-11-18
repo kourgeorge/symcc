@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { register, symccAgentType } from '../hooks/register'
-import { S, workers } from '../hooks/plugin/state'
+import { S, workers } from '../hooks/app/state'
 
 type Handler = (...a: unknown[]) => unknown
 /** register(on) with a fake `on`: each hook's handler and the .catch it was given (if any), by event name. */

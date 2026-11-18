@@ -12,10 +12,10 @@
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS } from '../../board'
 import { squash } from '../../core/text'
-import { S } from '../state'
-import { when } from '../tools'
+import { S } from '../../app/state'
+import { when } from '../../app/tools'
 import type { PaneParts } from './parts'
-import type { $ } from '../../claude/panel'
+import type { $ } from '../panel'
 import { vsBadge, vsCallout, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
 
 /** A history line in parts: its "try 2:" (or ''), what was said, the result after "→", and whether it went badly or well. */

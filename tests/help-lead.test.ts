@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { SETTINGS } from '../hooks/board'
-import { TOOLS, manual } from '../hooks/plugin/tools'
+import { TOOLS, manual } from '../hooks/app/tools'
 
 test('/symcc-help lead names every lead tool and every setting', () => {
   const text = manual('lead')

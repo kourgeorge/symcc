@@ -2,15 +2,15 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou } from '../../board'
-import { type PaneView, S } from '../state'
-import { type $, panelValues } from '../../claude/panel'
-import { openPane } from './open'
-import { claudeHost } from '../../claude/host'
+import { type PaneView, S } from '../../app/state'
+import { type $, panelValues } from '../panel'
+import { openPane } from '../../app/open'
+import { claudeHost } from '../host'
 
 export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt' }>
 
 /**
- * The band's first line: the brand ("𝄞 symcc v0.3.0 board") and the facts after it, made by `facts(room)` for the room
+ * The band's first line: the brand ("𝄞 symcc v0.3.0") and the facts after it, made by `facts(room)` for the room
  * left in `columns` beside the brand and the "open board" button. The version is dropped first: it stays only when the
  * facts are as long with it as without it (nothing else had to be cut or left out for it) and the line still fits.
  */

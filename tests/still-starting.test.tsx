@@ -3,8 +3,8 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { path } from '../hooks/plugin/store'
-import { S } from '../hooks/plugin/state'
+import { path } from '../hooks/app/store'
+import { S } from '../hooks/app/state'
 import { ran } from './fakes'
 
 /** Records every write and every command, wherever it points; the files hold just a board under /repo. */

@@ -6,7 +6,7 @@ import { test } from './reset'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { fakeHost } from './fake-host'
 import { commandNames } from '../hooks/board'
-import { S, heard, stopped, toolName, useName } from '../hooks/plugin/state'
+import { S, heard, stopped, toolName, useName } from '../hooks/app/state'
 import * as app from '../hooks/app/symcc'
 import * as wiring from '../hooks/register'
 

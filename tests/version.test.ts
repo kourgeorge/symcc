@@ -4,8 +4,8 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { ICON } from '../hooks/name'
 import { bannerLines, bannerText, boardBrand, boardText, boardTitle, emptyBoard, versionOf } from '../hooks/board'
-import { S, loadVersion } from '../hooks/plugin/state'
-import { bandTitle } from '../hooks/plugin/ui/above-prompt'
+import { S, loadVersion } from '../hooks/app/state'
+import { bandTitle } from '../hooks/claude/ui/above-prompt'
 
 const PLUGIN = '/plugin'
 const PLUGIN_JSON = `${PLUGIN}/.claude-plugin/plugin.json`
@@ -43,11 +43,13 @@ test('the version read from plugin.json shows in the panel title, the banner, th
   await loadVersion(host)
   expect(reads).toEqual([PLUGIN_JSON]) // read once
   expect(S.version).toBe('0.3.0')
-  expect(boardTitle('/Users/me/repositories/symcc', 'symcc', S.version)).toBe(`${ICON} symcc v0.3.0 board · symcc`)
-  expect(boardText(emptyBoard(), 0, '~/repositories/symcc', 'symcc', 0, {}, S.version).split('\n')[0]).toBe(`${ICON} symcc v0.3.0 board · ~/repositories/symcc`)
-  expect(bannerText(bannerLines(emptyBoard(), '/Users/me/repositories/symcc', '/Users/me', true, 80, 0, 'symcc', undefined, S.version)[0]!)).toContain('symcc v0.3.0 board · symcc')
+  expect(boardTitle('/Users/me/repositories/symcc', 'symcc', S.version)).toBe(`${ICON} symcc v0.3.0 · symcc`)
+  expect(boardText(emptyBoard(), 0, '~/repositories/symcc', 'symcc', 0, {}, S.version).split('\n')[0]).toBe(`${ICON} symcc v0.3.0 · ~/repositories/symcc`)
+  expect(bannerText(bannerLines(emptyBoard(), '/Users/me/repositories/symcc', '/Users/me', true, 80, 0, 'symcc', undefined, S.version)[0]!)).toContain('symcc v0.3.0 · symcc')
   const band = bandTitle(80, () => ' · symcc ⏵ auto · 1 doing ')
   expect(band.brand).toBe(boardBrand('symcc', '0.3.0'))
+  expect(band.brand).toBe(`${ICON} symcc v0.3.0`)
+  expect(bannerLines(emptyBoard(), '/Users/me/repositories/symcc', '/Users/me', true, 80, 0, 'symcc', undefined, S.version)[0]!.parts.some(p => p.text.includes('board'))).toBe(false)
   expect(band.brand).toContain('v0.3.0')
 })
 
@@ -66,15 +68,15 @@ test('a broken plugin.json shows no version', async () => {
 
 test('a narrow panel and a narrow band drop the version first', async () => {
   await loadVersion(hostWith({ [PLUGIN_JSON]: '{"version":"0.3.0"}' }).host)
-  // the banner's first line: 26 columns with the version, 19 without
-  expect(bannerText(bannerLines(emptyBoard(), '/x/symcc', '/x', true, 30, 0, 'symcc', undefined, S.version)[0]!)).toBe('symcc v0.3.0 board · symcc')
-  expect(bannerText(bannerLines(emptyBoard(), '/x/symcc', '/x', true, 22, 0, 'symcc', undefined, S.version)[0]!)).toBe('symcc board · symcc')
+  // the banner's first line: 20 columns with the version, 19 without
+  expect(bannerText(bannerLines(emptyBoard(), '/x/symcc', '/x', true, 30, 0, 'symcc', undefined, S.version)[0]!)).toBe('symcc v0.3.0 · symcc')
+  expect(bannerText(bannerLines(emptyBoard(), '/x/symcc', '/x', true, 19, 0, 'symcc', undefined, S.version)[0]!)).toBe('symcc board · symcc')
   // the band: the version goes when the facts would have to be cut for it
   const facts = (room: number) => ' · symcc ⏵ auto · 1 doing · 2 to do '.slice(0, Math.max(0, room))
   const wide = bandTitle(80, facts)
   expect(wide.brand).toContain('v0.3.0')
   expect(wide.facts).toBe(facts(99))
-  const narrow = bandTitle(65, facts)
+  const narrow = bandTitle(63, facts)
   expect(narrow.brand).toBe(`${ICON} symcc board`)
   expect(narrow.facts).toBe(facts(99))
 })

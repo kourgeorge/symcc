@@ -4,7 +4,7 @@
 // ui.close hook decides from the page and the open boxes; escBack applying it, and takeKeysBack asking for
 // the keyboard back, need a real panel. Since T-154 nothing needs Esc: tests/way-out.test.tsx checks the other ways out.
 import { expect, test } from 'claude-code/testing'
-import { escStep, type EscStep, type PanePlace } from '../hooks/plugin/ui/esc'
+import { escStep, type EscStep, type PanePlace } from '../hooks/claude/ui/esc'
 
 type Boxes = Parameters<typeof escStep>[1]
 const NONE: Boxes = { settingEdit: null, settingPick: null, draft: null, naming: null, rolePick: null, rejecting: null, diffOpen: null, answering: null, search: null }

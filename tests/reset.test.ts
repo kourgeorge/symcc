@@ -2,10 +2,10 @@
 // cancelled and dropped, and the private queues of store.ts and review.ts forgotten.
 import { expect } from 'claude-code/testing'
 import { test, resetPlugin, withTimeout, RESET_TEST_TIMEOUT_MS } from './reset'
-import { S, startS, timers } from '../hooks/plugin/state'
-import { oneAtATime } from '../hooks/plugin/store'
-import { mergeTurn } from '../hooks/plugin/review'
-import { logo, playLogo, resetLogo } from '../hooks/plugin/logo'
+import { S, startS, timers } from '../hooks/app/state'
+import { oneAtATime } from '../hooks/app/store'
+import { mergeTurn } from '../hooks/app/review'
+import { logo, playLogo, resetLogo } from '../hooks/app/logo'
 
 const never = () => new Promise<never>(() => undefined)
 

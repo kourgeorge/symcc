@@ -8,8 +8,8 @@ import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
 import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
 import { ICON, namesFor } from '../../name'
-import { type PaneView, S } from '../state'
-import type { PaneTab } from './open'
+import { type PaneView, S } from '../../app/state'
+import type { PaneTab } from '../../app/open'
 import { CLICK_HINT } from './surface'
 
 /** What the VS Code pieces draw with: the surface's elements, the color cast and the panel's width. */

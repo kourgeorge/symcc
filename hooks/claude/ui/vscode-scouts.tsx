@@ -11,13 +11,13 @@
 // with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
 import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../scouts'
-import { S } from '../state'
-import { type $, panelValues } from '../../claude/panel'
+import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
+import { S } from '../../app/state'
+import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { resetPane } from './open'
-import { claudeHost } from '../../claude/host'
+import { resetPane } from '../../app/open'
+import { claudeHost } from '../host'
 import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 
 /** The color of a scout's mark in VS Code: running blue, paused dim, a bad file in the warning color, waiting plain. */

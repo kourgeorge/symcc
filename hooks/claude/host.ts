@@ -7,7 +7,7 @@
 // `$` holds (claude/panel.ts), `words` gives symcc's tools their "mcp__<name>__<tool>" names, and `features` are all on.
 import type { EngineInterface } from 'claude-code'
 import { type Host, type HostAgentStart, type HostWords, ALL_FEATURES } from '../host'
-import { S } from '../plugin/state'
+import { S } from '../app/state'
 import { ROLE_TOOLS, claudeNames, workerTypeFor } from './agent-types'
 import { hostAgent, isNotReady, scoutNotReady } from './agents'
 import { leadUsage } from './lead-usage'
@@ -76,7 +76,7 @@ function envGet($: EngineInterface, name: string): Promise<string | undefined> {
 
 /**
  * The hook's `$` as a Host: each member makes the same call on the same `$` (so a hook's waits still count against its
- * own time), under symcc's names, plus `agents`, `lead`, `words` and `ui.panel`, the board panel's values (plugin/state.ts). Cheap and holds
+ * own time), under symcc's names, plus `agents`, `lead`, `words` and `ui.panel`, the board panel's values (app/state.ts). Cheap and holds
  * nothing, so each hook makes its own. Written out member by member: Claude Code's loader only lets `$` be used as
  * `$.noun.event(...)` or handed to the plugin's own functions, so `$` can't be wrapped as a whole (and some calls want
  * their first argument written out: see envGet).

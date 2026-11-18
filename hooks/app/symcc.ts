@@ -15,26 +15,26 @@
 // imports 'claude-code'; what is only Claude Code's (its event shapes, agent types, plan mode events, the panel's
 // render hooks) stays in register.tsx and hooks/claude/.
 //
-// Before calling an entry point, the host calls useName (plugin/state.ts) with its plugin name, so S.N is right.
+// Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
 import { boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal } from '../board'
 import type { FileTouch, Host } from '../host'
 import type { SymccTokens } from '../../types'
-import { findArchived, saveArchiveMigrated } from '../plugin/archive'
-import { askCall, checkEdit, guardFailed } from '../plugin/ask'
-import { gitReady } from '../plugin/git'
-import { claimLead, publish, handOver, releaseLead } from '../plugin/lead'
-import { changedFiles, changesText } from '../plugin/review'
-import { loadRoles } from '../plugin/roles'
-import { loadKinds } from '../plugin/kinds'
-import { checkerFinished } from '../plugin/checker'
-import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from '../plugin/scouts'
-import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from '../plugin/state'
-import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from '../plugin/store'
-import { noteForLead, brief, takeBoardUpdate } from '../plugin/tell'
-import { playable } from '../plugin/voice'
-import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from '../plugin/tools'
-import { openPane } from '../plugin/ui/open'
-import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, stoppedHandBack, setSymcc, setBoardMode, type TurnEnd } from '../plugin/workers'
+import { findArchived, saveArchiveMigrated } from './archive'
+import { askCall, checkEdit, guardFailed } from './ask'
+import { gitReady } from './git'
+import { claimLead, publish, handOver, releaseLead } from './lead'
+import { changedFiles, changesText } from './review'
+import { loadRoles } from './roles'
+import { loadKinds } from './kinds'
+import { checkerFinished } from './checker'
+import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './scouts'
+import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from './state'
+import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './store'
+import { noteForLead, brief, takeBoardUpdate } from './tell'
+import { playable } from './voice'
+import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
+import { openPane } from './open'
+import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, stoppedHandBack, setSymcc, setBoardMode, type TurnEnd } from './workers'
 
 /** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
 export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings. (ctrl+x tab goes back to it.)'

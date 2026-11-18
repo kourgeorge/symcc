@@ -1,8 +1,8 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { fakeHost } from './fake-host'
-import { S } from '../hooks/plugin/state'
-import { type Players, playsFor, spokenProject, withProject, findPlayers, WIN_TEXT_VAR } from '../hooks/plugin/voice'
+import { S } from '../hooks/app/state'
+import { type Players, playsFor, spokenProject, withProject, findPlayers, WIN_TEXT_VAR } from '../hooks/app/voice'
 
 // A machine that has every speech command (macOS, Linux and Windows ones), found without running anything.
 function machineFor(system: 'mac' | 'linux' | 'windows') {

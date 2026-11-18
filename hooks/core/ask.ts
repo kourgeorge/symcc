@@ -62,7 +62,7 @@ export function resolvePath(base: string, p: string): string {
   return `/${out.join('/')}`
 }
 
-/** How realPathOf looks at the disk; plugin/ask.ts answers it with $.fs. */
+/** How realPathOf looks at the disk; app/ask.ts answers it with $.fs. */
 export interface PathLookup {
   /** Where existing path `abs` really is (symbolic links followed), or undefined when it is not there. */
   real(abs: string): Promise<string | undefined>

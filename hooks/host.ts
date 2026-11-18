@@ -1,4 +1,4 @@
-// What symcc's logic (hooks/plugin/, outside ui/) needs from the program it runs in: files, commands,
+// What symcc's logic (hooks/app/) needs from the program it runs in: files, commands,
 // timers, agents, the session, and a few screen calls. Written by hand, with no import from 'claude-code',
 // so the logic doesn't depend on Claude Code's types.
 //

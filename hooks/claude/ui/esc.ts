@@ -3,11 +3,12 @@
 // only does that for a panel opened with closeOnEscape, and the owner saw no step from the search box (see
 // docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
 // (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
-import { cancelScoutEdit, scoutPlace } from '../scouts'
-import { S, openDays, changesCache } from '../state'
-import { type $, panelValues } from '../../claude/panel'
-import { resetPane, takeKeysBack } from './open'
-import { claudeHost } from '../../claude/host'
+import { cancelScoutEdit, scoutPlace } from '../../app/scouts'
+import { S, openDays, changesCache } from '../../app/state'
+import { type $, panelValues } from '../panel'
+import { resetPane } from '../../app/open'
+import { takeKeysBack } from './open'
+import { claudeHost } from '../host'
 
 /** What Esc does on the board panel; null: nothing left to go back from, the panel closes. */
 export type EscStep =

@@ -2,13 +2,13 @@
 // option and "Answer…" for their own words (the same answer box as a waiting task's page). An answer closes it,
 // the lead hears it in its next board update, and the page goes back to the list.
 import { answerChoices, answerKeys, type OwnerQuestion, type KeyHint } from '../../board'
-import { S } from '../state'
-import { type $, panelValues } from '../../claude/panel'
-import { when } from '../tools'
-import { answerOnBoard } from '../questions'
+import { S } from '../../app/state'
+import { type $, panelValues } from '../panel'
+import { when } from '../../app/tools'
+import { answerOnBoard } from '../../app/questions'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
-import { claudeHost } from '../../claude/host'
+import { claudeHost } from '../host'
 
 /** The keys at the bottom of a question's page: the answer keys, then b back. */
 export const questionKeys = (options: readonly string[]): KeyHint[] => [...answerKeys(undefined, options), { key: 'b', word: 'back' }]

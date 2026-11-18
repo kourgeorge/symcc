@@ -3051,9 +3051,9 @@ test('fixText lists dropped task entries as they are and keeps "set to the defau
 })
 
 // ---------------- a scout run that fails to start, or is stopped ----------------
-import { fixText } from '../hooks/plugin/store'
-import { runScout, runScoutNow, scoutFinished } from '../hooks/plugin/scouts'
-import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as scoutLeadQueue } from '../hooks/plugin/state'
+import { fixText } from '../hooks/app/store'
+import { runScout, runScoutNow, scoutFinished } from '../hooks/app/scouts'
+import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as scoutLeadQueue } from '../hooks/app/state'
 
 /** The shared fake Host for the scout code: in-memory files, a board in auto mode, one scout "gaps", and a spawn
  *  that answers with `spawn` (a function so a test can change it between calls; a start that fails rejects). */
