@@ -1,507 +1,160 @@
-// symcc (the name comes from plugin.json, see name.ts): a shared task board, the main chat as its lead, workers that build tasks in
-// parallel in their own Git worktrees and merge what passes the tests, and scouts you
-// define in .<name>/scouts/*.md that do what their file asks on a timer.
+// symcc (the name comes from plugin.json, see name.ts): the overview is at the top of app/symcc.ts.
 //
-// How work flows:
-//   you ⇄ lead (the main chat)  ──board tools──▶  .<name>/board.json
-//   a task is ready  ──▶  worktree + background worker subagent
-//   worker done      ──▶  commit · scope check · tests · merge into main  ──▶  the lead is told
-//   scout on a timer ──▶  report    ──▶  the lead is told and decides what goes on the board
-//
-// This file only wires up the hooks. The code lives in plugin/: state.ts (what the plugin holds
-// while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
-// roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
+// This file only wires Claude Code's events to symcc's entry points in app/symcc.ts (which any host can call), with
+// claudeHost($) (claude/host.ts) as the Host. What only Claude Code has stays here: its event shapes, its agent
+// types (claude/registration.ts), plan mode (claude/plan.ts) and the board panel's render hooks (plugin/ui/).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, WEB_SAFETY_LINE, intoOf, ASK_TOOL, guardReason } from './board'
-import { workerAgentTypes, isWorkerType, EXTRA_TOOLS, SCOUT_TOOLS } from './claude/agent-types'
-import { findArchived, saveArchiveMigrated } from './plugin/archive'
-import { ASK_TOOL_DEF, askCall, checkEdit, guardFailed } from './plugin/ask'
-import { gitReady } from './plugin/git'
-import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
-import { changedFiles, changesText } from './plugin/review'
-import { loadRoles } from './plugin/roles'
-import { loadKinds } from './plugin/kinds'
-import { checkerFinished } from './plugin/checker'
-import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './plugin/scouts'
-import { claudeHost, type ClaudeHost } from './claude/host'
-import { type $, S, useName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, openDays, changesCache, panelValues } from './plugin/state'
-import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './plugin/store'
-import { seePlan } from './plugin/plan'
-import { planFromMode, planFromAttachment, seeMainMode } from './claude/plan'
+import { isWorkerType } from './claude/agent-types'
+import { claudeHost } from './claude/host'
+import { seeMainMode, seeSpawnMode, seeAttachment } from './claude/plan'
+import { registerAll } from './claude/registration'
 import { usageTokens, turnEnd } from './claude/usage'
-import { noteForLead, brief } from './plugin/tell'
-import { playable } from './plugin/voice'
-import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './plugin/tools'
+import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
+import { type $, S, useName } from './plugin/state'
+import { findRoot } from './plugin/store'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
-import { openPane, takeKeysBack } from './plugin/ui/open'
 import { arrowMove, noteFocus } from './plugin/ui/arrows'
-import { escBack } from './plugin/ui/esc'
+import { paneClosing } from './plugin/ui/esc'
 import { renderPane } from './plugin/ui/pane'
-import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, stoppedHandBack, setSymcc, setBoardMode } from './plugin/workers'
 
-// ---------------- registration ----------------
+export { BOARD_OPENED } from './app/symcc'
+export { registerAll } from './claude/registration'
 
-/** Registers the worker agent types (base, and one per set of extra role tools), the scout agent type, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */
-/** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
-export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings. (ctrl+x tab goes back to it.)'
-
-export async function registerAll($: $) {
-  const ok = (p: Promise<unknown>) => p.catch(() => undefined)
-  // One worker type for the base tools, and one more per set of extra tools a role can ask for
-  // (e.g. "worker-web" for WebSearch and WebFetch); a task is spawned as the type its role needs.
-  for (const w of workerAgentTypes(S.N.name))
-    await ok($.agent.register({
-      name: w.suffix,
-      description: `${S.N.name} worker${w.suffix === 'worker' ? '' : ` (with ${w.tools.filter(t => EXTRA_TOOLS.includes(t)).join(', ')})`}: builds one task from the ${S.N.name} board in its own worktree. Started by ${S.N.name} only.`,
-      prompt: `You are a ${S.N.name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. To ask the owner something, call the ${S.N.tool(ASK_TOOL)} tool; if an edit is refused as outside your files, stop and hand back.${w.suffix === 'worker' ? '' : ` ${WEB_SAFETY_LINE}`}`,
-      tools: w.tools,
-      background: true,
-      permissionMode: 'acceptEdits',
-    }))
-  await ok($.agent.register({
-    name: 'scout',
-    description: `${S.N.name} scout: does what its scout file asks (reading the project, shell commands, the web) and reports to the lead. Started by ${S.N.name} only.`,
-    prompt: `You are a ${S.N.name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`,
-    tools: [...SCOUT_TOOLS],
-    background: true,
-  }))
-  for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
-  // the workers' question tool, next to the lead's tools (only a running worker's call is taken; see askCall)
-  await ok($.tool.register({ ...ASK_TOOL_DEF(), isDeferred: false }))
-  for (const c of [
-    { name: S.N.name, description: `Open the ${S.N.name} board panel: tasks and scouts` },
-    { name: `${S.N.name}-tasks`, description: `Open the ${S.N.name} board panel on the tasks view` },
-    { name: `${S.N.name}-scouts`, description: `Open the ${S.N.name} board panel on the scouts view and reload the scout files` },
-    { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task: /${S.N.name}-task T-3`, argumentHint: '<T-id>' },
-    { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
-    { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
-    { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
-    { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), or pause or resume it (/${S.N.name}-scout <name> pause|resume)`, argumentHint: '<name> [pause|resume]' },
-    { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
-    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
-    { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts: /${S.N.name}-stats [full] [7d|T-100..T-130]`, argumentHint: '[full] [7d|T-1..T-9]' },
-    { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: Claude works as normal, nothing runs; the board is kept` },
-    { name: `${S.N.name}-on`, description: `Turn ${S.N.name} back on for this project, in the mode the board had` },
-    { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
-  ])
-    await ok($.command.register(c))
+/** The plan mode a main session event carries (see seeMainMode). */
+function mainMode($: $, e: { permission_mode?: string; agent_id?: string }) {
+  useName($)
+  seeMainMode(claudeHost($), e)
 }
-
-/**
- * After a tool call changed scout or role files: reschedules the scouts and/or reloads the roles, then
- * publishes the view again, so the board shows the change right away (scheduleScouts and loadRoles only
- * change what the plugin holds; the panel draws from the published view). Runs in the background.
- */
-function filesChanged(host: ClaudeHost, hit: { scouts: boolean; roles: boolean }) {
-  if (!hit.scouts && !hit.roles) return
-  void (async () => {
-    // before session.start (a plugin reload): learn the project folder first; unknown, change nothing
-    if (!(await findRoot(host))) return
-    if (hit.scouts) await scheduleScouts(host)
-    if (hit.roles) await loadRoles(host).catch(() => undefined)
-    await publish(host, await load(host))
-  })().catch(() => undefined)
-}
-
-/** Counts session.start runs, so a late claimLead of an earlier start doesn't end a newer one's wait. */
-let starts = 0
 
 export const register: Register = on => {
   // Every hook starts with useName($), so S.N (the plugin's name) is right everywhere.
   on('session.start', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
-    S.startupDone = false
-    // Register the agent types, tools and commands first, before anything that can wait
-    // (claimLead may wait for old workers to stop) or throw: a pump started meanwhile, e.g.
-    // by a lead tool call, must find the worker type.
+    sessionStarting()
+    // Register the agent types, tools and commands first, before anything that can wait or throw.
     await registerAll($)
     const result = await next(e)
-    // claimLead may wait on the clock: for the board lock (up to 5 s), for old workers it stopped
-    // to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (2 s). A hook has 10 s and
-    // $.clock waits count against it, so session.start doesn't wait for those: once claimLead is
-    // about to wait (startWait.mark), the rest of the start goes on and claimLead finishes on its
-    // own. S.startupDone stays false until claimLead has finished, so pump starts no work before
-    // old tasks went back to "todo". When nothing waits, all of it runs in order as before.
-    const run = ++starts
-    let leadDone = true
-    let lead: Promise<unknown> = Promise.resolve()
-    // Even if a later step throws, pump must not stay blocked for the whole session.
-    try {
-      S.root = (await $.session.repo())?.root ?? (await $.session.root())
-      S.home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
-      S.me = await $.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
-      // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
-      // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
-      await saveMigrated(host).catch(() => undefined)
-      await saveArchiveMigrated(host).catch(() => undefined)
-      await saveScoutsMigrated(host).catch(() => undefined)
-      // Become the driver if nobody drives the board. As the driver, old workers still running
-      // from before a reload are stopped first and their tasks go back to "todo".
-      const waits = new Promise<void>(r => (startWait.mark = r))
-      leadDone = false
-      lead = claimLead(host, true)
-        .catch(() => (S.driving = false))
-        .finally(() => (leadDone = true))
-      await Promise.race([lead, waits])
-      startWait.mark = null
-      if (!(await $.fs.exists(path(S.N.boardFile)))) await publish(host, await load(host))
-      // A new project (no scouts folder yet) gets the plugin's example scouts, all paused (no timer runs them; run now still does); never stops the start.
-      await seedExampleScouts(host).catch(() => undefined)
-      await scheduleScouts(host).catch(() => undefined)
-      await loadRoles(host).catch(() => undefined)
-      await loadKinds(host).catch(() => undefined)
-      await cleanLeftoverTmp(host).catch(() => undefined)
-      S.watchdog?.cancel()
-      S.watchdog = $.clock.every(2 * 60_000, () => void check(host).catch(() => undefined))
-      // The driver refreshes its heartbeat; the others look whether it went stale and take over.
-      S.beat?.cancel()
-      S.beat = $.clock.every(LEAD_BEAT_MS, () =>
-        void claimLead(host)
-          .then(async d => (d ? pump(host) : undefined))
-          .catch(() => undefined),
-      )
-      // A board.json that can't be read: load already kept a copy and told the owner (once); nothing
-      // more happens now and board.json is left as it is. The heartbeat's pump starts work once it is fixed.
-      const b = await load(host).catch(() => null)
-      if (b) {
-        // Look at git once now: with no git, no repo or no commit, the lead is told (once) and nothing starts.
-        await gitReady(host, b).catch(() => undefined)
-        await publish(host, b)
-        // Open the board panel by itself (every session, driver or not), without taking the cursor
-        // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
-        // that is fine: the band above the prompt and /<name> still work.
-        if (openOnStart(b) && symccOn(b)) await openPane(host, { focus: false, quiet: true })
-      }
-    } finally {
-      startWait.mark = null
-      const done = () => {
-        if (run !== starts) return
-        S.startupDone = true
-        void pump(host).catch(() => undefined)
-      }
-      if (leadDone) done()
-      else void lead.then(done)
-    }
+    await sessionStart(host)
     return result
   })
 
   on('session.end', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
-    // /clear ends the session but the process goes on under a new session id, and no
-    // session.start follows: keep the timers, workers and scouts, and hand over to the new id.
+    // /clear ends the session, but the process goes on under a new session id (see sessionCleared).
     if ((e as { reason?: string }).reason === 'clear') {
       const result = await next(e)
-      await handOver(host).catch(() => undefined)
+      await sessionCleared(host)
       return result
     }
-    for (const t of timers.splice(0)) t.cancel()
-    S.watchdog?.cancel()
-    S.watchdog = null
-    S.beat?.cancel()
-    S.beat = null
-    await releaseLead(host)
+    await sessionEnd(host)
     return next(e)
   })
 
-  // The lead's guide, appended to the system prompt.
+  // The lead's guide, appended to the system prompt (prompt.compose is not cached: read on every render).
   on('prompt.compose', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
     const r = await next(e)
-    // Before session.start set the project folder (a plugin reload): learn it first; unknown, add nothing.
-    if (!(await findRoot(host))) return r
-    // Read on every render (prompt.compose is not cached), so /<name>-off and /<name>-on count from the next message.
-    if (!(await isOn(host))) return r
-    return { sections: [...r.sections, { id: `${S.N.name}:lead`, text: leadGuide(), scope: 'session' as const }] }
+    const text = await leadGuideText(host)
+    return text === undefined ? r : { sections: [...r.sections, { id: `${S.N.name}:lead`, text, scope: 'session' as const }] }
   })
 
-  // Keep the owner's last typed prompt (at the terminal or from the phone/web bridge), so a task
-  // added after it can point back to the request. Slash commands, hidden prompts and the plugin's
-  // own "[name] Board update" messages are not the owner's request and are left out.
+  // The owner's typed prompt (terminal or phone/web bridge); slash commands, hidden prompts and symcc's own board updates are left out.
   on('prompt.submit', async ($, e, next) => {
     useName($)
     const r = await next(e)
     const kind = e.origin?.kind
-    if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string' && r.text.trim()) heard.owner = { text: r.text.trim().slice(0, 2000), at: now() }
+    if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
     return r
   })
 
-  // Workers and scouts only reach the agents through the plugin itself.
-  // (The name is only known once a hook runs, so these match inside rather than by a filter.)
+  // Workers and scouts only reach the agents through the plugin itself (the name is only known once a hook runs).
   on('agent.offer', ($, e, next) => {
     useName($)
     return isWorkerType(e.agent, S.N.name) || e.agent === S.N.scout ? { isOffered: false } : next(e)
   })
 
-  // One tool.call hook for every tool (the name is only known once a hook runs):
-  // a worker or scout the plugin stopped can't do anything more, so every tool it tries is
-  // refused; the lead's own tools, mcp__<name>__<tool>, run here; and writing, editing or deleting
-  // a scout file (Write, Edit, MultiEdit, or rm and the like in Bash) reschedules the scouts, a role file reloads the roles.
-  // The workers' question tool, mcp__<name>__ask_owner, runs here too: it knows the calling worker from the agentId.
-  const toolNames = TOOLS().map(t => t.name)
+  // One tool.call hook for every tool: symcc's own run in toolCall; any other runs, then otherToolDone looks at what it changed.
   on('tool.call', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
-    if (e.agentId && stopped.has(e.agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
-    if (e.tool === S.N.tool(ASK_TOOL)) {
-      if (!(await findRoot(host))) return { result: startingText() }
-      return { result: await askCall(host, e.agentId, e as unknown as Record<string, unknown>).catch((err: Error) => `error: ${err.message}`) }
-    }
-    const name = toolNames.find(t => e.tool === S.N.tool(t))
-    if (!name) {
-      const r = await next(e)
-      filesChanged(host, fileToolHits(e as unknown as Record<string, unknown>, S.N.scouts, `${S.N.dir}/roles`))
-      return r
-    }
-    // Before session.start set the project folder (e.g. right after a plugin reload), learn it from the
-    // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
-    if (!(await findRoot(host))) return { result: startingText() }
-    if (!(await isOn(host))) return { result: offAnswer(S.N.name) }
-    try {
-      return { result: await runTool(host, name, e as unknown as In) }
-    } catch (err) {
-      return { result: `error: ${(err as Error).message}` }
-    }
+    const call = e as unknown as Record<string, unknown>
+    const ours = await toolCall(host, e.tool, e.agentId, call)
+    if (ours) return ours
+    const r = await next(e)
+    otherToolDone(host, call)
+    return r
   }).catch(($, e, next) => {
-    // The hook threw or ran out of time. Once it had passed the call on (next), that answer stands. Otherwise one of
-    // symcc's own agents is refused (never let through unchecked); the lead's call of a symcc tool gets the error,
-    // and any other call of the lead goes on as if the hook were not there (see guardFailed).
+    // The hook threw or ran out of time. Once it had passed the call on (next), that answer stands.
     if (next.called) return next(e)
     useName($)
-    const deny = guardFailed(claudeHost($), 'tool.call', e.agentId, next.error)
-    if (deny) return { deny }
-    const ours = e.tool === S.N.tool(ASK_TOOL) || toolNames.some(t => e.tool === S.N.tool(t))
-    return ours ? { result: `error: ${S.N.name} couldn't run this tool: ${guardReason(next.error?.kind, next.error?.message)}` } : next(e)
+    return toolCallFailed(claudeHost($), e.tool, e.agentId, next.error) ?? next(e)
   })
 
-  // A worker's edit (Edit, Write, NotebookEdit) outside its change task's files is refused, and the path is
-  // recorded as a request to the owner; an edit or Bash command reaching the owner's copy outside the worker's
-  // folder is refused (see checkEdit). Everything else is decided as usual.
+  // A worker's edit outside its files, or reaching the owner's copy, is refused (see toolCheck); everything else is decided as usual.
   on('tool.check', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
     // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
     const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
-    // an error in checkEdit is not swallowed here: the .catch below refuses the call of symcc's own agents
-    const deny = e.agentId ? await checkEdit(host, e.agentId, e.tool, e.input, cwd) : undefined
+    // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
+    const deny = await toolCheck(host, e.agentId, e.tool, e.input, cwd)
     return deny ? { decision: 'deny', reason: deny } : next(e)
   }).catch(($, e, next) => {
-    // The hook threw or ran out of time: a worker's, checker's or scout's call is refused, the lead's goes on (guardFailed).
     if (next.called) return next(e)
     useName($)
-    const deny = guardFailed(claudeHost($), 'tool.check', e.agentId, next.error)
+    const deny = toolCheckFailed(claudeHost($), e.agentId, next.error)
     return deny ? { decision: 'deny', reason: deny } : next(e)
   })
 
-  // A worker's or scout's run ended: its final answer arrives here, with why it ended (e.reason).
+  // An agent's run ended: its final answer arrives here, with why it ended (e.reason).
   on('turn.complete', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
     const r = await next(e)
-    const end = turnEnd(e)
-    if (e.agentId && workers.has(e.agentId)) void workerFinished(host, e.agentId, e.answer, end, usageTokens(e.usage))
-    else if (e.agentId && scoutRuns.has(e.agentId)) void scoutFinished(host, e.agentId, e.answer, e.isAborted, usageTokens(e.usage))
-    // a checker's verdict (the checker setting) goes to the finish step waiting for it
-    else if (e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, e.isAborted || e.reason === 'aborted', usageTokens(e.usage))
-    // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
-    // (a worker this copy stopped, e.g. an orphan after a reload: its task is put back to "todo" at once instead)
-    else if (e.agentId) void lateHandBack(host, e.agentId).then(ok => (ok ? workerFinished(host, e.agentId!, e.answer, end, usageTokens(e.usage)) : stoppedHandBack(host, e.agentId!))).catch(() => undefined)
+    agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
     return r
   })
 
-  // Every slash command starts with the plugin's name (see parseCommand): /<name> opens the
-  // panel, /<name>-<word> does one thing. Registered under the plugin's name, so matched here.
+  // symcc's slash commands are registered under the plugin's name, so matched in runCommand.
   on('command.run', async ($, e, next) => {
     const host = claudeHost($)
     useName($)
-    const isStats = e.command === `${S.N.name}-stats`
-    if (!isStats && !commandNames(S.N.name).includes(e.command)) return next(e)
-    // Before session.start set the project folder (a plugin reload): learn it from the session first;
-    // if it still isn't known, answer and write nothing (never a board or lock path from "/").
-    if (!(await findRoot(host))) return { text: startingText(), isTextDisplayOnly: true }
-    // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
-    if (isStats) return { text: await statsText(host, e.args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
-    // A broken board.json makes load throw (it is never written over): the commands that don't need the
-    // board (help, opening the panel, a usage line) still work; the others answer with the reason.
-    const loaded = await load(host).then(
-      board => ({ board, broken: '' }),
-      (err: Error) => ({ board: null, broken: err.message }),
-    )
-    const cmd = parseCommand(e.command, e.args, loaded.board ? modeOf(loaded.board) : undefined, S.N.name)
-    if (!cmd) return next(e)
-    const say = (text: string) => ({ text, isTextDisplayOnly: true as const })
-    if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
-    const b = loaded.board!
-    switch (cmd.kind) {
-      case 'bad':
-        return say(cmd.message)
-      case 'help':
-        return say(manual(cmd.topic))
-      case 'open':
-      case 'tasks':
-        await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
-        return say(BOARD_OPENED)
-      case 'scouts': {
-        const defs = await scheduleScouts(host)
-        await publish(host, await load(host))
-        // Open the panel on the Scouts view; the text list below is the fallback when it can't be placed.
-        const placed = await openPane(host, { tab: 'scouts' }).then(r => r?.isPlaced ?? false).catch(() => false)
-        const skipped = unreadableScoutsText()
-        const withSkipped = (text: string) => (skipped ? `${text}\n${skipped}` : text)
-        if (placed) return say(withSkipped(`Scouts opened: Enter opens a scout, t tasks, b goes back to the tasks.`))
-        if (!defs.length && skipped) return { text: skipped }
-        if (!defs.length) return { text: `No scouts yet. Add one as ${S.N.scouts}/<name>.md:\n---\nevery_minutes: 30\n---\nLook for missing tests around risky code.` }
-        return { text: defs.map(d => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ''}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name)!.last_run!.slice(11, 16)}` : ''}${scoutState.get(d.name)?.running ? ' (running now)' : ''}${scoutState.get(d.name)?.paused ? ' (paused)' : ''}`).join('\n') + (skipped ? `\n${skipped}` : '') }
-      }
-      case 'scout':
-        return { text: await runScoutNow(host, cmd.name) }
-      case 'scout-pause':
-        return say(await setScoutPaused(host, cmd.name, cmd.paused))
-      case 'settings': {
-        S.settingEdit = null
-        S.settingPick = null
-        const placed = await openPane(host, { tab: 'settings' }).then(r => r?.isPlaced ?? false).catch(() => false)
-        if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, b goes back to the tasks.`)
-        return say(settingsText({ ...b, notify: notifyOf(b, await playable(host)) }, S.N.name))
-      }
-      case 'set':
-        return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))
-      case 'off':
-      case 'on':
-        return say(await setSymcc(host, cmd.kind === 'on'))
-      case 'mode': {
-        const r = await setBoardMode(host, cmd.mode, 'you')
-        noteForLead(`The owner set the board mode to ${cmd.mode}: ${brief(r)}`)
-        return say(r)
-      }
-      case 'show': {
-        const t = find(b, cmd.id)
-        if (!t) {
-          // not on the board: it may have been moved to archive.json (read-only, shown as text)
-          const old = await findArchived(host, cmd.id)
-          if (!old) return say(`${cmd.id} is not on the board.`)
-          return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
-        }
-        await openPane(host, { tab: 'tasks', task: t.id })
-        return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
-      }
-      case 'approve':
-      case 'reject': {
-        const t = find(b, cmd.id)
-        if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
-        if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}).`)
-        const r = await runTool(host, cmd.kind, cmd.kind === 'reject' ? { task: t.id, reason: cmd.reason } : { task: t.id }).catch((err: Error) => `error: ${err.message}`)
-        noteForLead(cmd.kind === 'approve' ? `The owner approved ${t.id}: ${brief(r)}` : `The owner rejected ${t.id} ("${brief(cmd.reason)}"): ${brief(r)}`)
-        return say(r)
-      }
-      case 'diff': {
-        const t = find(b, cmd.id)
-        if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
-        if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`)
-        try {
-          const files = await changedFiles(host, intoOf(t), t)
-          if (!cmd.file) return say(statText(t.id, files, S.N.name))
-          const f = cmd.file.replace(/^\.\//, '')
-          if (!files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${files.map(x => x.file).join(', ') || 'nothing'}`)
-          const text = await changesText(host, intoOf(t), t, f)
-          return say(cutDiff(text, t.id, 5000, f, S.N.name).join('\n') || `${f}: no text changes (binary?)`)
-        } catch (err) {
-          return say(`Could not read the changes of ${t.id}: ${(err as Error).message}`)
-        }
-      }
-    }
-    return next(e)
+    return (await runCommand(host, e.command, e.args)) ?? next(e)
   })
 
   // Plan mode (see core/plan.ts): Claude Code has no call for the mode and no event when it changes, so it is
   // read from these events of the main session (never a worker's or scout's). Each passes the event on unchanged.
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    const host = claudeHost($)
-    useName($)
-    seeMainMode(host, e)
-    return next(e)
-  })
-  on('classic.Stop', async ($, e, next) => {
-    const host = claudeHost($)
-    useName($)
-    seeMainMode(host, e)
-    return next(e)
-  })
-  on('classic.SessionStart', async ($, e, next) => {
-    const host = claudeHost($)
-    useName($)
-    seeMainMode(host, e)
-    return next(e)
-  })
-  // a spawn from the main chat carries the main chat's mode
-  on('agent.spawn', async ($, e, next) => {
-    const host = claudeHost($)
-    useName($)
-    if (!e.parentAgentId) void seePlan(host, planFromMode(e.permissionMode)).catch(() => undefined)
-    return next(e)
-  })
-  // plan_mode / plan_mode_reentry: the reminder sent while plan mode is on; plan_mode_exit: it has ended
-  on('prompt.attachment', async ($, e, next) => {
-    const host = claudeHost($)
-    useName($)
-    if (!e.agentId) void seePlan(host, planFromAttachment(e.type)).catch(() => undefined)
-    return next(e)
-  })
+  on('classic.UserPromptSubmit', async ($, e, next) => (mainMode($, e), next(e)))
+  on('classic.Stop', async ($, e, next) => (mainMode($, e), next(e)))
+  on('classic.SessionStart', async ($, e, next) => (mainMode($, e), next(e)))
+  on('agent.spawn', async ($, e, next) => (useName($), seeSpawnMode(claudeHost($), e), next(e)))
+  on('prompt.attachment', async ($, e, next) => (useName($), seeAttachment(claudeHost($), e), next(e)))
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const host = claudeHost($)
     useName($)
-    await findRoot(host)
+    await findRoot(claudeHost($))
     return renderAbovePrompt($, e, next)
   })
 
-  // Esc in the board panel goes one step back (see escBack: leaves a text box, or goes back a page) and
-  // keeps the panel open, then asks for the keyboard back, which Claude Code gave to its prompt on Esc.
-  // Esc on the board list with no search closes it. Opened days, the search and the active view are
-  // forgotten when the board panel closes. Each close is written to the debug log (claude --debug), to see
-  // whether an Esc reached the panel at all (docs/research/esc-in-panels.md).
+  // The board panel closing: Esc goes one step back and keeps it open (see paneClosing).
   on('ui.close', async ($, e, next) => {
     useName($)
     if (e.id !== S.N.pane) return next(e)
-    const back = e.origin.kind === 'person' && (await escBack($))
-    $.ui.log(`${S.N.name} board: ui.close from ${e.origin.kind}${back ? ', went one step back' : ''}`, { to: 'debug' })
-    if (back) {
-      takeKeysBack($)
-      return { value: undefined }
-    }
-    openDays.clear()
-    S.backlogOpen = false
-    S.backlogAll = false
-    S.doneOpen = false
-    S.droppedOpen = false
-    S.search = null
-    S.draft = null
-    S.naming = null
-    S.diffOpen = null
-    S.rejecting = null
-    S.rolePick = null
-    S.answering = null
-    S.settingEdit = null
-    S.settingPick = null
-    changesCache.clear()
-    await panelValues($).updateTab(() => '').catch(() => undefined)
-    await panelValues($).updateScoutOpen(() => '').catch(() => undefined)
-    return next(e)
+    return (await paneClosing($, e.origin.kind)) ? { value: undefined } : next(e)
   })
 
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-    const host = claudeHost($)
     useName($)
-    await findRoot(host)
+    await findRoot(claudeHost($))
     return renderPane($, e, next)
   })
 
-  // ↑↓ on the board panel's lists move the focus to the row above or below (Claude Code makes them scroll the
-  // panel once its page is taller than the panel); see ui/arrows.ts.
+  // ↑↓ on the board panel's lists move the focus to the row above or below; see ui/arrows.ts.
   on('ui.focus', { component: 'Pane' }, async ($, e, next) => {
     useName($)
     return noteFocus($, e, next)
