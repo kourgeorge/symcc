@@ -61,8 +61,11 @@ fi
 # (hosts/node/env.d.ts, hosts/node/tsconfig.json). hosts/node/tests/node-host.spec.ts checks the same imports under bun test.
 node_files=$(find hosts/node -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
 if [ -n "$node_files" ]; then
-  hits=$(grep -nHE "^[[:space:]]*(import|export|\})[^'\"]*['\"]" $node_files |
-    grep -E "['\"](claude-code(/[^'\"]*)?|[^'\"]*/claude/[^'\"]*|[^'\"]*/register(\.tsx)?)['\"]")
+  # a module name after `from` (any line, so a long name list's last line too), a bare `import '...'`, or a dynamic
+  # `import('...')`; the name is claude-code(/...), a path through or ending in /claude, or register(.tsx)
+  q="['\"\`]"
+  nq="[^'\"\`]"
+  hits=$(grep -nHE "(^|[^[:alnum:]_\$.])(from|import)[[:space:]]*\(?[[:space:]]*$q(claude-code(/$nq*)?|$nq*/claude(/$nq*)?|$nq*/register(\.tsx)?)$q" $node_files)
   if [ -n "$hits" ]; then
     echo "$hits" | while IFS= read -r hit; do echo "host-free: hosts/node/ imports Claude Code (it must run without it): $hit" >&2; done
     fails=$((fails + 1))

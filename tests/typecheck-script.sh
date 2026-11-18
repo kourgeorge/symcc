@@ -65,6 +65,18 @@ rm -rf "$tmp/hooks/core/sub"
 expect_host_bound "node: import in a .tsx file" hooks/app/y.tsx "import { readFileSync } from 'node:fs'\nexport const y = readFileSync\n" "a host-bound import.*hooks/app/y.tsx:1"
 rm -f "$tmp/hooks/app/y.tsx"
 expect_host_bound "needs Claude Code types" hooks/app/a.ts "export const a: EngineInterface | null = null\n" "with no Claude Code types.*TS2304"
+# T-377: hosts/node/ may use Node, but never Claude Code or hooks/claude/, in any import form
+mkdir -p "$tmp/hosts/node"
+printf "import { readFileSync } from 'node:fs'\nimport { S } from '../../hooks/app/state'\n// it never imports 'claude-code'\nexport const n = [readFileSync, S]\n" > "$tmp/hosts/node/ok.ts"
+clean
+out="$(sh "$tmp/tests/host-free.sh" "$tmp" 2>&1)"; code=$?
+[ "$code" -eq 0 ] || bad "host-free with a clean hosts/node/: expected exit 0, got $code: $out"
+expect_host_bound "hosts/node/: claude-code import" hosts/node/n.ts "import type { On } from 'claude-code'\n" "hosts/node/ imports Claude Code.*n.ts:1"
+expect_host_bound "hosts/node/: dynamic import('claude-code')" hosts/node/n.ts "export const m = import('claude-code')\n" "hosts/node/ imports Claude Code.*n.ts:1"
+expect_host_bound "hosts/node/: await import of hooks/claude/" hosts/node/n.ts "export const h = await import('../../hooks/claude/host')\n" "hosts/node/ imports Claude Code.*n.ts:1"
+expect_host_bound "hosts/node/: multi-line name list" hosts/node/n.ts "import { a,\n  b } from '../../hooks/claude/host'\n" "hosts/node/ imports Claude Code.*n.ts:2"
+expect_host_bound "hosts/node/: the hooks/claude folder itself" hosts/node/n.ts "import { claudeHost } from '../../hooks/claude'\n" "hosts/node/ imports Claude Code.*n.ts:1"
+rm -rf "$tmp/hosts"
 # and through scripts/typecheck.sh, on code that type-checks fine with Claude Code's types
 clean
 printf "export const c = 'WebFetch'\n" > "$tmp/hooks/core/c.ts"

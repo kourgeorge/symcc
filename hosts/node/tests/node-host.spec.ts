@@ -14,11 +14,12 @@ const FAKE = `${NODE}/tests/fake-claude.sh`
 
 /**
  * The imports of `text` that bind it to Claude Code: 'claude-code' (or 'claude-code/...'), hooks/claude/, register.tsx.
- * Only import and export lines count (a line starting with them, or the `} from '...'` line ending a long name list).
+ * Every module name counts: after `from` (on any line, so the end of a long name list too), a bare `import '...'`, and
+ * a dynamic `import('...')` / `await import('...')` (quotes or backticks).
  */
 export function claudeImports(text: string): string[] {
-  const specs = [...text.matchAll(/^\s*(?:(?:import|export)\b[^'"\n]*?|\}\s*from\s*)['"]([^'"]+)['"]/gm)].map(m => m[1]!)
-  return specs.filter(s => /^claude-code(\/|$)/.test(s) || /(^|\/)hooks\/claude(\/|$)|(^|\/)claude\//.test(s) || /(^|\/)register(\.tsx)?$/.test(s))
+  const specs = [...text.matchAll(/(?:(?<![\w$.])from\s*|^\s*import\s+|(?<![\w$.])import\s*\(\s*)['"`]([^'"`\n]+)['"`]/gm)].map(m => m[1]!)
+  return specs.filter(s => /^claude-code(\/|$)/.test(s) || /(^|\/)claude(\/|$)/.test(s) || /(^|\/)register(\.tsx)?$/.test(s))
 }
 
 async function filesUnder(dir: string): Promise<string[]> {
@@ -34,11 +35,18 @@ async function filesUnder(dir: string): Promise<string[]> {
 test('hosts/node/ imports nothing from Claude Code or hooks/claude/', async () => {
   // the check itself catches each kind of import (the samples are built, so this file holds none of them as an import)
   const imp = (names: string, from: string) => `import ${names} from '${from}'`
-  expect(claudeImports(imp('type { $ }', 'claude-code'))).toEqual(['claude-code'])
-  expect(claudeImports(imp('{ expect }', 'claude-code/testing'))).toEqual(['claude-code/testing'])
-  expect(claudeImports(imp('{ claudeHost }', '../../hooks/claude/host'))).toEqual(['../../hooks/claude/host'])
+  const CC = ['claude', 'code'].join('-')
+  const HC = ['../../hooks', 'claude'].join('/')
+  expect(claudeImports(imp('type { $ }', CC))).toEqual([CC])
+  expect(claudeImports(imp('{ expect }', `${CC}/testing`))).toEqual([`${CC}/testing`])
+  expect(claudeImports(imp('{ claudeHost }', `${HC}/host`))).toEqual([`${HC}/host`])
+  expect(claudeImports(imp('{ claudeHost }', HC))).toEqual([HC])
   expect(claudeImports(imp('x', '../../hooks/register'))).toEqual(['../../hooks/register'])
-  expect(claudeImports(`import {\n  a,\n} from '../../hooks/claude/agents'`)).toEqual(['../../hooks/claude/agents'])
+  expect(claudeImports(`import {\n  a,\n} from '${HC}/agents'`)).toEqual([`${HC}/agents`])
+  expect(claudeImports(`import { a,\n  b } from '${HC}/host'`)).toEqual([`${HC}/host`])
+  expect(claudeImports(`const h = await ${'import'}('${HC}/host')`)).toEqual([`${HC}/host`])
+  expect(claudeImports(`const m = ${'import'}("${CC}")`)).toEqual([CC])
+  expect(claudeImports(`${'import'} '${HC}/side'`)).toEqual([`${HC}/side`])
   expect(claudeImports(`${imp('{ S }', '../../hooks/app/state')}\n${imp('{ spawn }', 'node:child_process')}`)).toEqual([])
   const files = await filesUnder(NODE)
   expect(files.length).toBeGreaterThan(3)
@@ -148,6 +156,12 @@ test('an option with no value is refused: a bare --files never adds a task that 
     expect(await readFile(`${dir}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
     const r2 = await runCommand(['bun', MAIN, '--root', dir, 'add', 'Title', '--files', '--why', 'x'], { cwd: dir })
     expect(r2.stderr).toContain('--files needs a value')
+    for (const bad of ['abc', '0', '-1']) {
+      const r3 = await runCommand(['bun', MAIN, '--root', dir, '--wait-minutes', bad, 'tick'], { cwd: dir })
+      expect(`${bad}: ${r3.exitCode}`).toBe(`${bad}: 2`)
+      expect(r3.stderr).toContain('--wait-minutes needs a positive number')
+    }
+    expect(await readFile(`${dir}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

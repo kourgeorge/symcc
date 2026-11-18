@@ -80,6 +80,11 @@ async function main() {
     return 2
   }
   const { opts, rest } = args
+  const wait = opts['wait-minutes']
+  if (wait !== undefined && !(Number(wait) > 0 && Number.isFinite(Number(wait)))) {
+    console.error(`error: --wait-minutes needs a positive number\n${USAGE}`)
+    return 2
+  }
   if (!rest.length) {
     console.log(USAGE)
     return 2
