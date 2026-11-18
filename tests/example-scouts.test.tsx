@@ -46,6 +46,8 @@ function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; fai
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', (_, e) => (toasts.push(String((e as unknown as { text?: string; message?: string }).text ?? (e as unknown as { message?: string }).message ?? JSON.stringify(e))), { value: undefined }) as never)
   on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ok('true\n') : ok() }
@@ -116,6 +118,10 @@ test('run now on an example scout runs it once, and it stays paused (a pause onl
   // the scout is spawned (the test kit hands back no agent id, so the plugin calls it a failed start; what
   // matters here is that run now is not refused for the pause and the scout's agent is asked to start)
   expect(typeof r === 'string' ? r : String(r.result)).not.toContain('paused')
+  // asked from a lead tool call, it is queued (T-391), and starts when the lead's turn ends
+  expect(scoutSpawns(w.spawned)).toEqual([])
+  await $.turn.complete({ answer: 'ok', isAborted: false, reason: 'answer', durationMs: 1000, turnId: 'lead' } as never)
+  await w.clock.settle()
   expect(scoutSpawns(w.spawned).length).toBe(1)
   expect(scoutSpawns(w.spawned)[0]).toContain('bugs')
   expect(paused(w.files)).toEqual(EXAMPLES)
@@ -156,6 +162,10 @@ test('control: a scout that is not paused does run on its timer in this fake wor
   const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }), '/.symcc/scouts/bugs.md': mine }, dirs: ['/.symcc/scouts'] })
   await start($)
   await w.clock.advance(PAST_EVERY_TIMER)
+  // its timer queues it (T-391); the next turn's start starts it
+  expect(scoutSpawns(w.spawned)).toEqual([])
+  await $.turn.start({ text: '', turnId: 'wake' } as never)
+  await w.clock.settle()
   expect(scoutSpawns(w.spawned).length).toBeGreaterThan(0)
 })
 

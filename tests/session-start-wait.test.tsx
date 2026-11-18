@@ -53,6 +53,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
     return { value: ok() }
   })
   on('tool.call', () => ({ result: 'ran' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: 'running' })) }) as never)
   on('session.send', (_, e) => {
     const to = (e as unknown as { to: string | { agentId: string } }).to
@@ -75,6 +76,12 @@ function board(maxParallel: number): Board {
   b = addTask(b, { origin: { why: 'a test' }, title: 'Change a', files: ['src/'], merge_into: 'main' }, ISO)[0]
   b = addTask(b, { origin: { why: 'a test' }, title: 'Change b', files: ['docs/'], merge_into: 'main' }, ISO)[0]
   return patchTask(b, 'T-1', { status: 'doing', attempts: 1, session: 'me', agent: 'ag9', branch: 'symcc/T-1', runs: [{ started: ISO }] } as never, ISO)
+}
+
+/** The lead's next turn starts (the wake-up symcc sent, or the owner's prompt): queued workers start there (T-391). */
+async function nextTurn($: Engine, w: { clock: { settle(): Promise<unknown> } }) {
+  await $.turn.start({ text: '', turnId: 'next' } as never)
+  await w.clock.settle()
 }
 
 /** Starts the session without waiting for it; `done()` says whether session.start has returned. */
@@ -127,6 +134,9 @@ test('pump starts no work while session.start is still waiting for the reload se
   expect(w.spawned).toEqual([])
   await w.clock.advance(1)
   await w.clock.settle()
+  // both are queued, and start at the lead's next turn
+  expect(w.spawned).toEqual([])
+  await nextTurn($, w)
   expect(w.spawned.map(x => x.name).sort()).toEqual(['symcc-T-1', 'symcc-T-2'])
 })
 
@@ -152,10 +162,12 @@ test('two session.starts in a row: the older one finishing its wait starts no wo
   expect(w.task('T-1').status).toBe('todo')
   await w.clock.advance(1_500)
   await w.clock.settle()
+  await nextTurn($, w)
   expect(w.spawned).toEqual([])
-  // old1 ends: the second start's claimLead ends on its next look, and now T-2 gets one worker
+  // old1 ends: the second start's claimLead ends on its next look, and now T-2 gets one worker (at the next turn)
   agents.splice(0)
   await w.clock.advance(500)
   await w.clock.settle()
+  await nextTurn($, w)
   expect(w.spawned.filter(x => x.name === 'symcc-T-2')).toHaveLength(1)
 })

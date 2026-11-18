@@ -11,6 +11,7 @@ import { S, type CheckerEnd, checkerRuns, stopped } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
+import { startAgent } from './starts'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
 export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean }
@@ -53,7 +54,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const saved = await gitPlace($, dir, taskBranch(t))
   let agentId: string
   try {
-    const spawned = await $.agents.spawn({ kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+    // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
+    const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
     if (!spawned.agentId) throw new Error('the checker did not start')
     agentId = spawned.agentId
   } catch (err) {

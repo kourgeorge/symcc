@@ -62,6 +62,7 @@ function world(on: On, agents: Agent[], sid = 's1', gate: { wait?: Promise<void>
     return { isDelivered: true } as never
   })
   on('turn.complete', () => ({ text: '' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('session.start', (_, e) => ({ cwd: e.cwd }) as never)
   on('session.repo', () => ({ value: { root: '/repo' } }) as never)
   on('session.root', () => ({ value: '/repo' }) as never)
@@ -192,8 +193,11 @@ test('a task sent back to todo because its worker was stopped gets a fresh worke
   await w.clock.settle()
   expect(w.task('T-1').status).toBe('todo')
   // w9 stays listed as running, but this copy stopped it: it does not hold T-1, so a new worker starts
+  // it is queued (T-391), the idle lead is woken, and the wake-up's turn starts it
   for (let i = 0; i < 5 && !w.spawned.length; i++) {
     await w.clock.advance(2 * 60_000)
+    await w.clock.settle()
+    if (w.prompts.some(p => p.includes('Starting worker symcc-T-1 '))) await $.turn.start({ text: '', turnId: `wake-${i}` } as never)
     await w.clock.settle()
   }
   // (the test kit can't hand the plugin the new agent's id, so the start itself then counts as failed)
