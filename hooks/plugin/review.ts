@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, endedBy, tryLabel } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, endedBy, tryLabel } from '../board'
 import { sayNeedsYou } from './voice'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, changesCache } from './state'
@@ -145,19 +145,26 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     left.push(...inBranch)
   }
   const secrets = [...new Set(left)].sort()
-  const withSecrets = (r: CheckResult): CheckResult => (secrets.length ? { ...r, secrets, detail: `${r.detail}; ${secretsLeftText(secrets)}` } : r)
-  if (secrets.length && !changed.length) {
-    const ask = onlySecretsQuestion(t.id, secrets)
-    const r: CheckResult = { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
-    // A worker's try: the task waits for the owner with the question (still the same try only). The caller then finds
-    // it waiting and keeps that (its outcome line goes to the history as "not used"), so it never ends as failed.
-    if (mode === 'finish') await waitForOwner($, b, t, ask, `${tryLabel(t)}: ${r.detail}`)
-    return r
+  // A merge removes the task's folder afterwards (git worktree remove --force deletes untracked files too),
+  // so on a merge the left-out files are first moved out of it to keepLeftOut's folder; otherwise they stay in the folder.
+  const withSecrets = async (r: CheckResult): Promise<CheckResult> => {
+    if (!secrets.length) return r
+    const where = r.ok && r.merged ? await keepLeftOut($, t.id, dir, secrets) : undefined
+    return { ...r, secrets, detail: `${r.detail}; ${secretsLeftText(secrets, where)}` }
   }
   if (!changed.length) {
     // Nothing new, but this task's own work is already on the target branch (an earlier try merged
-    // it and a reload sent the task back): it is done, not failed.
-    if (await onTarget($, t.id, head, target)) return { ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` }
+    // it and a reload sent the task back): it is done, not failed. Checked first: files an earlier try
+    // left out as secrets are still in the folder then, and must not turn this into a question.
+    if (await onTarget($, t.id, head, target)) return withSecrets({ ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` })
+    if (secrets.length) {
+      const ask = onlySecretsQuestion(t.id, secrets)
+      const r: CheckResult = { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
+      // A worker's try: the task waits for the owner with the question (still the same try only). The caller then finds
+      // it waiting and keeps that (its outcome line goes to the history as "not used"), so it never ends as failed.
+      if (mode === 'finish') await waitForOwner($, b, t, ask, `${tryLabel(t)}: ${r.detail}`)
+      return r
+    }
     return { ok: false, detail: 'the worker made no change' }
   }
   const bad = outOfScope(changed, t.files, S.N.dir)
@@ -189,6 +196,32 @@ async function waitForOwner($: Host, b: Board, t: SymccTask, question: string, l
   if (!written) return
   sayNeedsYou($, b, t, question)
   tellLead($, `${question} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`)
+}
+
+/**
+ * Moves the secret-looking `files` (left out of task `id`'s merge) from its folder `dir` to
+ * <root>/<board folder>/left-out/<id>/ (the board folder is never committed; left-out/ is made for the owner only, mode 700),
+ * since the folder is removed after the merge. Returns where they are now, for the merge result.
+ */
+async function keepLeftOut($: Host, id: string, dir: string, files: readonly string[]): Promise<string> {
+  const rel = `${S.N.dir}/left-out/${id}`
+  const gone = "not kept: the task's folder is removed after the merge"
+  if (!/^[A-Za-z0-9_-]+$/.test(id) || !S.root) return gone
+  const top = `${S.root}/${S.N.dir}/left-out`
+  const mk = await $.process.run(['mkdir', '-p', '-m', '700', top])
+  if (mk.exitCode !== 0) return gone
+  // never committed, even in a repo whose .gitignore doesn't list the board folder
+  if (!(await $.fs.exists(`${top}/.gitignore`))) await $.fs.write(`${top}/.gitignore`, '*\n').catch(() => undefined)
+  const moved: string[] = []
+  for (const f of files) {
+    if (!isPlainRelPath(f)) continue
+    const to = `${top}/${id}/${f}`
+    const md = await $.process.run(['mkdir', '-p', to.slice(0, to.lastIndexOf('/'))])
+    if (md.exitCode !== 0) continue
+    if ((await $.process.run(['mv', '-f', `${dir}/${f}`, to])).exitCode === 0) moved.push(f)
+  }
+  if (!moved.length) return gone
+  return moved.length === files.length ? `moved to ${rel}/, since the task's folder is removed after the merge` : `only ${moved.join(', ')} moved to ${rel}/; the rest was ${gone}`
 }
 
 /** The files changed from commit `base` to commit `head` (-z: names come through as they are; without it git quotes and escapes unusual ones, e.g. "caf\303\251.md"). */

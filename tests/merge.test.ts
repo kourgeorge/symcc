@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
@@ -757,6 +757,7 @@ async function finishedWithSecrets(changed: string[], committed = false) {
   const [b] = boardWith('auto', ['npm test'], { files: ['src/', 'tests/'] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
+  for (const f of changed) w.put(`${WT}/${f}`, `contents of ${f}`)
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   await workerFinished(w.$, 'ag1', 'made the change')
   return { w, restored, t: find(await load(w.$), 'T-1')!, told: leadQueue.join('\n') }
@@ -777,6 +778,13 @@ test('a change with src/a.ts and tests/.env merges src/a.ts only; the history an
   expect(w.git.main).toBe(H1)
   expect(t.history.at(-1)).toContain('left out tests/.env: the name looks like a secret')
   expect(told).toContain('left out tests/.env: the name looks like a secret, so it was not committed or merged')
+  // the merge removes the task's folder (worktree remove --force deletes untracked files), so the file is moved out first, and the text says where
+  expect(w.calls).toContain(`mkdir -p -m 700 ${ROOT}/.symcc/left-out`)
+  expect(w.files.get(`${ROOT}/.symcc/left-out/T-1/tests/.env`)).toBe('contents of tests/.env')
+  expect(w.files.has(`${WT}/tests/.env`)).toBe(false)
+  expect(w.files.get(`${ROOT}/.symcc/left-out/.gitignore`)).toBe('*\n')
+  expect(told).toContain("(moved to .symcc/left-out/T-1/, since the task's folder is removed after the merge)")
+  expect(t.history.at(-1)).not.toContain("still in the task's folder")
 })
 
 test('*.pem, *.key and id_rsa files are left out the same way; id_rsa.pub is not', async () => {
@@ -809,6 +817,32 @@ test('a change with only .env.local does not merge: the task waits for the owner
   expect(t.question).toContain('changed only files whose names look like secrets (tests/.env.local)')
   expect(t.history.at(-1)).toContain('left out tests/.env.local')
   expect(told).toContain('tests/.env.local')
+  // nothing merged, so the folder stays and the file stays in it
+  expect(w.files.get(`${WT}/tests/.env.local`)).toBe('contents of tests/.env.local')
+  expect(w.calls.some(c => c.includes('left-out'))).toBe(false)
+})
+
+test('a try whose earlier try already merged is done, even with a left-out secret still in its folder', async () => {
+  const w = world({ dirty: false, head: H1, changed: [], answer: (args, cwd) => {
+    if (args[0] === 'log' && args.at(-1) === H1) return ok(t1Commit(1))
+    if (cwd === WT && args[0] === 'diff' && args.includes('--cached')) return ok('tests/.env')
+    if (cwd === WT && args[0] === 'restore') return ok()
+    return undefined
+  } })
+  w.put(`${WT}/tests/.env`, 'S')
+  const [b, t] = boardWith('auto', [], { attempts: 2, files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(true)
+  expect(r.ask).toBeUndefined()
+  expect(r.merged).toBe(H1)
+  expect(r.detail).toMatch(/^already merged into main/)
+  expect(r.detail).toContain('left out tests/.env')
+  expect(w.files.get(`${ROOT}/.symcc/left-out/T-1/tests/.env`)).toBe('S')
+})
+
+test('only plain relative paths are moved out of the folder', () => {
+  expect(isPlainRelPath('tests/.env')).toBe(true)
+  for (const bad of ['', '/etc/passwd', '../.env', 'a/../../.env', 'a/./.env', 'a//.env', 'a\\..\\.env', 'a\0b']) expect(isPlainRelPath(bad)).toBe(false)
 })
 
 test('checkAndMerge with no secret-looking file leaves nothing out and says nothing about secrets', async () => {

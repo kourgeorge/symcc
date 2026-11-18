@@ -16,8 +16,14 @@ export const secretFiles = (files: readonly string[]): string[] => files.filter(
 const shownName = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
 const nameList = (files: readonly string[]) => `${files.slice(0, 10).map(shownName).join(', ')}${files.length > 10 ? `, and ${files.length - 10} more` : ''}`
 
-/** What a check says about the secret-looking files (`files`, see secretFiles) it left out of a task's commit. */
-export const secretsLeftText = (files: readonly string[]) => `left out ${nameList(files)}: the name looks like a secret, so it was not committed or merged (still in the task's folder)`
+/**
+ * What a check says about the secret-looking files (`files`, see secretFiles) it left out of a task's commit.
+ * `where`: where they are now (by default still in the task's folder; after a merge that folder is removed, so they are moved first).
+ */
+export const secretsLeftText = (files: readonly string[], where = "still in the task's folder") => `left out ${nameList(files)}: the name looks like a secret, so it was not committed or merged (${shownName(where)})`
+
+/** Whether `file` (a path git listed in a task's change) is a plain relative path that is safe to move: not absolute, no "." or ".." parts, no NUL or backslash. */
+export const isPlainRelPath = (file: string) => !!file && !file.startsWith('/') && !file.includes('\0') && !file.includes('\\') && file.split('/').every(p => p !== '' && p !== '.' && p !== '..')
 
 /** The question a task waits with when its change held only secret-looking files (`files`), so nothing was merged. */
 export const onlySecretsQuestion = (id: string, files: readonly string[]) => `${id} changed only files whose names look like secrets (${nameList(files)}), so nothing was committed or merged; they are still in its folder. Should it try again without them (say what it should do instead), or be dropped?`
