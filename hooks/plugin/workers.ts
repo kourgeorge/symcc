@@ -964,7 +964,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   if (r.ok) sayDone(host, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
   if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await git(host, ['branch', '-d', taskBranch(t)])
-  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? "The checker's report" : 'The end of the last test output'}:\n${r.checker ? r.testOutput.replace(/^[^\n]*\n/, '') : r.testOutput}` : ''
+  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? "The checker's report" : 'The last test output (each failing test first when it was long, then its end)'}:\n${r.checker ? r.testOutput.replace(/^[^\n]*\n/, '') : r.testOutput}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
@@ -1505,7 +1505,7 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`
 }
 
-/** workers whose agent a check saw ended without a hand-back: failed a short while later (ENDED_GRACE_MS), or on the next check, if still not handed back */
+/** workers whose agent a check saw ended (or missing from the agent list) without a hand-back: failed a short while later (ENDED_GRACE_MS; a missing one on the next check), or on the next check, if still not handed back */
 export const seenEnded = new Set<string>()
 
 /** How long after a check saw a worker's agent ended its report may still come (turn.complete hands it on a moment after the agent ends). */
@@ -1641,13 +1641,17 @@ export async function check(host: Host) {
     // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so the
     // first check that sees it ended gives it a short grace (ENDED_GRACE_MS) and fails it then if still
     // not handed back; with no timer here, the next check fails it.
-    const ended = info !== undefined && ENDED_STATUSES.includes(info.status)
+    // Claude Code drops an ended agent from host.agents.list() a while after it ends: a tracked worker
+    // missing from a list we did get counts as ended too, once it stays missing for one whole check.
+    const missing = agents !== undefined && info === undefined
+    const ended = missing || (info !== undefined && ENDED_STATUSES.includes(info.status))
     if (!ended) {
       seenEnded.delete(agentId)
       continue
     }
     if (!seenEnded.has(agentId)) {
       seenEnded.add(agentId)
+      if (missing) continue
       const timer = afterMs(host, ENDED_GRACE_MS, () => void failLost(host, agentId, w).catch(() => undefined))
       if (timer) timers.push(timer)
       continue
