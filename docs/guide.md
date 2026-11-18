@@ -1288,6 +1288,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
 | [`tests/`](../tests/) | The tests: one file per area (the board logic, the panel, merging, scouts, stats, and so on) |
+| [`hosts/node/`](../hosts/node/) | symcc with no Claude Code: a `Host` made of plain Node/Bun calls (`host.ts`), agents as `claude -p` processes (`runner.ts`), and a tiny command line (`main.ts`). See "Running symcc without Claude Code" below |
 
 **Where to add a new feature:** pure logic goes in `hooks/core/`; what symcc does goes in `hooks/app/`; Claude Code wiring goes in `hooks/claude/`; panel pages go in `hooks/claude/ui/`. `hooks/app/` and `hooks/core/` must not import `claude-code` or `node:` modules, or name Claude Code's tools: `sh tests/host-free.sh` (run by `sh scripts/typecheck.sh`) checks this.
 
@@ -1303,4 +1304,19 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 - **Run the tests:** `claude plugin test .` from the project folder.
 - **Where tests live:** in `tests/`, one file per area (for example `board.test.ts` for the board logic and `pane.test.tsx` for the panel).
 - **Layout:** `hooks/core/` holds the logic you can test (plain data, no Claude Code calls). `hooks/app/` holds what symcc does, also with no Claude Code. `hooks/claude/` and `hooks/claude/ui/` do the wiring to Claude Code, and `hooks/register.tsx` only connects events. Put new logic in `hooks/core/` when you can. See the code map above.
+- **Test the Node host:** `sh scripts/test-node-host.sh` (bun test, not `claude plugin test`: it needs files and processes).
 - **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).
+
+### Running symcc without Claude Code
+
+`hosts/node/` runs the same engine (`hooks/app/` and `hooks/core/`) from a plain command line, with each worker as its own `claude -p` process. It has no board panel, no band and no plan mode. It is a small test of the idea, not a full client. Each command is one session:
+
+```
+bun hosts/node/main.ts --root <project> tool settings '{"test_commands":["npm test"]}'
+bun hosts/node/main.ts --root <project> add "Say hello" "Create hello.txt" --files hello.txt
+bun hosts/node/main.ts --root <project> [--model haiku] tick     # starts ready tasks, waits for their tests and merges
+bun hosts/node/main.ts --root <project> board
+bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash command
+```
+
+What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended.

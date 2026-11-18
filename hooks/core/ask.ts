@@ -484,7 +484,7 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
     }
     // a command word with expansion braces (`{cd,} /tmp`, `c{d..d} /tmp`) may be a cd: the folder it names is added,
     // and the worker's folder (as for a cd that can't be followed), and none is dropped (T-436)
-    const first = braceWords(p.text)[0]
+    const first = plainWords(p.text, braceLit)[0]
     if (first !== undefined && hasBrace(first)) {
       const guess = cdTarget(`cd ${p.text.trim().replace(/^\S+\s*/, '')}`, home)
       const moved = [wt, ...(guess ? here.map(d => resolvePath(d, guess)) : [])]
@@ -636,38 +636,13 @@ const GIT_ENV_REFUSED = /^(GIT_\w*|PAGER|EDITOR|VISUAL|LESS\w*|SSH_ASKPASS|BROWS
 
 /**
  * The words of simple command `text`, split at spaces outside quotes; quotes are dropped and a backslash keeps the next
- * character. A best effort, not a shell parser.
+ * character. A best effort, not a shell parser. `lit` maps each quoted or backslashed character (braceLit).
  */
-function plainWords(text: string): string[] {
+function plainWords(text: string, lit = (c: string) => c): string[] {
   const out: string[] = []
   let w = ''
   let has = false
   let quote = ''
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!
-    if (c === '\\' && quote !== "'") (w += text[++i] ?? ''), (has = true)
-    else if (quote) c === quote ? (quote = '') : (w += c)
-    else if (c === "'" || c === '"') (quote = c), (has = true)
-    else if (/\s/.test(c)) {
-      if (w || has) out.push(w)
-      w = ''
-      has = false
-    } else w += c
-  }
-  if (w || has) out.push(w)
-  return out
-}
-
-/**
- * plainWords' words of `text` with each quoted or backslashed "{", "}" and "," turned into "_", so what is left of
- * them is what bash's brace expansion may read (`'{"h":"%h"}'` is text, `{git,stash}` is not).
- */
-function braceWords(text: string): string[] {
-  const out: string[] = []
-  let w = ''
-  let has = false
-  let quote = ''
-  const lit = (c: string) => (/[{},]/.test(c) ? '_' : c)
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!
     if (c === '\\' && quote !== "'") (w += lit(text[++i] ?? '')), (has = true)
@@ -682,6 +657,12 @@ function braceWords(text: string): string[] {
   if (w || has) out.push(w)
   return out
 }
+
+/**
+ * Turns a quoted or backslashed "{", "}" and "," into "_" for plainWords, so what is left of them is what bash's brace
+ * expansion may read (`'{"h":"%h"}'` is text, `{git,stash}` is not).
+ */
+const braceLit = (c: string) => (/[{},]/.test(c) ? '_' : c)
 
 /** Short options of git grep that take a value right after them (`-e<pattern>`, `-A3`). */
 const GREP_VALUE = 'efABCmO'
@@ -872,7 +853,7 @@ const RERUNS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'eval'])
 const BRACE_WHAT = 'with {braces}'
 
 /**
- * Whether word `w` (from braceWords, so quoted braces are gone) has a "{" that bash's brace expansion may read: not a
+ * Whether word `w` (from plainWords with braceLit, so quoted braces are gone) has a "{" that bash's brace expansion may read: not a
  * git revision's `@{...}` (`HEAD@{1}`), not a `${...}` setting and not an empty `{}` (bash keeps it as text, as in
  * `find -exec git log {} +`).
  */
@@ -931,7 +912,7 @@ function braceExpand(w: string): string[] | null {
 }
 
 /**
- * Whether braceWords word `w` may become git through brace expansion: with the braces and commas gone it reads git
+ * Whether word `w` (from plainWords with braceLit) may become git through brace expansion: with the braces and commas gone it reads git
  * (`{git,} stash`, `g{i,}t stash`), or one of its comma-separated parts, or that part's last path piece, is git or
  * `git-...` (`{git,stash}`, `{/usr/bin/git,stash}`), or one of the words its expansion makes is (`g{i..i}t`,
  * `{g..h}it`, T-436). Too many words to tell counts as git.
@@ -989,7 +970,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     const words = plainWords(p.text)
     const adds = seen
     seen ||= words.some(a => ADDS_WORDS.has(progName(a)))
-    return [{ ...p, words, braces: braceWords(p.text), adds }]
+    return [{ ...p, words, braces: plainWords(p.text, braceLit), adds }]
   })
   /** The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined when it isn't git. */
   const gitAt = (words: string[], at: number, adds: boolean, braces: string[]): { bad?: string } | undefined => {
@@ -1039,6 +1020,12 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
   // main's broad rule for all of it. The command splitter doesn't know `#` comments or `$'...'` quoting, so with a
   // newline, a `#` that starts a word or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
   // Nor with a backslash anywhere: an escape like `a\>&` hides a background `&` from the splitter (T-439 round 7).
+  /** Adds inner gitScan result `inner` to `out`; the result to return when it found a git write. */
+  const fold = (inner: { bad?: string; git: boolean; env?: string }) => {
+    out.git ||= inner.git
+    out.env ??= inner.env
+    return inner.bad ? { ...out, bad: inner.bad } : undefined
+  }
   const unsplit = /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(command)
   // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
   const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
@@ -1054,10 +1041,8 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
       const rest = words.slice(shellAt + 1)
       const texts = progName(words[shellAt]!) === 'eval' ? [rest.join(' ')] : rest.filter(w => !/^[-+]/.test(w))
       for (const t of texts) {
-        const inner = gitScan(t, depth + 1, allow, true)
-        out.git ||= inner.git
-        out.env ??= inner.env
-        if (inner.bad) return { ...out, bad: inner.bad }
+        const bad = fold(gitScan(t, depth + 1, allow, true))
+        if (bad) return bad
       }
     }
     const toolArgs = findExecTextArgs(words)
@@ -1071,19 +1056,21 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
       if (g) continue
       const at = w.search(/git(?!\w)/i)
       if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
-        const inner = gitScan(w.slice(at), depth + 1, allow, broad)
-        out.git ||= inner.git
-        out.env ??= inner.env
-        if (inner.bad) return { ...out, bad: inner.bad }
+        const bad = fold(gitScan(w.slice(at), depth + 1, allow, broad))
+        if (bad) return bad
       }
     }
   }
   return out
 }
 
+/** The start of each git write reason: `what` may change something, and `who` may only read with git. */
+const gitReadOnlyText = (what: string, who: string) =>
+  `Refused: ${what} may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
+
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
-  `Refused: ${what} may change the repository or run another program, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Check the work without changing any branch, commit, tag or the stash.`
+  `${gitReadOnlyText(what, 'the checker')} Check the work without changing any branch, commit, tag or the stash.`
 
 /**
  * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
@@ -1091,14 +1078,14 @@ export const gitWriteText = (what: string) =>
  * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
  */
 export const workerGitWriteText = (what: string, into?: string) =>
-  `Refused: ${what} may change the repository or run another program, and a worker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
+  `${gitReadOnlyText(what, 'a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change
  * something: a scout runs in the owner's own folder, so a git write there changes the owner's branch, files or stash.
  */
 export const scoutGitWriteText = (what: string) =>
-  `Refused: ${what} may change the repository or run another program, and a scout may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings). You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`
+  `${gitReadOnlyText(what, 'a scout')} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`
 
 /**
  * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative

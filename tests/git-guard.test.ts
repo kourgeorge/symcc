@@ -303,3 +303,19 @@ test('long odd brace words stay cheap for the git check, and a long word with gi
   // past the work cap a word is judged by its letters: these could make git
   expect(gitWriteIn(`${'{g,i}'.repeat(60)}{t..t} stash`)).toBe('git with {braces}')
 })
+
+test('the git write reasons keep their exact text, and quoted braces stay text (T-447)', () => {
+  const head = (who: string) =>
+    `Refused: git stash may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
+  expect(gitWriteText('git stash')).toBe(`${head('the checker')} Check the work without changing any branch, commit, tag or the stash.`)
+  const worker = `${head('a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.`
+  expect(workerGitWriteText('git stash')).toBe(worker)
+  expect(workerGitWriteText('git stash', 'main')).toBe(`${worker} In this try you may also run \`git merge main\` (or \`git merge --abort\`) to merge main in; then resolve the conflicts in the files and don't commit.`)
+  expect(scoutGitWriteText('git stash')).toBe(`${head('a scout')} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`)
+  // quoted or backslashed braces are text; bare ones may spell git; an inner bash -c or a word holding a command is folded in
+  expect(gitWriteIn(`git log --format='{"h":"%h"}'`)).toBeUndefined()
+  expect(gitWriteIn(`git log --format=\\{x\\,y\\}`)).toBeUndefined()
+  expect(gitWriteIn('{git,} stash')).toBe('git with {braces}')
+  expect(gitWriteIn(`bash -c 'git stash'`)).toBe('git stash')
+  expect(gitWriteIn(`X='ls; git stash'`)).toBe('git stash')
+})

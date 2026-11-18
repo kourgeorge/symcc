@@ -5,6 +5,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## Unreleased
 
 ### Added
+- symcc runs outside Claude Code too, as a first test: `bun hosts/node/main.ts add | tick | board` drives the same board from a plain command line, with each worker as its own `claude -p` process in its worktree (a task's files become `claude -p` permission rules). A try's tokens and dollar cost are kept. There is no panel there: the board is the text board.
 - `/symcc-drive` makes the session you type it in drive the board. If another session drives, it hands over within 30 s: it stops its workers, steps down, and your session restarts those tasks from their kept folders and branches, without using up a try. There are never two drivers at once, and a session that doesn't answer is taken over after the usual 3 minutes.
 
 ### Fixed
@@ -14,6 +15,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Changed
 - The board in VS Code's side panel has no more blue boxes. VS Code draws every button as a filled blue box whose label never wraps, so task rows, question rows and scout rows are now plain text that wraps, with the ID (or scout name) as a link that opens it; Backlog / Done / Dropped (and the folds on a task's page) are bold links ("▸ Backlog 7"); the tabs are one line of text with the shown tab bold and the others links; and the mode switch is a small link. Buttons are kept for real actions (Approve, Retry, Save ...). The logo in VS Code is the single 𝄞 glyph, large and bold, since VS Code's font broke the multi-row clef apart. The terminal, desktop and mobile boards are unchanged.
+- In VS Code's Tasks list a done task is one dense line ("✓ T-12 title", the title dim) and a dropped one too ("– T-12 title"), with no second "done" line, like the terminal list. Open tasks keep their status line. The terminal, desktop and mobile boards are unchanged.
 - Role files name their extra tools in symcc's own words: `tools: web` instead of `tools: WebSearch, WebFetch`, so a role means the same in every host (in Claude Code, `web` is still WebSearch and WebFetch). Your own `.symcc/roles/*.md` files with the old names are changed once when symcc reads them. The lead's `roles` tool and the Roles page take `web`.
 - The header shows just the name and version ("𝄞 symcc v0.4.1 · <folder>"), without the word "board" after them, in the board tool's text, the band above the prompt and the terminal, desktop and mobile header. With no version known it still reads "symcc board".
 - The band above the prompt shows each doing task's real state and time, like the board's Tasks list: "T-440 ▶ 12m", "T-373 ▶ test", "T-435 ▶ check", "T-436 ▶ merge", with the try after it from try 2 on ("T-434 ▶ check · try 2"), in lined-up columns. The word "doing" is gone, and so are the notes the state already says ("worker on it", "checking and merging", "starting at the next turn"); every other note, such as "time is up: the worker was told to hand back", stays as the row's tail.
