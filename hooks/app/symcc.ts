@@ -22,7 +22,7 @@ import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
 import { askCall, checkEdit, guardFailed } from './ask'
 import { gitReady } from './git'
-import { claimLead, publish, handOver, releaseLead } from './lead'
+import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
 import { changedFiles, changesText } from './review'
 import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
@@ -55,6 +55,7 @@ export function COMMANDS(): { name: string; description: string; argumentHint?: 
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts: /${S.N.name}-stats [full] [7d|T-100..T-130]`, argumentHint: '[full] [7d|T-1..T-9]' },
     { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: Claude works as normal, nothing runs; the board is kept` },
     { name: `${S.N.name}-on`, description: `Turn ${S.N.name} back on for this project, in the mode the board had` },
+    { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ]
 }
@@ -376,6 +377,8 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'off':
     case 'on':
       return say(await setSymcc(host, cmd.kind === 'on'))
+    case 'drive':
+      return say(await driveHere(host))
     case 'mode': {
       const r = await setBoardMode(host, cmd.mode, 'you')
       noteForLead(`The owner set the board mode to ${cmd.mode}: ${brief(r)}`)
