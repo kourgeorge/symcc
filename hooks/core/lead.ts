@@ -74,7 +74,7 @@ export const drivesAfter = (m: LeadMove): boolean => m !== 'follow' && m !== 'ha
  * What /<name>-drive does in session `me`, by lead.json `text` at `nowMs`:
  * - 'already': `me` drives; nothing changes.
  * - 'cancel': `me` drives but another session asked to take it: that request is dropped, `me` keeps driving.
- * - 'now': nobody drives, or the driver is gone (stale): `me` takes over at once.
+ * - 'now': nobody drives, the driver is gone (stale), or it already handed the board to `me`: `me` drives at once.
  * - 'ask': another session drives with a fresh heartbeat: `me` writes a hand-over request (see handRequest).
  * - 'asked': `me` already asked that session and waits for it.
  */
@@ -82,9 +82,10 @@ export type DriveAsk = 'already' | 'cancel' | 'now' | 'ask' | 'asked'
 
 export function driveAsk(text: string | null, me: string, nowMs: number, staleMs = LEAD_STALE_MS): DriveAsk {
   const m = whoDrives(text, me, nowMs, staleMs)
-  if (m === 'keep' || m === 'claim') return 'already'
+  if (m === 'keep') return 'already'
   if (m === 'handover') return 'cancel'
-  if (m === 'become' || m === 'takeover') return 'now'
+  // 'claim': the old driver already handed over and this session's heartbeat hasn't claimed yet: claim right away
+  if (m === 'become' || m === 'takeover' || m === 'claim') return 'now'
   return parseLead(text)?.handTo === me ? 'asked' : 'ask'
 }
 

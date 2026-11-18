@@ -159,11 +159,17 @@ async function followBoard(host: Host) {
 
 /** On session end the driver lets go of lead.json, so another session can take over at once. */
 export async function releaseLead(host: Host) {
-  if (!S.driving) return
+  const was = S.driving
   S.driving = false
   await locked(host, async () => {
     const file = path(S.N.leadFile)
-    if (parseLead(await host.fs.read(file).catch(() => null))?.session === S.me) await host.run(['rm', '-f', file])
+    const text = await host.fs.read(file).catch(() => null)
+    const l = parseLead(text)
+    if (!l) return
+    // the driver, or a session the board was just handed to (before its heartbeat claimed it): let go at once
+    if (l.session === S.me && (was || l.handFrom)) await host.run(['rm', '-f', file])
+    // a hand-over this session asked for (/<name>-drive) is dropped: the driver keeps driving
+    else if (l.handTo === S.me) await writeLead(host, noHandRequest(text)!)
   }).catch(() => undefined)
 }
 
@@ -177,11 +183,18 @@ export async function handOver(host: Host) {
   const fresh = await host.session.id().catch(() => old)
   if (fresh && fresh !== old) {
     S.me = fresh
-    if (S.driving)
-      await locked(host, async () => {
-        const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+    await locked(host, async () => {
+      const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+      if (S.driving) {
         if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}))
-      })
+        return
+      }
+      if (!l) return
+      // a hand-over this session asked for (/<name>-drive) follows it to the new id, keeping its time
+      if (l.handTo === old) await writeLead(host, leadText(l.session, l.heartbeat, { handTo: S.me, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) }))
+      // the board was handed to this session and its heartbeat hasn't claimed it yet: the new id gets it
+      else if (l.session === old && l.handFrom) await writeLead(host, handedText(S.me, l.handFrom, l.heartbeat))
+    })
     if (await host.fs.exists(path(S.N.boardFile))) await change(host, b => relabelSession(b, old, S.me))
   }
   const b = await load(host)

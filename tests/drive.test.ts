@@ -3,7 +3,7 @@
 // workers it stops for that go back to "todo" without using up a try.
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, leadText, parseLead, patchTask, startRun, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, LEAD_STALE_MS, find, parseCommand, commandNames, type Board, type LeadMove } from '../hooks/board'
-import { claimLead, driveHere } from '../hooks/app/lead'
+import { claimLead, driveHere, handOver, releaseLead } from '../hooks/app/lead'
 import { S, workers } from '../hooks/app/state'
 import { COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
@@ -37,7 +37,8 @@ test('whoDrives: a hand-over request seen by the driver steps it down; the hand-
   expect(parseLead(handed)).toEqual({ session: 'b', heartbeat: t0 + 40_000, handFrom: 'a' })
   expect(whoDrives(handed, 'b', t0 + 45_000)).toBe('claim')
   expect(whoDrives(handed, 'a', t0 + 45_000)).toBe('follow')
-  expect(driveAsk(handed, 'b', t0 + 45_000)).toBe('already')
+  // /symcc-drive in the gap before b's heartbeat claims: b claims right away
+  expect(driveAsk(handed, 'b', t0 + 45_000)).toBe('now')
   // after the claim, the new driver's plain heartbeat
   expect(whoDrives(leadText('b', t0 + 50_000), 'b', t0 + 60_000)).toBe('keep')
   // stale: the normal takeover, with or without a request; and /symcc-drive takes over at once
@@ -91,12 +92,13 @@ test('/symcc-drive is a command, listed for the host', () => {
 
 const ROOT = '/repo'
 
-function world() {
+function world(id = 'me') {
   const files = new Map<string, string>()
   const toasts: string[] = []
   const fs = memoryFs(files)
   const w = fakeHost({
     fs,
+    session: { id: async () => id },
     run: async argv => {
       const [cmd, ...rest] = argv
       const args = rest.filter(a => !a.startsWith('-'))
@@ -174,4 +176,68 @@ test('/symcc-drive asks the driving session to hand over; it stops its workers o
   const after = (JSON.parse(w.files.get(`${ROOT}/${S.N.boardFile}`)!) as Board).tasks[0]!
   expect(after.status).toBe('todo')
   expect(after.attempts).toBe(0)
+})
+
+test('/symcc-drive in the gap after the old driver handed over (before this heartbeat) claims right away', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  S.driving = false
+  const w = world('b')
+  await boardWithWork(w)
+  w.files.set(w.lead, handedText('b', 'a', Date.now()))
+  expect(await driveHere(w.host)).toBe('This session drives the board now.')
+  expect(S.driving).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'b', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat })
+})
+
+test('a hand-over request follows its session after /clear: the new id gets the board', async () => {
+  S.root = ROOT
+  const w = world('b2')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'b'
+  S.driving = false
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await driveHere(w.host)
+  // /clear: b goes on as b2; the request moves with it, keeping its time
+  const at = parseLead(w.files.get(w.lead)!)!.handAt
+  await handOver(w.host)
+  expect(S.me).toBe('b2')
+  expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'a', handTo: 'b2', handAt: at })
+  // a's heartbeat hands over to b2, and b2's heartbeat claims
+  S.me = 'a'
+  S.driving = true
+  expect(await claimLead(w.host)).toBe(false)
+  expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'b2', handFrom: 'a' })
+  S.me = 'b2'
+  S.driving = false
+  expect(await claimLead(w.host)).toBe(true)
+})
+
+test('/clear in the gap after the board was handed over: the new id still gets it', async () => {
+  S.root = ROOT
+  const w = world('b2')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'b'
+  S.driving = false
+  w.files.set(w.lead, handedText('b', 'a', Date.now()))
+  await handOver(w.host)
+  expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'b2', handFrom: 'a' })
+  expect(await claimLead(w.host)).toBe(true)
+})
+
+test('when the session that asked for the board ends, its request is dropped and the driver keeps driving', async () => {
+  S.root = ROOT
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'b'
+  S.driving = false
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await driveHere(w.host)
+  expect(parseLead(w.files.get(w.lead)!)?.handTo).toBe('b')
+  await releaseLead(w.host)
+  expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'a', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat })
+  S.me = 'a'
+  S.driving = true
+  expect(await claimLead(w.host)).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
 })
