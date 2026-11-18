@@ -80,7 +80,7 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
-    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env: { FAKE_LOG: log }, timeoutMs: 120_000 })
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env: { FAKE_LOG: log, FAKE_SCRATCH: '1' }, timeoutMs: 120_000 })
 
     expect((await cli('tool', 'settings', JSON.stringify({ test_commands: ['sh check.sh'] }))).stdout).toContain('sh check.sh')
     const added = await cli('add', 'Say hello', 'Write hello.txt with a greeting', '--files', 'hello.txt')
@@ -104,6 +104,9 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     // merged into main, and the board keeps the try's tokens and cost
     expect((await git('log', '--format=%s', 'main')).stdout).toContain('T-1: Say hello')
     expect((await git('show', 'main:hello.txt')).stdout).toBe('hello from the fake worker\n')
+    // the worker's throwaway script under .scratch/ was not committed (T-456), and real git staged the rest (T-477)
+    expect((await git('ls-tree', '-r', '--name-only', 'main')).stdout.split('\n')).not.toContain('.scratch/edit.py')
+    expect((await git('log', '--all', '--name-only', '--format=')).stdout).not.toContain('.scratch')
     const t = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
     expect(t.status).toBe('done')
     expect(t.runs[0].cost).toBe(0.0123)
