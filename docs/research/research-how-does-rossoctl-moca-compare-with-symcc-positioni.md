@@ -1,6 +1,6 @@
 # Research: how does rossoctl/moca compare with symcc (positioning, goals, design)?
 
-Kept from task T-420 so later tasks can read it. Checked on 2026-11-18.
+Kept from task T-420 (answer written 2026-11-18) so later tasks can read it.
 
 ## Question
 
@@ -8,15 +8,9 @@ How does rossoctl/moca compare with symcc in positioning, goals and design?
 
 ## Answer
 
-### Short answer
 moca is a server for running many AI coding-agent sessions for many users. It keeps each session's state in Redis and runs every command the agent makes in a remote container or a small virtual machine (microVM). Other programs send it work over HTTP. It has no lead, no board and no planning.
 
 It is a **neighbour, not a competitor**. moca is the layer below: "where and how safely does an agent's work run". symcc is the layer above: "what work to do, in what order, checked and merged". symcc can learn from moca, and one part of moca (its sandbox service, `mocactl sbx`) could later be one place where symcc workers run. Nothing in it can be copied in as it is today.
-
-### How I checked (2026-11-18)
-- Ran `gh repo view rossoctl/moca` and `gh issue list` / `gh release list` (repo pushed 2026-11-18 01:06 UTC).
-- Cloned the repo into /tmp, read it, then deleted the clone. Files read: README.md, CLAUDE.md, .claude/settings.json, skills/moca-delegate-task/SKILL.md, docs/sbx/user-guide.md, docs/concepts/brain-and-hands.md, docs/concepts/dispatch-archetypes.md, docs/specs/2026-06-28-human-gate-design.md, docs/specs/2026-10-27-sbx-up-cortex-design.md, packages/mocactl/package.json, and the code layout. I ran none of its code.
-- For symcc I read README.md, docs/guide.md and these notes in docs/research/: research-existing-hosts-*, opencode-spike-*, research-can-symcc-work-inside-an-ide-*, research-can-symcc-start-each-worker-in-a-sandbox-*, standalone-cli.md and host-independence.md.
 
 ### Facts about moca
 - **What it says it is** (repo description and README top): "Run stateful AI coding agents on a dense, warm process-manager runtime — sessions resume exactly where they left off." The README calls it a "leaf-session backend": "an external orchestrator dispatches isolated units of agent work ('leaves') over a simple HTTP + shared-volume contract."
@@ -48,7 +42,7 @@ It is a **neighbour, not a competitor**. moca is the layer below: "where and how
   - Scheduled runs were removed: "No P6 equivalent; design owed" (issue #536).
   - Its own server-side agent is Pi only. Claude Code, OpenCode, Codex and Bob are supported only as local programs that use the sandbox.
 
-### 2. Comparison table
+### Comparison table
 
 | | symcc | moca |
 |---|---|---|
@@ -67,7 +61,7 @@ It is a **neighbour, not a competitor**. moca is the layer below: "where and how
 | Maturity | Used every day by the owner; plugin API is early access | "Preview" everywhere; 3.6k commits in 5 months; 12 stars |
 | License | MIT | Apache-2.0 |
 
-### 3. Ideas worth borrowing (ideas only)
+### Ideas worth borrowing (ideas only)
 1. **Switch off local tools and run commands somewhere else.** They do it with Claude Code's `permissions.deny` plus an MCP server that offers its own `bash`/`read`/`write`/`edit`. This is another way to do what T-357 studied. symcc would run its own local MCP tools that only work inside the worktree, instead of wrapping Bash in `sandbox-exec`. It would also cover Read/Edit/Write, which Claude Code's own sandbox doesn't.
 2. **"Treat answers as untrusted work."** This matches symcc's checker and scope check. Worth saying the same way in the worker and lead prompts.
 3. **A pause that holds nothing in memory.** A paused run is just its saved state plus an id (`gateId`), and it continues when a decision comes back. This fits symcc's `waiting` status and the standalone engine: a waiting task should need no running process.
@@ -89,7 +83,7 @@ It is a **neighbour, not a competitor**. moca is the layer below: "where and how
 - a board panel inside Claude Code and VS Code
 - no server, accounts or operator needed
 
-### 4. Anything symcc could reuse directly?
+### Anything symcc could reuse directly?
 **Not now.**
 - The license is no barrier: Apache-2.0 code can go into an MIT project if the notice is kept.
 - The useful part, the `sbx` microVM sandbox, needs moca's control plane, a KVM host run by an operator, and GitHub enrollment. That is the opposite of symcc's "local, one developer, no extra app".
@@ -98,18 +92,22 @@ It is a **neighbour, not a competitor**. moca is the layer below: "where and how
 
 **Maybe later, as an option** (guess, not tested): with a moca `sbx` service available (for example inside an organisation that runs one), a symcc worker could run `mocactl sbx up` in its own worktree (each worktree gets its own sandbox) and run with local tools switched off. symcc would then pull the patch back before its scope check and tests. That would fit as an optional "runner" in the standalone engine, not as part of the core.
 
-### Not checked
+## Not checked
 - I did not install or run `mocactl` or any moca deployment.
 - I did not read rossoctl/cortex beyond its description ("The proxy layer between agents and everything they touch", Apache-2.0, 30 stars).
 - I did not read most of the 51 decision records.
 - That moca is from IBM is a guess.
 
-### Recommended next step
+## Recommended next step
 Don't make moca a dependency. Add idea 1 (local MCP tools that only work inside the worktree, with the built-in tools switched off) as an option to compare against the T-357 sandbox approach. Keep "remote runner, e.g. moca sbx" as a possible later runner for the standalone engine (T-377) work.
+
+## How it was found
+- Ran `gh repo view rossoctl/moca` and `gh issue list` / `gh release list` (repo pushed 2026-11-18 01:06 UTC).
+- Cloned the repo into /tmp, read it, then deleted the clone. Files read: README.md, CLAUDE.md, .claude/settings.json, skills/moca-delegate-task/SKILL.md, docs/sbx/user-guide.md, docs/concepts/brain-and-hands.md, docs/concepts/dispatch-archetypes.md, docs/specs/2026-06-28-human-gate-design.md, docs/specs/2026-10-27-sbx-up-cortex-design.md, packages/mocactl/package.json, and the code layout. I ran none of its code.
+- For symcc I read README.md, docs/guide.md and these notes in docs/research/: research-existing-hosts-*, opencode-spike-*, research-can-symcc-work-inside-an-ide-*, research-can-symcc-start-each-worker-in-a-sandbox-*, standalone-cli.md and host-independence.md.
 
 Sources (all read 2026-11-18):
 - https://github.com/rossoctl/moca (README.md, CLAUDE.md, docs/sbx/user-guide.md, docs/concepts/brain-and-hands.md, docs/concepts/dispatch-archetypes.md, skills/moca-delegate-task/SKILL.md)
 - https://github.com/rossoctl/moca/issues/536 (scheduled dispatch), https://github.com/rossoctl/moca/issues/859 (cost per turn)
 - https://github.com/rossoctl/moca/releases (v0.10.0, 2026-11-05)
 - https://github.com/rossoctl/cortex (description only)
-- Inside the project: README.md, docs/guide.md, docs/research/research-existing-hosts-that-wrap-many-coding-agents-claude.md, opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, research-can-symcc-work-inside-an-ide-like-vs-code-and-how.md, research-can-symcc-start-each-worker-in-a-sandbox-that-only.md, standalone-cli.md, host-independence.md (all under docs/research/ or the project root)
