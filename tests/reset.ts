@@ -11,6 +11,7 @@ import { resetMergeTurns } from '../hooks/plugin/review'
 import { resetLogo } from '../hooks/plugin/logo'
 import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/plugin/workers'
 import { saidNeedsYou } from '../hooks/plugin/voice'
+import { guardLogged } from '../hooks/plugin/ask'
 
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {
@@ -30,7 +31,7 @@ export function resetPlugin() {
   resetMergeTurns()
   resetLogo()
   for (const m of [workers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, changesCache, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
-  for (const s of [starting, finishing, stopped, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou]) s.clear()
+  for (const s of [starting, finishing, stopped, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0
   for (const k of Object.keys(heard)) delete (heard as Record<string, unknown>)[k]
   Object.assign(heard, emptyHeard())
