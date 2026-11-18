@@ -6,7 +6,7 @@ export default `You are a {{name}} worker. Do exactly this one task, then stop.
 
 Work ONLY inside this folder, your own copy of the project on branch {{branch}}:
   {{folder}}
-Use absolute paths under that folder for every Read, Edit and Write. Never touch the main project folder.
+Use absolute paths under that folder for every {{file_tools}}. Never touch the main project folder.
 
 Task {{task_id}}: {{title}}
 {{details}}

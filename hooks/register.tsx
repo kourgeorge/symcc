@@ -8,7 +8,7 @@ import { claudeNames, isWorkerType } from './claude/agent-types'
 import { claudeHost } from './claude/host'
 import { seeMainMode, seeSpawnMode, seeAttachment } from './claude/plan'
 import { registerAll } from './claude/registration'
-import { fileTouch } from './claude/tools'
+import { editTouch, fileTouch } from './claude/tools'
 import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
@@ -105,7 +105,7 @@ export const register: Register = on => {
     // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
     const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
     // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
-    const deny = await toolCheck(host, e.agentId, e.tool, e.input, cwd)
+    const deny = await toolCheck(host, e.agentId, editTouch(e.tool, e.input), cwd)
     return deny ? { decision: 'deny', reason: deny } : next(e)
   }).catch(($, e, next) => {
     if (next.called) return next(e)

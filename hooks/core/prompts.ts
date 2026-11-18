@@ -28,6 +28,7 @@ const SHARED_PLACEHOLDERS: Record<string, string> = {
 export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = {
   change: {
     ...SHARED_PLACEHOLDERS,
+    file_tools: 'what the worker uses on files, as the host names it (Claude Code: "Read, Edit and Write")',
     files: 'the "Files you may change" lines (the task\'s files, or "whatever the task needs")',
     test_command: 'the "these must pass" line with the test commands (or "There is no test command")',
     merge_main: 'only when the branch it merges into moved and conflicts: how to merge it first',

@@ -7,7 +7,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard } from '../hooks/board'
 import type { Host, HostAgentStart } from '../hooks/host'
-import { noUi } from '../hooks/host'
+import { ALL_FEATURES, noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/plugin/state'
 import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/plugin/starts'
 import { ran } from './fakes'
@@ -29,6 +29,7 @@ function fakeHost(fail: string[] = []) {
     clock: { after: (ms: number, f: () => void) => (timers.push({ ms, f }), { cancel() {} }) },
     lead: { send: async () => undefined },
     ui: noUi,
+    features: ALL_FEATURES,
   } as unknown as Host
   S.enabledNow = true
   return { host, spawned, timers }
