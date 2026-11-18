@@ -9,6 +9,7 @@ import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRol
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
 import type { PaneParts } from './parts'
 import { arrows, headingFocused, row } from './arrows'
+import { settingsPageVs } from './vscode-settings'
 import { claudeHost } from '../../claude/host'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
@@ -576,6 +577,10 @@ export async function settingsPage($: $, pane: PaneParts) {
       ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
     ]
   }
+  const openRoles = () => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))
+  const openKinds = () => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))
+  // VS Code's side panel: groups as headings, a Select or a box per setting, no key hints (see vscode-settings.tsx)
+  if (pane.vscode) return settingsPageVs($, pane, { rolesCount, kindsCount, save: saveIt, openRoles, openKinds })
   const pageRow = (page: 'roles' | 'kinds') =>
     page === 'roles' ? (
       <Button key={row('settings-roles')} plain label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>

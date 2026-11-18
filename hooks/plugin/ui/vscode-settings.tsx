@@ -1,0 +1,123 @@
+// The board panel's Settings view in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's page
+// (settings.tsx) folds its groups and opens a pick list or an edit box on Enter; here every group is a heading with
+// its settings under it, each on its own row:
+//   Work                                      (the group's heading)
+//   mode  [auto ▾]                            (VS Code's Select: a pick saves it)
+//   default auto · off: nothing runs; …       (what it means, dim, wrapped)
+//   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
+// Roles and Kinds are buttons that open their pages. No key hints.
+import { SETTINGS, SETTING_GROUPS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, isSettingPage, settingValue, parseSettingValue, type SettingName, type SettingsInput } from '../../board'
+import { S } from '../state'
+import { type $ } from '../../claude/panel'
+import type { PaneParts } from './parts'
+import { vsFooter, vsSection } from './vscode'
+
+/** What settings.tsx hands the VS Code page: the Roles and Kinds counts, how to save, how to open those pages. */
+export type VsSettingsCtx = {
+  rolesCount: string
+  kindsCount: string
+  save: (input: SettingsInput) => () => void
+  openRoles: () => void
+  openKinds: () => void
+}
+
+/** The choices of a setting with a fixed set of them, or null for a setting typed in a box (numbers, test commands). */
+export function settingChoices(name: SettingName, notifyChoices: readonly string[] | undefined): string[] | null {
+  const info = SETTINGS.find(x => x.name === name)!
+  if (info.kind === 'onoff') return ['on', 'off']
+  if (info.kind === 'mode') return ['off', 'review', 'auto']
+  if (info.kind === 'findings') return [...SCOUT_FINDINGS_CHOICES]
+  if (info.kind === 'untested') return [...TESTS_WITH_CHANGES_CHOICES]
+  // only what this machine can play (off always)
+  if (info.kind === 'notify') return notifyChoices?.length ? [...notifyChoices] : ['off']
+  return null
+}
+
+/** The Settings page in VS Code. */
+export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
+  const { Box, Text, Button, Input, C, banner, tabs, vs, v } = pane
+  const { Select } = vs
+  const plain = (key: string, text: string, color = 'inactive') => (
+    <Text key={key} wrap="wrap" color={C(color)}>
+      {text}
+    </Text>
+  )
+  const redraw = () => $.ui.invalidate('ui.render')
+
+  const settingRow = (name: SettingName) => {
+    const x = SETTINGS.find(s => s.name === name)!
+    const now = settingValue(v, name)
+    const choices = settingChoices(name, v.notify_choices)
+    const about = `default ${x.default} · ${x.range} · ${x.meaning}`
+    if (choices) {
+      // a value this machine can't play (notify) stays in the list, marked, so the Select shows what is set
+      const cantPlay = !choices.includes(now)
+      const options = [...choices.map(value => ({ value })), ...(cantPlay ? [{ value: now, label: `${now} (can't play here)` }] : [])]
+      return (
+        <Box key={`vs-setting-${name}`} flexDirection="column">
+          <Select key={`setting:${name}`} label={name} options={options} value={now} onSelect={value => {
+            const r = parseSettingValue(name, value)
+            if (value !== now && r.ok) ctx.save(r.input)()
+          }} />
+          {cantPlay ? plain('cant-play', "can't play here: nothing plays", 'warning') : null}
+          {plain('about', about)}
+        </Box>
+      )
+    }
+    // a box: what was typed stays while the page redraws (S.settingEdit), the saved value otherwise
+    const ed = S.settingEdit?.name === name ? S.settingEdit : null
+    const shown = now === 'none' && x.kind === 'commands' ? '' : now
+    const submit = (value: string) => {
+      const typed = value.trim() ? value : x.kind === 'commands' ? 'none' : ''
+      if (!typed) return void ((S.settingEdit = { name, value, error: `${name} must be a whole number, ${x.range}` }), redraw())
+      const r = parseSettingValue(name, typed)
+      if (r.ok === false) return void ((S.settingEdit = { name, value, error: r.message }), redraw())
+      S.settingEdit = null
+      ctx.save(r.input)()
+    }
+    return (
+      <Box key={`vs-setting-${name}`} flexDirection="column">
+        <Input
+          key={`setting:${name}`}
+          label={name}
+          value={ed ? ed.value : shown}
+          placeholder={x.kind === 'commands' ? 'e.g. cd web && npm test, or empty for none' : `a whole number, ${x.range}`}
+          submitLabel="Save"
+          onInput={value => void (S.settingEdit = { name, value, error: '' })}
+          onSubmit={submit}
+        />
+        {ed?.error ? plain(`setting-error-${name}`, ed.error, 'error') : null}
+        {x.kind === 'commands' ? plain('commands-note', 'the line runs as one shell command · several: ["npm test", "npm run lint"] · empty clears them') : null}
+        {plain('about', about)}
+      </Box>
+    )
+  }
+
+  const pageRow = (page: 'roles' | 'kinds') => {
+    const roles = page === 'roles'
+    return (
+      <Box key={`vs-setting-${page}`} flexDirection="column">
+        <Box key={`vs-setting-${page}-row`} flexDirection="row" flexWrap="wrap" gap={1}>
+          <Button key={roles ? 'settings-roles' : 'settings-kinds'} label={roles ? `Roles: ${ctx.rolesCount}` : `Kinds: ${ctx.kindsCount}`} variant="secondary" onPress={roles ? ctx.openRoles : ctx.openKinds} />
+        </Box>
+        {plain('about', roles ? 'the worker roles, to open, edit, turn off or add' : 'the task kinds, to open, edit, turn off or add')}
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box key="vs-header" flexDirection="column">
+        {[...banner(), tabs()]}
+      </Box>
+      {SETTING_GROUPS.map(g => (
+        <Box key={`vs-group-${g.title}`} flexDirection="column" gap={1}>
+          {vsSection(vs, `vs-group-${g.title}-head`, g.title)}
+          {g.items.map(item => (isSettingPage(item) ? pageRow(item) : settingRow(item)))}
+        </Box>
+      ))}
+      {plain('vs-settings-how', `A pick or Save changes a setting at once. You can also type /${S.N.name}-settings NAME VALUE, or tell the lead.`)}
+      {vsFooter(vs, 'settings-keys')}
+    </Box>
+  )
+}
