@@ -181,6 +181,23 @@ export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | strin
 }
 
 /**
+ * The try mark of a task being worked on, the same words in the board list, the band above the prompt, the status line
+ * and the lead's text board: '' on a first try (or when not "doing"); "try 2" on a later one; "try 2/3" with
+ * `autoRetries` (the board's auto_retries) while the try is an automatic retry after failing tests (test_tries > 0),
+ * so the limit shows. The task page's "2 tries" uses the same word.
+ */
+export function tryMark(t: Pick<SymccTask, 'status' | 'attempts'> & { test_tries?: number }, autoRetries?: number): string {
+  const n = Number(t.attempts)
+  if (t.status !== 'doing' || !(n > 1)) return ''
+  const auto = Number(t.test_tries ?? 0)
+  const limit = autoRetries !== undefined && auto > 0 ? n - auto + autoRetries : 0
+  return limit >= n ? `try ${n}/${limit}` : `try ${n}`
+}
+
+/** How loud a try mark is drawn: dim on try 2, the warning colour from try 3 on (see tryMark). */
+export const tryTone = (t: Pick<SymccTask, 'attempts'>): 'inactive' | 'warning' => (Number(t.attempts) >= 3 ? 'warning' : 'inactive')
+
+/**
  * The worker prompt's role section: "Your role: <name>", the role's checklist, the skills to use and,
  * for a role with web tools, the web safety line. Empty for a role with none of these (general: today's worker).
  * The checklist's {{placeholders}} are filled in from `values`, the prompt's own (see fillRole).
