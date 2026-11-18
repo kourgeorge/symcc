@@ -2,10 +2,10 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou } from '../../board'
-import { type PaneView, S } from '../state'
-import { type $, panelValues } from '../../claude/panel'
-import { openPane } from './open'
-import { claudeHost } from '../../claude/host'
+import { type PaneView, S } from '../../app/state'
+import { type $, panelValues } from '../panel'
+import { openPane } from '../../app/open'
+import { claudeHost } from '../host'
 
 export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt' }>
 

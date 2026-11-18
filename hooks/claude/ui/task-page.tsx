@@ -1,18 +1,18 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
 import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
-import { folderDiff, changedFiles } from '../review'
-import { loadRoles } from '../roles'
-import { loadKinds } from '../kinds'
-import { S, workers } from '../state'
-import { type $, panelValues } from '../../claude/panel'
-import { path } from '../store'
-import { noteForLead, brief, tellLead } from '../tell'
-import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
+import { folderDiff, changedFiles } from '../../app/review'
+import { loadRoles } from '../../app/roles'
+import { loadKinds } from '../../app/kinds'
+import { S, workers } from '../../app/state'
+import { type $, panelValues } from '../panel'
+import { path } from '../../app/store'
+import { noteForLead, brief, tellLead } from '../../app/tell'
+import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { historyParts, taskPageVs } from './vscode-task'
-import { claudeHost } from '../../claude/host'
+import { claudeHost } from '../host'
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {

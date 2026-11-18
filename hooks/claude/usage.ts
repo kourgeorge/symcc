@@ -1,6 +1,6 @@
 // Claude Code's token usage and turn end fields. Only the Claude Code adapter knows these names; the rest of
-// symcc works on SymccTokens (input, output, cache_write, cache_read) and TurnEnd (see plugin/workers.ts).
-import type { TurnEnd } from '../plugin/workers'
+// symcc works on SymccTokens (input, output, cache_write, cache_read) and TurnEnd (see app/workers.ts).
+import type { TurnEnd } from '../app/workers'
 import type { SymccTokens } from '../../types'
 import { cleanTokens } from '../core/runs'
 

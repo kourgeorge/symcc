@@ -2,9 +2,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { parseKind, kindSkipReason, mergeKinds, checkKind, kindNames, kindsLeadText, BUILT_IN_KINDS, detailRows, addTask, emptyBoard } from '../hooks/board'
-import { S, skippedKinds } from '../hooks/plugin/state'
-import { loadKinds } from '../hooks/plugin/kinds'
-import { leadGuide } from '../hooks/plugin/tools'
+import { S, skippedKinds } from '../hooks/app/state'
+import { loadKinds } from '../hooks/app/kinds'
+import { leadGuide } from '../hooks/app/tools'
 import { BUILT_IN_KIND_TEXTS } from '../kinds'
 import { ALL_FEATURES } from '../hooks/host'
 

@@ -1,4 +1,4 @@
-// The Scouts and Settings pages in VS Code's side panel have their own layout (hooks/plugin/ui/vscode-scouts.tsx and
+// The Scouts and Settings pages in VS Code's side panel have their own layout (hooks/claude/ui/vscode-scouts.tsx and
 // vscode-settings.tsx); on the terminal, the desktop and mobile they draw exactly as before (scouts-settings-snapshot.ts
 // holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
@@ -10,8 +10,8 @@ import { LONG_REPORT, SCOUTS, SCOUTS_VIEW, seedScouts } from './scouts-settings-
 import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
-import { CLICK_HINT } from '../hooks/plugin/ui/surface'
-import { reportStart } from '../hooks/plugin/ui/vscode-scouts'
+import { CLICK_HINT } from '../hooks/claude/ui/surface'
+import { reportStart } from '../hooks/claude/ui/vscode-scouts'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 

@@ -38,7 +38,7 @@ export async function pump(host: Host) {
     await change(host, x => patchTask(x, id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, id), now(), 'stopped', "couldn't start") }, now()))
     tellLead(host, `${id} couldn't start: ${err.message.slice(0, 300)}`)
   }
-  // Each task is made ready and claimed in turn; their starts then wait in the queue together (see plugin/starts.ts),
+  // Each task is made ready and claimed in turn; their starts then wait in the queue together (see app/starts.ts),
   // so one wake-up starts them all. A worker still in the queue counts as running (it is in `starting`).
   const queued: Promise<void>[] = []
   for (const t of ready(b)) {
@@ -53,7 +53,7 @@ export async function pump(host: Host) {
 /**
  * Starts a worker on task `id`, but only if it is still "todo" and no live agent works on it
  * (see mayStart). The claim happens inside change(), so two starts can't both win. Settles once the worker
- * started (it waits in the start queue meanwhile, see plugin/starts.ts).
+ * started (it waits in the start queue meanwhile, see app/starts.ts).
  */
 export async function startWorker(host: Host, id: string) {
   const q = await queueWorker(host, id)

@@ -1,6 +1,6 @@
 // The board panel's values, which only Claude Code's `$` holds (claude/host.ts carries them as the Host's ui.panel).
 // Claude Code reads which values a plugin keeps from its code before it runs, so their owner must be written out here
-// as text. It must be the plugin's name: on a rename, change it in these four lines and in types/index.d.ts too.
+// as text. It must be the plugin's name: on a rename, change it in these four lines and in types/claude.d.ts too.
 // The loader lets read and update take only an atom written in the same file, so they are only reached through
 // panelValues below.
 import { type EngineInterface, atom, read, update } from 'claude-code'
@@ -18,7 +18,7 @@ const tab = atom({ plugin: 'symcc', key: 'tab' } as const, '')
 const scoutOpen = atom({ plugin: 'symcc', key: 'scout' } as const, '')
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as SymccView, { shape: 'view-1' })
 
-/** The board panel's values through Claude Code's `$` (for claude/host.ts, and the panel's own render code in plugin/ui/). */
+/** The board panel's values through Claude Code's `$` (for claude/host.ts, and the panel's own render code in claude/ui/). */
 export function panelValues($: $): PanelValues {
   return {
     readOpened: () => read($, opened),

@@ -2,10 +2,10 @@
 // tools), the scout agent type, the lead's tools, the workers' question tool and the slash commands (app/symcc.ts).
 import { WEB_SAFETY_LINE, ASK_TOOL } from '../board'
 import { claudeNames, workerAgentTypes, EXTRA_TOOLS, scoutAgentTools } from './agent-types'
-import { ASK_TOOL_DEF } from '../plugin/ask'
-import { S } from '../plugin/state'
+import { ASK_TOOL_DEF } from '../app/ask'
+import { S } from '../app/state'
 import type { $ } from './panel'
-import { TOOLS } from '../plugin/tools'
+import { TOOLS } from '../app/tools'
 import { COMMANDS } from '../app/symcc'
 
 /** Registers the worker agent types, the scout agent type, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */

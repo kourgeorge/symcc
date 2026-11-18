@@ -27,3 +27,9 @@ else
   echo "typecheck: type errors found (see above)" >&2
   exit 1
 fi
+
+# hooks/app/ and hooks/core/ must stay free of Claude Code (T-372): see tests/host-free.sh.
+if [ -f tests/host-free.sh ] && ! sh tests/host-free.sh "$root"; then
+  echo "typecheck: host-bound code found in hooks/app/ or hooks/core/ (see above)" >&2
+  exit 1
+fi

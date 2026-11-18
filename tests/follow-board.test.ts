@@ -2,9 +2,9 @@
 // session changed the file, so its panel and status line show the new tasks; with no change it reloads nothing.
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, leadText, type Board } from '../hooks/board'
-import { claimLead } from '../hooks/plugin/lead'
-import { S } from '../hooks/plugin/state'
-import { saveBoard } from '../hooks/plugin/store'
+import { claimLead } from '../hooks/app/lead'
+import { S } from '../hooks/app/state'
+import { saveBoard } from '../hooks/app/store'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 

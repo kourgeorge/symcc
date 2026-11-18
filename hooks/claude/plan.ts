@@ -3,9 +3,9 @@
 //   classic.* events (not classic.PreToolUse): e.permission_mode
 //   agent.spawn: e.permissionMode
 //   prompt.attachment of type plan_mode / plan_mode_reentry (on) and plan_mode_exit (off)
-// core/plan.ts and plugin/plan.ts work on plain on (true) / off (false) / says nothing (null).
+// core/plan.ts and app/plan.ts work on plain on (true) / off (false) / says nothing (null).
 import type { Host } from '../host'
-import { seePlan } from '../plugin/plan'
+import { seePlan } from '../app/plan'
 
 /** A permission mode name read from an event → plan mode on (true), off (false), or not known (null). */
 export function planFromMode(mode: unknown): boolean | null {

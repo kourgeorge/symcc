@@ -1,7 +1,7 @@
 import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
+import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/app/scouts'
 import { inProject } from './project'
 import { ran, readText, entry, pause } from './fakes'
 

@@ -1,4 +1,4 @@
-// The task page in VS Code's side panel has its own wide layout (hooks/plugin/ui/vscode-task.tsx); on the terminal and
+// The task page in VS Code's side panel has its own wide layout (hooks/claude/ui/vscode-task.tsx); on the terminal and
 // the desktop it draws exactly as before (task-page-snapshot.ts holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
@@ -6,8 +6,8 @@ import { PANE, T0, drawnData, changedTree } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
 import { TASK_BEFORE_MOBILE } from './task-page-mobile-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
-import { CLICK_HINT } from '../hooks/plugin/ui/surface'
-import { reportPart } from '../hooks/plugin/ui/vscode-task'
+import { CLICK_HINT } from '../hooks/claude/ui/surface'
+import { reportPart } from '../hooks/claude/ui/vscode-task'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 

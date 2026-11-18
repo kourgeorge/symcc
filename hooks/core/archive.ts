@@ -1,5 +1,5 @@
 // Old finished tasks: moving done and dropped tasks out of board.json into archive.json.
-// Every function here is pure; the plugin (plugin/archive.ts) reads and writes the files.
+// Every function here is pure; the plugin (app/archive.ts) reads and writes the files.
 import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId, withoutStages } from './board-file'

@@ -6,7 +6,7 @@ import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
-import { ORPHAN_WAIT_MS, RELOAD_SETTLE_MS } from '../hooks/plugin/workers'
+import { ORPHAN_WAIT_MS, RELOAD_SETTLE_MS } from '../hooks/app/workers'
 import { ran } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
 

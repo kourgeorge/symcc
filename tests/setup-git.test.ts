@@ -6,9 +6,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../hooks/board'
-import { setupGit } from '../hooks/plugin/git'
-import { S, leadQueue, meanwhile } from '../hooks/plugin/state'
-import { load, saveBoard } from '../hooks/plugin/store'
+import { setupGit } from '../hooks/app/git'
+import { S, leadQueue, meanwhile } from '../hooks/app/state'
+import { load, saveBoard } from '../hooks/app/store'
 import { fakeHost, memoryFs } from './fake-host'
 
 const ROOT = '/repo'

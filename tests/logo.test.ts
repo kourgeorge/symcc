@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { ICON_ART } from '../hooks/name'
-import { logo, logoNow, logoOnPublish, noteLogoWidth, playLogo } from '../hooks/plugin/logo'
+import { logo, logoNow, logoOnPublish, noteLogoWidth, playLogo } from '../hooks/app/logo'
 import { BANNER_NARROW, SETTINGS, bannerLines, bannerText, emptyBoard, isNothing, parseBoard, readBoard, parseSettingsCommand } from '../hooks/board'
 import { type LogoFacts, type LogoMove, LOGO_AREA, LOGO_ROWS, LOGO_SHAPES, LOGO_FRAME_MS, NOTE_COLUMN, DISSOLVE_ORDER, SPARKS, SWAY_EVERY_MS, allDone, isPlaying, logoFrame, mayMove, moveFrames, moveMs, pickMove, restFrame, singFrames, startMove, swayDue, swayFrames, transformFrames } from '../hooks/core/logo'
 

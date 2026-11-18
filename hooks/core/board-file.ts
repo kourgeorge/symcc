@@ -187,7 +187,7 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
 
 /**
  * The project-wide test lock (<data folder>/tests.lock): symcc's merge step runs only one task's test commands at a time,
- * across tasks and sessions (see withTestLock in plugin/review.ts). The holder writes its task, session and time, and
+ * across tasks and sessions (see withTestLock in app/review.ts). The holder writes its task, session and time, and
  * dates it again before each test command; older than TEST_LOCK_STALE_MS (more than one command's TEST_TIMEOUT_MS) it is stale.
  */
 export const TEST_LOCK_FILE = 'tests.lock'

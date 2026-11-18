@@ -1,7 +1,7 @@
 // The project folder for a test (T-274): path() refuses an empty root, so a test that runs the plugin's
 // hooks gives the session a folder, and a test that calls plugin code directly sets S.root.
 import type { On } from 'claude-code'
-import { S } from '../hooks/plugin/state'
+import { S } from '../hooks/app/state'
 
 /** The folder the tests use as the project. */
 export const PROJECT = '/proj'

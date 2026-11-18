@@ -152,10 +152,3 @@ export type SymccView = {
   mode: SymccMode
   test_commands: string[]
 }
-
-declare module 'claude-code' {
-  interface PluginState {
-    // keyed by the plugin's name: keep it the same as "name" in .claude-plugin/plugin.json
-    symcc: { view: Shaped<SymccView>; opened: string; tab: string; scout: string }
-  }
-}

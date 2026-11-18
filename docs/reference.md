@@ -175,7 +175,8 @@ into `develop`" to move one task). More tips: [good to know](guide.md#good-to-kn
 ## For developers
 
 The code is split into modules: [`hooks/core/`](../hooks/core/) (the board as plain data, easy
-to test), [`hooks/plugin/`](../hooks/plugin/) and [`hooks/plugin/ui/`](../hooks/plugin/ui/) (everything
+to test), [`hooks/app/`](../hooks/app/) (what symcc does, with no Claude Code in it),
+[`hooks/claude/`](../hooks/claude/) and [`hooks/claude/ui/`](../hooks/claude/ui/) (everything
 that talks to Claude Code, and the panel), and [`hooks/register.tsx`](../hooks/register.tsx) (only
 the wiring), with tests in [`tests/`](../tests/). See the
 [guide](guide.md#for-developers-where-the-code-is) for more, and for
