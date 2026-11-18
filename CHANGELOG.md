@@ -17,6 +17,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Old `board.json` files are converted once.
 
 ### Added
+- The board in VS Code's side panel has its own layout: a wrapped header, tabs without key labels, tasks grouped by status with whole titles and the status color on the mark only, Backlog / Done / Dropped as fold rows, and a footer with a mode switch button and a search box instead of key hints. The terminal board is unchanged.
 - A failed task says clearly why: its page starts with a "Why it failed" block (the reason in one plain sentence, what the worker's report asks for, and what to do next), and its board row and the lead's board show the same sentence instead of the bare note.
 - The Settings view groups the settings under headings: Work, Checks before merging, Workers (Roles, Kinds), Scouts, and Board and alerts. ↑↓ still go through every row. The lead's settings listing uses the same groups.
 - The Settings view's groups open and close: all start closed, each heading showing its values in short (`▸ Work · auto · 3 at once · 45 min · 2 retries`); Enter on a heading opens or closes it, ↑↓ skip the rows of closed groups, and open groups stay open until the session ends.
