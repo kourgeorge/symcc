@@ -31,6 +31,7 @@ declare module 'node:child_process' {
     on(event: 'error', fn: (err: Error) => void): void
   }
   export function spawn(cmd: string, args: readonly string[], options: { cwd?: string; env?: Record<string, string | undefined>; detached?: boolean; stdio?: readonly ('pipe' | 'ignore' | 'inherit')[] }): ChildProcess
+  export function spawnSync(cmd: string, args: readonly string[], options: { cwd?: string; encoding: 'utf8' }): { status: number | null; stdout: string; stderr: string }
 }
 
 declare module 'bun:test' {

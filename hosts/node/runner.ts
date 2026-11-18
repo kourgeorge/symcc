@@ -2,11 +2,12 @@
 // its prompt, listed while it runs, and stopped by ending the process. What the process is comes from an AgentRunner:
 // claudeRunner runs `claude -p --output-format stream-json` and reads the answer, tokens and cost from its last
 // "result" line. Another CLI agent (e.g. `codex exec --json`) is one more AgentRunner: its command and its result reader.
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import type { Host, HostAgent, HostAgentStart } from '../../hooks/host'
 import type { AgentRunEnd } from '../../hooks/app/symcc'
 import { cleanTokens } from '../../hooks/core/runs'
 import { basePromptFor } from '../../hooks/core/prompts'
+import { SCRATCH_DIR } from '../../hooks/core/ask'
 import { SYMCC_WORDS } from '../../hooks/host'
 import { DEFAULT_NAME } from '../../hooks/name'
 
@@ -144,14 +145,29 @@ export function editRule(file: string): string[] {
  * guard; the merge-time scope check stays the backstop): every tool not allowed is refused (--permission-mode dontAsk).
  * A worker may read, search and run commands (no git writes), and edit its task's files only (a.files; none given:
  * anywhere in its folder); a role's `web` adds WebSearch and WebFetch. A scout or checker only reads and runs commands.
+ * `scratch` (T-456): the folder uses its throwaway SCRATCH_DIR (the project keeps no file there in git, see
+ * scratchInUse); then a worker and a checker may also write there (a checker only there).
  */
-export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>): { allowed: string[]; denied: string[] } {
+export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false): { allowed: string[]; denied: string[] } {
   const read = ['Read', 'Glob', 'Grep', 'Bash']
   const web = a.tools?.includes('web') ? ['WebSearch', 'WebFetch'] : []
   const denied = WORKER_DENIED_COMMANDS.map(c => `Bash(${c}:*)`)
-  if (a.kind !== 'worker') return { allowed: [...read, ...web], denied: [...denied, 'Edit', 'Write', 'NotebookEdit'] }
+  const scratchRules = scratch && a.kind !== 'scout' ? editRule(`${SCRATCH_DIR}/`) : []
+  if (a.kind !== 'worker') {
+    // a deny rule beats an allow rule, so a checker with scratch rules gets no blanket Edit/Write deny (dontAsk still refuses every other edit)
+    return { allowed: [...read, ...web, ...scratchRules], denied: [...denied, ...(scratchRules.length ? [] : ['Edit', 'Write']), 'NotebookEdit'] }
+  }
   const edits = a.files?.length ? a.files.flatMap(editRule) : editRule('.')
-  return { allowed: [...read, ...web, ...edits], denied }
+  return { allowed: [...read, ...web, ...edits, ...scratchRules], denied }
+}
+
+/**
+ * Whether the folder `cwd` uses its SCRATCH_DIR: the project keeps no file there in git (`git ls-files -- .scratch`
+ * prints nothing). A git failure counts as kept, so nothing is let through on a guess (like scratchTracked in hooks/app/git).
+ */
+export function scratchInUse(cwd: string | undefined): boolean {
+  const r = spawnSync('git', ['ls-files', '--', SCRATCH_DIR], { cwd, encoding: 'utf8' })
+  return r.status === 0 && r.stdout.trim() === ''
 }
 
 /** One line of `claude -p --output-format stream-json` output, as far as the runner reads it. */
@@ -200,7 +216,7 @@ export function claudeRunner(o: ClaudeRunnerOptions = {}): AgentRunner {
   return {
     name: 'claude',
     command(a) {
-      const { allowed, denied } = claudePermissions(a)
+      const { allowed, denied } = claudePermissions(a, a.kind !== 'scout' && scratchInUse(a.cwd))
       const model = a.model ?? o.model
       // --allowedTools and --disallowedTools take a list each, so the prompt goes on stdin (not as a word after them)
       const argv = [o.bin ?? process.env.SYMCC_CLAUDE ?? 'claude', '-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--permission-mode', 'dontAsk', ...(model ? ['--model', model] : []), '--allowedTools', ...allowed, '--disallowedTools', ...denied]
