@@ -11,7 +11,7 @@
 // with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
 import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
+import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -236,6 +236,49 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
         : null}
       {section('file', 'File', [plain('vs-scout-file', file, 'autoAccept')])}
       {vsFooter(vs, 'scout-keys')}
+    </Box>
+  )
+}
+
+/** A scout's edit page in VS Code: the name with a "new scout" or "editing" badge, notes, then the one Save Button and
+ *  a Cancel link (not two Buttons side by side: VS Code's Buttons don't wrap), then a labelled box per part of its file. */
+export function scoutEditPageVs($: $, pane: PaneParts) {
+  const { Box, Text, Button, Input, act, C, scouts, vs } = pane
+  const d = S.draft!
+  const sc = scouts.find(x => x.name === d.scout)
+  const r = sc ? scoutRow(sc, pane.nowMs) : undefined
+  const file = scoutFile(d.scout, S.N.name)
+  const plain = (key: string, text: string, color = 'inactive') => (
+    <Text key={key} wrap="wrap" color={C(color)}>
+      {text}
+    </Text>
+  )
+  const cancelHref = vsHref('do', 'scout-edit/cancel')
+  const box = (key: 'every' | 'model' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
+    <Input key={`scout-${key}`} label={label} value={d[key]} placeholder={placeholder} submitLabel="Keep" {...more} onInput={value => void (d[key] = value)} onSubmit={value => void (d[key] = value)} />
+  )
+  return (
+    <Box key="vs-scout-edit-page" flexDirection="column" gap={1}>
+      <Box key="vs-scout-edit-top" flexDirection="column">
+        <Box key="vs-edit-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
+          <Text key="name" wrap="wrap" bold color={C('claude')}>{d.scout}</Text>
+          <Text key="badge" wrap="wrap">{vsBadge(vs, 'vs-edit-badge', d.isNew ? 'new scout' : 'editing', 'warning')}</Text>
+        </Box>
+        {r ? plain('vs-edit-facts', [r.every, r.model, r.ran].filter(Boolean).join(' · ')) : null}
+        {plain('vs-edit-note-0', `Save writes ${file}; other front matter keys are kept.`)}
+        {plain('vs-edit-note-1', `The name is the file's name: to rename the scout, rename ${file}.`)}
+      </Box>
+      <Box key="vs-scout-edit-actions" flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
+        <Button key="scout-save" label="Save" variant="primary" onPress={act(() => saveScout(claudeHost($)))} />
+        {vsLink(vs, 'scout-cancel', mdLink('Cancel', cancelHref), [[cancelHref, () => void cancelScoutEdit(claudeHost($))]])}
+      </Box>
+      {d.error ? plain('vs-scout-edit-error', d.error, 'error') : null}
+      {box('every', 'Runs every', 'minutes: a whole number, 0 or more', { autoFocus: true })}
+      {plain('vs-every-about', 'in minutes · 0 = only on demand')}
+      {box('model', 'Model', "empty: the session's model")}
+      {box('summary', 'Summary', 'empty: the first line of the instructions')}
+      {box('body', 'Instructions', 'what to look for, in plain words', { rows: 8 })}
+      {vsFooter(vs, 'scout-edit-keys')}
     </Box>
   )
 }
