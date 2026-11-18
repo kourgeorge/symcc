@@ -11,8 +11,8 @@ import { COMMANDS } from '../app/symcc'
 /** Registers the worker agent types, the scout agent type, the lead's tools and the slash commands. Each one on its own: one failing doesn't stop the rest. */
 export async function registerAll($: $) {
   const ok = (p: Promise<unknown>) => p.catch(() => undefined)
-  // One worker type for the base tools, and one more per set of extra tools a role can ask for
-  // (e.g. "worker-web" for WebSearch and WebFetch); a task is spawned as the type its role needs.
+  // One worker type for the base tools, and one more per set of tool words a role can ask for
+  // (e.g. "worker-web" for web: WebSearch and WebFetch); a task is spawned as the type its role needs.
   for (const w of workerAgentTypes(S.N.name))
     await ok($.agent.register({
       name: w.suffix,

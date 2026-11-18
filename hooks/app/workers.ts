@@ -23,7 +23,7 @@ import { changeValues, investigationValues } from './prompt-values'
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
   const values = kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)
-  return fillPrompt(kind, { ...values, role: roleSection(role, values, S.W.roleTools) })
+  return fillPrompt(kind, { ...values, role: roleSection(role, values) })
 }
 
 export async function pump(host: Host) {

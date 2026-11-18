@@ -1,8 +1,8 @@
-// T-241: core/ knows no Claude Code tool names, agent types or agent statuses. The role functions take the host's
-// tool names (RoleTools), and the agent functions take AgentState (alive, a worker or not), so another host (an
+// T-241: core/ knows no Claude Code tool names, agent types or agent statuses. A role's tools are symcc's words
+// (T-373: tools: web), which each host maps to its own tools, and the agent functions take AgentState (alive, a worker or not), so another host (an
 // OpenCode plugin, a standalone client) can use them with its own words. The Claude Code ones live in hooks/claude/.
 import { expect, test } from 'claude-code/testing'
-import { addTask, emptyBoard, patchTask, parseRole, roleSkipReason, roleTools, roleSection, liveWorkersFor, mayStart, orphanMove, WEB_SAFETY_LINE, statsReport, type RoleTools, type AgentState, type LeadCall } from '../hooks/board'
+import { addTask, emptyBoard, patchTask, parseRole, roleSkipReason, roleTools, roleSection, liveWorkersFor, mayStart, orphanMove, WEB_SAFETY_LINE, statsReport, ROLE_TOOL_WORDS, type AgentState, type LeadCall } from '../hooks/board'
 import * as claudeTypes from '../hooks/claude/agent-types'
 import * as claudeAgents from '../hooks/claude/agents'
 import * as board from '../hooks/board'
@@ -11,19 +11,20 @@ import { usageTokens, turnEnd } from '../hooks/claude/usage'
 import { type Host, agentState } from '../hooks/host'
 
 const T = '2026-11-18T00:00:00.000Z'
-const OTHER: RoleTools = { extra: ['websearch', 'webfetch', 'todo'], web: ['websearch', 'webfetch'] }
-
-test('core reads a role\'s tools: line with the tool names it is given, not Claude Code\'s', () => {
-  const text = '---\ndescription: d\ntools: WebSearch, todo\n---\n- check\n'
-  expect(parseRole('r', text, OTHER)?.tools).toEqual(['websearch', 'todo'])
-  expect(roleSkipReason('r', '---\ndescription: d\ntools: Agent\n---\n', OTHER)).toBe('unknown tool "Agent" in tools (a role may only add: websearch, webfetch, todo)')
-  expect(roleTools(['TODO', 'todo'], OTHER)).toEqual(['todo'])
-  expect(roleSection(parseRole('r', text, OTHER)!, {}, OTHER)).toContain(WEB_SAFETY_LINE)
-  expect(roleSection(parseRole('r', '---\ndescription: d\ntools: todo\n---\nx', OTHER)!, {}, OTHER)).not.toContain(WEB_SAFETY_LINE)
-  // the same file with Claude Code's names, through the adapter
-  expect(parseRole('r', text, claudeTypes.ROLE_TOOLS)).toBe(null)
-  expect(roleSkipReason('r', text, claudeTypes.ROLE_TOOLS)).toBe('unknown tool "todo" in tools (a role may only add: WebSearch, WebFetch)')
-  expect(claudeTypes.ROLE_TOOLS).toEqual({ extra: ['WebSearch', 'WebFetch'], web: ['WebSearch', 'WebFetch'] })
+test('core reads a role\'s tools: line in symcc\'s words (web), the same in every host; the Claude adapter maps them', () => {
+  const text = '---\ndescription: d\ntools: web\n---\n- check\n'
+  expect(ROLE_TOOL_WORDS).toEqual(['web'])
+  expect(parseRole('r', text)?.tools).toEqual(['web'])
+  expect(roleSkipReason('r', '---\ndescription: d\ntools: Agent\n---\n')).toBe('unknown tool "Agent" in tools (a role may only add: web)')
+  expect(roleTools(['WEB', 'web'])).toEqual(['web'])
+  expect(roleSection(parseRole('r', text)!, {})).toContain(WEB_SAFETY_LINE)
+  expect(roleSection(parseRole('r', '---\ndescription: d\n---\nx')!, {})).not.toContain(WEB_SAFETY_LINE)
+  // Claude Code's tool names are not role words
+  expect(parseRole('r', '---\ndescription: d\ntools: WebSearch\n---\n')).toBe(null)
+  // the Claude adapter: web is WebSearch and WebFetch, on the worker-web agent type
+  expect(claudeTypes.claudeRoleTools(['web'])).toEqual(['WebSearch', 'WebFetch'])
+  expect(claudeTypes.workerTypeFor(parseRole('r', text)!)).toBe('symcc:worker-web')
+  expect(claudeTypes.workerAgentTypes().find(t => t.suffix === 'worker-web')?.tools).toEqual([...claudeTypes.BASE_WORKER_TOOLS, 'WebSearch', 'WebFetch', 'mcp__symcc__ask_owner'])
 })
 
 test('core finds live workers from AgentState; the Claude adapter makes HostAgents from $.agent.list() entries, and the host those AgentState', () => {

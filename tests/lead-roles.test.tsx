@@ -2,13 +2,10 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { fakeHost } from './fake-host'
 import { entry } from './fakes'
-import { roleChoices, rolesLeadText, checkRole, parseRole as parseRoleWith } from '../hooks/board'
-import { SYMCC_WORDS } from '../hooks/host'
+import { roleChoices, rolesLeadText, checkRole, parseRole } from '../hooks/board'
 import { S, leadQueue, skippedRoles } from '../hooks/app/state'
 import { leadGuide, manual, runTool } from '../hooks/app/tools'
 
-/** A role file read with the role tools symcc's own words allow (as plugin code does on the fake Host). */
-const parseRole = (name: string, text: string) => parseRoleWith(name, text, SYMCC_WORDS.roleTools)
 
 const ROOT = '/proj'
 const MINE = `${ROOT}/.symcc/roles`
@@ -93,16 +90,31 @@ test('roles list shows every role and where it comes from; with name, one role i
 
 test('roles add writes a valid role file; a taken name, a bad tool or no description is refused', async () => {
   const { $, mine } = setup()
-  const out = await call($, { action: 'add', name: 'web_check', description: 'checks links', model: 'haiku', skills: ['review'], tools: ['websearch', 'WebFetch'], checklist: '- check every link' })
+  const out = await call($, { action: 'add', name: 'web_check', description: 'checks links', model: 'haiku', skills: ['review'], tools: ['Web'], checklist: '- check every link' })
   expect(out).toContain('added role web_check (.symcc/roles/web_check.md)')
-  expect(parseRole('web_check', mine['web_check.md']!)).toMatchObject({ description: 'checks links', model: 'haiku', skills: ['review'], tools: ['WebSearch', 'WebFetch'], prompt: '- check every link' })
+  expect(parseRole('web_check', mine['web_check.md']!)).toMatchObject({ description: 'checks links', model: 'haiku', skills: ['review'], tools: ['web'], prompt: '- check every link' })
+  expect(mine['web_check.md']).toContain('\ntools: web\n')
   expect(S.roles.some(r => r.name === 'web_check')).toBe(true)
   expect(await call($, { action: 'add', name: 'web_check', description: 'x' })).toContain('already exists')
   expect(await call($, { action: 'add', name: 'docs', description: 'x' })).toContain('already exists')
   expect(await call($, { action: 'add', name: 'shell', description: 'x', tools: ['Bash'] })).toContain('unknown tool "Bash"')
+  // the old Claude Code names are not role tools any more
+  expect(await call($, { action: 'add', name: 'old_web', description: 'x', tools: ['WebSearch'] })).toContain('unknown tool "WebSearch" in tools (a role may only add: web)')
   expect(await call($, { action: 'edit', name: 'web_check', tools: ['Agent'] })).toContain('unknown tool "Agent"')
   expect(await call($, { action: 'add', name: 'empty' })).toContain('description is missing')
   expect(Object.keys(mine)).toEqual(['web_check.md'])
+})
+
+test("an owner's role file with the old Claude Code tool names is moved to tools: web once, on load, and then works", async () => {
+  const { $, mine, touched } = setup({ 'links.md': '---\ndescription: checks links\ntools: WebSearch, WebFetch\n---\n- check every link\n' })
+  const list = await call($, {})
+  expect(list).toContain('- links (added): checks links · tools web')
+  expect(mine['links.md']).toBe('---\ndescription: checks links\ntools: web\n---\n- check every link\n')
+  expect(S.roles.find(r => r.name === 'links')?.tools).toEqual(['web'])
+  expect(touched).toEqual([`${MINE}/links.md`])
+  // already moved: read again, nothing is written
+  await call($, {})
+  expect(touched).toEqual([`${MINE}/links.md`])
 })
 
 test('roles edit changes what it is given and keeps the rest; editing a built-in makes a copy first', async () => {

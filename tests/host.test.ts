@@ -172,7 +172,7 @@ function claudeAgentsWorld(answer: (input: Record<string, unknown>) => Promise<{
 test("host.agents.spawn starts a Claude Code subagent of the agent type that fits: a worker's by its role's tools, scouts and checkers as scouts", async () => {
   const w = claudeAgentsWorld()
   expect(await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-1', description: 'Do it', cwd: '/wt/T-1' })).toEqual({ agentId: 'ag1' })
-  await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-2', description: 'Look', tools: ['WebSearch', 'WebFetch'], cwd: '/wt/T-2', model: 'sonnet' })
+  await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-2', description: 'Look', tools: ['web'], cwd: '/wt/T-2', model: 'sonnet' })
   await w.host.agents.spawn({ kind: 'scout', prompt: 'p', name: 'symcc-scout-bugs', description: 'Look for bugs' })
   await w.host.agents.spawn({ kind: 'checker', prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', cwd: '/wt/T-1' })
   expect(w.spawns).toEqual([
@@ -234,7 +234,6 @@ test("Claude Code's adapter maps symcc's words to its `$`: run is $.process.run,
   expect(await host.env('PATH')).toBe(undefined)
   expect(envs).toEqual(['HOME'])
   expect(host.words.tool('symcc', 'board')).toBe('mcp__symcc__board')
-  expect(host.words.roleTools.extra).toEqual(['WebSearch', 'WebFetch'])
 })
 
 test("Claude Code's adapter: host.lead.usage reads the lead's calls from Claude Code's session logs through the same host", async () => {
