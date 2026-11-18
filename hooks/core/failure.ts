@@ -90,7 +90,7 @@ const isPassHead = (l: string) => heading(l) && /^what\s+(passed|works|worked|is
  * The first problem in a checker's report. It looks only in the problems part: after a "Problems:" /
  * "Problem:" line when there is one, else the whole report; never in a "What passed" / "What works"
  * part. There it takes the first "path:line …" line, else the first line naming a file under hooks/ or
- * tests/; when nothing matches, the report's first line.
+ * tests/ (without a "Problems:" line, only among the last 8 lines); when nothing matches, the report's first line.
  */
 export function firstProblem(report: string): string {
   const lines = report.split('\n').map(l => l.trim()).filter(l => l && l !== CHECKER_MARK && l !== '…')
@@ -100,14 +100,16 @@ export function firstProblem(report: string): string {
     const stop = lines.findIndex((l, i) => i > head && isPassHead(l))
     part = lines.slice(head + 1, stop < 0 ? undefined : stop)
   } else {
-    // drop every "What passed" part (from its heading to the next heading); the rest is searched from the top
+    // drop every "What passed" part (from its heading to the next heading); the rest is searched from the top for a
+    // "path:line" line, but only its last lines for a line that merely names a file (an intro often mentions files)
     let inPass = false
     part = lines.filter(l => {
       if (heading(l)) inPass = isPassHead(l)
       return !inPass
     })
   }
-  const pick = part.find(l => PROBLEM_LINE.test(l)) ?? part.find(l => NAMES_FILE.test(l)) ?? (head >= 0 ? part[0] : undefined) ?? lines[0] ?? ''
+  const named = head >= 0 ? part : part.slice(-8)
+  const pick = part.find(l => PROBLEM_LINE.test(l)) ?? named.find(l => NAMES_FILE.test(l)) ?? (head >= 0 ? part[0] : undefined) ?? lines[0] ?? ''
   // a worktree's long absolute path says nothing the short one doesn't; list marks and bold add nothing either
   return cutLine(pick.replace(/^(?:[-*]|\d+[.)])\s+/, '').replace(/\*\*/g, '').replace(/\S*\/\.symcc\/worktrees\/[^/\s]+\//g, ''), 240)
 }

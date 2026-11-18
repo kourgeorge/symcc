@@ -118,6 +118,12 @@ test("the checker's first problem with no 'Problems:' heading and a long list is
   expect(firstProblem(checkerOutput(`I found ten problems with this work.\n\n${list}`))).toBe('hooks/core/p1.ts:1, problem 1')
   // a "What passed" part before the list is still skipped
   expect(firstProblem(`Ten problems.\nWhat passed:\n- tests/a.test.ts:3 passes\nThe rest:\n${list}`)).toBe('hooks/core/p1.ts:1, problem 1')
+
+})
+
+test("with no 'Problems:' heading, an intro line that only mentions files doesn't beat the real problem at the end", () => {
+  const report = 'The checker found these problems:\nI read hooks/core/failure.ts and tests/failure.test.ts first.\n' + 'Step: looked around.\n'.repeat(9) + '- hooks/core/panel.ts misses r retry'
+  expect(firstProblem(report)).toBe('hooks/core/panel.ts misses r retry')
 })
 
 test("a failed task's texts name the lead (who changes tasks), not the lead's change tool", () => {
