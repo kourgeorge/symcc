@@ -100,6 +100,13 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
+/** The notes a doing row's state already says ("▶ 12m", "▶ check"), so the band leaves them out when it shows one. */
+const STATE_NOTES = new Set(['worker on it', 'checking and merging', 'starting at the next turn'])
+
+/** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
+export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>
+  !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : t.note
+
 /** About how wide the line above the prompt may be: Claude Code puts "<name>: " (and its own mark) in front. */
 export const STATUS_WIDTH = 80
 /** The room the status text has in STATUS_WIDTH after Claude Code's "⚠ <name>: " in front of it. */

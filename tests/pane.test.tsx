@@ -169,6 +169,26 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   await later.unmount()
 })
 
+test("the band hides only the notes a doing row's state says; other notes stay as the row's tail (T-455)", async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const fresh = iso(T0 - 10_000)
+  const tasks = [
+    task('T-50', 'doing', 'Wrap up', { note: 'time is up: the worker was told to hand back', attempts: 1, runs: [{ started: iso(T0 - 62 * 60_000) }] }),
+    task('T-51', 'doing', 'Being checked', { note: 'checking and merging', attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'checking', at: fresh } }),
+    task('T-52', 'doing', 'Queued', { note: 'starting at the next turn', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
+  ]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-50 ▶ 1h 02m$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /checking and merging/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /starting at the next turn/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('with an empty board the band shows nothing of its own', async ($, on) => {
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })

@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandLeads, bandHasState, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -53,9 +53,10 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const shownTasks = live.slice(0, taskRows)
   const since = (id: string) => v?.working?.find(w => w.task === id)?.since
   const leads = bandLeads(shownTasks, nowMs, since)
-  // a doing row's state says what goes on ("▶ 12m"), so its note ("worker on it") is left out; kept when it has none
+  // a note the row's state already says ("worker on it" beside "▶ 12m") is left out; every other note stays (see bandNote)
+  const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id))
   const tail = (t: (typeof live)[number]) =>
-    fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note && !bandHasState(t, nowMs, since(t.id)) ? ` — ${t.note}` : ''
+    fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : note(t) ? ` — ${note(t)}` : ''
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
