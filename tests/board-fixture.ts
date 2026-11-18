@@ -63,3 +63,10 @@ export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_
 
 /** A drawn tree as plain data, to compare two drawings: handlers and their handles (new on each draw) dropped. */
 export const plainTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(tree ?? null, (k, v) => (k === 'handle' ? undefined : v)))
+/** A running task's time ("▶ 9m", "try 2: 6m (running)", "total: 26m") is counted on the real clock, which the kit's
+ *  fake clock does not hold, so it grows once T0 has passed; it is blanked out for the trees compared with a snapshot. */
+const DUR = String.raw`\d+[smhd](?: \d+[smh])?`
+export const steadyTree = (tree: unknown): unknown => JSON.parse(JSON.stringify(plainTree(tree), (_k, v) => typeof v !== 'string' ? v : v
+  .replace(new RegExp(`▶ ${DUR} *`, 'g'), '▶ ~ ')
+  .replace(new RegExp(`(try \\d+: )${DUR}( \\(running\\))`, 'g'), '$1~$2')
+  .replace(new RegExp(`(total: |^ · )${DUR}( · )`, 'g'), '$1~$2')))
