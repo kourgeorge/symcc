@@ -3,7 +3,10 @@
 // worker's worktree and a board: one copy per folder runs the engine (the main folder's), a second copy for the same
 // real folder and a worktree's copy only guard; a worker's edit outside its files is refused through
 // permission.evaluate (and the tool backstop), an allowed one passes, a shell write into the owner's copy is refused,
-// and a stopped agent is refused anything. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
+// and a stopped agent is refused anything; the tool backstop reads OpenCode 2.3's real tool inputs (and a multiedit).
+// The agents (T-463) on a fake session API (fakeSessions): create as the lead's child -> move, waited for -> prompt once
+// recorded -> end with tokens and the final text, an interrupt, the model per role, and a worker the main copy starts
+// from the board through to agentFinished. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../../board'
@@ -11,9 +14,14 @@ import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorke
 import { resetStore } from '../../app/store'
 import { stoppedText } from '../../app/ask'
 import { runCommand } from '../../../hosts/node/host'
-import type { OcContext, OcPermissionEvaluation, OcToolBefore } from '../ctx'
+import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt } from '../ctx'
+import { opencodeAgents, opencodeModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
+import { toolTouches } from '../guard'
+import { pump } from '../../app/workers'
+import { load } from '../../app/store'
 import { symccServer, owners, SYMCC_ENGINE, type CopyRole, type Engine } from '../plugin'
-import { PLUGIN_ROOT } from '../host'
+import { PLUGIN_ROOT, opencodeHost } from '../host'
+import type { Host } from '../../host'
 
 /** Puts symcc's memory back to its start values, as a fresh copy of the plugin has (bun shares one copy across tests). */
 function reset() {
@@ -27,17 +35,100 @@ function reset() {
   owners().clear()
 }
 
+/** One session of the fake session API. */
+type FakeSession = { info: OcSessionInfo; moveTo?: string; looksLeft: number; ended?: () => void; messages: OcSessionMessage[] }
+
+/**
+ * A fake of OpenCode's session API (ctx.session), as OpenCode 2.3 behaved in a real run (T-463): a session made with
+ * a parentID is put in its parent's folder whatever `location` says; a move lands only after `moveLag` more
+ * session.get calls; session.wait settles once the test ends the session (`end`) or it is interrupted. `calls` lists
+ * what was asked, in order.
+ */
+function fakeSessions(moveLag = 2) {
+  const sessions = new Map<string, FakeSession>()
+  const calls: string[] = []
+  let n = 0
+  const one = (id: string) => {
+    const s = sessions.get(id)
+    if (!s) throw new Error(`no session ${id}`)
+    return s
+  }
+  const api: OcSessionApi = {
+    async create(input) {
+      const id = `ses_${++n}`
+      const parent = input.parentID ? sessions.get(input.parentID) : undefined
+      const dir = parent?.info.location.directory ?? input.location?.directory ?? '/nowhere'
+      calls.push(`create ${id}${input.parentID ? ` parent ${input.parentID}` : ''} model ${input.model?.providerID}/${input.model?.id}`)
+      const info: OcSessionInfo = { id, ...(input.parentID ? { parentID: input.parentID } : {}), location: { directory: dir } }
+      sessions.set(id, { info, looksLeft: 0, messages: [] })
+      return info
+    },
+    async get({ sessionID }) {
+      const s = one(sessionID)
+      if (s.moveTo !== undefined && s.looksLeft-- <= 0) {
+        s.info = { ...s.info, location: { directory: s.moveTo } }
+        s.moveTo = undefined
+      }
+      return s.info
+    },
+    async move({ sessionID, directory }) {
+      calls.push(`move ${sessionID}`)
+      Object.assign(one(sessionID), { moveTo: directory, looksLeft: moveLag })
+    },
+    async prompt({ sessionID, text, delivery }) {
+      calls.push(`prompt ${sessionID} in ${one(sessionID).info.location.directory} (${delivery})`)
+      one(sessionID).messages.push({ type: 'user', content: [{ type: 'text', text }] })
+      return {}
+    },
+    wait: ({ sessionID }) => new Promise<void>(res => void (one(sessionID).ended = () => res())),
+    async interrupt({ sessionID }) {
+      calls.push(`interrupt ${sessionID}`)
+      const s = one(sessionID)
+      s.info = { ...s.info, outcome: 'interrupted', tokens: { input: 5, output: 7, reasoning: 0, cache: { read: 0, write: 0 } }, cost: 0 }
+      s.ended?.()
+      return { interrupted: true }
+    },
+    context: async ({ sessionID }) => one(sessionID).messages,
+    async remove({ sessionID }) {
+      calls.push(`remove ${sessionID}`)
+      sessions.delete(sessionID)
+    },
+    hook: async () => ({ dispose: async () => undefined }),
+  }
+  /** Session `id`'s run ends: it said `text`, with these tokens. */
+  const end = (id: string, text: string, tokens = { input: 10, output: 484, reasoning: 330, cache: { read: 154787, write: 2261 } }) => {
+    const s = one(id)
+    s.messages.push({ type: 'assistant', content: [{ type: 'text', text }], finish: 'stop' })
+    s.info = { ...s.info, outcome: 'succeeded', tokens, cost: 0 }
+    s.ended?.()
+  }
+  /** A lead session in folder `dir` (as the owner's own chat). */
+  const lead = (dir: string) => {
+    const id = `ses_lead${++n}`
+    sessions.set(id, { info: { id, location: { directory: dir } }, looksLeft: 0, messages: [] })
+    return id
+  }
+  return { api, calls, end, lead, sessions }
+}
+
 /** A fake OpenCode ctx for folder `dir`: it keeps the hooks the plugin registers, and counts their disposals. */
-function fakeCtx(dir: string) {
-  const hooks: { evaluate?: (e: OcPermissionEvaluation) => Promise<void> | void; before?: (e: OcToolBefore) => Promise<void> | void } = {}
+function fakeCtx(dir: string, session: OcSessionApi = fakeSessions().api) {
+  const hooks: { evaluate?: (e: OcPermissionEvaluation) => Promise<void> | void; before?: (e: OcToolBefore) => Promise<void> | void; prompt?: (e: OcSessionPrompt) => Promise<void> | void } = {}
   let disposed = 0
   const reg = { dispose: async () => void disposed++ }
   const ctx: OcContext = {
     location: { directory: dir },
     permission: { hook: async (_name, fn) => ((hooks.evaluate = fn), reg) },
     tool: { hook: async (_name, fn) => ((hooks.before = fn), reg) },
+    session: { ...session, hook: async (_name, fn) => ((hooks.prompt = fn), reg) },
   }
   return { ctx, hooks, disposed: () => disposed }
+}
+
+/** Waits until `check` is true (looking every 20 ms, for at most `ms`). */
+async function until(check: () => boolean | Promise<boolean>, ms = 5000) {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise<void>(r => setTimeout(() => r(), 20))) if (await check()) return
+  throw new Error('timed out waiting')
 }
 
 /** Asks the copy's permission hook about `action` on `resources` for session `sessionID`; answers the check as it ended. */
@@ -114,7 +205,7 @@ test('one copy runs the engine: the main folder\'s first copy; a second copy for
     // the engine copy is unloaded: its engine ends and the waiting copy takes over; nothing else starts one
     await endA!()
     expect(calls.slice(3)).toEqual([`end ${p.main}`, `start ${p.link}`])
-    expect(a.disposed()).toBe(2)
+    expect(a.disposed()).toBe(3)
     await endW!()
     await endB!()
     expect(calls.slice(5)).toEqual([`end ${p.link}`])
@@ -243,3 +334,165 @@ test('hooks/opencode/ and opencode/ import nothing from Claude Code or hooks/cla
   expect(files.length).toBeGreaterThan(5)
   for (const f of files) expect(`${f}: ${claudeImports(await readFile(f, 'utf8')).join(', ')}`).toBe(`${f}: `)
 })
+
+test('the model per role (R8): a role\'s Claude name runs on OpenCode\'s Claude Agent provider, "provider/model" as it is, none gives the default for the kind', () => {
+  expect(DEFAULT_MODELS).toEqual({ worker: 'claude-agent/sonnet', scout: 'claude-agent/haiku', checker: 'claude-agent/haiku' })
+  expect(opencodeModel(undefined, 'worker')).toEqual({ providerID: 'claude-agent', id: 'sonnet' })
+  expect(opencodeModel('', 'scout')).toEqual({ providerID: 'claude-agent', id: 'haiku' })
+  expect(opencodeModel('inherit', 'checker')).toEqual({ providerID: 'claude-agent', id: 'haiku' })
+  expect(opencodeModel('sonnet', 'checker')).toEqual({ providerID: 'claude-agent', id: 'sonnet' })
+  expect(opencodeModel('opus', 'worker')).toEqual({ providerID: 'claude-agent', id: 'opus' })
+  expect(opencodeModel('claude-opus-4-5', 'worker')).toEqual({ providerID: 'claude-agent', id: 'opus' })
+  expect(opencodeModel('opus[1m]', 'worker')).toEqual({ providerID: 'claude-agent', id: 'opus' })
+  expect(opencodeModel('Haiku', 'worker')).toEqual({ providerID: 'claude-agent', id: 'haiku' })
+  expect(opencodeModel('openai/gpt-5', 'worker')).toEqual({ providerID: 'openai', id: 'gpt-5' })
+  expect(opencodeModel('opencode/deepseek-v4.1-flash-free', 'scout')).toEqual({ providerID: 'opencode', id: 'deepseek-v4.1-flash-free' })
+})
+
+test('an OpenCode session agent: create (child of the lead) -> move into its folder, waited for -> prompt once symcc recorded it -> its end reaches onEnd with tokens and the final text; an interrupt ends one as aborted', async () => {
+  const f = fakeSessions(2)
+  const base = await realpath(await mkdtemp('/tmp/symcc-oc-agents-'))
+  const main = `${base}/proj`
+  const wt = `${main}/.symcc/worktrees/T-1`
+  await mkdir(wt, { recursive: true })
+  try {
+    const lead = f.lead(main)
+    const ends: { id: string; end: unknown }[] = []
+    const known = new Set<string>()
+    const agents = opencodeAgents(f.api, { dir: main, lead: () => lead, ready: async id => known.has(id), onEnd: (id, end) => void ends.push({ id, end }), pollMs: 5, waitMs: 2000 })
+    const r = await agents.spawn({ kind: 'worker', prompt: 'do T-1', name: 'symcc-T-1', description: 'a change', cwd: wt, model: 'opus' })
+    expect(r.agentId).toBe('ses_2')
+    // made a child of the lead (so OpenCode put it in the lead's folder), with the role's model, then moved: spawn
+    // answered only once session.get showed the worktree
+    expect(f.calls).toEqual([`create ses_2 parent ${lead} model claude-agent/opus`, 'move ses_2'])
+    expect(f.sessions.get('ses_2')!.info.location.directory).toBe(wt)
+    expect((await agents.list()).map(a => `${a.id} ${a.kind} ${a.status}`)).toEqual(['ses_2 worker pending'])
+    // no prompt until symcc has recorded the agent (the board names it, so the worktree's copy can guard it)
+    await new Promise<void>(res => setTimeout(() => res(), 50))
+    expect(f.calls.length).toBe(2)
+    known.add('ses_2')
+    await until(() => f.calls.length === 3)
+    expect(f.calls[2]).toBe(`prompt ses_2 in ${wt} (queue)`)
+    // the base prompt (OpenCode's tool names) comes before the task's prompt
+    const sent = String(f.sessions.get('ses_2')!.messages[0]!.content![0]!.text)
+    expect(sent.endsWith('\n\ndo T-1')).toBe(true)
+    expect(sent).toContain('symcc_ask_owner')
+    expect(agents.has('ses_2')).toBe(true)
+    // it ends: session.get's outcome and tokens (reasoning counts as output) and session.context's last text; cost 0 is left out
+    f.end('ses_2', 'Changed src/a.ts.\n\nDONE')
+    await until(() => ends.length === 1)
+    expect(ends[0]).toEqual({ id: 'ses_2', end: { answer: 'Changed src/a.ts.\n\nDONE', end: { reason: 'answer' }, isAborted: false, tokens: { input: 10, output: 814, cache_read: 154787, cache_write: 2261 } } })
+    expect((await agents.list())[0]!.status).toBe('completed')
+    // a scout (no folder of its own) on the default model; stopped while it runs: interrupted, so it ended aborted
+    const s = await agents.spawn({ kind: 'scout', prompt: 'look around', name: 'symcc-scout-x', description: 'a scout' })
+    expect(f.calls.slice(3)).toEqual([`create ses_3 parent ${lead} model claude-agent/haiku`])
+    known.add('ses_3')
+    await until(() => f.calls.length === 5)
+    await agents.send('ses_3', 'wrap up')
+    await agents.stop(s.agentId!, 'stop')
+    await until(() => ends.length === 2)
+    expect(f.calls.slice(4)).toEqual([`prompt ses_3 in ${main} (queue)`, 'prompt ses_3 in ' + main + ' (steer)', 'interrupt ses_3'])
+    expect(ends[1]).toEqual({ id: 'ses_3', end: { answer: '', end: { reason: 'aborted' }, isAborted: true, tokens: { input: 5, output: 7 } } })
+    expect((await agents.list()).map(a => a.status)).toEqual(['completed', 'killed'])
+    // a move that never lands: the start fails and the session is taken away, so no worker runs in the lead's folder
+    const stuck = fakeSessions(1_000_000)
+    const a2 = opencodeAgents(stuck.api, { dir: main, lead: () => stuck.lead(main), onEnd: () => undefined, pollMs: 5, waitMs: 100 })
+    expect(await a2.spawn({ kind: 'checker', prompt: 'check', name: 'c', description: 'c', cwd: wt }).catch((e: Error) => e.message)).toMatch(/didn't move the session/)
+    expect(stuck.calls.some(c => c.startsWith('prompt'))).toBe(false)
+    expect(stuck.calls.at(-1)).toMatch(/^remove /)
+    // never recorded by symcc: never prompted, ended as an error
+    const lost: unknown[] = []
+    const a3 = opencodeAgents(f.api, { dir: main, ready: async () => false, onEnd: (_id, end) => void lost.push(end), pollMs: 5, waitMs: 60 })
+    await a3.spawn({ kind: 'worker', prompt: 'x', name: 'w', description: 'w', cwd: wt })
+    await until(() => lost.length === 1)
+    expect(f.calls.filter(c => c.startsWith('prompt ses_4'))).toEqual([])
+    expect((lost[0] as { end: { reason: string } }).end.reason).toBe('error')
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('sessionEnd: a failed run is an error with its message, a content filter a refusal', () => {
+  const at = { directory: '/x' }
+  expect(sessionEnd({ id: 's', outcome: 'failed', location: at }, [{ type: 'assistant', content: [], finish: 'error', error: { message: 'rate limited' } }])).toEqual({ answer: 'rate limited', end: { reason: 'error' }, isAborted: false, tokens: undefined })
+  expect(sessionEnd({ id: 's', outcome: 'succeeded', location: at, cost: 0.25 }, [{ type: 'assistant', content: [{ type: 'text', text: 'no' }], finish: 'content-filter' }]).end.reason).toBe('refusal')
+  expect(sessionEnd({ id: 's', outcome: 'succeeded', location: at, cost: 0.25 }, []).cost).toBe(0.25)
+  expect(AGENT_PERMISSIONS).toEqual([{ action: 'question', resource: '*', effect: 'deny' }])
+})
+
+test('the tool backstop reads OpenCode 2.3\'s real tool inputs: edit and write {path}, patch {patchText}, shell {command, workdir}, and a multiedit\'s files', async () => {
+  reset()
+  const p = await project()
+  try {
+    const dir = p.wt
+    // as logged in a real run (T-463): write {path, content}, edit {path, oldString, newString}, shell {command, workdir}
+    expect(await toolTouches(dir, 'write', { path: 'src/b.ts', content: 'x' })).toEqual([{ path: `${dir}/src/b.ts` }])
+    expect(await toolTouches(dir, 'edit', { path: 'src/a.ts', oldString: '1', newString: '3' })).toEqual([{ path: `${dir}/src/a.ts` }])
+    expect(await toolTouches(dir, 'shell', { command: 'ls src', workdir: dir })).toEqual([{ command: 'ls src' }])
+    expect(await toolTouches(dir, 'shell', { command: 'ls', workdir: p.main })).toEqual([{ command: `cd '${p.main}' && ls` }])
+    expect(await toolTouches(dir, 'patch', { patchText: '*** Begin Patch\n*** Add File: src/c.ts\n+x\n*** Update File: README.md\n*** End Patch' })).toEqual([{ path: `${dir}/src/c.ts` }, { path: `${dir}/README.md` }])
+    expect(await toolTouches(dir, 'multiedit', { filePath: 'src/a.ts', edits: [{ oldString: '1', newString: '2' }, { filePath: 'README.md', oldString: 'hi', newString: 'yo' }] })).toEqual([{ path: `${dir}/src/a.ts` }, { path: `${dir}/README.md` }])
+    expect(await toolTouches(dir, 'read', { path: 'README.md' })).toEqual([])
+    // through the worktree's copy: each is refused for the file outside the task's files (src/)
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined } })
+    const w = fakeCtx(p.wt)
+    const end = await plugin.setup(w.ctx)
+    const before = async (tool: string, input: unknown) => {
+      let thrown = ''
+      await Promise.resolve(w.hooks.before!({ tool, sessionID: 'ses_worker', agent: 'build', messageID: 'm', id: 'c', input })).catch((e: Error) => (thrown = e.message))
+      return thrown
+    }
+    expect(await before('write', { path: 'README.md', content: 'x' })).toBe(blockedEditText('README.md'))
+    expect(await before('edit', { path: 'README.md', oldString: 'hi', newString: 'x' })).toBe(blockedEditText('README.md'))
+    expect(await before('patch', { patchText: '*** Begin Patch\n*** Update File: README.md\n@@\n-hi\n+x\n*** End Patch' })).toBe(blockedEditText('README.md'))
+    expect(await before('multiedit', { filePath: 'src/a.ts', edits: [{ filePath: 'README.md', oldString: 'hi', newString: 'x' }] })).toBe(blockedEditText('README.md'))
+    expect(await before('shell', { command: 'echo x > README.md', workdir: p.main })).toMatch(/outside|owner/)
+    expect(await before('write', { path: 'src/b.ts', content: 'x' })).toBe('')
+    expect(await before('shell', { command: 'ls src', workdir: p.wt })).toBe('')
+    await end!()
+  } finally {
+    reset()
+    await p.done()
+  }
+})
+
+test('the main folder\'s copy starts a worker as an OpenCode session: the role\'s model, a child of the lead, moved into its worktree, prompted once the board names it; its end reaches agentFinished with its tokens', async () => {
+  reset()
+  const p = await project()
+  try {
+    // T-3: a todo task of an added role whose model is any OpenCode model
+    await mkdir(`${p.main}/.symcc/roles`, { recursive: true })
+    await writeFile(`${p.main}/.symcc/roles/fast.md`, '---\ndescription: a fast one\nmodel: openai/gpt-5\n---\nBe quick.\n')
+    const at = '2026-11-18T00:00:00.000Z'
+    const [b] = addTask(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')), { origin: { why: 'a test' }, title: 'a quick one', files: ['src/'] }, at)
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(patchTask(patchTask(b, 'T-1', { status: 'done' }, at), 'T-2', { status: 'done' }, at), 'T-3', { role: 'fast' }, at)))
+    const f = fakeSessions(2)
+    let host: Host | undefined
+    const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-run' }, agentOptions: { pollMs: 10 } })
+    const c = fakeCtx(p.main, f.api)
+    const endCopy = await plugin.setup(c.ctx)
+    expect(S.guardOnly).toBe(false)
+    // the owner types in their own session: it becomes the lead the agents are children of
+    const lead = f.lead(p.main)
+    await c.hooks.prompt!({ sessionID: lead })
+    await until(() => S.startupDone === true)
+    await pump(host!)
+    await until(() => f.calls.some(x => x.startsWith('prompt')), 15_000)
+    const wt = `${p.main}/.symcc/worktrees/T-3`
+    expect(f.calls).toEqual([`create ses_2 parent ${lead} model openai/gpt-5`, 'move ses_2', `prompt ses_2 in ${wt} (queue)`])
+    const t = (await load(host!)).tasks.find(x => x.id === 'T-3')!
+    expect(t.status).toBe('doing')
+    expect(t.agent).toBe('ses_2')
+    expect(workers.has('ses_2')).toBe(true)
+    // its prompt is the worker prompt for T-3, with the role's checklist
+    expect(String(f.sessions.get('ses_2')!.messages[0]!.content![0]!.text)).toContain('Be quick.')
+    // it ends: agentFinished takes its tokens onto the try
+    f.end('ses_2', 'Nothing to change.')
+    await until(async () => !!(await load(host!)).tasks.find(x => x.id === 'T-3')!.runs?.at(-1)?.tokens, 15_000)
+    expect((await load(host!)).tasks.find(x => x.id === 'T-3')!.runs!.at(-1)!.tokens).toEqual({ input: 10, output: 814, cache_read: 154787, cache_write: 2261 })
+    await endCopy!()
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 60_000)

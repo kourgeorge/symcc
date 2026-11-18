@@ -1,9 +1,10 @@
 // OpenCode's side of the Host (hooks/host.ts), T-462: opencodeHost makes a Host for one copy of the OpenCode plugin
 // (OpenCode starts one per folder a session works in, see plugin.ts). Files, commands and timers are plain Node/Bun,
 // shared with the Node host (hosts/node/host.ts: nodeFs, runCommand, nodeClock); the session is the copy's folder.
-// Not built yet, and filled by the next OpenCode tasks: the agents (OpenCode sessions or `claude -p` processes),
-// the lead (session.prompt), symcc's tools and slash commands, and the TUI's board panel and band. Until then the
-// agents can't start (their start is "not ready", so a task waits) and a board update for the lead goes nowhere.
+// The agents are OpenCode sessions (agents.ts, T-463), passed in by plugin.ts as `agents`. Not built yet, and filled
+// by the next OpenCode tasks: the lead (session.prompt), symcc's tools and slash commands, and the TUI's board panel
+// and band. Until then a board update for the lead goes nowhere; with no `agents` given, no agent can start (its
+// start is "not ready", so a task waits).
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import { nodeFs, runCommand, nodeClock } from '../../hosts/node/host'
 

@@ -40,16 +40,32 @@ export function patchFiles(text: string): string[] {
   return [...text.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm)].map(m => (m[1] ?? m[2] ?? '').trim()).filter(Boolean)
 }
 
-/** What an OpenCode tool call touches, in symcc's words: write and edit name a file, patch its files, shell a command. */
+/**
+ * What an OpenCode tool call touches, in symcc's words. OpenCode 2.3's built-in tools that change files are edit
+ * ({path, oldString, newString}), write ({path, content}) and patch ({patchText}, offered to some models only), and
+ * shell ({command, workdir}) runs a command (seen in a real run, T-463; patch's field is from its tool definition).
+ * It has no multiedit; one (an older OpenCode's, or a plugin's: {filePath, edits: [{filePath?}]}) is checked too,
+ * and so are the older names filePath, file_path, apply_patch and bash. A shell command run in another folder
+ * (workdir) is judged as `cd <workdir> && <command>`, so its text shows where it runs.
+ */
 export async function toolTouches(dir: string, tool: string, input: unknown): Promise<FileTouch[]> {
   const f = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
   const str = (v: unknown) => (typeof v === 'string' ? v : '')
-  if (tool === 'write' || tool === 'edit') {
-    const p = str(f.filePath) || str(f.path) || str(f.file_path)
-    return p ? [{ path: await resourcePath(dir, p) }] : []
+  const fileOf = (o: Record<string, unknown>) => str(o.path) || str(o.filePath) || str(o.file_path)
+  const touch = async (p: string) => ({ path: await resourcePath(dir, p) })
+  if (tool === 'write' || tool === 'edit') return fileOf(f) ? [await touch(fileOf(f))] : []
+  if (tool === 'multiedit') {
+    const edits = Array.isArray(f.edits) ? f.edits.filter((e): e is Record<string, unknown> => !!e && typeof e === 'object') : []
+    return Promise.all([...new Set([fileOf(f), ...edits.map(fileOf)].filter(Boolean))].map(touch))
   }
-  if (tool === 'patch' || tool === 'apply_patch') return Promise.all(patchFiles(str(f.patchText) || str(f.patch)).map(async p => ({ path: await resourcePath(dir, p) })))
-  if (tool === 'shell' || tool === 'bash') return str(f.command) ? [{ command: str(f.command) }] : []
+  if (tool === 'patch' || tool === 'apply_patch') return Promise.all(patchFiles(str(f.patchText) || str(f.patch)).map(touch))
+  if (tool === 'shell' || tool === 'bash') {
+    const command = str(f.command)
+    const workdir = str(f.workdir) || str(f.cwd)
+    if (!command) return []
+    const elsewhere = workdir && (await resourcePath(dir, workdir)) !== (await realPathOf(dir))
+    return [{ command: elsewhere ? `cd '${workdir.replace(/'/g, `'\\''`)}' && ${command}` : command }]
+  }
   return []
 }
 

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs the OpenCode plugin's tests (hooks/opencode/, T-462) with bun test: a fake OpenCode ctx on a scratch git repo
 # with a worker's worktree. It checks which copy runs symcc's engine (one per real main folder), and that a worker's
-# edits and shell writes are refused through permission.evaluate. Not a `claude plugin test` file: that runtime has
+# edits and shell writes are refused through permission.evaluate; and, on a fake session API, that workers are
+# OpenCode sessions (create -> move -> prompt -> wait or interrupt, tokens, the model per role, T-463). Not a `claude plugin test` file: that runtime has
 # no files or processes, and OpenCode itself isn't needed. Needs bun and git on PATH.
 # Usage: sh scripts/test-opencode-host.sh [folder]
 set -eu

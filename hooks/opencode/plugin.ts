@@ -13,14 +13,18 @@
 //   - every copy registers the edit guard (guard.ts).
 // A copy that is unloaded and loaded again (a file edit reloads every copy) starts cleanly: cleanup ends its engine
 // and timers (sessionEnd), and the next setup starts them again. Only the engine copy may act on OpenCode's events
-// (every copy sees every session's): the next OpenCode tasks add those, and the agents, lead, tools and TUI.
-import type { Host } from '../host'
-import { sessionStarting, sessionStart, guardStart, sessionEnd } from '../app/symcc'
-import { useName } from '../app/state'
+// (every copy sees every session's): the next OpenCode tasks add those, and the lead, tools and TUI. The agents are
+// OpenCode sessions (agents.ts, T-463), children of the lead's session (the last one in the copy's folder given a
+// prompt that is none of symcc's agents).
+import type { Host, HostAgentKind } from '../host'
+import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished } from '../app/symcc'
+import { useName, scoutRuns } from '../app/state'
 import { mainRoot, isWorkerFolder } from '../app/store'
+import { agentOnBoard } from '../app/workers'
 import type { OcContext, OcRegistration, OcServerPlugin } from './ctx'
 import { opencodeHost, type OpencodeHostOptions } from './host'
 import { onEvaluate, onToolBefore, realPathOf } from './guard'
+import { opencodeAgents, type OpencodeAgentsOptions } from './agents'
 
 /** What a copy does with symcc's engine: run it (the main folder's copy), only guard (any other), or end it. */
 export type Engine = {
@@ -72,6 +76,19 @@ export type ServerOptions = {
   hostOptions?: Omit<OpencodeHostOptions, 'dir'>
   /** told each copy's folder and role */
   onRole?: (dir: string, role: CopyRole) => void
+  /** passed on to the agents (opencodeAgents), e.g. shorter waits in the tests */
+  agentOptions?: Pick<OpencodeAgentsOptions, 'waitMs' | 'pollMs' | 'sleep'>
+}
+
+/**
+ * Whether symcc has recorded agent `id` of kind `kind`, so the guard of its folder's copy of the plugin knows it: a
+ * scout (it runs in the main folder, so this copy's memory is enough) once its run is kept, a worker or a checker
+ * once the board names it (the copy for its worktree only knows it from there, see agentOnBoard).
+ */
+export async function recorded(host: Host, id: string, kind: HostAgentKind): Promise<boolean> {
+  if (kind === 'scout') return scoutRuns.has(id)
+  const on = await agentOnBoard(host, id)
+  return on?.kind === 'worker' || on?.kind === 'checker'
 }
 
 /** The server plugin, as OpenCode wants its default export ({ id, setup }). */
@@ -81,10 +98,33 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
     id: 'symcc',
     async setup(ctx: OcContext) {
       const dir = ctx.location.directory
-      const host = (o.host ?? opencodeHost)({ ...o.hostOptions, dir })
+      // the agents are OpenCode sessions (agents.ts), children of the lead's session: the last session in this
+      // copy's folder that was given a prompt and is none of symcc's agents. Only the engine copy starts any.
+      let lead: string | undefined
+      const ref: { host?: Host } = {}
+      const agents = o.hostOptions?.agents
+        ? undefined
+        : opencodeAgents(ctx.session, {
+            ...o.agentOptions,
+            dir,
+            lead: () => lead,
+            ready: (id, kind) => recorded(ref.host!, id, kind),
+            onEnd: (id, end) => {
+              useName(ref.host!)
+              agentFinished(ref.host!, id, end)
+            },
+            log: text => ref.host?.ui.log(text),
+          })
+      const host = (o.host ?? opencodeHost)({ ...o.hostOptions, ...(agents ? { agents } : {}), dir })
+      ref.host = host
       const say = (text: string) => host.ui.toast(text)
       useName(host)
       const regs: OcRegistration[] = []
+      regs.push(
+        await ctx.session.hook('prompt', e => {
+          if (e.sessionID && !agents?.has(e.sessionID)) lead = e.sessionID
+        }),
+      )
       // the guard first, so a session's edits are judged from the start (an unknown project refuses nothing)
       regs.push(await ctx.permission.hook('evaluate', onEvaluate(host, dir)))
       regs.push(await ctx.tool.hook('execute.before', onToolBefore(host, dir)))
