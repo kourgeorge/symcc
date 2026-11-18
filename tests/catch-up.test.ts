@@ -19,6 +19,7 @@ function world() {
   const branches = new Map<string, string[]>([['main', ['a', 'b']]])
   const checkedOut = new Map<string, string>() // folder -> branch
   const dirty = new Set<string>()
+  const statusFails = new Set<string>()
   const calls: string[] = []
   const ref = (r: string) => r.replace(/^refs\/heads\//, '')
   const runGit = (a: string[], cwd: string): Res => {
@@ -37,6 +38,7 @@ function world() {
       const have = new Set(branches.get(from) ?? [])
       return ok(String((branches.get(to) ?? []).filter(c => !have.has(c)).length))
     }
+    if (a[0] === 'status' && statusFails.has(cwd)) return fail('index locked')
     if (a[0] === 'status') return ok(dirty.has(cwd) ? ' M src/x.ts' : '')
     if (a[0] === 'merge' && a.includes('--ff-only')) {
       const br = checkedOut.get(cwd)!
@@ -62,7 +64,7 @@ function world() {
     },
   })
   S.root = ROOT
-  return { $, branches, dirty, calls }
+  return { $, branches, dirty, statusFails, calls }
 }
 
 const task = { id: 'T-1', title: 't', status: 'todo' } as SymccTask
@@ -129,6 +131,18 @@ test('a fast-forward that fails leaves the branch behind and says the move faile
   expect(behind).toBe(1)
   expect(why).toBe('failed')
   expect(behindNote(behind, 'main', why)).toContain('could not move your branch up to main')
+})
+
+test('a failed status check is reported as a failed move, not as uncommitted work', async () => {
+  const w = world()
+  await prepareWorktree(w.$, task, 'main', true)
+  w.branches.set('main', ['a', 'b', 'c'])
+  w.statusFails.add(worktreeDir('T-1'))
+  const { behind, why } = await prepareWorktree(w.$, task, 'main', true)
+  expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'b'])
+  expect(behind).toBe(1)
+  expect(why).toBe('failed')
+  expect(behindNote(behind, 'main', why)).not.toContain('uncommitted')
 })
 
 test('without catchUp (e.g. a merge remaking the folder) the branch is left as it is', async () => {

@@ -171,7 +171,7 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
  * so a task that waited on others starts from their merged work. A branch with its own commits, or a folder with
  * changes, is left as it is (the "bring up to date" step at merge time handles it). Returns how many of `target`'s
  * commits the branch still lacks afterwards (0 when it was moved, is up to date, or git could not tell), and, when
- * that is more than 0, why it was not moved (T-483): its own commits, uncommitted changes, or the move failed.
+ * that is more than 0, why it was not moved (T-483): its own commits, uncommitted changes, or the move failed (also when `git status` itself fails).
  */
 export async function catchUpBranch($: Host, dir: string, branch: string, target: string): Promise<CatchUp> {
   const count = async (range: string) => {
@@ -185,7 +185,8 @@ export async function catchUpBranch($: Host, dir: string, branch: string, target
   if (own === null) return { behind: 0 }
   if (own > 0) return { behind, why: 'commits' }
   const st = await git($, ['status', '--porcelain'], dir)
-  if (st.exitCode !== 0 || st.stdout.trim()) return { behind, why: 'changes' }
+  if (st.exitCode !== 0) return { behind, why: 'failed' } // status itself failed: don't claim uncommitted work
+  if (st.stdout.trim()) return { behind, why: 'changes' }
   const r = await git($, ['merge', '--ff-only', '-q', `refs/heads/${target}`], dir)
   return r.exitCode === 0 ? { behind: 0 } : { behind, why: 'failed' }
 }
