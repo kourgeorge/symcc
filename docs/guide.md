@@ -568,10 +568,16 @@ unchanged.
 - **Tabs**: a segmented row of small boxes, `Tasks 20`, `Scouts 1`, `Settings`. The one shown
   has a bold border in the accent color, its name bold and its count in a filled badge; the
   others have a dim border. Click a tab to switch.
-- **Tasks**: grouped under small headings (Waiting for you, Review, Failed, Doing, To do). Each
-  task is an `Open T-12` button with its status mark and word in the status color, then its
-  whole title, then a dim line (role, try, question or why it failed). Backlog, Done and
-  Dropped are fold rows: `▸ Backlog (3)`.
+- **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
+  To do), each with its colored mark and its count in a badge (`▶ Doing  2 `), a blank line
+  between them. Each task is one button: the ID dim and the title (up to two lines; a longer
+  one ends with "(more)", and its page has it whole), then a dim line with the status in its
+  color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the kind or role, the
+  try, and the question or why it failed. A task that needs you starts with a `●` and has a
+  bold title. The lead's questions look the same, in the warning color. Backlog, Done and
+  Dropped are folded headings (`▸ Backlog  3 `), closed until you click them. With nothing
+  open the list says "All clear" and has one main button, `Tell the lead what to do next`,
+  which puts "Next task: " in the prompt box (only when the box is empty).
 - **Footer**: a `Switch to review merge` (or `Switch to auto`) button and a search box that
   filters as you type, with `Clear search` while a search is on. No key hints; other pages
   say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
@@ -587,11 +593,12 @@ unchanged.
   button that opens it); the **Changes** of a task in review; **History**; **Time and cost**;
   and the latest **Report** as Markdown: its first lines, with `Show all` for the rest and a
   button for each try.
-- **Scouts**: each scout gets a few lines, wrapped, never cut: its name (a button that opens
-  it) and its state with a colored mark (`◉ running now`, `○ paused`, `◎ next in 3h`,
+- **Scouts**: each scout is one button of a few lines, wrapped, never cut: its name and its
+  state as a filled badge in its color (`◉ running now`, `○ paused`, `◎ next in 3h`,
   `◎ on demand`); then a dim line with how often it runs, its model and when it last ran; its
-  summary; and the start of its last report (`last report: found 2: …` with the first finding,
-  or `last report: nothing`). Under the list: `+ New scout` and `← Tasks`.
+  summary; and, dim, the start of its last report (`last report: found 2: …` with the first
+  finding, or `last report: nothing`). Under the list: `+ New scout` and `← Tasks`. With no
+  scouts yet, a short how-to in a box and `+ New scout` as the main button.
 - **A scout's page**: a `← Scouts` button; the name and state; when it runs, its model, the next
   run and the last run; buttons `Run now` (not while it runs), `Pause` or `Resume`, and `Edit`;
   then its **Instructions** and its whole **Last report**, both as Markdown, and its **File**.

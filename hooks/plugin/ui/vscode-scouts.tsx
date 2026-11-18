@@ -1,10 +1,11 @@
 // The board panel's Scouts view in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's list
-// (scouts-page.tsx) packs each scout on one line of columns, cut to the width; here each scout gets a few readable
-// lines instead:
-//   security-advisories  ◎ next in 3h        (the name is the button that opens it; the mark in its color)
-//     every day · ran 21h ago                (how often, model, when it ran: dim)
-//     Checks the advisories …                (the summary, whole)
-//     last report: found 5: The package …    (the start of the last report, whole)
+// (scouts-page.tsx) packs each scout on one line of columns, cut to the width; here each scout is one button of a
+// few readable lines instead:
+//   security-advisories   ◎ next in 3h       (the name, then its status as a badge in its color)
+//   every day · ran 21h ago                  (how often, model, when it ran: dim)
+//   Checks the advisories for our packages   (the summary, whole)
+//   last report: found 5: The package left-pad has a security advisory   (the start of the last report, whole, dim)
+// With no scouts, a short how-to in a box and "+ New scout" as the one primary button.
 // One scout's page: a "← Scouts" button, the name and state, its facts, Run now / Pause / Edit as buttons, then the
 // instructions, the whole last report as Markdown, and its Runs (newest first; a press opens that run's full report,
 // with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
@@ -17,7 +18,7 @@ import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from './open'
 import { claudeHost } from '../../claude/host'
-import { vsFooter, vsSection } from './vscode'
+import { vsBadge, vsFooter, vsSection } from './vscode'
 
 /** The color of a scout's mark in VS Code: running blue, paused dim, a bad file in the warning color, waiting plain. */
 const markTone = (s: SymccScout) => (s.running ? 'ide' : s.paused ? 'inactive' : s.warning ? 'warning' : 'text')
@@ -70,20 +71,25 @@ export function scoutsListVs($: $, pane: PaneParts) {
     const facts = [r.every, r.model, r.ran].filter(Boolean).join(' · ')
     const title = x.summary?.trim() || (x.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) || ''
     const last = lastLine(x)
+    // one plain button: the name and its status badge, then dim lines: how often and the last run, the summary, a bad
+    // file's warning, the start of the last report
+    const line = (text: string, color = 'inactive') => [
+      '\n',
+      <Text key={`l-${text}`} wrap="wrap" color={C(color)}>
+        {text}
+      </Text>,
+    ]
     return (
       <Box key={`vs-scout-${x.name}`} flexDirection="column">
-        <Box key={`vs-scout-${x.name}-top`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Button key={row(`scout:${x.name}`)} plain label={`Open ${x.name}`} autoFocus={focusFirst()} onPress={act(() => panelValues($).updateScoutOpen(() => x.name))}>
-            <Text wrap="wrap" bold={!x.paused} color={C(x.paused ? 'inactive' : 'claude')}>{x.name}</Text>
-          </Button>
-          <Text key="mark" color={C(markTone(x))}>{`${scoutIcon(x)} ${vsScoutState(x, nowMs)}`}</Text>
-        </Box>
-        <Box key={`vs-scout-${x.name}-body`} flexDirection="column" paddingLeft={2}>
-          {plain('facts', facts)}
-          {title ? plain('title', title, 'text') : null}
-          {x.warning ? plain('warning', x.warning, 'warning') : null}
-          {last.text ? plain('last', last.text, last.tone) : null}
-        </Box>
+        <Button key={row(`scout:${x.name}`)} plain label={`Open ${x.name}`} autoFocus={focusFirst()} onPress={act(() => panelValues($).updateScoutOpen(() => x.name))}>
+          <Text wrap="wrap" bold={!x.paused} color={C(x.paused ? 'inactive' : 'claude')}>{x.name}</Text>
+          <Text>{'  '}</Text>
+          {vsBadge(vs, 'mark', `${scoutIcon(x)} ${vsScoutState(x, nowMs)}`, markTone(x))}
+          {line(facts)}
+          {title ? line(title, 'text') : null}
+          {x.warning ? line(x.warning, 'warning') : null}
+          {last.text ? line(last.text) : null}
+        </Button>
       </Box>
     )
   }
@@ -105,7 +111,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
     </Box>
   ) : (
     <Box key="vs-scout-new-row" flexDirection="row">
-      <Button key="scout-new" label="+ New scout" variant="secondary" autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((S.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))} />
+      <Button key="scout-new" label="+ New scout" variant={scouts.length === 0 ? 'primary' : 'secondary'} autoFocus={scouts.length === 0 ? true : undefined} onPress={() => ((S.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))} />
     </Box>
   )
 
@@ -114,7 +120,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
       <Box key="vs-header" flexDirection="column">
         {[...banner(), tabs()]}
       </Box>
-      {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column">{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
+      {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column" borderStyle="round" borderColor={C('subtle')} paddingX={1}>{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
       {scouts.map(scoutBox)}
       {newBox}
       <Box key="vs-scouts-back-row" flexDirection="row">

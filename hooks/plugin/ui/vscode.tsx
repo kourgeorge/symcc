@@ -178,27 +178,64 @@ export function vsFooter(k: VsKit, name: string, opts: { mode?: SymccMode; onSwi
   )
 }
 
-/** A small section heading in VS Code: the status mark in its color, then the name and count ("▶ Doing (2)"). */
-export function vsHeading(k: VsKit, key: string, mark: string, tone: string, label: string, n: number): RenderChildren {
+/** The background of a count badge for a status tone: the tone itself, but a neutral grey for the plain text color
+ *  (a badge in the text color would read as a black or white block). */
+export const badgeTone = (tone: string) => (tone === 'text' ? 'inactive' : tone)
+
+/** A small filled badge in VS Code (" 3 ", " running now "): bold, in the inverse text color on `tone`. */
+export function vsBadge(k: VsKit, key: string, text: string | number, tone: string): RenderChildren {
   const { Text, C } = k
   return (
-    <Text key={key} bold>
-      <Text color={C(tone)}>{`${mark} `}</Text>
-      <Text color={C('text')}>{`${label} (${n})`}</Text>
+    <Text key={key} bold backgroundColor={C(badgeTone(tone))} color={C('inverseText')}>
+      {` ${text} `}
     </Text>
   )
 }
 
-/** A fold row in VS Code: a plain button that reads as a heading ("▸ Backlog (6)", "▾ Done (3)"). */
-export function vsFold(k: VsKit, key: string, label: string, n: number | string, open: boolean, onPress: () => void, top = true, autoFocus?: true): RenderChildren {
+/** A section heading in VS Code: the status mark in its color, the name bold, then the count as a filled badge in the
+ *  same color ("▶ Doing  2 "). Its text for a screen reader stays "Doing (2)" in `label`'s place. */
+export function vsHeading(k: VsKit, key: string, mark: string, tone: string, label: string, n: number): RenderChildren {
+  const { Box, Text, C } = k
+  return (
+    <Box key={key} flexDirection="row">
+      <Text bold wrap="wrap">
+        <Text color={C(tone)}>{`${mark} `}</Text>
+        <Text color={C('text')}>{label}</Text>
+        <Text color={C('text')}> </Text>
+        {vsBadge(k, `${key}-count`, n, tone)}
+      </Text>
+    </Box>
+  )
+}
+
+/** A fold row in VS Code: a plain button that reads as a heading, the count as a badge ("▸ Backlog  6 ", "▾ Done  3 
+ *  (+12 archived)"); its label says it in words ("▸ Backlog (6)"). `top` false: a smaller, dim fold (a day under Done). */
+export function vsFold(k: VsKit, key: string, label: string, n: number, open: boolean, onPress: () => void, top = true, autoFocus?: true, note = ''): RenderChildren {
   const { Button, Text, C } = k
-  const text = `${open ? '▾' : '▸'} ${label} (${n})`
+  const text = `${open ? '▾' : '▸'} ${label} (${n}${note ? ` ${note}` : ''})`
   return (
     <Button key={key} plain label={text} autoFocus={autoFocus} onPress={onPress}>
-      <Text bold={top} color={C(top ? 'text' : 'inactive')}>{text}</Text>
+      <Text bold={top} color={C('inactive')}>{`${open ? '▾' : '▸'} `}</Text>
+      <Text bold={top} color={C(top ? 'text' : 'inactive')}>{label}</Text>
+      <Text color={C('inactive')}> </Text>
+      {top ? vsBadge(k, `${key}-count`, n, 'inactive') : <Text color={C('inactive')}>{String(n)}</Text>}
+      {note ? <Text color={C('inactive')}>{` ${note}`}</Text> : null}
     </Button>
   )
 }
+
+/** A title cut to about two lines of `columns` (whole words, `lead` columns taken by what comes before it on the first
+ *  line): the title, and whether it was cut (the row then says "(more)": the whole title is on the task's page). */
+export function twoLines(title: string, columns: number, lead = 0): { text: string; cut: boolean } {
+  const room = Math.max(12, 2 * Math.max(1, columns) - lead)
+  const t = title.trim()
+  if (t.length <= room) return { text: t, cut: false }
+  const head = t.slice(0, room - MORE.length)
+  const space = head.lastIndexOf(' ')
+  return { text: (space > room / 2 ? head.slice(0, space) : head).trimEnd(), cut: true }
+}
+/** What a cut title ends with (see twoLines). */
+export const MORE = ' (more)'
 
 /** A section heading on VS Code's task page: plain words, bold, in the heading color ("What to do"). */
 export function vsSection(k: VsKit, key: string, label: string): RenderChildren {

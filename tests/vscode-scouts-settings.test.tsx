@@ -116,6 +116,20 @@ test('the Scouts list in VS Code at width 50: whole names, summaries and report 
   expect(await row('docs-drift')).toMatch(/last report: nothing/)
   expect(await row('on-demand-check')).toMatch(/on demand · never ran/)
   expect(await row('broken')).toMatch(/every_minutes "-5" is not valid/)
+  // T-444: each scout is one plain button (text only inside): its name, its status as a filled badge, then dim lines;
+  // the start of the last report dim too
+  for (const s of SCOUTS) {
+    const open = await ui.find({ key: `scout:${s.name}` })
+    expect(open?.props.plain, s.name).toBe(true)
+    for (const c of (open!.children as unknown[]).flat(9)) if (c && typeof c === 'object') expect((c as { type?: string }).type, s.name).toBe('Text')
+    const badge = elements(open!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
+    expect([badge?.props?.color, badge?.props?.bold], s.name).toEqual(['inverseText', true])
+  }
+  const running = elements((await ui.find({ key: 'scout:dependency-updates' }))!.children).find(n => n.props?.backgroundColor)
+  expect([texts(running).join(''), running?.props?.backgroundColor]).toEqual([' ◉ running now ', 'ide'])
+  const report = elements((await ui.find({ key: 'scout:security-advisories-for-node-packages' }))!.children).find(n => /^last report: /.test(texts(n).join('')))
+  expect(report?.props?.color).toBe('inactive')
+  expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('secondary')
   // a new scout: a button, then a box for its name with a Cancel button
   await ui.press({ key: 'scout-new' })
   readable(await ui.drawn(), 'new scout')
@@ -138,6 +152,10 @@ test('the Scouts list in VS Code with no scouts: the how-to text without termina
   expect(all).toContain('Or press "New scout" to write one right here.')
   expect(all).not.toContain('(n)')
   expect((await ui.find({ key: 'scout-new' }))?.type).toBe('Button')
+  // T-444: the how-to in a box, and "+ New scout" as the one primary button
+  expect((await ui.find({ key: 'vs-scouts-howto' }))?.props.borderStyle).toBe('round')
+  expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('primary')
+  expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBe(1)
   await ui.unmount()
 })
 

@@ -5,7 +5,8 @@ import { test } from './reset'
 import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board-fixture'
 import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
-import { shortTests, logoWidthFor, vsLogoRow, VS_LOGO_COLUMNS } from '../hooks/plugin/ui/vscode'
+import { shortTests, logoWidthFor, vsLogoRow, VS_LOGO_COLUMNS, twoLines, MORE } from '../hooks/plugin/ui/vscode'
+import { ASK_LEAD, ASK_LEAD_DRAFT } from '../hooks/plugin/ui/vscode-list'
 import { drawNow } from '../hooks/plugin/ui/now'
 import { LOGO_AREA, LOGO_MIN_WIDTH, mayMove, restFrame, swayFrames } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING } from '../hooks/board'
@@ -128,29 +129,31 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   for (const k of ['day:backlog', 'day:done', 'day:dropped']) await ui.press({ key: k })
   const tree = await ui.drawn()
   const all = texts(tree)
-  // every title is drawn whole, in a Text that wraps; nothing anywhere is cut with "…"
+  // every title is whole in its row button's label and drawn in a Text that wraps (cut at a word after two lines, then
+  // "(more)"); nothing anywhere is cut with "…"
   for (const t of BOARD_TASKS) {
-    const title = await ui.find({ type: 'Text', text: t.title })
+    const open = await ui.find({ key: t.id })
+    expect([open?.type, open?.props.plain, open?.props.label], t.id).toEqual(['Button', true, `${t.id} ${t.title}`])
+    const title = elements(open!.children).find(n => n.type === 'Text' && n.props?.wrap === 'wrap' && t.title.startsWith(texts(n).join('')) && texts(n).join('').length > 8)
     expect(title, t.id).toBeDefined()
-    expect(title!.props.wrap).toBe('wrap')
-    expect(STATUS_COLORS.has(String(title!.props.color))).toBe(false)
+    expect(STATUS_COLORS.has(String(title!.props?.color))).toBe(false)
   }
   expect(all.filter(s => s.includes('…'))).toEqual([])
-  // each row: its ID is a plain button; the status color is on the mark only, not on the row's box or its title
+  // each row is one plain button; the status color is on the status words only, not on the row's box or its title
   for (const t of BOARD_TASKS) {
     const rowBox = await ui.find({ key: `vs-task-${t.id}` })
     expect(rowBox, t.id).toBeDefined()
     expect(rowBox!.props.color ?? rowBox!.props.backgroundColor).toBeUndefined()
+    expect((rowBox!.children as Node[]).filter(n => n && typeof n === 'object').map(n => n.type), t.id).toEqual(['Button'])
     const colored = elements(rowBox!.children).filter(n => n.type === 'Text' && STATUS_COLORS.has(String(n.props?.color)))
-    expect(colored.length, t.id).toBeLessThanOrEqual(2) // the mark, and a later try's "try 3" in the warning color
+    expect(colored.length, t.id).toBeLessThanOrEqual(3) // the needs-you mark, the status words, a later try's "try 3"
     for (const n of colored) expect(texts(n).join(''), t.id).not.toContain(t.title)
-    const open = await ui.find({ key: t.id })
-    expect(open?.type).toBe('Button')
-    expect(open?.props.plain).toBe(true)
   }
   expect((await ui.find({ key: 'vs-task-T-405' }))?.text).toMatch(/✗ failed/)
-  // grouped by status under small headings, the folded groups as heading rows
-  for (const h of ['Waiting for you (1)', 'Review (2)', 'Failed (1)', 'Doing (2)', 'To do (6)']) expect(all, h).toContain(h)
+  // grouped by status under headings with a count badge, the folded groups as heading rows
+  for (const [k, h] of [['Waiting for you', '? Waiting for you  1 '], ['Review', '◆ Review  2 '], ['Failed', '✗ Failed  1 '], ['Doing', '▶ Doing  2 '], ['To do', '○ To do  6 ']]) {
+    expect((await ui.find({ key: `vs-head-${k}` }))?.text, k).toBe(h)
+  }
   expect(all).toContain('▾ Backlog (3)')
   expect(all).toContain('▾ Dropped (2)')
   // tabs without key labels, the one shown marked
@@ -272,6 +275,131 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     for (const re of KEY_HINTS) expect(head.filter(s => re.test(s)), `${at} ${re}`).toEqual([])
     await ui.unmount()
   }
+})
+
+// T-444: VS Code's lists: headings with a count badge, each task one button (the ID dim, the title up to two lines, a dim
+// line with the status in color, the kind, the try and the time), the lead's questions in the warning tone, the closed
+// groups folded, and a friendly empty board with one primary button.
+const QUESTION = { id: 'Q-3', text: 'Should the board open by itself when a session starts?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
+const LONG = { ...BOARD_TASKS.find(t => t.id === 'T-410')!, id: 'T-421', order: 421, title: 'Draw the board list in the VS Code side panel with clear headings, count badges and one button per task, so it is easy to scan' }
+const MIXED_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, LONG], questions: [QUESTION] } }
+const EMPTY_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, working: [], tasks: [] } }
+
+test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows as buttons, Done and Backlog folded', async ($, on) => {
+  seedBoard(on, { view: MIXED_VIEW })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [40, 80]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const tree = await ui.drawn()
+    const all = texts(tree)
+    // headings: the colored mark, the name, the count as a filled badge in the same color
+    const heads: [string, string, string][] = [
+      ['questions', '? Questions for you  1 ', 'warning'],
+      ['Waiting for you', '? Waiting for you  1 ', 'warning'],
+      ['Review', '◆ Review  2 ', 'warning'],
+      ['Failed', '✗ Failed  1 ', 'error'],
+      ['Doing', '▶ Doing  2 ', 'ide'],
+      ['To do', '○ To do  7 ', 'inactive'],
+    ]
+    for (const [k, text, tone] of heads) {
+      const head = await ui.find({ key: `vs-head-${k}` })
+      expect(head?.text, `${at} ${k}`).toBe(text)
+      const badge = elements(head!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
+      expect([badge?.props?.backgroundColor, badge?.props?.color, badge?.props?.bold], `${at} ${k}`).toEqual([tone, 'inverseText', true])
+    }
+    // a line of space between the folded sections too (the open ones sit in the page's column, gap 1)
+    expect((await ui.find({ key: 'vs-folded' }))?.props.gap, at).toBe(1)
+    // Backlog, Done and Dropped are folded: heading buttons with a count badge, none of their tasks drawn
+    const folds: [string, string, string][] = [
+      ['day:backlog', '▸ Backlog (3)', '▸ Backlog  3 '],
+      ['day:done', '▸ Done (3)', '▸ Done  3 '],
+      ['day:dropped', '▸ Dropped (2)', '▸ Dropped  2 '],
+    ]
+    for (const [k, label, shown] of folds) {
+      const fold = await ui.find({ key: k })
+      expect([fold?.type, fold?.props.plain, fold?.props.label, texts(fold!.children).join('')], `${at} ${k}`).toEqual(['Button', true, label, shown])
+    }
+    for (const id of ['T-411', 'T-414', 'T-417']) expect(await ui.find({ key: `vs-task-${id}` }), `${at} ${id}`).toBeUndefined()
+    // each open task is one plain button whose children are only text, its ID in the dim color
+    for (const t of BOARD_TASKS.filter(t => !['backlog', 'done', 'dropped'].includes(t.status))) {
+      const b = await ui.find({ key: t.id })
+      expect([b?.type, b?.props.plain], `${at} ${t.id}`).toEqual(['Button', true])
+      for (const c of (b!.children as unknown[]).flat(9)) if (c && typeof c === 'object') expect((c as Node).type, `${at} ${t.id}`).toBe('Text')
+      expect(elements(b!.children).find(n => texts(n).join('') === t.id)?.props?.color, `${at} ${t.id}`).toBe('inactive')
+    }
+    const rowText = async (id: string) => texts((await ui.find({ key: id }))!.children).join('')
+    // the dim line: the status in its color and its time, the kind or role, the question or why it failed, the try
+    expect(await rowText('T-404'), at).toContain('\n? waiting for 1m · Yellow or blue for review?')
+    expect(await rowText('T-405'), at).toContain('\n✗ failed 1m ago')
+    expect(await rowText('T-401'), at).toContain('\n▶ 2m')
+    expect(await rowText('T-403'), at).toContain('\n◆ review for 1m · ready for your review')
+    expect(await rowText('T-420'), at).toMatch(/\n.*investigation/)
+    const status = elements((await ui.find({ key: 'T-405' }))!.children).find(n => texts(n).join('') === '✗ failed 1m ago')
+    expect(status?.props?.color, at).toBe('error')
+    // a task that needs you gets a clear "●" mark first; one that runs starts with its ID
+    for (const id of ['T-403', 'T-404', 'T-405', 'T-420']) expect(await rowText(id), `${at} ${id}`).toMatch(new RegExp(`^● ${id}  `))
+    expect(await rowText('T-401'), at).toMatch(/^T-401  /)
+    // a long title: whole when it fits two lines, at 80; at 40 cut at a word after about two lines, then "(more)" (the
+    // whole title is on its page and in the button's label)
+    const long = LONG.title
+    const shown = texts((await ui.find({ key: 'T-421' }))!.children)
+    expect((await ui.find({ key: 'T-421' }))?.props.label, at).toBe(`T-421 ${long}`)
+    if (bodyColumns === 80) expect(shown, at).toContain(long)
+    else {
+      expect(shown, at).not.toContain(long)
+      expect(shown, at).toContain(MORE)
+      const cut = shown.find(s => long.startsWith(s) && s.length > 20)!
+      expect(long.charAt(cut.length), at).toBe(' ')
+    }
+    // the lead's question: a row like a task's, in the warning tone
+    const q = await ui.find({ key: 'Q-3' })
+    expect([q?.type, q?.props.plain, q?.props.label], at).toEqual(['Button', true, `Q-3 ${QUESTION.text}`])
+    expect(texts(q!.children).join(''), at).toBe(`● Q-3  ${QUESTION.text}\n? question for you for 5m · 2 choices`)
+    expect(elements(q!.children).find(n => texts(n).join('') === '● ')?.props?.color, at).toBe('warning')
+    // nothing cut with "…", no key hints, no primary button on a busy board
+    expect(all.filter(s => s.includes('…')), at).toEqual([])
+    for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), `${at} ${re}`).toEqual([])
+    expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length, at).toBe(0)
+    // a fold opens on a press: Done's tasks are then rows too
+    await ui.press({ key: 'day:done' })
+    expect((await ui.find({ key: 'T-414' }))?.type, at).toBe('Button')
+    await ui.press({ key: 'day:done' })
+    await ui.unmount()
+  }
+})
+
+test('in VS Code an empty board at widths 40 and 80: a friendly note and one primary button that starts a message to the lead', async ($, on) => {
+  seedBoard(on, { view: EMPTY_VIEW })
+  on('ui.toast', () => ({ value: undefined }))
+  const filled: string[] = []
+  on('prompt.fill', (_, e) => (filled.push(e.text), { isFilled: true }) as never)
+  for (const bodyColumns of [40, 80]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const tree = await ui.drawn()
+    const all = texts(tree)
+    expect((await ui.find({ key: 'vs-empty' }))?.text, at).toContain('✓ All clear. Nothing running or waiting.')
+    const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary')
+    expect(primary.length, at).toBe(1)
+    expect((await ui.find({ key: 'vs-ask-lead' }))?.props.variant, at).toBe('primary')
+    expect(primary[0]!.props?.label, at).toBe(ASK_LEAD)
+    expect(await ui.find({ key: 'vs-folded' }), at).toBeUndefined()
+    expect(all.filter(s => s.includes('…')), at).toEqual([])
+    for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), `${at} ${re}`).toEqual([])
+    await ui.press({ key: 'vs-ask-lead' })
+    await ui.unmount()
+  }
+  expect(filled).toEqual([ASK_LEAD_DRAFT, ASK_LEAD_DRAFT])
+})
+
+test('twoLines: a title past about two lines is cut at a word; a short one stays whole', () => {
+  expect(twoLines('short title', 40)).toEqual({ text: 'short title', cut: false })
+  const long = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen'
+  const t = twoLines(long, 20, 7)
+  expect(t.cut).toBe(true)
+  expect(long.startsWith(t.text) && long.charAt(t.text.length) === ' ').toBe(true)
+  expect(t.text.length + MORE.length).toBeLessThanOrEqual(2 * 20 - 7)
 })
 
 test('in VS Code the logo may move at any panel width (it always shows there); its rows keep their spaces', () => {
