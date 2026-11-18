@@ -1,5 +1,6 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, endedBy, tryLabel } from '../board'
+import { sayNeedsYou } from './voice'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -147,7 +148,11 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   const withSecrets = (r: CheckResult): CheckResult => (secrets.length ? { ...r, secrets, detail: `${r.detail}; ${secretsLeftText(secrets)}` } : r)
   if (secrets.length && !changed.length) {
     const ask = onlySecretsQuestion(t.id, secrets)
-    return { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
+    const r: CheckResult = { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
+    // A worker's try: the task waits for the owner with the question (still the same try only). The caller then finds
+    // it waiting and keeps that (its outcome line goes to the history as "not used"), so it never ends as failed.
+    if (mode === 'finish') await waitForOwner($, b, t, ask, `${tryLabel(t)}: ${r.detail}`)
+    return r
   }
   if (!changed.length) {
     // Nothing new, but this task's own work is already on the target branch (an earlier try merged
@@ -172,6 +177,18 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold)), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
   }
+}
+
+/** Task `t` (still the same doing try) waits for the owner with `question`; `line` goes to its history, and the lead and the owner are told. */
+async function waitForOwner($: Host, b: Board, t: SymccTask, question: string, line: string) {
+  const written = await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== 'doing' || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
+    return [patchTask(x, t.id, { status: 'waiting', question: question.slice(0, 1000), note: 'waiting for you', history: [...cur.history, line], ...endedBy(cur, now(), 'asked', 'only secret-looking files') }, now()), true] as [Board, boolean]
+  })
+  if (!written) return
+  sayNeedsYou($, b, t, question)
+  tellLead($, `${question} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`)
 }
 
 /** The files changed from commit `base` to commit `head` (-z: names come through as they are; without it git quotes and escapes unusual ones, e.g. "caf\303\251.md"). */
