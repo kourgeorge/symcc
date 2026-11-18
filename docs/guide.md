@@ -551,10 +551,16 @@ In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: yo
 (or Tab to it and press Enter). So the board there has its own layout; the terminal's is
 unchanged.
 
-- **Header**: the name and folder, the folder's path, the branch and who drives, the board
-  mode and what it means, the tests (the first command, then "(+1 more)"), the limits and the
-  counts, each on its own line and wrapped, never cut.
-- **Tabs**: `● Tasks (20)`, `Scouts (1)`, `Settings`; the dot marks the one shown.
+- **Header**: the symcc logo (the clef, in the accent color; it sways now and then and turns
+  into a check mark, a robot or a note on a merge, a start or a scout finding, as in the
+  terminal) with four short lines beside it: the name, version and folder; the board mode as a
+  colored pill (`⏵ auto`) with what it means, dim; the branch and who drives; the tests (the
+  first command, then "(+1 more)") and the limits. Under it the counts as small badges
+  (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each dot in its status color. Every line
+  wraps, never cut.
+- **Tabs**: a segmented row of small boxes, `Tasks 20`, `Scouts 1`, `Settings`. The one shown
+  has a bold border in the accent color, its name bold and its count in a filled badge; the
+  others have a dim border. Click a tab to switch.
 - **Tasks**: grouped under small headings (Waiting for you, Review, Failed, Doing, To do). Each
   task is an `Open T-12` button with its status mark and word in the status color, then its
   whole title, then a dim line (role, try, question or why it failed). Backlog, Done and

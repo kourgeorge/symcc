@@ -152,6 +152,23 @@ export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccSta
 
 const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'backlog', 'done']
 
+/** One count of the banner's counts line: its text ("2 doing", "3 in backlog", "5 done (+2 archived)", the token
+ *  total) and the status it counts (none for the total). */
+export type BannerCount = { text: string; status?: SymccStatus }
+
+/** The banner's counts, in BANNER_ORDER, then the total of the runs (when any ran); none on an empty board with nothing archived. */
+export function bannerCounts(b: BannerBoard, nowMs?: number): BannerCount[] {
+  const gone = archivedOf(b).done
+  if (!b.tasks.length && !gone) return []
+  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => t.status === st).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([st, n]) => ({ status: st, text: st === 'backlog' ? `${n} in backlog` : st === 'done' ? `${n} done${gone ? ` ${archivedNote(gone)}` : ''}` : `${n} ${STATUS_WORD[st]}` }))
+  if (gone && !b.tasks.some(t => t.status === 'done')) counts.push({ status: 'done', text: `${gone} done (archived)` })
+  const t = boardTotal(b, nowMs)
+  if (t.tries) counts.push({ text: fmtTotal(t, 'tokens') })
+  return counts
+}
+
 /** Cuts parts so their text fits in `room` columns, ending with "…" when something was cut. */
 function cutParts(parts: BannerPart[], room: number): BannerPart[] {
   const len = parts.reduce((s, p) => s + p.text.length, 0)
@@ -208,13 +225,8 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const withV = line1(version)
   const l1 = withV.reduce((n, p) => n + p.text.length, 0) <= room1 ? withV : line1('')
   const texts = [l1, l2, l3]
-  const gone = archivedOf(b).done
-  if (b.tasks.length || gone) {
-    const counts = statusCounts(b.tasks, BANNER_ORDER).map(c => c.replace(/^(\d+) backlog$/, '$1 in backlog').replace(/^(\d+) done$/, `$1 done${gone ? ` ${archivedNote(gone)}` : ''}`))
-    if (gone && !b.tasks.some(t => t.status === 'done')) counts.push(`${gone} done (archived)`)
-    const t = boardTotal(b, nowMs)
-    texts.push(join([...counts.map(c => fact(c)), ...(t.tries ? [fact(fmtTotal(t, 'tokens'))] : [])]))
-  }
+  const counts = bannerCounts(b, nowMs)
+  if (counts.length) texts.push(join(counts.map(c => fact(c.text))))
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW
   // The three fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook)

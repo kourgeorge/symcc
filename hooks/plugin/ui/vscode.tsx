@@ -1,11 +1,13 @@
-// The board panel's own pieces for VS Code's side panel (see surface.ts): a header on readable, wrapped lines, tabs
-// you click, a footer with real buttons and no key hints, small section headings and fold rows. The Tasks page uses
+// The board panel's own pieces for VS Code's side panel (see surface.ts): a header with the logo and the facts on
+// readable, wrapped lines, a tab strip you click, a footer with real buttons and no key hints, small section headings and fold rows. The Tasks page uses
 // them, and so do the task page (vscode-task.tsx) and the Scouts and Settings pages (vscode-scouts.tsx, vscode-settings.tsx).
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerLines, folderName, shortHome, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
 import { namesFor } from '../../name'
 import { type PaneView, S } from '../state'
+import { logoNow } from '../logo'
+import { LOGO_AREA, LOGO_MIN_WIDTH } from '../../core/logo'
 import type { PaneTab } from './open'
 import { CLICK_HINT } from './surface'
 
@@ -38,64 +40,121 @@ export const modeColor = (m: SymccMode) => (m === 'off' ? 'warning' : m === 'rev
 /** The mode switch's label in VS Code: "Switch to review merge" in auto (and off), "Switch to auto" in review. */
 export const switchLabel = (m: SymccMode) => `Switch to ${MODE_NAME[nextMode(m)]}`
 
-/** The header's lines in VS Code, each wrapped to the panel (never cut): name and folder, the folder's path, branch and
- *  who drives, the mode and what it means, the tests and limits, and the counts. `gitRow` is the "no git" warning row. */
+/** The color of a status's dot in the counts badges (the same as the list's marks). */
+const COUNT_COLOR: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
+
+/** The mode pill's color: the same hue as the mode's word elsewhere, but auto in the success color (a pill in the plain
+ *  text color would read as a black or white block). */
+export const pillColor = (m: SymccMode) => (m === 'auto' ? 'success' : modeColor(m))
+
+/** How wide the logo's column is in VS Code: the frame's width (LOGO_AREA, room for the sway) and nothing else. */
+export const VS_LOGO_COLUMNS = LOGO_AREA
+
+/** A logo row for VS Code: its spaces as no-break spaces, so the web panel keeps them (the clef's lines stay lined up);
+ *  drawn in the monospace font, so each character takes one column. */
+export const vsLogoRow = (row: string) => row.replace(/ /g, ' ')
+
+/** How a board panel of `width` columns tells the logo's width (see noteLogoWidth): VS Code always shows the logo,
+ *  so its moves may play at any width there; elsewhere the panel's own width (no logo below LOGO_MIN_WIDTH). */
+export const logoWidthFor = (vscode: boolean, width: number) => (vscode ? Math.max(width, LOGO_MIN_WIDTH) : width)
+
+/**
+ * The header in VS Code, each line wrapped to the panel (never cut):
+ *  - on the left the logo (the clef, bold in the accent color; it sways and turns into shapes as on the terminal), and beside it
+ *    the name, version and folder; the mode as a pill with its meaning dim beside it; the branch and who drives on one dim line;
+ *    the tests and the limits on one dim line;
+ *  - under it the counts as small badges ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
+ * A warning line when symcc is turned off sits under the name.
+ */
 export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderChildren[]): RenderChildren[] {
-  const { Text, C } = k
+  const { Box, Text, C } = k
   const d = emptyBoard()
   const name = namesFor(S.N.name)
   const folder = folderName(S.root)
   const off = v.enabled === false ? offStatusLine(S.N.name) : ''
   const driving = v.driving ?? S.driving
   const cmds = v.test_commands ?? []
-  const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${v.auto_retries ?? d.auto_retries} ${(v.auto_retries ?? d.auto_retries) === 1 ? 'retry' : 'retries'}`
-  // the counts line is the banner's own (the last line when there are tasks), drawn whole here
-  const lines = bannerLines({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries, mode }, S.root, S.home, driving, 1_000_000, k.nowMs, S.N.name, [], S.version)
-  const counts = (v.tasks.length || (v.archived?.done ?? 0)) && lines.length > 3 ? lines[lines.length - 1]!.parts.map(p => p.text).join('') : ''
+  const retries = v.auto_retries ?? d.auto_retries
+  const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}`
+  const counts = bannerCounts({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: retries, mode }, k.nowMs)
+  const dot = (key: string) => <Text key={key} color={C('subtle')}> · </Text>
+  const frame = logoNow()
   return [
-    <Text key="vs-title" wrap="wrap">
-      <Text bold color={C('ide')}>{name.name}</Text>
-      {S.version ? <Text color={C('inactive')}>{versionMark(S.version)}</Text> : null}
-      <Text bold color={C('ide')}> board</Text>
-      {folder ? <Text color={C('inactive')}>{` · ${folder}`}</Text> : null}
-    </Text>,
-    ...(off ? [<Text key="vs-off" wrap="wrap" color={C('warning')}>{off}</Text>] : []),
-    ...(S.root ? [<Text key="vs-path" wrap="wrap" color={C('inactive')}>{shortHome(S.root, S.home)}</Text>] : []),
-    <Text key="vs-branch" wrap="wrap">
-      {v.branch_note ? <Text color={C('warning')}>{v.branch_note}</Text> : <Text color={C('inactive')}>{v.branch ? `branch ${v.branch}` : 'no branch'}</Text>}
-      <Text color={C('subtle')}> · </Text>
-      <Text color={C('inactive')}>{driving ? 'this session drives' : 'driven by another session'}</Text>
-    </Text>,
-    <Text key="vs-mode" wrap="wrap">
-      <Text color={C('inactive')}>mode </Text>
-      <Text bold color={C(modeColor(mode))}>{modeLabel(mode)}</Text>
-      <Text color={C('inactive')}>{`: ${MODE_MEANING[mode]}`}</Text>
-    </Text>,
-    cmds.length ? (
-      <Text key="vs-tests" wrap="wrap" color={C('inactive')}>{`tests: ${shortTests(cmds)}`}</Text>
-    ) : (
-      <Text key="vs-tests" wrap="wrap" color={C('warning')}>no test command</Text>
-    ),
-    <Text key="vs-limits" wrap="wrap" color={C('inactive')}>{limits}</Text>,
-    ...(counts ? [<Text key="vs-counts" wrap="wrap" bold color={C('text')}>{counts}</Text>] : []),
+    <Box key="vs-top" flexDirection="row" gap={1}>
+      <Box key="vs-logo" flexDirection="column" width={VS_LOGO_COLUMNS} flexShrink={0}>
+        {frame.map((row, i) => (
+          <Text key={`vs-logo-${i}`} mono bold color={C('ide')}>{vsLogoRow(row)}</Text>
+        ))}
+      </Box>
+      <Box key="vs-facts" flexDirection="column" flexGrow={1} flexShrink={1}>
+        <Text key="vs-title" wrap="wrap">
+          <Text bold color={C('ide')}>{name.name}</Text>
+          {S.version ? <Text color={C('inactive')}>{versionMark(S.version)}</Text> : null}
+          {folder ? <Text color={C('inactive')}>{` · ${folder}`}</Text> : null}
+        </Text>
+        {off ? <Text key="vs-off" wrap="wrap" color={C('warning')}>{off}</Text> : null}
+        <Text key="vs-mode" wrap="wrap">
+          <Text bold backgroundColor={C(pillColor(mode))} color={C('inverseText')}>{` ${modeLabel(mode)} `}</Text>
+          <Text color={C('inactive')}>{` ${MODE_MEANING[mode]}`}</Text>
+        </Text>
+        <Text key="vs-branch" wrap="wrap">
+          {v.branch_note ? <Text color={C('warning')}>{v.branch_note}</Text> : <Text color={C('inactive')}>{v.branch ? `branch ${v.branch}` : 'no branch'}</Text>}
+          {dot('vs-branch-dot')}
+          <Text color={C('inactive')}>{driving ? 'this session drives' : 'driven by another session'}</Text>
+        </Text>
+        <Text key="vs-settings" wrap="wrap">
+          {cmds.length ? <Text color={C('inactive')}>{`tests: ${shortTests(cmds)}`}</Text> : <Text color={C('warning')}>no test command</Text>}
+          {dot('vs-settings-dot')}
+          <Text color={C('inactive')}>{limits}</Text>
+        </Text>
+      </Box>
+    </Box>,
+    ...(counts.length
+      ? [
+          <Box key="vs-counts" flexDirection="row" flexWrap="wrap">
+            {counts.map((c, i) => (
+              <Text key={`vs-count-${i}`}>
+                {c.status ? <Text color={C(COUNT_COLOR[c.status] ?? 'text')}>● </Text> : null}
+                <Text bold={!!c.status} color={C(c.status ? 'text' : 'inactive')}>{c.text}</Text>
+                {i < counts.length - 1 ? <Text color={C('subtle')}> · </Text> : null}
+              </Text>
+            ))}
+          </Box>,
+        ]
+      : []),
     ...gitRow,
   ]
 }
 
-/** The tabs in VS Code: three plain buttons, "● Tasks (20)" bold in the accent color for the one shown, the others
- *  without the dot in the secondary color; no key labels. */
-export function vsTabs(k: VsKit, tabs: { which: PaneTab; label: string; active: boolean; onPress: () => void }[]): RenderChildren {
+/** A tab in VS Code: its name, the count beside it as a small badge (none for Settings), and whether it is shown. */
+export type VsTab = { which: PaneTab; label: string; count?: number; active: boolean; onPress: () => void }
+
+/** A tab's text as one string: "Tasks 20", "Settings" (the Button's label, what a screen reader says). */
+export const tabLabel = (t: Pick<VsTab, 'label' | 'count'>) => (t.count === undefined ? t.label : `${t.label} ${t.count}`)
+
+/**
+ * The tabs in VS Code: a segmented row, each tab a small bordered box around a plain button ("Tasks 20", no key labels).
+ * The one shown has a bold border in the accent color, its name bold in the accent color and its count a filled badge;
+ * the others a dim border in the subtle color, their name and count in the secondary color. The row wraps when the panel
+ * is too narrow for the three, never cutting a tab.
+ */
+export function vsTabs(k: VsKit, tabs: VsTab[]): RenderChildren {
   const { Box, Text, Button, C } = k
   return (
-    <Box key="tabs" flexDirection="row" flexWrap="wrap" gap={1}>
-      {tabs.map(t => {
-        const label = t.active ? `● ${t.label}` : t.label
-        return (
-          <Button key={`tab-${t.which}`} plain label={label} onPress={t.onPress}>
-            <Text bold={t.active} underline={t.active} color={C(t.active ? 'ide' : 'inactive')}>{label}</Text>
+    <Box key="tabs" flexDirection="row" flexWrap="wrap" marginTop={1}>
+      {tabs.map(t => (
+        <Box key={`tab-box-${t.which}`} borderStyle={t.active ? 'bold' : 'round'} borderColor={C(t.active ? 'ide' : 'subtle')} borderDimColor={!t.active} paddingX={1} flexShrink={0}>
+          <Button key={`tab-${t.which}`} plain label={tabLabel(t)} onPress={t.onPress}>
+            <Text bold={t.active} color={C(t.active ? 'ide' : 'inactive')}>{t.label}</Text>
+            {t.count === undefined ? null : <Text color={C('inactive')}> </Text>}
+            {t.count === undefined ? null : t.active ? (
+              <Text bold backgroundColor={C('ide')} color={C('inverseText')}>{` ${t.count} `}</Text>
+            ) : (
+              <Text color={C('inactive')}>{String(t.count)}</Text>
+            )}
           </Button>
-        )
-      })}
+        </Box>
+      ))}
     </Box>
   )
 }

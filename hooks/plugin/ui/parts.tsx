@@ -13,7 +13,7 @@ import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from './open'
 import { claudeHost } from '../../claude/host'
 import { isVscode, vscodeButton } from './surface'
-import { type VsKit, vsBanner, vsFooter, vsTabs } from './vscode'
+import { type VsKit, logoWidthFor, vsBanner, vsFooter, vsTabs } from './vscode'
 
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
 export type PaneEvent = Parameters<PaneHook>[1]
@@ -31,7 +31,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const nowMs = await drawNow($)
   const open = await panelValues($).readOpened()
   const width = Math.max(20, e.props.bodyColumns ?? 60)
-  noteLogoWidth(width)
+  noteLogoWidth(logoWidthFor(vscode, width))
   // Theme colors, so the board reads well in both light and dark themes.
   const color: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
   const word: Record<string, string> = STATUS_WORD
@@ -94,8 +94,8 @@ export async function paneParts($: $, e: PaneEvent) {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
     if (vscode)
       return vsTabs(vs, [
-        { which: 'tasks', label: `Tasks (${v.tasks.length})`, active: !onScouts && !onSettings, onPress: go('tasks') },
-        { which: 'scouts', label: `Scouts (${scouts.length})`, active: onScouts, onPress: go('scouts') },
+        { which: 'tasks', label: 'Tasks', count: v.tasks.length, active: !onScouts && !onSettings, onPress: go('tasks') },
+        { which: 'scouts', label: 'Scouts', count: scouts.length, active: onScouts, onPress: go('scouts') },
         { which: 'settings', label: 'Settings', active: onSettings, onPress: go('settings') },
       ])
     const keyOf = (which: PaneTab) => (which === 'settings' ? 'c' : which[0])
