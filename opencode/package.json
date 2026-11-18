@@ -1,0 +1,6 @@
+{
+  "name": "symcc-opencode",
+  "private": true,
+  "type": "module",
+  "description": "symcc as an OpenCode 2.x plugin (in progress): OpenCode finds server.ts and tui.ts at this folder's root"
+}
