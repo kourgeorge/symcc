@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, type BoardTask } from '../hooks/board'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
@@ -141,7 +141,11 @@ test('kept test output: a huge error is cut to its first lines, and past the roo
   const long = Array.from({ length: 200 }, (_, i) => `diff line ${i} ${'y'.repeat(400)}`)
   const many = Array.from({ length: 40 }, (_, i) => ({ at: 10 + i * 20, name: `broken test ${i}`, error: [`Error: wrong ${i}`, ...long] }))
   const kept = testTail(runnerOutput(many))
-  for (let i = 0; i < 40; i++) expect(kept).toContain(`(fail) broken test ${i} [5001.00ms]`)
+  // the first one with its error, then the next FAIL_LINES_SHOWN as short lines, then only a count of the rest
+  for (let i = 0; i <= FAIL_LINES_SHOWN; i++) expect(kept).toContain(`(fail) broken test ${i} [5001.00ms]`)
+  expect(kept).not.toContain(`(fail) broken test ${FAIL_LINES_SHOWN + 1} [`)
+  expect(kept).toContain(moreFailingLine(40 - 1 - FAIL_LINES_SHOWN))
+  expect(failCount(kept)).toBe(40)
   expect(kept).toContain('  Error: wrong 0')
   expect(kept).toContain(`  … (${long.length + 1 - FAIL_ERROR_LINES} more error lines)`)
   expect(kept).not.toContain('Error: wrong 39')
@@ -149,6 +153,36 @@ test('kept test output: a huge error is cut to its first lines, and past the roo
   // no line is longer than 300 characters, and the whole stays near its two limits
   expect(Math.max(...kept.split('\n').map(l => l.length))).toBeLessThanOrEqual(300)
   expect(kept.length).toBeLessThan(FAIL_BLOCK_CHARS + TEST_OUTPUT_CHARS + 40 * 120)
+})
+
+test('kept test output: 400 failing tests stay under a fixed size, with "… and N more failing tests" and the right total', () => {
+  const many = Array.from({ length: 400 }, (_, i) => ({ at: Math.floor(i * 2.2), name: `a shared helper broke test number ${i} of the board panel`, error: [`Error: helper threw on call ${i}`, '  at helper (hooks/core/x.ts:1:1)'] }))
+  const full = runnerOutput(many)
+  const kept = testTail(full)
+  expect(kept.length).toBeLessThan(FAIL_BLOCK_CHARS + TEST_OUTPUT_CHARS + FAIL_LINES_CHARS)
+  const lines = kept.split('\n')
+  expect(lines[1]).toBe(failedTestsHead(400))
+  const shown = lines.filter(l => l.startsWith('(fail)')).length
+  const withError = failBlocks(kept.slice(0, kept.indexOf('… and '))).filter(b => b.includes('Error:')).length
+  expect(withError).toBeGreaterThan(0)
+  expect(kept).toContain(moreFailingLine(400 - withError - FAIL_LINES_SHOWN))
+  expect(shown).toBeLessThanOrEqual(withError + FAIL_LINES_SHOWN + 5)
+  // the real total, from the heading (and the runner's " 400 fail" line), not only the lines kept
+  expect(failCount(kept)).toBe(400)
+  expect(failingLines(kept, 2)).toContain('(and 398 more)')
+  expect(whyFailed(failed({ note: 'tests failed: `claude plugin test .` (exit 1)', test_output: kept }))).toContain('400 failing tests: ')
+  // the next worker is told what it gets: the failing tests, then the end
+  expect(testOutputHeading(kept)).toBe('The failing tests and the end of the test output:')
+  expect(testOutputHeading('…the end only')).toBe('The end of the test output:')
+  expect(testOutputHeading('$ npm test (exit 1)\nall of it')).toBe('The test output:')
+  // the lead's give-up text is short: the count, the first failing tests with their errors, how many more, where the rest is
+  const lead = gaveUpTestsText(kept)
+  expect(lead.length).toBeLessThan(2000)
+  expect(lead.startsWith('400 failing tests, the first 3:\ntests/file-0.test.ts:\n(fail) a shared helper broke test number 0 of the board panel [5001.00ms]\n  Error: helper threw on call 0')).toBe(true)
+  expect(lead).toContain(moreFailingLine(397))
+  expect(lead).toContain("on the task's page")
+  // output with no "(fail)" line gives its first errors
+  expect(gaveUpTestsText('$ sh scripts/typecheck.sh (exit 1)\nhooks/a.ts(1,1): error TS2322: nope')).toContain('First errors: hooks/a.ts(1,1): error TS2322: nope')
 })
 
 test('kept test output: plain bun output, with the error printed above "(fail)", keeps that error too', () => {

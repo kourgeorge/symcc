@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange, testTail } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
@@ -259,6 +259,16 @@ test('a checker that finds problems sends the task back to its worker with the r
   expect(prompt).toContain('A checker reviewed your last try and found problems')
   expect(prompt).toContain(report)
   expect(prompt).not.toContain('Your last try failed these tests')
+})
+
+test("failing tests sent back to the worker come under a heading that says what follows", async () => {
+  const w = world()
+  const kept = testTail(['$ npm test (exit 1)', 'tests/a.test.ts:', '(fail) x [1ms]', '  Error: y', ...Array.from({ length: 200 }, (_, i) => `(pass) filler ${i} ${'z'.repeat(40)}`), ' 200 pass', ' 1 fail'].join('\n'))
+  const b = boardWith(false, { status: 'todo', test_tries: 1, test_output: kept })
+  await saveBoard(w.$, b)
+  const prompt = WORKER_PROMPT(find(b, 'T-1')!, b, WT)
+  expect(prompt).toContain('Your last try failed these tests; fix it. The failing tests and the end of the test output:\n```\n$ npm test (exit 1)\n1 failed test')
+  expect(prompt).not.toContain('fix it. The end of the test output:')
 })
 
 test('when its retries are used up, a checker report fails the task with the report', async () => {
