@@ -62,7 +62,8 @@ export function failBlocks(output: string): string[] {
     const from = prev.findIndex(a => /^error:/i.test(a.trim()))
     const before = from < 0 ? [] : prev.slice(from)
     const after: string[] = []
-    for (let j = i + 1; j < lines.length; j++) {
+    let j = i + 1
+    for (; j < lines.length; j++) {
       const a = lines[j]!
       if (MARK_LINE.test(a) || FILE_LINE.test(a) || SUMMARY_LINE.test(a) || (a !== '' && !/^\s/.test(a))) break
       after.push(a)
@@ -80,7 +81,8 @@ export function failBlocks(output: string): string[] {
     const head = file && file !== fileShown ? [file] : []
     fileShown = file || fileShown
     blocks.push([...head, ...up, l, ...down].join('\n'))
-    lastMark = i
+    // past this test's own error lines, so the next "(fail)" never takes them as its error
+    lastMark = j - 1
   }
   return blocks
 }

@@ -164,6 +164,14 @@ test('kept test output: plain bun output, with the error printed above "(fail)",
   expect(failingLines(testTail(bun), 3)).toBe('(fail) bad one | error: expect(received).toBe(expected) | Expected: 2; (fail) slow one')
 })
 
+test('kept test output: two failures in a row with "Error:" lines each keep only their own error', () => {
+  const out = '(fail) zz throws [0.81ms]\n  Error: boom here\n  second line\n(fail) next [1ms]\n  Error: x\n'
+  expect(failBlocks(out)).toEqual(['(fail) zz throws [0.81ms]\n  Error: boom here\n  second line', '(fail) next [1ms]\n  Error: x'])
+  // the same inside a test file, with a passing test between the failures
+  const filed = 'tests/a.test.ts:\n(fail) one [1ms]\n  Error: first\n(pass) fine [1ms]\n(fail) two [1ms]\n  Error: second\n'
+  expect(failBlocks(filed)).toEqual(['tests/a.test.ts:\n(fail) one [1ms]\n  Error: first', '(fail) two [1ms]\n  Error: second'])
+})
+
 test("the checker's first problem is taken from its list of problems, not its opening line", () => {
   // shaped like T-386's report: an intro, details, then "Problems:" with an absolute worktree path
   const t386 = [
