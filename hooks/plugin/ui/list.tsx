@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone } from '../../board'
 import { type $, openDays, S, updateOpened } from '../state'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
@@ -146,6 +146,8 @@ export function listPage($: $, pane: PaneParts) {
         const x = r.task
         const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
         const lead = r.indent + idWidth + 3 + cellWidth + 2
+        // a later try ("try 2") is dim, from try 3 on in the warning colour (see tryMark)
+        const tried = tryMark(x)
         const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), width)
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => updateOpened($, () => x.id))}>
@@ -157,7 +159,12 @@ export function listPage($: $, pane: PaneParts) {
             <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>
-            {fit.extra ? <Text color={C('inactive')}>{`${fit.pad}${fit.extra}`}</Text> : null}
+            {fit.extra && tried && fit.extra.endsWith(tried)
+              ? [
+                  <Text key="extra" color={C('inactive')}>{`${fit.pad}${fit.extra.slice(0, fit.extra.length - tried.length)}`}</Text>,
+                  <Text key="try" color={C(tryTone(x))}>{tried}</Text>,
+                ]
+              : fit.extra ? <Text color={C('inactive')}>{`${fit.pad}${fit.extra}`}</Text> : null}
           </Button>
         )
       })}

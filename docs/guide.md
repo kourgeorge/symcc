@@ -801,6 +801,13 @@ in the board panel and press `l` (Role) to pick one. That works on a task to do,
 failed or in the backlog. The board list shows a role at the right end
 of the task's row (`tester · try 2`); `general` shows nothing.
 
+When a task is doing and this is not its first try, the board says which try it is: `try 2`
+at the right end of its row (dim; from `try 3` on in the warning colour), `T-5 doing (try 2)`
+in the band above the prompt and the status line, and `T-5 doing · try 2/3` in the lead's
+board (the `/3` shows the limit while the try is an automatic retry after failing tests).
+A first try shows no mark. When the status line is short of room, the try marks are left out
+first, so failed tasks and reviews always stay in view.
+
 **One task, one role.** When a feature needs several kinds of work and each part is big
 enough to stand alone, the lead splits it into one task per role and links them with `after`:
 

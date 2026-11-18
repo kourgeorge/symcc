@@ -8,7 +8,7 @@ import { originOf } from './origin'
 import { overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
-import { roleMark, roleOf } from './roles'
+import { roleMark, roleOf, tryMark } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs } from './runs'
 import { ellipsis, num } from './text'
@@ -113,7 +113,7 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
   return kind ? `[${[kind, role].filter(Boolean).join(' · ')}]` : role
 }
 
-/** The secondary-color (inactive) text at the right end of a task row: "tester · try 1" for a task being worked on (its
+/** The secondary-color (inactive) text at the right end of a task row: "tester", or "tester · try 2" on a later try (see tryMark), for a task being worked on (its
  *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "after T-3" for
  *  one waiting on unfinished tasks (else its role; an investigation's starts with "[investigation]"), "Enter to review"
  *  in review ("[investigation]" for an answered investigation, whose status column says "answer"; a and x only work on the task's
@@ -132,7 +132,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
   switch (t.status) {
     case 'doing':
       if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
-      return [roleTag(t), t.attempts > 0 ? `try ${t.attempts}` : ''].filter(Boolean).join(' · ')
+      return [roleTag(t), tryMark(t)].filter(Boolean).join(' · ')
     case 'todo':
     case 'paused': {
       const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))

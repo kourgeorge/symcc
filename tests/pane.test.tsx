@@ -879,14 +879,22 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its role and try at the right end in the inactive color; general shows only the try', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+test('a running task shows its role at the right end in the inactive color, and "try N" from its 2nd try (warning from try 3); general shows only the try', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { role: 'tester', attempts: 3 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
-  const mark = await ui.find({ type: 'Text', text: /^ +tester · try 1$/ })
+  // a first try: only the role, no try mark
+  const mark = await ui.find({ type: 'Text', text: /^ +tester$/ })
   expect(mark).toBeDefined()
   expect(mark?.props.color).toBe('inactive')
   expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
-  expect(await ui.find({ type: 'Text', text: /^ +try 2$/ })).toBeDefined()
+  expect((await ui.find({ key: 'T-12' }))?.text).not.toMatch(/try/)
+  // try 2: dim; try 3: the warning colour
+  const two = await ui.find({ type: 'Text', text: /^try 2$/ })
+  expect(two?.props.color).toBe('inactive')
+  expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/\s+try 2$/)
+  const three = await ui.find({ type: 'Text', text: /^try 3$/ })
+  expect(three?.props.color).toBe('warning')
+  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/tester · try 3$/)
   expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
   await ui.unmount()
 })
@@ -1129,7 +1137,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   }
   // at 100 columns the extras sit at the right end of each row
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
-  expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^  T-95 ▶ 4m\s+Secrets scout example\s+frontend · try 1$/)
+  expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^  T-95 ▶ 4m\s+Secrets scout example\s+frontend$/)
   expect((await ui.find({ key: 'T-95' }))!.text.length).toBe(100)
   expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^  T-97 ○\s+Rename "off" to "pause"\s+after T-96$/)
   expect((await ui.find({ key: 'T-94' }))!.text).toMatch(/^  T-94 ◆ review\s+Clearer board view\s+Enter to review$/)

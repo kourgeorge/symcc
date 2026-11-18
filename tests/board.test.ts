@@ -6,7 +6,7 @@ import { pause, commandsOf } from './fakes'
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
-import { putTask } from '../hooks/board'
+import { putTask, tryMark, tryTone, bandStatus } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -2554,8 +2554,11 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(b1.tasks[0]!.checking).toEqual({ step: 'testing', at: stamp })
   expect(patchTask(b1, 'T-1', { status: 'done' }, stamp).tasks[0]!.checking).toBeUndefined()
   expect(['review', 'waiting', 'failed', 'paused', 'todo', 'done'].map(status => statusCell({ status: status as never }, now))).toEqual(['review', 'waiting', 'failed', 'paused', '', ''])
-  expect(rowExtra(base, tasks)).toBe('frontend · try 1')
-  expect(rowExtra({ ...base, role: 'general' }, tasks)).toBe('try 1')
+  // a first try shows no try mark; a later one shows "try N"
+  expect(rowExtra({ ...base, attempts: 1 }, tasks)).toBe('frontend')
+  expect(rowExtra({ ...base, attempts: 2 }, tasks)).toBe('frontend · try 2')
+  expect(rowExtra({ ...base, role: 'general', attempts: 1 }, tasks)).toBe('')
+  expect(rowExtra({ ...base, role: 'general', attempts: 3 }, tasks)).toBe('try 3')
   expect(rowExtra(tasks[1]!, tasks)).toBe('after T-5')
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
@@ -2566,11 +2569,11 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(rowExtra(asking, tasks, '', 45)).toBe('T-5 has run 55 min. Give it more time?')
   expect(rowExtra({ ...asking, extra_minutes: undefined }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
   // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
-  const wide = fitRow(20, 'Secrets scout example', 'frontend · try 1', 60)
+  const wide = fitRow(20, 'Secrets scout example', 'frontend · try 2', 60)
   expect(20 + wide.title.length + wide.pad.length + wide.extra.length).toBe(60)
   expect(wide.title).toBe('Secrets scout example')
-  expect(fitRow(20, 'Secrets scout example', 'frontend · try 1', 50)).toEqual({ title: 'Secrets scout example', pad: '', extra: '' })
-  expect(fitRow(20, 'Secrets scout example', 'frontend · try 1', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
+  expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 50)).toEqual({ title: 'Secrets scout example', pad: '', extra: '' })
+  expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
 })
 
 test('key hints: in order for the task state, laid out at 30, 50 and 80 columns, never split or cut', () => {
@@ -3270,4 +3273,39 @@ test('taskCopyText: a minimal task; copyToast says copied or why not', () => {
   expect(copyToast('T-12', { isCopied: false, reason: 'no-clipboard' })).toBe("couldn't copy: this terminal has no clipboard access")
   expect(copyToast('T-12', { isCopied: false, reason: 'no-surface' })).toMatch(/^couldn't copy: /)
   expect(copyToast('T-12', { isCopied: false, reason: 'refused' })).toBe("couldn't copy: the copy was refused")
+})
+
+test('a doing task on its 2nd or later try says "try N" in the status line, the band above the prompt and the text board; a first try says nothing', () => {
+  const at = '2026-11-18T10:00:00Z'
+  // the mark itself: nothing on a first try or when not doing; "try N" after; "try N/M" while an automatic retry
+  expect(tryMark({ status: 'doing', attempts: 1 })).toBe('')
+  expect(tryMark({ status: 'doing', attempts: 0 })).toBe('')
+  expect(tryMark({ status: 'todo', attempts: 3 })).toBe('')
+  expect(tryMark({ status: 'doing', attempts: 2 })).toBe('try 2')
+  expect(tryMark({ status: 'doing', attempts: 2, test_tries: 1 }, 2)).toBe('try 2/3')
+  expect(tryMark({ status: 'doing', attempts: 2, test_tries: 0 }, 2)).toBe('try 2')
+  expect(tryTone({ attempts: 2 })).toBe('inactive')
+  expect(tryTone({ attempts: 3 })).toBe('warning')
+  // the status line
+  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 1 }] }, true)).toContain('T-369 doing')
+  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 1 }] }, true)).not.toContain('try')
+  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true)).toContain('T-369 doing (try 2)')
+  expect(statusLine({ tasks: [{ id: 'T-1', status: 'doing', attempts: 1 }, { id: 'T-2', status: 'doing', attempts: 3 }] }, true)).toContain('T-1, T-2 doing (T-2 try 3)')
+  // the try marks never push the parts that need attention past the line's room: they are left out first
+  const busy = [{ id: 'T-371', status: 'doing', attempts: 2 }, { id: 'T-372', status: 'doing', attempts: 3 }, { id: 'T-369', status: 'review' }, { id: 'T-368', status: 'failed' }] as const
+  expect(statusLine({ tasks: [...busy] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-371, T-372 doing · 1 to review (T-369) · 1 failed (T-368)')
+  expect(statusLine({ tasks: [...busy] }, true)).toContain('T-371, T-372 doing (T-371 try 2, T-372 try 3)')
+  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-369 doing (try 2)')
+  // the band above the prompt
+  expect(bandStatus({ id: 'T-369', status: 'doing', attempts: 1 })).toBe('T-369 doing')
+  expect(bandStatus({ id: 'T-369', status: 'doing', attempts: 2 })).toBe('T-369 doing (try 2)')
+  // the lead's text board, with the auto retry limit while the retry is automatic
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'First' }, at)
+  ;[b] = addTask(b, { origin: W, title: 'Second' }, at)
+  b = patchTask(b, 'T-1', { status: 'doing', attempts: 1 }, at)
+  b = patchTask(b, 'T-2', { status: 'doing', attempts: 2, test_tries: 1 }, at)
+  const text = boardText({ ...b, auto_retries: 2 })
+  expect(text).toMatch(/T-2 +doing +· try 2\/3 Second/)
+  expect(text).toMatch(/T-1 +doing +First/)
+  expect(text.split('\n').find(l => l.includes('First'))).not.toContain('try')
 })

@@ -6,7 +6,7 @@ import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
 import { kindMark } from './kinds'
-import { roleMark } from './roles'
+import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
@@ -45,6 +45,20 @@ function idList(ids: string[]): string {
   return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
 }
 
+/** The try marks of the doing tasks for the status line (see tryMark): " (try 2)" when one task is doing, " (T-2 try 2)"
+ *  naming the task when several are; '' when every one is on its first try. */
+function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[]): string {
+  const marks = doing.slice(0, STATUS_IDS).map(t => ({ id: t.id, mark: tryMark({ status: t.status, attempts: t.attempts ?? 0 }) })).filter(x => x.mark)
+  if (!marks.length) return ''
+  return doing.length === 1 ? ` (${marks[0]!.mark})` : ` (${marks.map(x => `${x.id} ${x.mark}`).join(', ')})`
+}
+
+/** A task's status in the band above the prompt: "T-369 doing", "T-369 doing (try 2)" on a later try (see tryMark). */
+export function bandStatus(t: Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>): string {
+  const mark = tryMark({ status: t.status, attempts: t.attempts ?? 0 })
+  return `${t.id} ${STATUS_WORD[t.status]}${mark ? ` (${mark})` : ''}`
+}
+
 /** About how wide the line above the prompt may be: Claude Code puts "<name>: " (and its own mark) in front. */
 export const STATUS_WIDTH = 80
 /** The room the status text has in STATUS_WIDTH after Claude Code's "⚠ <name>: " in front of it. */
@@ -54,12 +68,12 @@ export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ $
  * The short status text Claude Code shows after "symcc:", e.g. "⏵ auto · 1/3 workers · T-26 doing · 1 to do · 5 scouts (next: gaps-bot in 1h 00m)".
  * It starts with the board mode (modeLabel: "⏹ off", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
  * With `crew` (see withCrew): the busy workers right after the mode (left out while none run) and the scouts after the
- * counts; when the text is wider than `width`, the "(next: …)" part goes first, then the scouts.
+ * counts; when the text is wider than `width`, the try marks of the doing tasks go first, then the "(next: …)" part, then the scouts.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
  * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏹ off").
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
  */
-export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
+export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
   const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   // in plan mode the line says so first (see core/plan.ts)
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
@@ -70,16 +84,24 @@ export function statusLine(b: { tasks: Pick<SymccTask, 'id' | 'status'>[] }, dri
   const c = crew && { ...crew, mode: m, plan_mode: plan }
   if (b.tasks.length) {
     const doing = ids('doing'), review = ids('review'), failed = ids('failed')
-    const parts = [
-      doing.length && `${idList(doing)} ${STATUS_WORD.doing}`,
-      review.length && `${review.length} to review (${idList(review)})`,
-      ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
-      failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
-    ].filter((x): x is string => !!x)
-    // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
-    const parked = ids('backlog').length
-    const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
-    return withCrew((w, s) => join([label, w, counts, s, branch_note]), c, nowMs, width)
+    const note = triesNote(b.tasks.filter(t => t.status === 'doing'))
+    const line = (tries: string) => {
+      const parts = [
+        doing.length && `${idList(doing)} ${STATUS_WORD.doing}${tries}`,
+        review.length && `${review.length} to review (${idList(review)})`,
+        ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
+        failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
+      ].filter((x): x is string => !!x)
+      // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
+      const parked = ids('backlog').length
+      const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
+      return withCrew((w, s) => join([label, w, counts, s, branch_note]), c, nowMs, width)
+    }
+    // the try marks are extra: they are kept only when they fit without cutting anything else (scouts, "(next: …)")
+    const plain = line('')
+    if (!note) return plain
+    const full = line(note)
+    return full.length <= width && full.length === plain.length + note.length ? full : plain
   }
   if (!driving) return withCrew((w, s) => join([label, w, 'empty' + other, s, branch_note]), c, nowMs, width)
   // an empty board in mode auto stays quiet (unless there are scouts), so a fresh project shows nothing
@@ -207,13 +229,15 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 }
 
 /** One row (and its "from:" line) of the board as text. */
-function boardRow(t: SymccTask): string[] {
+function boardRow(t: SymccTask, autoRetries?: number): string[] {
   const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
   const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')
   const role = tag ? ` [${tag}]` : ''
-  return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
+  // a later try: "T-5   doing   · try 2/3 <title>" (see tryMark)
+  const mark = tryMark(t, autoRetries)
+  return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
 }
 
 /** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */
@@ -241,10 +265,10 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   if (filter.status?.length || search) {
     const rows = all.filter(t => (!filter.status?.length || filter.status.includes(t.status)) && taskMatches(t, search))
     const asked = [filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
-    body = rows.length ? [...rows.flatMap(boardRow), `${rows.length} of ${b.tasks.length} tasks (${asked})`] : [`No tasks match (${asked}).`]
+    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries)), `${rows.length} of ${b.tasks.length} tasks (${asked})`] : [`No tasks match (${asked}).`]
   } else {
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
-    body = [...[...s.open, ...s.backlog].flatMap(boardRow), ...(hidden ? [hidden] : [])]
+    body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries)), ...(hidden ? [hidden] : [])]
   }
   return [...top, head, ...body, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
 }

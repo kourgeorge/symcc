@@ -1,6 +1,6 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, STATUS_WORD, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
+import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
 import { type $, readView, type PaneView, S } from '../state'
 import { openPane } from './open'
 
@@ -18,8 +18,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
   const rows = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
   const color: Record<string, string> = { review: 'cyan', waiting: 'yellow', failed: 'red', doing: 'green' }
-  const word: Record<string, string> = STATUS_WORD
-  // plan mode: nothing new starts; workers already running keep going (said so)
+    // plan mode: nothing new starts; workers already running keep going (said so)
   const plan = (v as PaneView | undefined)?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   // the mode, the busy workers, the counts and the scouts, fitted beside the name and the "open board" button:
   // "(next: …)" goes first when short of room, then the scouts (see withCrew)
@@ -39,7 +38,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
       {live.slice(0, rows).map(t => (
         <Text wrap="truncate">
           <Text color={color[t.status] as never}>
-            {t.id} {word[t.status]}
+            {bandStatus(t)}
           </Text>
           <Text> {t.title}</Text>
           <Text color={'inactive' as never}>{fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : t.note ? ` — ${t.note}` : ''}</Text>
