@@ -682,6 +682,17 @@ async function checkAgain($: Host, t0: BoardTask) {
     const b = await load($)
     const t = find(b, id)
     if (!t || !sameTry(t, t0) || t.note !== CHECKER_NOTE) return
+    // The checker may have said OK already and the work reached its branch before the reload (a symcc task's
+    // merge reloads the plugin): then it is done, as sendBackIdle would have made it, and no new checker starts.
+    const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
+    if (sha) {
+      const done = await change($, x => {
+        const cur = find(x, id)
+        return cur && cur.status === 'doing' && sameTry(cur, t0) ? ([putTask(x, mergedDone(cur, sha, 'checked again', now())), true] as [Board, boolean]) : ([x, false] as [Board, boolean])
+      })
+      if (done) tellLead($, `✓ ${id} is done: its work was already merged (${shortSha(sha)}) when the plugin reloaded.`)
+      return
+    }
     const dir = worktreeDir(id)
     const head = await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
     if (!head || head.exitCode !== 0 || !head.stdout.trim()) {

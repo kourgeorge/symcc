@@ -626,3 +626,28 @@ test('T-386: a checker shown as ended after the reload: the next check starts a 
   expect(t.merged).toBe(H1)
   expect(t.runs?.[0]?.commits).toEqual([H1])
 })
+
+test('T-386: a reload after the checker said OK and the work reached main (before the outcome was written): the task ends done, no new checker', async () => {
+  const w = world()
+  // finishing: the old copy's mark (its merge was under way); a board field not in SymccTask
+  const left = { note: 'a checker is trying to break it before it merges', finishing: ISO, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
+  await saveBoard(w.$, boardWith(true, left))
+  w.git.head = H1
+  w.git.main = H1
+  w.git.dirty = false
+  const run = w.claude.process.run
+  w.claude.process.run = async (argv: string[], o?: { cwd?: string }) => (argv[0] === 'git' && argv.includes('log') && argv.includes('--format=%B') ? ok('T-1: Do it\n\nSymcc-Task: T-1\nSymcc-Try: 1\n') : run(argv, o))
+  resetPlugin()
+  S.root = ROOT
+  S.driving = true
+  S.gitState = 'ok'
+  ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status: 'completed' }]
+  await check(w.$)
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(w.spawns.length).toBe(0)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.note).toBe('merged into main (b1b1b1b1)')
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(w.git.main).toBe(H1)
+})
