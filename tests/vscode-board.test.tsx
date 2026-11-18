@@ -2,11 +2,13 @@
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_TASKS, T0, seedBoard, drawnData, changedTree } from './board-fixture'
-import { BEFORE } from './board-snapshot'
+import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board-fixture'
+import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
-import { shortTests } from '../hooks/plugin/ui/vscode'
+import { shortTests, logoWidthFor, vsLogoRow, VS_LOGO_COLUMNS } from '../hooks/plugin/ui/vscode'
 import { drawNow } from '../hooks/plugin/ui/now'
+import { LOGO_AREA, LOGO_MIN_WIDTH, mayMove, restFrame, swayFrames } from '../hooks/core/logo'
+import { modeLabel, MODE_MEANING } from '../hooks/board'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -39,10 +41,10 @@ function texts(tree: unknown): string[] {
 const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success', 'suggestion'])
 const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /t s c views/, /\[m\]/, /\[f\]/, /Enter to/]
 
-test('the board on the terminal and the desktop draws exactly as before the VS Code layout', async ($, on) => {
+test('the board on the terminal, the desktop and mobile draws exactly as before the VS Code layout', async ($, on) => {
   seedBoard(on)
   on('ui.toast', () => ({ value: undefined }))
-  for (const surface of ['terminal', 'desktop'] as const) {
+  for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
     for (const bodyColumns of [50, 90]) {
       const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface })
       expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} ${bodyColumns}`])
@@ -58,6 +60,21 @@ test('the board on the terminal and the desktop draws exactly as before the VS C
     expect(drawnData(await ui.drawn())).toEqual(BEFORE[`${surface} settings`])
     await ui.press({ key: 'tab-tasks' }) // the next surface starts on the Tasks page again
     await ui.unmount()
+  }
+})
+
+// a board with only dropped tasks (and nothing run) keeps its empty counts line under the banner, as before
+const DROPPED_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, working: [], tasks: BOARD_TASKS.filter(t => t.status === 'dropped') } }
+
+test('a board with only dropped tasks on the terminal, the desktop and mobile draws exactly as before', async ($, on) => {
+  seedBoard(on, { view: DROPPED_VIEW })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
+    for (const bodyColumns of [50, 90]) {
+      const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface })
+      expect(drawnData(await ui.drawn()), `${surface} ${bodyColumns}`).toEqual(BEFORE_DROPPED[`${surface} ${bodyColumns}`])
+      await ui.unmount()
+    }
   }
 })
 
@@ -137,11 +154,12 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   expect(all).toContain('▾ Backlog (3)')
   expect(all).toContain('▾ Dropped (2)')
   // tabs without key labels, the one shown marked
-  expect((await ui.find({ key: 'tab-tasks' }))?.props.label).toBe('● Tasks (20)')
-  expect((await ui.find({ key: 'tab-scouts' }))?.props.label).toBe('Scouts (1)')
+  expect((await ui.find({ key: 'tab-tasks' }))?.props.label).toBe('Tasks 20')
+  expect((await ui.find({ key: 'tab-scouts' }))?.props.label).toBe('Scouts 1')
+  expect((await ui.find({ key: 'tab-box-tasks' }))?.props.borderColor).toBe('ide')
   // the header on readable lines: the tests line short, the mode with its meaning
   expect(await ui.find({ type: 'Text', text: 'tests: claude plugin test . (+1 more)' })).toBeDefined()
-  expect(all.join(' ')).toMatch(/mode .*auto/)
+  expect(all.join(' ')).toMatch(/⏵ auto/)
   // no key hints; at most one primary button; the mode switch is a Button and the search an Input
   for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), String(re)).toEqual([])
   expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBeLessThanOrEqual(1)
@@ -181,7 +199,9 @@ test('in VS Code the other pages drop key marks from labels and print no key hin
   await ui.press({ key: 'back' })
   await ui.press({ key: 'tab-scouts' })
   await check('scouts')
-  expect((await ui.find({ key: 'tab-scouts' }))?.props.label).toBe('● Scouts (1)')
+  expect((await ui.find({ key: 'tab-scouts' }))?.props.label).toBe('Scouts 1')
+  expect((await ui.find({ key: 'tab-box-scouts' }))?.props.borderColor).toBe('ide')
+  expect((await ui.find({ key: 'tab-box-tasks' }))?.props.borderColor).toBe('subtle')
   expect((await ui.find({ key: 'scouts-back' }))?.props.label).toBe('← Tasks')
   await ui.press({ key: 'tab-settings' })
   await check('settings')
@@ -197,4 +217,76 @@ test('plainLabel and shortTests', () => {
   expect(shortTests(['npm test'])).toBe('npm test')
   expect(shortTests(['a', 'b', 'c'])).toBe('a (+2 more)')
   expect(shortTests([])).toBe('')
+})
+
+// T-442: VS Code's header: the logo beside the facts, the mode as a pill, fewer lines, the counts as badges, and a tab strip.
+test('in VS Code the header shows the logo, a short banner and a tab strip with the shown tab marked, at widths 40 and 80', async ($, on) => {
+  seedBoard(on)
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [40, 80]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const at = `width ${bodyColumns}`
+    // the logo: the clef at rest, one Text per row, bold in the accent color, in its own column of LOGO_AREA columns
+    const logoBox = await ui.find({ key: 'vs-logo' })
+    expect(logoBox?.props.width, at).toBe(LOGO_AREA)
+    const rows = elements(logoBox!.children).filter(n => n.type === 'Text')
+    expect(rows.map(n => texts(n).join('')), at).toEqual(restFrame().map(vsLogoRow))
+    for (const r of rows) expect([r.props?.bold, r.props?.mono, r.props?.color], at).toEqual([true, true, 'ide'])
+    // beside it four lines (one fewer than before, and no path line): name, version and folder; the mode pill and its
+    // meaning; branch and driver; tests and limits; each wraps, none is cut
+    const facts = await ui.find({ key: 'vs-facts' })
+    const lines = (facts!.children as Node[]).filter(n => n && typeof n === 'object')
+    expect(lines.length, at).toBe(4)
+    for (const n of lines) expect([n.type, n.props?.wrap], at).toEqual(['Text', 'wrap'])
+    expect(texts(lines[0]).join(''), at).toMatch(/^symcc( v\S+)? · /)
+    expect(texts(lines[1]).join(''), at).toBe(` ${modeLabel('auto')}  ${MODE_MEANING.auto}`)
+    const pill = elements(lines[1]).find(n => n.type === 'Text' && n.props?.backgroundColor)
+    expect([pill?.props?.backgroundColor, pill?.props?.color], at).toEqual(['success', 'inverseText'])
+    expect(texts(lines[2]).join(''), at).toBe('branch main · driven by another session')
+    expect(texts(lines[3]).join(''), at).toMatch(/^tests: claude plugin test \. \(\+1 more\) · \d+ at once · \d+ min · \d+ retr(y|ies)$/)
+    // the counts as badges: a colored dot, then the count, " · " between
+    const counts = await ui.find({ key: 'vs-counts' })
+    expect(counts?.props.flexWrap, at).toBe('wrap')
+    const badges = (counts!.children as Node[]).filter(n => n && typeof n === 'object')
+    expect(texts(badges[0]).join(''), at).toBe('● 2 doing · ')
+    expect(elements(badges[0]).find(n => texts(n).join('') === '● ')?.props?.color, at).toBe('success')
+    // the tabs: a segmented row that wraps, each tab a bordered box around one plain button ("Tasks 20"); the one shown
+    // has a bold accent border, its name bold in the accent color and its count a filled badge; the others a dim border
+    const row = await ui.find({ key: 'tabs' })
+    expect([row?.props.flexDirection, row?.props.flexWrap], at).toEqual(['row', 'wrap'])
+    const tabs: [string, string, boolean][] = [['tasks', 'Tasks 20', true], ['scouts', 'Scouts 1', false], ['settings', 'Settings', false]]
+    for (const [which, label, active] of tabs) {
+      const box = await ui.find({ key: `tab-box-${which}` })
+      expect([box?.props.borderStyle, box?.props.borderColor, box?.props.borderDimColor], `${at} ${which}`).toEqual(active ? ['bold', 'ide', false] : ['round', 'subtle', true])
+      const b = await ui.find({ key: `tab-${which}` })
+      expect([b?.type, b?.props.plain, b?.props.label, b?.props.hotkey], `${at} ${which}`).toEqual(['Button', true, label, undefined])
+      expect(texts(b!.children).join(''), `${at} ${which}`).toBe(active ? 'Tasks  20 ' : label)
+    }
+    const tab = elements((await ui.find({ key: 'tab-tasks' }))!.children)
+    expect(tab.filter(n => n.props?.bold && n.props?.color === 'ide').map(n => texts(n).join('')), at).toEqual(['Tasks'])
+    const badge = tab.find(n => n.props?.backgroundColor)
+    expect([texts(badge).join(''), badge?.props?.backgroundColor, badge?.props?.color], at).toEqual([' 20 ', 'ide', 'inverseText'])
+    // nothing cut, no key hints anywhere in the header
+    const head = texts(await ui.find({ key: 'vs-header' }))
+    expect(head.filter(s => s.includes('…')), at).toEqual([])
+    for (const re of KEY_HINTS) expect(head.filter(s => re.test(s)), `${at} ${re}`).toEqual([])
+    await ui.unmount()
+  }
+})
+
+test('in VS Code the logo may move at any panel width (it always shows there); its rows keep their spaces', () => {
+  expect(logoWidthFor(true, 40)).toBe(LOGO_MIN_WIDTH)
+  expect(logoWidthFor(true, 80)).toBe(80)
+  expect(mayMove({ shown: true, mode: 'auto', width: logoWidthFor(true, 40) })).toBe(true)
+  // the terminal still tells its own width: no move below LOGO_MIN_WIDTH there
+  expect(logoWidthFor(false, 40)).toBe(40)
+  expect(mayMove({ shown: true, mode: 'auto', width: logoWidthFor(false, 40) })).toBe(false)
+  // every frame of a move fits the logo's column, with no-break spaces in place of spaces
+  for (const f of [restFrame(), ...swayFrames()]) {
+    for (const r of f) {
+      expect([...vsLogoRow(r)].length).toBe(VS_LOGO_COLUMNS)
+      expect(vsLogoRow(r)).not.toContain(' ')
+      expect(vsLogoRow(r).replace(/ /g, ' ')).toBe(r)
+    }
+  }
 })
