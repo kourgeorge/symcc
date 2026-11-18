@@ -4,6 +4,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, T0, drawnData, changedTree } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
+import { TASK_BEFORE_MOBILE } from './task-page-mobile-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { reportPart } from '../hooks/plugin/ui/vscode-task'
@@ -37,11 +38,13 @@ function texts(tree: unknown): string[] {
   return out
 }
 const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /Esc back/, /Enter sends/, /Enter on empty/, /Enter picks/, /\s\([a-z0-9]\)$/]
+/** A fold row ("▸ Waits for (2)") ends in its count, which is no key hint. */
+const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \(\d+\)$/.test(s))
 
 /** The action buttons each rich task shows in VS Code, in order, and the one primary (if any) on its page. */
 const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
   'T-501': { keys: ['approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'], primary: 'approve' },
-  'T-502': { keys: ['retry', 'stash', 'role', 'drop', 'needs-review', 'copy'], primary: 'retry' },
+  'T-502': { keys: ['stash', 'role', 'drop', 'needs-review', 'copy'], primary: 'retry' },
   'T-503': { keys: ['drop', 'needs-review', 'copy'], primary: 'choice-1' },
   'T-504': { keys: ['pause', 'drop', 'needs-review', 'copy'] },
   'T-505': { keys: ['resume', 'stash', 'role', 'drop', 'needs-review', 'copy'], primary: 'resume' },
@@ -61,6 +64,10 @@ for (const id of RICH_IDS) {
       expect(drawnData(await ui.drawn()), `${surface} ${id}`).toEqual(TASK_BEFORE[`${surface} ${id}`])
       await ui.unmount()
     }
+    // and on mobile exactly as before the VS Code card look (T-443)
+    const ui = await $.ui.mount({ ...PANE, surface: 'mobile' })
+    expect(drawnData(await ui.drawn()), `mobile ${id}`).toEqual(TASK_BEFORE_MOBILE[`mobile ${id}`])
+    await ui.unmount()
   })
 
   test(`${id}'s task page in VS Code at width 50: whole text, its sections, only the fitting buttons, one primary at most`, async ($, on) => {
@@ -75,13 +82,14 @@ for (const id of RICH_IDS) {
     expect(title, id).toBeDefined()
     expect(title!.props.wrap).toBe('wrap')
     expect(t.title.startsWith(LONG_TITLE)).toBe(true)
-    // the status line, then the sections
-    expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(new RegExp(`^${id}  `))
-    const want = ['Title', 'Why / where it came from', 'What to do', 'Files it may change', 'Waits for', 'Time and cost']
+    // the id and the title on top, the status badge, then the sections
+    expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
+    expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(/^ \S+ .+ /)
+    const want = ['Why / where it came from', 'What to do', '▸ Files it may change (3)', '▸ Waits for (2)', `▸ Time and cost (${'runs' in t ? t.runs.length : 0})`]
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
-    if (t.status === 'failed') want.push('Why it failed')
-    if (t.status === 'waiting') want.push('Question for you')
+    if (t.status === 'failed') want.push('✗ Why it failed')
+    if (t.status === 'waiting') want.push('? Question for you')
     for (const h of want) expect(all, `${id} ${h}`).toContain(h)
     // the details and the report are Markdown, given whole (the report: its first part)
     const md = elements(tree).filter(n => n.type === 'Markdown').map(n => String(n.props?.text))
@@ -91,10 +99,12 @@ for (const id of RICH_IDS) {
     expect(elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key), id).toEqual(ACTIONS[id]!.keys)
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
     expect(primary, id).toEqual(ACTIONS[id]!.primary ? [ACTIONS[id]!.primary] : [])
-    // the tasks it waits for are buttons that open them; back to the list is a clear button; no key hints
+    // the tasks it waits for (in their fold, closed at first) are buttons that open them; back to the list is a clear button; no key hints
+    expect(await ui.find({ key: 'after-T-499' })).toBeUndefined()
+    await ui.press({ key: 'fold-after' })
     expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Button')
     expect((await ui.find({ key: 'back' }))?.props.label).toBe('← Tasks')
-    for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), `${id} ${re}`).toEqual([])
+    for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
     expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
     await ui.unmount()
   })
@@ -169,9 +179,12 @@ test('in VS Code a task it waits for opens by its button, and "← Tasks" goes b
   seedRich(on, '')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-506' })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^T-506  ○ to do/)
+  expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ○ to do /)
+  await ui.press({ key: 'fold-after' })
   await ui.press({ key: 'after-T-499' })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^T-499  ✓ done/)
+  expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ✓ done /)
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'vs-actions' })).toBeUndefined()
   expect(await ui.find({ key: 'vs-task-T-506' })).toBeDefined()
@@ -194,3 +207,67 @@ for (const surface of ['terminal', 'vscode'] as const)
     expect(seen).toEqual([surface])
     await ui.unmount()
   })
+
+// T-443: the VS Code task page reads like a card, at widths 40 and 80: the id and title large and bold, a status badge in
+// its color, tags on one line, clear sections, the less-used ones folded (closed by default, with a count), what needs
+// you boxed at the top in its tone with its buttons right there, at most one primary button, no "…" and no key hints.
+const CARDS: Record<string, { badge: string; tone: string; callout?: [string, string, string] }> = {
+  'T-504': { badge: ' ▶ doing ', tone: 'ide' },
+  'T-502': { badge: ' ✗ failed ', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
+  'T-503': { badge: ' ? waiting for you ', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
+  'T-510': { badge: ' ◆ answered: read it ', tone: 'success' },
+}
+for (const [id, want] of Object.entries(CARDS))
+  for (const bodyColumns of [40, 80])
+    test(`in VS Code ${id}'s task page reads like a card at width ${bodyColumns}`, async ($, on) => {
+      seedRich(on, id)
+      const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+      const at = `${id} width ${bodyColumns}`
+      const tree = await ui.drawn()
+      const all = texts(tree)
+      // the top: id and title large and bold, the badge in the status's color, the tags dim on one wrapping line
+      const t = RICH_TASKS.find(x => x.id === id)!
+      expect((await ui.find({ type: 'Text', text: id }))?.props, at).toMatchObject({ bold: true, size: 'title' })
+      expect((await ui.find({ type: 'Text', text: t.title }))?.props, at).toMatchObject({ bold: true, size: 'title', wrap: 'wrap' })
+      const status = await ui.find({ key: 'vs-status' })
+      const [badge, tags] = elements(status!.children).filter(n => n.type === 'Text')
+      expect(badge?.children, at).toEqual([want.badge])
+      expect(badge?.props, at).toMatchObject({ bold: true, backgroundColor: want.tone })
+      expect(tags?.props, at).toMatchObject({ wrap: 'wrap', size: 'caption', color: 'inactive' })
+      expect(String(tags?.children), at).toMatch(/worker · try 2/)
+      // the sections, with their headings
+      for (const h of ['Why / where it came from', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
+      // the folds, closed by default, each with its count; pressing one opens it
+      for (const f of ['files', 'after', 'time']) {
+        expect((await ui.find({ key: `fold-${f}` }))?.props.label, `${at} ${f}`).toMatch(/^▸ .+ \(\w+\)$/)
+        expect(await ui.find({ key: `vs-sec-${f}-body` }), `${at} ${f}`).toBeUndefined()
+      }
+      // what needs you: boxed at the top in its tone, its main button inside
+      if (want.callout) {
+        const [key, tone, button] = want.callout
+        const box = await ui.find({ key })
+        expect(box?.props, at).toMatchObject({ borderStyle: 'round', borderColor: tone })
+        expect(elements(box!.children).some(n => n.type === 'Button' && n.props?.key === button), at).toBe(true)
+        const top = (await ui.drawn()) as Node
+        const order = (top.children ?? []).map(n => (n as Node)?.props?.key)
+        expect(order.indexOf(key), at).toBeLessThan(order.indexOf('vs-actions'))
+      }
+      // the history: newest first, a mark in its tone, the merge in the success color, the words whole
+      const first = await ui.find({ key: 'vs-history-0' })
+      expect(first?.text, at).toContain('merged into main')
+      expect(elements(first!.children).some(n => n.props?.color === 'success'), at).toBe(true)
+      const second = await ui.find({ key: 'vs-history-1' })
+      expect(elements(second!.children).some(n => n.props?.color === 'error'), at).toBe(true)
+      expect(second?.text, at).toContain('two tests did not find the new section headings')
+      // at most one primary button, no "…", no key hints
+      const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary')
+      expect(primary.length, at).toBeLessThanOrEqual(1)
+      expect(all.filter(s => s.includes('…')), at).toEqual([])
+      for (const re of KEY_HINTS) expect(hints(all, re), `${at} ${re}`).toEqual([])
+      // a fold opens on its press, and only for this task
+      await ui.press({ key: 'fold-time' })
+      expect((await ui.find({ key: 'fold-time' }))?.props.label, at).toMatch(/^▾ Time and cost/)
+      expect(await ui.find({ key: 'vs-sec-time-body' }), at).toBeDefined()
+      expect(await ui.find({ key: 'vs-sec-files-body' }), at).toBeUndefined()
+      await ui.unmount()
+    })

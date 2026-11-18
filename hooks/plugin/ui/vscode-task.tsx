@@ -1,11 +1,12 @@
-// The task page in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's task page (task-page.tsx) packs
-// labelled rows cut to the panel and lists its keys; here the page uses the whole panel width and wraps every line:
+// The task page in VS Code's side panel (see surface.ts and vscode.tsx), drawn as a card. The terminal's task page
+// (task-page.tsx) packs labelled rows cut to the panel and lists its keys; here the page uses the whole panel width and wraps every line:
 //   ← Tasks                                  (back to the list)
-//   T-414  ◆ ready for review · try 2 · 40m · worker · feature
-//   Title, then the action buttons in one row (only the ones that fit the status, at most one primary)
-//   the question with its answers as buttons and a box for your own (when one waits), why it failed (when it did)
-//   Why / where it came from · What to do (Markdown) · Files it may change · Waits for (ids as buttons) · Changes
-//   History · Time and cost · Report (Markdown, its first part with a "Show all" button)
+//   T-414 and the title, large and bold; the status badge in its color, then the kind, role, try and time as small dim tags
+//   the question (its answers as buttons and a box for your own), why it failed (with Retry), waiting for your files
+//   (with Merge now): boxed in their tone, at the top
+//   the action buttons in one row (only the ones that fit the status, at most one primary on the page)
+//   Why / where it came from · What to do (Markdown) · Changes · History (a timeline, newest first) · Report (Markdown,
+//   its first part with a "Show all" button), then the folds, closed by default: Files it may change · Waits for · Time and cost
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS } from '../../board'
@@ -14,7 +15,7 @@ import { S } from '../state'
 import { when } from '../tools'
 import type { PaneParts } from './parts'
 import type { $ } from '../../claude/panel'
-import { vsFooter, vsSection } from './vscode'
+import { vsBadge, vsCallout, vsFold, vsFooter, vsSection, vsTags } from './vscode'
 
 /** A history line in parts: its "try 2:" (or ''), what was said, the result after "→", and whether it went badly or well. */
 export function historyParts(line: string): { m: string; said: string; result: string; bad: boolean; good: boolean } {
@@ -25,6 +26,9 @@ export function historyParts(line: string): { m: string; said: string; result: s
   const good = /merged into|^merged/i.test(result)
   return { m: m ? m[1]! : '', said, result, bad, good }
 }
+
+/** The try a history line is about ("try 2: …", "try 3 (role tester): …" → 2, 3); 0 when it names none. */
+export const historyTry = (line: string): number => Number(/^try (\d+)\b/.exec(line)?.[1] ?? 0)
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
@@ -156,32 +160,54 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {body.filter(Boolean) as never}
     </Box>
   )
-
-  // the status line: the status word in its color, then the try, the time, the role and the kind
-  const role = findRole(S.roles, roleOf(t))?.name ?? roleOf(t)
-  const kind = kindMark(t)
-  const total = sumRuns(t.runs, nowMs)
-  const facts = [t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', role, kind].filter(Boolean).join(' · ')
-  const statusLine = (
-    <Box key="vs-status" flexDirection="column">
-    <Text wrap="wrap">
-      <Text bold color={C('claude')}>{t.id}</Text>
-      <Text>{'  '}</Text>
-      <Text bold color={C(STATUS_BADGE[t.status])}>{`${STATUS_MARK[t.status]} ${x.answered ? 'answered: read it' : STATUS_WORD[t.status]}`}</Text>
-      {facts ? <Text color={C('inactive')}>{` · ${facts}`}</Text> : null}
-      {x.agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
-    </Text>
+  // a less-used section folds, closed by default: its row says how many it holds; pressing it opens or closes it
+  if (S.taskFolds && S.taskFolds.task !== t.id) S.taskFolds = null
+  const isOpen = (name: string) => !!S.taskFolds?.open.includes(name)
+  const toggle = (name: string) => () => {
+    const open = S.taskFolds?.open ?? []
+    S.taskFolds = { task: t.id, open: open.includes(name) ? open.filter(n => n !== name) : [...open, name] }
+    x.redraw()
+  }
+  const fold = (name: string, label: string, n: number | string, body: unknown[]) => (
+    <Box key={`vs-sec-${name}`} flexDirection="column">
+      {vsFold(vs, `fold-${name}`, label, n, isOpen(name), toggle(name))}
+      {isOpen(name) ? (
+        <Box key={`vs-sec-${name}-body`} flexDirection="column" paddingLeft={2}>
+          {body.filter(Boolean) as never}
+        </Box>
+      ) : null}
     </Box>
   )
 
+  // the top: the id and the title large and bold, the status badge in its color, then the kind, role, try and time as small tags
+  const role = findRole(S.roles, roleOf(t))?.name ?? roleOf(t)
+  const kind = kindMark(t)
+  const total = sumRuns(t.runs, nowMs)
+  const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
+  const statusWord = x.answered ? 'answered: read it' : STATUS_WORD[t.status]
+  const head = (
+    <Box key="vs-head" flexDirection="column">
+      <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
+      <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
+      <Box key="vs-status" flexDirection="row" flexWrap="wrap" columnGap={1}>
+        {vsBadge(vs, 'vs-badge', `${STATUS_MARK[t.status]} ${statusWord}`, x.answered ? 'success' : STATUS_BADGE[t.status])}
+        {tags.length ? vsTags(vs, 'vs-tags', tags) : null}
+      </Box>
+    </Box>
+  )
   const typingBox = S.rejecting?.task === t.id && x.inReview
   const rolePicking = S.rolePick?.task === t.id
-  const actions = vsActions(t, x, on)
+  const acts = vsActions(t, x, on)
+  // Retry sits in "Why it failed" and Merge now in "Waiting for your files", right by their words
+  const inCallout = (a: Action) => (a.key === 'retry' && !!x.why) || (a.key === 'merge-now' && !!x.fileWait)
+  const button = (a: Action) => <Button key={a.key} label={a.label} variant={a.main ? 'primary' : 'secondary'} onPress={a.onPress} />
+  const calloutButtons = (key: string) => {
+    const list = acts.filter(a => inCallout(a) && a.key === key)
+    return list.length ? <Box key={`vs-${key}-row`} flexDirection="row" flexWrap="wrap" gap={1}>{list.map(button)}</Box> : null
+  }
   const actionRow = (
     <Box key="vs-actions" flexDirection="row" flexWrap="wrap" gap={1}>
-      {actions.map(a => (
-        <Button key={a.key} label={a.label} variant={a.main ? 'primary' : 'secondary'} onPress={a.onPress} />
-      ))}
+      {acts.filter(a => !inCallout(a)).map(button)}
     </Box>
   )
 
@@ -227,7 +253,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const answers = x.choices.slice(0, -1) // the last one is "Answer…": the box below is always there
   const askedFiles = !x.overtime ? ((t as { asked_files?: string[] }).asked_files ?? []) : []
   const question = x.answerable
-    ? section('question', x.overtime ? 'Time is up' : 'Question for you', [
+    ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
         plain('vs-question', x.askedQuestion ?? (askedFiles.length ? 'The worker asks to change more files:' : '(no question)'), 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
         answers.length ? (
@@ -238,13 +264,15 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
           </Box>
         ) : null,
         <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} autoFocus={answers.length ? undefined : true} onSubmit={value => on.sendAnswer(value)()} />,
-      ])
+      ].filter(Boolean) as never[])
     : null
 
-  const fileWait = x.fileWait ? section('file-wait', 'Waiting for your files', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive')]) : null
+  const fileWait = x.fileWait
+    ? vsCallout(vs, 'vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive'), calloutButtons('merge-now')].filter(Boolean) as never[])
+    : null
 
   const failed = x.why
-    ? section('why-failed', 'Why it failed', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive')])
+    ? vsCallout(vs, 'vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive'), calloutButtons('retry')].filter(Boolean) as never[])
     : null
 
   const answer = x.answerShown
@@ -273,7 +301,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     if (r.label) label = r.label
     if (['Branch', 'Commits', 'Research'].includes(label)) more.push(r)
   }
-  const files = section('files', 'Files it may change', [
+  const files = fold('files', 'Files it may change', t.files.length || 'any', [
     ...(t.files.length ? t.files.map(f => plain(`vs-file-${f}`, f, 'autoAccept')) : [plain('vs-files-any', 'anywhere in the project', 'inactive')]),
     segs('vs-into', [{ text: 'merges into ', color: 'inactive' }, { text: intoOf(t), color: 'ide', bold: true }]),
     ...more.map((r, i) => segs(`vs-more-${i}`, [...(r.label ? [{ text: `${r.label}: `, color: 'inactive' }] : []), ...r.segs])),
@@ -281,7 +309,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // the tasks it waits for: each id a button that opens it, its status and title beside
   const waits = t.after.length
-    ? section('after', 'Waits for', [
+    ? fold('after', 'Waits for', t.after.length, [
         ...t.after.map(id => {
           const dep = v.tasks.find(d => d.id === id)
           const gone = !dep && (v.archived_done ?? []).includes(id)
@@ -323,21 +351,30 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
+  // the history as a timeline, newest first: a mark in its tone, the try and when it ran, then the words, wrapped whole
   const history = t.history.length
     ? section('history', `History (${t.history.length}, newest first)`, [...t.history].reverse().map((line, i) => {
         const hp = historyParts(line)
+        const tone = hp.bad ? 'error' : hp.good ? 'success' : 'inactive'
+        const n = historyTry(line)
+        const run = n ? t.runs?.[n - 1] : undefined
+        const stamp = [run ? when(run.ended ?? run.started) : '', hp.m.replace(/:$/, '')].filter(Boolean).join(' · ')
         return (
-          <Text key={`vs-history-${i}`} wrap="wrap">
-            <Text color={C(hp.bad ? 'error' : hp.good ? 'success' : 'inactive')}>{hp.bad ? '✗' : hp.good ? '✓' : '•'}</Text>{' '}
-            {hp.m ? <Text bold color={C('inactive')}>{hp.m} </Text> : null}
-            <Text color={C('inactive')}>{hp.said}</Text>
-            {hp.result ? <Text color={C(hp.bad ? 'error' : hp.good ? 'success' : 'text')}>{` → ${hp.result}`}</Text> : null}
-          </Text>
+          <Box key={`vs-history-${i}`} flexDirection="row" gap={1}>
+            <Text key="mark" bold color={C(tone)}>{hp.bad ? '✗' : hp.good ? '✓' : '•'}</Text>
+            <Box key="body" flexDirection="column" flexShrink={1}>
+              {stamp ? <Text key="when" wrap="wrap" size="caption" color={C('inactive')}>{stamp}</Text> : null}
+              <Text key="text" wrap="wrap">
+                <Text color={C(hp.bad && !hp.result ? 'error' : 'text')}>{hp.said}</Text>
+                {hp.result ? <Text color={C(hp.bad ? 'error' : hp.good ? 'success' : 'text')}>{` → ${hp.result}`}</Text> : null}
+              </Text>
+            </Box>
+          </Box>
         )
       }))
     : null
 
-  const time = section('time', 'Time and cost', [
+  const time = fold('time', 'Time and cost', t.runs?.length ?? 0, [
     plain('vs-dates', `added ${when(t.created_at)} · changed ${when(t.updated_at)}`, 'inactive'),
     ...(t.runs ?? []).map((r, i) => plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success')),
     t.runs?.length ? plain('vs-total', `total: ${fmtTotal(total)}`, 'text', { bold: true }) : plain('vs-no-runs', 'no tries yet', 'inactive'),
@@ -368,28 +405,27 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-task-top" flexDirection="column">
+      <Box key="vs-task-top" flexDirection="column" gap={1}>
         <Box key="vs-back-row" flexDirection="row">
           <Button key="back" label="← Tasks" variant="secondary" autoFocus={x.answerable || typingBox ? undefined : true} onPress={on.back} />
         </Box>
-        {statusLine}
+        {head}
       </Box>
-      {section('title', 'Title', [plain('vs-title', t.title, 'text', { bold: true })])}
-      {actionRow}
-      {rejectBox}
-      {roleBox}
       {question}
       {fileWait}
       {failed}
+      {actionRow}
+      {rejectBox}
+      {roleBox}
       {answer}
       {origin}
       {details}
-      {files}
-      {waits}
       {changes}
       {history}
-      {time}
       {report}
+      {files}
+      {waits}
+      {time}
       {vsFooter(vs, 'task-keys')}
     </Box>
   )
