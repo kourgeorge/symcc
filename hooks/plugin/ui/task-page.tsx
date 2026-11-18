@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { loadKinds } from '../kinds'
@@ -228,6 +228,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     if (!overtime && asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles(claudeHost($), t.id) : await refuseAskedFiles(claudeHost($), t.id))))
     return sendAnswer(choices[i]!)
   }
+  // A failed task: why it failed (the same sentence as its board row and the lead's board), what to do next, and
+  // what the failed try's report asks for (a NEED FILES line or a question), if anything. Only the report of the
+  // try that failed counts: a try that left no report (no result, could not start) must not show an older try's ask.
+  const failed = t.status === 'failed'
+  const latest = reports[reports.length - 1]
+  const latestBody = !failed || !latest || latest.try !== t.attempts ? null : latest === shown ? reportBody : await $.fs.read(path(latest.file)).then(x => String(x), () => null)
+  const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1) ?? '') } : null
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
   const copyTask = (press?: { surface?: Parameters<typeof $.ui.copy>[0]['surface'] }) =>
     act(async () => {
@@ -245,6 +252,15 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
         </Text>
       </Box>
+
+      {why && (
+        <Box flexDirection="column">
+          {heading('Why it failed')}
+          {wrapSegs([{ text: why.reason, color: 'text' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `why-${j}`))}
+          {why.asks ? wrapSegs([{ text: why.asks, color: 'warning' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `why-asks-${j}`)) : null}
+          {wrapSegs([{ text: `Next: ${why.next}`, color: 'inactive' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `why-next-${j}`))}
+        </Box>
+      )}
 
       {buttonRows([
         <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))} />,

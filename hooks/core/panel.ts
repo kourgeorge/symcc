@@ -12,6 +12,9 @@ import { roleMark, roleOf, tryMark } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs } from './runs'
 import { ellipsis, num } from './text'
+import { whyFailed } from './failure'
+
+export * from './failure'
 
 /** A section's header in the board panel: "▸ Done (42)" folded, "▾ Done (42)" open; with `opened` left out (a section
  *  that is always open, like "Doing") there is no arrow: "Doing (1)". */
@@ -118,7 +121,7 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
  *  one waiting on unfinished tasks (else its role; an investigation's starts with "[investigation]"), "Enter to review"
  *  in review ("[investigation]" for an answered investigation, whose status column says "answer"; a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
- *  waiting task, the note of a failed or backlog one, and '' for finished ones. With `here` (the branch checked
+ *  waiting task, why a failed one failed (whyFailed, the same sentence as the lead's board and its page), the note of a backlog one, and '' for finished ones. With `here` (the branch checked
  *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean.
  *  `maxMinutes`: the board's max_minutes, for the time limit in the more-time question. */
 export function rowExtra(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes): string {
@@ -143,7 +146,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
     case 'waiting':
       return t.question ?? ''
     case 'failed':
-      return t.note
+      return whyFailed(t)
     case 'backlog':
       return t.note && t.note !== 'in the backlog' ? t.note : ''
     default:
@@ -164,10 +167,12 @@ const cutTo = (s: string, n: number) => (n <= 0 ? '' : ellipsis(s, n))
 
 /** Fits a task row's title and extra after `lead` columns (indent, id, mark and status) in `width` columns: the
  *  extra goes to the right end (`pad` fills the gap, at least two spaces) when the whole title fits beside it;
- *  otherwise the extra is left out first, then the title is cut with "…". */
-export function fitRow(lead: number, title: string, extra: string, width: number): { title: string; pad: string; extra: string } {
+ *  otherwise the extra is left out first (or, with `cutExtra`, cut to fit), then the title is cut with "…". */
+export function fitRow(lead: number, title: string, extra: string, width: number, cutExtra = false): { title: string; pad: string; extra: string } {
   const room = Math.max(1, width - lead)
   if (extra && title.length + 2 + extra.length <= room) return { title, pad: ' '.repeat(room - title.length - extra.length), extra }
+  // `cutExtra` (a failed task's reason): the extra is cut with "…" to the room the whole title leaves, when that is 12 columns or more
+  if (extra && cutExtra && room - title.length - 2 >= 12) return { title, pad: '  ', extra: cutTo(extra, room - title.length - 2) }
   return { title: cutTo(title, room), pad: '', extra: '' }
 }
 
