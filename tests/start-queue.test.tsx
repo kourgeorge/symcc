@@ -204,6 +204,19 @@ test('loaded: work found by a timer (the start-up pump) is queued, the idle lead
   expect(wakeUps(w.prompts).length).toBe(1)
 })
 
+test('T-471 loaded: claiming a new try clears the agent of the try before, so that old agent is never taken as the new try\'s worker', async ($, on) => {
+  const w = world(on)
+  const b = todo(1)
+  b.tasks[0] = { ...b.tasks[0]!, attempts: 1, agent: 'w-old' }
+  w.files.set(BOARD, JSON.stringify(b))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('doing')
+  expect(w.task('T-1').note).toBe(QUEUED_NOTE)
+  expect(w.task('T-1').attempts).toBe(2)
+  expect(w.task('T-1').agent).toBeUndefined()
+})
+
 test('loaded: a worker asked for by a lead tool call (add) is queued, wakes nobody (the lead is in its turn), and starts at that turn\'s end', async ($, on) => {
   const w = world(on)
   w.files.set(BOARD, JSON.stringify(todo(0)))

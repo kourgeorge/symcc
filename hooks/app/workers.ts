@@ -8,7 +8,7 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
-import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, cancelStarts, startCancelled, QUEUED_NOTE } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
@@ -97,6 +97,8 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       if (!mayStart(cur, agents.map(agentState), S.N.name)) return [x, null]
       const at = now()
       const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: QUEUED_NOTE, runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
+      // T-471: an earlier try's agent is never taken as this try's worker (agentOnBoard); the new one is recorded when it starts
+      delete find(y, id)!.agent
       return [y, find(y, id)!]
     })
     if (!t) return null
@@ -488,10 +490,48 @@ export async function lateHandBack(host: Host, agentId: string): Promise<boolean
   return true
 }
 
-/** The worker behind `agentId`: from memory, or (after a plugin reload) picked back up from the board by lateHandBack. Undefined when it can't be found. */
+/**
+ * What agent `agentId` is on the board, whatever session's copy of the plugin started it (T-471), for the guards:
+ * - a running worker: the agent of a task "doing" whose try hasn't handed back yet (its folder is the task's own);
+ * - a running checker: the checker recorded on a task "doing" (BoardTask.checker);
+ * - an ended agent: the agent of a task that isn't running it any more (another status, or its try handed back),
+ *   which may do nothing more;
+ * undefined when it isn't on the board (the lead's own agents, say), or the project folder isn't known.
+ * Nothing is added to `workers` (a hand-back keeps lateHandBack's rule). An unreadable board throws, so a guard
+ * refuses rather than lets a call through unchecked (see guardFailed). Each agent found is remembered (rememberOnBoard).
+ */
+export type OnBoard = { kind: 'worker'; worker: Worker } | { kind: 'checker'; task: string; worktree: string } | { kind: 'ended'; task: string }
+export async function agentOnBoard(host: Host, agentId: string): Promise<OnBoard | undefined> {
+  if (!agentId || !S.root) return undefined
+  const b = await load(host)
+  const chk = b.tasks.find(x => x.status === 'doing' && x.checker === agentId)
+  const t = b.tasks.find(x => x.agent === agentId)
+  const found: OnBoard | undefined = chk
+    ? { kind: 'checker', task: chk.id, worktree: worktreeDir(chk.id) }
+    : !t
+      ? undefined
+      : t.status !== 'doing' || handedBack(t) || starting.has(t.id) || queuedWorkers.has(t.id)
+        ? { kind: 'ended', task: t.id }
+        : { kind: 'worker', worker: { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: runStart(t) } }
+  if (found) rememberOnBoard(agentId)
+  return found
+}
+
+/** When task `t`'s current try started (ms), or now when the board doesn't say. */
+function runStart(t: BoardTask): number {
+  const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
+  return Number.isFinite(started) ? started : Date.now()
+}
+
+/**
+ * The running worker behind `agentId`, for the guards: from memory, or else from the board (agentOnBoard), whatever
+ * session started it. Undefined when it is no running worker. An unreadable board throws.
+ */
 export async function workerOf(host: Host, agentId: string): Promise<Worker | undefined> {
-  if (!workers.has(agentId)) await lateHandBack(host, agentId).catch(() => false)
-  return workers.get(agentId)
+  const w = workers.get(agentId)
+  if (w) return w
+  const on = await agentOnBoard(host, agentId)
+  return on?.kind === 'worker' ? on.worker : undefined
 }
 
 // ---------------- a task changed while its work is checked ----------------

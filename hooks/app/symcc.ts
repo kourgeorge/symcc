@@ -20,7 +20,7 @@ import { boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, co
 import type { FileTouch, Host } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
-import { askCall, checkEdit, guardFailed } from './ask'
+import { askCall, checkEdit, guardFailed, stoppedText } from './ask'
 import { gitReady } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
 import { changedFiles, changesText } from './review'
@@ -28,13 +28,13 @@ import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
 import { checkerFinished } from './checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './scouts'
-import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from './state'
+import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './store'
 import { noteForLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
-import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, stoppedHandBack, setSymcc, setBoardMode, type TurnEnd } from './workers'
+import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, setSymcc, setBoardMode, type TurnEnd } from './workers'
 
 /** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
 export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings. (ctrl+x tab goes back to it.)'
@@ -218,11 +218,15 @@ export function isSymccTool(tool: string): boolean {
  * A worker or scout symcc stopped can't do anything more, so every tool it tries is refused. A scout or checker may
  * only read the board (board and stats); its call of any other symcc tool is refused. The lead's own tools
  * and the workers' question tool (it knows the calling worker from `agentId`) run here.
+ * An agent this copy doesn't hold is looked up on the board (agentOnBoard, T-471), so a checker or a stopped agent
+ * of another session's copy is treated as here; an unreadable board throws (toolCallFailed then decides).
  */
 export async function toolCall(host: Host, tool: string, agentId: string | undefined, input: Record<string, unknown>): Promise<{ deny: string } | { result: string } | null> {
-  if (agentId && stopped.has(agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
+  if (agentId && stopped.has(agentId)) return { deny: stoppedText() }
+  const on = agentId && !isOwnAgent(agentId) && (await findRoot(host)) ? await agentOnBoard(host, agentId) : undefined
+  if (on?.kind === 'ended') return { deny: stoppedText() }
   // a scout or checker only reads the board: board and stats run, every other symcc tool (ask_owner too) is refused
-  if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId))) {
+  if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId) || on?.kind === 'checker')) {
     const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find(t => tool === toolName(t))
     const why = short ? scoutToolRefusal(short, S.N.name) : null
     if (why) return { deny: why }
