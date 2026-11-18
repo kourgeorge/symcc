@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -130,7 +130,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
   await markStep($, t, 'checking', stopped)
-  const add = await git($, ['add', '-A', '--', '.'], dir)
+  // the worker's throwaway folder is never staged (T-456): its info/exclude line keeps it out already, and so does this
+  const add = await git($, ['add', '-A', '--', '.', `:(exclude)${SCRATCH_DIR}`], dir)
   if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
   // Files whose names look like secrets (.env, *.pem, *.key, id_rsa, ...) are taken out of what is staged
   // before the commit: they stay in the folder, but never reach a commit or the target branch.

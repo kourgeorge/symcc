@@ -1206,9 +1206,22 @@ export function blockedEdit(path: string | undefined, worktree: Folders, files: 
   const wts = folderList(worktree)
   if (!p || !wts.length) return undefined
   const rel = insideAny(resolvePath(wts[0]!, p), wts, true)
-  if (!rel) return undefined
+  if (!rel || inScratch(rel)) return undefined
   return outOfScope([rel], files, dataDir).length ? rel : undefined
 }
+
+/**
+ * The throwaway folder in each worker's folder (T-456): a worker or checker may write scripts and notes there. It is in
+ * the checkout's local ignore list (info/exclude, never .gitignore), so it is never staged, committed or scope checked;
+ * an edit under it is never refused as outside the task's files, and symcc clears it when a try ends or the folder is reused.
+ */
+export const SCRATCH_DIR = '.scratch'
+
+/** The line in the checkout's info/exclude that keeps SCRATCH_DIR out of git (only at the folder's top). */
+export const SCRATCH_EXCLUDE = `/${SCRATCH_DIR}/`
+
+/** Whether `rel` (a path relative to the worker's folder, with ".." already worked out) is inside SCRATCH_DIR. */
+export const inScratch = (rel: string) => rel.startsWith(`${SCRATCH_DIR}/`)
 
 /** The reason a worker reads when its edit of `path` is refused as outside its task's files. */
 export const blockedEditText = (path: string) => `${path} is outside this task's files; it's recorded as a request to the owner. Stop and hand back.`
