@@ -2,7 +2,7 @@
 // (list.tsx) packs each task on one cut line of a button; here each task is two readable lines of text that wrap:
 //   ● T-404  Pick the colors for the review mark on light themes   (the ID a link that opens the task, the title plain,
 //   ? waiting for 1m · Yellow or blue for review?                    up to two lines, then "(more)"; "●": it needs you)
-// the second line dim: the status in its color and how long it has run or waited, the kind or role, the try, the
+// (a done or dropped task is one line: "✓ T-12 title", its mark first, no second line), the second line dim: the status in its color and how long it has run or waited, the kind or role, the try, the
 // question or why it failed. Grouped under headings with their colored mark and a count badge (Questions for you,
 // Waiting for you, Review, Failed, Doing, To do), a line of space between them, then Backlog, Done and Dropped, folded
 // (each fold a link). No Buttons for rows or folds: VS Code draws a Button as a filled blue box whose label never wraps.
@@ -75,6 +75,8 @@ export function listPageVs($: $, pane: PaneParts) {
    *  Text, not a Button, so it wraps (VS Code draws a Button as a blue box on one line). */
   const taskRow = (x: SymccTask, depth = 0) => {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
+    // a done or dropped task is one line: its mark (the terminal list's), the ID link, the dim title; no status line
+    const ended = x.status === 'done' || x.status === 'dropped'
     const needs = needsYou(x)
     const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
     const tried = tryMark(x)
@@ -84,23 +86,26 @@ export function listPageVs($: $, pane: PaneParts) {
     // or failure reason that only mentions the word does not count
     const tagged = rest.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     if (kind && !tagged) rest = rest ? `${kind} · ${rest}` : kind
-    const title = twoLines(x.title, width - depth, (needs ? 2 : 0) + x.id.length + 2)
+    const title = twoLines(x.title, width - depth, (needs || ended ? 2 : 0) + x.id.length + 2)
     const href = vsHref('task', x.id)
     const words = `${mdText(title.text)}${title.cut ? ` ${mdText(MORE)}` : ''}`
     return (
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
         <Box key={`vs-task-${x.id}-top`} flexDirection="row">
           {needs ? <Text key="needs" bold color={C(tone[x.status] ?? 'warning')}>● </Text> : null}
+          {ended ? <Text key="ended" color={C(tone[x.status]!)}>{`${mark[x.status]} `}</Text> : null}
           <Box key="title" flexDirection="column" flexGrow={words ? 1 : 0} flexShrink={1}>
             {vsLink(vs, row(x.id), words ? `${mdLink(x.id, href)} \u00a0${needs ? `**${words}**` : words}` : mdLink(x.id, href), [[href, act(() => panelValues($).updateOpened(() => x.id))]], closed)}
           </Box>
           {words ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
         </Box>
-        <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
-          <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
-          {rest ? ` · ${rest}` : ''}
-          {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
-        </Text>
+        {ended ? null : (
+          <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
+            <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
+            {rest ? ` · ${rest}` : ''}
+            {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
+          </Text>
+        )}
       </Box>
     )
   }
