@@ -1,7 +1,8 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
 import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
-import { type $, S, panelValues } from '../state'
+import { S } from '../state'
+import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from './open'

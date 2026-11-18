@@ -57,10 +57,6 @@ export function namesFor(raw: string = DEFAULT_NAME) {
     branch: (id: string) => `${name}/${id}`,
     /** who the plugin's own commits and merges are by */
     author: { name, email: `${name}@localhost` },
-    worker: `${name}:worker`,
-    scout: `${name}:scout`,
-    /** a tool's full name as the model sees it: "mcp__<name>__board" */
-    tool: (t: string) => `mcp__${name}__${t}`,
     /** the board panel's id */
     pane: `${name}-board`,
     /** the board's name in titles: "<name> board" */

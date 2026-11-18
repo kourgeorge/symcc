@@ -1,6 +1,8 @@
 // The lead's kinds tool (T-329): managed like the roles (see lead-roles.test.tsx).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
+import { fakeHost } from './fake-host'
+import { entry } from './fakes'
 import { parseKind, checkKind, kindNames, kindsLeadText } from '../hooks/board'
 import { S, leadQueue, skippedKinds } from '../hooks/plugin/state'
 import { leadGuide, manual, runTool } from '../hooks/plugin/tools'
@@ -23,7 +25,7 @@ function setup(mine: Record<string, string> = {}) {
     if (p.startsWith(`${MINE}/`)) return [mine, p.slice(MINE.length + 1)]
     return null
   }
-  const $ = {
+  const $ = fakeHost({
     plugin: { root: PLUGIN },
     fs: {
       exists: async (p: string) => {
@@ -32,12 +34,12 @@ function setup(mine: Record<string, string> = {}) {
       },
       list: async (p: string) => {
         const w = where(p)
-        return w && w[1] === '' ? Object.keys(w[0]).map(name => ({ name, kind: 'file' })) : []
+        return w && w[1] === '' ? Object.keys(w[0]).map(name => entry(name)) : []
       },
       read: async (p: string) => {
         const w = where(p)
         if (!w || !(w[1] in w[0])) throw new Error('no file')
-        return w[0][w[1]]
+        return w[0][w[1]]!
       },
       write: async (p: string, text: string) => {
         touched.push(p)
@@ -45,21 +47,19 @@ function setup(mine: Record<string, string> = {}) {
         if (w) w[0][w[1]] = String(text)
       },
     },
-    process: {
-      run: async (argv: string[]) => {
-        if (argv[0] === 'rm') {
-          const p = argv[argv.length - 1]!
-          touched.push(p)
-          const w = where(p)
-          if (w) delete w[0][w[1]]
-        }
-        return { exitCode: 0, stdout: '', stderr: '' }
-      },
+    run: async argv => {
+      if (argv[0] === 'rm') {
+        const p = argv[argv.length - 1]!
+        touched.push(p)
+        const w = where(p)
+        if (w) delete w[0][w[1]]
+      }
+      return { exitCode: 0, stdout: '', stderr: '' }
     },
     ui: { refresh: () => undefined, toast: () => undefined, log: () => undefined, status: () => undefined },
     // A skipped role file tells the lead (through a timer); nothing is sent here.
-    clock: { after: () => undefined },
-  }
+    clock: { after: () => ({ cancel() {} }) },
+  }).host
   S.root = ROOT
   S.kinds = []
   return { $, mine, touched }

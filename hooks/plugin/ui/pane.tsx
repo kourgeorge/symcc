@@ -1,5 +1,6 @@
 // The board panel: picks the page to draw (Settings, a scout, the Scouts list, a task, or the task list).
-import { type $, S } from '../state'
+import { S } from '../state'
+import { type $ } from '../../claude/panel'
 import { arrows, rowStops } from './arrows'
 import { listPage } from './list'
 import { type PaneEvent, type PaneHook, type PaneParts, paneParts } from './parts'

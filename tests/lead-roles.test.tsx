@@ -1,9 +1,14 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { roleChoices, rolesLeadText, checkRole } from '../hooks/board'
-import { parseRole } from '../hooks/claude/agent-types'
+import { fakeHost } from './fake-host'
+import { entry } from './fakes'
+import { roleChoices, rolesLeadText, checkRole, parseRole as parseRoleWith } from '../hooks/board'
+import { SYMCC_WORDS } from '../hooks/host'
 import { S, leadQueue, skippedRoles } from '../hooks/plugin/state'
 import { leadGuide, manual, runTool } from '../hooks/plugin/tools'
+
+/** A role file read with the role tools symcc's own words allow (as plugin code does on the fake Host). */
+const parseRole = (name: string, text: string) => parseRoleWith(name, text, SYMCC_WORDS.roleTools)
 
 const ROOT = '/proj'
 const MINE = `${ROOT}/.symcc/roles`
@@ -29,7 +34,7 @@ function setup(mine: Record<string, string> = {}) {
     if (p.startsWith(`${PLUGIN}/roles/`)) return [builtIn, p.slice(PLUGIN.length + 7)]
     return null
   }
-  const $ = {
+  const $ = fakeHost({
     plugin: { root: PLUGIN },
     fs: {
       exists: async (p: string) => {
@@ -38,12 +43,12 @@ function setup(mine: Record<string, string> = {}) {
       },
       list: async (p: string) => {
         const w = where(p)
-        return w && w[1] === '' ? Object.keys(w[0]).map(name => ({ name, kind: 'file' })) : []
+        return w && w[1] === '' ? Object.keys(w[0]).map(name => entry(name)) : []
       },
       read: async (p: string) => {
         const w = where(p)
         if (!w || !(w[1] in w[0])) throw new Error('no file')
-        return w[0][w[1]]
+        return w[0][w[1]]!
       },
       write: async (p: string, text: string) => {
         touched.push(p)
@@ -51,21 +56,19 @@ function setup(mine: Record<string, string> = {}) {
         if (w) w[0][w[1]] = String(text)
       },
     },
-    process: {
-      run: async (argv: string[]) => {
-        if (argv[0] === 'rm') {
-          const p = argv[argv.length - 1]!
-          touched.push(p)
-          const w = where(p)
-          if (w) delete w[0][w[1]]
-        }
-        return { exitCode: 0, stdout: '', stderr: '' }
-      },
+    run: async argv => {
+      if (argv[0] === 'rm') {
+        const p = argv[argv.length - 1]!
+        touched.push(p)
+        const w = where(p)
+        if (w) delete w[0][w[1]]
+      }
+      return { exitCode: 0, stdout: '', stderr: '' }
     },
     ui: { refresh: () => undefined, toast: () => undefined, log: () => undefined, status: () => undefined },
     // A skipped role file tells the lead (through a timer); nothing is sent here.
-    clock: { after: () => undefined },
-  }
+    clock: { after: () => ({ cancel() {} }) },
+  }).host
   S.root = ROOT
   S.roles = []
   return { $, builtIn, mine, touched }

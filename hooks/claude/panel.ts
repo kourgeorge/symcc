@@ -1,0 +1,33 @@
+// The board panel's values, which only Claude Code's `$` holds (claude/host.ts carries them as the Host's ui.panel).
+// Claude Code reads which values a plugin keeps from its code before it runs, so their owner must be written out here
+// as text. It must be the plugin's name: on a rename, change it in these four lines and in types/index.d.ts too.
+// The loader lets read and update take only an atom written in the same file, so they are only reached through
+// panelValues below.
+import { type EngineInterface, atom, read, update } from 'claude-code'
+import type { SymccView } from '../../types'
+import type { PanelValues } from '../host'
+
+/** Claude Code's `$`, as one hook hands it to the plugin. */
+export type $ = EngineInterface
+
+/** which task the board panel has open; '' = the list */
+const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
+/** which view the board panel shows: 'scouts', or anything else for the tasks; kept while the panel is open */
+const tab = atom({ plugin: 'symcc', key: 'tab' } as const, '')
+/** which scout the Scouts view has open; '' = the list */
+const scoutOpen = atom({ plugin: 'symcc', key: 'scout' } as const, '')
+const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as SymccView, { shape: 'view-1' })
+
+/** The board panel's values through Claude Code's `$` (for claude/host.ts, and the panel's own render code in plugin/ui/). */
+export function panelValues($: $): PanelValues {
+  return {
+    readOpened: () => read($, opened),
+    updateOpened: change => update($, opened, change),
+    readTab: () => read($, tab),
+    updateTab: change => update($, tab, change),
+    readScoutOpen: () => read($, scoutOpen),
+    updateScoutOpen: change => update($, scoutOpen, change),
+    readView: () => read($, view),
+    updateView: change => update($, view, change),
+  }
+}

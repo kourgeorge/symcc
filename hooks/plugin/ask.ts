@@ -1,11 +1,11 @@
 // A worker's try hands back through Claude Code's own mechanisms, never through words in its text:
-// - a question: the workers' ask_owner tool (mcp__<name>__ask_owner), served in the tool.call hook;
+// - a question: the workers' ask_owner tool (as the host names it, see toolName in state.ts), served in the tool.call hook;
 // - more files: an Edit, Write or NotebookEdit outside the task's files is refused in the tool.check hook,
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
-import { S, type Worker, scoutRuns, checkerRuns, workers, stopped } from './state'
+import { S, toolName, type Worker, scoutRuns, checkerRuns, workers, stopped } from './state'
 import type { Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -32,8 +32,8 @@ export const ASK_TOOL_DEF = () => ({
  * workerOf); the question is written to its try on the board (a later call replaces it). Everyone else is refused.
  */
 export async function askCall($: Host, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
-  const tool = S.N.tool(ASK_TOOL)
-  if (!agentId) return `Refused: ${tool} is only for ${S.N.name} workers; the lead (the main chat) never calls it (use ${S.N.tool('ask')} to make a task wait for the owner).`
+  const tool = toolName(ASK_TOOL)
+  if (!agentId) return `Refused: ${tool} is only for ${S.N.name} workers; the lead (the main chat) never calls it (use ${toolName('ask')} to make a task wait for the owner).`
   if (scoutRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not scouts. End with your report as usual.`
   const w = await workerOf($, agentId)
   if (!w) return `Refused: ${tool} is only for running ${S.N.name} workers, and you are not one (or your try already handed back).`

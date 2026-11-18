@@ -1,8 +1,7 @@
-import { whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
-import { liveWorkersFor } from '../claude/agents'
+import { liveWorkersFor, whoDrives, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan } from '../board'
 import { homeBranch } from './git'
 import { S, workers, type PaneView, scoutState, updateView } from './state'
-import type { Host } from '../host'
+import { type Host, agentState } from '../host'
 import { path, locked, change, now, load, safeWrite } from './store'
 import { openPane } from './ui/open'
 import { playable } from './voice'
@@ -45,7 +44,7 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await host.fs.exists(path(S.N.boardFile)))
-      await change(host, b => resetDoing(b, S.me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive, S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id)).map(t => t.id)))
+      await change(host, b => resetDoing(b, S.me, leadBefore, Date.now(), note, now(), b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id)).map(t => t.id)))
     if (move === 'takeover' && !fresh) host.ui.toast(S.N.toast('the session driving the board stopped answering; this session drives it now'))
   }
   if (was && !S.driving) {
@@ -70,7 +69,7 @@ export async function releaseLead(host: Host) {
   S.driving = false
   await locked(host, async () => {
     const file = path(S.N.leadFile)
-    if (parseLead(await host.fs.read(file).catch(() => null))?.session === S.me) await host.process.run(['rm', '-f', file])
+    if (parseLead(await host.fs.read(file).catch(() => null))?.session === S.me) await host.run(['rm', '-f', file])
   }).catch(() => undefined)
 }
 

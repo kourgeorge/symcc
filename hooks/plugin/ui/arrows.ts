@@ -6,7 +6,8 @@
 // Claude Code keeps the focused element in view on its own, so the panel still scrolls as the focus moves.
 import type { MatchedHook } from 'claude-code'
 import type { KeyHint } from '../../board'
-import { type $, S } from '../state'
+import { S } from '../state'
+import { type $ } from '../../claude/panel'
 
 type ScrollHook = MatchedHook<'ui.scroll', { component: 'Pane' }>
 type FocusHook = MatchedHook<'ui.focus', { component: 'Pane' }>
@@ -41,11 +42,23 @@ export function focusStops(node: unknown): string[] {
   return focusStops(n.children ?? p.children)
 }
 
+/** True only when a Settings group heading is known to have the focus (its key line then says "Enter open/close");
+ *  a focus on a tab, on any other button, or not known yet is not a heading, so the page keeps its normal hint. */
+export const headingFocused = (focused: string | undefined) => focused?.startsWith('group:') ?? false
+
+/** Notes that the focus moved to `to`; on the Settings page (its rows include group headings) a move between a
+ *  heading and any other element redraws the page, so its key line follows the focus. */
+function focusMoved($: $, to: string | undefined) {
+  const from = arrows.focused
+  arrows.focused = to
+  if (arrows.stops.some(k => k.startsWith('group:')) && headingFocused(from) !== headingFocused(to)) $.ui.invalidate('ui.render')
+}
+
 /** `ui.focus` on the board panel: remembers which element holds the focus once it moved. */
-export async function noteFocus(_: $, e: Parameters<FocusHook>[1], next: Parameters<FocusHook>[2]) {
+export async function noteFocus($: $, e: Parameters<FocusHook>[1], next: Parameters<FocusHook>[2]) {
   if (e.requestId !== S.N.pane) return next(e)
   const r = await next(e)
-  if (!r.deny) arrows.focused = e.element
+  if (!r.deny) focusMoved($, e.element)
   return r
 }
 
@@ -69,6 +82,6 @@ export async function arrowMove($: $, e: Parameters<ScrollHook>[1], next: Parame
   if (to === undefined) return next(e)
   const r = await $.ui.focus({ requestId: S.N.pane, key: to }).catch((err: Error) => ({ deny: err.message }))
   if (r.deny) return next(e)
-  arrows.focused = to
+  focusMoved($, to)
   return {}
 }

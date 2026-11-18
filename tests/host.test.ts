@@ -3,7 +3,7 @@
 // as another program (an OpenCode plugin, a standalone app) would build one, must be enough to run the logic.
 import { expect } from 'claude-code/testing'
 import type { EngineInterface } from 'claude-code'
-import { type Host, type HostRunResult, type PanelValues, noUi, notReadyYet } from '../hooks/host'
+import { type Host, type HostRunResult, type PanelValues, SYMCC_WORDS, noUi, notReadyYet } from '../hooks/host'
 import { S, type PaneView } from '../hooks/plugin/state'
 import { findRoot, load, saveBoard, takeLock, dropLock, change } from '../hooks/plugin/store'
 import { tellLead } from '../hooks/plugin/tell'
@@ -33,9 +33,10 @@ function memoryHost(root: string, ui: Host['ui'] = noUi, later = false) {
       root: async () => root,
       usage: async () => ({}),
     },
-    lead: { send: async text => void sent.push(text) },
+    lead: { send: async text => void sent.push(text), usage: async () => ({}) },
     agents: { spawn: async () => ({ agentId: 'agent-1' }), list: async () => [], send: async () => undefined, stop: async () => undefined },
-    env: { get: async () => undefined },
+    words: SYMCC_WORDS,
+    env: async () => undefined,
     fs: {
       read: async p => {
         const text = files.get(p)
@@ -50,25 +51,23 @@ function memoryHost(root: string, ui: Host['ui'] = noUi, later = false) {
         return { kind: 'file', size: files.get(p)!.length, mtimeMs: 0, isLink: false }
       },
     },
-    process: {
-      run: async argv => {
-        ran.push(argv[0]!)
-        const [cmd, ...rest] = argv
-        const args = rest.filter(a => !a.startsWith('-'))
-        if (cmd === 'mv' || cmd === 'ln') {
-          const [from, to] = args as [string, string]
-          if (!files.has(from)) return done({ exitCode: 1, stderr: 'No such file' })
-          if (cmd === 'ln' && files.has(to)) return done({ exitCode: 1, stderr: 'File exists' })
-          files.set(to, files.get(from)!)
-          if (cmd === 'mv') files.delete(from)
-          return done()
-        }
-        if (cmd === 'rm') {
-          for (const a of args) files.delete(a)
-          return done()
-        }
-        return done({ exitCode: 127, stderr: `${cmd}: not in this fake` })
-      },
+    run: async argv => {
+      ran.push(argv[0]!)
+      const [cmd, ...rest] = argv
+      const args = rest.filter(a => !a.startsWith('-'))
+      if (cmd === 'mv' || cmd === 'ln') {
+        const [from, to] = args as [string, string]
+        if (!files.has(from)) return done({ exitCode: 1, stderr: 'No such file' })
+        if (cmd === 'ln' && files.has(to)) return done({ exitCode: 1, stderr: 'File exists' })
+        files.set(to, files.get(from)!)
+        if (cmd === 'mv') files.delete(from)
+        return done()
+      }
+      if (cmd === 'rm') {
+        for (const a of args) files.delete(a)
+        return done()
+      }
+      return done({ exitCode: 127, stderr: `${cmd}: not in this fake` })
     },
     clock: { after: (_ms, fn) => (later && fn(), timer), every: () => timer, sleep: async () => undefined },
     ui,
@@ -197,7 +196,7 @@ test("a refused or failed start rejects; only Claude Code's \"agent type not fou
   expect(await claudeAgentsWorld(async () => ({})).host.agents.spawn(worker)).toEqual({})
 })
 
-test('host.agents lists every worker type as "<name>:worker", and send and stop are messages to the agent', async () => {
+test("host.agents lists every worker type as a 'worker' and the scout type as a 'scout', and send and stop are messages to the agent", async () => {
   const w = claudeAgentsWorld()
   w.list([
     { id: 'a1', type: 'symcc:worker-web', status: 'running', description: 'T-1' },
@@ -205,11 +204,11 @@ test('host.agents lists every worker type as "<name>:worker", and send and stop 
     { id: 'a3', type: 'symcc:scout', status: 'waiting', description: 'bugs' },
     { id: 'a4', type: 'general-purpose', status: 'running', description: 'other' },
   ])
-  expect((await w.host.agents.list()).map(a => [a.id, a.type, a.status])).toEqual([
-    ['a1', 'symcc:worker', 'running'],
-    ['a2', 'symcc:worker', 'completed'],
-    ['a3', 'symcc:scout', 'waiting'],
-    ['a4', 'general-purpose', 'running'],
+  expect((await w.host.agents.list()).map(a => [a.id, a.kind, a.status])).toEqual([
+    ['a1', 'worker', 'running'],
+    ['a2', 'worker', 'completed'],
+    ['a3', 'scout', 'waiting'],
+    ['a4', 'other', 'running'],
   ])
   await w.host.agents.send('a1', 'wrap up')
   await w.host.agents.stop('a1', 'Stop now')
@@ -217,4 +216,33 @@ test('host.agents lists every worker type as "<name>:worker", and send and stop 
     { to: { agentId: 'a1' }, text: 'wrap up' },
     { to: { agentId: 'a1' }, text: 'Stop now' },
   ])
+})
+
+test("Claude Code's adapter maps symcc's words to its `$`: run is $.process.run, env is $.env.get, and tools are mcp__<name>__<tool>", async () => {
+  const runs: unknown[] = []
+  const envs: string[] = []
+  const claude = {
+    process: { run: async (argv: readonly string[], init?: unknown) => (runs.push([argv, init]), { exitCode: 0, stdout: 'ok', stderr: '' }) },
+    env: { get: async (name: string) => (envs.push(name), name === 'HOME' ? '/h' : undefined) },
+  }
+  const host = claudeHost(claude as unknown as EngineInterface)
+  expect(await host.run(['git', 'status'], { cwd: '/p' })).toEqual({ exitCode: 0, stdout: 'ok', stderr: '' })
+  expect(runs).toEqual([[['git', 'status'], { cwd: '/p' }]])
+  expect(await host.env('HOME')).toBe('/h')
+  // a name symcc doesn't read is never asked for
+  expect(await host.env('PATH')).toBe(undefined)
+  expect(envs).toEqual(['HOME'])
+  expect(host.words.tool('symcc', 'board')).toBe('mcp__symcc__board')
+  expect(host.words.roleTools.extra).toEqual(['WebSearch', 'WebFetch'])
+})
+
+test("Claude Code's adapter: host.lead.usage reads the lead's calls from Claude Code's session logs through the same host", async () => {
+  const listed: string[] = []
+  const claude = {
+    env: { get: async (name: string) => (name === 'HOME' ? '/h' : undefined) },
+    fs: { list: async (d: string) => (listed.push(d), []) },
+  }
+  const host = claudeHost(claude as unknown as EngineInterface)
+  expect(await host.lead.usage('/p/app', { kind: 'all' }, 0)).toEqual({ lead: [], leadSessions: 0, leadFrom: "Claude Code's session logs" })
+  expect(listed).toEqual(['/h/.claude/projects/-p-app'])
 })

@@ -1,7 +1,8 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
 import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
-import { type $, type PaneView, S, panelValues } from '../state'
+import { type PaneView, S } from '../state'
+import { type $, panelValues } from '../../claude/panel'
 import { openPane } from './open'
 import { claudeHost } from '../../claude/host'
 

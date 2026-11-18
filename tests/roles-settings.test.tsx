@@ -87,6 +87,10 @@ function fakeRoles(on: On, mine: Record<string, string>, board?: () => unknown) 
 
 type Eng = Engine
 
+/** Each test here mounts the panel and opens every Settings group first, many redraws: under a full parallel run
+ *  that can take longer than the default 5 seconds, so they get more time (as search.test.tsx's panel tests do). */
+const PANEL = { timeoutMs: 20_000 }
+
 /** Starts the session (so the plugin knows its project folder) and mounts the panel on its Settings view, every group open. */
 async function settingsOnly($: Eng) {
   await $.session.start({ cwd: '/proj' } as never)
@@ -102,7 +106,7 @@ async function settings($: Eng) {
   return ui
 }
 
-test('Settings shows one Roles row (count and off count), not the roles; it opens the Roles page and Back returns', async ($, on) => {
+test('Settings shows one Roles row (count and off count), not the roles; it opens the Roles page and Back returns', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   fakeRoles(on, { 'mobile.md': '---\ndescription: phone apps\n---\n', 'docs.md': '---\ndescription: writes the docs\noff: true\n---\n' })
   const ui = await settingsOnly($)
@@ -129,7 +133,7 @@ test('Settings shows one Roles row (count and off count), not the roles; it open
   await ui.unmount()
 })
 
-test('Settings lists every role: built-in, replaced, added and off, each with its description', async ($, on) => {
+test('Settings lists every role: built-in, replaced, added and off, each with its description', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   fakeRoles(on, { 'tester.md': '---\ndescription: my own tests\n---\n- mine\n', 'mobile.md': '---\ndescription: phone apps\n---\n', 'docs.md': '---\ndescription: writes the docs\noff: true\n---\n' })
   const ui = await settings($)
@@ -146,7 +150,7 @@ test('Settings lists every role: built-in, replaced, added and off, each with it
   await ui.unmount()
 })
 
-test('a role opens in full; Turn off and Turn on write its file; general has no Turn off', async ($, on) => {
+test('a role opens in full; Turn off and Turn on write its file; general has no Turn off', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   const { mine } = fakeRoles(on, {})
   const ui = await settings($)
@@ -175,7 +179,7 @@ test('a role opens in full; Turn off and Turn on write its file; general has no 
   await ui.unmount()
 })
 
-test('Reset shows only for a replaced built-in, Remove only for an added role (after a confirm step)', async ($, on) => {
+test('Reset shows only for a replaced built-in, Remove only for an added role (after a confirm step)', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   const { mine } = fakeRoles(on, { 'tester.md': '---\ndescription: my own tests\n---\n', 'mobile.md': '---\ndescription: phone apps\n---\n' })
   const ui = await settings($)
@@ -201,7 +205,7 @@ test('Reset shows only for a replaced built-in, Remove only for an added role (a
   await ui.unmount()
 })
 
-test('New role makes .symcc/roles/<name>.md from the template and opens it; Edit on a built-in saves a copy', async ($, on) => {
+test('New role makes .symcc/roles/<name>.md from the template and opens it; Edit on a built-in saves a copy', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   const { mine } = fakeRoles(on, {})
   const ui = await settings($)
@@ -236,7 +240,7 @@ test('New role makes .symcc/roles/<name>.md from the template and opens it; Edit
   await ui.unmount()
 })
 
-test('a broken replaced built-in shows why with Reset only; Reset brings the built-in back', async ($, on) => {
+test('a broken replaced built-in shows why with Reset only; Reset brings the built-in back', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   const { mine } = fakeRoles(on, { 'tester.md': '---\nmodel: sonnet\n---\n' })
   const ui = await settings($)
@@ -252,7 +256,7 @@ test('a broken replaced built-in shows why with Reset only; Reset brings the bui
   await ui.unmount()
 })
 
-test('a broken added role shows why with Remove (after the confirm step); New role with its name says to open it', async ($, on) => {
+test('a broken added role shows why with Remove (after the confirm step); New role with its name says to open it', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   const { mine } = fakeRoles(on, { 'mobile.md': 'no front matter\n' })
   const ui = await settings($)
@@ -274,7 +278,7 @@ test('a broken added role shows why with Remove (after the confirm step); New ro
   await ui.unmount()
 })
 
-test("a role whose name: line differs from its file name shows a mark on its row and the warning on its page", async ($, on) => {
+test("a role whose name: line differs from its file name shows a mark on its row and the warning on its page", PANEL, async ($, on) => {
   stateOf(on, VIEW)
   fakeRoles(on, { 'tester.md': '---\nname: qa\ndescription: my own tests\n---\n' })
   const ui = await settings($)
@@ -289,7 +293,7 @@ test("a role whose name: line differs from its file name shows a mark on its row
   await ui.unmount()
 })
 
-test("the checker role's page shows the checker's own built-in prompt, the one it really goes into", async ($, on) => {
+test("the checker role's page shows the checker's own built-in prompt, the one it really goes into", PANEL, async ($, on) => {
   stateOf(on, VIEW)
   fakeRoles(on, { 'checker.md': '---\ndescription: tries to break a change\n---\n- try empty input\n' })
   const ui = await settings($)
@@ -304,7 +308,7 @@ test("the checker role's page shows the checker's own built-in prompt, the one i
   await ui.unmount()
 })
 
-test("the checker role has no Turn on / off: its page points to the checker setting and says whether it is on", async ($, on) => {
+test("the checker role has no Turn on / off: its page points to the checker setting and says whether it is on", PANEL, async ($, on) => {
   // the Settings view draws the checker setting from the published view, as publish (lead.ts) puts it there from the board
   const view = { ...VIEW.view, value: { ...VIEW.view.value, checker: false } }
   let version = 1
@@ -331,7 +335,7 @@ test("the checker role has no Turn on / off: its page points to the checker sett
   await ui.unmount()
 })
 
-test('a role page lists the placeholders its checklist can use, and shows the built-in prompt it goes in (view only, {{role}} marked)', async ($, on) => {
+test('a role page lists the placeholders its checklist can use, and shows the built-in prompt it goes in (view only, {{role}} marked)', PANEL, async ($, on) => {
   stateOf(on, VIEW)
   fakeRoles(on, {})
   const ui = await settings($)
