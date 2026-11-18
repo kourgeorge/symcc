@@ -1,11 +1,12 @@
 // The board panel's Tasks view in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's list
-// (list.tsx) packs each task on one cut line of a button; here each task is one button of two readable lines:
-//   ● T-404  Pick the colors for the review mark on light themes   (the ID dim, the title plain, up to two lines,
-//   ? waiting for 1m · Yellow or blue for review?                    then "(more)"; "●" marks a task that needs you)
+// (list.tsx) packs each task on one cut line of a button; here each task is two readable lines of text that wrap:
+//   ● T-404  Pick the colors for the review mark on light themes   (the ID a link that opens the task, the title plain,
+//   ? waiting for 1m · Yellow or blue for review?                    up to two lines, then "(more)"; "●": it needs you)
 // the second line dim: the status in its color and how long it has run or waited, the kind or role, the try, the
 // question or why it failed. Grouped under headings with their colored mark and a count badge (Questions for you,
-// Waiting for you, Review, Failed, Doing, To do), a line of space between them, then Backlog, Done and Dropped, folded.
-// No key hints: the mode switch is a button and the search a box in the footer. An empty board says so, with one
+// Waiting for you, Review, Failed, Doing, To do), a line of space between them, then Backlog, Done and Dropped, folded
+// (each fold a link). No Buttons for rows or folds: VS Code draws a Button as a filled blue box whose label never wraps.
+// No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
 import { archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowExtra, taskMatches, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration } from '../../board'
@@ -13,7 +14,7 @@ import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { vsFold, vsFooter, vsHeading, twoLines, MORE } from './vscode'
+import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, MORE, NO_TITLE } from './vscode'
 
 /** The status groups of the VS Code list, top to bottom: what needs you first, then what runs and what waits. */
 const GROUPS: { label: string; has: SymccStatus[] }[] = [
@@ -69,7 +70,9 @@ export function listPageVs($: $, pane: PaneParts) {
     return `${mark[x.status]} ${cell && cell !== x.status ? cell : word[x.status]}`
   }
 
-  /** One task, one plain button: the ID dim and the title (up to two lines), then a dim line with the rest. */
+  /** One task: a line of text, its ID a link that opens it, then the title (up to two lines; bold when it needs you,
+   *  dim when closed), with "●" first in the status color when it needs you; under it a dim line with the rest.
+   *  Text, not a Button, so it wraps (VS Code draws a Button as a blue box on one line). */
   const taskRow = (x: SymccTask, depth = 0) => {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
     const needs = needsYou(x)
@@ -82,24 +85,22 @@ export function listPageVs($: $, pane: PaneParts) {
     const tagged = rest.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     if (kind && !tagged) rest = rest ? `${kind} · ${rest}` : kind
     const title = twoLines(x.title, width - depth, (needs ? 2 : 0) + x.id.length + 2)
-    const open = act(() => panelValues($).updateOpened(() => x.id))
+    const href = vsHref('task', x.id)
+    const words = `${mdText(title.text)}${title.cut ? ` ${mdText(MORE)}` : ''}`
     return (
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
-        <Button key={row(x.id)} plain label={`${x.id} ${x.title}`} autoFocus={focusFirst()} onPress={open}>
-          {needs ? <Text bold color={C(tone[x.status] ?? 'warning')}>● </Text> : null}
-          <Text color={C('inactive')}>{x.id}</Text>
-          <Text>{'  '}</Text>
-          <Text wrap="wrap" bold={needs} color={C(closed ? 'inactive' : 'text')}>
-            {title.text}
-          </Text>
-          {title.cut ? <Text color={C('inactive')}>{MORE}</Text> : null}
-          {'\n'}
-          <Text wrap="wrap" color={C('inactive')}>
-            <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
-            {rest ? ` · ${rest}` : ''}
-            {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
-          </Text>
-        </Button>
+        <Box key={`vs-task-${x.id}-top`} flexDirection="row">
+          {needs ? <Text key="needs" bold color={C(tone[x.status] ?? 'warning')}>● </Text> : null}
+          <Box key="title" flexDirection="column" flexGrow={words ? 1 : 0} flexShrink={1}>
+            {vsLink(vs, row(x.id), words ? `${mdLink(x.id, href)} \u00a0${needs ? `**${words}**` : words}` : mdLink(x.id, href), [[href, act(() => panelValues($).updateOpened(() => x.id))]], closed)}
+          </Box>
+          {words ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
+        </Box>
+        <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
+          <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
+          {rest ? ` · ${rest}` : ''}
+          {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
+        </Text>
       </Box>
     )
   }
@@ -115,19 +116,20 @@ export function listPageVs($: $, pane: PaneParts) {
           {questions.map(q => {
             const asked = ago(q.asked_at)
             const choices = q.options?.length ?? 0
+            const href = vsHref('question', q.id)
             return (
               <Box key={`vs-question-${q.id}`} flexDirection="column">
-                <Button key={row(q.id)} plain label={`${q.id} ${q.text}`} autoFocus={focusFirst()} onPress={act(() => panelValues($).updateOpened(() => q.id))}>
-                  <Text bold color={C('warning')}>● </Text>
-                  <Text color={C('inactive')}>{q.id}</Text>
-                  <Text>{'  '}</Text>
-                  <Text wrap="wrap" bold color={C('text')}>{q.text}</Text>
-                  {'\n'}
-                  <Text wrap="wrap" color={C('inactive')}>
-                    <Text color={C('warning')}>{`? question for you${asked ? ` for ${asked}` : ''}`}</Text>
-                    {choices ? ` · ${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''}
-                  </Text>
-                </Button>
+                <Box key={`vs-question-${q.id}-top`} flexDirection="row">
+                  <Text key="needs" bold color={C('warning')}>● </Text>
+                  <Box key="title" flexDirection="column" flexGrow={mdText(q.text) ? 1 : 0} flexShrink={1}>
+                    {vsLink(vs, row(q.id), mdText(q.text) ? `${mdLink(q.id, href)} \u00a0**${mdText(q.text)}**` : mdLink(q.id, href), [[href, act(() => panelValues($).updateOpened(() => q.id))]])}
+                  </Box>
+                  {mdText(q.text) ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
+                </Box>
+                <Text key={`vs-question-${q.id}-info`} wrap="wrap" color={C('inactive')}>
+                  <Text color={C('warning')}>{`? question for you${asked ? ` for ${asked}` : ''}`}</Text>
+                  {choices ? ` · ${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''}
+                </Text>
               </Box>
             )
           })}
@@ -150,20 +152,18 @@ export function listPageVs($: $, pane: PaneParts) {
   const folded = [
     parts.backlog.length ? (
       <Box key="vs-backlog" flexDirection="column">
-        {vsFold(vs, row('day:backlog'), 'Backlog', parts.backlog.length, backlogOpen, () => ((S.backlogOpen = !S.backlogOpen), redraw()), true, focusFirst())}
+        {vsFold(vs, row('day:backlog'), 'Backlog', parts.backlog.length, backlogOpen, () => ((S.backlogOpen = !S.backlogOpen), redraw()))}
         {backlogOpen ? backlogShown.map(t => taskRow(t, 2)) : null}
         {backlogOpen && backlogMore > 0 ? (
           <Box key="vs-backlog-more-row" paddingLeft={2}>
-            <Button key={row('day:backlog-more')} plain label={`Show ${backlogMore} more`} onPress={() => ((S.backlogAll = true), redraw())}>
-              <Text color={C('inactive')}>{`Show ${backlogMore} more`}</Text>
-            </Button>
+            {vsLink(vs, row('day:backlog-more'), mdLink(`Show ${backlogMore} more`, vsHref('more', 'backlog')), [[vsHref('more', 'backlog'), () => ((S.backlogAll = true), redraw())]], true)}
           </Box>
         ) : null}
       </Box>
     ) : null,
     parts.done.length || gone ? (
       <Box key="vs-done" flexDirection="column">
-        {vsFold(vs, row('day:done'), 'Done', parts.done.length, doneOpen, () => ((S.doneOpen = !S.doneOpen), redraw()), true, focusFirst(), gone ? archivedNote(gone) : '')}
+        {vsFold(vs, row('day:done'), 'Done', parts.done.length, doneOpen, () => ((S.doneOpen = !S.doneOpen), redraw()), true, gone ? archivedNote(gone) : '')}
         {doneOpen
           ? [
               ...parts.doneToday.map(t => taskRow(t, 2)),
@@ -179,7 +179,7 @@ export function listPageVs($: $, pane: PaneParts) {
     ) : null,
     parts.dropped.length ? (
       <Box key="vs-dropped" flexDirection="column">
-        {vsFold(vs, row('day:dropped'), 'Dropped', parts.dropped.length, droppedOpen, () => ((S.droppedOpen = !S.droppedOpen), redraw()), true, focusFirst())}
+        {vsFold(vs, row('day:dropped'), 'Dropped', parts.dropped.length, droppedOpen, () => ((S.droppedOpen = !S.droppedOpen), redraw()))}
         {droppedOpen ? parts.dropped.map(t => taskRow(t, 2)) : null}
       </Box>
     ) : null,

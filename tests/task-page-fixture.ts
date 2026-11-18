@@ -1,6 +1,6 @@
 // Task pages with a lot in them (a long title, long Markdown details, history, runs, a report, tasks it waits for), one
 // per status, for the tests that draw the task page on several surfaces (see vscode-task-page.test.tsx).
-import type { On } from 'claude-code'
+import type { On, ProcessRunResult } from 'claude-code'
 import type { MockClock } from 'claude-code/testing'
 import { T0, seedBoard } from './board-fixture'
 import { ran, readText } from './fakes'
@@ -72,13 +72,13 @@ export const RICH_TASKS = [
 export const RICH_IDS = RICH_TASKS.map(t => t.id).filter(id => id > 'T-500')
 
 /** Seeds the board with the rich tasks (`opened` the one shown; '' the list, so a press can open another), their report files and a git that answers with no changes. */
-export function seedRich(on: On, opened: string): MockClock {
+export function seedRich(on: On, opened: string, run: (argv: string[]) => ProcessRunResult = () => ran()): MockClock {
   const clock = seedBoard(on, {
     ...(opened ? { opened } : {}),
     view: { shape: 'view-1', value: { tasks: RICH_TASKS, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['claude plugin test .'] } },
   })
   on('fs.read', (_, e, next) => (/reports\/T-5\d\d-try-1\.md$/.test(e.path) ? readText('First try: the tests failed.\n') : /reports\/T-5\d\d-try-2\.md$/.test(e.path) ? readText(REPORT) : next(e)))
-  on('process.run', () => ({ value: ran() }))
+  on('process.run', (_, e) => ({ value: run((e as { argv?: string[] }).argv ?? []) }))
   on('fs.exists', () => ({ value: false }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))

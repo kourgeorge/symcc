@@ -252,18 +252,27 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   let beat: { cancel(): void } | null = null
   let tryNo: number | undefined
   let limitMs = finishLimitMs(0)
+  // The try ends now (checking and merging is not counted). The turn result gives tokens but
+  // no dollar cost, so `cost` stays empty until Claude Code reports one.
+  // The task is marked as being tested and merged (refreshed while that runs), so a reloaded
+  // copy of the plugin sees it and doesn't send the task back to "todo" meanwhile.
+  const ended = now()
   try {
-    // The try ends now (checking and merging is not counted). The turn result gives tokens but
-    // no dollar cost, so `cost` stays empty until Claude Code reports one.
-    // The task is marked as being tested and merged (refreshed while that runs), so a reloaded
-    // copy of the plugin sees it and doesn't send the task back to "todo" meanwhile.
-    const ended = now()
     tryNo = await change(host, x => {
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
       limitMs = finishLimitMs(x.test_commands.length)
       return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens }) } : {}) }, ended), t.attempts] as [Board, number]
     })
+  } catch {
+    // T-452: board.json can't be read (load already told the owner, once). The report is kept here and
+    // finished as usual by the regular check once the board can be read again (resumeKept); board.json is
+    // left as it is, and the task is not sent back to "todo" meanwhile (see sendBackIdle).
+    keptHandBacks.set(agentId, { w, answer, end, tokens })
+    finishing.delete(w.task)
+    return
+  }
+  try {
     if (tryNo !== undefined) beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, w.task, tryNo!).catch(() => undefined))
     // The whole step has a time limit (finishLimitMs: it grows with the test commands): the heartbeat above keeps going even when
     // the step hangs, so without it a stuck step would keep its task "doing" forever. Past the limit
@@ -283,6 +292,22 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   }
   await checkerAgainNow(host, w.task)
   await pump(host)
+}
+
+/** T-452: hand-backs of workers whose task couldn't be marked finished (board.json couldn't be read), by agent id; resumeKept finishes them. */
+const keptHandBacks = new Map<string, { w: Worker; answer: string; end: TurnEnd; tokens?: SymccTokens }>()
+
+/** Whether task `id` has a worker's hand-back kept until board.json can be read again (see keptHandBacks). */
+const keptFor = (id: string) => [...keptHandBacks.values()].some(k => k.w.task === id)
+
+/** T-452: board.json can be read again: each kept hand-back is finished as usual (tests, merge); one that fails to again is kept again. */
+function resumeKept(host: Host) {
+  for (const [agentId, k] of [...keptHandBacks]) {
+    keptHandBacks.delete(agentId)
+    workers.set(agentId, k.w)
+    // workerFinished marks the task as finishing before its first wait, so the rest of the check leaves it alone
+    void workerFinished(host, agentId, k.answer, k.end, k.tokens).catch(() => undefined)
+  }
 }
 
 /** T-428: tasks whose checker was stopped before its verdict (see afterChecker): their checker step starts again once the step that ran it is over. */
@@ -1666,7 +1691,7 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
   const working = agents.filter(a => !stopped.has(a.id))
-  const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !onPurpose.has(t.id) && !finishingNow(t, Date.now())
+  const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !keptFor(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !onPurpose.has(t.id) && !finishingNow(t, Date.now())
   // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
   const idle = (await load(host)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working.map(agentState), S.N.name).length))
   const merged = new Map<string, string>()
@@ -1716,6 +1741,7 @@ export async function check(host: Host) {
   await cleanLeftoverTmp(host).catch(() => undefined)
   await stopOrphans(host)
   const b = await load(host)
+  resumeKept(host)
   if (!symccOn(b)) return
   const agents = await host.agents.list().catch(() => undefined)
   const nowMs = Date.now()
