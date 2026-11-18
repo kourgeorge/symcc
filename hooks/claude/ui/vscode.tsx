@@ -55,8 +55,10 @@ export const logoWidthFor = (vscode: boolean, width: number) => (vscode ? 0 : wi
 
 /** Where VS Code's links point: never opened (the plugin answers the press); `.invalid`, so no real site is named. */
 export const VS_LINK_BASE = 'https://symcc.invalid/'
-/** The link for a place on the board: vsHref('task', 'T-372') is "https://symcc.invalid/task/T-372". */
-export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more' | 'file' | 'run', id: string) => `${VS_LINK_BASE}${kind}/${encodeURIComponent(id)}`
+/** The link for a place on the board: vsHref('task', 'T-372') is "https://symcc.invalid/task/T-372". "(" and ")" are
+ *  encoded too, since an unmatched one would end the markdown link early (a file named "src/a).ts"). */
+export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more' | 'file' | 'run', id: string) =>
+  `${VS_LINK_BASE}${kind}/${encodeURIComponent(id).replace(/[()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())}`
 
 /** Text put into markdown as it is: on one line, every markdown mark escaped (a title with "*" or "[x]" stays plain). */
 export const mdText = (s: string) => s.replace(/\s+/g, ' ').trim().replace(/[\\`*_[\]<>~|#!&]/g, '\\$&')

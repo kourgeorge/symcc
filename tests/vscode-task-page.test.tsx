@@ -318,3 +318,16 @@ test('in VS Code the changed files of a task in review are links, and pressing o
     await ui.unmount()
   }
 })
+
+// T-448: a file name with an unmatched bracket keeps a whole link: "(" and ")" are encoded, so the markdown link ends
+// at its own ")" and the href is the one listed in pressableLinks
+test('vsHref encodes "(" and ")", so a file named src/a).ts or a(b.ts gets a whole link', () => {
+  for (const f of ['src/a).ts', 'a(b.ts']) {
+    const href = vsHref('file', f)
+    expect(href, f).not.toMatch(/[()]/)
+    expect(decodeURIComponent(href.slice(href.lastIndexOf('/') + 1)), f).toBe(f)
+    const md = mdLink(f, href)
+    expect(md.slice(md.indexOf('](') + 2, -1), f).toBe(href)
+  }
+  expect(vsHref('file', 'src/a).ts')).toBe('https://symcc.invalid/file/src%2Fa%29.ts')
+})
