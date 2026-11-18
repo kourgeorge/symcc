@@ -4435,7 +4435,11 @@ const CHECKING_NOTE = 'checking and merging'
 async function twoChecking(w: ReturnType<typeof world>, t2: Partial<BoardTask> = {}): Promise<[SymccTask, SymccTask]> {
   const [b0] = boardWith('auto', ['npm test'])
   let [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)
-  for (const id of ['T-1', 'T-2']) b = patchTask(b, id, { status: 'doing', attempts: 1, note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() }, ...(id === 'T-2' ? t2 : {}) }, ISO)
+  // status first: a check mark given with a change of status is dropped (patchTask)
+  for (const id of ['T-1', 'T-2']) {
+    b = patchTask(b, id, { status: 'doing', attempts: 1 }, ISO)
+    b = patchTask(b, id, { note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() }, ...(id === 'T-2' ? t2 : {}) }, ISO)
+  }
   await saveBoard(w.$, b)
   return [find(b, 'T-1')!, find(b, 'T-2')!]
 }
@@ -4461,7 +4465,9 @@ test('two tasks reaching their tests at once run them one after the other; the s
   expect(await one).toBe('one')
   expect(await two).toBe('two')
   expect(log).toEqual(['T-1 start (lock T-1)', 'T-1 end', 'T-2 start (lock T-2)'])
-  expect(seen).toEqual([waitingTestsNote('T-1'), waitingTestsNote('T-1'), waitingTestsNote('T-1')])
+  // every look while it waits names T-1 (never itself, even when T-1 lets go between its try and its look)
+  expect(seen.length).toBeGreaterThanOrEqual(3)
+  expect(seen.every(n => n === waitingTestsNote('T-1'))).toBe(true)
   expect(waitingTestsNote('T-5')).toBe("waiting for another task's tests (T-5)")
   expect(w.sleeps.every(ms => ms === TEST_LOCK_POLL_MS)).toBe(true)
   // the waiting one's time limit stops while it waits and starts again once its tests begin; the first never waited
@@ -4555,7 +4561,8 @@ test('a finished task waiting a long time for another task\'s tests still merges
   // T-2, in another session, is running its tests now and holds the test lock
   await change(w.$, x => {
     const [y] = addTask(x, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)
-    return patchTask(y, 'T-2', { status: 'doing', attempts: 1, checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
+    const z = patchTask(y, 'T-2', { status: 'doing', attempts: 1 }, ISO)
+    return patchTask(z, 'T-2', { checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
   })
   w.put(TLOCK, testLockText('T-2', 'other-session', Date.now()))
   const notes: (string | undefined)[] = []

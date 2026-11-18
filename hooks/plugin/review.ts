@@ -376,6 +376,7 @@ export async function withTestLock<T>($: Host, t: Pick<SymccTask, 'id' | 'status
   let shown = ''
   let before: string | undefined
   let waited = false
+  let again = false
   try {
     file = path(`${S.N.dir}/${TEST_LOCK_FILE}`)
     for (;;) {
@@ -389,6 +390,12 @@ export async function withTestLock<T>($: Host, t: Pick<SymccTask, 'id' | 'status
         }
       }
       const held = await $.fs.read(file).catch(() => null)
+      // let go between our try and our look: try again at once (only once in a row, so a lock that can't be read never spins)
+      if (testLine[0] === me && held === null && !again) {
+        again = true
+        continue
+      }
+      again = false
       if (testLine[0] === me && held !== null) {
         const st = await $.fs.stat(file).catch(() => null)
         if (await testLockStale($, t.id, held, st?.mtimeMs)) {
@@ -396,7 +403,7 @@ export async function withTestLock<T>($: Host, t: Pick<SymccTask, 'id' | 'status
           continue
         }
       }
-      const holder = parseTestLock(held)?.task ?? testLine[0]?.id ?? 'another task'
+      const holder = parseTestLock(held)?.task ?? (testLine[0] && testLine[0] !== me ? testLine[0].id : 'another task')
       if (!waited) {
         waited = true
         turn?.(false)
