@@ -217,6 +217,17 @@ test("the checker's first problem is taken from its list of problems, not its op
   expect(firstProblem('The save button is never enabled.\nAlso no test.')).toBe('The save button is never enabled.')
 })
 
+test("a long checker report that quotes a \"(fail)\" line is cut plainly, with no failed-tests heading as its first problem", () => {
+  const report = ['Problems:', '- tests/x.test.ts:12 fails:', '(fail) something [1ms]', '  Error: bad', ...Array.from({ length: 100 }, (_, i) => `detail line ${i} ${'q'.repeat(40)}`)].join('\n')
+  const kept = checkerOutput(report)
+  expect(kept).not.toContain(failedTestsHead(1))
+  expect(kept).toEndWith(`detail line 99 ${'q'.repeat(40)}`)
+  expect(kept.length).toBeLessThanOrEqual('The checker found these problems:\n…'.length + TEST_OUTPUT_CHARS)
+  expect(firstProblem(kept)).not.toContain('failed test')
+  // a short report is kept whole
+  expect(checkerOutput('Problems:\n(fail) a [1ms]\n  Error: x')).toBe('The checker found these problems:\nProblems:\n(fail) a [1ms]\n  Error: x')
+})
+
 test("the checker's first problem: symcc's own comma format, numbered and bold lines, never a 'What passed' line", () => {
   const comma = 'I found one real problem.\n\nWhat passed:\n- The tests in tests/failure.test.ts pass.\n\nProblems:\nhooks/core/failure.ts:37, strips only "try N:"'
   expect(firstProblem(checkerOutput(comma))).toBe('hooks/core/failure.ts:37, strips only "try N:"')
