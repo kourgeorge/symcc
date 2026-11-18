@@ -6,6 +6,7 @@ import { S, skippedKinds } from '../hooks/plugin/state'
 import { loadKinds } from '../hooks/plugin/kinds'
 import { leadGuide } from '../hooks/plugin/tools'
 import { BUILT_IN_KIND_TEXTS } from '../kinds'
+import { ALL_FEATURES } from '../hooks/host'
 
 const ROOT = '/proj'
 const MINE = `${ROOT}/.symcc/kinds`
@@ -21,6 +22,7 @@ function setup(mine: Record<string, string> = {}) {
     return null
   }
   const $ = {
+    features: ALL_FEATURES,
     plugin: { root: PLUGIN },
     fs: {
       exists: async (p: string) => {

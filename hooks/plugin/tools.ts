@@ -6,7 +6,7 @@ import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBr
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, toolName } from './state'
-import type { Host } from '../host'
+import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
@@ -268,7 +268,11 @@ export function manual(arg: string): string {
   return hit ? MAN[hit]! : `No topic "${arg.trim()}". Topics: ${Object.keys(MAN).join(', ')}`
 }
 
-export const leadGuide = () => `## ${S.N.name}: you are the lead (main conversation only)
+/**
+ * The lead's guide, for the host's `features` (see HostFeatures; every one on unless given): without plan mode the
+ * plan mode paragraph is left out. The host's words (S.W) name its plan mode.
+ */
+export const leadGuide = (features: HostFeatures = ALL_FEATURES) => `## ${S.N.name}: you are the lead (main conversation only)
 This section is for the main conversation only. If you are a subagent (a ${S.N.name} worker or scout, or any other), ignore it and do the job you were given.
 
 The project has a shared task board (${S.N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
@@ -298,8 +302,8 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The owner can pause one scout (p on its page, or /${S.N.name}-scout <name> pause): a paused scout doesn't run on its timer until the owner resumes it, but "run now" (the owner's, or your scouts run) still runs it once and it stays paused. Only the owner pauses or resumes scouts; you can't.
 - To stop work: ${S.N.name} pause pauses one task (its worker is stopped; ${S.N.name} resume continues it later, with a fresh worker). ${S.N.name} settings mode "off" stops every worker and scout; mode "review" or "auto" starts work again.
 - Ideas or work that is not clear yet go to the backlog (${S.N.name} add with backlog: true); they never start until moved to todo (${S.N.name} change backlog: false). Say 'stash this' / 'move T-5 to todo'. A scout's "maybe later" finding can go to the backlog too. The scout_findings setting (${S.N.name} settings): "auto" (the default) lets you decide where a scout finding goes; "backlog" puts every task you add with origin_by scout in the backlog, whatever you ask (the answer says "scout_findings is backlog: added to the backlog"); it starts only when the owner moves it to todo (or you do, on the owner's word). With backlog, still tell the owner what the scout found, so they can decide. ${S.N.name} change backlog: true stashes a to do, paused or failed task (a running one is stopped first). The mode (off, review, auto) does not touch backlog items.
-- Plan mode (Claude Code's own planning mode, Shift+Tab): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
-- ${S.N.name} checks every two minutes on its own: it starts ready tasks, asks the owner for more time for a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
+${features.planMode ? `- Plan mode (${S.W.planMode}): only plan. Nothing starts: every task you add goes to the backlog (the answer says "plan mode: ... added to the backlog"), and no new worker or scout starts; workers already running keep going. When plan mode ends you are told once which tasks were added to the backlog during it: ask the owner which to move to todo; don't move them yourself.
+` : ''}- ${S.N.name} checks every two minutes on its own: it starts ready tasks, asks the owner for more time for a worker that runs longer than max_minutes (${S.N.name} settings), and reminds you about failed tasks nobody handled.
 ${rolesLeadText(S.roles, S.N.name)}
 ${kindsLeadText(S.kinds, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off; checker can't be turned on or off and is never a task's role: the checker setting runs it). An off role is never picked for a new task.
@@ -360,6 +364,9 @@ export const TOOLS = () => [
   },
 ]
 
+/** Why the stats leave the lead out on a host that can't tell its model calls (features.leadUsage off). */
+export const LEAD_USAGE_UNREAD = "the lead's calls can't be read here"
+
 /**
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
@@ -375,7 +382,7 @@ export async function statsText($: Host, args: string, full?: boolean): Promise<
   const r = readArchive(text)
   const archiveProblem = r.broken ? `${S.N.archiveFile} can't be read (${r.broken})` : !r.archive.tasks.length && archivedCount(b) ? `${archivedCount(b)} archived tasks, but ${S.N.archiveFile} holds none` : undefined
   const nowMs = Date.now()
-  const team: TeamInput = { ...(await $.lead.usage(S.root, range, nowMs)), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
+  const team: TeamInput = { ...($.features.leadUsage ? await $.lead.usage(S.root, range, nowMs) : { leadProblem: LEAD_USAGE_UNREAD }), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
   return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })

@@ -4,7 +4,8 @@ import type { Host } from '../host'
 
 // ---------------- telling the lead ----------------
 // Workers and scouts report to the main chat as a prompt from this plugin. Several
-// reports close together go in one message, sent when the chat is idle.
+// reports close together go in one message, sent when the chat is idle (on a host that can't
+// wake the lead, kept until the host takes it on its next hook: takeBoardUpdate).
 // The owner's own actions (approve, drop, settings, ...) don't wake the lead: they wait
 // as short "Meanwhile the owner:" lines at the top of the next update sent for a real reason.
 
@@ -18,18 +19,32 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
   return ['Meanwhile the owner (nothing to answer):', ...lines.slice(0, shown).map(l => `- ${l}`), ...(more > 0 ? [`- +${more} more`] : [])].join('\n')
 }
 
-/** Tells the lead `text` now (in the next board update, sent in a moment when the chat is idle). */
+/**
+ * Tells the lead `text` in the next board update. A host that wakes the lead at once (features.wakeLead 'now') sends
+ * it in a moment, so several close together go in one message; on any other the update waits until the host takes
+ * it (takeBoardUpdate) on its next hook that can carry text.
+ */
 export function tellLead(host: Host, text: string) {
   if (!S.enabledNow) return // the plugin is off: no "[name] Board update" messages
   leadQueue.push(text)
+  if (host.features.wakeLead !== 'now') return
   if (S.leadTimer) return
   S.leadTimer = host.clock.after(1500, () => {
     S.leadTimer = null
-    const body = leadQueue.splice(0).join('\n\n')
-    if (!body || !S.enabledNow) return
-    const before = meanwhileText(meanwhile.splice(0))
-    void host.lead.send(`[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.`).catch(() => undefined)
+    const update = takeBoardUpdate()
+    if (update) void host.lead.send(update).catch(() => undefined)
   })
+}
+
+/**
+ * The board update waiting for the lead, taken from the queue (with the "Meanwhile the owner:" lines at its top);
+ * undefined when nothing waits (only "Meanwhile" lines don't make one) or the plugin is off.
+ */
+export function takeBoardUpdate(): string | undefined {
+  const body = leadQueue.splice(0).join('\n\n')
+  if (!body || !S.enabledNow) return undefined
+  const before = meanwhileText(meanwhile.splice(0))
+  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.`
 }
 
 /** An answer cut to one short line, for a "Meanwhile" line. */

@@ -113,12 +113,12 @@ export async function publish(host: Host, b: Board) {
 }
 
 let statusText: (() => string | undefined) | undefined
-/** Shows `text()` as the line above the prompt; refreshStatus draws it again later. */
+/** Shows `text()` as the line above the prompt; refreshStatus draws it again later. A host with no band (features.band off) shows it nowhere. */
 function showStatus(host: Host, text: () => string | undefined) {
   statusText = text
-  host.ui.status(text())
+  if (host.features.band) host.ui.status(text())
 }
 /** Draws the line above the prompt again, so "next: x in 38m" counts down (scouts.ts calls it every minute). */
 export function refreshStatus(host: Host) {
-  if (statusText) host.ui.status(statusText())
+  if (statusText && host.features.band) host.ui.status(statusText())
 }

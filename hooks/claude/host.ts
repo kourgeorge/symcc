@@ -4,9 +4,9 @@
 // "<name>:scout"), listed by $.agent.list() and told to stop with $.session.send. The lead is the main chat, sent a
 // prompt with $.prompt.submit, and its usage is read from Claude Code's session logs (claude/lead-usage.ts);
 // `ui.refresh` is $.ui.invalidate('ui.render'), `ui.panel` carries the board panel's values, which only Claude Code's
-// `$` holds (claude/panel.ts), and `words` gives symcc's tools their "mcp__<name>__<tool>" names.
+// `$` holds (claude/panel.ts), `words` gives symcc's tools their "mcp__<name>__<tool>" names, and `features` are all on.
 import type { EngineInterface } from 'claude-code'
-import type { Host, HostAgentStart, HostWords } from '../host'
+import { type Host, type HostAgentStart, type HostWords, ALL_FEATURES } from '../host'
 import { S } from '../plugin/state'
 import { ROLE_TOOLS, claudeNames, workerTypeFor } from './agent-types'
 import { hostAgent, isNotReady, scoutNotReady } from './agents'
@@ -21,10 +21,15 @@ export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: st
   return a.kind === 'worker' ? workerTypeFor({ tools: a.tools ? [...a.tools] : undefined }, name) : claudeNames(name).scout
 }
 
-/** Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role may add WebSearch and WebFetch. */
+/**
+ * Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role may add WebSearch and WebFetch; a
+ * worker's file tools are Read, Edit and Write; plan mode is turned on with Shift+Tab.
+ */
 export const CLAUDE_WORDS: HostWords = {
   tool: (name, tool) => claudeNames(name).tool(tool),
   roleTools: ROLE_TOOLS,
+  fileTools: 'Read, Edit and Write',
+  planMode: "Claude Code's own planning mode, Shift+Tab",
 }
 
 /** An error from a start, marked when it only means the agent type isn't there yet (see notReadyYet in host.ts). */
@@ -76,6 +81,8 @@ function envGet($: EngineInterface, name: string): Promise<string | undefined> {
  */
 export function claudeHost($: EngineInterface): ClaudeHost {
   const host: ClaudeHost = {
+    // Claude Code has every feature: the board panel, the band, a lead woken at once, plan mode and the lead's session logs
+    features: ALL_FEATURES,
     plugin: {
       get name() {
         return $.plugin.name

@@ -25,8 +25,10 @@ export async function resetPane($: Host, which?: PaneTab, task = '') {
 /**
  * Opens the board panel (see resetPane for `tab` and `task`). `focus` (default on) moves the
  * cursor into it and lets Esc close it; `quiet` ignores errors (the panel then just isn't shown).
+ * A host with no panel (features.panel off) opens nothing: it answers isPlaced false, so the callers answer in text.
  */
 export async function openPane($: Host, o: { tab?: PaneTab; task?: string; focus?: boolean; quiet?: boolean } = {}) {
+  if (!$.features.panel) return { isPlaced: false }
   const go = async () => {
     await resetPane($, o.tab, o.task)
     return $.ui.open(paneArgs(o.focus !== false))
