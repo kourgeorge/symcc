@@ -620,5 +620,9 @@ test('T-386: a checker shown as ended after the reload: the next check starts a 
   expect(w.spawns.length).toBe(2)
   checkerFinished([...checkerRuns.keys()][0]!, 'OK')
   await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
-  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  // the worker's commit, made before the reload, is still saved on the try (as without a reload)
+  expect(t.merged).toBe(H1)
+  expect(t.runs?.[0]?.commits).toEqual([H1])
 })

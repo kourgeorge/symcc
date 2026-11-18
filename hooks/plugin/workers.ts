@@ -743,6 +743,8 @@ async function reportSummary($: Host, t: SymccTask): Promise<string> {
  * No verdict (the checker was stopped, ran over its time or didn't start): it waits for the owner's review.
  */
 async function afterChecker($: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
+  // the try's commits are saved now, before the checker runs: a reload meanwhile loses `made`, and the checker step started again (checkHeldAgain) only knows the board
+  await recordCommits($, t.id, made)
   turn?.(false)
   const c = await runChecker($, t, b, dir, stop)
   turn?.(true)
