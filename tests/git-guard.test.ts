@@ -235,6 +235,13 @@ const WRITES: [string, string][] = [
   ['{/usr/bin/git,stash}', 'git with {braces}'],
   ['env {git,stash}', 'git with {braces}'],
   ['{git-stash,}', 'git with {braces}'],
+  // text a shell runs again is a command of its own, braces and all
+  ["bash -c '{git,stash}'", 'git with {braces}'],
+  ['sh -c "{git,stash}"', 'git with {braces}'],
+  ["eval '{git,stash}'", 'git with {braces}'],
+  ['bash -c "{,git} stash"', 'git with {braces}'],
+  ["bash -c 'echo; {git,stash}'", 'git with {braces}'],
+  ["bash -c 'cd x && {git,stash}'", 'git with {braces}'],
   ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],

@@ -765,6 +765,9 @@ const plainCd = (p: { text: string; words: string[] }) =>
 /** Whether text holds a command run inside it (`$(...)`, backquotes, `<(...)`, `>(...)`). */
 const RUNS_INSIDE = /\$\(|`|<\(|>\(/
 
+/** Programs that run their text words as a new command line (`bash -c '...'`, `eval '...'`). */
+const RERUNS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'eval'])
+
 /** What gitWriteIn names for a git command with brace expansion in it. */
 const BRACE_WHAT = 'with {braces}'
 
@@ -856,6 +859,19 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     const words = p.words
     for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
     if (!broad && exempt(p)) continue
+    // text a shell runs again (`bash -c '{git,stash}'`, `eval '{git,stash}'`) is a whole command of its own, with its
+    // own brace expansion and splitting, so each word after a shell or eval is checked as one (T-446)
+    const shellAt = words.findIndex(w => RERUNS.has(progName(w)))
+    if (shellAt >= 0) {
+      const rest = words.slice(shellAt + 1)
+      const texts = progName(words[shellAt]!) === 'eval' ? [rest.join(' ')] : rest.filter(w => !/^[-+]/.test(w))
+      for (const t of texts) {
+        const inner = gitScan(t, depth + 1, allow, true)
+        out.git ||= inner.git
+        out.env ??= inner.env
+        if (inner.bad) return { ...out, bad: inner.bad }
+      }
+    }
     // main's broad rule: any word `git` (or ending in `/git`, or `git-xyz`) counts, and text from a `git` on in any
     // word that holds more than one word or command (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
     for (let i = 0; i < words.length; i++) {
