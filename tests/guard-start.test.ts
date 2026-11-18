@@ -32,6 +32,7 @@ function inWorktree(gitAnswers = true, dir = WT, common = `${ROOT}/.git`) {
     run: async argv => {
       runs.push([...argv])
       if (gitAnswers && argv.join(' ') === 'git rev-parse --git-common-dir') return done({ stdout: `${common}\n` })
+      if (gitAnswers && argv.join(' ') === 'git rev-parse --show-toplevel') return done({ stdout: `${dir}\n` })
       return done()
     },
     clock: { every: ms => (timers.push(ms), { cancel: () => undefined }), after: ms => (timers.push(ms), { cancel: () => undefined }) },
@@ -46,7 +47,7 @@ function nothingDone(w: ReturnType<typeof inWorktree>) {
   expect(w.timers).toEqual([])
   expect(w.files.has(`${ROOT}/.symcc/lead.json`)).toBe(false)
   expect(w.files.has(`${WT}/.symcc/board.json`)).toBe(false)
-  expect(w.runs.every(r => r.join(' ') === 'git rev-parse --git-common-dir')).toBe(true)
+  expect(w.runs.every(r => ['git rev-parse --git-common-dir', 'git rev-parse --show-toplevel'].includes(r.join(' ')))).toBe(true)
   expect(S.driving).toBe(false)
 }
 
@@ -141,6 +142,25 @@ test("an owner's own second checkout (another git worktree) is not a worker's fo
   S.root = ''
   expect(await findRoot(w.host)).toBe(true)
   expect(S.root).toBe(own)
+})
+
+test("an owner's own git worktree inside the project (/repo/.worktrees/feature) keeps its own root and runs normally", async () => {
+  const own = `${ROOT}/.worktrees/feature`
+  const w = inWorktree(true, own)
+  expect(await mainRoot(w.host, own)).toBe(own)
+  await sessionStart(w.host)
+  expect(S.root).toBe(own)
+  expect(S.guardOnly).toBe(false)
+  S.root = ''
+  expect(await findRoot(w.host)).toBe(true)
+  expect(S.root).toBe(own)
+})
+
+test('mainRoot: a folder inside the main project (toplevel is the main project) gives the main project', async () => {
+  const w = inWorktree(true, `${ROOT}/src/deep`, '../../.git')
+  ;(w.host as { run: Host['run'] }).run = async argv =>
+    done({ stdout: argv.join(' ') === 'git rev-parse --show-toplevel' ? `${ROOT}\n` : '../../.git\n' })
+  expect(await mainRoot(w.host, `${ROOT}/src/deep`)).toBe(ROOT)
 })
 
 test('/clear in a guard-only copy follows the new id but writes nothing and claims no lead', async () => {

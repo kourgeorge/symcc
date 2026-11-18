@@ -23,7 +23,7 @@ export const path = (rel: string) => {
 /**
  * The main project folder for `dir` when `dir` is one of symcc's own worker folders (T-472), else `dir` itself.
  * git's shared folder (`git rev-parse --git-common-dir`) is the main project's .git, so its parent is the main
- * project; `dir` only counts as a worker's folder when it lies inside <main project>/.<name>/worktrees/ (real paths
+ * project; `dir` is in the main project only when its `git rev-parse --show-toplevel` is that project. Else `dir` only counts as a worker's folder when it lies inside <main project>/.<name>/worktrees/ (real paths
  * compared), so an owner's own second checkout (another `git worktree`) keeps its own root. When git can't tell (no
  * git, a bare repo, a host that runs nothing), a path inside .<name>/worktrees/ is cut back to the project above it.
  */
@@ -36,8 +36,12 @@ export async function mainRoot(host: Host, dir: string): Promise<string> {
     // git answers ".git" (or a relative path) in the main project, an absolute path (/..., C:/... or \\server\...) from a worktree
     const abs = isAbsolute(common) ? common : `${clean}/${common}`
     const main = normalPath(abs.slice(0, -'.git'.length))
-    // the main project itself or a folder inside it (git may answer "../.git" there); else only symcc's worker folders
-    if (within(normalPath(clean), main)) return main
+    // git's own answer: the main project (or a folder inside it) has the main project as its toplevel; any other
+    // toplevel is a worktree, which is a worker's folder (guard-only) or the owner's own worktree (keeps its own root)
+    const t = await host.run(['git', 'rev-parse', '--show-toplevel'], { cwd: clean, timeoutMs: 15_000 }).catch(() => null)
+    const top = t && t.exitCode === 0 ? t.stdout.trim() : ''
+    const inMain = top && isAbsolute(top) ? within(normalPath(top), main) && within(main, normalPath(top)) : !isAbsolute(common)
+    if (inMain) return main
     return (await isWorkerFolder(host, clean, main)) ? main : clean
   }
   const mark = `/${S.N.worktrees}/`
