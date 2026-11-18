@@ -6,6 +6,7 @@ import { DEFAULT_NAME } from '../name'
 import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
+import { jsonObj } from './text'
 import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount } from './runs'
 
 // ---------------- the range ----------------
@@ -437,14 +438,6 @@ const figs = (v: unknown): ScoutUsageFigures | null => {
   const o = v as Record<string, unknown>
   return { runs: num(o.runs), tokens: cleanTokens(o.tokens) ?? {}, ms: num(o.ms) }
 }
-const jsonObj = (text: string | null | undefined): Record<string, unknown> | null => {
-  try {
-    const raw = JSON.parse(String(text ?? ''))
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
-  } catch {
-    return null
-  }
-}
 
 /** The scouts' tokens and time kept in scouts.json under "usage" (scout name → totals); {} for a missing or broken file. */
 export function parseScoutUsage(text: string | null | undefined): Record<string, ScoutUsage> {
@@ -508,35 +501,9 @@ export function keepScoutUsage(next: string, prev: string | null | undefined): s
   return JSON.stringify({ ...n, usage }, null, 2) + '\n'
 }
 
-/** One API call of the lead, read from Claude Code's session log: its message id, when, and its tokens (each kind apart). */
-export type LeadCall = { id: string; atMs: number; tokens: SymccTokens }
-
-/**
- * The lead's calls in one session log (Claude Code's <session>.jsonl): only assistant lines of the main chat
- * (not sidechains) with usage; only the usage numbers are read. A call written over several lines counts once.
- */
-export function leadCalls(jsonl: string): LeadCall[] {
-  const byId = new Map<string, LeadCall>()
-  let n = 0
-  for (const line of String(jsonl ?? '').split('\n')) {
-    if (!line.includes('"usage"')) continue
-    const o = jsonObj(line)
-    if (!o || o.type !== 'assistant' || o.isSidechain === true) continue
-    const m = o.message as { id?: unknown; usage?: Record<string, unknown> } | undefined
-    const u = m?.usage
-    if (!u || typeof u !== 'object') continue
-    const tokens = cleanTokens({ input: u.input_tokens, output: u.output_tokens, cache_write: u.cache_creation_input_tokens, cache_read: u.cache_read_input_tokens })
-    if (!tokens) continue
-    const id = typeof m!.id === 'string' && m!.id ? m!.id : `line-${n++}`
-    const atMs = Date.parse(typeof o.timestamp === 'string' ? o.timestamp : '')
-    const old = byId.get(id)
-    if (!old || tokenCount(tokens) > tokenCount(old.tokens)) byId.set(id, { id, atMs, tokens })
-  }
-  return [...byId.values()]
-}
-
-/** Claude Code's folder name for a project path under ~/.claude/projects: every character not a letter or digit becomes "-". */
-export const projectFolderName = (root: string) => String(root ?? '').replace(/[^a-zA-Z0-9]/g, '-')
+/** One API call of the lead, as the host's adapter reads it (for Claude Code, see claude/lead-usage.ts): its message id,
+ *  when, its tokens (each kind apart), and where it was read from (shown by /<name>-stats full). */
+export type LeadCall = { id: string; atMs: number; tokens: SymccTokens; from?: string }
 
 /** The time span a range covers, in ms ([from, to], either open); for an id range, from the first task made to the last change. */
 export function rangeSpan(r: StatsRange, tasks: Pick<SymccTask, 'created_at' | 'updated_at'>[], nowMs: number): { from?: number; to?: number } {
@@ -571,8 +538,8 @@ export function leadTotals(calls: LeadCall[], s: { from?: number; to?: number })
   return { calls: inside.length, tokens: sumTokens(inside.map(c => c.tokens)) }
 }
 
-/** What the "Whole team" part needs: the lead's calls (or why they can't be read), the scouts' usage, and this session's $ if Claude Code reports it. */
-export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?: string; scouts?: Record<string, ScoutUsage>; sessionUsd?: number }
+/** What the "Whole team" part needs: the lead's calls (or why they can't be read) and where they come from, the scouts' usage, and this session's $ if the host reports it. */
+export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?: string; leadFrom?: string; scouts?: Record<string, ScoutUsage>; sessionUsd?: number }
 
 /**
  * The "Whole team" lines: lead · workers · scouts with bars, each with its kinds apart on the next
@@ -581,6 +548,7 @@ export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?
  */
 export function teamLines(team: TeamInput, span: { from?: number; to?: number }, workers: { tokens: SymccTokens; tries: number }, merged: number, name: string = DEFAULT_NAME, full = false): string[] {
   const lead = team.lead ? leadTotals(team.lead, span) : null
+  const from = team.leadFrom ?? team.lead?.find(c => c.from)?.from
   const sc = scoutTotals(team.scouts ?? {}, span)
   const total = sumTokens([lead?.tokens, workers.tokens, sc.tokens])
   const max = Math.max(tokenCount(lead?.tokens), tokenCount(workers.tokens), tokenCount(sc.tokens))
@@ -588,7 +556,7 @@ export function teamLines(team: TeamInput, span: { from?: number; to?: number },
   const w = 12
   const part = (label: string, t: SymccTokens, what: string) => [`  ${label.padEnd(w)} ${bar(tokenCount(t), max).padEnd(BAR_WIDTH)} ${n(t)} tokens · ${what}`, ...kindsRow(t, w)]
   const out: string[] = []
-  if (lead) out.push(...part(`${ORIGIN_MARK.lead} lead`, lead.tokens, `${plural(lead.calls, 'call')}${team.leadSessions !== undefined ? ` · ${plural(team.leadSessions, 'session')}` : ''}${full ? ", from Claude Code's session logs" : ''}`))
+  if (lead) out.push(...part(`${ORIGIN_MARK.lead} lead`, lead.tokens, `${plural(lead.calls, 'call')}${team.leadSessions !== undefined ? ` · ${plural(team.leadSessions, 'session')}` : ''}${full && from ? `, from ${from}` : ''}`))
   else out.push(row(`${ORIGIN_MARK.lead} lead`, `not counted: ${team.leadProblem ?? 'no session logs'}`))
   out.push(...part(`${ORIGIN_MARK.worker} workers`, workers.tokens, plural(workers.tries, 'try', 'tries')))
   out.push(...part(`${ORIGIN_MARK.scout} scouts`, sc.tokens, `${plural(sc.runs, 'run')}${sc.runs ? ` · ${fmtDuration(sc.ms)}` : ''}`))

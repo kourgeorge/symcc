@@ -1,4 +1,3 @@
-import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
 import { roleSection, workerTypeFor, asBaseWorkers } from '../claude/agent-types'
@@ -190,7 +189,11 @@ export async function waitEnded($: Host, ids: string[], ms: number): Promise<Age
 }
 
 /** Why a worker's turn ended (from turn.complete): answered, stopped, refused (with what the API said) or an API error. */
-export type TurnEnd = { reason: TurnCompleteReason; refusal?: TurnRefusal }
+export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal }
+/** Why a turn ended: the model answered, it was interrupted, the model refused, or an error ended it. */
+export type TurnEndReason = 'answer' | 'aborted' | 'refusal' | 'error'
+/** What was said about a refusal that ended a turn: its category and explanation, each null when none was given. */
+export type TurnRefusal = { category: string | null; explanation: string | null }
 
 /** A worker's hand-back `answer` arrived; `end`: why its turn ended. */
 export async function workerFinished($: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {

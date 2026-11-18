@@ -36,3 +36,13 @@ export function frontMatterLine(line: string): { key: string; value: string } | 
   const kv = /^\s*([a-z_]+)\s*:\s*(.*?)\s*$/i.exec(line)
   return kv ? { key: kv[1]!.toLowerCase(), value: kv[2]! } : null
 }
+
+/** `text` read as a JSON object, or null when it isn't one. */
+export const jsonObj = (text: string | null | undefined): Record<string, unknown> | null => {
+  try {
+    const raw = JSON.parse(String(text ?? ''))
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}

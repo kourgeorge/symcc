@@ -1,6 +1,7 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, leadCalls, projectFolderName, parseScoutUsage, rangeSpan, parseStatusFilter, BOARD_STATUSES, type LeadCall, type StatsRange, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS } from '../board'
 import { EXTRA_TOOLS } from '../claude/agent-types'
+import { leadUsage } from '../claude/lead-usage'
 import { scoutMemoryFile, leadScouts } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -370,39 +371,10 @@ export async function statsText($: Host, args: string, full?: boolean): Promise<
   const r = readArchive(text)
   const archiveProblem = r.broken ? `${S.N.archiveFile} can't be read (${r.broken})` : !r.archive.tasks.length && archivedCount(b) ? `${archivedCount(b)} archived tasks, but ${S.N.archiveFile} holds none` : undefined
   const nowMs = Date.now()
-  const team: TeamInput = { ...(await leadUsage($, range, nowMs)), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
+  const team: TeamInput = { ...(await leadUsage($, S.root, range, nowMs)), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
   return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })
-}
-
-/**
- * The lead's tokens: the plugin API gives no per-session token counts (only this session's $ total), so they are
- * read from Claude Code's own session logs, ~/.claude/projects/<this project's folder>/<session>.jsonl. Read-only,
- * only this project's folder, only the usage numbers (see leadCalls). For a days range, logs not written to since
- * the range began are skipped.
- */
-async function leadUsage($: Host, range: StatsRange, nowMs: number): Promise<Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem'>> {
-  const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
-  const base = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
-  if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
-  const dir = `${base}/projects/${projectFolderName(S.root)}`
-  const files = await $.fs.list(dir).catch(() => null)
-  if (!files) return { leadProblem: `no session logs in ${shortHome(dir, home)}` }
-  const from = rangeSpan(range, [], nowMs).from
-  // a resumed session's log may repeat calls of the one before: each call counts once
-  const lead = new Map<string, LeadCall>()
-  let sessions = 0
-  for (const f of files) {
-    if (f.kind !== 'file' || !f.name.endsWith('.jsonl')) continue
-    if (range.kind === 'days' && from !== undefined && f.mtimeMs < from) continue
-    const text = await $.fs.read(`${dir}/${f.name}`).catch(() => null)
-    if (text === null) continue
-    const calls = leadCalls(String(text))
-    if (calls.length) sessions++
-    for (const c of calls) lead.set(c.id, c)
-  }
-  return { lead: [...lead.values()], leadSessions: sessions }
 }
 
 export type In = Record<string, unknown>

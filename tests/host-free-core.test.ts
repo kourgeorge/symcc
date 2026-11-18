@@ -2,9 +2,13 @@
 // tool names (RoleTools), and the agent functions take AgentState (alive, a worker or not), so another host (an
 // OpenCode plugin, a standalone client) can use them with its own words. The Claude Code ones live in hooks/claude/.
 import { expect, test } from 'claude-code/testing'
-import { addTask, emptyBoard, patchTask, parseRole, roleSkipReason, roleTools, roleSection, liveWorkersFor, mayStart, orphanMove, WEB_SAFETY_LINE, type RoleTools, type AgentState } from '../hooks/board'
+import { addTask, emptyBoard, patchTask, parseRole, roleSkipReason, roleTools, roleSection, liveWorkersFor, mayStart, orphanMove, WEB_SAFETY_LINE, statsReport, type RoleTools, type AgentState, type LeadCall } from '../hooks/board'
 import * as claudeTypes from '../hooks/claude/agent-types'
 import * as claudeAgents from '../hooks/claude/agents'
+import * as board from '../hooks/board'
+import { leadCalls, leadUsage, LEAD_LOGS } from '../hooks/claude/lead-usage'
+import { usageTokens, turnEnd } from '../hooks/claude/usage'
+import type { Host } from '../hooks/host'
 
 const T = '2026-11-18T00:00:00.000Z'
 const OTHER: RoleTools = { extra: ['websearch', 'webfetch', 'todo'], web: ['websearch', 'webfetch'] }
@@ -33,4 +37,31 @@ test('core finds live workers from AgentState; the Claude adapter makes those fr
   expect(claudeAgents.agentState({ id: 'w1', type: 'symcc:worker-web', status: 'running' })).toMatchObject({ worker: false, alive: true })
   expect(claudeAgents.isNotReady("Agent type 'symcc:worker' not found")).toBe(true)
   expect(claudeAgents.scoutNotReady("Agent type 'symcc:scout' not found")).toBe(true)
+})
+
+// T-242: core/ knows no Claude Code plan mode fields, usage field names or session log format either.
+test('plan mode, usage and session log readers live in the Claude adapter, not in core', () => {
+  for (const name of ['planFromMode', 'planFromAttachment', 'usageTokens', 'leadCalls', 'projectFolderName']) expect(name in board).toBe(false)
+  expect(usageTokens({ input_tokens: 3, cache_creation_input_tokens: 2 })).toEqual({ input: 3, cache_write: 2 })
+  // how a turn ended: Claude Code's turn.complete fields become symcc's TurnEnd; a refusal only rides along on a refusal
+  expect(turnEnd({ reason: 'refusal', refusal: { category: 'c', explanation: null } })).toEqual({ reason: 'refusal', refusal: { category: 'c', explanation: null } })
+  expect(turnEnd({ reason: 'answer', refusal: { category: 'c', explanation: null } })).toEqual({ reason: 'answer' })
+})
+
+test('the stats say where the lead\'s calls come from as the adapter tells it', async () => {
+  const NOW = Date.parse('2026-11-18T12:00:00.000Z')
+  const call: LeadCall = { id: 'a', atMs: NOW - 60_000, tokens: { input: 10 } }
+  const tasks = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'A' }, T)[0].tasks
+  expect(statsReport({ tasks, nowMs: NOW, full: true, team: { lead: [call], leadFrom: 'the host\'s logs' } })).toMatch(/1 call, from the\s+host's logs/)
+  expect(statsReport({ tasks, nowMs: NOW, full: true, team: { lead: [call] } })).toMatch(/10 tokens · 1 call\n/)
+  const line = JSON.stringify({ type: 'assistant', timestamp: new Date(NOW).toISOString(), message: { id: 'm1', usage: { input_tokens: 5 } } })
+  expect(leadCalls(line)).toEqual([{ id: 'm1', atMs: NOW, tokens: { input: 5 }, from: LEAD_LOGS }])
+  // the reader: Claude Code's ~/.claude/projects/<folder>/*.jsonl, and it says so even when there are no calls
+  const read: string[] = []
+  const $ = {
+    env: { get: async (n: string) => (n === 'HOME' ? '/h' : undefined) },
+    fs: { list: async (d: string) => (read.push(d), [{ name: 's.jsonl', kind: 'file', size: 1, mtimeMs: NOW, isLink: false }]), read: async () => line },
+  } as unknown as Host
+  expect(await leadUsage($, '/p/my.app', { kind: 'all' }, NOW)).toEqual({ lead: [{ id: 'm1', atMs: NOW, tokens: { input: 5 }, from: LEAD_LOGS }], leadSessions: 1, leadFrom: LEAD_LOGS })
+  expect(read).toEqual(['/h/.claude/projects/-p-my-app'])
 })

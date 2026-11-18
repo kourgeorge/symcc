@@ -125,15 +125,6 @@ export function fmtTokenKinds(t: SymccTokens | undefined): string {
   return parts.length ? parts.join(' · ') : '0'
 }
 
-/**
- * The tokens a turn result reports, each kind kept apart (input, output, cache writes, cache
- * reads), or undefined if it reports none. The worker's turn result gives token counts only, no dollar cost.
- */
-export function usageTokens(u: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined): SymccTokens | undefined {
-  if (!u) return undefined
-  return cleanTokens({ input: u.input_tokens, output: u.output_tokens, cache_write: u.cache_creation_input_tokens, cache_read: u.cache_read_input_tokens })
-}
-
 /** How long one try took, in ms. A try still running counts up to `nowMs` (0 if not given). */
 export function runMs(r: SymccRun, nowMs?: number): number {
   const a = Date.parse(r.started)

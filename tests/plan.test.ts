@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
-import { addTask, emptyBoard, ready, scoutWhyNot, statusLine, emptyPlan, inPlan, notePlan, planAdded, planAddText, planBacklog, planBandText, planEndText, planFromAttachment, planFromMode, PLAN_NOTE, type PlanState } from '../hooks/board'
+import { addTask, emptyBoard, ready, scoutWhyNot, statusLine, emptyPlan, inPlan, notePlan, planAdded, planAddText, planBacklog, planBandText, planEndText, PLAN_NOTE, type PlanState } from '../hooks/board'
+import { planFromAttachment, planFromMode } from '../hooks/claude/plan'
 
 const T = '2026-11-13T00:00:00.000Z'
 const W = { why: 'a test' }

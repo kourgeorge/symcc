@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadCalls, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, projectFolderName, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { leadCalls, projectFolderName } from '../hooks/claude/lead-usage'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()

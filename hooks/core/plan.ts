@@ -1,12 +1,9 @@
-// Plan mode (Claude Code's read-only planning mode, Shift+Tab): while the main session is in it,
+// Plan mode (the host's read-only planning mode; in Claude Code, Shift+Tab): while the main session is in it,
 // nothing starts. New tasks go to the backlog, pump and the scout timer skip, workers already
-// running keep going. Claude Code has no call for the mode and no event when it changes, so
-// symcc learns it from fields on some events (see docs/research/plan-mode.md):
-//   classic.* events (not classic.PreToolUse): e.permission_mode
-//   agent.spawn: e.permissionMode
-//   prompt.attachment of type plan_mode / plan_mode_reentry (on) and plan_mode_exit (off)
+// running keep going. The host's adapter turns its own signals into on (true) / off (false) / says
+// nothing (null) and passes them to plugin/plan.ts seePlan (for Claude Code, see claude/plan.ts).
 // Until one of those is seen the mode is unknown, and symcc behaves as if not in plan mode.
-// Everything here is pure, so it can be tested without Claude.
+// Everything here is pure, so it can be tested without a host.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 
@@ -17,19 +14,6 @@ export const emptyPlan = (): PlanState => ({ on: null, added: [] })
 
 /** The words shown on the band and the status line while in plan mode. */
 export const PLAN_NOTE = 'plan mode: nothing starts'
-
-/** A permission mode name read from an event → plan mode on (true), off (false), or not known (null). */
-export function planFromMode(mode: unknown): boolean | null {
-  if (typeof mode !== 'string' || !mode.trim()) return null
-  return mode.trim() === 'plan'
-}
-
-/** A prompt.attachment type → plan mode on (true), off (false), or says nothing about it (null). */
-export function planFromAttachment(type: unknown): boolean | null {
-  if (type === 'plan_mode' || type === 'plan_mode_reentry') return true
-  if (type === 'plan_mode_exit') return false
-  return null
-}
 
 /** Whether the session is in plan mode now; an unknown mode counts as not (behave as before). */
 export const inPlan = (p: Pick<PlanState, 'on'>) => p.on === true
