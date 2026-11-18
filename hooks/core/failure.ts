@@ -33,11 +33,15 @@ export function failedHow(t: Failed): FailedHow {
 export const ENDED_EARLY_NOTE = 'the worker ended its turn before its work finished'
 
 /** "I'll continue / resume / report back / wait ..." said about later (not bare "will continue", which reports quote about retries). */
-const LATER = /\b(?:I['’]ll|I will|I['’]m going to|I am going to|let me)\s+(?:then\s+|now\s+)?(?:continue|resume|report back|get back|check back|come back|wait)\b|\bwill report back\b/i
-/** "still running / going / in progress": only counts together with "I'll ..." or the writer's own wait in the same sentence. */
+const LATER = /\b(?:I['’]ll|I will|I['’]m going to|I am going to|let me)\s+(?:then\s+|now\s+)?(?:continue|resume|report back|get back|check back|come back|wait)\b|^\s*will (?:continue|resume|report back)\b/i
+/** "still running / going / in progress": only counts together with the writer's own wait in the same sentence. */
 const STILL = /\bstill (?:running|going|in progress)\b/i
-/** "I'll / I will / I'm waiting / waiting for" as the writer's own wait (not "without waiting for", "not waiting for"). */
-const WAITS = /\b(?:I['’]ll|I will|I['’]m waiting|I am waiting|wait for)\b|(?<!\b(?:without|not|no|never)\s+)\bwaiting for\b/i
+/**
+ * The writer's own wait: "I'm (still) waiting", or a "waiting for" with no subject that starts the sentence or a
+ * clause ("…, waiting for them to finish"). Not someone else's ("makes the lead wait for it", "stops waiting for",
+ * "isn't waiting for", "without waiting for").
+ */
+const WAITS = /\bI(?:['’]m| am)\s+(?:still\s+|now\s+)?waiting\b|(?:^|[,;:—–]\s*)(?:and\s+|now\s+|still\s+)?waiting for\b/i
 /** A bullet or numbered list line ("- …", "* …", "• …", "1. …"). */
 const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
 
@@ -45,7 +49,8 @@ const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
  * Whether a worker's final answer only says it will go on later ("The background runs are still going; I'll continue
  * when they finish."): ending its turn ends its work, so such a try is unfinished. Kept narrow: only the answer's last
  * paragraph is read (not when it is a bullet list, which describes the change), sentence by sentence, and a sentence
- * must say "I'll continue / resume / report back / wait..." or "still running" together with the writer's own wait.
+ * must say "I'll continue / resume / report back / wait..." (or start with "Will report back"), or "still running"
+ * together with the writer's own wait.
  */
 export function endedEarly(answer: string | null | undefined): boolean {
   const paras = String(answer ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)

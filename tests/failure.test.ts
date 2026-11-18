@@ -292,6 +292,7 @@ test('endedEarly: an answer that says it will continue later counts; normal repo
     'Changed hooks/a.ts and added a test.\n\nThe full test run is still running in the background; I will report back once it ends.',
     'Tests are still running, waiting for them to finish.',
     "I'll resume once the typecheck is done.",
+    "The tests are still running and I'm waiting for them.",
     'Will report back.',
     // T-399's try 1, its real last paragraph: must flag
     "Changed the prompts and the check.\n\nThe background runs are still going; I'll continue when they finish.",
@@ -308,6 +309,14 @@ test('endedEarly: an answer that says it will continue later counts; normal repo
     // the same two sentences as plain text: "still running" and "waiting for" in different sentences, and not the writer's own wait
     'A checker still running at the reload is stopped. A new checker starts right away without waiting for a check.',
     'The checker is still running, so a new one starts without waiting for it.',
+    // someone else's wait, or an "I'll" that has nothing to do with waiting (found by the checker): must not flag
+    'Changed the merge so a try still in progress makes the lead wait for it; tests/merge.test.ts covers it.',
+    'A checker still running at the reload stops waiting for a verdict.',
+    "A checker that is still running isn't waiting for the lead any more.",
+    "The checker is still running when the merge starts, so I'll note it in the docs.",
+    // "will report back" said about a scout or a worker, not the writer: must not flag
+    'Now a scout that finds nothing will report back NOTHING.',
+    'Fixed it so the worker will report back its findings; tests/x.test.ts covers it.',
   ]
   for (const a of normal) expect([a, endedEarly(a)]).toEqual([a, false])
 })
