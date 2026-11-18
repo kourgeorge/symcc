@@ -4,12 +4,12 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
-import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked } from '../hooks/plugin/workers'
+import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
 import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
-import { test } from './reset'
+import { test, resetPlugin } from './reset'
 import { claudeHost } from '../hooks/claude/host'
 
 const ROOT = '/repo'
@@ -542,4 +542,170 @@ test("a checker's git commands that change anything are refused, read-only ones 
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   for (const command of ['git commit -am x', 'git stash', 'git reset --hard', 'git checkout -b x'])
     expect(await checkEdit(w.$, 'ag2', 'Bash', { command })).toBeUndefined()
+})
+
+// ---------------- a reload during the checker (T-386) ----------------
+
+/**
+ * T-1's worker hands back and its checker starts (chk1); then the plugin reloads (its memory starts over, as
+ * resetPlugin does): the old copy's step keeps waiting for chk1's answer, which never reaches it. `status`:
+ * chk1 as the agent list shows it after the reload. Returns the agents list (changed by the test).
+ */
+async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) {
+  await saveBoard(w.$, boardWith(true))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  void workerFinished(w.$, 'ag1', 'made the change')
+  await until(() => checkerRuns.size > 0)
+  expect(find(await load(w.$), 'T-1')!.note).toBe('a checker is trying to break it before it merges')
+  resetPlugin()
+  S.root = ROOT
+  S.driving = true
+  const agents = [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status }]
+  ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => agents
+  return agents
+}
+
+test('T-386: a reload stops the running checker; at the next check the task gets a new checker on the same work, no retry counted, and the lead is told once', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  const sha = w.git.head
+  await check(w.$)
+  // the old checker (unknown to this copy) was told to stop, and a new one started at once
+  expect(w.sends.map(m => m.to.agentId)).toEqual(['chk1'])
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  const mid = find(await load(w.$), 'T-1')!
+  expect(mid.status).toBe('doing')
+  expect(mid.checking?.step).toBe('checking')
+  expect(w.git.head).toBe(sha)
+  const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
+  expect(told.length).toBe(1)
+  // a check meanwhile does not start a third one
+  await check(w.$)
+  expect(w.spawns.length).toBe(2)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.history).toContain('try 1: checker: OK')
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
+})
+
+test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  // the reload's own look for orphans (session start) stops the old checker; its "stopped" answer then comes in
+  await stopOrphans(w.$)
+  expect(w.spawns.length).toBe(1)
+  await stoppedHandBack(w.$, 'chk1')
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  checkerFinished([...checkerRuns.keys()][0]!, 'stopped', true)
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  // no verdict from the new one either: it waits for review, as without a reload; still try 1
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.attempts).toBe(1)
+})
+
+test('T-386: a checker shown as ended after the reload: the next check starts a new one', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'completed')
+  await check(w.$)
+  expect(w.sends).toEqual([])
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  // the worker's commit, made before the reload, is still saved on the try (as without a reload)
+  expect(t.merged).toBe(H1)
+  expect(t.runs?.[0]?.commits).toEqual([H1])
+})
+
+test('T-386: a reload after the checker said OK and the work reached main (before the outcome was written): the task ends done, no new checker', async () => {
+  const w = world()
+  // finishing: the old copy's mark (its merge was under way); a board field not in SymccTask
+  const left = { note: 'a checker is trying to break it before it merges', finishing: ISO, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
+  await saveBoard(w.$, boardWith(true, left))
+  w.git.head = H1
+  w.git.main = H1
+  w.git.dirty = false
+  const run = w.claude.process.run
+  w.claude.process.run = async (argv: string[], o?: { cwd?: string }) => (argv[0] === 'git' && argv.includes('log') && argv.includes('--format=%B') ? ok('T-1: Do it\n\nSymcc-Task: T-1\nSymcc-Try: 1\n') : run(argv, o))
+  resetPlugin()
+  S.root = ROOT
+  S.driving = true
+  S.gitState = 'ok'
+  ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status: 'completed' }]
+  await check(w.$)
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(w.spawns.length).toBe(0)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.note).toBe('merged into main (b1b1b1b1)')
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(w.git.main).toBe(H1)
+})
+
+/** The checker's next `n` starts throw "Agent type symcc:scout not found" (its type isn't loaded yet, just after a reload); later ones start as usual. */
+function scoutNotLoaded(w: ReturnType<typeof world>, n: number) {
+  const agent = w.claude.agent as { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> }
+  const real = agent.spawn
+  let left = n
+  agent.spawn = async o => {
+    if (left > 0) {
+      left--
+      throw new Error('Agent type symcc:scout not found')
+    }
+    return real(o)
+  }
+}
+
+test("T-386: a restarted checker whose agent type isn't loaded yet: the task stays doing, and the next check starts a checker", async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  scoutNotLoaded(w, 1)
+  await stopOrphans(w.$)
+  await stoppedHandBack(w.$, 'chk1')
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(checkerRuns.size).toBe(0)
+  const mid = find(await load(w.$), 'T-1')!
+  expect(mid.status).toBe('doing')
+  expect(mid.note).toBe('a checker is trying to break it before it merges')
+  expect(mid.history.some(l => l.includes('no verdict'))).toBe(false)
+  await check(w.$)
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+})
+
+test("T-386: a restarted checker whose agent type is still not loaded after 3 starts: the task goes to review with no verdict", async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  scoutNotLoaded(w, 99)
+  await stopOrphans(w.$)
+  await stoppedHandBack(w.$, 'chk1')
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  await check(w.$)
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  await check(w.$)
+  for (let i = 0; i < 4000; i++) await Promise.resolve()
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.note).toMatch(/the checker gave no verdict \(the checker couldn't start: Agent type symcc:scout not found\)/)
+  expect(t.attempts).toBe(1)
+  expect(w.spawns.length).toBe(1)
 })

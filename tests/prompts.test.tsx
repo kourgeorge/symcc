@@ -157,6 +157,8 @@ test('Settings has no Prompts row, even with a .symcc/prompts/change.md file', a
   fakePrompts(on, { 'change.md': 'Mine: {{details}}' })
   await $.session.start({ cwd: '/proj' } as never)
   const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'group:Work' })
+  await ui.press({ key: 'group:Workers' })
   expect(await ui.find({ key: 'setting:mode' })).toBeDefined()
   expect(await ui.find({ key: 'settings-roles' })).toBeDefined()
   expect(await ui.find({ key: 'settings-prompts' })).toBeUndefined()
