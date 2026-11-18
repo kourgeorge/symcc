@@ -205,6 +205,17 @@ export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTo
 export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
+/** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
+export const isOwnAgent = (agentId: string | undefined): agentId is string =>
+  !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
+/**
+ * Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. It is in `stopped`
+ * before the first await, so a caller that doesn't wait (`void halt(...)`) still refuses its tools at once.
+ */
+export async function halt(host: Host, agentId: string, why: string) {
+  stopped.add(agentId)
+  await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
+}
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */
 export const reminded = new Map<string, string>()
 /** the board health findings already told to the lead (their keys; see newFindings) */

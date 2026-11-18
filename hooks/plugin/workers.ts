@@ -8,7 +8,7 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
-import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, cancelStarts, startCancelled, QUEUED_NOTE } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
@@ -426,7 +426,7 @@ async function markChecking(host: Host, id: string, status: SymccTask['status'],
  * session, the report is taken as that worker's, so its work is still checked and merged.
  */
 export async function lateHandBack(host: Host, agentId: string): Promise<boolean> {
-  if (workers.has(agentId) || stopped.has(agentId) || scoutRuns.has(agentId) || checkerRuns.has(agentId)) return false
+  if (isOwnAgent(agentId)) return false
   const b = await load(host).catch(() => null)
   const t = b?.tasks.find(x => x.agent === agentId)
   // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
@@ -1209,12 +1209,6 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
   }
 }
 
-/** Ends an agent's work: from now on every tool it tries is refused, and it is told to stop. */
-export async function halt(host: Host, agentId: string, why: string) {
-  stopped.add(agentId)
-  await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
-}
-
 /**
  * Tasks whose worker is being stopped on purpose (pause, drop, ask, change, the board or symcc turned
  * off, ...), with how many regular checks have seen the mark: the one stopping it changes the task's
@@ -1360,9 +1354,8 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
   const out: string[] = []
   for (const a of agents) {
     if (a.kind === 'other') continue
-    if (workers.has(a.id) || scoutRuns.has(a.id) || checkerRuns.has(a.id)) continue
-    // Already told to stop: not taken back, and not messaged again (a message would wake it up).
-    if (stopped.has(a.id)) continue
+    // Already tracked, or already told to stop: not taken back, and not messaged again (a message would wake it up).
+    if (isOwnAgent(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
     if (a.kind === 'worker' && !b) continue
     if (a.kind === 'worker' && b) {
