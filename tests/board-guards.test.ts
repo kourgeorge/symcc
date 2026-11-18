@@ -3,13 +3,14 @@
 // lead tools, takes the worker's ask_owner, and refuses every tool of an agent whose try ended.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { type Board, addTask, emptyBoard, patchTask, find, ASK_TOOL, ASK_SENT, blockedEditText, gitWriteIn, gitWriteText } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, ASK_TOOL, ASK_SENT, blockedEditText, gitWriteIn, gitWriteText, readBoard, withAgentId, AGENT_TRIES_KEPT, CHECKERS_KEPT } from '../hooks/board'
 import { S, toolName, workers, boardAgents, starting, queuedWorkers } from '../hooks/app/state'
 import { checkEdit, askCall, guardFailed, stoppedText } from '../hooks/app/ask'
 import { toolCall } from '../hooks/app/symcc'
 import { agentOnBoard, lateHandBack } from '../hooks/app/workers'
 import { load } from '../hooks/app/store'
 import { fakeHost, memoryFs, done } from './fake-host'
+import type { SymccRun } from '../types'
 import type { BoardTask } from '../hooks/board'
 
 const ROOT = '/repo'
@@ -150,4 +151,55 @@ test('with no project folder known, nothing is looked up', async () => {
   const { host } = await world()
   S.root = ''
   expect(await agentOnBoard(host, 'w9')).toBeUndefined()
+})
+
+// ---------------- T-479: ended agents stay on their try ----------------
+
+test("T-479: a checker named on a try, once the task was dropped, is refused every tool by another copy", async () => {
+  const { host, files } = await world({ checker: 'c9', finishing: ISO })
+  const b = patchTask(await load(host), 'T-1', { status: 'dropped' }, ISO)
+  expect(find(b, 'T-1')!.checker).toBeUndefined()
+  expect(find(b, 'T-1')!.runs!.at(-1)!.checkers).toEqual(['c9'])
+  files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(b))
+  expect((await agentOnBoard(host, 'c9'))?.kind).toBe('ended')
+  expect(await toolCall(host, 'Bash', 'c9', {})).toEqual({ deny: stoppedText() })
+  expect(await checkEdit(host, 'c9', { command: 'git commit -am x' })).toBe(stoppedText())
+  expect(await checkEdit(host, 'c9', { path: `${ROOT}/README.md` })).toBe(stoppedText())
+})
+
+test("T-479: an earlier try's worker is refused after a new try is claimed (its id is kept on its own try)", async () => {
+  const { host, files } = await world()
+  // the try of w9 ends, and a new try is claimed: the board then names no worker (workers.ts clears agent)
+  const b0 = patchTask(await load(host), 'T-1', { status: 'todo' }, ISO)
+  const b1 = patchTask(b0, 'T-1', { status: 'doing', attempts: 2, session: 'another-session', runs: [...find(b0, 'T-1')!.runs!, { started: ISO }] }, ISO)
+  delete find(b1, 'T-1')!.agent
+  expect(find(b1, 'T-1')!.runs!.map(r => r.agent)).toEqual(['w9', undefined])
+  files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(b1))
+  expect((await agentOnBoard(host, 'w9'))?.kind).toBe('ended')
+  expect(await toolCall(host, 'Bash', 'w9', {})).toEqual({ deny: stoppedText() })
+  expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
+  expect(await askCall(host, 'w9', { question: 'x' })).toMatch(/^Refused/)
+  expect(find(await load(host), 'T-1')!.try_question).toBeUndefined()
+  // the new try's worker, once recorded, runs as usual
+  const b2 = patchTask(b1, 'T-1', { agent: 'w10' }, ISO)
+  expect(find(b2, 'T-1')!.runs!.map(r => r.agent)).toEqual(['w9', 'w10'])
+  files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(b2))
+  expect((await agentOnBoard(host, 'w10'))?.kind).toBe('worker')
+  expect((await agentOnBoard(host, 'w9'))?.kind).toBe('ended')
+})
+
+test('T-479: only the last few tries keep agent ids, a try keeps only its latest checkers, and bad ids read from the file are dropped', async () => {
+  let runs: SymccRun[] = []
+  for (let i = 0; i < AGENT_TRIES_KEPT + 2; i++) runs = withAgentId([...runs, { started: ISO }], 'agent', `w${i}`)!
+  expect(runs.map(r => r.agent)).toEqual([undefined, undefined, ...Array.from({ length: AGENT_TRIES_KEPT }, (_, i) => `w${i + 2}`)])
+  for (let i = 0; i < CHECKERS_KEPT + 3; i++) runs = withAgentId(runs, 'checker', `c${i}`)!
+  expect(runs.at(-1)!.checkers).toEqual(Array.from({ length: CHECKERS_KEPT }, (_, i) => `c${i + 3}`))
+  // a bad id is never kept
+  for (const bad of ['', 'a b', 'x'.repeat(201), 'new\nline', 7, null]) expect(withAgentId([{ started: ISO }], 'agent', bad)).toEqual([{ started: ISO }])
+  // from the file: bad values are cleaned, and an empty list is dropped
+  const text = JSON.stringify({ tasks: [{ id: 'T-1', status: 'todo', title: 'x', details: '', note: '', files: [], after: [], history: [], order: 1, attempts: 1, question: null, branch: null, created_at: ISO, updated_at: ISO, runs: [{ started: ISO, agent: 5, checkers: ['ok', 3, '', 'ok', 'has space'] }, { started: ISO, agent: 'w2', checkers: 'c' }] }] })
+  const read = readBoard(text)
+  expect(read.board.tasks[0]!.runs!.map(r => ({ agent: r.agent, checkers: r.checkers }))).toEqual([{ agent: undefined, checkers: ['ok'] }, { agent: 'w2', checkers: undefined }])
+  expect(read.board.tasks[0]!.runs!.every(r => !('checkers' in r) || Array.isArray(r.checkers))).toBe(true)
+  expect(read.fixed.some(f => /bad agent ids/.test(f))).toBe(true)
 })

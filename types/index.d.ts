@@ -33,6 +33,12 @@ export type SymccRun = {
   ended_note?: string
   /** set when this try first had to merge main into the branch, after a clash with main */
   merge_main?: true
+  /**
+   * The agent id of this try's worker, and of each checker it had (oldest first), kept when the try ends, so every copy
+   * of the plugin refuses an agent that has ended (T-479). Only the last few tries keep them (see AGENT_TRIES_KEPT).
+   */
+  agent?: string
+  checkers?: string[]
 }
 
 /**

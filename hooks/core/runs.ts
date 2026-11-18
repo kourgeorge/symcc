@@ -6,6 +6,55 @@ import type { SymccRun, SymccRunEnd, SymccTask, SymccTokens } from '../../types'
 /** The runs with a new try started at `now`; `mergeMain` marks a try that first merges main in after a clash. */
 export const startRun = (runs: SymccRun[] | undefined, now: string, mergeMain = false): SymccRun[] => [...(runs ?? []), { started: now, ...(mergeMain ? { merge_main: true as const } : {}) }]
 
+/** How many of a task's latest tries keep their agent ids (SymccRun.agent and checkers); older tries lose them. */
+export const AGENT_TRIES_KEPT = 5
+/** How many checker ids one try keeps (the latest). */
+export const CHECKERS_KEPT = 10
+/** The most characters an agent id kept on a try may have; a longer one is not kept. */
+const AGENT_ID_MAX = 200
+
+/** Whether `v` can be an agent id kept on a try: a short string with no spaces or control characters. */
+export const isAgentId = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= AGENT_ID_MAX && /^[\x21-\x7e]+$/.test(v)
+
+/**
+ * The runs with agent `id` recorded on try `at` (the last try when not given): as its worker (`as` 'agent'), or added
+ * to its checkers. A bad id, or no such try, changes nothing. Old tries' ids are then trimmed (keepAgentIds).
+ */
+export function withAgentId(runs: SymccRun[] | undefined, as: 'agent' | 'checker', id: unknown, at?: number): SymccRun[] | undefined {
+  const i = at ?? (runs?.length ?? 0) - 1
+  const r = runs?.[i]
+  if (!runs || !r || !isAgentId(id)) return runs
+  if (as === 'agent' ? r.agent === id : r.checkers?.includes(id)) return runs
+  const out = [...runs]
+  out[i] = as === 'agent' ? { ...r, agent: id } : { ...r, checkers: [...(r.checkers ?? []), id].slice(-CHECKERS_KEPT) }
+  return keepAgentIds(out)
+}
+
+/**
+ * The runs with their agent ids cleaned, for a board read from its file and after each change: a bad worker id is
+ * dropped, the checkers keep only good ids (the latest CHECKERS_KEPT, empty dropped), and only the last
+ * AGENT_TRIES_KEPT tries keep any. Returns `runs` itself when nothing changes.
+ */
+export function keepAgentIds<T extends SymccRun[] | undefined>(runs: T): T {
+  if (!Array.isArray(runs)) return runs
+  let changed = false
+  const out = runs.map((r, i) => {
+    if (!r || typeof r !== 'object' || !('agent' in r || 'checkers' in r)) return r
+    const old = i < runs.length - AGENT_TRIES_KEPT
+    const agent = !old && isAgentId(r.agent) ? r.agent : undefined
+    const checkers = !old && Array.isArray(r.checkers) ? [...new Set(r.checkers.filter(isAgentId))].slice(-CHECKERS_KEPT) : []
+    if (agent === r.agent && checkers.length && checkers.length === r.checkers?.length && checkers.every((c, k) => c === r.checkers![k])) return r
+    if (agent === r.agent && !checkers.length && !('checkers' in r)) return r
+    changed = true
+    const { agent: _a, checkers: _c, ...rest } = r
+    return { ...rest, ...(agent ? { agent } : {}), ...(checkers.length ? { checkers } : {}) }
+  })
+  return (changed ? out : runs) as T
+}
+
+/** Whether agent `id` is named on any of `runs` (as a try's worker or one of its checkers). */
+export const onRuns = (runs: SymccRun[] | undefined, id: string): boolean => !!id && !!runs?.some(r => r?.agent === id || (Array.isArray(r?.checkers) && r.checkers.includes(id)))
+
 /**
  * The runs with the last try's end reason set to `by` (and `note`). The first reason wins: a try
  * that already has one keeps it, unless `overwrite` (e.g. the work was merged after all).
