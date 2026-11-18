@@ -1,13 +1,14 @@
 // symcc's OpenCode server plugin (T-462): what opencode/server.ts exports. OpenCode starts a fresh copy of it (its own
 // module memory) for every folder a session works in, all in one server process that shares globalThis; a session's
 // permission and tool hooks fire only in the copy for its own folder. So:
-//   - the copy whose folder is the project's main folder (compared with links followed: macOS gives /tmp and
-//     /private/tmp separate copies) runs symcc's engine: sessionStart, which claims lead.json (the one-driver lock
-//     across sessions and programs), starts the timers and the board;
-//   - a copy in a worker's folder (or any other folder of the project) only guards: guardStart reads the roles, kinds
+//   - the copy whose folder is the project's main folder or a folder inside it (anything but a worker's folder; the
+//     owners are keyed by the main folder with links followed: macOS gives /tmp and /private/tmp separate copies) runs
+//     symcc's engine: sessionStart, which claims lead.json (the one-driver lock across sessions and programs), starts
+//     the timers and the board;
+//   - a copy in a worker's folder only guards: guardStart reads the roles, kinds
 //     and board and never claims the lead, so its hooks can judge that folder's sessions (T-472, with T-471's board
 //     lookups);
-//   - two copies for the same real main folder: the first runs the engine, the other only guards until the first is
+//   - two copies for the same real main folder (e.g. the main folder and a subfolder of it): the first runs the engine, the other only guards until the first is
 //     unloaded, then takes over (the owners are kept on globalThis by real path, and let go in cleanup);
 //   - every copy registers the edit guard (guard.ts).
 // A copy that is unloaded and loaded again (a file edit reloads every copy) starts cleanly: cleanup ends its engine
@@ -16,7 +17,7 @@
 import type { Host } from '../host'
 import { sessionStarting, sessionStart, guardStart, sessionEnd } from '../app/symcc'
 import { useName } from '../app/state'
-import { mainRoot } from '../app/store'
+import { mainRoot, isWorkerFolder } from '../app/store'
 import type { OcContext, OcRegistration, OcServerPlugin } from './ctx'
 import { opencodeHost, type OpencodeHostOptions } from './host'
 import { onEvaluate, onToolBefore, realPathOf } from './guard'
@@ -88,7 +89,10 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       regs.push(await ctx.permission.hook('evaluate', onEvaluate(host, dir)))
       regs.push(await ctx.tool.hook('execute.before', onToolBefore(host, dir)))
       const main = await mainRoot(host, dir).catch(() => dir)
-      const [realDir, realMain] = await Promise.all([realPathOf(dir), realPathOf(main || dir)])
+      const realMain = await realPathOf(main || dir)
+      // the main folder or any folder inside it (not a worker's folder) is a main copy, as Claude Code's sessionStart
+      // treats it; the owner's own worktree outside the project has itself as its main root
+      const inMain = !(await isWorkerFolder(host, dir, main || dir).catch(() => false))
       const token = {}
       let running = false
       let slot: Slot | undefined
@@ -98,7 +102,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
         o.onRole?.(dir, 'engine')
         await engine.start(host).catch(err => say(`couldn't start the board: ${(err as Error)?.message ?? err}`))
       }
-      if (realDir === realMain) {
+      if (inMain) {
         slot = owners().get(realMain) ?? { waiting: [] }
         owners().set(realMain, slot)
         if (!slot.owner) await takeOver()

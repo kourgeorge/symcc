@@ -190,6 +190,38 @@ test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and star
   }
 }, 30_000)
 
+test('a copy in a subfolder of the main project runs the engine (as Claude Code\'s sessionStart does); with the main folder\'s copy running, it waits', async () => {
+  reset()
+  const p = await project()
+  try {
+    const roles: string[] = []
+    const onRole = (dir: string, role: CopyRole) => void roles.push(`${dir} ${role}`)
+    const plugin = symccServer({ engine: SYMCC_ENGINE, onRole, hostOptions: { say: () => undefined, sessionId: 'opencode-sub' } })
+    const end = await plugin.setup(fakeCtx(`${p.main}/src`).ctx)
+    expect(roles).toEqual([`${p.main}/src engine`])
+    expect(S.guardOnly).toBe(false)
+    expect(S.root).toBe(p.main)
+    expect(S.beat !== null).toBe(true)
+    expect(await readFile(`${p.main}/.symcc/lead.json`, 'utf8')).toContain('opencode-sub')
+    await end!()
+    expect(S.beat).toBe(null)
+    // one engine per project: the main folder's copy and a subfolder's share one owner
+    reset()
+    const { engine } = recordingEngine()
+    const roles2: string[] = []
+    const rec = symccServer({ engine, onRole: (dir: string, role: CopyRole) => void roles2.push(`${dir} ${role}`), hostOptions: { say: () => undefined } })
+    const endMain = await rec.setup(fakeCtx(p.main).ctx)
+    const endSub = await rec.setup(fakeCtx(`${p.main}/src`).ctx)
+    expect(roles2).toEqual([`${p.main} engine`, `${p.main}/src waiting`])
+    await endSub!()
+    await endMain!()
+    expect(owners().size).toBe(0)
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 30_000)
+
 /** The imports of `text` that bind it to Claude Code (the same check as the Node host's spec): 'claude-code', hooks/claude/, register.tsx. */
 function claudeImports(text: string): string[] {
   const specs = [...text.matchAll(/(?:(?<![\w$.])from\s*|^\s*import\s+|(?<![\w$.])import\s*\(\s*)['"`]([^'"`\n]+)['"`]/gm)].map(m => m[1]!)
