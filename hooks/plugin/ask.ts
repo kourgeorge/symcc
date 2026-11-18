@@ -5,7 +5,7 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
-import { S, toolName, type Worker, scoutRuns, checkerRuns, workers, stopped } from './state'
+import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import type { Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -124,9 +124,6 @@ async function outsideOwnFolder($: Host, tool: string, input: unknown, worktree:
 export const guardLogged = new Set<string>()
 const GUARD_LOGGED_MAX = 50
 
-/** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
-export const isOwnAgent = (agentId: string | undefined): agentId is string =>
-  !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
 
 /**
  * A guard hook (tool.check, tool.call) threw or ran out of time on a call of agent `agentId` (`failure`: why, as the
