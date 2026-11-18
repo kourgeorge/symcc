@@ -1427,6 +1427,8 @@ export async function check($: $) {
     const limit = timeLimitOf(b.max_minutes, t)
     if (t?.status === 'doing' && t.wrap_up) {
       if (nowMs - Date.parse(t.wrap_up) >= WRAP_UP_GRACE_MS) {
+        // Stopped on purpose: a "Stopped" answer meanwhile must not send it back to todo (it fails below).
+        onPurpose.set(w.task, 0)
         workers.delete(agentId)
         await halt($, agentId, `its time is up (it ran longer than ${limit} minutes)`)
         await timedOut($, w.task, t, limit, minutes)

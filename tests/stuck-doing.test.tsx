@@ -261,3 +261,31 @@ test('(c) a tracked worker that ends with no hand-back: its task fails right aft
   expect(w.task('T-1').status).toBe('failed')
   expect(w.prompts.filter(p => p.includes('the worker ended without a result'))).toHaveLength(1)
 })
+
+test('a worker stopped because its time is up: a "Stopped" answer during the slow stop does not send the task back, it fails', async ($, on) => {
+  const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
+  const gate: { wait?: Promise<void> } = {}
+  const w = world(on, agents, 's1', gate)
+  const tenAgo = new Date(Date.now() - 10 * 60_000).toISOString()
+  w.files.set(BOARD, JSON.stringify(patchTask(doing('s1', 'w1', tenAgo), 'T-1', { wrap_up: tenAgo } as never, ISO)))
+  w.files.set(LEAD, JSON.stringify({ session: 's1', heartbeat: T0 - 1000 }) + '\n')
+  await start($, w)
+  expect(w.task('T-1').status).toBe('doing')
+  // the message telling w1 its time is up is slow
+  let release = () => {}
+  gate.wait = new Promise<void>(r => (release = r))
+  await w.clock.advance(2 * 60_000)
+  await w.clock.settle()
+  expect(w.sent).toContain('w1')
+  // w1 answers "Stopped" while the stop is still on its way
+  await $.turn.complete({ agentId: 'w1', answer: 'Stopped', isAborted: false, reason: 'answer', durationMs: 1000, turnId: 'turn-w1' } as never)
+  await w.clock.settle()
+  release()
+  gate.wait = undefined
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('failed')
+  expect(t.history.some(h => /restarted/.test(h))).toBe(false)
+  expect(w.prompts.some(p => p.includes('no worker was working on it any more'))).toBe(false)
+  expect(w.spawned).toEqual([])
+})
