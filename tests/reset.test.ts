@@ -86,7 +86,7 @@ test('the reset test() given options before the body still starts fresh and runs
 function logo$() {
   const ticks: (() => void)[] = []
   return {
-    ui: { panes: async () => [{ id: 'symcc-board', title: '', isShown: true, isFocused: false, isPlaced: true }], invalidate: () => undefined },
+    ui: { panes: async () => [{ id: 'symcc-board', title: '', isShown: true, isFocused: false, isPlaced: true }], refresh: () => undefined },
     clock: { every: (_ms: number, f: () => void) => (ticks.push(f), { cancel: () => void ticks.splice(ticks.indexOf(f), 1) }) },
     ticks,
   }

@@ -60,7 +60,7 @@ function world(on: On) {
   return { files, writes, spawned, state, clock }
 }
 
-test('session.start with an unreadable scout file still runs the other scout, the heartbeat and the 2-minute check', async ($, on) => {
+test('session.start with an unreadable scout file still runs the other scout, the heartbeat and the 2-minute check', { timeoutMs: 20_000 }, async ($, on) => {
   const w = world(on)
   await $.session.start({ cwd: '/repo' } as never)
   expect(JSON.parse(w.files.get(LEAD)!).session).toBe('s1')

@@ -39,13 +39,13 @@ const KINDS: DefKind<KindDef, LeadKindInput> = {
 }
 
 /** Reads the kinds again: the plugin's built-in ones, then the project's .<name>/kinds/ over them. */
-export function loadKinds($: Host): Promise<KindDef[]> {
-  return loadDefs($, KINDS)
+export function loadKinds(host: Host): Promise<KindDef[]> {
+  return loadDefs(host, KINDS)
 }
 
 /** The plugin's kinds and the project's own, read again (S.kinds too); `broken` is the project's files that can't be read, with why. */
-export function kindLists($: Host): Promise<{ builtIn: KindDef[]; project: KindDef[]; broken: BrokenDef[]; dir: string }> {
-  return defLists($, KINDS)
+export function kindLists(host: Host): Promise<{ builtIn: KindDef[]; project: KindDef[]; broken: BrokenDef[]; dir: string }> {
+  return defLists(host, KINDS)
 }
 
 /**
@@ -53,13 +53,13 @@ export function kindLists($: Host): Promise<{ builtIn: KindDef[]; project: KindD
  * reset (back to the built-in), remove (an added kind), off / on (change and investigation can't be turned off). Every name is checked
  * before any path is made (letters, digits, - and _ only), so nothing outside <dir>/kinds is touched. The kinds are read again after a change.
  */
-export async function leadKinds($: Host, a: LeadKindInput): Promise<string> {
-  return (await changeKind($, a)).text
+export async function leadKinds(host: Host, a: LeadKindInput): Promise<string> {
+  return (await changeKind(host, a)).text
 }
 
 /** The kinds tool's work (see leadKinds); `ok` says a kind file was written or removed. */
-export function changeKind($: Host, a: LeadKindInput): Promise<{ ok: boolean; text: string }> {
-  return manageDefs($, KINDS, a)
+export function changeKind(host: Host, a: LeadKindInput): Promise<{ ok: boolean; text: string }> {
+  return manageDefs(host, KINDS, a)
 }
 
 // ---------------- the Kinds page of the panel's Settings view ----------------
@@ -90,27 +90,27 @@ export function resetKindView() {
 export const kindDraftOf = (k: KindDef): KindDraft => ({ kind: k.name, description: k.description, body: k.body, error: '' })
 
 /** Saves the edit mode through the kinds tool's edit; says what happened, or keeps the edit mode open with the error. */
-export async function saveKindDraft($: Host): Promise<string> {
+export async function saveKindDraft(host: Host): Promise<string> {
   const d = kindView.draft
   if (!d) return ''
   if (!d.description.trim()) {
     d.error = 'description is missing: say in a few words what this kind of task is'
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return ''
   }
-  const r = await changeKind($, { action: 'edit', name: d.kind, description: d.description, body: d.body })
+  const r = await changeKind(host, { action: 'edit', name: d.kind, description: d.description, body: d.body })
   if (!r.ok) {
     d.error = r.text
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return ''
   }
   kindView.draft = null
-  $.ui.invalidate('ui.render')
+  host.ui.refresh()
   return r.text
 }
 
 /** "New kind": makes .<name>/kinds/<kind>.md from the short template and opens it in the edit mode; a bad, taken or broken name
  *  stays in the name box with the reason (like newRoleFile). */
-export function newKindFile($: Host, name: string): Promise<string> {
-  return newDefFile($, KINDS, kindView, name, NEW_KIND_TEMPLATE, kindDraftOf)
+export function newKindFile(host: Host, name: string): Promise<string> {
+  return newDefFile(host, KINDS, kindView, name, NEW_KIND_TEMPLATE, kindDraftOf)
 }

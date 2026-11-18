@@ -21,61 +21,61 @@ const winChime = (name: string) => `[System.Media.SystemSounds]::${name}.Play();
 const MAC_SOUNDS = '/System/Library/Sounds'
 const FD_SOUNDS = '/usr/share/sounds/freedesktop/stereo'
 
-function run($: Host, argv: string[]) {
-  return $.process.run(argv, { timeoutMs: 5000 }).catch(() => null)
+function run(host: Host, argv: string[]) {
+  return host.process.run(argv, { timeoutMs: 5000 }).catch(() => null)
 }
-async function okRun($: Host, argv: string[]) {
-  return (await run($, argv))?.exitCode === 0
+async function okRun(host: Host, argv: string[]) {
+  return (await run(host, argv))?.exitCode === 0
 }
 
 /** Which system this is: uname first; where there is no uname (Windows), `cmd /c ver`. */
-export async function systemOf($: Host): Promise<NotifySystem> {
-  const r = await run($, ['uname', '-s'])
+export async function systemOf(host: Host): Promise<NotifySystem> {
+  const r = await run(host, ['uname', '-s'])
   const os = r && r.exitCode === 0 ? String(r.stdout ?? '').trim() : ''
   if (os === 'Darwin') return 'mac'
   if (os === 'Linux') return 'linux'
   if (/^(MINGW|MSYS|CYGWIN)|windows/i.test(os)) return 'windows'
   if (os) return 'other'
-  const w = await run($, ['cmd', '/c', 'ver'])
+  const w = await run(host, ['cmd', '/c', 'ver'])
   return w && w.exitCode === 0 && /windows/i.test(String(w.stdout ?? '')) ? 'windows' : 'other'
 }
 
 /** Is the program `name` installed? Looked up only (command -v, or where on Windows), never run. */
-function hasProgram($: Host, system: NotifySystem, name: string) {
-  return system === 'windows' ? okRun($, ['where', name]) : okRun($, ['sh', '-c', 'command -v "$1" >/dev/null 2>&1', 'sh', name])
+function hasProgram(host: Host, system: NotifySystem, name: string) {
+  return system === 'windows' ? okRun(host, ['where', name]) : okRun(host, ['sh', '-c', 'command -v "$1" >/dev/null 2>&1', 'sh', name])
 }
-function hasFile($: Host, path: string) {
-  return okRun($, ['test', '-f', path])
+function hasFile(host: Host, path: string) {
+  return okRun(host, ['test', '-f', path])
 }
 /** The freedesktop "complete" and "bell" sounds with extension `ext`, or null when there is no "complete" one. */
-async function fdSounds($: Host, ext: string) {
-  if (!(await hasFile($, `${FD_SOUNDS}/complete.${ext}`))) return null
+async function fdSounds(host: Host, ext: string) {
+  if (!(await hasFile(host, `${FD_SOUNDS}/complete.${ext}`))) return null
   const done = `${FD_SOUNDS}/complete.${ext}`
-  return { done, needs: (await hasFile($, `${FD_SOUNDS}/bell.${ext}`)) ? `${FD_SOUNDS}/bell.${ext}` : done }
+  return { done, needs: (await hasFile(host, `${FD_SOUNDS}/bell.${ext}`)) ? `${FD_SOUNDS}/bell.${ext}` : done }
 }
 
 /** Finds this machine's speech and sound commands by looking for the programs (and sound files), playing nothing. */
-export async function findPlayers($: Host): Promise<Players> {
-  const system = await systemOf($)
+export async function findPlayers(host: Host): Promise<Players> {
+  const system = await systemOf(host)
   const voice: Player[] = []
   const sound: Player[] = []
   if (system === 'mac') {
-    if (await hasProgram($, system, 'say')) voice.push(text => ({ argv: ['say', '-r', '200', text] }))
-    if ((await hasProgram($, system, 'afplay')) && (await hasFile($, `${MAC_SOUNDS}/Glass.aiff`))) {
-      const ping = (await hasFile($, `${MAC_SOUNDS}/Ping.aiff`)) ? 'Ping' : 'Glass'
+    if (await hasProgram(host, system, 'say')) voice.push(text => ({ argv: ['say', '-r', '200', text] }))
+    if ((await hasProgram(host, system, 'afplay')) && (await hasFile(host, `${MAC_SOUNDS}/Glass.aiff`))) {
+      const ping = (await hasFile(host, `${MAC_SOUNDS}/Ping.aiff`)) ? 'Ping' : 'Glass'
       sound.push((_, needs) => ({ argv: ['afplay', `${MAC_SOUNDS}/${needs ? ping : 'Glass'}.aiff`] }))
     }
   } else if (system === 'linux') {
-    if (await hasProgram($, system, 'spd-say')) voice.push(text => ({ argv: ['spd-say', '-w', text] }))
-    if (await hasProgram($, system, 'espeak-ng')) voice.push(text => ({ argv: ['espeak-ng', text] }))
-    if (await hasProgram($, system, 'espeak')) voice.push(text => ({ argv: ['espeak', text] }))
-    const oga = await fdSounds($, 'oga')
-    if (oga && (await hasProgram($, system, 'paplay'))) sound.push((_, needs) => ({ argv: ['paplay', needs ? oga.needs : oga.done] }))
-    if (await hasProgram($, system, 'canberra-gtk-play')) sound.push((_, needs) => ({ argv: ['canberra-gtk-play', '-i', needs ? 'bell' : 'complete'] }))
-    const wav = await fdSounds($, 'wav')
-    if (wav && (await hasProgram($, system, 'aplay'))) sound.push((_, needs) => ({ argv: ['aplay', '-q', needs ? wav.needs : wav.done] }))
+    if (await hasProgram(host, system, 'spd-say')) voice.push(text => ({ argv: ['spd-say', '-w', text] }))
+    if (await hasProgram(host, system, 'espeak-ng')) voice.push(text => ({ argv: ['espeak-ng', text] }))
+    if (await hasProgram(host, system, 'espeak')) voice.push(text => ({ argv: ['espeak', text] }))
+    const oga = await fdSounds(host, 'oga')
+    if (oga && (await hasProgram(host, system, 'paplay'))) sound.push((_, needs) => ({ argv: ['paplay', needs ? oga.needs : oga.done] }))
+    if (await hasProgram(host, system, 'canberra-gtk-play')) sound.push((_, needs) => ({ argv: ['canberra-gtk-play', '-i', needs ? 'bell' : 'complete'] }))
+    const wav = await fdSounds(host, 'wav')
+    if (wav && (await hasProgram(host, system, 'aplay'))) sound.push((_, needs) => ({ argv: ['aplay', '-q', needs ? wav.needs : wav.done] }))
   } else if (system === 'windows') {
-    if (await hasProgram($, system, 'powershell')) {
+    if (await hasProgram(host, system, 'powershell')) {
       voice.push(text => ({ argv: [...PS, WIN_SPEAK], env: { [WIN_TEXT_VAR]: text } }))
       sound.push((_, needs) => ({ argv: [...PS, winChime(needs ? 'Exclamation' : 'Asterisk')] }))
     }
@@ -84,14 +84,14 @@ export async function findPlayers($: Host): Promise<Players> {
 }
 
 /** This machine's players, found once per session. */
-export function players($: Host): Promise<Players> {
-  S.players ??= findPlayers($).catch(() => ({ system: 'other' as const, voice: [], sound: [] }))
+export function players(host: Host): Promise<Players> {
+  S.players ??= findPlayers(host).catch(() => ({ system: 'other' as const, voice: [], sound: [] }))
   return S.players
 }
 
 /** Which of sound and voice this machine can play (found once per session). */
-export async function playable($: Host): Promise<Playable> {
-  const p = await players($)
+export async function playable(host: Host): Promise<Playable> {
+  const p = await players(host)
   return { system: p.system, sound: p.sound.length > 0, voice: p.voice.length > 0 }
 }
 
@@ -113,8 +113,8 @@ export function withProject(text: string, root: string): string {
 }
 
 /** Says "symcc: T-3 done" (or chimes) for a merged task, if this session drives the board and notify is on. Never waits, never shows an error. */
-export function sayDone($: Host, b: Board, id: string) {
-  queueSay($, b, id)
+export function sayDone(host: Host, b: Board, id: string) {
+  queueSay(host, b, id)
 }
 
 /** The waiting questions already told ("task id#try#question"), so each one is told only once. */
@@ -124,37 +124,37 @@ export const saidNeedsYou = new Set<string>()
  * Says "symcc: T-5 needs you" (or chimes) when task `t`'s worker asked the owner something (its ask_owner
  * call, or files outside its list), once per waiting question, under the same rules and in the same queue as "T-3 done".
  */
-export function sayNeedsYou($: Host, b: Board, t: Pick<SymccTask, 'id' | 'attempts'>, question = '') {
+export function sayNeedsYou(host: Host, b: Board, t: Pick<SymccTask, 'id' | 'attempts'>, question = '') {
   const key = `${t.id}#${t.attempts}#${question}`
   if (saidNeedsYou.has(key)) return
-  if (queueSay($, b, NEEDS_YOU_MARK + t.id)) saidNeedsYou.add(key)
+  if (queueSay(host, b, NEEDS_YOU_MARK + t.id)) saidNeedsYou.add(key)
 }
 
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
-function queueSay($: Host, b: Board, item: string): boolean {
+function queueSay(host: Host, b: Board, item: string): boolean {
   if (!S.driving || !symccOn(b) || b.notify === 'off') return false
   S.notifyWanted = b.notify ?? null
   sayQueue.push(item)
   if (S.sayTimer || S.saying) return true
-  S.sayTimer = $.clock.after(1500, () => {
+  S.sayTimer = host.clock.after(1500, () => {
     S.sayTimer = null
-    void sayNext($)
+    void sayNext(host)
   })
   return true
 }
 
 /** The commands to try for one queued line, in order; [] when nothing plays (off, or it can't play here: told once). */
-export async function playsFor($: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
+export async function playsFor(host: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
   const text = spokenLine(items)
   if (!text) return []
-  const p = await players($)
+  const p = await players(host)
   const can: Playable = { system: p.system, sound: p.sound.length > 0, voice: p.voice.length > 0 }
   const n = notifyOf({ notify: wanted ?? undefined }, can)
   if (n === 'off') return []
   if (!canPlay(n, can)) {
     if (!S.toldUnplayable) {
       S.toldUnplayable = true
-      $.ui.toast(S.N.toast(unplayableNote(n, can)))
+      host.ui.toast(S.N.toast(unplayableNote(n, can)))
     }
     return []
   }
@@ -164,14 +164,14 @@ export async function playsFor($: Host, wanted: Notify | null, items: string[]):
   return p[n].map(make => make(line, needsYou))
 }
 
-export async function sayNext($: Host) {
+export async function sayNext(host: Host) {
   if (S.saying) return
   const items = sayQueue.splice(0)
   if (!items.length) return
   S.saying = true
   try {
-    for (const c of await playsFor($, S.notifyWanted, items)) {
-      const r = await $.process.run(c.argv, { timeoutMs: 30_000, ...(c.env ? { env: c.env } : {}) }).catch(() => null)
+    for (const c of await playsFor(host, S.notifyWanted, items)) {
+      const r = await host.process.run(c.argv, { timeoutMs: 30_000, ...(c.env ? { env: c.env } : {}) }).catch(() => null)
       if (r && r.exitCode === 0) break
     }
   } catch {
@@ -179,5 +179,5 @@ export async function sayNext($: Host) {
   } finally {
     S.saying = false
   }
-  if (sayQueue.length) void sayNext($)
+  if (sayQueue.length) void sayNext(host)
 }
