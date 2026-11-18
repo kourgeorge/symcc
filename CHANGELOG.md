@@ -5,6 +5,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## Unreleased
 
 ### Added
+- symcc runs outside Claude Code too, as a first test: `bun hosts/node/main.ts add | tick | board` drives the same board from a plain command line, with each worker as its own `claude -p` process in its worktree (a task's files become `claude -p` permission rules). A try's tokens and dollar cost are kept. There is no panel there: the board is the text board.
 - `/symcc-drive` makes the session you type it in drive the board. If another session drives, it hands over within 30 s: it stops its workers, steps down, and your session restarts those tasks from their kept folders and branches, without using up a try. There are never two drivers at once, and a session that doesn't answer is taken over after the usual 3 minutes.
 
 ### Fixed

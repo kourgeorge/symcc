@@ -52,8 +52,12 @@ export function agentState(a: HostAgent): AgentState {
  * How to start an agent: what kind it is, its prompt, its name and short description, the extra tools its role asks
  * for in symcc's words (a worker's, e.g. ['web']; the host maps them to its own tools), the folder it works in and its model. The host picks how to run it (for Claude Code,
  * a background subagent of the agent type that fits; elsewhere a child session, or a process of its own).
+ *
+ * `files`: for a worker on a change task with a file list, the files and folders it may change (relative to `cwd`; a
+ * folder ends with "/"). Claude Code's adapter doesn't need it (its tool hook asks symcc, see toolCheck); a host with
+ * no such hook (e.g. hosts/node/, a `claude -p` process) turns it into its own permission rules. Absent: anywhere in `cwd`.
  */
-export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; cwd?: string; model?: string }
+export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; files?: readonly string[]; cwd?: string; model?: string }
 
 /** What starting an agent answers: its id (none: it didn't start). */
 export type HostAgentStarted = { agentId?: string }
