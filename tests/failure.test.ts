@@ -172,6 +172,29 @@ test('kept test output: two failures in a row with "Error:" lines each keep only
   expect(failBlocks(filed)).toEqual(['tests/a.test.ts:\n(fail) one [1ms]\n  Error: first', '(fail) two [1ms]\n  Error: second'])
 })
 
+test('failing tests with the same name in two test files both count, and a failure shown twice still counts once', () => {
+  // shaped like real `claude plugin test` output where tests/a.test.ts and tests/b.test.ts both fail "same"
+  const out = [
+    '$ claude plugin test . (exit 1)', '', 'tests/a.test.ts:', '(fail) same [1.00ms]', '  Error: a broke', '(fail) only in a [1.00ms]', '  Error: a2',
+    '', 'tests/b.test.ts:', '(pass) fine [1.00ms]', '(fail) same [2.00ms]', '  Error: b broke', '(fail) only in b [1.00ms]', '  Error: b2',
+    '(fail) last [1.00ms]', '  Error: b3', ...Array.from({ length: 300 }, (_, i) => `(pass) filler ${i} ${'z'.repeat(40)}`),
+    '', ' 300 pass', ' 5 fail', 'Ran 305 tests across 2 files. [1.0s]',
+  ].join('\n')
+  expect(failCount(out)).toBe(5)
+  expect(failingLines(out, 3)).toBe('(fail) same | Error: a broke; (fail) only in a; (fail) same (and 2 more)')
+  const why = whyFailed(failed({ note: 'tests failed: `claude plugin test .` (exit 1)', test_output: out }))
+  expect(why).toContain('5 failing tests: ')
+  expect(why).toContain('(and 2 more)')
+  // the kept output shows them up front, each with its file; the count and the heading agree
+  const kept = testTail(out)
+  expect(kept.split('\n')[1]).toBe(failedTestsHead(5))
+  expect(failCount(kept)).toBe(5)
+  // the same test shown again in the cut end (its file line cut off, or in a runner's repeat list) counts once
+  expect(failCount(kept + '\n…ts:\n(fail) same [2.00ms]\n(fail) last [1.00ms]')).toBe(5)
+  expect(failCount(out + '\n\n2 tests failed:\n(fail) same [1.00ms]\n(fail) only in b [1.00ms]')).toBe(5)
+  expect(failCount(kept + '\n…tests/b.test.ts:\n(fail) only in b [1.00ms]')).toBe(5)
+})
+
 test("the checker's first problem is taken from its list of problems, not its opening line", () => {
   // shaped like T-386's report: an intro, details, then "Problems:" with an absolute worktree path
   const t386 = [

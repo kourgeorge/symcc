@@ -39,9 +39,40 @@ function saidBefore(t: Failed, detail: RegExp): string {
   return ''
 }
 
-/** How many different tests failed in test output (each "(fail)" line once, even when the kept output shows it twice). */
-export const failCount = (output: string): number =>
-  new Set(output.split('\n').map(l => l.trim()).filter(l => /^\(fail\)\s/.test(l)).map(l => l.replace(/\s*\[[\d.]+\s*m?s\]$/, ''))).size
+const FILE_LINE = /^\S.*\.test\.[cm]?[jt]sx?:$/
+/** Where the test file of the lines after it is no longer known: the cut end of kept output ("…"), or a runner's repeat list ("2 tests failed:"). */
+const FILE_UNKNOWN = /^…|^\d+ tests? failed:$/
+
+/**
+ * Each different failing test in test output, as the index of its first "(fail)" line and its name. A test is
+ * told apart by its test file too (the "tests/x.test.ts:" line above it), so two files' tests with the same
+ * name both count. Kept output can show a failure twice (in the failed tests up front and again in its end,
+ * where its file line may be cut off): a "(fail)" line whose file isn't known counts once with any earlier one of that name.
+ */
+function failures(output: string): { at: number; name: string }[] {
+  const lines = output.split('\n').map(l => l.trim())
+  const found: { at: number; name: string }[] = []
+  const seen = new Set<string>()
+  const names = new Set<string>()
+  let file = ''
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!
+    // the cut end's first line may be part of a file line ("…s/b.test.ts:"), so "…" comes first
+    if (FILE_UNKNOWN.test(l)) file = ''
+    else if (FILE_LINE.test(l)) file = l
+    if (!/^\(fail\)\s/.test(l)) continue
+    const name = l.replace(/\s*\[[\d.]+\s*m?s\]$/, '')
+    const key = `${file}\n${name}`
+    if (seen.has(key) || (!file && names.has(name))) continue
+    seen.add(key)
+    names.add(name)
+    found.push({ at: i, name })
+  }
+  return found
+}
+
+/** How many different tests failed in test output (each once, even when the kept output shows it twice; see failures). */
+export const failCount = (output: string): number => failures(output).length
 
 /**
  * The failing tests in test output: each "(fail) <name>" line with the first error lines of the first one,
@@ -52,15 +83,9 @@ export const failCount = (output: string): number =>
 export function failingLines(output: string, n = 1): string {
   const raw = output.split('\n')
   const lines = raw.map(l => l.trim())
+  const found = failures(output)
   const picks: string[] = []
-  const seen = new Set<string>()
-  for (let i = 0; i < lines.length; i++) {
-    if (!/^\(fail\)\s/.test(lines[i]!)) continue
-    // kept test output can show a failure twice: in the failed tests up front and again in its end
-    const name = lines[i]!.replace(/\s*\[[\d.]+\s*m?s\]$/, '')
-    if (seen.has(name)) continue
-    seen.add(name)
-    if (picks.length >= n) continue
+  for (const { at: i, name } of found.slice(0, n)) {
     if (picks.length) {
       picks.push(name)
       continue
@@ -75,7 +100,7 @@ export function failingLines(output: string, n = 1): string {
     picks.push([name, ...why.slice(0, 2)].join(' | '))
   }
   if (!picks.length) return ''
-  const more = seen.size - picks.length
+  const more = found.length - picks.length
   return cutLine(picks.join('; ') + (more > 0 ? ` (and ${more} more)` : ''), 240)
 }
 
