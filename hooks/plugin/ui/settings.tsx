@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummary, isSettingPage, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { type $, S } from '../state'
 import { resetPane } from './open'
@@ -7,7 +7,7 @@ import { ownerSettings } from '../tools'
 import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../roles'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../kinds'
 import type { PaneParts } from './parts'
-import { row } from './arrows'
+import { arrows, headingFocused, row } from './arrows'
 import { claudeHost } from '../../claude/host'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
@@ -594,11 +594,13 @@ export async function settingsPage($: $, pane: PaneParts) {
       {header()}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
-        const label = open ? `▾ ${g.title}` : `▸ ${groupSummary(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })}`
+        const sum = groupSummaryParts(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })
+        const label = open ? `▾ ${g.title}` : `▸ ${sum.title}${sum.values}`
         return [
           ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),
           <Button key={row(`group:${g.title}`)} plain label={label} autoFocus={gi === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={toggleGroup(g.title)}>
-            <Text bold color={C('suggestion')}>{label}</Text>
+            <Text bold color={C('text')}>{open ? `▾ ${g.title}` : `▸ ${sum.title}`}</Text>
+            {open || !sum.values ? null : <Text color={C('inactive')}>{sum.values}</Text>}
           </Button>,
           ...(open ? g.items.flatMap(item => (isSettingPage(item) ? [pageRow(item)] : settingRow(item))) : []),
         ]
@@ -607,7 +609,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       <Text color={C('inactive')}>Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
       <Text key="settings-back-blank"> </Text>
       <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
-      {footer(settingsKeys(), 'settings-keys')}
+      {footer(settingsKeys(headingFocused(arrows.focused)), 'settings-keys')}
     </Box>
   )
 }
