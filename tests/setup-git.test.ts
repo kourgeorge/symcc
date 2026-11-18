@@ -39,7 +39,7 @@ type Start = {
 
 type Commit = { files: string[]; args: string[] }
 
-/** A gitignore line matches a path (the few patterns setup writes: dir/, /exact, name, name.*, !name). As in git, the last matching line wins. */
+/** A gitignore line matches a path (the few patterns setup writes: dir/, /exact, name, name.*, !.env*.example). As in git, the last matching line wins; case-sensitive, like git on Linux. */
 function ignored(lines: string[], path: string): boolean {
   const parts = path.split('/')
   const base = parts.at(-1)!
@@ -51,7 +51,7 @@ function ignored(lines: string[], path: string): boolean {
       if (d.includes('/')) return path.startsWith(`${d}/`)
       return parts.slice(0, -1).includes(d)
     }
-    if (l.endsWith('*')) return base.startsWith(l.slice(0, -1))
+    if (l.includes('*')) return new RegExp('^' + l.split('*').map(x => x.replace(/[.+?^$()|[\]{}\\]/g, '\\$&')).join('[^/]*') + '$').test(base)
     return base === l
   }
   let out = false
@@ -222,7 +222,7 @@ test('a folder with no repo: a .gitignore with symcc data folder and the common 
   const w = world()
   await withProject(w)
   await setupGit(w.$, 'the lead')
-  expect(ignoreLinesOf(w)).toEqual([`${S.N.dir}/`, 'node_modules/', '.env', '.env.*', '!.env.example', '!.env.sample', '!.env.template', '!.env.dist', '!.env.defaults', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/'])
+  expect(ignoreLinesOf(w)).toEqual([`${S.N.dir}/`, 'node_modules/', '.env', '.env.*', '!.env*.example', '!.env*.sample', '!.env*.template', '!.env*.dist', '!.env*.defaults', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/'])
 })
 
 test('a folder with no repo: one commit with the normal files and .gitignore, not the data folder', async () => {
@@ -347,6 +347,16 @@ test('template files (.env.example, config/.env.defaults, id_rsa.example) are in
   expect(out).not.toContain('looks like a secret')
 })
 
+test('longer template names (.env.local.example, config/.env.production.sample) are in the first commit too; .env.EXAMPLE and .env.local are not', async () => {
+  const w = world()
+  await withProject(w)
+  for (const f of ['.env.local', '.env.local.example', 'config/.env.production.sample', '.env.EXAMPLE']) w.files.set(`${ROOT}/${f}`, 'X=1\n')
+  await setupGit(w.$, 'the lead')
+  const files = w.repo.commits[0]!.files
+  for (const f of ['.env.local.example', 'config/.env.production.sample']) expect(files).toContain(f)
+  for (const f of ['.env.local', '.env.EXAMPLE']) expect(files).not.toContain(f)
+})
+
 test('a secret-looking file the base lines miss (a .pem) is taken out of the commit and added to .gitignore by its path', async () => {
   const w = world()
   await withProject(w)
@@ -424,7 +434,7 @@ test('an existing .gitignore without a last newline gets one before the added li
 test('an existing .gitignore that has every line already is not rewritten and the answer says nothing about it', async () => {
   const w = world()
   await withProject(w)
-  const mine = `${[`${S.N.dir}/`, 'node_modules/', '.env', '.env.*', '!.env.example', '!.env.sample', '!.env.template', '!.env.dist', '!.env.defaults', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/'].join('\n')}\n`
+  const mine = `${[`${S.N.dir}/`, 'node_modules/', '.env', '.env.*', '!.env*.example', '!.env*.sample', '!.env*.template', '!.env*.dist', '!.env*.defaults', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/'].join('\n')}\n`
   w.files.set(`${ROOT}/.gitignore`, mine)
   const out = await setupGit(w.$, 'the lead')
   expect(ignoreOf(w)).toBe(mine)

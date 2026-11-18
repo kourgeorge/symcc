@@ -59,7 +59,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - A task waiting on your files keeps waiting (even if its merge runs over) and tells you the right fix for each kind of file: commit or stash, remove an untracked file, or deal with an ignored one.
 
 ### Fixed
-- Template files such as `.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.defaults` and `id_rsa.example` no longer count as secrets: tasks can change them, your own edits to them in review are kept, and the first-time git setup commits them. Real `.env`, `.env.local`, `*.pem`, `*.key` and `id_rsa` files are still left out.
+- Template files such as `.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.defaults` and `id_rsa.example` no longer count as secrets: tasks can change them, your own edits to them in review are kept, and the first-time git setup commits them (also longer names like `.env.local.example`; the ending must be lower case). Real `.env`, `.env.local`, `*.pem`, `*.key` and `id_rsa` files are still left out.
 - The checker no longer skips changes that only look like docs: agent instructions (`roles/`, `kinds/`, `.claude/`, `.symcc/`, `skills/`, `CLAUDE.md`, `AGENTS.md`, `SKILL.md`), `.mdx` files and config, build or CI files (even under `docs/`) are now checked. Only README / CHANGELOG / LICENSE, other `.md` files and media skip it.
 - The `checker` role can't be turned on or off any more (its page has no Turn on button and points to the `checker` setting instead), and it is never offered as a task role.
 - A worker whose run ended on an API error or a refusal now fails its task with the reason, instead of being checked and merged as if it had finished.

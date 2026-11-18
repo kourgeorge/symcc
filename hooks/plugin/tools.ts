@@ -237,7 +237,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     had to merge); reject with a reason sends it back to "todo" for a fresh worker.
   • Files whose names look like secrets (.env, .env.*, *.pem, *.key, id_rsa, ...) are left out of a
     worker's commit and merge (after a merge they are kept in ${S.N.dir}/left-out/<task>/); deleting
-    one merges normally. A task that changed only such files waits with a question: answer to
+    one merges normally. Templates (a lower-case .example, .sample, .template, .dist or .defaults
+    ending, like .env.example or .env.local.example) are not secrets and merge like any file. A task that changed only such files waits with a question: answer to
     retry without them (say what to do instead), or drop it.
   • A task's branch only moves by a checked merge. Your uncommitted edits on it are kept; only
     edits (or untracked files) in files the task changes make it wait, and it merges by itself
@@ -257,7 +258,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   • Add ${S.N.dir}/ to the project's .gitignore.
   • A folder with no git repo (or no commits yet): nothing starts. ${S.N.name} asks first, then
     (press g in the board, or the lead's setup_git) runs git init on main, writes a .gitignore
-    and makes a first commit of your files, leaving out secrets (.env, *.pem, id_rsa) and files
+    and makes a first commit of your files, leaving out secrets (.env, *.pem, id_rsa; templates like .env.example are kept) and files
     over 50 MB. It never pushes or adds a remote. With git not installed nothing starts at all.`,
 })
 
@@ -350,7 +351,7 @@ export const TOOLS = () => [
   { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
   {
     name: 'setup_git',
-    description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.*, .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
+    description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.* but not templates like .env.example (!.env*.example etc.), .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
     inputSchema: { type: 'object', properties: {} },
   },
   {
