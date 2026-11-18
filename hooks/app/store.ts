@@ -21,13 +21,48 @@ export const path = (rel: string) => {
 }
 
 /**
- * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does.
+ * The main project folder for `dir`, even when `dir` is a worker's worktree (T-472): git's shared folder
+ * (`git rev-parse --git-common-dir`) is the main project's .git, so its parent is the main project. When git can't
+ * tell (no git, a bare repo, a host that runs nothing), a path inside .<name>/worktrees/ is cut back to the project
+ * above it; any other folder is answered as it is.
+ */
+export async function mainRoot(host: Host, dir: string): Promise<string> {
+  if (!dir) return ''
+  const clean = dir.replace(/\/+$/, '') || '/'
+  const r = await host.run(['git', 'rev-parse', '--git-common-dir'], { cwd: clean, timeoutMs: 15_000 }).catch(() => null)
+  const common = r && r.exitCode === 0 ? r.stdout.trim().replace(/\/+$/, '') : ''
+  if (common && /(^|\/)\.git$/.test(common)) {
+    // git answers ".git" (or a relative path) in the main project, an absolute path from a worktree
+    const abs = common.startsWith('/') ? common : `${clean}/${common}`
+    const parent = abs.slice(0, -'.git'.length)
+    // a Windows path (C:/...) is kept as git wrote it, only its .git cut off
+    return abs.startsWith('/') ? normalPath(parent) : parent.replace(/[\\/]+$/, '')
+  }
+  const mark = `/${S.N.worktrees}/`
+  const at = clean.indexOf(mark)
+  return at > 0 ? clean.slice(0, at) : clean
+}
+
+/** `p` with its "." and ".." parts worked out (git may answer e.g. "../../.git" from a folder inside the project). */
+function normalPath(p: string): string {
+  const out: string[] = []
+  for (const part of p.split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  return `/${out.join('/')}`
+}
+
+/**
+ * Sets S.root from the session (its git repo, else its folder) when it is not set yet, as session.start does. It is
+ * always the main project, also for a session in a worker's worktree (see mainRoot).
  * A hook that runs before session.start (a plugin reload starts the module over) uses this; true once the root is known.
  */
 export async function findRoot(host: Host): Promise<boolean> {
   if (S.root) return true
   const repo = await host.session.repo().catch(() => null)
-  const root = repo?.root || (await host.session.root().catch(() => '')) || ''
+  const root = await mainRoot(host, repo?.root || (await host.session.root().catch(() => '')) || '').catch(() => '')
   if (root && !S.root) S.root = root
   return !!S.root
 }
@@ -92,6 +127,8 @@ export function resetStore() {
 async function keepCopy(host: Host, text: string, what: string, say: (copy: string) => string): Promise<string> {
   const known = reported.get(text)
   if (known !== undefined) return known
+  // a guard-only copy (guardStart, in a worker's folder) never writes; the copy that drives the board keeps it
+  if (S.guardOnly) return ''
   const copy = `${S.N.boardFile}.${what}-${now().replace(/[:.]/g, '-')}`
   const ok = await host.fs.write(path(copy), text).then(() => true, () => false)
   const name = ok ? copy : ''

@@ -96,7 +96,7 @@ test('a Host written by hand runs the board store: find the project, take the lo
   await saveBoard(host, { ...b, max_parallel: 3 })
   await dropLock(host, mine)
   expect((await load(host)).max_parallel).toBe(3)
-  expect(ran).toEqual(['mv', 'ln', 'rm', 'mv', 'rm'])
+  expect(ran).toEqual(['git', 'mv', 'ln', 'rm', 'mv', 'rm'])
   expect([...files.keys()]).toEqual([`/proj/${S.N.boardFile}`])
 })
 
