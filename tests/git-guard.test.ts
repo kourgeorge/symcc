@@ -311,6 +311,16 @@ test('long odd brace words stay cheap for the git check, and a long word with gi
   expect(gitWriteIn(`${'{g,i}'.repeat(60)}{t..t} stash`)).toBe('git with {braces}')
 })
 
+test('a brace word past the length or "{" limit is not expanded: it is judged by its letters, so the limit stays (T-436, T-478)', () => {
+  // `t{i,g}` expands to "ti" and "tg", never git, but its letters hold g, i and t. Under the limits the expansion is
+  // used, so it is no git; past them (more than 50 "{", or more than 2000 characters) the expansion is skipped and
+  // the letters count, so it is refused. Without the limit this word would be expanded and pass
+  expect(gitWriteIn(`t{i,g}${'{x}'.repeat(49)} stash`)).toBeUndefined()
+  expect(gitWriteIn(`t{i,g}${'{x}'.repeat(50)} stash`)).toBe('git with {braces}')
+  expect(gitWriteIn(`t{i,g}${'x'.repeat(1990)} stash`)).toBeUndefined()
+  expect(gitWriteIn(`t{i,g}${'x'.repeat(2000)} stash`)).toBe('git with {braces}')
+})
+
 test('the git write reasons keep their exact text, and quoted braces stay text (T-447)', () => {
   const head = (who: string) =>
     `Refused: git stash may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
