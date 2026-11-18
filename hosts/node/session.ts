@@ -7,30 +7,32 @@ import type { Host } from '../../hooks/host'
 import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentFinished, leadUpdate } from '../../hooks/app/symcc'
 import { S, useName, toolName, workers, starting, finishing, approving, queuedWorkers, scoutRuns, checkerRuns } from '../../hooks/app/state'
 import { drainStarts, queuedStarts, cancelStarts } from '../../hooks/app/starts'
+import { stopForQuit } from '../../hooks/app/workers'
 import { nodeHost } from './host'
 import { processAgents, type AgentRunner, type ProcessAgents } from './runner'
 
-export type NodeSession = { host: Host; agents: ProcessAgents; say: (line: string) => void }
+export type NodeSession = { host: Host; agents: ProcessAgents; say: (line: string) => void; closing: boolean }
 
 export type SessionOptions = { root: string; runner: AgentRunner; say?: (line: string) => void; sessionId?: string; pluginRoot?: string }
 
 /** Starts a session on project `o.root` with agents from `o.runner`, as Claude Code's session.start hook does. */
 export async function openSession(o: SessionOptions): Promise<NodeSession> {
   const say = o.say ?? ((line: string) => void process.stderr.write(`${line}\n`))
-  const ref: { host?: Host } = {}
+  const ref: { host?: Host; s?: NodeSession } = {}
   const agents = processAgents(o.runner, (agentId, end) => {
     const host = ref.host!
     useName(host)
     for (const d of end.denied ?? []) say(`${agentId}: its permission rules refused ${d}`)
     agentFinished(host, agentId, end)
-    void drainStarts(host).catch(() => undefined)
+    // a closing session starts nothing new
+    if (!ref.s?.closing) void drainStarts(host).catch(() => undefined)
   })
   const host = nodeHost({ root: o.root, agents, say, cost: agents.cost, ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
   ref.host = host
   useName(host)
   sessionStarting()
   await sessionStart(host)
-  return { host, agents, say }
+  return (ref.s = { host, agents, say, closing: false })
 }
 
 /** Runs one of the lead's tools (`tool` in symcc's plain words, e.g. "add") as the lead, and answers its text. */
@@ -69,8 +71,17 @@ export async function settle(s: NodeSession, work: boolean, timeoutMs = 60 * 60_
   return false
 }
 
-/** Ends the session (its timers stop and the lead is let go) and answers the board update waiting for the lead, if any. */
-export async function closeSession(s: NodeSession): Promise<string | undefined> {
+/**
+ * Ends the session and answers the board update waiting for the lead, if any. Agents still running (a tick that
+ * stopped waiting) are stopped first and their tasks go back to "todo", so the next run starts them again instead of
+ * finding them "doing" with no worker; then every agent process is ended for sure, and the timers stop.
+ */
+export async function closeSession(s: NodeSession, why = 'the command line stopped waiting'): Promise<string | undefined> {
+  s.closing = true
+  cancelStarts(() => true, why)
+  const back = await stopForQuit(s.host, why).catch(() => [] as string[])
+  await s.agents.stopAll()
   await sessionEnd(s.host)
+  if (back.length) s.say(`stopped ${back.join(', ')}: back to todo for the next tick`)
   return leadUpdate()
 }

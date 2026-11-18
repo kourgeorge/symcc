@@ -30,7 +30,7 @@ declare module 'node:child_process' {
     on(event: 'close', fn: (code: number | null, signal: string | null) => void): void
     on(event: 'error', fn: (err: Error) => void): void
   }
-  export function spawn(cmd: string, args: readonly string[], options: { cwd?: string; env?: Record<string, string | undefined>; stdio?: readonly ('pipe' | 'ignore' | 'inherit')[] }): ChildProcess
+  export function spawn(cmd: string, args: readonly string[], options: { cwd?: string; env?: Record<string, string | undefined>; detached?: boolean; stdio?: readonly ('pipe' | 'ignore' | 'inherit')[] }): ChildProcess
 }
 
 declare module 'bun:test' {
@@ -52,6 +52,8 @@ declare var process: {
   env: Record<string, string | undefined>
   exitCode: number | undefined
   exit(code?: number): never
+  kill(pid: number, signal?: string): boolean
+  on(event: 'SIGINT' | 'SIGTERM', fn: () => void): void
   cwd(): string
   stdout: { write(text: string): boolean }
   stderr: { write(text: string): boolean }

@@ -1426,6 +1426,26 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
   return `${S.N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}`
 }
 
+/**
+ * The host is about to quit (`why`, e.g. a command line that stops waiting): every worker, scout and checker of this
+ * copy is stopped, and the tasks they worked on go back to "todo" (their folders and branches are kept), so the next
+ * run starts them again instead of finding them "doing" with no worker. Answers the ids of the tasks put back.
+ */
+export async function stopForQuit(host: Host, why: string): Promise<string[]> {
+  const ids: string[] = []
+  await haltAll(host, why, async w => {
+    ids.push(w.task)
+    await change(host, x => {
+      const cur = find(x, w.task)
+      if (cur?.status !== 'doing') return x
+      return patchTask(x, w.task, { status: 'todo', note: `stopped: ${why}; continues on the next run`, history: [...cur.history, stoppedLine(cur, why)], ...endedBy(cur, now(), 'stopped', why) }, now())
+    })
+  })
+  ids.push(...(await stopChecks(host, why)).back)
+  if (ids.length) await publish(host, await load(host))
+  return ids
+}
+
 export const LIVE = new Set(['pending', 'running', 'waiting'])
 
 /**

@@ -29,22 +29,45 @@ export type ProcessAgents = Host['agents'] & {
   running: () => number
   /** what the finished runs cost together (US dollars), when any said */
   cost: () => number | undefined
+  /**
+   * Ends every agent process still running (and what it started), and waits until they are gone (after `graceMs` they
+   * are killed outright), so none keeps editing its folder after the CLI has quit.
+   */
+  stopAll: (graceMs?: number) => Promise<void>
 }
 
 /** host.agents over `runner`'s processes; `onEnd` is called once per run when its process has ended. */
 export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end: RunnerEnd) => void): ProcessAgents {
-  type Run = { agent: HostAgent; child: ChildProcess; killed: boolean }
+  type Run = { agent: HostAgent; child: ChildProcess; killed: boolean; closed: Promise<void> }
   const runs = new Map<string, Run>()
   let n = 0
   let cost: number | undefined
+  // Each agent runs in its own process group (detached), so a stop ends what it started too (e.g. a shell's commands).
+  const signal = (r: Run, sig: 'SIGTERM' | 'SIGKILL') => {
+    try {
+      if (r.child.pid) process.kill(-r.child.pid, sig)
+      else r.child.kill(sig)
+    } catch {
+      r.child.kill(sig)
+    }
+  }
+  const stop = (r: Run) => {
+    if (r.agent.status !== 'running') return
+    r.killed = true
+    signal(r, 'SIGTERM')
+  }
   return {
     async spawn(a) {
       const { argv, stdin, env } = runner.command(a)
       const [cmd, ...args] = argv
       if (!cmd) throw new Error(`${runner.name}: no command for ${a.name}`)
       const id = `${runner.name}-${++n}-${Date.now().toString(36)}`
-      const child = spawn(cmd, args, { cwd: a.cwd, env: { ...process.env, ...env }, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
-      const run: Run = { agent: { id, kind: a.kind === 'worker' ? 'worker' : 'scout', status: 'running', name: a.name, description: a.description }, child, killed: false }
+      const child = spawn(cmd, args, { cwd: a.cwd, env: { ...process.env, ...env }, detached: true, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
+      const closed = new Promise<void>(res => {
+        child.on('close', () => res())
+        child.on('error', () => res())
+      })
+      const run: Run = { agent: { id, kind: a.kind === 'worker' ? 'worker' : 'scout', status: 'running', name: a.name, description: a.description }, child, killed: false, closed }
       runs.set(id, run)
       let stdout = ''
       let stderr = ''
@@ -69,12 +92,24 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
     send: async () => undefined,
     async stop(agentId) {
       const r = runs.get(agentId)
-      if (!r || r.agent.status !== 'running') return
-      r.killed = true
-      r.child.kill('SIGTERM')
+      if (r) stop(r)
     },
     running: () => [...runs.values()].filter(r => r.agent.status === 'running').length,
     cost: () => cost,
+    async stopAll(graceMs = 5000) {
+      const live = [...runs.values()].filter(r => r.agent.status === 'running' || r.killed)
+      for (const r of live) stop(r)
+      // the group is ended outright after the grace time, and also when its leader closed early (its children may live on)
+      await Promise.all(
+        live.map(async r => {
+          let t: ReturnType<typeof setTimeout> | undefined
+          await Promise.race([r.closed, new Promise<void>(res => void (t = setTimeout(res, graceMs)))])
+          if (t) clearTimeout(t)
+          signal(r, 'SIGKILL')
+          await Promise.race([r.closed, new Promise<void>(res => setTimeout(res, 1000))])
+        }),
+      )
+    },
   }
 }
 

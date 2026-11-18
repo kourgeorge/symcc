@@ -2,8 +2,10 @@
 # A stand-in for `claude -p --output-format stream-json` (no model): it reads the prompt from stdin, "edits" a file in
 # the folder it was started in (FAKE_EDIT, default hello.txt), saves its arguments and prompt where FAKE_LOG says, and
 # prints a stream-json system line and result line the way claude -p does, with tokens and a cost.
+# FAKE_SLEEP (seconds) makes it wait first, like a slow model: a stop while it waits must mean the file never changes.
 prompt=$(cat)
 file=${FAKE_EDIT:-hello.txt}
+[ -n "${FAKE_SLEEP:-}" ] && sleep "$FAKE_SLEEP"
 mkdir -p "$(dirname "$file")"
 echo "hello from the fake worker" > "$file"
 if [ -n "${FAKE_LOG:-}" ]; then

@@ -109,3 +109,46 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
   }
 }, 180_000)
+
+test('a tick that stops waiting stops its claude -p worker: the task goes back to todo and the worker never edits after the CLI ended', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-quit-')
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 120_000 })
+    expect((await cli({}, 'add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
+
+    // the fake worker waits 8 s before it writes; the tick gives up after about 3 s
+    const started = Date.now()
+    const tick = await cli({ FAKE_SLEEP: '8' }, '--wait-minutes', '0.05', 'tick')
+    expect(tick.stdout).toContain('stopped waiting')
+    expect(tick.stderr).toContain('stopped T-1')
+    const t = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
+    expect(t.status).toBe('todo')
+    expect(t.note).toContain('continues on the next run')
+
+    // well after the fake worker would have written, its worktree still has no hello.txt
+    const left = 8_000 - (Date.now() - started)
+    await new Promise<void>(res => void setTimeout(res, Math.max(0, left) + 2_000))
+    expect(await readFile(`${repo}/.symcc/worktrees/T-1/hello.txt`, 'utf8').catch(() => 'none')).toBe('none')
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)
+
+test('an option with no value is refused: a bare --files never adds a task that may edit anywhere', async () => {
+  const dir = await mkdtemp('/tmp/symcc-node-args-')
+  try {
+    const r = await runCommand(['bun', MAIN, '--root', dir, 'add', 'Title', '--files'], { cwd: dir })
+    expect(r.exitCode).toBe(2)
+    expect(r.stderr).toContain('--files needs a value')
+    expect(await readFile(`${dir}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
+    const r2 = await runCommand(['bun', MAIN, '--root', dir, 'add', 'Title', '--files', '--why', 'x'], { cwd: dir })
+    expect(r2.stderr).toContain('--files needs a value')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

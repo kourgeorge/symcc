@@ -9,14 +9,23 @@
 import { claudeRunner } from './runner'
 import { openSession, leadTool, slashCommand, settle, closeSession, type NodeSession } from './session'
 
-/** The CLI's words: the options (--name value) apart from the rest. */
+/**
+ * The CLI's words: the options (--name value) apart from the rest. An option with no value after it (the last word,
+ * or another option next) is refused, so e.g. a bare `--files` never becomes the task's details with no file limit.
+ */
 export function parseArgs(argv: readonly string[]): { opts: Record<string, string>; rest: string[] } {
   const opts: Record<string, string> = {}
   const rest: string[] = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!
-    if (a.startsWith('--') && i + 1 < argv.length) opts[a.slice(2)] = argv[++i]!
-    else rest.push(a)
+    if (!a.startsWith('--')) {
+      rest.push(a)
+      continue
+    }
+    const v = argv[i + 1]
+    if (v === undefined || v.startsWith('--')) throw new Error(`${a} needs a value after it`)
+    opts[a.slice(2)] = v
+    i++
   }
   return { opts, rest }
 }
@@ -63,13 +72,24 @@ async function command(s: NodeSession, rest: string[], opts: Record<string, stri
 }
 
 async function main() {
-  const { opts, rest } = parseArgs(process.argv.slice(2))
+  let args: ReturnType<typeof parseArgs>
+  try {
+    args = parseArgs(process.argv.slice(2))
+  } catch (err) {
+    console.error(`error: ${(err as Error).message}\n${USAGE}`)
+    return 2
+  }
+  const { opts, rest } = args
   if (!rest.length) {
     console.log(USAGE)
     return 2
   }
   const runner = claudeRunner({ ...(opts.claude ? { bin: opts.claude } : {}), ...(opts.model ? { model: opts.model } : {}) })
   const s = await openSession({ root: opts.root ?? process.cwd(), runner })
+  // Ctrl-C or a kill: the agents are stopped and their tasks put back before the CLI ends (they run in their own groups)
+  const quit = (sig: string) => () => void closeSession(s, `the command line got ${sig}`).finally(() => process.exit(130))
+  process.on('SIGINT', quit('SIGINT'))
+  process.on('SIGTERM', quit('SIGTERM'))
   let code = 0
   try {
     console.log(await command(s, rest, opts))
