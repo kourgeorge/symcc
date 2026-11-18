@@ -17,7 +17,7 @@
 //
 // Before calling an entry point, the host calls useName (plugin/state.ts) with its plugin name, so S.N is right.
 import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason } from '../board'
-import type { Host } from '../host'
+import type { FileTouch, Host } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from '../plugin/archive'
 import { askCall, checkEdit, guardFailed } from '../plugin/ask'
@@ -28,7 +28,7 @@ import { loadRoles } from '../plugin/roles'
 import { loadKinds } from '../plugin/kinds'
 import { checkerFinished } from '../plugin/checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from '../plugin/scouts'
-import { S, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from '../plugin/state'
+import { S, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState } from '../plugin/state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from '../plugin/store'
 import { noteForLead, brief } from '../plugin/tell'
 import { playable } from '../plugin/voice'
@@ -102,7 +102,7 @@ export async function sessionStart(host: Host) {
   // Even if a later step throws, pump must not stay blocked for the whole session.
   try {
     S.root = (await host.session.repo())?.root ?? (await host.session.root())
-    S.home = (await host.env.get('HOME').catch(() => undefined)) ?? ''
+    S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
     // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
     // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
@@ -193,12 +193,12 @@ export function ownerTyped(text: string) {
 // ---------------- tools ----------------
 
 let names: string[] | null = null
-/** The names of the lead's tools (without the host's prefix, see S.N.tool). */
+/** The names of the lead's tools, symcc's plain names (the host may call them otherwise, see toolName). */
 const toolNames = () => (names ??= TOOLS().map(t => t.name))
 
 /** Whether `tool` (the name the host calls it by) is one of symcc's own: the lead's tools or the workers' question tool. */
 export function isSymccTool(tool: string): boolean {
-  return tool === S.N.tool(ASK_TOOL) || toolNames().some(t => tool === S.N.tool(t))
+  return tool === toolName(ASK_TOOL) || toolNames().some(t => tool === toolName(t))
 }
 
 /**
@@ -209,11 +209,11 @@ export function isSymccTool(tool: string): boolean {
  */
 export async function toolCall(host: Host, tool: string, agentId: string | undefined, input: Record<string, unknown>): Promise<{ deny: string } | { result: string } | null> {
   if (agentId && stopped.has(agentId)) return { deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` }
-  if (tool === S.N.tool(ASK_TOOL)) {
+  if (tool === toolName(ASK_TOOL)) {
     if (!(await findRoot(host))) return { result: startingText() }
     return { result: await askCall(host, agentId, input).catch((err: Error) => `error: ${err.message}`) }
   }
-  const name = toolNames().find(t => tool === S.N.tool(t))
+  const name = toolNames().find(t => tool === toolName(t))
   if (!name) return null
   // Before session start set the project folder (e.g. right after a plugin reload), learn it from the
   // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
@@ -227,12 +227,14 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
 }
 
 /**
- * A tool that is not symcc's ran (`call`: the tool's name as `tool`, and its input fields). Writing, editing or
+ * A tool that is not symcc's ran, and touched what `touch` says (a file it wrote or edited, or a shell command it ran;
+ * null: none of those, as the host tells it from its own tool names, e.g. claude/tools.ts). Writing, editing or
  * deleting a scout file reschedules the scouts, a role file reloads the roles, and the board is published again.
  * Runs in the background.
  */
-export function otherToolDone(host: Host, call: Record<string, unknown>) {
-  const hit = fileToolHits(call, S.N.scouts, `${S.N.dir}/roles`)
+export function otherToolDone(host: Host, touch: FileTouch | null) {
+  if (!touch) return
+  const hit = fileToolHits(touch, S.N.scouts, `${S.N.dir}/roles`)
   if (!hit.scouts && !hit.roles) return
   void (async () => {
     // before session start (a plugin reload): learn the project folder first; unknown, change nothing

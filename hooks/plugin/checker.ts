@@ -2,8 +2,7 @@
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
 // verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, addTokens, agentSafeName, checkerDiff, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
-import { roleSection } from '../claude/agent-types'
+import { type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, addTokens, agentSafeName, checkerDiff, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -37,7 +36,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
   // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, test command, kind, ...)
   const facts = changeValues(t, b, dir)
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, S.W.roleTools), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`

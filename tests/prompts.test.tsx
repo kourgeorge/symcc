@@ -16,7 +16,8 @@ import { ran, entry } from './fakes'
 const ROOT = '/proj'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
 const ISO = '2026-11-16T00:00:00.000Z'
-const ASK = 'To ask the owner something, call the mcp__symcc__ask_owner tool. If an edit is refused as outside your files, stop and hand back.'
+// symcc's own words name the question tool plainly; Claude Code's (mcp__symcc__ask_owner) come with its host (see app-entry.test.ts)
+const ASK = 'To ask the owner something, call the ask_owner tool. If an edit is refused as outside your files, stop and hand back.'
 const TEST_RULE = 'Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.'
 
 /** A board with T-1 doing (files src/), and the test commands given. */

@@ -6,6 +6,7 @@ import { type SymccTask } from '../types'
 import { prepareWorktree, copyTypes, worktreeDir, TYPES_DIR } from '../hooks/plugin/git'
 import { S } from '../hooks/plugin/state'
 import { test } from './reset'
+import { fakeHost } from './fake-host'
 
 const ROOT = '/repo'
 type Res = { exitCode: number; stdout: string; stderr: string }
@@ -40,32 +41,30 @@ function world({ types = true, ignored = true } = {}) {
     }
     return ok()
   }
-  const $ = {
-    process: {
-      run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
-        const [cmd, ...rest] = argv
-        calls.push(argv.join(' '))
-        if (cmd === 'git') return runGit(rest, o.cwd ?? ROOT)
-        if (cmd === 'rm') {
-          for (const p of rest.filter(x => !x.startsWith('-'))) for (const k of [p, ...under(p)]) files.delete(k)
-          return ok()
-        }
-        if (cmd === 'cp') {
-          const [from, to] = rest.filter(x => !x.startsWith('-')) as [string, string]
-          for (const k of under(from)) files.set(`${to}${k.slice(from.length)}`, files.get(k)!)
-          return ok()
-        }
+  const { host: $ } = fakeHost({
+    run: async (argv: readonly string[], o: { cwd?: string } = {}): Promise<Res> => {
+      const [cmd, ...rest] = argv
+      calls.push(argv.join(' '))
+      if (cmd === 'git') return runGit(rest, o.cwd ?? ROOT)
+      if (cmd === 'rm') {
+        for (const p of rest.filter(x => !x.startsWith('-'))) for (const k of [p, ...under(p)]) files.delete(k)
         return ok()
-      },
+      }
+      if (cmd === 'cp') {
+        const [from, to] = rest.filter(x => !x.startsWith('-')) as [string, string]
+        for (const k of under(from)) files.set(`${to}${k.slice(from.length)}`, files.get(k)!)
+        return ok()
+      }
+      return ok()
     },
     fs: {
       exists: async (p: string) => files.has(p) || under(p).length > 0,
       read: async (p: string) => files.get(p) ?? Promise.reject(new Error(`no file ${p}`)),
       write: async (p: string, text: string) => void files.set(p, text),
     },
-  }
+  })
   S.root = ROOT
-  return { $: $ as never, files, calls, status: async (dir: string) => (await $.process.run(['git', 'status', '--porcelain'], { cwd: dir })).stdout }
+  return { $, files, calls, status: async (dir: string) => (await $.run(['git', 'status', '--porcelain'], { cwd: dir })).stdout }
 }
 
 const task = { id: 'T-1', title: 't', status: 'todo' } as SymccTask

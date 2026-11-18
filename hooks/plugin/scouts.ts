@@ -2,7 +2,7 @@ import type { SymccScout, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError } from '../board'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
-import { type Host, notReadyYet } from '../host'
+import { type FileTouch, type Host, notReadyYet } from '../host'
 import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 
@@ -64,7 +64,7 @@ export async function seedExampleScouts(host: Host): Promise<string[]> {
       for (const e of examples) text = scoutPausedText(parseScoutMemory(text), e.name, true)
       return text
     })
-    const r = await host.process.run(['mkdir', '-p', dir])
+    const r = await host.run(['mkdir', '-p', dir])
     if (r.exitCode !== 0) throw new Error(r.stderr || r.stdout || `mkdir exit ${r.exitCode}`)
     for (const e of examples) await host.fs.write(`${dir}/${e.name}.md`, e.text)
     host.ui.toast(S.N.toast(`added ${examples.length} example scouts, all paused: try one with Run now (r on its page) or /${S.N.name}-scout <name>, or resume its timer with p or /${S.N.name}-scout <name> resume`))
@@ -167,7 +167,7 @@ export function changeScoutMemory(host: Host, fn: (old: string | null) => string
     const old = await host.fs.read(file).catch(() => null)
     const next = fn(typeof old === 'string' ? old : null)
     if (next === null) return
-    await host.process.run(['mkdir', '-p', path(S.N.dir)])
+    await host.run(['mkdir', '-p', path(S.N.dir)])
     await safeWrite(host, file, keepScoutUsage(next, old), `${S.N.dir}/scouts.json`)
   })
 }
@@ -408,7 +408,7 @@ export async function saveScout(host: Host) {
     return
   }
   const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary }, d.body)
-  await host.process.run(['mkdir', '-p', path(S.N.scouts)])
+  await host.run(['mkdir', '-p', path(S.N.scouts)])
   await host.fs.write(path(rel), text)
   S.draft = null
   // The same path as a Write to a scout file: reschedule, so the new timing applies now.
@@ -465,7 +465,7 @@ export async function leadScouts(host: Host, a: LeadScoutInput): Promise<string>
   if (action === 'remove') {
     if (old === null && !known) return `no scout named ${name} (${have()})`
     // An argument list (no shell), with "--" so the path can never be read as an option.
-    const r = await host.process.run(['rm', '-f', '--', path(file)])
+    const r = await host.run(['rm', '-f', '--', path(file)])
     if (r.exitCode !== 0) return `could not remove ${file}: ${r.stderr || r.stdout || `exit ${r.exitCode}`}`
     await scheduleScouts(host)
     await publish(host, await load(host))
@@ -481,7 +481,7 @@ export async function leadScouts(host: Host, a: LeadScoutInput): Promise<string>
   const prompt = typeof a.prompt === 'string' && a.prompt.trim() ? a.prompt : (def?.prompt ?? '')
   if (!prompt.trim()) return 'prompt is missing: say in plain words what the scout looks for'
   const model = typeof a.model === 'string' ? a.model.trim() : (def?.model ?? '')
-  await host.process.run(['mkdir', '-p', path(S.N.scouts)])
+  await host.run(['mkdir', '-p', path(S.N.scouts)])
   await host.fs.write(path(file), scoutText(old, { every_minutes: every, model }, prompt))
   await scheduleScouts(host)
   await publish(host, await load(host))
@@ -499,21 +499,17 @@ export function cancelScoutEdit(host: Host) {
 /**
  * Which of the plugin's folders a tool call writes, edits or deletes in: the scouts folder
  * (`scouts`, e.g. ".symcc/scouts") and/or the roles folder (`roles`, e.g. ".symcc/roles").
- * The tool's arguments sit beside `tool` in the call (`e.file_path` for Write, Edit and MultiEdit,
- * `e.command` for Bash). For Bash only commands that can change files count (rm, mv, cp, a redirect, ...),
+ * The host says what the call touched (FileTouch): a file it writes or edits (`path`), or a shell command
+ * (`command`). For a command only those that can change files count (rm, mv, cp, a redirect, ...),
  * so reading a scout file with cat doesn't start the timers over.
  */
-export function fileToolHits(e: Record<string, unknown>, scouts: string, roles: string): { scouts: boolean; roles: boolean } {
-  const tool = String(e.tool ?? '')
+export function fileToolHits(touch: FileTouch, scouts: string, roles: string): { scouts: boolean; roles: boolean } {
   const inDir = (text: string, dir: string, needSlash: boolean) => text.replace(/\\/g, '/').includes(needSlash ? `${dir}/` : dir)
-  if (tool === 'Write' || tool === 'Edit' || tool === 'MultiEdit') {
-    const p = String(e.file_path ?? '')
+  if ('path' in touch) {
+    const p = touch.path
     return { scouts: inDir(p, scouts, true), roles: inDir(p, roles, true) }
   }
-  if (tool === 'Bash') {
-    const c = String(e.command ?? '')
-    if (!/(^|[\s;&|(])(rm|mv|cp|unlink|touch|tee|sed\s+-i|git\s+(rm|mv|checkout|restore))\b|>/.test(c)) return { scouts: false, roles: false }
-    return { scouts: inDir(c, scouts, false), roles: inDir(c, roles, false) }
-  }
-  return { scouts: false, roles: false }
+  const c = touch.command
+  if (!/(^|[\s;&|(])(rm|mv|cp|unlink|touch|tee|sed\s+-i|git\s+(rm|mv|checkout|restore))\b|>/.test(c)) return { scouts: false, roles: false }
+  return { scouts: inDir(c, scouts, false), roles: inDir(c, roles, false) }
 }

@@ -1,32 +1,30 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
+import { fakeHost } from './fake-host'
 import { S } from '../hooks/plugin/state'
 import { type Players, playsFor, spokenProject, withProject, findPlayers, WIN_TEXT_VAR } from '../hooks/plugin/voice'
 
 // A machine that has every speech command (macOS, Linux and Windows ones), found without running anything.
-function machineFor(system: 'mac' | 'linux' | 'windows'): unknown {
+function machineFor(system: 'mac' | 'linux' | 'windows') {
   const programs: Record<string, string[]> = { mac: ['say', 'afplay'], linux: ['spd-say', 'espeak-ng', 'espeak'], windows: ['powershell'] }
   const uname: Record<string, string> = { mac: 'Darwin', linux: 'Linux', windows: '' }
   const ok = (stdout = '') => ({ exitCode: 0, stdout, stderr: '' })
   const no = () => ({ exitCode: 1, stdout: '', stderr: '' })
-  return {
-    process: {
-      run: async (argv: string[]) => {
-        const [cmd, ...rest] = argv
-        if (cmd === 'uname') return uname[system] ? ok(uname[system] + '\n') : no()
-        if (cmd === 'cmd') return system === 'windows' ? ok('Microsoft Windows [Version 10]') : no()
-        if (cmd === 'sh') return programs[system]!.includes(rest[3]!) ? ok() : no()
-        if (cmd === 'where') return programs[system]!.includes(rest[0]!) ? ok() : no()
-        if (cmd === 'test') return ok()
-        return ok()
-      },
+  return fakeHost({
+    run: async argv => {
+      const [cmd, ...rest] = argv
+      if (cmd === 'uname') return uname[system] ? ok(uname[system] + '\n') : no()
+      if (cmd === 'cmd') return system === 'windows' ? ok('Microsoft Windows [Version 10]') : no()
+      if (cmd === 'sh') return programs[system]!.includes(rest[3]!) ? ok() : no()
+      if (cmd === 'where') return programs[system]!.includes(rest[0]!) ? ok() : no()
+      if (cmd === 'test') return ok()
+      return ok()
     },
-    ui: { toast: () => undefined },
-  }
+  }).host
 }
 
 async function voiceOn(system: 'mac' | 'linux' | 'windows', root: string) {
-  const $ = machineFor(system) as Parameters<typeof findPlayers>[0]
+  const $ = machineFor(system)
   S.players = findPlayers($) as Promise<Players>
   S.root = root
   return $

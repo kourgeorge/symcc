@@ -8,7 +8,7 @@ import type { SymccScout } from '../types'
 import { SCOUT_REPORT_CHARS, emptyBoard } from '../hooks/board'
 import { scoutFinished } from '../hooks/plugin/scouts'
 import { S, scoutRuns, scoutState, heard, leadQueue, meanwhile } from '../hooks/plugin/state'
-import { claudeHost } from '../hooks/claude/host'
+import { fakeHost, memoryFs } from './fake-host'
 
 const ROOT = '/repo'
 const MEMORY = `${ROOT}/.symcc/scouts.json`
@@ -31,8 +31,7 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
   const timers: (() => void)[] = []
   const sent: string[] = []
   const toasts: string[] = []
-  const state = new Map<string, unknown>()
-  const run = async (argv: string[]): Promise<Res> => {
+  const run = async (argv: readonly string[]): Promise<Res> => {
     const [cmd, ...rest] = argv
     if (cmd === 'mv') {
       const [, from, to] = rest
@@ -46,39 +45,13 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
     // no git, no players: every other command just works and prints nothing
     return ok()
   }
-  const $ = {
-    process: { run: (argv: string[]) => run(argv) },
-    fs: {
-      exists: async (p: string) => files.has(p),
-      read: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return files.get(p)!
-      },
-      write: async (p: string, text: string) => void files.set(p, text),
-      stat: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: 0 }
-      },
-      list: async () => [],
-    },
-    session: { id: async () => 'me', send: async () => undefined },
-    agent: { list: async () => [] },
-    env: { get: async () => undefined },
-    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)), status: () => undefined },
-    clock: {
-      after: (_ms: number, f: () => void) => (timers.push(f), { cancel() {} }),
-      sleep: async () => undefined,
-    },
-    prompt: { submit: async (p: { text: string }) => void sent.push(p.text) },
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+  const { host } = fakeHost({
+    run: argv => run(argv),
+    fs: memoryFs(files),
+    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)) },
+    clock: { after: (_ms, f) => (timers.push(f), { cancel() {} }) },
+    lead: { send: async text => void sent.push(text) },
+  })
   S.root = ROOT
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -99,7 +72,7 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
     return sent
   }
   const memory = () => JSON.parse(files.get(MEMORY) ?? '{}') as { scouts?: Record<string, { last_run: string | null; last_report?: string; paused?: boolean }>; usage?: Record<string, { runs: number }> }
-  return { $: claudeHost($ as never) as never, claude: $, files, st, sent, toasts, toLead, memory }
+  return { $: host, files, st, sent, toasts, toLead, memory }
 }
 
 // ---------------- a report with findings ----------------

@@ -10,7 +10,7 @@ import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 import { test } from './reset'
-import { claudeHost } from '../hooks/claude/host'
+import { fakeHost, memoryFs } from './fake-host'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -26,9 +26,6 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false }
   const files = new Map<string, string>()
   const calls: string[] = []
-  const spawns: { prompt: string; subagentType?: string; cwd?: string; name?: string }[] = []
-  const sends: { to: { agentId: string }; text: string }[] = []
-  const state = new Map<string, unknown>()
   function runGit(a0: string[]): Res {
     const a = a0.filter((x, i) => x !== '-c' && a0[i - 1] !== '-c')
     const s = a.join(' ')
@@ -61,62 +58,32 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
     }
     return ok()
   }
-  const $ = {
-    process: {
-      run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
-        const [cmd, ...rest] = argv
-        calls.push(argv.join(' '))
-        if (cmd === 'git') return runGit(rest)
-        if (cmd === 'ln') {
-          if (files.has(rest[1]!)) return fail('File exists')
-          files.set(rest[1]!, files.get(rest[0]!)!)
-          return ok()
-        }
-        if (cmd === 'mv') {
-          if (!files.has(rest[1]!)) return fail('No such file')
-          files.set(rest[2]!, files.get(rest[1]!)!)
-          files.delete(rest[1]!)
-          return ok()
-        }
-        if (cmd === 'rm') {
-          for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
-          return ok()
-        }
-        void o
+  const { host, spawns, sent: sends } = fakeHost({
+    run: async (argv, o = {}) => {
+      const [cmd, ...rest] = argv
+      calls.push(argv.join(' '))
+      if (cmd === 'git') return runGit(rest)
+      if (cmd === 'ln') {
+        if (files.has(rest[1]!)) return fail('File exists')
+        files.set(rest[1]!, files.get(rest[0]!)!)
         return ok()
-      },
+      }
+      if (cmd === 'mv') {
+        if (!files.has(rest[1]!)) return fail('No such file')
+        files.set(rest[2]!, files.get(rest[1]!)!)
+        files.delete(rest[1]!)
+        return ok()
+      }
+      if (cmd === 'rm') {
+        for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
+        return ok()
+      }
+      void o
+      return ok()
     },
-    fs: {
-      exists: async (p: string) => files.has(p),
-      read: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return files.get(p)!
-      },
-      write: async (p: string, text: string) => void files.set(p, text),
-      stat: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: 0 }
-      },
-      list: async () => [],
-    },
-    session: { id: async () => 'me', send: async (m: { to: { agentId: string }; text: string }) => void sends.push(m) },
-    agent: {
-      list: async () => [],
-      spawn: async (o: { prompt: string; subagentType?: string; cwd?: string; name?: string }) => (spawns.push(o), { agentId: `chk${spawns.length}` }),
-    },
-    plugin: { root: '/plugin', name: 'symcc' },
-    ui: { toast: () => undefined, status: () => undefined, log: () => undefined },
-    clock: { after: () => ({ cancel() {} }), every: () => ({ cancel() {} }), sleep: async () => undefined },
-    prompt: { submit: async () => undefined },
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+    fs: memoryFs(files),
+    agents: { spawn: async o => (spawns.push(o), { agentId: `chk${spawns.length}` }) },
+  })
   S.root = ROOT
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -125,7 +92,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: claudeHost($ as never) as never, claude: $, git, calls, spawns, sends }
+  return { $: host, git, calls, spawns, sends }
 }
 
 /** A board with task T-1 (files src/) "doing" on try 1, with the checker setting `checker`. */
@@ -218,7 +185,7 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   const t = await finish(w, async id => {
     // the checker got the task and the diff, as a read-only agent in the task's folder
     const s = w.spawns[0]!
-    expect(s.subagentType).toBe('symcc:scout')
+    expect(s.kind).toBe('checker')
     expect(s.cwd).toBe(WT)
     expect(s.prompt).toContain('Done when: a test shows it.')
     expect(s.prompt).toContain('+the new line')
@@ -340,7 +307,7 @@ for (const [tool, args, status, again, againText] of [
       // the checker is told to stop and is not waited for any more
       expect(checkerRuns.has(id)).toBe(false)
       expect(stopped.has(id)).toBe(true)
-      expect(w.sends.some(m => m.to.agentId === id && m.text.startsWith('Stop now'))).toBe(true)
+      expect(w.sends.some(m => m.to === id && m.text.startsWith('Stop now'))).toBe(true)
     })
     expect(agent).not.toBe('')
     expect(w.git.main).toBe(M1)
@@ -360,10 +327,9 @@ for (const [tool, args, status, again, againText] of [
   test(`${tool} while the checker is still starting up stops it as soon as it starts: nothing merges, the task is ${status}, and ${again} works right after`, async () => {
     const w = world()
     await saveBoard(w.$, boardWith(true))
-    const a = w.claude as unknown as { agent: { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> } }
-    const real = a.agent.spawn
+    const real = w.$.agents.spawn
     let reply = ''
-    a.agent.spawn = async o => {
+    w.$.agents.spawn = async o => {
       if (o.name?.endsWith('-checker')) reply = await runTool(w.$, tool, { task: 'T-1', ...args })
       return real(o)
     }
@@ -372,7 +338,7 @@ for (const [tool, args, status, again, againText] of [
     const id = 'chk1'
     expect(checkerRuns.size).toBe(0)
     expect(stopped.has(id)).toBe(true)
-    expect(w.sends.some(m => m.to.agentId === id && m.text.startsWith('Stop now'))).toBe(true)
+    expect(w.sends.some(m => m.to === id && m.text.startsWith('Stop now'))).toBe(true)
     expect(w.git.main).toBe(M1)
     expect(t.status).toBe(status)
     expect(checkingNow('T-1')).toBe(false)
@@ -384,11 +350,10 @@ for (const [tool, args, status, again, againText] of [
 test('a drop that comes before the checker is spawned starts no checker at all', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
-  const a = w.$ as unknown as { process: { run: (argv: string[], o?: { cwd?: string }) => Promise<Res> } }
-  const run = a.process.run
+  const run = w.$.run
   let dropped = false
   // the drop lands while the checker step is still getting ready (reading the change for its prompt)
-  a.process.run = async (argv, o) => {
+  w.$.run = async (argv, o) => {
     if (!dropped && argv[0] === 'git' && argv.some(x => x.endsWith('...HEAD'))) {
       dropped = true
       await runTool(w.$, 'drop', { task: 'T-1' })

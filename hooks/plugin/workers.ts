@@ -1,7 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText } from '../board'
-import { roleSection } from '../claude/agent-types'
-import { mayStart, type AgentInfo, ENDED_STATUSES, orphanMove, liveWorkersFor } from '../claude/agents'
+import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -11,7 +9,7 @@ import { loadRoles } from './roles'
 import { runChecker, haltCheckers } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
-import { type Host, notReadyYet } from '../host'
+import { type Host, type HostAgent, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -24,7 +22,7 @@ import { changeValues, investigationValues } from './prompt-values'
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef) => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
   const values = kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)
-  return fillPrompt(kind, { ...values, role: roleSection(role, values) })
+  return fillPrompt(kind, { ...values, role: roleSection(role, values, S.W.roleTools) })
 }
 
 export async function pump(host: Host) {
@@ -63,7 +61,7 @@ export async function startWorker(host: Host, id: string) {
     const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id))
     const b = await load(host)
     const t0 = find(b, id)
-    if (!mayStart(t0, agents, S.N.name)) return
+    if (!mayStart(t0, agents.map(agentState), S.N.name)) return
     // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
     // the owner retried it after it was wrongly failed): it is done, not tried again.
     if (await mergedBeforeStart(host, t0!)) return
@@ -77,7 +75,7 @@ export async function startWorker(host: Host, id: string) {
     await loadKinds(host).catch(() => undefined)
     const t = await change(host, x => {
       const cur = find(x, id)
-      if (!mayStart(cur, agents, S.N.name)) return [x, null]
+      if (!mayStart(cur, agents.map(agentState), S.N.name)) return [x, null]
       const at = now()
       const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: 'worker on it', runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
       return [y, find(y, id)!]
@@ -161,24 +159,24 @@ export async function waitIfBranchGone(host: Host, b: Board, t: SymccTask, when:
 }
 
 /** The agents of this session as host.agents.list() reports them; null if the list can't be read. */
-export async function agentsNow(host: Host): Promise<AgentInfo[] | null> {
+export async function agentsNow(host: Host): Promise<HostAgent[] | null> {
   return host.agents.list().catch(() => null)
 }
 
 /** The workers this copy of the plugin started, as agents (they may not be listed yet). */
-export const knownWorkers = (): AgentInfo[] => [...workers].map(([id, w]) => ({ id, type: S.N.worker, status: 'running', description: w.task }))
+export const knownWorkers = (): HostAgent[] => [...workers].map(([id, w]) => ({ id, kind: 'worker', status: 'running', description: w.task }))
 
 /** How long a reload waits for old workers it stopped to really end. */
 export const ORPHAN_WAIT_MS = 20_000
 
 /** Waits up to `ms` until the agents `ids` have ended; returns those still alive (all of them if the list can't be read). */
-export async function waitEnded(host: Host, ids: string[], ms: number): Promise<AgentInfo[]> {
+export async function waitEnded(host: Host, ids: string[], ms: number): Promise<HostAgent[]> {
   if (!ids.length) return []
   const until = Date.now() + ms
   // The time waited is also counted in host.clock sleeps, so the wait ends on host.clock's time too (not only the wall clock's).
   for (let waited = 0; ; waited += 500) {
     const agents = await agentsNow(host)
-    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED_STATUSES.includes(a.status)) : ids.map(id => ({ id, type: S.N.worker, status: 'running' }))
+    const alive = agents ? agents.filter(a => ids.includes(a.id) && !ENDED_STATUSES.includes(a.status)) : ids.map((id): HostAgent => ({ id, kind: 'worker', status: 'running' }))
     if (!alive.length || waited >= ms || Date.now() > until) return alive
     aboutToWait()
     await host.clock.sleep(500)
@@ -549,7 +547,7 @@ export async function saveReport(host: Host, t: SymccTask, answer: string) {
   if (!answer.trim()) return
   const rel = reportFile(S.N.dir, t.id, t.attempts)
   try {
-    await host.process.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
+    await host.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
     await safeWrite(host, path(rel), reportText(answer), 'the report')
     await change(host, x => {
       const cur = find(x, t.id)
@@ -1191,20 +1189,20 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
   const live = liveDriver(lead, Date.now())
   // A board that can't be read (being fixed, or a read failing now) says nothing about whose
   // worker is whose: then no worker is stopped (the next check looks again), only scouts are.
-  const b = agents.some(a => a.type === S.N.worker) ? await load(host).catch(() => null) : emptyBoard()
+  const b = agents.some(a => a.kind === 'worker') ? await load(host).catch(() => null) : emptyBoard()
   const out: string[] = []
   for (const a of agents) {
-    if (a.type !== S.N.worker && a.type !== S.N.scout) continue
+    if (a.kind === 'other') continue
     if (workers.has(a.id) || scoutRuns.has(a.id) || checkerRuns.has(a.id)) continue
     // Already told to stop: not taken back, and not messaged again (a message would wake it up).
     if (stopped.has(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
-    if (a.type === S.N.worker && !b) continue
-    if (a.type === S.N.worker && b) {
+    if (a.kind === 'worker' && !b) continue
+    if (a.kind === 'worker' && b) {
       // A worker of this session that was running when the plugin reloaded keeps working:
       // track it again instead of stopping it (see orphanMove for when).
       const taken = [...workers.values()].map(w => w.task)
-      const m = orphanMove(a as AgentInfo, b, S.me, live, [...taken, ...starting, ...finishing], S.N.name)
+      const m = orphanMove(agentState(a), b, S.me, live, [...taken, ...starting, ...finishing], S.N.name)
       if (m.move === 'leave') continue
       if (m.move === 'adopt') {
         const t = find(b, m.task)!
@@ -1236,11 +1234,11 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
 export const RELOAD_SETTLE_MS = 2_000
 
 /** Whether a "doing" task of this session has no live worker (in `agents`), no merge mark and nothing in this copy working on it. */
-async function waitingOnOld(host: Host, agents: AgentInfo[]): Promise<boolean> {
+async function waitingOnOld(host: Host, agents: HostAgent[]): Promise<boolean> {
   if (!(await host.fs.exists(path(S.N.boardFile)).catch(() => false))) return false
   const b = await load(host).catch(() => emptyBoard())
   const mine = new Set([...workers.values()].map(w => w.task))
-  return b.tasks.some(t => t.status === 'doing' && t.session === S.me && !t.finishing && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !liveWorkersFor(t, agents, S.N.name).length)
+  return b.tasks.some(t => t.status === 'doing' && t.session === S.me && !t.finishing && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !liveWorkersFor(t, agents.map(agentState), S.N.name).length)
 }
 
 /**
@@ -1259,7 +1257,7 @@ export async function cleanLeftoverTmp(host: Host) {
   }
   const failed: string[] = []
   for (const name of leftoverTmpFiles(files, Date.now())) {
-    const r = await host.process.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
+    const r = await host.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
     if (r.exitCode !== 0) failed.push(`${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`)
   }
   // Say it once per file, not every two minutes.
@@ -1387,13 +1385,13 @@ function sameTry(cur: BoardTask, was: BoardTask, agentId?: string) {
  * tool it tries is refused, even while it is still listed. Only tasks this session may take over
  * (ownedHere) are touched, and never one whose worker is being stopped on purpose (onPurpose).
  */
-export async function sendBackIdle(host: Host, agents: AgentInfo[]) {
+export async function sendBackIdle(host: Host, agents: HostAgent[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
   const working = agents.filter(a => !stopped.has(a.id))
   const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !onPurpose.has(t.id) && !finishingNow(t, Date.now())
   // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
-  const idle = (await load(host)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working, S.N.name).length))
+  const idle = (await load(host)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working.map(agentState), S.N.name).length))
   const merged = new Map<string, string>()
   for (const t of idle) {
     const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged(host, t).catch(() => null) : null)

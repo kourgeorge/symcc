@@ -49,13 +49,13 @@ export async function safeWrite(host: Host, file: string, text: string, what: st
   try {
     await host.fs.write(tmp, text)
     // host.fs has no rename; mv within one folder is an atomic rename
-    r = await host.process.run(['mv', '-f', tmp, file])
+    r = await host.run(['mv', '-f', tmp, file])
   } catch (e) {
-    await host.process.run(['rm', '-f', tmp]).catch(() => undefined)
+    await host.run(['rm', '-f', tmp]).catch(() => undefined)
     throw e
   }
   if (r.exitCode === 0) return
-  await host.process.run(['rm', '-f', tmp]).catch(() => undefined)
+  await host.run(['rm', '-f', tmp]).catch(() => undefined)
   throw new Error(`couldn't save ${what}: ${(r.stderr || r.stdout).trim().slice(0, 200) || `mv exit ${r.exitCode}`}`)
 }
 
@@ -165,12 +165,12 @@ export async function takeLock(host: Host): Promise<string> {
   try {
     const until = Date.now() + 5_000
     for (;;) {
-      if ((await host.process.run(['ln', tmp, lock])).exitCode === 0) return mine
+      if ((await host.run(['ln', tmp, lock])).exitCode === 0) return mine
       const held = await host.fs.read(lock).catch(() => null)
       const st = await host.fs.stat(lock).catch(() => null)
       if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs)) {
         // remove it only if it is still the same stale lock we just read
-        if ((await host.fs.read(lock).catch(() => null)) === held) await host.process.run(['rm', '-f', lock])
+        if ((await host.fs.read(lock).catch(() => null)) === held) await host.run(['rm', '-f', lock])
         continue
       }
       if (Date.now() > until) throw new Error(`the board is busy (another session holds ${S.N.lockFile}); try again`)
@@ -178,13 +178,13 @@ export async function takeLock(host: Host): Promise<string> {
       await host.clock.sleep(100)
     }
   } finally {
-    await host.process.run(['rm', '-f', tmp]).catch(() => undefined)
+    await host.run(['rm', '-f', tmp]).catch(() => undefined)
   }
 }
 
 export async function dropLock(host: Host, mine: string) {
   const lock = path(S.N.lockFile)
-  if ((await host.fs.read(lock).catch(() => null)) === mine) await host.process.run(['rm', '-f', lock]).catch(() => undefined)
+  if ((await host.fs.read(lock).catch(() => null)) === mine) await host.run(['rm', '-f', lock]).catch(() => undefined)
 }
 
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */

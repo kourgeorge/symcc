@@ -206,7 +206,7 @@ async function keepLeftOut($: Host, id: string, dir: string, files: readonly str
   const gone = "not kept: the task's folder is removed after the merge"
   if (!/^[A-Za-z0-9_-]+$/.test(id) || !S.root) return gone
   const top = `${S.root}/${S.N.dir}/left-out`
-  const mk = await $.process.run(['mkdir', '-p', '-m', '700', top])
+  const mk = await $.run(['mkdir', '-p', '-m', '700', top])
   if (mk.exitCode !== 0) return gone
   // never committed, even in a repo whose .gitignore doesn't list the board folder
   if (!(await $.fs.exists(`${top}/.gitignore`))) await $.fs.write(`${top}/.gitignore`, '*\n').catch(() => undefined)
@@ -214,9 +214,9 @@ async function keepLeftOut($: Host, id: string, dir: string, files: readonly str
   for (const f of files) {
     if (!isPlainRelPath(f)) continue
     const to = `${top}/${id}/${f}`
-    const md = await $.process.run(['mkdir', '-p', to.slice(0, to.lastIndexOf('/'))])
+    const md = await $.run(['mkdir', '-p', to.slice(0, to.lastIndexOf('/'))])
     if (md.exitCode !== 0) continue
-    if ((await $.process.run(['mv', '-f', `${dir}/${f}`, to])).exitCode === 0) moved.push(f)
+    if ((await $.run(['mv', '-f', `${dir}/${f}`, to])).exitCode === 0) moved.push(f)
   }
   if (!moved.length) return gone
   return moved.length === files.length ? `moved to ${rel}/, since the task's folder is removed after the merge` : `only ${moved.join(', ')} moved to ${rel}/; the rest was ${gone}`
@@ -366,7 +366,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const testsRun = mode === 'finish' || candidate !== head || retest
   if (testsRun && b.test_commands.length) await markStep($, t, 'testing', stopped)
   for (const cmd of testsRun ? b.test_commands : []) {
-    const r = await $.process.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
+    const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
     if (r.exitCode !== 0) {
       const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
       return res(stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) })

@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../types'
-import { pause, commandsOf } from './fakes'
+import { pause, commandsOf, entry } from './fakes'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
@@ -12,8 +12,20 @@ import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
-import { parseRole, roleSkipReason, roleSection, EXTRA_TOOLS, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers } from '../hooks/claude/agent-types'
-import { liveWorkersFor, mayStart, orphanMove, isNotReady } from '../hooks/claude/agents'
+import { ROLE_TOOLS, EXTRA_TOOLS, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
+import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
+import * as core from '../hooks/board'
+import { type HostAgentStarted, agentState } from '../hooks/host'
+
+// The core role and agent functions, given Claude Code's words the way the plugin gets them on Claude Code: a role's
+// tools as ROLE_TOOLS (host.words.roleTools), and $.agent.list() entries through the adapter (hostAgent) as AgentState.
+const parseRole = (name: string, text: string) => core.parseRole(name, text, ROLE_TOOLS)
+const roleSkipReason = (name: string, text: string) => core.roleSkipReason(name, text, ROLE_TOOLS)
+const roleSection = (r: core.RoleDef | undefined, values: Record<string, string> = {}) => core.roleSection(r, values, ROLE_TOOLS)
+const asCore = (a: AgentInfo, name?: string) => agentState(hostAgent(a, name))
+const mayStart = (t: core.BoardTask | undefined, agents: AgentInfo[], name?: string) => core.mayStart(t, agents.map(a => asCore(a, name)), name)
+const liveWorkersFor = (t: Pick<core.BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name?: string) => core.liveWorkersFor(t, agents.map(a => asCore(a, name)), name)
+const orphanMove = (a: AgentInfo, b: core.Board, me: string, live: string | null, taken: string[] = [], name?: string) => core.orphanMove(asCore(a, name), b, me, live, taken, name)
 
 const T = '2026-11-09T00:00:00.000Z'
 // every new task needs a reason it exists
@@ -488,7 +500,7 @@ test('a narrow banner drops the drawing and cuts lines to fit', () => {
 })
 
 test('another plugin name changes every path, branch, agent type and text made from it', () => {
-  const n = namesFor('crew')
+  const n = { ...namesFor('crew'), ...claudeNames('crew') }
   const root = '/Users/me/repositories/app'
   const b = { ...emptyBoard(), test_commands: ['npm test'] }
   const [b1, t] = addTask(b, { origin: W, title: 'x', files: ['src/', '.crew/board.json', '.symcc/old.json'] }, T, n.dir)
@@ -769,7 +781,7 @@ test('scouts are sorted running first, then by their next run', async () => {
 })
 
 test('a spawn that fails because the worker type is not registered yet is "not ready", other errors are real', async () => {
-  const N = namesFor(DEFAULT_NAME)
+  const N = claudeNames(DEFAULT_NAME)
   expect(isNotReady(`Agent type '${N.worker}' not found`)).toBe(true)
   expect(isNotReady(`Error: Agent type '${N.worker}' not found. Available agents: general-purpose`)).toBe(true)
   expect(isNotReady(`Agent type 'other:worker' not found`, 'other')).toBe(true)
@@ -2908,9 +2920,9 @@ test('inside a readable board.json, a bad task entry is skipped and counted; the
 import { runScout, runScoutNow, scoutFinished } from '../hooks/plugin/scouts'
 import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as scoutLeadQueue } from '../hooks/plugin/state'
 
-/** A small fake `$` for the scout code: in-memory files, a board in auto mode, one scout "gaps", and a spawn
- *  that answers with `spawn` (a function so a test can change it between calls). */
-function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
+/** The shared fake Host for the scout code: in-memory files, a board in auto mode, one scout "gaps", and a spawn
+ *  that answers with `spawn` (a function so a test can change it between calls; a start that fails rejects). */
+function scoutWorld(spawn: () => Promise<HostAgentStarted>) {
   const ROOT = '/repo'
   const files = new Map<string, string>()
   files.set(`${ROOT}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'auto' }))
@@ -2918,8 +2930,7 @@ function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
   const toasts: string[] = []
   const later: { ms: number; f: () => void }[] = []
   const prompts: string[] = []
-  const state = new Map<string, { value: unknown; version: number }>()
-  const $ = {
+  const { host } = fakeHost({
     fs: {
       exists: async (p: string) => files.has(p) || [...files.keys()].some(k => k.startsWith(`${p}/`)),
       read: async (p: string) => {
@@ -2927,40 +2938,24 @@ function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
         return files.get(p)!
       },
       write: async (p: string, t: string) => void files.set(p, t),
-      list: async (d: string) => [...files.keys()].filter(k => k.startsWith(`${d}/`)).map(k => ({ kind: 'file', name: k.slice(d.length + 1) })),
+      list: async (d: string) => [...files.keys()].filter(k => k.startsWith(`${d}/`)).map(k => entry(k.slice(d.length + 1))),
     },
-    process: {
-      run: async (argv: string[]) => {
-        if (argv[0] === 'mv') {
-          files.set(argv[3]!, files.get(argv[2]!)!)
-          files.delete(argv[2]!)
-        }
-        return { exitCode: 0, stdout: argv[0] === 'git' ? 'main' : '', stderr: '' }
-      },
+    run: async argv => {
+      if (argv[0] === 'mv') {
+        files.set(argv[3]!, files.get(argv[2]!)!)
+        files.delete(argv[2]!)
+      }
+      return { exitCode: 0, stdout: argv[0] === 'git' ? 'main' : '', stderr: '' }
     },
-    agent: {
-      spawn: async (o: { prompt: string }) => {
+    agents: {
+      spawn: async o => {
         prompts.push(o.prompt)
         return spawn()
       },
-      list: async () => [],
     },
-    ui: { toast: (t: unknown) => void toasts.push(String(t)), status: () => undefined, invalidate: () => undefined },
-    clock: {
-      after: (ms: number, f: () => void) => (later.push({ ms, f }), { cancel() {} }),
-      every: () => ({ cancel() {} }),
-    },
-    prompt: { submit: async () => undefined },
-    session: { id: async () => 'me', send: async () => undefined },
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = (state.get(e.key)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+    ui: { toast: (t: unknown) => void toasts.push(String(t)) },
+    clock: { after: (ms, f) => (later.push({ ms, f }), { cancel() {} }) },
+  })
   PS.root = ROOT
   PS.driving = true
   PS.gitState = 'ok'
@@ -2970,13 +2965,13 @@ function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
   scoutRuns.clear()
   scoutTimers.splice(0)
   scoutLeadQueue.splice(0)
-  return { $: claudeHost($ as never) as never, claude: $, files, toasts, later, prompts }
+  return { $: host, files, toasts, later, prompts }
 }
 
 const OLD_RUN = '2026-11-01T10:00:00.000Z'
 
 test('a scout whose start fails keeps its old last_run, and "run now" says why instead of "started"', async () => {
-  const w = scoutWorld(async () => ({ deny: 'no agents allowed here' }))
+  const w = scoutWorld(async () => Promise.reject(new Error('no agents allowed here')))
   expect(await runScoutNow(w.$, 'gaps')).toBe("scout gaps didn't start: no agents allowed here")
   const st = scoutState.get('gaps')!
   st.last_run = OLD_RUN
@@ -2991,7 +2986,7 @@ test('a scout whose start fails keeps its old last_run, and "run now" says why i
 
 test('a scout whose type is not ready yet is tried again shortly, then starts with the old last_run in its prompt', async () => {
   let ready = false
-  const w = scoutWorld(async () => (ready ? { agentId: 'a1' } : { deny: "Agent type 'symcc:scout' not found" }))
+  const w = scoutWorld(async () => (ready ? { agentId: 'a1' } : Promise.reject(Object.assign(new Error("Agent type 'symcc:scout' not found"), { notReady: true }))))
   await runScoutNow(w.$, 'gaps')
   const st = scoutState.get('gaps')!
   st.last_run = OLD_RUN
@@ -3187,7 +3182,7 @@ test('backToTodo of a running task says in its history why it restarts', async (
 // ---------------- saved reports and clean cuts ----------------
 
 import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
-import { claudeHost } from '../hooks/claude/host'
+import { fakeHost } from './fake-host'
 
 test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {
   expect(cutLine('  short\n text  ', 50)).toBe('short text')

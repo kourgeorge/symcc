@@ -1,63 +1,35 @@
-// What the plugin holds while it is loaded, in one place: the plugin's name, the panel's state
-// values, and every value the other modules change. They all use these (S, the maps and sets)
-// directly, never a copy, so a change made in one module is seen by all.
-import { type EngineInterface, atom, read, update } from 'claude-code'
+// What the plugin holds while it is loaded, in one place: the plugin's name, the host's words, and every value the
+// other modules change. They all use these (S, the maps and sets) directly, never a copy, so a change made in one
+// module is seen by all.
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
 import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
-import type { Host, PanelValues } from '../host'
+import { type Host, type HostWords, type PanelValues, SYMCC_WORDS } from '../host'
 
-export type $ = EngineInterface
+// ---------------- the plugin's name and the host's words ----------------
+// Everything made from the name (data folder, branches, text) comes from S.N, and the names that differ from host to
+// host (what the model calls symcc's tools, the tools a role may add) from S.W. They start as DEFAULT_NAME and
+// SYMCC_WORDS and are set once, from the host (host.plugin.name, from plugin.json, and host.words), the first time
+// any hook runs: every hook calls useName(host) first.
 
-// ---------------- the plugin's name ----------------
-// Everything made from the name (data folder, branches, agent types, tool names, text) comes
-// from S.N. It starts as DEFAULT_NAME and is set once, from $.plugin.name (plugin.json), the
-// first time any hook runs: every hook calls useName($) first.
-
-// The one exception: the panel's state values. Claude Code reads which values a plugin keeps
-// from its code before it runs, so their owner must be written out here as text. It must be
-// the plugin's name: on a rename, change it in these four lines and in types/index.d.ts too.
-/** which task the board panel has open; '' = the list */
-const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
-/** which view the board panel shows: 'scouts', or anything else for the tasks; kept while the panel is open */
-const tab = atom({ plugin: 'symcc', key: 'tab' } as const, '')
-/** which scout the Scouts view has open; '' = the list */
-const scoutOpen = atom({ plugin: 'symcc', key: 'scout' } as const, '')
-const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as SymccView, { shape: 'view-1' })
-
-// The loader lets read and update take only an atom written in the same file, so the other
-// modules read and change these four through the functions below.
-// Only Claude Code's `$` holds these values, and the loader lets only `$` itself reach `read` and `update`, so
-// panelValues makes the reads and changes from one hook's `$`, and Claude Code's Host (claude/host.ts claudeHost)
-// carries them as its `ui.panel` (PanelValues, in host.ts). The functions after it take a Host, because the logic
-// (publish, saveScout, openPane) calls them with one. A host with no panel leaves `ui.panel` out (noPanel below).
+// ---------------- the board panel's values ----------------
+// A host with a board panel keeps which task, view and scout it has open, and the published view, where its panel
+// reads them, and carries them as its Host's ui.panel (PanelValues, in host.ts; for Claude Code see claude/panel.ts).
+// The functions below take a Host, because the logic (publish, saveScout, openPane) calls them with one. A host with
+// no panel leaves `ui.panel` out (noPanel below).
 
 export type { PanelValues }
 
-/** The board panel's values through Claude Code's `$` (for claude/host.ts). */
-export function panelValues($: $): PanelValues {
-  return {
-    readOpened: () => read($, opened),
-    updateOpened: change => update($, opened, change),
-    readTab: () => read($, tab),
-    updateTab: change => update($, tab, change),
-    readScoutOpen: () => read($, scoutOpen),
-    updateScoutOpen: change => update($, scoutOpen, change),
-    readView: () => read($, view),
-    updateView: change => update($, view, change),
-  }
-}
-
 /** A host with no board panel: each value reads as its start value, and a change goes nowhere. */
 const noPanel: PanelValues = {
-  readOpened: async () => opened.initial,
+  readOpened: async () => '',
   updateOpened: async () => undefined,
-  readTab: async () => tab.initial,
+  readTab: async () => '',
   updateTab: async () => undefined,
-  readScoutOpen: async () => scoutOpen.initial,
+  readScoutOpen: async () => '',
   updateScoutOpen: async () => undefined,
-  readView: async () => view.initial,
+  readView: async () => ({ tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] }) as SymccView,
   updateView: async () => undefined,
 }
 
@@ -98,6 +70,8 @@ export function updateView(host: Host, change: (value: SymccView) => SymccView) 
 /** S's values as a load starts them (a fresh object each call); also used by the tests' resetPlugin(). */
 export const startS = () => ({
   N: namesFor(DEFAULT_NAME),
+  /** the host's words (see HostWords); toolName below makes a tool's name from them */
+  W: SYMCC_WORDS as HostWords,
   named: false,
   root: '',
   /** whether the plugin is on, as the board said when it was last read (see load); for the places that can't wait */
@@ -177,14 +151,18 @@ export const startS = () => ({
 /** Every value of the plugin that is set again while it runs; the other modules use S.<name>, never a copy. */
 export const S = startS()
 
-/** Takes the plugin's name from plugin.json (via $.plugin.name), once; DEFAULT_NAME if it has none. */
-export function useName($: Pick<Host, 'plugin'>) {
+/** Takes the plugin's name from plugin.json (via host.plugin.name; DEFAULT_NAME if it has none) and the host's words, once. */
+export function useName(host: Pick<Host, 'plugin' | 'words'>) {
   if (S.named) return
   S.named = true
-  const name = cleanName($.plugin.name)
+  S.W = host.words
+  const name = cleanName(host.plugin.name)
   if (name === S.N.name) return
   S.N = namesFor(name)
 }
+
+/** What the model calls symcc's tool `tool` (e.g. "board") on this host (see HostWords). */
+export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
 export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>

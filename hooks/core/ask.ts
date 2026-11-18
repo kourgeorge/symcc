@@ -4,7 +4,7 @@
 import { outOfScope } from './task'
 
 /**
- * The workers' question tool's short name: the model sees it as mcp__<name>__ask_owner. (Not "ask": that
+ * The workers' question tool's short name; the host may call it otherwise (Claude Code: mcp__<name>__ask_owner, see HostWords). (Not "ask": that
  * is already the lead's tool that makes a task wait with a question.)
  */
 export const ASK_TOOL = 'ask_owner'
