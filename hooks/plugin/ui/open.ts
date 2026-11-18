@@ -1,6 +1,7 @@
 // Opening the board panel, and choosing what it shows.
 import { boardTitle } from '../../board'
-import { type $, S, updateOpened, updateScoutOpen, updateTab } from '../state'
+import { S, updateOpened, updateScoutOpen, updateTab } from '../state'
+import { type $ } from '../../claude/panel'
 import { resetRoleView } from '../roles'
 import { resetKindView } from '../kinds'
 import type { Host } from '../../host'

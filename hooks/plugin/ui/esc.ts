@@ -4,7 +4,8 @@
 // docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
 // (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
 import { cancelScoutEdit } from '../scouts'
-import { type $, S, panelValues, openDays, changesCache } from '../state'
+import { S, openDays, changesCache } from '../state'
+import { type $, panelValues } from '../../claude/panel'
 import { resetPane, takeKeysBack } from './open'
 import { claudeHost } from '../../claude/host'
 

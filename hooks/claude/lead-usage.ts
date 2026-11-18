@@ -1,9 +1,9 @@
 // The lead's tokens, read from Claude Code's own session logs. Only the Claude Code adapter knows where they
 // are and what their lines look like; core/stats.ts works on LeadCall lists (see TeamInput there).
-import type { Host } from '../host'
+import type { Host, LeadUsage } from '../host'
 import { jsonObj } from '../core/text'
 import { tokenCount } from '../core/runs'
-import { rangeSpan, type LeadCall, type StatsRange, type TeamInput } from '../core/stats'
+import { rangeSpan, type LeadCall, type StatsRange } from '../core/stats'
 import { shortHome } from '../core/banner'
 import { usageTokens, type ClaudeUsage } from './usage'
 
@@ -43,9 +43,9 @@ export const projectFolderName = (root: string) => String(root ?? '').replace(/[
  * Read-only, only this project's folder, only the usage numbers (see leadCalls). For a days range, logs not written
  * to since the range began are skipped.
  */
-export async function leadUsage($: Host, root: string, range: StatsRange, nowMs: number): Promise<Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem' | 'leadFrom'>> {
-  const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
-  const base = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
+export async function leadUsage($: Pick<Host, 'env' | 'fs'>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsage> {
+  const home = (await $.env('HOME')) || (await $.env('USERPROFILE'))
+  const base = (await $.env('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
   if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
   const dir = `${base}/projects/${projectFolderName(root)}`
   const files = await $.fs.list(dir).catch(() => null)

@@ -8,7 +8,7 @@ import * as claudeAgents from '../hooks/claude/agents'
 import * as board from '../hooks/board'
 import { leadCalls, leadUsage, LEAD_LOGS } from '../hooks/claude/lead-usage'
 import { usageTokens, turnEnd } from '../hooks/claude/usage'
-import type { Host } from '../hooks/host'
+import { type Host, agentState } from '../hooks/host'
 
 const T = '2026-11-18T00:00:00.000Z'
 const OTHER: RoleTools = { extra: ['websearch', 'webfetch', 'todo'], web: ['websearch', 'webfetch'] }
@@ -21,20 +21,24 @@ test('core reads a role\'s tools: line with the tool names it is given, not Clau
   expect(roleSection(parseRole('r', text, OTHER)!, {}, OTHER)).toContain(WEB_SAFETY_LINE)
   expect(roleSection(parseRole('r', '---\ndescription: d\ntools: todo\n---\nx', OTHER)!, {}, OTHER)).not.toContain(WEB_SAFETY_LINE)
   // the same file with Claude Code's names, through the adapter
-  expect(claudeTypes.parseRole('r', text)).toBe(null)
-  expect(claudeTypes.roleSkipReason('r', text)).toBe('unknown tool "todo" in tools (a role may only add: WebSearch, WebFetch)')
+  expect(parseRole('r', text, claudeTypes.ROLE_TOOLS)).toBe(null)
+  expect(roleSkipReason('r', text, claudeTypes.ROLE_TOOLS)).toBe('unknown tool "todo" in tools (a role may only add: WebSearch, WebFetch)')
   expect(claudeTypes.ROLE_TOOLS).toEqual({ extra: ['WebSearch', 'WebFetch'], web: ['WebSearch', 'WebFetch'] })
 })
 
-test('core finds live workers from AgentState; the Claude adapter makes those from $.agent.list() entries', () => {
+test('core finds live workers from AgentState; the Claude adapter makes HostAgents from $.agent.list() entries, and the host those AgentState', () => {
   const b = patchTask(addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'A' }, T)[0], 'T-1', { status: 'doing', session: 'me', agent: 'w1' }, T)
   const live: AgentState = { id: 'w1', worker: true, alive: true, name: 'symcc-T-1' }
   expect(liveWorkersFor({ id: 'T-1' }, [live, { ...live, id: 'w2', alive: false }, { ...live, id: 'w3', worker: false }]).map(a => a.id)).toEqual(['w1'])
   expect(mayStart(patchTask(b, 'T-1', { status: 'todo' }, T).tasks[0], [live])).toBe(false)
   expect(orphanMove(live, b, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
   expect(orphanMove({ ...live, alive: false }, b, 'me', 'me')).toEqual({ move: 'leave' })
-  expect(claudeAgents.agentState({ id: 'w1', type: 'symcc:worker', status: 'killed' })).toMatchObject({ worker: true, alive: false })
-  expect(claudeAgents.agentState({ id: 'w1', type: 'symcc:worker-web', status: 'running' })).toMatchObject({ worker: false, alive: true })
+  expect(claudeAgents.hostAgent({ id: 'w1', type: 'symcc:worker-web', status: 'running' })).toEqual({ id: 'w1', kind: 'worker', status: 'running' })
+  expect(claudeAgents.hostAgent({ id: 's1', type: 'symcc:scout', status: 'running' }).kind).toBe('scout')
+  expect(claudeAgents.hostAgent({ id: 'g1', type: 'general-purpose', status: 'running' }).kind).toBe('other')
+  expect(agentState(claudeAgents.hostAgent({ id: 'w1', type: 'symcc:worker', status: 'killed' }))).toMatchObject({ worker: true, alive: false })
+  expect(agentState(claudeAgents.hostAgent({ id: 'w1', type: 'symcc:worker-web', status: 'running' }))).toMatchObject({ worker: true, alive: true })
+  expect(agentState({ id: 's1', kind: 'scout', status: 'waiting' })).toMatchObject({ worker: false, alive: true })
   expect(claudeAgents.isNotReady("Agent type 'symcc:worker' not found")).toBe(true)
   expect(claudeAgents.scoutNotReady("Agent type 'symcc:scout' not found")).toBe(true)
 })
@@ -59,7 +63,7 @@ test('the stats say where the lead\'s calls come from as the adapter tells it', 
   // the reader: Claude Code's ~/.claude/projects/<folder>/*.jsonl, and it says so even when there are no calls
   const read: string[] = []
   const $ = {
-    env: { get: async (n: string) => (n === 'HOME' ? '/h' : undefined) },
+    env: async (n: string) => (n === 'HOME' ? '/h' : undefined),
     fs: { list: async (d: string) => (read.push(d), [{ name: 's.jsonl', kind: 'file', size: 1, mtimeMs: NOW, isLink: false }]), read: async () => line },
   } as unknown as Host
   expect(await leadUsage($, '/p/my.app', { kind: 'all' }, NOW)).toEqual({ lead: [{ id: 'm1', atMs: NOW, tokens: { input: 5 }, from: LEAD_LOGS }], leadSessions: 1, leadFrom: LEAD_LOGS })

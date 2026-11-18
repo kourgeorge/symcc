@@ -10,8 +10,9 @@ import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 import { test, resetPlugin } from './reset'
-import { turnComplete } from './turn-hook'
-import { claudeHost } from '../hooks/claude/host'
+import { agentFinished } from '../hooks/app/symcc'
+import { fakeHost, memoryFs } from './fake-host'
+import type { HostAgent } from '../hooks/host'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -27,9 +28,6 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false }
   const files = new Map<string, string>()
   const calls: string[] = []
-  const spawns: { prompt: string; subagentType?: string; cwd?: string; name?: string }[] = []
-  const sends: { to: { agentId: string }; text: string }[] = []
-  const state = new Map<string, unknown>()
   function runGit(a0: string[]): Res {
     const a = a0.filter((x, i) => x !== '-c' && a0[i - 1] !== '-c')
     const s = a.join(' ')
@@ -62,62 +60,32 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
     }
     return ok()
   }
-  const $ = {
-    process: {
-      run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
-        const [cmd, ...rest] = argv
-        calls.push(argv.join(' '))
-        if (cmd === 'git') return runGit(rest)
-        if (cmd === 'ln') {
-          if (files.has(rest[1]!)) return fail('File exists')
-          files.set(rest[1]!, files.get(rest[0]!)!)
-          return ok()
-        }
-        if (cmd === 'mv') {
-          if (!files.has(rest[1]!)) return fail('No such file')
-          files.set(rest[2]!, files.get(rest[1]!)!)
-          files.delete(rest[1]!)
-          return ok()
-        }
-        if (cmd === 'rm') {
-          for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
-          return ok()
-        }
-        void o
+  const { host, spawns, sent: sends } = fakeHost({
+    run: async (argv, o = {}) => {
+      const [cmd, ...rest] = argv
+      calls.push(argv.join(' '))
+      if (cmd === 'git') return runGit(rest)
+      if (cmd === 'ln') {
+        if (files.has(rest[1]!)) return fail('File exists')
+        files.set(rest[1]!, files.get(rest[0]!)!)
         return ok()
-      },
+      }
+      if (cmd === 'mv') {
+        if (!files.has(rest[1]!)) return fail('No such file')
+        files.set(rest[2]!, files.get(rest[1]!)!)
+        files.delete(rest[1]!)
+        return ok()
+      }
+      if (cmd === 'rm') {
+        for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
+        return ok()
+      }
+      void o
+      return ok()
     },
-    fs: {
-      exists: async (p: string) => files.has(p),
-      read: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return files.get(p)!
-      },
-      write: async (p: string, text: string) => void files.set(p, text),
-      stat: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: 0 }
-      },
-      list: async () => [],
-    },
-    session: { id: async () => 'me', send: async (m: { to: { agentId: string }; text: string }) => void sends.push(m) },
-    agent: {
-      list: async () => [],
-      spawn: async (o: { prompt: string; subagentType?: string; cwd?: string; name?: string }) => (spawns.push(o), { agentId: `chk${spawns.length}` }),
-    },
-    plugin: { root: '/plugin', name: 'symcc' },
-    ui: { toast: () => undefined, status: () => undefined, log: () => undefined },
-    clock: { after: () => ({ cancel() {} }), every: () => ({ cancel() {} }), sleep: async () => undefined },
-    prompt: { submit: async () => undefined },
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+    fs: memoryFs(files),
+    agents: { spawn: async o => (spawns.push(o), { agentId: `chk${spawns.length}` }) },
+  })
   S.root = ROOT
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -126,7 +94,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: claudeHost($ as never) as never, claude: $, git, calls, spawns, sends }
+  return { $: host, git, calls, spawns, sends }
 }
 
 /** A board with task T-1 (files src/) "doing" on try 1, with the checker setting `checker`. */
@@ -219,7 +187,7 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   const t = await finish(w, async id => {
     // the checker got the task and the diff, as a read-only agent in the task's folder
     const s = w.spawns[0]!
-    expect(s.subagentType).toBe('symcc:scout')
+    expect(s.kind).toBe('checker')
     expect(s.cwd).toBe(WT)
     expect(s.prompt).toContain('Done when: a test shows it.')
     expect(s.prompt).toContain('+the new line')
@@ -306,7 +274,7 @@ test('a checker stopped before its verdict merges nothing: the task waits for th
   expect(w.git.main).toBe(M1)
 })
 
-test('T-402: through turn.complete, a checker whose turn ended on an error or a refusal gives no verdict: no problems, no retry used, the task waits for review', async () => {
+test('T-402: through agentFinished (turn.complete), a checker whose turn ended on an error or a refusal gives no verdict: no problems, no retry used, the task waits for review', async () => {
   for (const [end, why] of [
     [{ reason: 'error' }, 'its turn ended on an error (retries used up or the context limit)'],
     [{ reason: 'refusal', refusal: { category: null, explanation: 'cannot help' } }, 'the model refused to go on (cannot help)'],
@@ -315,7 +283,7 @@ test('T-402: through turn.complete, a checker whose turn ended on an error or a 
     const w = world()
     await saveBoard(w.$, boardWith(true))
     const before = find(await load(w.$), 'T-1')!
-    const t = await finish(w, async id => turnComplete(w.claude, id, 'Let me look at src/a.ts next.', end))
+    const t = await finish(w, async id => agentFinished(w.$, id, { answer: 'Let me look at src/a.ts next.', end, isAborted: false, tokens: undefined }))
     expect(t.status).toBe('review')
     expect(t.note).toBe(`ready for review: the tests passed, but the checker gave no verdict (${why}), nothing merged yet`)
     expect(t.attempts).toBe(before.attempts)
@@ -360,7 +328,7 @@ for (const [tool, args, status, again, againText] of [
       // the checker is told to stop and is not waited for any more
       expect(checkerRuns.has(id)).toBe(false)
       expect(stopped.has(id)).toBe(true)
-      expect(w.sends.some(m => m.to.agentId === id && m.text.startsWith('Stop now'))).toBe(true)
+      expect(w.sends.some(m => m.to === id && m.text.startsWith('Stop now'))).toBe(true)
     })
     expect(agent).not.toBe('')
     expect(w.git.main).toBe(M1)
@@ -380,10 +348,9 @@ for (const [tool, args, status, again, againText] of [
   test(`${tool} while the checker is still starting up stops it as soon as it starts: nothing merges, the task is ${status}, and ${again} works right after`, async () => {
     const w = world()
     await saveBoard(w.$, boardWith(true))
-    const a = w.claude as unknown as { agent: { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> } }
-    const real = a.agent.spawn
+    const real = w.$.agents.spawn
     let reply = ''
-    a.agent.spawn = async o => {
+    w.$.agents.spawn = async o => {
       if (o.name?.endsWith('-checker')) reply = await runTool(w.$, tool, { task: 'T-1', ...args })
       return real(o)
     }
@@ -392,7 +359,7 @@ for (const [tool, args, status, again, againText] of [
     const id = 'chk1'
     expect(checkerRuns.size).toBe(0)
     expect(stopped.has(id)).toBe(true)
-    expect(w.sends.some(m => m.to.agentId === id && m.text.startsWith('Stop now'))).toBe(true)
+    expect(w.sends.some(m => m.to === id && m.text.startsWith('Stop now'))).toBe(true)
     expect(w.git.main).toBe(M1)
     expect(t.status).toBe(status)
     expect(checkingNow('T-1')).toBe(false)
@@ -404,11 +371,10 @@ for (const [tool, args, status, again, againText] of [
 test('a drop that comes before the checker is spawned starts no checker at all', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
-  const a = w.$ as unknown as { process: { run: (argv: string[], o?: { cwd?: string }) => Promise<Res> } }
-  const run = a.process.run
+  const run = w.$.run
   let dropped = false
   // the drop lands while the checker step is still getting ready (reading the change for its prompt)
-  a.process.run = async (argv, o) => {
+  w.$.run = async (argv, o) => {
     if (!dropped && argv[0] === 'git' && argv.some(x => x.endsWith('...HEAD'))) {
       dropped = true
       await runTool(w.$, 'drop', { task: 'T-1' })
@@ -580,8 +546,8 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   resetPlugin()
   S.root = ROOT
   S.driving = true
-  const agents = [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status }]
-  ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => agents
+  const agents: HostAgent[] = [{ id: 'chk1', name: 'symcc-T-1-checker', kind: 'scout', status }]
+  w.$.agents.list = async () => agents
   return agents
 }
 
@@ -591,7 +557,7 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   const sha = w.git.head
   await check(w.$)
   // the old checker (unknown to this copy) was told to stop, and a new one started at once
-  expect(w.sends.map(m => m.to.agentId)).toEqual(['chk1'])
+  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
   await until(() => checkerRuns.size > 0)
   expect(w.spawns.length).toBe(2)
   expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
@@ -655,13 +621,13 @@ test('T-386: a reload after the checker said OK and the work reached main (befor
   w.git.head = H1
   w.git.main = H1
   w.git.dirty = false
-  const run = w.claude.process.run
-  w.claude.process.run = async (argv: string[], o?: { cwd?: string }) => (argv[0] === 'git' && argv.includes('log') && argv.includes('--format=%B') ? ok('T-1: Do it\n\nSymcc-Task: T-1\nSymcc-Try: 1\n') : run(argv, o))
+  const run = w.$.run
+  w.$.run = async (argv, o) => (argv[0] === 'git' && argv.includes('log') && argv.includes('--format=%B') ? ok('T-1: Do it\n\nSymcc-Task: T-1\nSymcc-Try: 1\n') : run(argv, o))
   resetPlugin()
   S.root = ROOT
   S.driving = true
   S.gitState = 'ok'
-  ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status: 'completed' }]
+  w.$.agents.list = async () => [{ id: 'chk1', name: 'symcc-T-1-checker', kind: 'scout', status: 'completed' }]
   await check(w.$)
   for (let i = 0; i < 2000; i++) await Promise.resolve()
   expect(w.spawns.length).toBe(0)
@@ -672,15 +638,15 @@ test('T-386: a reload after the checker said OK and the work reached main (befor
   expect(w.git.main).toBe(H1)
 })
 
-/** The checker's next `n` starts throw "Agent type symcc:scout not found" (its type isn't loaded yet, just after a reload); later ones start as usual. */
+/** The checker's next `n` starts fail as "not ready" (its agent type isn't loaded yet, just after a reload; the host marks such an error, see notReadyYet); later ones start as usual. */
 function scoutNotLoaded(w: ReturnType<typeof world>, n: number) {
-  const agent = w.claude.agent as { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> }
+  const agent = w.$.agents
   const real = agent.spawn
   let left = n
   agent.spawn = async o => {
     if (left > 0) {
       left--
-      throw new Error('Agent type symcc:scout not found')
+      throw Object.assign(new Error('Agent type symcc:scout not found'), { notReady: true })
     }
     return real(o)
   }

@@ -2,6 +2,7 @@ import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { fileToolHits } from '../hooks/plugin/scouts'
+import { fileTouch } from '../hooks/claude/tools'
 import { inProject } from './project'
 import { ran, readText, entry, pause } from './fakes'
 
@@ -49,15 +50,21 @@ const settle = async (until: () => boolean) => {
 }
 const lastView = (views: string[]) => views[views.length - 1] ?? ''
 
-test('fileToolHits: Write, Edit and MultiEdit of a scout or role file count; Bash only when it changes files', () => {
+test('fileToolHits: a written or edited scout or role file counts; a command only when it changes files', () => {
   const S = '.symcc/scouts', R = '.symcc/roles'
-  expect(fileToolHits({ tool: 'Write', file_path: '/p/.symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
-  expect(fileToolHits({ tool: 'Edit', file_path: '/p/.symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
-  expect(fileToolHits({ tool: 'MultiEdit', file_path: '/p/.symcc/roles/docs.md' }, S, R)).toEqual({ scouts: false, roles: true })
-  expect(fileToolHits({ tool: 'Write', file_path: '/p/src/a.ts' }, S, R)).toEqual({ scouts: false, roles: false })
-  expect(fileToolHits({ tool: 'Bash', command: 'rm .symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
-  expect(fileToolHits({ tool: 'Bash', command: 'cat .symcc/scouts/x.md' }, S, R)).toEqual({ scouts: false, roles: false })
-  expect(fileToolHits({ tool: 'Read', file_path: '/p/.symcc/scouts/x.md' }, S, R)).toEqual({ scouts: false, roles: false })
+  expect(fileToolHits({ path: '/p/.symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
+  expect(fileToolHits({ path: '/p/.symcc/roles/docs.md' }, S, R)).toEqual({ scouts: false, roles: true })
+  expect(fileToolHits({ path: '/p/src/a.ts' }, S, R)).toEqual({ scouts: false, roles: false })
+  expect(fileToolHits({ command: 'rm .symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
+  expect(fileToolHits({ command: 'cat .symcc/scouts/x.md' }, S, R)).toEqual({ scouts: false, roles: false })
+})
+
+test("Claude Code's tool calls in symcc's words: Write, Edit and MultiEdit write a file, Bash runs a command, others touch nothing", () => {
+  expect(fileTouch({ tool: 'Write', file_path: '/p/.symcc/scouts/x.md' })).toEqual({ path: '/p/.symcc/scouts/x.md' })
+  expect(fileTouch({ tool: 'Edit', file_path: '/p/a.ts' })).toEqual({ path: '/p/a.ts' })
+  expect(fileTouch({ tool: 'MultiEdit', file_path: '/p/.symcc/roles/docs.md' })).toEqual({ path: '/p/.symcc/roles/docs.md' })
+  expect(fileTouch({ tool: 'Bash', command: 'rm .symcc/scouts/x.md' })).toEqual({ command: 'rm .symcc/scouts/x.md' })
+  expect(fileTouch({ tool: 'Read', file_path: '/p/.symcc/scouts/x.md' })).toBe(null)
 })
 
 test('a Write of a new scout file reschedules the scouts and the published view lists it; an Edit does too; rm takes it off', async ($, on) => {

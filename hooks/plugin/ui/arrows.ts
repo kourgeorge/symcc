@@ -6,7 +6,8 @@
 // Claude Code keeps the focused element in view on its own, so the panel still scrolls as the focus moves.
 import type { MatchedHook } from 'claude-code'
 import type { KeyHint } from '../../board'
-import { type $, S } from '../state'
+import { S } from '../state'
+import { type $ } from '../../claude/panel'
 
 type ScrollHook = MatchedHook<'ui.scroll', { component: 'Pane' }>
 type FocusHook = MatchedHook<'ui.focus', { component: 'Pane' }>

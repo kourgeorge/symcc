@@ -46,8 +46,8 @@ export function scoutDescription(scout: string, instructions = ''): string {
 
 /**
  * An agent as symcc sees it, whatever the host: its id, whether it is one of the plugin's (base) workers, whether it
- * is still alive, and its name and description. The host's adapter makes these from its own agent list (for Claude
- * Code, see claude/agents.ts).
+ * is still alive, and its name and description. The logic makes these from host.agents.list() (agentState in
+ * hooks/host.ts); each host's adapter lists its agents in symcc's words (for Claude Code, see claude/agents.ts).
  */
 export type AgentState = { id: string; worker: boolean; alive: boolean; description?: string; name?: string }
 
