@@ -68,6 +68,10 @@ const READS = [
   // T-446: `@{` revisions and an empty `{}` are no brace expansion
   'git log HEAD@{1}',
   'git log -1 HEAD@{u}',
+  // T-446: braces inside quotes and `${VAR}` are no brace expansion
+  `git log --pretty=format:'{"h":"%h"}'`,
+  'git -C "${PWD}" log',
+  'git log ${x}',
   'find . -name x -exec git log -1 {} +',
   '{ grep -n git README.md; }',
 ]
@@ -225,6 +229,13 @@ const WRITES: [string, string][] = [
   ['{git,} stash', 'git with {braces}'],
   ['g{i,}t stash', 'git with {braces}'],
   ['rg --pre={git,} stash .', 'git with {braces}'],
+  // one braced word may hold git and its subcommand together (`{git,stash}` runs `git stash`)
+  ['{git,stash}', 'git with {braces}'],
+  ['{git,-C,.,stash}', 'git with {braces}'],
+  ['{/usr/bin/git,stash}', 'git with {braces}'],
+  ['env {git,stash}', 'git with {braces}'],
+  ['{git-stash,}', 'git with {braces}'],
+  ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],
   ['{ git stash; }', 'git stash'],

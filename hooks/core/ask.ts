@@ -558,6 +558,31 @@ function plainWords(text: string): string[] {
   return out
 }
 
+/**
+ * plainWords' words of `text` with each quoted or backslashed "{", "}" and "," turned into "_", so what is left of
+ * them is what bash's brace expansion may read (`'{"h":"%h"}'` is text, `{git,stash}` is not).
+ */
+function braceWords(text: string): string[] {
+  const out: string[] = []
+  let w = ''
+  let has = false
+  let quote = ''
+  const lit = (c: string) => (/[{},]/.test(c) ? '_' : c)
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\' && quote !== "'") (w += lit(text[++i] ?? '')), (has = true)
+    else if (quote) c === quote ? (quote = '') : (w += lit(c))
+    else if (c === "'" || c === '"') (quote = c), (has = true)
+    else if (/\s/.test(c)) {
+      if (w || has) out.push(w)
+      w = ''
+      has = false
+    } else w += c
+  }
+  if (w || has) out.push(w)
+  return out
+}
+
 /** Short options of git grep that take a value right after them (`-e<pattern>`, `-A3`). */
 const GREP_VALUE = 'efABCmO'
 /** Short options of diff-like git commands that take a value right after them (`-S<text>`, `-G<regex>`, `-L<range>`, `-n3`); shortlog's -n takes none. */
@@ -744,10 +769,22 @@ const RUNS_INSIDE = /\$\(|`|<\(|>\(/
 const BRACE_WHAT = 'with {braces}'
 
 /**
- * Whether word `w` has a "{" that bash's brace expansion may read: not a git revision's `@{...}` (`HEAD@{1}`) and not
- * an empty `{}` (bash keeps it as text, as in `find -exec git log {} +`).
+ * Whether word `w` (from braceWords, so quoted braces are gone) has a "{" that bash's brace expansion may read: not a
+ * git revision's `@{...}` (`HEAD@{1}`), not a `${...}` setting and not an empty `{}` (bash keeps it as text, as in
+ * `find -exec git log {} +`).
  */
-const hasBrace = (w: string) => w.replace(/@\{[^{}]*\}/g, '').replace(/\{\}/g, '').includes('{')
+const hasBrace = (w: string) =>
+  w.replace(/[@$]\{[^{}]*\}/g, '').replace(/\{\}/g, '').includes('{')
+
+/**
+ * Whether braceWords word `w` may become git through brace expansion: with the braces and commas gone it reads git
+ * (`{git,} stash`, `g{i,}t stash`), or one of its comma-separated parts, or that part's last path piece, is git or
+ * `git-...` (`{git,stash}`, `{/usr/bin/git,stash}`).
+ */
+const braceGit = (w: string) =>
+  hasBrace(w) &&
+  (/(?:^|[/=])git$/i.test(w.replace(/[{},]/g, '')) ||
+    w.split(/[{},]/).some(part => /^git(?:$|-)/i.test(part.split(/[/=]/).pop() ?? '')))
 
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
 function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
@@ -761,23 +798,23 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     const words = plainWords(p.text)
     const adds = seen
     seen ||= words.some(a => ADDS_WORDS.has(progName(a)))
-    return [{ ...p, words, adds }]
+    return [{ ...p, words, braces: braceWords(p.text), adds }]
   })
   /** The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined when it isn't git. */
-  const gitAt = (words: string[], at: number, adds: boolean): { bad?: string } | undefined => {
+  const gitAt = (words: string[], at: number, adds: boolean, braces: string[]): { bad?: string } | undefined => {
     const w = words[at]!
     // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
     const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
     // an option whose value is git runs it with the words after (`rg --pre=git stash .` runs `git stash`)
-    // brace expansion may spell git (`{git,} stash`, `g{i,}t stash`): with the braces and commas gone it reads git
-    const braced = !dashed && !isGit(w) && hasBrace(w) && /(?:^|[/=])git$/i.test(w.replace(/[{},]/g, ''))
+    // brace expansion may spell git (`{git,} stash`, `{git,stash}`, `g{i,}t stash`)
+    const braced = !dashed && !isGit(w) && braceGit(braces[at] ?? w)
     if (!dashed && !isGit(w) && !/=git$/i.test(w) && !braced) return undefined
     out.git = true
     // xargs and parallel add words from their input (`stash`, `--output=x`), so what that git does can't be known
     if (adds || words.slice(0, at).some(a => ADDS_WORDS.has(progName(a)))) return { bad: 'xargs git' }
     // bash's brace expansion makes new words (`git {stash,}` runs `git stash`, `git -C {.,} stash` runs `git -C . stash`),
     // so what a git command with a "{" in its words does can't be told from its text (T-446)
-    if (braced || words.slice(at + 1).some(hasBrace)) return { bad: `git ${BRACE_WHAT}` }
+    if (braced || braces.slice(at + 1).some(hasBrace)) return { bad: `git ${BRACE_WHAT}` }
     let j = at + 1
     let sub = dashed
     if (!dashed) {
@@ -796,14 +833,14 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
    * Whether a simple command's `git` words are only text: a TEXT_TOOLS command, or a read-only git command (checked
    * by gitAt), with no command run inside it and not in a here-document.
    */
-  const exempt = (p: { text: string; doc?: boolean; words: string[]; adds: boolean }): boolean => {
+  const exempt = (p: { text: string; doc?: boolean; words: string[]; braces: string[]; adds: boolean }): boolean => {
     if (p.words.length === 0) return true
     if (p.doc || RUNS_INSIDE.test(p.text)) return false
     if (textTool(p.words) || plainCd(p)) return true
     const w = p.words[0]!
     // `HEAD@{1}` braces were cut at before T-439's round 6, so a line with `@{` gets no read-only git exception
     if (command.includes('@{')) return false
-    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds)?.bad === undefined
+    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds, p.braces)?.bad === undefined
   }
   // Text one command prints may be run by another (`grep -h git notes | sh`, `grep ... > s; $SHELL s`, `./s`), and a
   // list of programs that run their input or a file can never be complete. So the exceptions hold only when every
@@ -823,7 +860,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     // word that holds more than one word or command (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
-      const g = gitAt(words, i, p.adds)
+      const g = gitAt(words, i, p.adds, p.braces)
       if (g?.bad) return { ...out, bad: g.bad }
       if (g) continue
       const at = w.search(/git(?!\w)/i)
