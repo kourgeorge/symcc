@@ -86,7 +86,7 @@ picks up again next time.
 | `waiting` | It needs an answer from you (shown under NEEDS YOU) |
 | `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
 | `paused` | Stopped on purpose, until resumed |
-| `failed` | It could not be finished; the lead decides what next. Its page starts with a "Why it failed" block: one plain sentence for the reason (tests failed, the checker found problems, files outside the task, no change, no result, out of time, an API error or refusal, could not start, a merge conflict), what the worker's report asks for (a `NEED FILES:` line or a question), and what to do next (Retry, change the task, or Drop). The board row and the lead's board show the same sentence |
+| `failed` | It could not be finished; the lead decides what next. Its page starts with a "Why it failed" block: one plain sentence for the reason (tests failed, the checker found problems, files outside the task, no change, no result, out of time, an API error or refusal, could not start, a merge conflict), what the worker's report asks for (a `NEED FILES:` line or a question), and what to do next (Retry, ask the lead in the chat to change the task, or Drop). Its key line lists `r retry` and `x drop`. The board row and the lead's board show the same sentence |
 | `done` | Merged into your branch. This is final |
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |

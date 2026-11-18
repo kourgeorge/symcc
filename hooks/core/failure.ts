@@ -129,9 +129,9 @@ const isPassHead = (l: string) => heading(l) && /^what\s+(passed|works|worked|is
 
 /**
  * The first problem in a checker's report. It looks only in the problems part: after a "Problems:" /
- * "Problem:" line when there is one, else the report's last lines; never in a "What passed" / "What works"
+ * "Problem:" line when there is one, else the whole report; never in a "What passed" / "What works"
  * part. There it takes the first "path:line …" line, else the first line naming a file under hooks/ or
- * tests/; when nothing matches, the report's first line.
+ * tests/ (without a "Problems:" line, only among the last 8 lines); when nothing matches, the report's first line.
  */
 export function firstProblem(report: string): string {
   const lines = report.split('\n').map(l => l.trim()).filter(l => l && l !== CHECKER_MARK && l !== '…')
@@ -141,14 +141,16 @@ export function firstProblem(report: string): string {
     const stop = lines.findIndex((l, i) => i > head && isPassHead(l))
     part = lines.slice(head + 1, stop < 0 ? undefined : stop)
   } else {
-    // drop every "What passed" part (from its heading to the next heading), then keep the last lines
+    // drop every "What passed" part (from its heading to the next heading); the rest is searched from the top for a
+    // "path:line" line, but only its last lines for a line that merely names a file (an intro often mentions files)
     let inPass = false
     part = lines.filter(l => {
       if (heading(l)) inPass = isPassHead(l)
       return !inPass
-    }).slice(-8)
+    })
   }
-  const pick = part.find(l => PROBLEM_LINE.test(l)) ?? part.find(l => NAMES_FILE.test(l)) ?? (head >= 0 ? part[0] : undefined) ?? lines[0] ?? ''
+  const named = head >= 0 ? part : part.slice(-8)
+  const pick = part.find(l => PROBLEM_LINE.test(l)) ?? named.find(l => NAMES_FILE.test(l)) ?? (head >= 0 ? part[0] : undefined) ?? lines[0] ?? ''
   // a worktree's long absolute path says nothing the short one doesn't; list marks and bold add nothing either
   return cutLine(pick.replace(/^(?:[-*]|\d+[.)])\s+/, '').replace(/\*\*/g, '').replace(/\S*\/\.symcc\/worktrees\/[^/\s]+\//g, ''), 240)
 }
@@ -208,32 +210,33 @@ export function whyFailed(t: Failed): string {
   }
 }
 
-/** What to do next about failed task `t`, in one line, matching its page's buttons (Retry, change the task, Drop). */
+/** What to do next about failed task `t`, in one line, matching its page's buttons (Retry, Drop); changing the task is
+ *  the lead's job, so the text says to ask the lead in the chat. */
 export function failNext(t: Failed): string {
   switch (failedHow(t)) {
     case 'tests':
-      return 'Retry to let a new worker fix the failing tests, change the task if the tests show it asks for the wrong thing, or Drop it.'
+      return 'Retry to let a new worker fix the failing tests, ask the lead in the chat to change the task if the tests show it asks for the wrong thing, or Drop it.'
     case 'checker':
-      return "Read the checker's report in the Details below; Retry to let a new worker fix it, change the task if the plan is off, or Drop it."
+      return "Read the checker's report in the Details below; Retry to let a new worker fix it, ask the lead in the chat to change the plan if it is off, or Drop it."
     case 'scope':
-      return 'Change the task to add those files (or split it), then Retry; or Drop it.'
+      return 'Ask the lead in the chat to add those files to the task (or split it), then Retry; or Drop it.'
     case 'no change':
-      return 'Read the report below; Retry if it should try again, change the task if it needs a clearer plan, or Drop it.'
+      return 'Read the report below; Retry if it should try again, ask the lead in the chat for a clearer plan, or Drop it.'
     case 'timed out':
-      return 'Retry to continue from the work so far, change the task to split it into smaller parts, or Drop it.'
+      return 'Retry to continue from the work so far, ask the lead in the chat to split it into smaller parts, or Drop it.'
     case 'no start':
       return 'Fix what stopped it from starting, then Retry; or Drop it.'
     case 'clash':
-      return 'Retry to let a new worker merge the latest work in, change the task, or Drop it.'
+      return 'Retry to let a new worker merge the latest work in, ask the lead in the chat to change the task, or Drop it.'
     case 'hung':
       return 'Look at why the test commands are slow or hang, then Retry; or Drop it.'
     case 'no result':
     case 'api error':
     case 'refused':
     case 'stopped':
-      return 'Retry to start a fresh try (it goes on from the work so far), change the task to make it smaller, or Drop it.'
+      return 'Retry to start a fresh try (it goes on from the work so far), ask the lead in the chat to make it smaller, or Drop it.'
     default:
-      return 'Read the history and report below; Retry, change the task, or Drop it.'
+      return 'Read the history and report below; Retry, ask the lead in the chat to change the task, or Drop it.'
   }
 }
 
@@ -247,11 +250,11 @@ export function failAsks(report: string | null | undefined): string {
   const need = lines.find(l => /^NEED FILES:/.test(l))
   if (need) {
     const files = cutLine(need.replace(/^NEED FILES:\s*/, ''), 200) || '(none named)'
-    return `The worker asks for more files: ${end(files)} Add them to the task with change, then Retry.`
+    return `The worker asks for more files: ${end(files)} Ask the lead in the chat to add them to the task, then Retry.`
   }
   // A question counts only in the report's last lines (an earlier one is usually answered later on), and only a
   // real sentence ending on a word and "?" (not a status line like "changed ?" or a link or code).
   const q = [...lines.slice(-3)].reverse().find(l => /[\w)'"`]\?\s*\**$/.test(l) && /^[-*#>\s]*\**[A-Za-z]/.test(l) && !/^[-*]?\s*(https?:|`)/.test(l) && !/^\w+:\s{2,}/.test(l))
-  if (q) return `The worker's report asks: ${cutLine(q.replace(/^[-*#>\s]+/, ''), 200)} Answer it by changing the task, then Retry.`
+  if (q) return `The worker's report asks: ${cutLine(q.replace(/^[-*#>\s]+/, ''), 200)} Answer it in the chat so the lead adds it to the task, then Retry.`
   return ''
 }

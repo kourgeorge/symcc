@@ -276,6 +276,7 @@ export function taskKeys(status: SymccStatus, worker = false, reports: readonly 
   if (status === 'review' && investigation) keys.push(k('a', 'done'), k('k', 'keep as a note'), k('x', 'ask more'))
   else if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
   if (status === 'backlog') keys.push(k('o', 'move to todo'), k('x', 'drop'))
+  if (status === 'failed') keys.push(k('r', 'retry'), k('x', 'drop'))
   if (fileWait) keys.push(k('r', 'merge now'))
   if (worker) keys.push(k('w', 'watch worker'))
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))

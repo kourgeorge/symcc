@@ -25,7 +25,7 @@ test('a failed task: one plain sentence says why, for every way a task can fail'
   // each case is told apart, and each has its own next step naming the page's buttons
   expect(new Set(CASES.map(([, t]) => failedHow(t))).size).toBe(CASES.length)
   for (const [, t] of CASES) expect(failNext(t)).toMatch(/Retry/)
-  expect(failNext(CASES[3]![1])).toBe('Read the report below; Retry if it should try again, change the task if it needs a clearer plan, or Drop it.')
+  expect(failNext(CASES[3]![1])).toBe('Read the report below; Retry if it should try again, ask the lead in the chat for a clearer plan, or Drop it.')
   expect(whyFailed(failed({ note: 'something new' }))).toBe('It failed: something new.')
 })
 
@@ -43,8 +43,8 @@ test("a failed task's board row and the lead's text board use the same sentence 
 })
 
 test("the worker's report asking for files or a question is pointed out", () => {
-  expect(failAsks('I could not finish.\nNEED FILES: src/b.ts, src/c.ts\n')).toBe('The worker asks for more files: src/b.ts, src/c.ts. Add them to the task with change, then Retry.')
-  expect(failAsks('Found two ways.\nShould I keep the old flag?\n')).toBe("The worker's report asks: Should I keep the old flag? Answer it by changing the task, then Retry.")
+  expect(failAsks('I could not finish.\nNEED FILES: src/b.ts, src/c.ts\n')).toBe('The worker asks for more files: src/b.ts, src/c.ts. Ask the lead in the chat to add them to the task, then Retry.')
+  expect(failAsks('Found two ways.\nShould I keep the old flag?\n')).toBe("The worker's report asks: Should I keep the old flag? Answer it in the chat so the lead adds it to the task, then Retry.")
   expect(failAsks('All done, nothing to ask.')).toBe('')
   expect(failAsks(null)).toBe('')
 })
@@ -57,7 +57,7 @@ test('the "try N (role X):" label is left out of the report quote, like "try N:"
 test('a report that only mentions NEED FILES or asks an early question gives no false alarm', () => {
   expect(failAsks('Fixed the parser so a `NEED FILES:` line is only read at the start of a line.')).toBe('')
   expect(failAsks('I checked it.\nneed files: a.ts\nAll good.')).toBe('')
-  expect(failAsks('  NEED FILES: src/x.ts')).toBe('The worker asks for more files: src/x.ts. Add them to the task with change, then Retry.')
+  expect(failAsks('  NEED FILES: src/x.ts')).toBe('The worker asks for more files: src/x.ts. Ask the lead in the chat to add them to the task, then Retry.')
   expect(failAsks('Done.\nStatus:   ◆ ready for review · added ? · changed ?\n')).toBe('')
   expect(failAsks('Why does it fail?\nThe cache was stale.\nI cleared it in load().\nTests pass now.\nAll done.')).toBe('')
 })
@@ -250,6 +250,28 @@ test("the checker's first problem: symcc's own comma format, numbered and bold l
   expect(firstProblem('Checked it.\nWhat passed:\n- tests/a.test.ts passes\nIssues:\n- hooks/b.ts:4, wrong count')).toBe('hooks/b.ts:4, wrong count')
 })
 
+test("the checker's first problem with no 'Problems:' heading and a long list is problem 1, not a later one", () => {
+  const list = Array.from({ length: 10 }, (_, i) => `hooks/core/p${i + 1}.ts:${i + 1}, problem ${i + 1}`).join('\n')
+  expect(firstProblem(checkerOutput(`I found ten problems with this work.\n\n${list}`))).toBe('hooks/core/p1.ts:1, problem 1')
+  // a "What passed" part before the list is still skipped
+  expect(firstProblem(`Ten problems.\nWhat passed:\n- tests/a.test.ts:3 passes\nThe rest:\n${list}`)).toBe('hooks/core/p1.ts:1, problem 1')
+
+})
+
+test("with no 'Problems:' heading, an intro line that only mentions files doesn't beat the real problem at the end", () => {
+  const report = 'The checker found these problems:\nI read hooks/core/failure.ts and tests/failure.test.ts first.\n' + 'Step: looked around.\n'.repeat(9) + '- hooks/core/panel.ts misses r retry'
+  expect(firstProblem(report)).toBe('hooks/core/panel.ts misses r retry')
+})
+
+test("a failed task's texts name the lead (who changes tasks), not the lead's change tool", () => {
+  const asks = [failAsks('NEED FILES: src/b.ts'), failAsks('Should I keep the old flag?')]
+  for (const text of [...CASES.map(([, t]) => failNext(t)), ...asks]) {
+    expect(text).not.toMatch(/with change|changing the task|^change the task|, change the task/i)
+  }
+  for (const text of asks) expect(text).toContain('lead')
+  expect(failNext(CASES.find(([, t]) => failedHow(t) === 'scope')![1])).toBe('Ask the lead in the chat to add those files to the task (or split it), then Retry; or Drop it.')
+})
+
 test("a failing command that isn't bun's test runner: its first error lines are quoted", () => {
   const out = '$ sh scripts/typecheck.sh (exit 2)\nhooks/a.ts(3,4): error TS2322: bad\n'
   expect(whyFailed(failed({ note: 'tests failed: `sh scripts/typecheck.sh` (exit 2). x', test_output: out })))
@@ -258,6 +280,6 @@ test("a failing command that isn't bun's test runner: its first error lines are 
 })
 
 test('a NEED FILES line that already ends in "." or "…" gets no second one', () => {
-  expect(failAsks('NEED FILES: src/b.ts, because the tokens live there.')).toBe('The worker asks for more files: src/b.ts, because the tokens live there. Add them to the task with change, then Retry.')
-  expect(failAsks(`NEED FILES: ${'a/b.ts '.repeat(40)}`)).toMatch(/… Add them to the task with change, then Retry\.$/)
+  expect(failAsks('NEED FILES: src/b.ts, because the tokens live there.')).toBe('The worker asks for more files: src/b.ts, because the tokens live there. Ask the lead in the chat to add them to the task, then Retry.')
+  expect(failAsks(`NEED FILES: ${'a/b.ts '.repeat(40)}`)).toMatch(/… Ask the lead in the chat to add them to the task, then Retry\.$/)
 })
