@@ -139,6 +139,8 @@ test("a setting's edit box: Enter on empty cancels (test_commands too: nothing s
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'group:Work' })
+  await ui.press({ key: 'group:Checks before merging' })
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ type: 'Text', text: /^Enter saves · Enter on empty cancels$/ })).toBeDefined()
   await ui.input({ key: 'setting-edit', text: '' })
@@ -160,6 +162,7 @@ test("a setting's edit box: Enter on empty cancels (test_commands too: nothing s
 test("a setting's pick list says x cancels; Settings has Back (b) to the board list", async ($, on) => {
   stateOf(on, { tab: 'settings', view: view([task('T-1', 'todo', 'Build it')]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'group:Work' })
   await ui.press({ key: 'setting:mode' })
   expect(await ui.find({ type: 'Text', text: /^Enter picks · x cancels$/ })).toBeDefined()
   await ui.press({ key: 'setting-cancel' })

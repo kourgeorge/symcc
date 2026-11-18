@@ -119,6 +119,8 @@ export const startS = () => ({
   settingEdit: null as { name: SettingName; value: string; error: string } | null,
   /** the Settings view's pick list (mode, notify): which setting and its choices */
   settingPick: null as { name: SettingName; options: string[] } | null,
+  /** the Settings view's groups (SETTING_GROUPS titles) the owner has opened; all start closed. Kept while the session lasts, not on disk */
+  settingsOpen: [] as string[],
   /** what the last git check found (see probeGit); work starts only when 'ok' */
   gitState: 'ok' as GitState,
   /** the git state the lead was last told about, so it is told once, not every check */
