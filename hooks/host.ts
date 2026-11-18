@@ -8,9 +8,14 @@
 // in `panel`, or `noUi` for a host with no screen): Claude Code's adapter (claude/host.ts) builds them from its `$`,
 // and tests/host.test.ts checks that the result fits. Each parameter is only what symcc passes, and each answer only
 // what symcc reads, so another program (an OpenCode plugin's ctx, or plain Node/Bun in a standalone app)
-// can be made to fit it too. Later steps rename the members to symcc's own words.
+// can be made to fit it too. Since T-246 (step 7) every member is in symcc's own words (`run`, `env`, `agents` with
+// their `kind`, `words` for the names that differ from host to host, `lead.usage`), and tests/fake-host.ts is the
+// shared fake Host the app logic's tests run on, the model for a new host.
 
 import type { SymccView } from '../types'
+import type { AgentState } from './core/agents'
+import type { RoleTools } from './core/roles'
+import type { StatsRange, TeamInput } from './core/stats'
 
 /** What a command's run answers: its exit code and its output. */
 export type HostRunResult = { exitCode: number; stdout: string; stderr: string }
@@ -28,12 +33,19 @@ export type HostTimer = { cancel: () => void }
 export type HostAgentKind = 'worker' | 'scout' | 'checker'
 
 /**
- * An agent (worker, scout or checker) of this session, as the agent list answers it, in symcc's words whatever runs it:
- * `type` is "<name>:worker" for every worker (whatever tools it has) and "<name>:scout" for a scout or a checker (any
- * other agent has some other type); `status` is "pending", "running" or "waiting" while it is alive, and "completed",
- * "failed" or "killed" once it has ended.
+ * An agent of this session, as the agent list answers it, in symcc's words whatever runs it: `kind` is 'worker' for
+ * every worker of symcc's (whatever tools it has), 'scout' for a scout or a checker of symcc's, 'other' for any other
+ * agent; `status` is "pending", "running" or "waiting" while it is alive, and one of ENDED_STATUSES once it has ended.
  */
-export type HostAgent = { id: string; description: string; type: string; status: string; name?: string }
+export type HostAgent = { id: string; description?: string; kind: 'worker' | 'scout' | 'other'; status: string; name?: string }
+
+/** Agent statuses that mean it has ended; anything else counts as still alive. */
+export const ENDED_STATUSES: readonly string[] = ['completed', 'failed', 'killed']
+
+/** An agent from host.agents.list() as core sees it (core/agents.ts): alive unless it has ended, a worker when it is one of symcc's. */
+export function agentState(a: HostAgent): AgentState {
+  return { ...a, worker: a.kind === 'worker', alive: !ENDED_STATUSES.includes(a.status) }
+}
 
 /**
  * How to start an agent: what kind it is, its prompt, its name and short description, the extra tools its role asks
@@ -65,7 +77,40 @@ export type HostPane = { id: string; isShown: boolean; isPlaced: boolean }
  * submitted prompt; for OpenCode a queued session prompt; a standalone app that runs the lead chat itself adds it to
  * that chat. Rejects when it can't be given.
  */
-export type HostLead = { send: (text: string) => Promise<unknown> }
+export type HostLead = {
+  send: (text: string) => Promise<unknown>
+  /**
+   * The lead's model calls for the stats, for project folder `root` in `range` (each call's tokens, how many sessions,
+   * where they were read from), or why they can't be told (`leadProblem`). A host that can't tell answers {}.
+   */
+  usage: (root: string, range: StatsRange, nowMs: number) => Promise<LeadUsage>
+}
+
+/** What host.lead.usage answers. */
+export type LeadUsage = Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem' | 'leadFrom'>
+
+/**
+ * The names that differ from host to host: what the model calls symcc's tools, and which extra tools a role may ask
+ * for in its `tools:` line (see core/roles.ts RoleTools).
+ */
+export type HostWords = {
+  /** the name the model calls symcc's tool `tool` (e.g. "board") by, for plugin `name` */
+  tool: (name: string, tool: string) => string
+  /** the extra tools a role may add, as its file spells them, and which of them reach the web */
+  roleTools: RoleTools
+}
+
+/**
+ * symcc's own words, for a host that adds nothing: its tools are called by their plain names. The role files spell the
+ * web tools WebSearch and WebFetch for now (step 10 of docs/research/host-independence.md gives them symcc's words).
+ */
+export const SYMCC_WORDS: HostWords = {
+  tool: (_name, tool) => tool,
+  roleTools: { extra: ['WebSearch', 'WebFetch'], web: ['WebSearch', 'WebFetch'] },
+}
+
+/** What a file-changing tool call touches, in symcc's words: a file it writes or edits (`path`), or a shell command it runs (`command`). */
+export type FileTouch = { path: string } | { command: string }
 
 /**
  * The board panel's values the panel draws from: which task is open ('' = the list), which view (tab) and which scout
@@ -108,7 +153,10 @@ export interface Host {
     /** ends an agent's work: `text` tells it to stop and end (a host that can, may also end it outright) */
     stop: (agentId: string, text: string) => Promise<unknown>
   }
-  env: { get: (name: string) => Promise<string | undefined> }
+  /** the names that differ from host to host (see HostWords) */
+  words: HostWords
+  /** an environment variable (symcc reads HOME, and the Claude adapter USERPROFILE and CLAUDE_CONFIG_DIR) */
+  env: (name: string) => Promise<string | undefined>
   fs: {
     read: (path: string) => Promise<string>
     write: (path: string, text: string) => Promise<void>
@@ -116,7 +164,8 @@ export interface Host {
     list: (path: string) => Promise<HostFileEntry[]>
     stat: (path: string, options?: { resolve: boolean }) => Promise<HostFileStat>
   }
-  process: { run: (argv: readonly string[], init?: { cwd?: string; env?: Record<string, string>; timeoutMs?: number }) => Promise<HostRunResult> }
+  /** runs a command (no shell) and answers its exit code and output */
+  run: (argv: readonly string[], init?: { cwd?: string; env?: Record<string, string>; timeoutMs?: number }) => Promise<HostRunResult>
   clock: {
     after: (ms: number, fn: () => void) => HostTimer
     every: (ms: number, fn: () => void) => HostTimer

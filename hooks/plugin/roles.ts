@@ -1,5 +1,4 @@
-import { type RoleDef, type RolePromptKind, NEW_ROLE_TEMPLATE, mergeRoles, DEFAULT_ROLE, CHECKER_ROLE_TEXT, isCheckerRole, roleNameError, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
-import { parseRole, roleSkipReason, EXTRA_TOOLS, roleTools } from '../claude/agent-types'
+import { type RoleDef, type RolePromptKind, parseRole, roleSkipReason, roleTools, NEW_ROLE_TEMPLATE, mergeRoles, DEFAULT_ROLE, CHECKER_ROLE_TEXT, isCheckerRole, roleNameError, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
 import type { BrokenDef } from '../core/def-files'
 import { skippedRoles, S } from './state'
 import type { Host } from '../host'
@@ -19,11 +18,13 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
   noun: 'role',
   plural: 'roles',
   skipped: skippedRoles,
-  parse: parseRole,
-  skipReason: roleSkipReason,
+  parse: (name, text) => parseRole(name, text, S.W.roleTools),
+  skipReason: (name, text) => roleSkipReason(name, text, S.W.roleTools),
   nameError: roleNameError,
   fileText: roleFileText,
-  fixHint: `(front matter with a description; a name of letters, digits, - and _; tools only from ${EXTRA_TOOLS.join(', ')}).`,
+  get fixHint() {
+    return `(front matter with a description; a name of letters, digits, - and _; tools only from ${S.W.roleTools.extra.join(', ')}).`
+  },
   builtIn: 'roles',
   merge: mergeRoles,
   get: () => S.roles,
@@ -36,13 +37,13 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
   counts: 'from the next worker on',
   noDescription: 'description is missing: say in a few words what the role is for (the lead reads it to choose)',
   added(a, description) {
-    const tools = roleTools(listOf(a.tools) ?? [])
+    const tools = roleTools(listOf(a.tools) ?? [], S.W.roleTools)
     if (typeof tools === 'string') return tools
     const model = typeof a.model === 'string' ? a.model.trim() : ''
     return { description, ...(model ? { model } : {}), skills: listOf(a.skills) ?? [], ...(tools.length ? { tools } : {}), prompt: typeof a.checklist === 'string' ? a.checklist : '' }
   },
   edited(cur, a, description) {
-    const tools = a.tools === undefined ? cur.tools ?? [] : roleTools(listOf(a.tools) ?? [])
+    const tools = a.tools === undefined ? cur.tools ?? [] : roleTools(listOf(a.tools) ?? [], S.W.roleTools)
     if (typeof tools === 'string') return tools
     const model = typeof a.model === 'string' ? a.model.trim() : cur.model ?? ''
     const skills = a.skills === undefined ? cur.skills : listOf(a.skills) ?? cur.skills

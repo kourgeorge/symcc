@@ -9,7 +9,7 @@ import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../h
 import { setupGit } from '../hooks/plugin/git'
 import { S, leadQueue, meanwhile } from '../hooks/plugin/state'
 import { load, saveBoard } from '../hooks/plugin/store'
-import { claudeHost } from '../hooks/claude/host'
+import { fakeHost, memoryFs } from './fake-host'
 
 const ROOT = '/repo'
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -75,7 +75,6 @@ function world(start: Start = {}) {
   const calls: string[] = []
   const repo = { exists: !!start.repo, head: start.repo ? (start.head ?? 'main') : '', inits: 0, index: new Set<string>(), commits: [] as Commit[] }
   if (start.hasCommit) repo.commits.push({ files: [], args: [] })
-  const state = new Map<string, unknown>()
 
   const rel = (p: string) => p.slice(top.length + 1)
   const work = () => [...files.keys()].filter(p => p.startsWith(`${top}/`)).map(rel)
@@ -127,63 +126,38 @@ function world(start: Start = {}) {
     return ok()
   }
 
-  const $ = {
-    process: {
-      run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
-        const [cmd, ...rest] = argv
-        if (cmd === 'git') {
-          calls.push(`${o.cwd ?? root}: git ${rest.join(' ')}`)
-          return runGit(rest)
-        }
-        calls.push(argv.join(' '))
-        // the board's lock and its save through a temp file (see store.ts)
-        if (cmd === 'ln') {
-          if (files.has(rest[1]!)) return fail('File exists')
-          files.set(rest[1]!, files.get(rest[0]!)!)
-          return ok()
-        }
-        if (cmd === 'mv') {
-          const [, from, to] = rest
-          if (!files.has(from!)) return fail('No such file')
-          files.set(to!, files.get(from!)!)
-          files.delete(from!)
-          return ok()
-        }
-        if (cmd === 'rm') {
-          for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
-          return ok()
-        }
-        // nothing else is installed (no sound players)
-        return fail('not found', 127)
-      },
+  const { host: $ } = fakeHost({
+    run: async (argv: readonly string[], o: { cwd?: string } = {}): Promise<Res> => {
+      const [cmd, ...rest] = argv
+      if (cmd === 'git') {
+        calls.push(`${o.cwd ?? root}: git ${rest.join(' ')}`)
+        return runGit(rest)
+      }
+      calls.push(argv.join(' '))
+      // the board's lock and its save through a temp file (see store.ts)
+      if (cmd === 'ln') {
+        if (files.has(rest[1]!)) return fail('File exists')
+        files.set(rest[1]!, files.get(rest[0]!)!)
+        return ok()
+      }
+      if (cmd === 'mv') {
+        const [, from, to] = rest
+        if (!files.has(from!)) return fail('No such file')
+        files.set(to!, files.get(from!)!)
+        files.delete(from!)
+        return ok()
+      }
+      if (cmd === 'rm') {
+        for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(p)
+        return ok()
+      }
+      // nothing else is installed (no sound players)
+      return fail('not found', 127)
     },
-    fs: {
-      exists: async (p: string) => files.has(p),
-      read: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return files.get(p)!
-      },
-      write: async (p: string, text: string) => void files.set(p, text),
-      stat: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: 0 }
-      },
-      list: async () => [],
-    },
-    session: { id: async () => 'me', send: async () => undefined },
-    agent: { list: async () => [] },
+    fs: memoryFs(files),
     ui: { toast: () => undefined, status: () => undefined },
     clock: { after: () => ({ cancel() {} }), sleep: async () => undefined },
-    prompt: { submit: async () => undefined },
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+  })
   S.root = root
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -196,7 +170,7 @@ function world(start: Start = {}) {
   leadQueue.splice(0)
   meanwhile.splice(0)
   const gitCalls = (what: string) => calls.filter(c => c.includes(`: git ${what}`))
-  return { $: claudeHost($ as never) as never, claude: $, files, sizes, calls, gitCalls, repo, root, top }
+  return { $, files, sizes, calls, gitCalls, repo, root, top }
 }
 
 /** The project's normal files, and an empty board. */

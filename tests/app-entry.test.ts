@@ -3,36 +3,20 @@
 // with a Host written by hand (no `$`), and check that register.tsx still exports what it did.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { type Host, noUi } from '../hooks/host'
+import { CLAUDE_WORDS } from '../hooks/claude/host'
+import { fakeHost } from './fake-host'
 import { commandNames } from '../hooks/board'
-import { S, heard, stopped } from '../hooks/plugin/state'
+import { S, heard, stopped, toolName, useName } from '../hooks/plugin/state'
 import * as app from '../hooks/app/symcc'
 import * as wiring from '../hooks/register'
 
-/** A Host with no files and no screen: enough for the entry points that answer before touching the project. */
-function bareHost(): Host {
-  const timer = { cancel: () => undefined }
-  return {
-    plugin: { name: 'symcc', root: '/plugin' },
-    session: { id: async () => 's1', repo: async () => null, root: async () => '/p', usage: async () => ({}) },
-    lead: { send: async () => undefined },
-    agents: { spawn: async () => ({}), list: async () => [], send: async () => undefined, stop: async () => undefined },
-    env: { get: async () => undefined },
-    fs: {
-      read: async p => {
-        throw new Error(`no file ${p}`)
-      },
-      write: async () => undefined,
-      exists: async () => false,
-      list: async () => [],
-      stat: async p => {
-        throw new Error(`no file ${p}`)
-      },
-    },
-    process: { run: async () => ({ exitCode: 1, stdout: '', stderr: '' }) },
-    clock: { after: () => timer, every: () => timer, sleep: async () => undefined },
-    ui: noUi,
-  }
+/** The shared fake Host with no files and no screen: enough for the entry points that answer before touching the project. */
+function bareHost() {
+  return fakeHost({
+    session: { id: async () => 's1', root: async () => '/p' },
+    agents: { spawn: async () => ({}) },
+    run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
+  }).host
 }
 
 test('register.tsx still exports BOARD_OPENED and registerAll, now from app/ and claude/', () => {
@@ -63,12 +47,23 @@ test('toolCall refuses a stopped agent, and leaves a tool that is not symcc\'s t
   expect(await app.toolCall(host, 'Read', 'a1', {})).toEqual({ deny: `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.` })
   expect(await app.toolCall(host, 'Read', undefined, {})).toBe(null)
   expect(app.isSymccTool('Read')).toBe(false)
-  expect(app.isSymccTool(S.N.tool('board'))).toBe(true)
+  expect(app.isSymccTool(toolName('board'))).toBe(true)
+  // symcc's own words: its tools are called by their plain names
+  expect(app.isSymccTool('board')).toBe(true)
+  expect(app.isSymccTool('ask_owner')).toBe(true)
+})
+
+test("a host's words name symcc's tools: Claude Code's are mcp__<name>__<tool>, and only those count as symcc's there", () => {
+  useName(fakeHost({ words: CLAUDE_WORDS }).host)
+  expect(toolName('board')).toBe('mcp__symcc__board')
+  expect(app.isSymccTool('mcp__symcc__board')).toBe(true)
+  expect(app.isSymccTool('mcp__symcc__ask_owner')).toBe(true)
+  expect(app.isSymccTool('board')).toBe(false)
 })
 
 test('toolCallFailed: the lead\'s own call goes on, its call of a symcc tool gets the error', () => {
   const host = bareHost()
   expect(app.toolCallFailed(host, 'Read', undefined, { kind: 'timeout' })).toBe(null)
-  const r = app.toolCallFailed(host, S.N.tool('board'), undefined, { kind: 'error', message: 'boom' })
+  const r = app.toolCallFailed(host, toolName('board'), undefined, { kind: 'error', message: 'boom' })
   expect(r && 'result' in r ? r.result : '').toContain(`error: ${S.N.name} couldn't run this tool`)
 })

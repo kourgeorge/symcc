@@ -4,15 +4,15 @@
 // claudeHost($) (claude/host.ts) as the Host. What only Claude Code has stays here: its event shapes, its agent
 // types (claude/registration.ts), plan mode (claude/plan.ts) and the board panel's render hooks (plugin/ui/).
 import type { Register } from 'claude-code'
-import { isWorkerType } from './claude/agent-types'
+import { claudeNames, isWorkerType } from './claude/agent-types'
 import { claudeHost } from './claude/host'
 import { seeMainMode, seeSpawnMode, seeAttachment } from './claude/plan'
 import { registerAll } from './claude/registration'
+import { fileTouch } from './claude/tools'
+import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
-import { type $, S, useName, scoutRuns, checkerRuns } from './plugin/state'
-import { checkerFinished } from './plugin/checker'
-import { scoutFinished } from './plugin/scouts'
+import { S, useName } from './plugin/state'
 import { findRoot } from './plugin/store'
 import { renderAbovePrompt } from './plugin/ui/above-prompt'
 import { arrowMove, noteFocus } from './plugin/ui/arrows'
@@ -24,15 +24,15 @@ export { registerAll } from './claude/registration'
 
 /** The plan mode a main session event carries (see seeMainMode). */
 function mainMode($: $, e: { permission_mode?: string; agent_id?: string }) {
-  useName($)
+  useName(claudeHost($))
   seeMainMode(claudeHost($), e)
 }
 
 export const register: Register = on => {
-  // Every hook starts with useName($), so S.N (the plugin's name) is right everywhere.
+  // Every hook starts with useName(host), so S.N (the plugin's name) and S.W (Claude Code's words, claude/host.ts) are right everywhere.
   on('session.start', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     sessionStarting()
     // Register the agent types, tools and commands first, before anything that can wait or throw.
     await registerAll($)
@@ -43,7 +43,7 @@ export const register: Register = on => {
 
   on('session.end', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     // /clear ends the session, but the process goes on under a new session id (see sessionCleared).
     if ((e as { reason?: string }).reason === 'clear') {
       const result = await next(e)
@@ -57,7 +57,7 @@ export const register: Register = on => {
   // The lead's guide, appended to the system prompt (prompt.compose is not cached: read on every render).
   on('prompt.compose', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     const r = await next(e)
     const text = await leadGuideText(host)
     return text === undefined ? r : { sections: [...r.sections, { id: `${S.N.name}:lead`, text, scope: 'session' as const }] }
@@ -65,7 +65,7 @@ export const register: Register = on => {
 
   // The owner's typed prompt (terminal or phone/web bridge); slash commands, hidden prompts and symcc's own board updates are left out.
   on('prompt.submit', async ($, e, next) => {
-    useName($)
+    useName(claudeHost($))
     const r = await next(e)
     const kind = e.origin?.kind
     if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
@@ -74,31 +74,31 @@ export const register: Register = on => {
 
   // Workers and scouts only reach the agents through the plugin itself (the name is only known once a hook runs).
   on('agent.offer', ($, e, next) => {
-    useName($)
-    return isWorkerType(e.agent, S.N.name) || e.agent === S.N.scout ? { isOffered: false } : next(e)
+    useName(claudeHost($))
+    return isWorkerType(e.agent, S.N.name) || e.agent === claudeNames(S.N.name).scout ? { isOffered: false } : next(e)
   })
 
   // One tool.call hook for every tool: symcc's own run in toolCall; any other runs, then otherToolDone looks at what it changed.
   on('tool.call', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     const call = e as unknown as Record<string, unknown>
     const ours = await toolCall(host, e.tool, e.agentId, call)
     if (ours) return ours
     const r = await next(e)
-    otherToolDone(host, call)
+    otherToolDone(host, fileTouch(call))
     return r
   }).catch(($, e, next) => {
     // The hook threw or ran out of time. Once it had passed the call on (next), that answer stands.
     if (next.called) return next(e)
-    useName($)
+    useName(claudeHost($))
     return toolCallFailed(claudeHost($), e.tool, e.agentId, next.error) ?? next(e)
   })
 
   // A worker's edit outside its files, or reaching the owner's copy, is refused (see toolCheck); everything else is decided as usual.
   on('tool.check', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
     const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
     // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
@@ -106,7 +106,7 @@ export const register: Register = on => {
     return deny ? { decision: 'deny', reason: deny } : next(e)
   }).catch(($, e, next) => {
     if (next.called) return next(e)
-    useName($)
+    useName(claudeHost($))
     const deny = toolCheckFailed(claudeHost($), e.agentId, next.error)
     return deny ? { decision: 'deny', reason: deny } : next(e)
   })
@@ -114,22 +114,16 @@ export const register: Register = on => {
   // An agent's run ended: its final answer arrives here, with why it ended (e.reason).
   on('turn.complete', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     const r = await next(e)
-    const end = turnEnd(e)
-    const tokens = usageTokens(e.usage)
-    // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
-    const broken = !e.isAborted && (end.reason === 'error' || end.reason === 'refusal')
-    if (broken && e.agentId && scoutRuns.has(e.agentId)) void scoutFinished(host, e.agentId, e.answer, end, tokens)
-    else if (broken && e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, end, tokens)
-    else agentFinished(host, e.agentId, { answer: e.answer, end, isAborted: e.isAborted, tokens })
+    agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
     return r
   })
 
   // symcc's slash commands are registered under the plugin's name, so matched in runCommand.
   on('command.run', async ($, e, next) => {
     const host = claudeHost($)
-    useName($)
+    useName(host)
     return (await runCommand(host, e.command, e.args)) ?? next(e)
   })
 
@@ -138,37 +132,37 @@ export const register: Register = on => {
   on('classic.UserPromptSubmit', async ($, e, next) => (mainMode($, e), next(e)))
   on('classic.Stop', async ($, e, next) => (mainMode($, e), next(e)))
   on('classic.SessionStart', async ($, e, next) => (mainMode($, e), next(e)))
-  on('agent.spawn', async ($, e, next) => (useName($), seeSpawnMode(claudeHost($), e), next(e)))
-  on('prompt.attachment', async ($, e, next) => (useName($), seeAttachment(claudeHost($), e), next(e)))
+  on('agent.spawn', async ($, e, next) => (useName(claudeHost($)), seeSpawnMode(claudeHost($), e), next(e)))
+  on('prompt.attachment', async ($, e, next) => (useName(claudeHost($)), seeAttachment(claudeHost($), e), next(e)))
 
   // The band above the prompt: the board, always in view inside Claude Code's own screen.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    useName($)
+    useName(claudeHost($))
     await findRoot(claudeHost($))
     return renderAbovePrompt($, e, next)
   })
 
   // The board panel closing: Esc goes one step back and keeps it open (see paneClosing).
   on('ui.close', async ($, e, next) => {
-    useName($)
+    useName(claudeHost($))
     if (e.id !== S.N.pane) return next(e)
     return (await paneClosing($, e.origin.kind)) ? { value: undefined } : next(e)
   })
 
   // The board panel: the list (each task a button), or one task with its actions.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-    useName($)
+    useName(claudeHost($))
     await findRoot(claudeHost($))
     return renderPane($, e, next)
   })
 
   // ↑↓ on the board panel's lists move the focus to the row above or below; see ui/arrows.ts.
   on('ui.focus', { component: 'Pane' }, async ($, e, next) => {
-    useName($)
+    useName(claudeHost($))
     return noteFocus($, e, next)
   })
   on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
-    useName($)
+    useName(claudeHost($))
     return arrowMove($, e, next)
   })
 }

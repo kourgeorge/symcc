@@ -3,7 +3,7 @@
 import type { SymccTask } from '../../types'
 import { type Board, type BoardTask, kindOf, kindSection, ASK_TOOL, ASK_LINE, askedMore, intoOf, isCheckerOutput, checkerRetryText } from '../board'
 import { taskBranch } from './git'
-import { S } from './state'
+import { S, toolName } from './state'
 
 /** A task's history without the "created by ..." line: what earlier tries did. */
 export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith('created by '))
@@ -22,7 +22,7 @@ export const sharedValues = (t: SymccTask, dir: string): Record<string, string> 
   // The task's kind and what it is for (from its kind file; see loadKinds).
   kind: kindSection(kindOf(t), S.kinds),
   // How a worker asks the owner and what a refused edit means (see hooks/plugin/ask.ts).
-  ask: ASK_LINE(S.N.tool(ASK_TOOL)),
+  ask: ASK_LINE(toolName(ASK_TOOL)),
 })
 
 /** The placeholders of an investigation's prompt: find the answer and hand it back in full; nothing it changes is kept. */

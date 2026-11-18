@@ -17,7 +17,7 @@ import { commandsOf } from './fakes'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
-import { claudeHost } from '../hooks/claude/host'
+import { fakeHost, memoryFs } from './fake-host'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -26,8 +26,9 @@ const tmpMove = (call: string, file: string) => {
 }
 
 // The test runtime can't run a real process or touch real files: it has no node: imports, no Bun or
-// process globals, and nothing below the plugin answers $.fs or $.process.run. So these tests run the
-// real merge, approve and board code against a scripted fake git and in-memory files (see world()).
+// process globals, and nothing below the plugin answers a Host's fs or run. So these tests run the real merge,
+// approve and board code on the shared fake Host (tests/fake-host.ts), with a scripted fake git and in-memory
+// files (see world()).
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -136,7 +137,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     return ok()
   }
 
-  async function answerRun(argv: string[], o: { cwd?: string }): Promise<Res> {
+  async function answerRun(argv: readonly string[], o: { cwd?: string }): Promise<Res> {
     const cwd = o.cwd ?? ROOT
     const [cmd, ...rest] = argv
     if (cmd === 'git') {
@@ -165,29 +166,16 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     return ok()
   }
 
-  const $ = {
-    process: {
-      run: async (argv: string[], o: { cwd?: string } = {}): Promise<Res> => {
-        const r = await answerRun(argv, o)
-        await afterRun(calls.at(-1)!)
-        return r
-      },
+  const { host } = fakeHost({
+    run: async (argv, o = {}) => {
+      const r = await answerRun(argv, o)
+      await afterRun(calls.at(-1)!)
+      return r
     },
-    fs: {
-      exists: async (p: string) => files.has(p),
-      read: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return files.get(p)!
-      },
-      write: async (p: string, text: string) => put(p, text),
-      stat: async (p: string) => {
-        if (!files.has(p)) throw new Error(`no file ${p}`)
-        return { mtimeMs: mtime.get(p)! }
-      },
-    },
-    session: { id: async () => 'me', send: async () => undefined },
-    agent: { list: async () => [] },
-    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)), status: () => undefined },
+    fs: memoryFs(files, p => mtime.get(p)!),
+    // no agent starts in this world unless a test gives one (spawn = ...)
+    agents: { spawn: async () => Promise.reject(new Error('no agents in this world')) },
+    ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)) },
     clock: {
       // never fires: what reaches the lead is read from leadQueue instead
       after: () => ({ cancel() {} }),
@@ -198,17 +186,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
         afterSleep()
       },
     },
-    prompt: { submit: async () => undefined },
-    // the panel's state values (publish writes the view there): kept here, never read by these tests
-    state: {
-      get: async (e: { key: string }) => state.get(e.key) ?? { value: undefined, version: 0 },
-      set: async (e: { key: string; value: unknown }) => {
-        const version = ((state.get(e.key) as { version?: number } | undefined)?.version ?? 0) + 1
-        state.set(e.key, { value: e.value, version })
-        return { isSet: true, version }
-      },
-    },
-  }
+  })
   S.root = ROOT
   S.leadTimer = null
   S.writing = Promise.resolve()
@@ -217,7 +195,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: claudeHost($ as never) as never, claude: $, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
+  return { $: host, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
 }
 
 /** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
@@ -321,9 +299,9 @@ test('the same broken board.json text as the test above is reported again here: 
 
 test('saveBoard says so when the board cannot be moved into place', async () => {
   const w = world()
-  const run = (w.$ as { process: { run: (a: string[]) => Promise<Res> } }).process
+  const run = w.$
   const real = run.run
-  run.run = async (a: string[]) => (a[0] === 'mv' ? fail('mv: Permission denied') : real(a))
+  run.run = async a => (a[0] === 'mv' ? fail('mv: Permission denied') : real(a))
   const err = await saveBoard(w.$, boardWith('auto')[0]).then(() => null, (e: Error) => e.message)
   expect(err).toBe("couldn't save the board: mv: Permission denied")
   expect(w.files.has(BOARD)).toBe(false)
@@ -1101,9 +1079,9 @@ test('a typed "cd web && npm test" is one test command, run as one shell line in
   const cmds = commandsOf(r)
   const w = await inReview({ upToDate: false }, {}, cmds)
   const runs: { argv: string[]; cwd?: string }[] = []
-  const fake = w.$ as unknown as { process: { run: (argv: string[], o?: { cwd?: string }) => Promise<unknown> } }
-  const run = fake.process.run
-  fake.process.run = (argv, o) => (argv[0] === '/bin/sh' && runs.push({ argv, cwd: o?.cwd }), run(argv, o))
+  const fake = w.$
+  const run = fake.run
+  fake.run = (argv, o) => (argv[0] === '/bin/sh' && runs.push({ argv: [...argv], cwd: o?.cwd }), run(argv, o))
   await runTool(w.$, 'approve', { task: 'T-1' })
   // one shell runs the whole line, so the cd takes effect for npm test
   expect(runs).toEqual([{ argv: ['/bin/sh', '-c', 'cd web && npm test'], cwd: WT }])
@@ -1432,9 +1410,9 @@ async function liveWorld() {
   const w = world()
   S.me = 'me'
   const spawned: string[] = []
-  const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
-  x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
-  x.plugin = { root: '/plugin' }
+  const x = w.$
+  x.agents.spawn = async e => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
+  x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
   const [b] = boardWith('auto', [], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
@@ -1502,8 +1480,8 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
 test('a new worker gets the built-in change prompt even when a .symcc/prompts/change.md file exists', async () => {
   const { w } = await liveWorld()
   const prompts: string[] = []
-  const x = w.claude as unknown as { agent: Record<string, unknown> }
-  x.agent.spawn = async (e: { prompt?: string }) => (prompts.push(String(e.prompt)), { agentId: `ag${prompts.length + 1}` })
+  const x = w.$
+  x.agents.spawn = async e => (prompts.push(String(e.prompt)), { agentId: `ag${prompts.length + 1}` })
   // a complete override, with every placeholder the old code needed, so old code would have used it (no warning path)
   w.put(`${ROOT}/.symcc/prompts/change.md`, 'MINE: {{details}}{{merge_main}}{{test_output}}\n{{ask}}\n')
   try {
@@ -1852,7 +1830,7 @@ test('the worker prompts say how to ask and what a refused edit means, with no Q
   const [c] = boardWith('auto', ['npm test'])
   const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<BoardTask>)
   for (const p of [WORKER_PROMPT(c.tasks[0]!, c, WT), WORKER_PROMPT(i.tasks[0]!, i, WT)]) {
-    expect(p).toContain('To ask the owner something, call the mcp__symcc__ask_owner tool. If an edit is refused as outside your files, stop and hand back.')
+    expect(p).toContain('To ask the owner something, call the ask_owner tool. If an edit is refused as outside your files, stop and hand back.')
     expect(p).not.toMatch(/QUESTION|OPTIONS|NEED FILES/)
   }
 })
@@ -2085,9 +2063,9 @@ test('a report that cannot be saved is told once and never blocks the task', asy
     const w = world()
     const [b0] = boardWith('auto', [], { runs: [{ started: ISO }] })
     await saveBoard(w.$, b0)
-    const run = w.$ as unknown as { process: { run: (a: string[], o?: object) => Promise<unknown> } }
-    const real = run.process.run
-    run.process.run = async (a, o) => (a[0] === 'mv' && String(a[2]).includes('/reports/') ? { exitCode: 1, stdout: '', stderr: 'disk full' } : real(a, o))
+    const run = w.$
+    const real = run.run
+    run.run = async (a, o) => (a[0] === 'mv' && String(a[2]).includes('/reports/') ? { exitCode: 1, stdout: '', stderr: 'disk full' } : real(a, o))
     leadQueue.splice(0)
     workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
     await workerFinished(w.$, 'ag1', 'Done.')
@@ -2108,15 +2086,15 @@ test('merged work that adds a file under docs/research/ keeps it as a research n
 
 // ---------------- what reaches the lead ----------------
 
-/** A `$` whose timer runs at once and whose prompts are kept in `sent`. */
+/** A fake Host whose timer runs at once and whose messages to the lead are kept in `sent`. */
 function leadWorld() {
   const sent: string[] = []
-  const $ = { clock: { after: (_ms: number, f: () => void) => (f(), { cancel() {} }) }, prompt: { submit: async (p: { text: string }) => void sent.push(p.text) } }
+  const { host } = fakeHost({ clock: { after: (_ms, f) => (f(), { cancel() {} }) }, lead: { send: async text => void sent.push(text) } })
   S.leadTimer = null
   S.enabledNow = true
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: claudeHost($ as never) as never, claude: $, sent }
+  return { $: host, sent }
 }
 
 test("the owner's own actions are queued, not sent; the next real board update starts with them", () => {
@@ -2182,9 +2160,9 @@ test("a worker's result still reaches the lead, as the outcome only (its report 
 function machine(os: string, programs: string[], files: string[] = []) {
   const w = world()
   const ran: { argv: string[]; env?: Record<string, string> }[] = []
-  const $ = w.$ as unknown as { process: { run: (a: string[], o?: { env?: Record<string, string> }) => Promise<Res> } }
-  const real = $.process.run
-  $.process.run = async (argv, o = {}) => {
+  const $ = w.$
+  const real = $.run
+  $.run = async (argv, o = {}) => {
     if (['git', 'mv', 'ln', 'rm'].includes(argv[0]!)) return real(argv, o)
     ran.push({ argv: [...argv], ...(o.env ? { env: o.env } : {}) })
     const [cmd, ...rest] = argv
@@ -2366,7 +2344,7 @@ test('a try stopped by turning symcc or the board off says so, and so does a sto
 /** Records what is sent to agents (halt's "Stop now", the wrap-up message). */
 const sentTo = (w: ReturnType<typeof world>) => {
   const sent: { to: string; text: string }[] = []
-  ;(w.claude as unknown as { session: Record<string, unknown> }).session.send = async (e: { to: { agentId: string }; text: string }) => void sent.push({ to: e.to.agentId, text: e.text })
+  w.$.agents.send = w.$.agents.stop = async (to, text) => void sent.push({ to, text })
   return sent
 }
 /** T-1's worker (ag1) as started `min` minutes ago. */
@@ -2554,7 +2532,7 @@ test('a worker whose agent ended is failed only on a later check, unless its rep
     // still not handed back on the second check: failed
     const lost = await tryEnds(async w => {
       S.driving = true // world() sets it to false
-      ;(w.claude as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
+      ;w.$.agents.list = async () => [{ id: 'ag1', kind: 'other', status: 'completed' }]
       workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
       await check(w.$)
       expect(workers.has('ag1')).toBe(true)
@@ -2568,7 +2546,7 @@ test('a worker whose agent ended is failed only on a later check, unless its rep
     // the report arrives between the two checks: merged, not failed
     const late = await tryEnds(async w => {
       S.driving = true
-      ;(w.claude as { agent: { list: () => Promise<unknown[]> } }).agent.list = async () => [{ id: 'ag1', type: 'symcc-worker', status: 'completed' }]
+      ;w.$.agents.list = async () => [{ id: 'ag1', kind: 'other', status: 'completed' }]
       workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - 5 * 60_000 })
       await check(w.$)
       await workerFinished(w.$, 'ag1', 'made the change')
@@ -2777,7 +2755,7 @@ test('a reload while a task is being tested and merged leaves it "doing"; it mer
   let during: BoardTask | undefined
   let spawned = 0
   const { w, t } = await finishing(async w => {
-    ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+    ;w.$.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
     w.put(LEAD, leadText('me', Date.now()))
     forget()
     await claimLead(w.$, true)
@@ -2863,7 +2841,7 @@ test('a task sent back after its try already merged is done, not started again (
     if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return ok()
     return undefined
   } })
-  ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+  ;w.$.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
   const [b0] = boardWith('auto', [], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   const b = { ...b0, tasks: [backToTodo(b0.tasks[0]!, 'restarted: the plugin reloaded and the old worker was gone', ISO)] }
   await saveBoard(w.$, b)
@@ -2909,7 +2887,7 @@ const t1Merged = (merged = true) => (args: string[]) => {
   return undefined
 }
 /** Makes the agent list show the handed-back worker ag1 as still there, only idle (not ended). */
-const idleAgent = (w: ReturnType<typeof world>) => void ((w.claude as unknown as { agent: Record<string, unknown> }).agent.list = async () => [{ id: 'ag1', type: 'symcc:worker', status: 'waiting', description: 'T-1' }])
+const idleAgent = (w: ReturnType<typeof world>) => void (w.$.agents.list = async () => [{ id: 'ag1', kind: 'worker', status: 'waiting', description: 'T-1' }])
 
 test('T-228: a try that merged but was left "doing" (its copy of the plugin stopped before writing done) ends done; max_minutes never stops it and nothing starts again', async () => {
   S.me = 'me'
@@ -2919,9 +2897,9 @@ test('T-228: a try that merged but was left "doing" (its copy of the plugin stop
       idleAgent(w)
       const sent: string[] = []
       let spawned = 0
-      const a = (w.claude as unknown as { agent: Record<string, unknown>; session: Record<string, unknown> })
-      a.agent.spawn = async () => (spawned++, { agentId: 'ag2' })
-      a.session.send = async (m: { text: string }) => void sent.push(m.text)
+      const a = w.$
+      a.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
+      a.agents.send = a.agents.stop = async (_to, text) => void sent.push(text)
       // started long ago (far over max_minutes), handed back, merged and recorded; but never marked done
       const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], merged: H1, runs: [{ started: ISO, ended: ISO, commits: [H1] }], ...(mark === 'stale' ? { finishing: new Date(Date.now() - 10 * 60_000).toISOString() } : {}) })
       await saveBoard(w.$, b)
@@ -2953,7 +2931,7 @@ test('T-237: a worker hands back, the merge takes a while and the clock passes m
   const sent: string[] = []
   const r = await tryEnds(async w => {
     idleAgent(w)
-    ;(w.claude as unknown as { session: Record<string, unknown> }).session.send = async (m: { text: string }) => void sent.push(m.text)
+    ;w.$.agents.send = w.$.agents.stop = async (_to, text) => void sent.push(text)
     let once = false
     w.onRun(async cmd => {
       if (once || !/^\/bin\/sh -c /.test(cmd)) return
@@ -3003,7 +2981,7 @@ test('T-237: a task changed while its work is being merged (sent back or asked m
 test('T-237: a merge whose done could not be written (settle failed) is still marked done', async () => {
   const r = await tryEnds(async w => {
     // the first save of the board with T-1 done (settle's write) fails once
-    const save = (w.$ as unknown as { process: { run: (a: string[], o?: object) => Promise<Res> } }).process
+    const save = w.$
     const run = save.run
     let failed = false
     save.run = async (argv, o) => {
@@ -3024,7 +3002,7 @@ test('T-237: retrying a task whose last try is already on its branch marks it do
   S.me = 'me'
   const w = world({ answer: t1Merged() })
   let spawned = 0
-  ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.spawn = async () => (spawned++, { agentId: 'ag2' })
+  ;w.$.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
   // failed by the timeout although its try had merged (as T-228 was); no merge recorded on the board
   const [b] = boardWith('auto', [], { status: 'failed', note: 'stopped: ran over 45 min', branch: 'symcc/T-1', history: ['created by the lead', 'try 1: stopped after 47 min (over the limit)'], runs: [{ started: ISO, ended: ISO, ended_by: 'timed out', ended_note: 'ran over 45 min' }] })
   await saveBoard(w.$, b)
@@ -3265,9 +3243,9 @@ async function finishedOnDirtyMain(status: string, test_commands = ['npm test'])
   const w = world({ current: 'main', status })
   S.me = 'me'
   const spawned: string[] = []
-  const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
-  x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
-  x.plugin = { root: '/plugin' }
+  const x = w.$
+  x.agents.spawn = async e => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
+  x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
   const [b0] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
   await saveBoard(w.$, b0)
@@ -3598,9 +3576,9 @@ test('a task whose checking and merging is given up twice in a row ends failed w
     const w = world()
     S.me = 'me'
     const spawned: string[] = []
-    const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
-    x.agent.spawn = async (e: { name?: string }) => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
-    x.plugin = { root: '/plugin' }
+    const x = w.$
+    x.agents.spawn = async e => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
+    x.plugin = { name: 'symcc', root: '/plugin' }
     x.fs.list = async () => []
     const timers = catchLimits(w)
     // every test command hangs: each try's checking and merging is stuck
@@ -4118,9 +4096,9 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   S.driving = true
   workers.clear()
   let prompt = ''
-  const x = w.claude as unknown as { agent: Record<string, unknown>; plugin?: unknown; fs: Record<string, unknown> }
-  x.agent.spawn = async (e: { prompt: string }) => ((prompt = e.prompt), { agentId: 'ag9' })
-  x.plugin = { root: '/plugin' }
+  const x = w.$
+  x.agents.spawn = async e => ((prompt = e.prompt), { agentId: 'ag9' })
+  x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
   await startWorker(w.$, 'T-2')
   const wt = `${ROOT}/.symcc/worktrees/T-2`
