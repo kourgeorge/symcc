@@ -2,11 +2,11 @@
 // board's settings, for the tests that draw the Scouts and Settings pages on several surfaces (see
 // vscode-scouts-settings.test.tsx). The board view is BOARD_VIEW's, with these scouts.
 import type { On } from 'claude-code'
-import { BOARD_VIEW, seedBoard } from './board-fixture'
+import { BOARD_VIEW, T0, seedBoard } from './board-fixture'
 
 const iso = (ms: number) => new Date(ms).toISOString()
-/** The pages read the real clock (Date.now, which a test can't hold), so the scouts' times are set from it. */
-const NOW = Date.now()
+/** The scouts' times are set from T0, the fixed clock seedBoard gives the pages (see hooks/plugin/ui/now.ts). */
+const NOW = T0
 const MIN = 60_000
 
 /** A long report that numbers its findings, in Markdown. */

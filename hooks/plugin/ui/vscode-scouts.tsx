@@ -48,7 +48,7 @@ function lastLine(s: SymccScout): { text: string; tone: string } {
 /** The Scouts list in VS Code. */
 export function scoutsListVs($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, scouts, banner, tabs, vs } = pane
-  const nowMs = Date.now()
+  const { nowMs } = pane
   let first = true
   const focusFirst = (): true | undefined => (first ? ((first = false), true) : undefined)
   const plain = (key: string, text: string, color = 'inactive') => (
@@ -121,7 +121,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
 export function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
   const { Box, Text, Button, act, C, vs } = pane
   const { Markdown } = vs
-  const nowMs = Date.now()
+  const { nowMs } = pane
   const r = scoutRow(sc, nowMs)
   const file = scoutFile(sc.name, S.N.name)
   const title = sc.summary?.trim() || ''

@@ -24,7 +24,7 @@ const GROUPS: { label: string; has: SymccStatus[] }[] = [
 
 export function listPageVs($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, mark, word, act, C, banner, tabs, vs, switchMode, mode } = pane
-  const nowMs = Date.now()
+  const { nowMs } = pane
   const query = S.search?.text.trim() ?? ''
   const filtering = query !== ''
   const matching = filtering ? v.tasks.filter(t => taskMatches(t, query)) : v.tasks
