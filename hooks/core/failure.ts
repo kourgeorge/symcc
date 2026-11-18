@@ -34,20 +34,25 @@ export const ENDED_EARLY_NOTE = 'the worker ended its turn before its work finis
 
 /** "I'll continue / resume / report back / wait ..." said about later (not bare "will continue", which reports quote about retries). */
 const LATER = /\b(?:I['’]ll|I will|I['’]m going to|I am going to|let me)\s+(?:then\s+|now\s+)?(?:continue|resume|report back|get back|check back|come back|wait)\b|\bwill report back\b/i
-/** "still running / going / in progress": only counts together with "I'll ..." or "waiting for" (a report may say something is still running). */
+/** "still running / going / in progress": only counts together with "I'll ..." or the writer's own wait in the same sentence. */
 const STILL = /\bstill (?:running|going|in progress)\b/i
-const WAITS = /\b(?:I['’]ll|I will|I['’]m waiting|waiting for|wait for)\b/i
+/** "I'll / I will / I'm waiting / waiting for" as the writer's own wait (not "without waiting for", "not waiting for"). */
+const WAITS = /\b(?:I['’]ll|I will|I['’]m waiting|I am waiting|wait for)\b|(?<!\b(?:without|not|no|never)\s+)\bwaiting for\b/i
+/** A bullet or numbered list line ("- …", "* …", "• …", "1. …"). */
+const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
 
 /**
  * Whether a worker's final answer only says it will go on later ("The background runs are still going; I'll continue
  * when they finish."): ending its turn ends its work, so such a try is unfinished. Kept narrow: only the answer's last
- * paragraph is read, and it must say "I'll continue / resume / report back / wait..." or "still running" with a wait.
+ * paragraph is read (not when it is a bullet list, which describes the change), sentence by sentence, and a sentence
+ * must say "I'll continue / resume / report back / wait..." or "still running" together with the writer's own wait.
  */
 export function endedEarly(answer: string | null | undefined): boolean {
   const paras = String(answer ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
   const last = paras.at(-1) ?? ''
-  if (!last) return false
-  return LATER.test(last) || (STILL.test(last) && WAITS.test(last))
+  if (!last || last.split('\n').some(l => BULLET.test(l))) return false
+  const sentences = last.split(/(?<=[.!?])\s+|\n+/)
+  return sentences.some(s => LATER.test(s) || (STILL.test(s) && WAITS.test(s)))
 }
 
 /** What the worker said in its last try that ended with `detail` (from the history line "try N: <said> → <detail>"); '' if none. */

@@ -293,6 +293,8 @@ test('endedEarly: an answer that says it will continue later counts; normal repo
     'Tests are still running, waiting for them to finish.',
     "I'll resume once the typecheck is done.",
     'Will report back.',
+    // T-399's try 1, its real last paragraph: must flag
+    "Changed the prompts and the check.\n\nThe background runs are still going; I'll continue when they finish.",
   ]
   for (const a of later) expect([a, endedEarly(a)]).toEqual([a, true])
   const normal = [
@@ -301,6 +303,11 @@ test('endedEarly: an answer that says it will continue later counts; normal repo
     "I'll continue to keep the old name in the docs.\n\nChanged hooks/core/failure.ts; tests/failure.test.ts covers it.",
     'The worker is still running when the check sees it, so it is kept doing (tests/merge.test.ts covers it).',
     '',
+    // T-386's try 1, its real last paragraph (a bullet list): must not flag
+    'Fixed the reload.\n\n- A checker still running at the reload is stopped. Its try is not counted.\n- When the stopped checker\'s "stopped" answer comes in, a new checker starts right away without waiting for a check.',
+    // the same two sentences as plain text: "still running" and "waiting for" in different sentences, and not the writer's own wait
+    'A checker still running at the reload is stopped. A new checker starts right away without waiting for a check.',
+    'The checker is still running, so a new one starts without waiting for it.',
   ]
   for (const a of normal) expect([a, endedEarly(a)]).toEqual([a, false])
 })
