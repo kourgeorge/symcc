@@ -464,7 +464,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   - **Scouts**: `scout_findings`
   - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
 
-  Each heading is a group you open and close with Enter. When the page opens, all groups
+  Each heading is a group you open and close with Enter (→/← do not, since the panel's
+  buttons only get Enter and letter or digit keys). When the page opens, all groups
   are closed and the first heading has the focus; a closed group shows its values in short
   on its heading line, e.g. `▸ Work · auto · 3 at once · 45 min · 2 retries`, and an open
   one shows `▾ Work` with its rows under it. ↑↓ go over the headings and the rows of open
