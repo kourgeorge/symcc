@@ -179,8 +179,31 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
+
+/**
+ * The project-wide test lock (<data folder>/tests.lock): symcc's merge step runs only one task's test commands at a time,
+ * across tasks and sessions (see withTestLock in plugin/review.ts). The holder writes its task, session and time, and
+ * dates it again before each test command; older than TEST_LOCK_STALE_MS (more than one command's TEST_TIMEOUT_MS) it is stale.
+ */
+export const TEST_LOCK_FILE = 'tests.lock'
+export const TEST_LOCK_STALE_MS = 20 * 60_000
+export type TestLock = { task: string; session: string; at: number }
+export const testLockText = (task: string, session: string, at: number) => JSON.stringify({ task, session, at }) + '\n'
+export function parseTestLock(text: string | null): TestLock | null {
+  const l = parseStamp(text, 'at', true)
+  if (!l) return null
+  try {
+    const task = (JSON.parse(text ?? '') as Record<string, unknown>).task
+    return typeof task === 'string' && task ? { task, session: l.session, at: l.at } : null
+  } catch {
+    return null
+  }
+}
+/** A task's note while its tests wait for task `holder`'s tests to end. */
+export const waitingTestsNote = (holder: string) => `waiting for another task's tests (${holder})`
+
 /** The files of the data folder that are saved through a temp file (see tmpName). */
-const TMP_OWNERS = ['board.lock', 'lead.json', 'board.json', 'scouts.json', 'archive.json']
+const TMP_OWNERS = ['board.lock', 'tests.lock', 'lead.json', 'board.json', 'scouts.json', 'archive.json']
 
 /**
  * The temp file a save of `file` writes first (then renames over `file`): `<file>.<session>.<n>.tmp`, where `n`
@@ -197,7 +220,7 @@ const LEFTOVER_TMP = new RegExp(`^(?:${TMP_OWNERS.map(n => n.replace(/\./g, '\\.
 
 /**
  * Which files in the data folder are leftover temp files that may be deleted: only
- * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, lead.json, board.json, scouts.json,
+ * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, tests.lock, lead.json, board.json, scouts.json,
  * archive.json), and only once they are older than maxAgeMs (a fresh one may still be in use by another
  * session). A file with no usable time, or dated in the future, is kept. Anything else (board.json, lead.json,
  * ...) is never chosen.

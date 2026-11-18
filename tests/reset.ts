@@ -8,7 +8,7 @@ import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRu
 import { resetScoutRuns } from '../hooks/plugin/scouts'
 import { resetStarts } from '../hooks/plugin/starts'
 import { resetStore } from '../hooks/plugin/store'
-import { resetMergeTurns } from '../hooks/plugin/review'
+import { resetMergeTurns, resetTestLine } from '../hooks/plugin/review'
 import { resetLogo } from '../hooks/plugin/logo'
 import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/plugin/workers'
 import { saidNeedsYou } from '../hooks/plugin/voice'
@@ -31,6 +31,7 @@ export function resetPlugin() {
   resetStarts()
   resetStore()
   resetMergeTurns()
+  resetTestLine()
   resetLogo()
   for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()

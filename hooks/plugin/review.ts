@@ -1,9 +1,9 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
-import { change, now } from './store'
+import { change, now, load, path, tryLock, dropIfSame, safeWrite } from './store'
 import { tellLead } from './tell'
 
 // ---------------- a task's changes, for review ----------------
@@ -191,7 +191,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     // `release`, so the line keeps moving) and starts again from zero when its own go begins.
     const restart = n > 1 || mergeTurns.has(target)
     if (restart) turn?.(false)
-    const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold)), release)
+    const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold, turn)), release)
     if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
   }
 }
@@ -327,6 +327,118 @@ export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Pro
   return mine
 }
 
+// ---------------- one task's tests at a time ----------------
+
+/** How often a task waiting for the test lock looks again. */
+export const TEST_LOCK_POLL_MS = 2_000
+
+/** The tasks of this copy of the plugin waiting for the test lock, oldest first: only the first one tries to take it. */
+const testLine: { id: string }[] = []
+
+/** Forgets the tasks waiting for the test lock (what a reload starts with); for the tests' resetPlugin() only. */
+export function resetTestLine() {
+  testLine.length = 0
+}
+
+/**
+ * Whether test lock text `held` (file time `fileMs`) may be taken over: it is older than TEST_LOCK_STALE_MS, or its
+ * task is no longer being checked by any copy of the plugin (gone from the board, or its check mark is no longer
+ * refreshed: its check ended or was given up, or its session died), or it is task `me`'s own, left by an earlier
+ * go of that task (say one cut short by a reload; this go's fresh check mark would otherwise keep it looking alive).
+ * A board that can't be read: not stale.
+ */
+async function testLockStale($: Host, me: string, held: string, fileMs?: number): Promise<boolean> {
+  if (isLockStale(held, Date.now(), fileMs, TEST_LOCK_STALE_MS)) return true
+  const l = parseTestLock(held)
+  if (!l) return false
+  if (l.task === me) return true
+  const b = await load($).catch(() => null)
+  if (!b) return false
+  const cur = find(b, l.task)
+  return !cur || !checkStepNow(cur, Date.now())
+}
+
+/**
+ * Runs `run` (task `t`'s test commands) while holding the project-wide test lock (TEST_LOCK_FILE in the board folder),
+ * so only one task's tests run at a time, across tasks and sessions; symcc's merge step only, not the workers' own runs.
+ * Tasks of this copy take turns oldest first (testLine); a lock held elsewhere is waited for, a stale one
+ * (testLockStale) taken over. While it waits, the task's note says whose tests it waits for (waitingTestsNote), and
+ * the step's time limit is stopped (`turn(false)`, started again from zero by `turn(true)` once the lock is ours), so
+ * waiting never counts as running over, nor twice in a row as hung. Asked between looks: when `stopped` gives a
+ * reason, it stops waiting and returns it. `run` gets `refresh`, which dates the lock again (before each command,
+ * so a long run of several commands is not taken as stale). The lock is let go however `run` ends.
+ */
+export async function withTestLock<T>($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, stopped: () => CheckResult | undefined, turn: ((go: boolean) => void) | undefined, run: (refresh: () => Promise<void>) => Promise<T>): Promise<T | CheckResult> {
+  const me = { id: t.id }
+  testLine.push(me)
+  let mine = ''
+  let file = ''
+  let shown = ''
+  let before: string | undefined
+  let waited = false
+  try {
+    file = path(`${S.N.dir}/${TEST_LOCK_FILE}`)
+    for (;;) {
+      const s = stopped()
+      if (s) return s
+      if (testLine[0] === me) {
+        const text = testLockText(t.id, S.me || 'unknown', Date.now())
+        if (await tryLock($, file, text)) {
+          mine = text
+          break
+        }
+      }
+      const held = await $.fs.read(file).catch(() => null)
+      if (testLine[0] === me && held !== null) {
+        const st = await $.fs.stat(file).catch(() => null)
+        if (await testLockStale($, t.id, held, st?.mtimeMs)) {
+          await dropIfSame($, file, held)
+          continue
+        }
+      }
+      const holder = parseTestLock(held)?.task ?? testLine[0]?.id ?? 'another task'
+      if (!waited) {
+        waited = true
+        turn?.(false)
+      }
+      if (holder !== shown) {
+        const was = shown
+        shown = holder
+        await noteTask($, t, stopped, note => {
+          if (!was) before = note
+          return waitingTestsNote(holder)
+        })
+      }
+      await $.clock.sleep(TEST_LOCK_POLL_MS)
+    }
+  } finally {
+    const at = testLine.indexOf(me)
+    if (at >= 0) testLine.splice(at, 1)
+    // the waiting note goes back to what it was, unless something else changed it meanwhile
+    if (shown) await noteTask($, t, () => undefined, note => (note === waitingTestsNote(shown) ? before : note))
+  }
+  if (waited) turn?.(true)
+  try {
+    return await run(async () => {
+      if ((await $.fs.read(file).catch(() => null)) !== mine) return
+      const next = testLockText(t.id, S.me || 'unknown', Date.now())
+      await safeWrite($, file, next, 'the test lock').then(() => void (mine = next), () => undefined)
+    })
+  } finally {
+    await dropIfSame($, file, mine)
+  }
+}
+
+/** Sets task `t`'s note to what `note` makes of it, while the task is still as it was and its check not `stopped`. Never throws. */
+async function noteTask($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, stopped: () => CheckResult | undefined, note: (now: string | undefined) => string | undefined) {
+  await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped()) return x
+    const next = note(cur.note)
+    return next === cur.note ? x : patchTask(x, t.id, { note: next }, now())
+  }).catch(() => undefined)
+}
+
 /**
  * Says on the board which step of checking task `t` is going on now (BoardTask.checking), so the list
  * shows it; only while the task is still as it was when the check began and the check was not
@@ -342,7 +454,7 @@ export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: 
 }
 
 /** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
-async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], hold?: (changed: readonly string[]) => boolean): Promise<{ result: CheckResult; raced?: boolean }> {
+async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], hold?: (changed: readonly string[]) => boolean, turn?: (go: boolean) => void): Promise<{ result: CheckResult; raced?: boolean }> {
   const res = (result: CheckResult) => ({ result })
   // First, before touching the folder: a step stopped or given up while it waited for its merge
   // turn does nothing, as the next try may already be using the folder.
@@ -364,15 +476,23 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     made.push(candidate)
   }
   const testsRun = mode === 'finish' || candidate !== head || retest
-  if (testsRun && b.test_commands.length) await markStep($, t, 'testing', stopped)
-  for (const cmd of testsRun ? b.test_commands : []) {
-    const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
-    if (r.exitCode !== 0) {
-      const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-      return res(stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) })
-    }
-    const s = stopped()
-    if (s) return res(s)
+  if (testsRun && b.test_commands.length) {
+    // One task's tests at a time, project-wide (withTestLock); the lock is let go however the tests end.
+    const failed = await withTestLock($, t, stopped, turn, async refresh => {
+      await markStep($, t, 'testing', stopped)
+      for (const cmd of b.test_commands) {
+        await refresh()
+        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
+        if (r.exitCode !== 0) {
+          const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
+          return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
+        }
+        const s = stopped()
+        if (s) return s
+      }
+      return undefined
+    })
+    if (failed) return res(failed)
   }
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
