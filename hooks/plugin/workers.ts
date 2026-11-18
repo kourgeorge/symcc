@@ -8,9 +8,9 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
-import { S, workers, starting, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
-import { startAgent, QUEUED_NOTE } from './starts'
+import { startAgent, cancelStarts, startCancelled, QUEUED_NOTE } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -102,9 +102,17 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     if (!t) return null
     const before = find(b, id)!
     const role = findRole(roles, roleOf(t))
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+    // Right before it starts, the task must still be this try's (not dropped, paused, changed or sent back meanwhile)
+    // and symcc still on; a stop while it waits takes it out of the queue at once (see haltWorkers).
+    const still = async () => {
+      if (!S.enabledNow) return false
+      const cur = find(await load(host), id)
+      return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
+    }
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
-    return { started: workerStarted(host, id, before, dir, branch, spawn).finally(() => starting.delete(id)) }
+    queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
+    return { started: workerStarted(host, id, before, dir, branch, spawn).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
   } finally {
     if (!queued) starting.delete(id)
   }
@@ -118,6 +126,8 @@ async function workerStarted(host: Host, id: string, before: BoardTask, dir: str
     if (!spawned.agentId) throw new Error('the worker did not start')
     agentId = spawned.agentId
   } catch (err) {
+    // taken back before it started (its task was stopped, dropped, paused or changed meanwhile): nothing failed
+    if (startCancelled(err)) return
     const misses = notReady.get(id) ?? 0
     if (!notReadyYet(err) || onNotReady(misses) === 'fail') {
       notReady.delete(id)
@@ -1228,6 +1238,14 @@ export async function haltWorkers(host: Host, why: string, which: (w: Worker) =>
     await halt(host, agentId, why)
     await then?.(w)
   }
+  // the workers still waiting in the start queue are stopped too: taken back out, so they never start
+  for (const w of [...queuedWorkers.values()]) {
+    if (!which(w)) continue
+    onPurpose.set(w.task, 0)
+    queuedWorkers.delete(w.task)
+    cancelStarts(a => a.kind === 'worker' && a.name === workerName(S.N.name, w.task), why)
+    await then?.(w)
+  }
 }
 
 /** Stops every worker, then every scout run; `then` runs after each worker is told to stop. */
@@ -1237,6 +1255,8 @@ export async function haltAll(host: Host, why: string, then?: (w: Worker) => Pro
   scoutRuns.clear()
   for (const s of scoutState.values()) s.running = false
   await haltCheckers(host, why)
+  // scouts and checkers still waiting in the start queue never start
+  cancelStarts(a => a.kind !== 'worker', why)
 }
 
 export async function stopWorker(host: Host, taskId: string, why: string) {

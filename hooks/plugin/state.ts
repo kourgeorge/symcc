@@ -191,6 +191,8 @@ export type Worker = { task: string; worktree: string; branch: string; since: nu
 export const workers = new Map<string, Worker>() // agentId → work
 /** tasks this copy has claimed and is starting a worker for (not yet in `workers`) */
 export const starting = new Set<string>()
+/** of those, the workers whose start waits in the start queue (see plugin/starts.ts): task id → work; a stop takes them out */
+export const queuedWorkers = new Map<string, Worker>()
 /** tasks whose worker finished and whose work is being checked and merged now */
 export const finishing = new Set<string>()
 export const scoutRuns = new Map<string, string>() // agentId → scout name

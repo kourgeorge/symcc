@@ -3,7 +3,7 @@ import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentCl
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
-import { startAgent } from './starts'
+import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
 import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
@@ -138,6 +138,8 @@ async function scoutStarted(host: Host, s: ScoutDef, st: SymccScout, spawn: Prom
     st.running = false
     st.last_run = lastRun
     await load(host).then(b => publish(host, b)).catch(() => undefined)
+    // taken back out of the start queue (everything was stopped before it started): nothing to warn about
+    if (startCancelled(err)) return `scout ${s.name} didn't start: ${msg}`
     if (notReadyYet(err) && onNotReady(misses) === 'retry') {
       timers.push(host.clock.after(SCOUT_RETRY_MS, () => void runScout(host, s, misses + 1)))
       return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`

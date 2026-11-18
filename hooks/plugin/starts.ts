@@ -10,7 +10,18 @@ import type { Host, HostAgentStart, HostAgentStarted } from '../host'
 import { S } from './state'
 import { tellLead } from './tell'
 
-type Waiting = { input: HostAgentStart; resolve: (r: HostAgentStarted) => void; reject: (err: unknown) => void }
+type Waiting = { input: HostAgentStart; resolve: (r: HostAgentStarted) => void; reject: (err: unknown) => void; still?: () => boolean | Promise<boolean> }
+
+/** The error a queued start rejects with when it was taken back before it started (see cancelStarts, startAgent's `still`). */
+export class StartCancelled extends Error {
+  readonly cancelled = true
+  constructor(why = 'it was stopped before it started') {
+    super(why)
+  }
+}
+
+/** Whether `err` only says a queued start was taken back (StartCancelled): nothing failed. */
+export const startCancelled = (err: unknown) => !!(err as { cancelled?: unknown } | null)?.cancelled
 
 /** The starts waiting for a hook where Claude Code keeps symcc's hooks; each is taken once. */
 const waiting: Waiting[] = []
@@ -27,11 +38,13 @@ export const QUEUED_NOTE = 'starting at the next turn'
 
 /**
  * Asks for agent `input` to start: queued until the next drainStarts, never started here. Settles once it started
- * (with host.agents.spawn's answer, or its error). The lead is woken once when it is idle.
+ * (with host.agents.spawn's answer, or its error). The lead is woken once when it is idle. `still`, asked right
+ * before the start, says whether it is still wanted (e.g. its task wasn't dropped meanwhile): if not, it rejects
+ * with StartCancelled and nothing starts.
  */
-export function startAgent(host: Host, input: HostAgentStart): Promise<HostAgentStarted> {
+export function startAgent(host: Host, input: HostAgentStart, still?: () => boolean | Promise<boolean>): Promise<HostAgentStarted> {
   return new Promise<HostAgentStarted>((resolve, reject) => {
-    waiting.push({ input, resolve, reject })
+    waiting.push({ input, resolve, reject, ...(still ? { still } : {}) })
     if (leadBusy || woke) return
     woke = true
     if (S.enabledNow) tellLead(host, wakeLine(input))
@@ -43,6 +56,17 @@ export function startAgent(host: Host, input: HostAgentStart): Promise<HostAgent
 export const queuedStarts = () => waiting.length
 
 /**
+ * Takes the queued starts `which` picks back out of the queue: none of them starts, each rejects with
+ * StartCancelled (`why`). Returns how many were taken back.
+ */
+export function cancelStarts(which: (a: HostAgentStart) => boolean, why?: string): number {
+  const out = waiting.filter(w => which(w.input))
+  for (const w of out) waiting.splice(waiting.indexOf(w), 1)
+  for (const w of out) w.reject(new StartCancelled(why))
+  return out.length
+}
+
+/**
  * Starts every queued agent with `host`, the host of the hook running now. Call it only from a hook where Claude
  * Code keeps symcc's hooks for the agents it starts: session.start, the main loop's turn.start, and turn.complete.
  * Each start is taken from the queue once, so nothing starts twice, even when two hooks empty it at once.
@@ -51,6 +75,11 @@ export async function drainStarts(host: Host) {
   woke = false
   for (let w = waiting.shift(); w; w = waiting.shift()) {
     try {
+      // still wanted? (a stop while it waited takes it out with cancelStarts; this catches every other change)
+      if (w.still && !(await w.still())) {
+        w.reject(new StartCancelled())
+        continue
+      }
       w.resolve(await host.agents.spawn(w.input))
     } catch (err) {
       w.reject(err)

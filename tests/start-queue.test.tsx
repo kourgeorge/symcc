@@ -9,7 +9,7 @@ import { type Board, addTask, emptyBoard } from '../hooks/board'
 import type { Host, HostAgentStart } from '../hooks/host'
 import { noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/plugin/state'
-import { startAgent, drainStarts, leadTurn, queuedStarts, QUEUED_NOTE } from '../hooks/plugin/starts'
+import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/plugin/starts'
 import { ran } from './fakes'
 
 // ---------------- the queue itself ----------------
@@ -49,6 +49,19 @@ test('a start is queued, not spawned; the next drain (a turn) starts it once and
   await drainStarts(host)
   await drainStarts(host)
   expect(spawned).toEqual(['symcc-T-1'])
+})
+
+test('a start taken back (cancelStarts) or no longer wanted (its still check) rejects as cancelled and never starts', async () => {
+  const { host, spawned } = fakeHost()
+  const a = startAgent(host, worker('symcc-T-1')).catch(e => e)
+  const b = startAgent(host, worker('symcc-T-2'), async () => false).catch(e => e)
+  const c = startAgent(host, worker('symcc-T-3'), () => true)
+  expect(cancelStarts(x => x.name === 'symcc-T-1')).toBe(1)
+  expect(startCancelled(await a)).toBe(true)
+  await drainStarts(host)
+  expect(startCancelled(await b)).toBe(true)
+  expect(await c).toEqual({ agentId: 'id-symcc-T-3' })
+  expect(spawned).toEqual(['symcc-T-3'])
 })
 
 test('two drains at once (two turns ending together) still start each queued agent once', async () => {
@@ -228,4 +241,30 @@ test('loaded: an agent\'s turn.complete (a worker finishing) starts the queue to
   await $.session.start({ cwd: '/repo' } as never)
   expect(w.spawned).toEqual(['symcc-T-1', 'symcc-T-2'])
   await w.clock.settle()
+  // the same try started: a worker still in the queue is this copy's, so the session start doesn't send its task back
+  expect(w.task('T-2').attempts).toBe(1)
 })
+
+// A worker still waiting in the queue is stopped like a running one: drop, pause and /symcc-off take it back out, so it never starts.
+for (const [what, stop, status] of [
+  ['dropped', ($: Engine) => $.tool.call({ tool: 'mcp__symcc__drop', task: 'T-1' } as never), 'dropped'],
+  ['paused', ($: Engine) => $.tool.call({ tool: 'mcp__symcc__pause', task: 'T-1' } as never), 'paused'],
+  ['turned off (/symcc-off)', ($: Engine) => $.command.run({ command: 'symcc-off', args: '', origin: { kind: 'composer' }, presentation: 'text' } as never), 'todo'],
+] as const) {
+  test(`loaded: a queued worker whose task is ${what} before the next turn never starts`, async ($, on) => {
+    const w = world(on)
+    w.files.set(BOARD, JSON.stringify(todo(1)))
+    await $.session.start({ cwd: '/repo' } as never)
+    await w.clock.settle()
+    expect(w.task('T-1').note).toBe(QUEUED_NOTE)
+    expect(w.spawned).toEqual([])
+    await stop($)
+    await w.clock.settle()
+    expect(w.task('T-1').status).toBe(status)
+    expect(w.task('T-1').note).not.toBe(QUEUED_NOTE)
+    await leadTurnStarts($, 'lead')
+    await leadTurnEnds($, 'lead')
+    await w.clock.settle()
+    expect(w.spawned).toEqual([])
+  })
+}
