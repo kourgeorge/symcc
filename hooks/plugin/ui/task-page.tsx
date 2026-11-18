@@ -11,6 +11,7 @@ import { noteForLead, brief, tellLead } from '../tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
+import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../../claude/host'
 
 /** One task opened: its details and actions; for a task in review also its changes. */
@@ -45,6 +46,16 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     : inReview
       ? [<Button key="approve" label="Approve" hotkey="a" onPress={approveIt} />, <Button key="reject" label="Reject" hotkey="x" onPress={askReason} />]
       : []
+  const submitReject = (value: string) =>
+    act(async () => {
+      const why = value.trim()
+      if (!why) return cancelReject()
+      const r = await runTool(claudeHost($), 'reject', { task: t.id, reason: why })
+      S.rejecting = null
+      S.diffOpen = null
+      $.ui.toast(S.N.toast(r))
+      noteForLead(answered ? `The owner asked more on ${t.id} ("${brief(why)}"): ${brief(r)}` : `The owner rejected ${t.id} ("${brief(why)}"): ${brief(r)}`)
+    })()
   /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button (c), leaves it: Esc
    *  doesn't reach the panel from a text box. */
   const rejectBox =
@@ -57,17 +68,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           value={S.rejecting.reason}
           autoFocus
           onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
-          onSubmit={value =>
-            act(async () => {
-              const why = value.trim()
-              if (!why) return cancelReject()
-              const r = await runTool(claudeHost($), 'reject', { task: t.id, reason: why })
-              S.rejecting = null
-              S.diffOpen = null
-              $.ui.toast(S.N.toast(r))
-              noteForLead(answered ? `The owner asked more on ${t.id} ("${brief(why)}"): ${brief(r)}` : `The owner rejected ${t.id} ("${brief(why)}"): ${brief(r)}`)
-            })()
-          }
+          onSubmit={submitReject}
         />
         <Button key="reject-cancel" label="Cancel (c)" hotkey="c" onPress={cancelReject} />
         <Text color={C('inactive')}>{boxHint('Enter sends it to todo')}</Text>
@@ -159,15 +160,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const fileWidth = Math.max(4, ...(changes?.files ?? []).map(f => f.file.length))
   // History lines: the try number, then the result colored by how it went.
   const historyLine = (line: string) => {
-    const m = /^(try \S+:)\s*(.*)$/.exec(line)
-    const body = m ? m[2]! : line
-    const [said, result] = body.includes(' → ') ? [body.slice(0, body.lastIndexOf(' → ')), body.slice(body.lastIndexOf(' → ') + 3)] : [body, '']
-    const bad = /not merged|fail|stopped|refused|error|outside|without a result/i.test(result || body)
-    const good = /merged into|^merged/i.test(result)
+    const { m, said, result, bad, good } = historyParts(line)
     return (
       <Text>
         <Text color={C(bad ? 'error' : good ? 'success' : 'inactive')}>{bad ? '✗' : good ? '✓' : '•'}</Text>{' '}
-        {m && <Text bold color={C('inactive')}>{m[1]} </Text>}
+        {m && <Text bold color={C('inactive')}>{m} </Text>}
         <Text color={C('inactive')}>{said}</Text>
         {result && (
           <Text color={C(bad ? 'error' : good ? 'success' : 'text')}>
@@ -238,6 +235,21 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const latestBody = !failed || !latest || latest.try !== t.attempts ? null : latest === shown ? reportBody : await $.fs.read(path(latest.file)).then(x => String(x), () => null)
   const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1) ?? '') } : null
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
+  const goBack = act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))
+  const openTask = (id: string) => act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => id)))
+  const pauseIt = act(async () => (await runTool(claudeHost($), 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))
+  const resumeIt = act(async () => (await runTool(claudeHost($), 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))
+  const mergeNow = act(async () => ($.ui.toast(S.N.toast(await runTool(claudeHost($), 'retry', { task: t.id }))), noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`)))
+  const retryIt = act(async () => (await runTool(claudeHost($), 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))
+  const toTodo = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))
+  const stashIt = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))
+  const dropIt = act(async () => (await runTool(claudeHost($), 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))
+  const watchIt = act(async () => (agentId ? $.ui.view({ agentId }) : undefined))
+  const toggleReview = act(async () => {
+    const r = await runTool(claudeHost($), 'change', { task: t.id, needs_review: !t.needs_review })
+    $.ui.toast(S.N.toast(r))
+    noteForLead(`The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id}.`)
+  })
   const copyTask = (press?: { surface?: Parameters<typeof $.ui.copy>[0]['surface'] }) =>
     act(async () => {
       const latest = reports[reports.length - 1]
@@ -245,6 +257,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       const r = await $.ui.copy({ text: taskCopyText(t, { roles: S.roles, report }), ...(press?.surface ? { surface: press.surface } : {}) })
       $.ui.toast(S.N.toast(copyToast(t.id, r)))
     })()
+  // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
+  if (pane.vscode)
+    return taskPageVs(pane, t, {
+      agentId, inReview, answered, target, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
+      redraw: () => $.ui.invalidate('ui.render'),
+      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
+    })
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
@@ -265,42 +284,38 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       )}
 
       {buttonRows([
-        <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))} />,
+        <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={goBack} />,
         ...reviewButtons,
         inReview && !answered && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
-        agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />,
+        agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={watchIt} />,
         (t.status === 'doing' || t.status === 'todo') && (
-          <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool(claudeHost($), 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))} />
+          <Button key="pause" label="Pause" hotkey="p" onPress={pauseIt} />
         ),
         t.status === 'paused' && (
-          <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool(claudeHost($), 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))} />
+          <Button key="resume" label="Resume" hotkey="u" onPress={resumeIt} />
         ),
         fileWait && (
-          <Button key="merge-now" label="Merge now (r)" hotkey="r" onPress={act(async () => ($.ui.toast(S.N.toast(await runTool(claudeHost($), 'retry', { task: t.id }))), noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`)))} />
+          <Button key="merge-now" label="Merge now (r)" hotkey="r" onPress={mergeNow} />
         ),
         (t.status === 'failed' || t.status === 'dropped') && (
-          <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool(claudeHost($), 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))} />
+          <Button key="retry" label="Retry" hotkey="r" onPress={retryIt} />
         ),
         t.status === 'backlog' && (
-          <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))} />
+          <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={toTodo} />
         ),
         (t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
-          <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))} />
+          <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={stashIt} />
         ),
         canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />,
         t.status !== 'done' && t.status !== 'dropped' && (
-          <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool(claudeHost($), 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))} />
+          <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={dropIt} />
         ),
         t.status !== 'done' && t.status !== 'dropped' && (
           <Button
             key="needs-review"
             label={`Needs review: ${t.needs_review ? 'on' : 'off'}`}
             hotkey="n"
-            onPress={act(async () => {
-              const r = await runTool(claudeHost($), 'change', { task: t.id, needs_review: !t.needs_review })
-              $.ui.toast(S.N.toast(r))
-              noteForLead(`The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id}.`)
-            })}
+            onPress={toggleReview}
           />
         ),
         <Button key="copy" label="Copy (y)" hotkey="y" onPress={copyTask} />,

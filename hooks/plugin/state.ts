@@ -132,6 +132,8 @@ export const startS = () => ({
   answering: null as string | null,
   /** which try's report the open task shows (its try number); null = the latest */
   reportTry: null as { task: string; try: number } | null,
+  /** the task whose report is shown whole on VS Code's task page (else only its first part); null = none */
+  reportAll: null as string | null,
   sayTimer: null as { cancel(): void } | null,
   saying: false,
   /** this machine's speech and sound commands (see voice.ts), found once per session; null until looked for */

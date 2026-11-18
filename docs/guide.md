@@ -563,6 +563,17 @@ unchanged.
   filters as you type, with `Clear search` while a search is on. No key hints; other pages
   say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
   (`Back`, not `Back (b)`).
+- **A task's page** uses the whole panel width and wraps every line, never cutting it with
+  "…". From the top: a `← Tasks` button back to the list; the status line (ID, the status in
+  its color, the try, the time, the role and the kind); the **Title**; one row of action
+  buttons that fit the status (for example Approve, Reject, Show changes, Drop, Copy for a task
+  in review), with at most one main button; then, when one waits, the **Question for you** with
+  its answers as buttons and a box for your own answer (a file request has `Allow files` and
+  `Don't allow`); **Why it failed** for a failed task; **Why / where it came from**; **What to
+  do** (the details, drawn as Markdown); **Files it may change**; **Waits for** (each task ID a
+  button that opens it); the **Changes** of a task in review; **History**; **Time and cost**;
+  and the latest **Report** as Markdown: its first lines, with `Show all` for the rest and a
+  button for each try.
 
 ---
 

@@ -1,8 +1,8 @@
 // The board panel's own pieces for VS Code's side panel (see surface.ts): a header on readable, wrapped lines, tabs
 // you click, a footer with real buttons and no key hints, small section headings and fold rows. The Tasks page uses
-// them now; the task, Scouts and Settings pages can take them up the same way.
+// them, and the task page (vscode-task.tsx); the Scouts and Settings pages can take them up the same way.
 import type { SymccMode } from '../../../types'
-import type { BoxProps, ButtonProps, ElementConstructor, InputProps, RenderChildren, RenderSurface, TextProps } from 'claude-code'
+import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, TextProps } from 'claude-code'
 import { emptyBoard, bannerLines, folderName, shortHome, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
 import { namesFor } from '../../name'
 import { type PaneView, S } from '../state'
@@ -15,6 +15,7 @@ export type VsKit = {
   Text: ElementConstructor<TextProps>
   Button: ElementConstructor<ButtonProps>
   Input: ElementConstructor<InputProps>
+  Markdown: ElementConstructor<MarkdownProps>
   C: (c: string) => never
   width: number
   surface: RenderSurface
@@ -133,5 +134,15 @@ export function vsFold(k: VsKit, key: string, label: string, n: number | string,
     <Button key={key} plain label={text} autoFocus={autoFocus} onPress={onPress}>
       <Text bold={top} color={C(top ? 'text' : 'inactive')}>{text}</Text>
     </Button>
+  )
+}
+
+/** A section heading on VS Code's task page: plain words, bold, in the heading color ("What to do"). */
+export function vsSection(k: VsKit, key: string, label: string): RenderChildren {
+  const { Text, C } = k
+  return (
+    <Text key={key} wrap="wrap" bold color={C('suggestion')}>
+      {label}
+    </Text>
   )
 }
