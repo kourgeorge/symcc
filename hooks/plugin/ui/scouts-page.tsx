@@ -1,6 +1,6 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
 import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen, closeScoutRun } from '../scouts'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -68,10 +68,10 @@ export function scoutEditPage($: $, pane: PaneParts) {
 export async function scoutsPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, width, act, C, scouts, header, footer, buttonRows, heading, paragraphs } = pane
   const { nowMs } = pane
-  const opener = await panelValues($).readScoutOpen()
-  const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
+  const place = scoutPlace(await panelValues($).readScoutOpen())
+  const sc = place.scout ? scouts.find(x => x.name === place.scout) : undefined
   // VS Code's side panel: readable rows and pages, with buttons and no key hints (see vscode-scouts.tsx)
-  if (pane.vscode) return sc ? scoutPageVs($, pane, sc) : scoutsListVs($, pane)
+  if (pane.vscode) return sc ? scoutPageVs($, pane, sc, place.run) : scoutsListVs($, pane)
   if (sc) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
@@ -82,8 +82,10 @@ export async function scoutsPage($: $, pane: PaneParts) {
     const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
     const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
     const problem = scoutLastRunProblem(runs)
-    const opened = scoutRunOpen.scout === sc.name ? shown.find(x => x.run.ended === scoutRunOpen.ended) : undefined
-    const closeRun = () => (closeScoutRun(), $.ui.invalidate('ui.render'))
+    const opened = place.run ? shown.find(x => x.run.ended === place.run) : undefined
+    // the open run is kept in the panel's saved scout value, next to the scout (scoutPlace); then the page is drawn again
+    const showRun = (run: string) => act(async () => (await panelValues($).updateScoutOpen(() => scoutPlaceValue(sc.name, run)), $.ui.invalidate('ui.render')))
+    const closeRun = showRun('')
     if (opened) {
       // one run's page: its line, then its full report (from its file)
       const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
@@ -142,7 +144,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
         </Box>
 
         {buttonRows([
-          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => (closeRun(), panelValues($).updateScoutOpen(() => '')))} />,
+          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />,
           // no Run now while it runs: it couldn't start again until this run ends
           !sc.running && <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow(claudeHost($), sc.name))))} />,
           <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout(claudeHost($), sc))} />,
@@ -163,7 +165,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
           <Box key="scout-runs" flexDirection="column">
             {heading('Runs')}
             {shown.map(x => (
-              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={() => ((scoutRunOpen.scout = sc.name), (scoutRunOpen.ended = x.run.ended), $.ui.invalidate('ui.render'))}>
+              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={showRun(x.run.ended)}>
                 <Text color={C(scoutOutcomeTone(x.run.outcome))}>{`  ${scoutRunLine(x.run, x.tasks, nowMs)}`}</Text>
               </Button>
             ))}

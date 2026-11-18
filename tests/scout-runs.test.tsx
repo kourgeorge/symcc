@@ -7,14 +7,13 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccScout } from '../types'
 import { emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, linkScoutRunTask, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
-import { scoutFinished, scheduleScouts, scoutRunOpen } from '../hooks/plugin/scouts'
+import { scoutFinished, scheduleScouts, scoutPlace, scoutPlaceValue } from '../hooks/plugin/scouts'
 import { runTool } from '../hooks/plugin/tools'
 import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
 import { fakeHost, memoryFs } from './fake-host'
 import { inProject } from './project'
 import { readText } from './fakes'
 import { ICON } from '../hooks/name'
-import { forgetPane } from '../hooks/plugin/ui/esc'
 import { resetPane } from '../hooks/plugin/ui/open'
 const ROOT = '/repo'
 const MEMORY = `${ROOT}/.symcc/scouts.json`
@@ -170,15 +169,17 @@ const PANE = {
   props: { title: `${ICON} symcc board · symcc`, isFocused: false, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
 } as const
 
-/** The panel on scout bugs's page, with its runs file and report files as given. */
+/** The panel on scout bugs's page, with its runs file and report files as given; answers the values the panel saved. */
 function page(on: On, files: Record<string, string>, tasks: unknown[] = []) {
   const seed: Record<string, unknown> = { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks, working: [], scouts: [{ name: 'bugs', every_minutes: 30, last_run: LAST_RUN, running: false, prompt: 'Look for crashes.', last_report: '1. Old crash.' }], mode: 'auto', test_commands: [] } } }
   const written = new Set<string>()
-  on('state.set', (_, e, next) => (written.add(e.key), next(e)))
+  const saved: Record<string, unknown> = {}
+  on('state.set', (_, e, next) => (written.add(e.key), (saved[e.key] = (e as { value?: unknown }).value), next(e)))
   inProject(on)
   on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
+  return saved
 }
 
 const texts = async (ui: { findAll(q: { type: string }): Promise<{ text: string }[]> }) => (await ui.findAll({ type: 'Text' })).map(x => x.text)
@@ -209,22 +210,43 @@ test("the scout's page lists its runs, newest first, and opening one shows its f
   await ui.unmount()
 })
 
-// A mounted panel runs its own copy of the plugin's modules, and unmount tells the plugin nothing (in Claude Code the
-// panel closing raises ui.close, which calls forgetPane). So the ways out are checked on this file's copy: each one
-// closes the open run, so opening the scout again shows its page with "▍Runs" (the first page test above), not the
-// old run. Esc on a run page going back to the scout's page first ('close run') is in tests/esc.test.tsx.
-test("an open run is closed whenever its scout's page is left: switching views (resetPane) and the panel closing (forgetPane)", async $ => {
-  const { host } = fakeHost()
-  scoutRunOpen.scout = 'bugs'
-  scoutRunOpen.ended = LAST_RUN
-  await resetPane(host, 'scouts') // what Esc's "scouts list" step, the tabs and opening the panel do
-  expect(scoutRunOpen).toEqual({ scout: '', ended: '' })
-  scoutRunOpen.scout = 'bugs'
-  scoutRunOpen.ended = LAST_RUN
-  await resetPane(host) // only the opened task changes: the scout's run page stays
-  expect(scoutRunOpen).toEqual({ scout: 'bugs', ended: LAST_RUN })
-  await forgetPane($ as never) // the panel closing
-  expect(scoutRunOpen).toEqual({ scout: '', ended: '' })
+/** The panel on scout bugs's page with two runs, both report files saved; answers the values the panel saved. */
+function twoRuns(on: On) {
+  const runs: ScoutRunRecord[] = [
+    { started: null, ended: OLD_ENDED, outcome: 'found', findings: 2, report: '.symcc/reports/scouts/bugs-old.md' },
+    { started: null, ended: LAST_RUN, outcome: 'nothing', findings: 0, report: '.symcc/reports/scouts/bugs-new.md' },
+  ]
+  return page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs), '/.symcc/reports/scouts/bugs-old.md': '1. The parser crashes.\n', '/.symcc/reports/scouts/bugs-new.md': 'NOTHING\n' })
+}
+const OLD_ENDED = '2026-11-12T00:00:00.000Z'
+
+// The open run is kept in the panel's saved scout value, next to the open scout (scoutPlace), not in the plugin's
+// memory: so the code that leaves the scout's page (its Back, the tabs, resetPane, Esc's steps, the panel closing in
+// forgetPane) sets that one value and closes the run too.
+test("the open run is kept in the panel's saved scout value, next to the open scout; Back keeps only the scout", async ($, on) => {
+  const saved = twoRuns(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: `scout-run:${OLD_ENDED}` })
+  await ui.redraw()
+  expect(saved.scout).toBe(scoutPlaceValue('bugs', OLD_ENDED))
+  expect(scoutPlace(String(saved.scout))).toEqual({ scout: 'bugs', run: OLD_ENDED })
+  expect(await ui.find({ type: 'Text', text: /^▍Report$/ })).toBeDefined()
+  await ui.press({ key: 'scout-run-back' })
+  await ui.redraw()
+  expect(saved.scout).toBe('bugs')
+  expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('resetPane with a view closes the open run with the open scout; without one, the run page stays', async () => {
+  const { host, panel } = fakeHost()
+  await panel.updateScoutOpen(() => scoutPlaceValue('bugs', LAST_RUN))
+  await resetPane(host) // only the opened task changes
+  expect(scoutPlace(await panel.readScoutOpen())).toEqual({ scout: 'bugs', run: LAST_RUN })
+  await resetPane(host, 'scouts') // the tabs, Esc's "scouts list" step, opening the panel
+  expect(scoutPlace(await panel.readScoutOpen())).toEqual({ scout: '', run: '' })
+  expect(scoutPlace('bugs')).toEqual({ scout: 'bugs', run: '' })
+  expect(scoutPlaceValue('bugs')).toBe('bugs')
 })
 
 test("the scout's page says when its last run ended on an API error, so nothing was reported", async ($, on) => {
@@ -318,3 +340,4 @@ test("the scout's page in VS Code says when its last run ended on an API error, 
   expect((await ui.findAll({ type: 'Text' })).find(t => / · found · 1 finding · no tasks$/.test(t.text))?.props.color).not.toBe(errRow!.props.color)
   await ui.unmount()
 })
+

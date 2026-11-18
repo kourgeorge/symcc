@@ -3,7 +3,7 @@
 // only does that for a panel opened with closeOnEscape, and the owner saw no step from the search box (see
 // docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
 // (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
-import { cancelScoutEdit, closeScoutRun, scoutRunOpen } from '../scouts'
+import { cancelScoutEdit, scoutPlace } from '../scouts'
 import { S, openDays, changesCache } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import { resetPane, takeKeysBack } from './open'
@@ -43,15 +43,15 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
 
 /** Takes the board panel one step back (see escStep) and says whether it did; false: the panel closes. */
 export async function escBack($: $): Promise<boolean> {
-  const scout = await panelValues($).readScoutOpen()
-  const run = !!scout && scoutRunOpen.scout === scout && !!scoutRunOpen.ended
+  const { scout, run: ended } = scoutPlace(await panelValues($).readScoutOpen())
+  const run = !!scout && !!ended
   const step = escStep({ tab: await panelValues($).readTab(), opened: await panelValues($).readOpened(), scout, run }, S)
   if (!step) return false
   if (step === 'cancel scout edit') cancelScoutEdit(claudeHost($))
   else if (step === 'scouts list') await resetPane(claudeHost($), 'scouts')
   else if (step === 'board list') await resetPane(claudeHost($), 'tasks')
+  else if (step === 'close run') await panelValues($).updateScoutOpen(v => scoutPlace(v).scout)
   else {
-    if (step === 'close run') closeScoutRun()
     if (step === 'cancel setting') (S.settingEdit = null), (S.settingPick = null)
     if (step === 'cancel role pick') S.rolePick = null
     if (step === 'cancel reject') S.rejecting = null
@@ -79,7 +79,6 @@ export async function forgetPane($: $) {
   S.answering = null
   S.settingEdit = null
   S.settingPick = null
-  closeScoutRun()
   changesCache.clear()
   await panelValues($).updateTab(() => '').catch(() => undefined)
   await panelValues($).updateScoutOpen(() => '').catch(() => undefined)

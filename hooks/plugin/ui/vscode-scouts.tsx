@@ -10,7 +10,7 @@
 // with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
 import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen, closeScoutRun } from '../scouts'
+import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -125,8 +125,8 @@ export function scoutsListVs($: $, pane: PaneParts) {
   )
 }
 
-/** One scout's page in VS Code (or one of its runs, when one is open). */
-export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
+/** One scout's page in VS Code, or one of its runs: `run` is when the open run ended ('' = none, the scout's page). */
+export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '') {
   const { Box, Text, Button, act, C, vs } = pane
   const { Markdown } = vs
   const { nowMs } = pane
@@ -152,8 +152,10 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
   const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
   const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
   const problem = sc.running ? '' : scoutLastRunProblem(runs)
-  const opened = scoutRunOpen.scout === sc.name ? shown.find(x => x.run.ended === scoutRunOpen.ended) : undefined
-  const closeRun = () => (closeScoutRun(), $.ui.invalidate('ui.render'))
+  const opened = run ? shown.find(x => x.run.ended === run) : undefined
+  // the open run is kept in the panel's saved scout value, next to the scout (scoutPlace); then the page is drawn again
+  const showRun = (run: string) => act(async () => (await panelValues($).updateScoutOpen(() => scoutPlaceValue(sc.name, run)), $.ui.invalidate('ui.render')))
+  const closeRun = showRun('')
   if (opened) {
     const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
     return (
@@ -180,7 +182,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
     <Box key="vs-scout-page" flexDirection="column" gap={1}>
       <Box key="vs-scout-top" flexDirection="column">
         <Box key="vs-back-row" flexDirection="row">
-          <Button key="scout-back" label="← Scouts" variant="secondary" autoFocus onPress={act(() => (closeRun(), panelValues($).updateScoutOpen(() => '')))} />
+          <Button key="scout-back" label="← Scouts" variant="secondary" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />
         </Box>
         <Text key="vs-scout-status" wrap="wrap">
           <Text bold color={C('claude')}>{sc.name}</Text>
@@ -214,7 +216,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
             'runs',
             'Runs',
             shown.map(x => (
-              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`Open the run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={() => ((scoutRunOpen.scout = sc.name), (scoutRunOpen.ended = x.run.ended), $.ui.invalidate('ui.render'))}>
+              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`Open the run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={showRun(x.run.ended)}>
                 <Text wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{scoutRunLine(x.run, x.tasks, nowMs)}</Text>
               </Button>
             )),

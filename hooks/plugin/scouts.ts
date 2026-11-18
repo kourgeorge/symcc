@@ -91,7 +91,6 @@ export function resetScoutRuns() {
   startWarned.clear()
   runsChecked.clear()
   historyWarned = false
-  closeScoutRun()
 }
 
 // ---------------- each scout's run history ----------------
@@ -101,14 +100,18 @@ const runsChecked = new Set<string>()
 /** whether a run history that could not be saved was already told (once per session) */
 let historyWarned = false
 
-/** The run whose full report the scout's page shows now (its scout and when it ended); '' for none. */
-export const scoutRunOpen = { scout: '', ended: '' }
-
-/** Closes the open run (back to its scout's page); also called whenever the scout's page is left (resetPane, forgetPane). */
-export function closeScoutRun() {
-  scoutRunOpen.scout = ''
-  scoutRunOpen.ended = ''
+/**
+ * Where the Scouts view is, as the board panel keeps it in its saved scout value (next to its tab): the open scout
+ * ('' = the list) and, on its page, the run whose full report is open (when that run ended; '' = none). Both are
+ * in the one value, so whatever leaves the scout's page (its Back button, resetPane, Esc, the panel closing) also
+ * closes the run.
+ */
+export function scoutPlace(value: string) {
+  const [scout = '', run = ''] = value.split('\n')
+  return { scout, run }
 }
+/** The saved scout value for scout `scout`'s page, with the run that ended at `run` open ('' = none). */
+export const scoutPlaceValue = (scout: string, run = '') => (run ? `${scout}\n${run}` : scout)
 
 /** A scout's runs file, in the project. */
 const runsPath = (scout: string) => path(scoutRunsFile(scout, S.N.name))
