@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -85,8 +85,10 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `blocked`: everything passed, only the owner's files on the target branch are in the way of the merge (nothing moved).
  * The checker setting (see plugin/checker.ts): `held`: the checks passed and nothing merged, for a checker to look at first;
  * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
+ * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
+ * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
  */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string }
+export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string }
 
 /** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
 export type CheckMode = 'finish' | 'approve' | 'merge'
@@ -118,15 +120,35 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   await markStep($, t, 'checking', stopped)
   const add = await git($, ['add', '-A', '--', '.'], dir)
   if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
+  // Files whose names look like secrets (.env, *.pem, *.key, id_rsa, ...) are taken out of what is staged
+  // before the commit: they stay in the folder, but never reach a commit or the target branch.
+  const staged = await git($, ['diff', '--cached', '--name-only', '--no-renames', '-z'], dir)
+  if (staged.exitCode !== 0) return { ok: false, detail: `symcc could not list the staged work (git diff --cached): ${gitFailText(staged)}` }
+  const left = secretFiles(staged.stdout.split('\0').filter(Boolean))
+  const unstaged = await unstage($, dir, left)
+  if (unstaged) return { ok: false, detail: `symcc could not leave out files that look like secrets (${secretsLeftText(left)}): ${unstaged}` }
   const committed = await commitTry($, t, dir, made)
   if (committed) return { ok: false, detail: `symcc could not commit the work: ${committed}` }
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
-  const head = await gitOk($, ['rev-parse', 'HEAD'], dir)
+  let head = await gitOk($, ['rev-parse', 'HEAD'], dir)
   const base = (await git($, ['merge-base', main, head])).stdout.trim() || main
-  // -z: names come through as they are (without it git quotes and escapes unusual ones, e.g. "caf\303\251.md").
-  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
-  if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
-  const changed = d.stdout.split('\0').filter(Boolean)
+  let changed = await changedSince($, base, head)
+  // Secret-looking files already in the branch's commits (the worker committed them, or an earlier try did):
+  // the branch's work is made one commit again without them, so they are not in the history that merges.
+  const inBranch = secretFiles(changed)
+  if (inBranch.length) {
+    const why = await dropFromBranch($, t, dir, base, inBranch, made)
+    if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${secretsLeftText(inBranch)}): ${why}` }
+    head = await gitOk($, ['rev-parse', 'HEAD'], dir)
+    changed = await changedSince($, base, head)
+    left.push(...inBranch)
+  }
+  const secrets = [...new Set(left)].sort()
+  const withSecrets = (r: CheckResult): CheckResult => (secrets.length ? { ...r, secrets, detail: `${r.detail}; ${secretsLeftText(secrets)}` } : r)
+  if (secrets.length && !changed.length) {
+    const ask = onlySecretsQuestion(t.id, secrets)
+    return { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
+  }
   if (!changed.length) {
     // Nothing new, but this task's own work is already on the target branch (an earlier try merged
     // it and a reload sent the task back): it is done, not failed.
@@ -136,9 +158,9 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) {
     // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
-    if (mode !== 'finish') return { ok: false, detail: outOfScopeText(bad, t.files) }
+    if (mode !== 'finish') return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files) })
     const undo = await undoOutOfScope($, t, dir, base, bad, made)
-    return { ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo }
+    return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo })
   }
   // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
   // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
@@ -148,8 +170,36 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     const restart = n > 1 || mergeTurns.has(target)
     if (restart) turn?.(false)
     const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold)), release)
-    if (!r.raced || n >= MAX_MERGE_RACES) return r.result
+    if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
   }
+}
+
+/** The files changed from commit `base` to commit `head` (-z: names come through as they are; without it git quotes and escapes unusual ones, e.g. "caf\303\251.md"). */
+async function changedSince($: Host, base: string, head: string): Promise<string[]> {
+  const d = await git($, ['diff', '--name-only', '--no-renames', '-z', `${base}..${head}`])
+  if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
+  return d.stdout.split('\0').filter(Boolean)
+}
+
+/** Takes `files` out of what is staged in folder `dir` (back to how HEAD has them), leaving them on disk. Returns '' when done, or git's error. */
+async function unstage($: Host, dir: string, files: readonly string[]): Promise<string> {
+  // :(literal): names are taken as they are, never as patterns.
+  for (let i = 0; i < files.length; i += 100) {
+    const r = await git($, ['restore', '--staged', '--', ...files.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
+    if (r.exitCode !== 0) return gitFailText(r)
+  }
+  return ''
+}
+
+/**
+ * Secret-looking `files` are in the commits of task `t`'s branch since `base` (the merge base): the branch
+ * goes back to `base` with its work kept staged (git reset --soft), the files are taken out of it (kept on
+ * disk), and the rest is committed again as one commit of this try. Returns '' when done, or why not.
+ */
+async function dropFromBranch($: Host, t: SymccTask, dir: string, base: string, files: readonly string[], made: string[]): Promise<string> {
+  const r = await git($, ['reset', '-q', '--soft', base], dir)
+  if (r.exitCode !== 0) return gitFailText(r)
+  return (await unstage($, dir, files)) || (await commitTry($, t, dir, made))
 }
 
 /**
