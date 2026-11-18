@@ -31,7 +31,7 @@ function caughtNext(answer: unknown, o: { called?: boolean; message?: string } =
   return { next, calls }
 }
 
-const GATING = ['tool.call', 'tool.check', 'agent.offer', 'agent.spawn', 'prompt.submit', 'command.run', 'classic.UserPromptSubmit', 'classic.Stop', 'classic.SessionStart', 'ui.close', 'ui.focus', 'ui.scroll']
+const GATING = ['tool.call', 'tool.check', 'agent.offer', 'agent.spawn', 'prompt.submit', 'command.run', 'classic.UserPromptSubmit', 'classic.Stop', 'classic.SessionStart', 'classic.SubagentStop', 'ui.close', 'ui.focus', 'ui.scroll']
 
 test('every gating hook symcc registers has a .catch', () => {
   const hooks = registered()
@@ -97,7 +97,7 @@ test("agent.spawn: when the hook fails before passing it on, the start of a symc
 test("the other gating hooks pass the event on unchanged when they fail, and a failing log changes nothing", async () => {
   const hooks = registered()
   const broken = { plugin: { name: 'symcc' }, ui: { log: () => { throw new Error('no log') } } } as never
-  for (const name of ['prompt.submit', 'command.run', 'classic.UserPromptSubmit', 'classic.Stop', 'classic.SessionStart', 'ui.close', 'ui.focus', 'ui.scroll']) {
+  for (const name of ['prompt.submit', 'command.run', 'classic.UserPromptSubmit', 'classic.Stop', 'classic.SessionStart', 'classic.SubagentStop', 'ui.close', 'ui.focus', 'ui.scroll']) {
     const e = { marker: name }
     const { next, calls } = caughtNext({ answer: name })
     expect(await hooks.get(name)!.caught!(broken, e, next)).toEqual({ answer: name })
