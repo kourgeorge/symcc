@@ -186,9 +186,14 @@ test('a verdict is OK only when the last line says OK on its own; anything else 
 test('docs-only, for the checker, is only prose and media: agent instructions, .mdx and config files are checked, even under docs/', () => {
   for (const f of ['README.md', 'docs/guide.md', 'docs/img/x.png', 'CHANGELOG.md', 'LICENSE', 'README', 'docs/demo.mp4', 'assets/font.woff2', 'roles/logo.svg'])
     expect([f, docsOnly([f])]).toEqual([f, true])
-  for (const f of ['roles/checker.md', 'kinds/bug.md', 'CLAUDE.md', 'sub/CLAUDE.md', 'AGENTS.md', '.claude/agents/x.md', '.claude/commands/go.md', '.symcc/roles/mine.md', 'skills/a/SKILL.md', 'SKILL.md', 'src/page.mdx', 'docs/page.mdx', 'docs/package.json', 'docs/Makefile', 'docs/openapi.yaml', 'docs/.github/workflows/ci.yml', 'docs/netlify.toml', 'docs/build.ts', 'license.ts'])
+  for (const f of ['roles/checker.md', 'kinds/bug.md', 'CLAUDE.md', 'sub/CLAUDE.md', 'AGENTS.md', '.claude/agents/x.md', '.claude/commands/go.md', '.symcc/roles/mine.md', 'skills/a/SKILL.md', 'SKILL.md', 'src/page.mdx', 'docs/page.mdx', 'docs/package.json', 'docs/Makefile', 'docs/openapi.yaml', 'docs/.github/workflows/ci.yml', 'docs/netlify.toml', 'docs/build.ts', 'license.ts',
+    'examples/scouts/gaps-bot.md', 'agents/helper.md', 'commands/go.md', 'GEMINI.md', 'CONVENTIONS.md', '.github/copilot-instructions.md',
+    '.github/instructions/ts.instructions.md', '.github/instructions/x.md', 'src/ts.instructions.md', '.cursor/rules/x.md', '.cursor/rules/x.mdc',
+    '.cursorrules', '.windsurf/rules/a.md', '.windsurfrules', '.clinerules', '.clinerules/a.md', '.opencode/agent/x.md', 'sub/examples/scouts/a.md'])
     expect([f, docsOnly([f])]).toEqual([f, false])
   expect(docsOnly(['README.md', 'roles/tester.md'])).toBe(false)
+  for (const f of ['examples/other.md', 'docs/scouts/x.md', 'docs/instructions/x.md'])
+    expect([f, docsOnly([f])]).toEqual([f, true])
   // tests_with_changes keeps the wider rule: a role file or docs config is not code that needs a test
   expect(untestedChange(['roles/tester.md', 'docs/package.json', 'src/page.mdx'])).toBe(false)
   expect(untestedChange(['src/a.ts'])).toBe(true)

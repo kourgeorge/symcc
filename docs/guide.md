@@ -148,6 +148,11 @@ happens, never the words in its hand-back:
 
 1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
+   **Secret-looking files.** Files whose names look like secrets (`.env`, `.env.*`, `*.pem`,
+   `*.key`, `id_rsa` and other SSH private keys) are left out of the commit and the merge, even if
+   they are in the task's file list. After a merge they are kept in `.symcc/left-out/<task>/`.
+   Deleting such a file merges normally. If a task changed only such files, nothing is merged and
+   the task waits for you with a question: try again without them, or drop it.
 2. **Scope check.** Every task lists the files it may change (its scope). If the worker changed
    anything else, nothing is merged (the note says which files; add them to `files` with
    `change`, or split the task). When a worker tries to edit (Edit, Write or
@@ -446,14 +451,23 @@ are about changes; under "How tasks ended" a read investigation shows as
   instructions, its last report, and buttons to run it now, edit it, or pause or resume it.
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
-  default, allowed range and what it means. Enter on a row changes it: `open_on_start`
+  default, allowed range and what it means. The rows are grouped under short headings:
+  - **Work**: `mode`, `max_parallel`, `max_minutes`, `auto_retries`, `enabled`
+  - **Checks before merging**: `test_commands`, `tests_with_changes`, `checker`
+  - **Workers**: the **Roles** and **Kinds** rows
+  - **Scouts**: `scout_findings`
+  - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
+
+  The headings are only labels: ↑↓ go from the last row of one group to the first of the
+  next. The lead's `settings` tool and `/symcc-settings` text list the settings under the
+  same headings. Enter on a row changes it: `open_on_start`
   `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
   `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
-- Under the settings, the **Roles** row says how many worker roles there are (e.g.
+- Under **Workers**, the **Roles** row says how many worker roles there are (e.g.
   `6 roles · 1 off`). Enter (or a click) on it opens the **Roles** page: one row per worker
   role: its name, where it comes from (`built-in`, `replaced`, `added`, with `, off` when it
   is turned off) and its description. Back (`b`) on the Roles page goes back to Settings, and
@@ -661,8 +675,11 @@ get through. The real fix is the worker sandbox (T-365).
 - **Skipped** for investigations and for changes that touch only prose or media. Only these count:
   `README`, `CHANGELOG`, `LICENSE`-style names (no extension, `.txt` or `.rst`), `.md` files that are not
   instructions for agents, and images, video, audio, subtitles and fonts. A `.md` file is instructions
-  for agents, and so is checked, when it is under `roles/`, `kinds/`, `.claude/`, `.symcc/` or `skills/`,
-  or is named `CLAUDE.md`, `AGENTS.md` or `SKILL.md`. Everything else is checked, even under `docs/`:
+  for agents, and so is checked, when it is under `roles/`, `kinds/`, `agents/`, `commands/`, `skills/`,
+  `examples/scouts/`, `.claude/`, `.symcc/`, `.github/instructions/`, `.cursor/`, `.windsurf/`, `.clinerules/`,
+  `.opencode/`, `.gemini/`, `.codex/` or `.roo/`, or is named `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `GEMINI.md`,
+  `CONVENTIONS.md`, `copilot-instructions.md` or `*.instructions.md` (and `.cursorrules`, `.windsurfrules` and
+  `.clinerules` files are always checked). Everything else is checked, even under `docs/`:
   `.mdx` files (they hold code), and config, build and CI files such as `package.json`, `.yaml`,
   `.toml`, `Makefile` and `.github/workflows/`. (`tests_with_changes` keeps its wider docs rule: a role
   file or a docs config file is not code that needs a test.)

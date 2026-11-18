@@ -6,8 +6,10 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Added
 - A failed task says clearly why: its page starts with a "Why it failed" block (the reason in one plain sentence, what the worker's report asks for, and what to do next), and its board row and the lead's board show the same sentence instead of the bare note.
+- The Settings view groups the settings under headings: Work, Checks before merging, Workers (Roles, Kinds), Scouts, and Board and alerts. ↑↓ still go through every row. The lead's settings listing uses the same groups.
 - A doing task on its 2nd or later try says so: `try 2` in the board list (warning colour from try 3), `T-5 doing (try 2)` above the prompt and in the status line, and `try 2/3` in the lead's board while auto retries run. A first try shows nothing.
-- The board banner's logo dances now and then: it sways when idle, turns into a check mark, robot or note when a task merges, a worker starts or a scout finds something, and sings when the board is all done.- `tests_with_changes` setting (off / ask / review, default ask): a change task whose commit edits code but no test file is flagged before merging. With ask it merges and the lead is told "T-3 changed code but no test"; with review it waits for your review. Docs-only changes are never flagged. The lead now writes how each change will be tested ("Done when: tests show …").
+- The board banner's logo dances now and then: it sways when idle, turns into a check mark, robot or note when a task merges, a worker starts or a scout finds something, and sings when the board is all done.
+- `tests_with_changes` setting (off / ask / review, default ask): a change task whose commit edits code but no test file is flagged before merging. With ask it merges and the lead is told "T-3 changed code but no test"; with review it waits for your review. Docs-only changes are never flagged. The lead now writes how each change will be tested ("Done when: tests show …").
 - Investigation tasks: a task kind for questions ("is it possible…", "should we…", "how does X work?"). The worker hands back an answer; nothing is committed, tested or merged, and it always waits for you to read it, even in `auto`. Then Done, Keep as a note (a docs task saves it as `docs/research/<topic>.md`) or Ask more. Researcher tasks are investigations by default. The board shows `◆ answer` and `[investigation]`; `/symcc-stats` counts investigations on their own with the outcome "answered", and leaves them out of the first-try and merge numbers.
 - Plan mode: while Claude Code is in plan mode, nothing starts and new tasks go to the backlog.
 - Search the board: press `f` and type to filter tasks.
@@ -25,8 +27,10 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - A narrated 1080p YouTube explainer video (script and build steps are in `docs/video`).
 - An eval harness that compares plain Claude Code with symcc on scripted sessions, and research notes on how to show lower cost and better quality.
 - /symcc-stats gives a short summary with bar charts; `/symcc-stats full` shows all the numbers.
+- Task kinds: change, bug, feature, refactor, docs and investigation, plus your own kinds as files in `.symcc/kinds/`. The lead has a `kinds` tool, and Settings has a Kinds page.
+- `checker` setting (off by default): a fresh checker tries to break each change before it merges.
+- A worker's secret-looking files (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa`, ...) are left out of its commit and merge, and kept in `.symcc/left-out/<task>/` after a merge. Deleting such a file merges normally. A task that changed only such files waits for you with a question: try again without them, or drop it.
 - The lead has a `roles` tool (list, show, add, edit, reset, turn off or on), and Settings has a Roles page.
-- Editable worker prompts: the fixed text every worker gets is a file you can edit (Settings → Prompts, or the lead's `prompts` tool: list, edit, reset). Your `.symcc/prompts/change.md` or `investigation.md` is used instead of the built-in one, with placeholders like `{{files}}` and `{{test_command}}`; a missing `{{ask}}` or `{{details}}` is added back with a warning.
 - The default change prompt asks the worker to add or update a test for its change (unless it only touches docs) and to say which test covers it.
 - Press `y` on a task to copy its content to the clipboard.
 - A scout's edit page has the same sections as its view page, including "Runs every" and "Summary" boxes.
@@ -56,7 +60,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - A task waiting on your files keeps waiting (even if its merge runs over) and tells you the right fix for each kind of file: commit or stash, remove an untracked file, or deal with an ignored one.
 
 ### Fixed
-- The checker no longer skips changes that only look like docs: agent instructions (`roles/`, `kinds/`, `.claude/`, `skills/`, `CLAUDE.md`, `AGENTS.md`, `SKILL.md`), `.mdx` files and config, build or CI files (even under `docs/`) are now checked. Only README / CHANGELOG / LICENSE, other `.md` files and media skip it.
+- The checker no longer skips changes that only look like docs: agent instructions (`roles/`, `kinds/`, `.claude/`, `.symcc/`, `skills/`, `CLAUDE.md`, `AGENTS.md`, `SKILL.md`), `.mdx` files and config, build or CI files (even under `docs/`) are now checked. Only README / CHANGELOG / LICENSE, other `.md` files and media skip it.
 - The `checker` role can't be turned on or off any more (its page has no Turn on button and points to the `checker` setting instead), and it is never offered as a task role.
 - A worker whose run ended on an API error or a refusal now fails its task with the reason, instead of being checked and merged as if it had finished.
 - Merge: the owner's branch is no longer left half-updated by a clashing untracked file, and git-ignored files are not silently overwritten.
