@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, find, ASK_TOOL, ASK_SENT, blockedEditText, gitWriteIn, gitWriteText } from '../hooks/board'
-import { S, toolName, workers, boardAgents } from '../hooks/app/state'
+import { S, toolName, workers, boardAgents, starting, queuedWorkers } from '../hooks/app/state'
 import { checkEdit, askCall, guardFailed, stoppedText } from '../hooks/app/ask'
 import { toolCall } from '../hooks/app/symcc'
 import { agentOnBoard, lateHandBack } from '../hooks/app/workers'
@@ -94,6 +94,23 @@ test('an agent whose task no longer runs it (another status, or its try handed b
     expect(await toolCall(host, 'Bash', 'w9', {})).toEqual({ deny: stoppedText() })
     expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
     expect(await askCall(host, 'w9', { question: 'x' })).toMatch(/^Refused/)
+  }
+})
+
+test("an earlier try's agent, while this copy has the new try waiting to start, is refused: its ask_owner, its edit and a refused-edit record, with nothing written onto the new try", async () => {
+  for (const wait of ['starting', 'queued'] as const) {
+    const { host } = await world({ attempts: 2, session: 'me', agent: 'w-old', note: 'queued', runs: [{ started: ISO, ended: ISO }, { started: ISO }] })
+    if (wait === 'starting') starting.add('T-1')
+    else queuedWorkers.set('T-1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
+    expect((await agentOnBoard(host, 'w-old'))?.kind).toBe('ended')
+    expect(await askCall(host, 'w-old', { question: 'Q from old?' })).toMatch(/^Refused/)
+    expect(await checkEdit(host, 'w-old', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
+    expect(await checkEdit(host, 'w-old', { path: `${WT}/README.md` })).toBe(stoppedText())
+    const t = find(await load(host), 'T-1')!
+    expect(t.try_question).toBeUndefined()
+    expect(t.try_refused).toBeUndefined()
+    starting.clear()
+    queuedWorkers.clear()
   }
 })
 

@@ -97,6 +97,8 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       if (!mayStart(cur, agents.map(agentState), S.N.name)) return [x, null]
       const at = now()
       const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: QUEUED_NOTE, runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
+      // T-471: an earlier try's agent is never taken as this try's worker (agentOnBoard); the new one is recorded when it starts
+      delete find(y, id)!.agent
       return [y, find(y, id)!]
     })
     if (!t) return null
@@ -508,7 +510,7 @@ export async function agentOnBoard(host: Host, agentId: string): Promise<OnBoard
     ? { kind: 'checker', task: chk.id, worktree: worktreeDir(chk.id) }
     : !t
       ? undefined
-      : t.status !== 'doing' || handedBack(t)
+      : t.status !== 'doing' || handedBack(t) || starting.has(t.id) || queuedWorkers.has(t.id)
         ? { kind: 'ended', task: t.id }
         : { kind: 'worker', worker: { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: runStart(t) } }
   if (found) rememberOnBoard(agentId)
