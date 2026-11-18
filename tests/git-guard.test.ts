@@ -65,6 +65,19 @@ const READS = [
   'pushd docs && grep -rn "git stash" .',
   'cd && ls .git',
   'git reflog show HEAD -3 && cd hooks/core',
+  // T-446: `@{` revisions and an empty `{}` are no brace expansion
+  'git log HEAD@{1}',
+  'git log -1 HEAD@{u}',
+  // T-446: braces inside quotes and `${VAR}` are no brace expansion
+  `git log --pretty=format:'{"h":"%h"}'`,
+  'git -C "${PWD}" log',
+  'git log ${x}',
+  'find . -name x -exec git log -1 {} +',
+  '{ grep -n git README.md; }',
+  // T-446: after find -exec the command run is the word right after it; grep's search word `git` is only text
+  'find . -exec grep -l git {} +',
+  'find . -name x -exec grep -n git {} \\;',
+  'find . -type f -exec grep -l "git" {} +',
 ]
 
 const WRITES: [string, string][] = [
@@ -210,6 +223,38 @@ const WRITES: [string, string][] = [
   ['cd `git stash`', 'git stash'],
   ['cd -P x && grep "git stash" y', 'git stash'],
   ['cd x y && grep "git stash" y', 'git stash'],
+  // T-446: brace expansion makes new words (`git {stash,}` runs `git stash`), so a "{" inside a word never cuts the
+  // command, and a git command with a "{" in its words (outside `@{` and an empty `{}`) is refused
+  ['git {stash,}', 'git with {braces}'],
+  ['git {push,origin}', 'git with {braces}'],
+  ['git {commit,-m,x}', 'git with {braces}'],
+  ['git -C {.,} stash', 'git with {braces}'],
+  ['git log {--output=/tmp/x,}', 'git with {braces}'],
+  ['{git,} stash', 'git with {braces}'],
+  ['g{i,}t stash', 'git with {braces}'],
+  ['rg --pre={git,} stash .', 'git with {braces}'],
+  // one braced word may hold git and its subcommand together (`{git,stash}` runs `git stash`)
+  ['{git,stash}', 'git with {braces}'],
+  ['{git,-C,.,stash}', 'git with {braces}'],
+  ['{/usr/bin/git,stash}', 'git with {braces}'],
+  ['env {git,stash}', 'git with {braces}'],
+  ['{git-stash,}', 'git with {braces}'],
+  // text a shell runs again is a command of its own, braces and all
+  ["bash -c '{git,stash}'", 'git with {braces}'],
+  ['sh -c "{git,stash}"', 'git with {braces}'],
+  ["eval '{git,stash}'", 'git with {braces}'],
+  ['bash -c "{,git} stash"', 'git with {braces}'],
+  ["bash -c 'echo; {git,stash}'", 'git with {braces}'],
+  ["bash -c 'cd x && {git,stash}'", 'git with {braces}'],
+  ['git log "x" {a,b}', 'git with {braces}'],
+  ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
+  ['find . -exec git stash {} +', 'git stash'],
+  ['find . -exec grep -l git {} \\; -exec git stash \\;', 'git stash'],
+  ['find . -exec env git stash {} +', 'git stash'],
+  ['{ git stash; }', 'git stash'],
+  ['{ git stash; } && echo', 'git stash'],
+  ['echo x && { git push; }', 'git push'],
+  ['if true; then { git stash; }; fi', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {
