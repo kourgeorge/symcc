@@ -446,14 +446,23 @@ are about changes; under "How tasks ended" a read investigation shows as
   instructions, its last report, and buttons to run it now, edit it, or pause or resume it.
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
-  default, allowed range and what it means. Enter on a row changes it: `open_on_start`
+  default, allowed range and what it means. The rows are grouped under short headings:
+  - **Work**: `mode`, `max_parallel`, `max_minutes`, `auto_retries`, `enabled`
+  - **Checks before merging**: `test_commands`, `tests_with_changes`, `checker`
+  - **Workers**: the **Roles** and **Kinds** rows
+  - **Scouts**: `scout_findings`
+  - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
+
+  The headings are only labels: ↑↓ go from the last row of one group to the first of the
+  next. The lead's `settings` tool and `/symcc-settings` text list the settings under the
+  same headings. Enter on a row changes it: `open_on_start`
   `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
   `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
-- Under the settings, the **Roles** row says how many worker roles there are (e.g.
+- Under **Workers**, the **Roles** row says how many worker roles there are (e.g.
   `6 roles · 1 off`). Enter (or a click) on it opens the **Roles** page: one row per worker
   role: its name, where it comes from (`built-in`, `replaced`, `added`, with `, off` when it
   is turned off) and its description. Back (`b`) on the Roles page goes back to Settings, and

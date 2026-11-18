@@ -2,7 +2,7 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
+import { SETTING_GROUPS, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, type KeyHint } from '../hooks/board'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/plugin/ui/arrows'
 import { sayQueue } from '../hooks/plugin/state'
 import { inProject } from './project'
@@ -821,7 +821,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(tasksTab?.props.bold).toBeFalsy()
   expect(tasksTab?.props.color).toBe('inactive')
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -848,6 +848,46 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   // "t" goes back to the tasks
   await ui.press({ key: 'tab-tasks' })
   expect(await ui.find({ key: 'T-1' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Settings groups its rows under 5 headings, in order; ↑↓ go through every row across them and never stop on a heading', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], notify: 'off', notify_choices: ['off'] } } })
+  fakeFiles(on, ROLE_FILES)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-settings' })
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  const titles = ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']
+  expect(SETTING_GROUPS.map(g => g.title)).toEqual(titles)
+  const at = titles.map(t => texts.indexOf(`▍${t}`))
+  expect(at.every(i => i >= 0)).toBe(true)
+  expect([...at].sort((a, b) => a - b)).toEqual(at)
+  // each row's name sits under its own heading, before the next one
+  const under: Record<string, string[]> = {
+    Work: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'],
+    'Checks before merging': ['test_commands', 'tests_with_changes', 'checker'],
+    Workers: ['Roles', 'Kinds'],
+    Scouts: ['scout_findings'],
+    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
+  }
+  titles.forEach((t, i) => {
+    const from = at[i]!
+    const to = at[i + 1] ?? texts.length
+    for (const name of under[t]!) {
+      const k = texts.findIndex((x, j) => j > from && x.trimEnd() === name)
+      expect(k).toBeGreaterThan(from)
+      expect(k).toBeLessThan(to)
+    }
+  })
+  // the headings are no Buttons, and the ↑↓ stops are every row, category after category
+  expect((await ui.findAll({ type: 'Button' })).some(b => String(b.key ?? '').startsWith('group'))).toBe(false)
+  const rows = Object.values(under).flat().map(n => (n === 'Roles' ? 'settings-roles' : n === 'Kinds' ? 'settings-kinds' : `setting:${n}`))
+  const stops = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(k => k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds')
+  expect(stops).toEqual(rows)
+  // ↓ on the last Work row goes to the first row of Checks before merging, past the heading
+  expect(arrowTarget(stops, 'setting:enabled', 1)).toBe('setting:test_commands')
+  expect(arrowTarget(stops, 'setting:test_commands', -1)).toBe('setting:enabled')
+  expect(arrowTarget(stops, 'settings-kinds', 1)).toBe('setting:scout_findings')
   await ui.unmount()
 })
 
