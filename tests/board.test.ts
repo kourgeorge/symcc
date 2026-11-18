@@ -2417,8 +2417,12 @@ test('after a plugin reload, a worker of this session is adopted, not stopped (T
   // the task belongs to another session that drives the board now: leave it alone
   const theirs = patchTask(b, 'T-1', { session: 'other' }, T)
   expect(orphanMove(w('w1'), theirs, 'me', 'other')).toEqual({ move: 'leave' })
-  // the task belongs to a dead session: not ours to keep, stop
-  expect(orphanMove(w('w1'), theirs, 'me', 'me')).toEqual({ move: 'stop' })
+  // the task names a session that no longer drives but this very agent (listed here, so this
+  // process's own worker; e.g. the session id changed over the reload): adopted (T-376)
+  expect(orphanMove(w('w1'), theirs, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
+  expect(orphanMove(w('w1'), theirs, 'me', null)).toEqual({ move: 'adopt', task: 'T-1' })
+  // a dead session's task found only by the worker's name: not ours to keep, stop
+  expect(orphanMove(w('w9'), patchTask(theirs, 'T-1', { agent: undefined }, T), 'me', 'me')).toEqual({ move: 'stop' })
   // ended agents are never touched; bad input is left alone
   expect(orphanMove(w('w1', 'symcc-T-1', 'completed'), b, 'me', 'me')).toEqual({ move: 'leave' })
   expect(orphanMove({ id: '', status: 'running' }, b, 'me', 'me')).toEqual({ move: 'leave' })

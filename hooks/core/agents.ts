@@ -75,8 +75,11 @@ export function liveWorkersFor(t: Pick<BoardTask, 'id' | 'agent'>, agents: Agent
  *   this agent (or no agent yet), and no other worker was adopted for it (`taken`): keep it
  *   working and track it again, so a reload does not stop it.
  * - "leave": the task belongs to another session that drives the board now: not ours to touch.
+ *   It is also adopted when the task names this very agent but a session that no longer drives
+ *   the board ($.agent.list() lists this process's agents, so it is ours; the session id may
+ *   have changed over the reload).
  * - "stop": anything else (task gone, not "doing", another worker named on it, a dead
- *   session's task): a real orphan.
+ *   session's task found only by the worker's name): a real orphan.
  * Ended agents are always left alone. The task is found by the agent id recorded on it,
  * then by the worker's name.
  */
@@ -88,7 +91,11 @@ export function orphanMove(a: AgentInfo, b: Board, me: string, live: string | nu
   const t = tasks.find(x => x.agent === a.id) ?? tasks.find(x => x.status === 'doing' && liveWorkersFor({ id: x.id }, [a], name).length > 0)
   if (!t || t.status !== 'doing') return { move: 'stop' }
   if (!ownedHere(t, me, live)) return { move: 'leave' }
-  if (!!me && t.session === me && (!t.agent || t.agent === a.id) && !taken.includes(t.id)) return { move: 'adopt', task: t.id }
+  if (!me || taken.includes(t.id)) return { move: 'stop' }
+  if (t.session === me && (!t.agent || t.agent === a.id)) return { move: 'adopt', task: t.id }
+  // The task names this very agent but a session that doesn't drive the board (e.g. this process's
+  // session id changed over the reload): the agent is listed here, so it is this process's own worker.
+  if (t.agent === a.id) return { move: 'adopt', task: t.id }
   return { move: 'stop' }
 }
 

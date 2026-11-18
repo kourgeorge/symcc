@@ -1,6 +1,6 @@
 import type { TurnCompleteReason, TurnRefusal } from 'claude-code'
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, finishingStale, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, workerTypeFor, asBaseWorkers, modeOf, symccOn, ready, patchTask, putTask, find, mayStart, startRun, findRole, roleOf, workerName, workerDescription, isNotReady, onNotReady, type AgentInfo, ENDED_STATUSES, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, orphanMove, leftoverTmpFiles, ownedHere, liveWorkersFor, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, taskBranch, copyReports } from './git'
@@ -1151,13 +1151,18 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
   // session's too: never stop a worker whose task the live driver (another session) owns.
   const lead = leadNow !== undefined ? leadNow : await $.fs.read(path(S.N.leadFile)).catch(() => null)
   const live = liveDriver(lead, Date.now())
-  const b = agents.some(a => a.type === S.N.worker) ? await load($).catch(() => emptyBoard()) : emptyBoard()
+  // A board that can't be read (being fixed, or a read failing now) says nothing about whose
+  // worker is whose: then no worker is stopped (the next check looks again), only scouts are.
+  const b = agents.some(a => a.type === S.N.worker) ? await load($).catch(() => null) : emptyBoard()
   const out: string[] = []
   for (const a of agents) {
     if (a.type !== S.N.worker && a.type !== S.N.scout) continue
     if (workers.has(a.id) || scoutRuns.has(a.id) || checkerRuns.has(a.id)) continue
+    // Already told to stop: not taken back, and not messaged again (a message would wake it up).
+    if (stopped.has(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
-    if (a.type === S.N.worker) {
+    if (a.type === S.N.worker && !b) continue
+    if (a.type === S.N.worker && b) {
       // A worker of this session that was running when the plugin reloaded keeps working:
       // track it again instead of stopping it (see orphanMove for when).
       const taken = [...workers.values()].map(w => w.task)
@@ -1170,7 +1175,8 @@ export async function stopOrphans($: $, leadNow?: string | null): Promise<string
         if (handedBack(t)) continue
         const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
         workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
-        if (t.agent !== a.id) await change($, x => (find(x, t.id)?.status === 'doing' && find(x, t.id)?.session === S.me ? patchTask(x, t.id, { agent: a.id }, now()) : x)).catch((e: Error) => $.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
+        // The task is recorded as this session's, with this agent (its session id may have changed over the reload).
+        if (t.agent !== a.id || t.session !== S.me) await change($, x => (find(x, t.id)?.status === 'doing' && (find(x, t.id)?.agent ?? a.id) === a.id ? patchTask(x, t.id, { agent: a.id, session: S.me }, now()) : x)).catch((e: Error) => $.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue
       }
     }
@@ -1302,6 +1308,57 @@ export async function answerOvertime($: $, id: string, answer: string): Promise<
 /** workers whose agent a check saw ended without a hand-back: failed on the next check if still not handed back */
 export const seenEnded = new Set<string>()
 
+/**
+ * A "doing" task no live worker works on any more, with no merge going on for it, goes back to
+ * "todo" for a fresh worker (its folder and branch are kept, so the next worker goes on from
+ * there), with a history line, and the lead is told; or it is done, when its work already reached
+ * its target branch. Such a task is left when its worker was lost: kept "doing" after a reload
+ * because its old worker was still alive, a worker stopped by this copy (an orphan, see
+ * stopOrphans), or its work was being tested and merged by an old copy of the plugin (its finishing
+ * mark is no longer refreshed). An agent this copy stopped never counts as working on a task: every
+ * tool it tries is refused, even while it is still listed. Only tasks this session may take over
+ * (ownedHere) are touched.
+ */
+export async function sendBackIdle($: $, agents: AgentInfo[]) {
+  const mine = new Set([...workers.values()].map(w => w.task))
+  const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
+  const working = agents.filter(a => !stopped.has(a.id))
+  const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !finishingNow(t, Date.now())
+  // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
+  const idle = (await load($)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working, S.N.name).length))
+  const merged = new Map<string, string>()
+  for (const t of idle) {
+    const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
+    if (sha) merged.set(t.id, sha)
+  }
+  const ids = idle.map(t => t.id)
+  if (!ids.length) return
+  const back: BoardTask[] = []
+  await change($, x => ({
+    ...x,
+    tasks: x.tasks.map(t => {
+      if (!ids.includes(t.id) || !free(t) || [...workers.values()].some(w => w.task === t.id)) return t
+      const sha = merged.get(t.id)
+      if (sha) return mergedDone(t, sha, 'sent back to todo', now())
+      back.push(t)
+      return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
+    }),
+  }))
+  for (const id of merged.keys()) tellLead($, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
+  if (back.length) tellLead($, `${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
+}
+
+/**
+ * A hand-back from an agent this copy had stopped (e.g. an orphan after a reload): its report is not
+ * taken, but its task must not stay "doing" with nobody on it, so it is put back right away (see sendBackIdle).
+ */
+export async function stoppedHandBack($: $, agentId: string) {
+  if (!S.driving || !stopped.has(agentId)) return
+  const agents = await $.agent.list().catch(() => undefined)
+  if (agents) await sendBackIdle($, asBaseWorkers(agents as AgentInfo[], S.N.name))
+  await pump($)
+}
+
 /** The regular check, every two minutes: keeps work moving and makes sure nothing is stuck or forgotten. */
 export async function check($: $) {
   if (!S.driving) return
@@ -1361,34 +1418,7 @@ export async function check($: $) {
     await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`], ...endedBy(find(x, w.task), now(), 'stopped', 'the worker ended without a result') }, now()))
     tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
   }
-  // A task kept "doing" after a reload because its old worker was still alive, or because its work
-  // was being tested and merged by the old copy of the plugin: once no live agent works on it any
-  // more and no merge is going on for it (its finishing mark is no longer refreshed), it goes back
-  // to "todo" for a fresh worker; or it is done, when its work already reached the target branch.
-  if (agents) {
-    const mine = new Set([...workers.values()].map(w => w.task))
-    const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
-    const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !finishingNow(t, Date.now())
-    // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
-    const idle = (await load($)).tasks.filter(t => free(t) && (t.session === S.me || finishingStale(t, Date.now())) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, agents as AgentInfo[], S.N.name).length))
-    const merged = new Map<string, string>()
-    for (const t of idle) {
-      const sha = mergedThisTry(t) ?? (S.gitState === 'ok' ? await alreadyMerged($, t).catch(() => null) : null)
-      if (sha) merged.set(t.id, sha)
-    }
-    const ids = idle.map(t => t.id)
-    if (ids.length)
-      await change($, x => ({
-        ...x,
-        tasks: x.tasks.map(t => {
-          if (!ids.includes(t.id) || !free(t) || [...workers.values()].some(w => w.task === t.id)) return t
-          const sha = merged.get(t.id)
-          if (sha) return mergedDone(t, sha, 'sent back to todo', now())
-          return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
-        }),
-      }))
-    for (const id of merged.keys()) tellLead($, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
-  }
+  if (agents) await sendBackIdle($, agents as AgentInfo[])
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)
   for (const t of late) reminded.set(t.id, t.updated_at)

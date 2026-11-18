@@ -33,7 +33,7 @@ import { openPane, takeKeysBack } from './plugin/ui/open'
 import { arrowMove, noteFocus } from './plugin/ui/arrows'
 import { escBack } from './plugin/ui/esc'
 import { renderPane } from './plugin/ui/pane'
-import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, setSymcc, setBoardMode } from './plugin/workers'
+import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, stoppedHandBack, setSymcc, setBoardMode } from './plugin/workers'
 
 // ---------------- registration ----------------
 
@@ -279,7 +279,8 @@ export const register: Register = on => {
     // a checker's verdict (the checker setting) goes to the finish step waiting for it
     else if (e.agentId && checkerRuns.has(e.agentId)) checkerFinished(e.agentId, e.answer, e.isAborted || e.reason === 'aborted', usageTokens(e.usage))
     // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
-    else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, end, usageTokens(e.usage)) : undefined)).catch(() => undefined)
+    // (a worker this copy stopped, e.g. an orphan after a reload: its task is put back to "todo" at once instead)
+    else if (e.agentId) void lateHandBack($, e.agentId).then(ok => (ok ? workerFinished($, e.agentId!, e.answer, end, usageTokens(e.usage)) : stoppedHandBack($, e.agentId!))).catch(() => undefined)
     return r
   })
 
