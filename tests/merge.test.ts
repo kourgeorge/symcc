@@ -2679,6 +2679,52 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   workers.clear()
 })
 
+test("a worker's Bash naming the owner's copy through a symbolic link elsewhere is refused; a link into its own folder or elsewhere is not (T-417)", async () => {
+  S.me = 'me'
+  const f = world()
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  await saveBoard(f.$, b)
+  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
+  const disk = fakeDisk({
+    [ROOT]: 'dir',
+    [`${ROOT}/README.md`]: 'file',
+    [`${ROOT}/.symcc`]: 'dir',
+    [`${ROOT}/.symcc/worktrees`]: 'dir',
+    [wt5]: 'dir',
+    [`${wt5}/src`]: 'dir',
+    '/home': 'dir',
+    '/home/me': 'dir',
+    '/home/me/link': `-> ${ROOT}`,
+    '/home/me/mine': `-> ${wt5}`,
+    '/home/me/out': '-> /tmp/x2',
+    '/tmp': 'dir',
+    '/tmp/x2': 'dir',
+  })
+  const fs = (f.$ as unknown as { fs: Record<string, unknown> }).fs
+  const plainStat = fs.stat as (p: string) => Promise<unknown>
+  fs.stat = async (p: string, o?: { resolve?: boolean }) => {
+    if (!o?.resolve) return plainStat(p)
+    const realPath = await disk.real(p)
+    if (realPath === undefined) throw new Error(`ENOENT ${p}`)
+    return { kind: 'file', size: 0, mtimeMs: 0, isLink: false, realPath }
+  }
+  fs.list = async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 }))
+  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
+  const bash = (command: string) => checkEdit(f.$, 'ag1', { command })
+  expect(await bash('cat /home/me/link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
+  expect(await bash('test -e /home/me/link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
+  expect(await bash('cat /home/me/link/.symcc/worktrees/T-5/src/a.ts')).toBeUndefined()
+  expect(await bash('cat /home/me/mine/src/a.ts && ls /home/me/out/notes')).toBeUndefined()
+  expect(await bash('cd tests && cat ../hooks/claude/tools.ts')).toBeUndefined()
+  // a disk that can't be read changes nothing: the paths are judged as written
+  fs.stat = async () => {
+    throw new Error('no disk')
+  }
+  expect(await bash('cat /home/me/link/README.md')).toBeUndefined()
+  expect(await bash(`cat ${ROOT}/README.md`)).toMatch(/^Refused: this command names README\.md/)
+  workers.clear()
+})
+
 test("a worker's Bash command reaching the owner's copy is refused; its own folder, /tmp and the lead are not (T-302)", async () => {
   S.me = 'me'
   const f = world()
