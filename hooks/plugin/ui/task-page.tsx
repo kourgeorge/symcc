@@ -183,7 +183,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: Date.now(), archivedDone: v.archived_done })
+  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done })
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
@@ -425,9 +425,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         <Box flexDirection="column">
           {heading('Runs (time and cost)')}
           {t.runs!.map((r, i) => (
-            <Text color={C(r.ended ? 'inactive' : 'success')}>{`  ${fmtRun(r, i, Date.now())}`}</Text>
+            <Text color={C(r.ended ? 'inactive' : 'success')}>{`  ${fmtRun(r, i, pane.nowMs)}`}</Text>
           ))}
-          <Text bold color={C('text')}>{`  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`}</Text>
+          <Text bold color={C('text')}>{`  total: ${fmtTotal(sumRuns(t.runs, pane.nowMs))}`}</Text>
         </Box>
       )}
 

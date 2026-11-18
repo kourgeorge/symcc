@@ -1,4 +1,5 @@
 // The band above the prompt: the board in one or a few lines.
+import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
 import { type PaneView, S } from '../state'
@@ -40,8 +41,9 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const plan = (v as PaneView | undefined)?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   // the mode, the busy workers, the counts and the scouts, fitted beside the name and the "open board" button:
   // "(next: …)" goes first when short of room, then the scouts (see withCrew)
+  const nowMs = await drawNow($)
   const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: (v as PaneView | undefined)?.max_parallel, tasks, scouts: v?.scouts ?? [] }
-  const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${boardWhere(S.root)} ${[modeLabel(modeOf(v)), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, Date.now(), room))
+  const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${boardWhere(S.root)} ${[modeLabel(modeOf(v)), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, nowMs, room))
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">

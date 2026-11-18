@@ -18,6 +18,8 @@ export type VsKit = {
   Markdown: ElementConstructor<MarkdownProps>
   C: (c: string) => never
   width: number
+  /** The time the page is drawn at (see now.ts). */
+  nowMs: number
   surface: RenderSurface
 }
 
@@ -46,7 +48,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const cmds = v.test_commands ?? []
   const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${v.auto_retries ?? d.auto_retries} ${(v.auto_retries ?? d.auto_retries) === 1 ? 'retry' : 'retries'}`
   // the counts line is the banner's own (the last line when there are tasks), drawn whole here
-  const lines = bannerLines({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries, mode }, S.root, S.home, driving, 1_000_000, Date.now(), S.N.name, [], S.version)
+  const lines = bannerLines({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries, mode }, S.root, S.home, driving, 1_000_000, k.nowMs, S.N.name, [], S.version)
   const counts = (v.tasks.length || (v.archived?.done ?? 0)) && lines.length > 3 ? lines[lines.length - 1]!.parts.map(p => p.text).join('') : ''
   return [
     <Text key="vs-title" wrap="wrap">

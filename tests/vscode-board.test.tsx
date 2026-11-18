@@ -2,10 +2,11 @@
 // terminal and the desktop it draws exactly as before (board-snapshot.ts holds the trees captured before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, BOARD_TASKS, seedBoard, plainTree } from './board-fixture'
+import { PANE, BOARD_TASKS, T0, seedBoard, plainTree, changedTree } from './board-fixture'
 import { BEFORE } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/plugin/ui/surface'
 import { shortTests } from '../hooks/plugin/ui/vscode'
+import { drawNow } from '../hooks/plugin/ui/now'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -58,6 +59,48 @@ test('the board on the terminal and the desktop draws exactly as before the VS C
     await ui.press({ key: 'tab-tasks' }) // the next surface starts on the Tasks page again
     await ui.unmount()
   }
+})
+
+// T-437: the pages are drawn at the host's clock ($.clock.now, the kit's mock clock at T0 here), never at the computer's
+// (Date.now can't be faked in a test: it is read-only), so the comparison above passes whatever the time of day the tests
+// run at; moving the host's clock 10 minutes on changes only the running time; and a real change in the tree still fails.
+const TEN_MIN = 10 * 60_000
+
+test('the board follows the host clock: 10 minutes later only the running time changes ("▶ 2m" to "▶ 12m")', async ($, on) => {
+  const clock = seedBoard(on)
+  on('ui.toast', () => ({ value: undefined }))
+  await clock.set(T0 + TEN_MIN)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect(plainTree(await ui.drawn()), surface).toEqual(changedTree(BEFORE[`${surface} 50`], [['▶ 2m       ', '▶ 12m      ']]))
+    await ui.unmount()
+  }
+})
+
+test('the board snapshot comparison still fails when the drawn tree really changes', async ($, on) => {
+  seedBoard(on)
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = plainTree(await ui.drawn())
+  expect(drawn).toEqual(plainTree(BEFORE['terminal 50']))
+  // one word of one title, one running time, one color: each alone is caught
+  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['Show the plugin version in the', 'Show the plugin release in the']]))
+  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['▶ 2m       ', '▶ 3m       ']]))
+  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['"color":"ide"', '"color":"text"']]))
+  await ui.unmount()
+})
+
+test("drawNow: the host clock's time; the computer's when the host can't answer or answers no number", async () => {
+  expect(await drawNow({ clock: { now: async () => T0 } } as never)).toBe(T0)
+  for (const now of [async () => { throw new Error('no clock') }, async () => Number.NaN, async () => undefined]) {
+    const before = Date.now()
+    const ms = await drawNow({ clock: { now } } as never)
+    expect(ms >= before && ms <= Date.now()).toBe(true)
+  }
+})
+
+test('changedTree throws when the text to change is not in the tree', () => {
+  expect(() => changedTree(BEFORE['terminal 50'], [['no such text anywhere', 'x']])).toThrow('is not in the tree')
 })
 
 test('in VS Code the Tasks page shows whole titles, status colors on the marks, buttons and no key hints', async ($, on) => {
