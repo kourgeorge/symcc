@@ -1341,9 +1341,24 @@ async function failLost($: $, agentId: string, w: Worker) {
   if (t && handedBack(t)) return
   seenEnded.delete(agentId)
   workers.delete(agentId)
-  await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(find(x, w.task)?.history ?? t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`], ...endedBy(find(x, w.task), now(), 'stopped', 'the worker ended without a result') }, now()))
-  tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
+  // Only while the task is still "doing" on this agent's try: dropped, paused or changed meanwhile
+  // (from another session, a tool or a board edit), or taken by a new try, it is left as it is now.
+  if (!t || !sameTry(t, t, agentId)) return
+  let failed = false
+  await change($, x => {
+    const cur = find(x, w.task)
+    if (!cur || !sameTry(cur, t, agentId) || handedBack(cur)) return x
+    failed = true
+    return patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...cur.history, `${tryLabel(cur)}: the worker ended without a result`], ...endedBy(cur, now(), 'stopped', 'the worker ended without a result') }, now())
+  })
+  if (!failed) return
+  tellLead($, `${w.task} "${t.title}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
   await publish($, await load($))
+}
+
+/** `cur` is still "doing" on the same try as `was` (same agent, if any, and same run): nothing took it over or ended it meanwhile. */
+function sameTry(cur: BoardTask, was: BoardTask, agentId?: string) {
+  return cur.status === 'doing' && cur.agent === was.agent && (agentId === undefined || (cur.agent ?? agentId) === agentId) && (cur.runs?.length ?? 0) === (was.runs?.length ?? 0) && cur.runs?.[cur.runs.length - 1]?.started === was.runs?.[was.runs.length - 1]?.started
 }
 
 /**
@@ -1375,7 +1390,9 @@ export async function sendBackIdle($: $, agents: AgentInfo[]) {
   await change($, x => ({
     ...x,
     tasks: x.tasks.map(t => {
-      if (!ids.includes(t.id) || !free(t) || [...workers.values()].some(w => w.task === t.id)) return t
+      // Re-read here: left as it is if its status, agent or run changed since it was picked.
+      const was = idle.find(i => i.id === t.id)
+      if (!was || !free(t) || !sameTry(t, was) || [...workers.values()].some(w => w.task === t.id)) return t
       const sha = merged.get(t.id)
       if (sha) return mergedDone(t, sha, 'sent back to todo', now())
       back.push(t)

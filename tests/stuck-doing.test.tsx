@@ -262,6 +262,26 @@ test('(c) a tracked worker that ends with no hand-back: its task fails right aft
   expect(w.prompts.filter(p => p.includes('the worker ended without a result'))).toHaveLength(1)
 })
 
+test('a task dropped from elsewhere while its ended worker is in its short grace stays dropped, not failed', async ($, on) => {
+  const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
+  const w = world(on, agents)
+  w.files.set(BOARD, JSON.stringify(doing('s1', 'w1', new Date(Date.now() - 10 * 60_000).toISOString())))
+  w.files.set(LEAD, JSON.stringify({ session: 's1', heartbeat: T0 - 1000 }) + '\n')
+  await start($, w)
+  await w.clock.advance(10_000)
+  agents[0]!.status = 'completed'
+  // the first check (at 2:00) sees it ended and starts the grace
+  await w.clock.advance(2 * 60_000 - 10_000)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('doing')
+  // dropped from another session (or a board edit) during the grace
+  w.files.set(BOARD, JSON.stringify(patchTask(w.board(), 'T-1', { status: 'dropped' } as never, ISO)))
+  await w.clock.advance(21_000)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('dropped')
+  expect(w.prompts.some(p => p.includes('the worker ended without a result'))).toBe(false)
+})
+
 test('a worker stopped because its time is up: a "Stopped" answer during the slow stop does not send the task back, it fails', async ($, on) => {
   const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
   const gate: { wait?: Promise<void> } = {}
