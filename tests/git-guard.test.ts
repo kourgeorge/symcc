@@ -43,6 +43,11 @@ const READS = [
   'grep -c "git reset --hard" docs/guide.md && grep -n git README.md',
   'sh -c "grep -n git docs/guide.md"',
   'ls .git',
+  'git reflog --date=iso',
+  'watch -n 1 git status',
+  'watch -n 1 grep -n git docs/guide.md',
+  'time -p git log -1',
+  'echo git status | sh',
 ]
 
 const WRITES: [string, string][] = [
@@ -83,13 +88,37 @@ const WRITES: [string, string][] = [
   ['git reflog expire --all', 'git reflog'],
   ['git reflog delete HEAD@{1}', 'git reflog'],
   ['git reflog --output=/tmp/x', 'git reflog --output'],
-  ['git reflog -o /tmp/x', 'git reflog -o'],
+  ['git reflog -o /tmp/x', 'git reflog'],
+  ['git reflog show -o /tmp/x', 'git reflog -o'],
   ['git cat-file --filters HEAD:a', 'git cat-file --filters'],
   ['git cat-file --filter HEAD:a', 'git cat-file --filter'],
   ['git worktree add /tmp/x', 'git worktree'],
   ['git branch x', 'git branch'],
   ["X='git stash;:' true", 'git stash'],
   ['echo -X"git reset --hard"', 'git reset'],
+  // the checker's holes in try 1: reflog shows only with no subcommand or `show`
+  ['git reflog write HEAD a b msg', 'git reflog'],
+  ['git reflog exists HEAD', 'git reflog'],
+  ['git reflog HEAD', 'git reflog'],
+  // time and watch options are skipped before the command
+  ['time -p git stash', 'git stash'],
+  ['time git stash', 'git stash'],
+  ['watch -n 1 git stash', 'git stash'],
+  ['watch -d git stash', 'git stash'],
+  ['watch -n1 -d -- git stash', 'git stash'],
+  ['watch --interval 2 git stash', 'git stash'],
+  // text piped into a shell, eval and source <(...) fall back to the broad rule
+  ['echo git stash | sh', 'git stash'],
+  ["printf 'git stash' | zsh", 'git stash'],
+  ['echo git stash | sh -s', 'git stash'],
+  ['echo "git stash" | bash', 'git stash'],
+  ['echo git stash | xargs -I{} sh -c {}', 'git stash'],
+  ['eval $(echo git stash)', 'git stash'],
+  ['source <(echo git stash)', 'git stash'],
+  ['. <(echo git stash)', 'git stash'],
+  ['bash <(echo git stash)', 'git stash'],
+  ['sh -c "$(echo git stash)"', 'git stash'],
+  ['echo git stash | source /dev/stdin', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {
