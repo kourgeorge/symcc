@@ -330,6 +330,10 @@ test("an Edit outside a worker's files is refused with the reason and recorded; 
   const out = await check($, 'a1', 'Edit', { file_path: `${WT1}/README.md`, old_string: 'a', new_string: 'b' })
   expect(out).toMatchObject({ decision: 'deny', reason: "README.md is outside this task's files; it's recorded as a request to the owner. Stop and hand back." })
   expect((await check($, 'a1', 'NotebookEdit', { notebook_path: `${WT1}/nb/x.ipynb`, new_source: '' })).decision).toBe('deny')
+  // T-419: MultiEdit is refused the same as Edit, not left for the merge-time scope check
+  const multi = await check($, 'a1', 'MultiEdit', { file_path: `${WT1}/docs/m.md`, edits: [{ old_string: 'a', new_string: 'b' }] })
+  expect(multi).toMatchObject({ decision: 'deny', reason: "docs/m.md is outside this task's files; it's recorded as a request to the owner. Stop and hand back." })
+  expect((await check($, 'a1', 'MultiEdit', { file_path: `${WT1}/src/c.ts`, edits: [] })).decision).toBe('allow')
   expect((await check($, 'a1', 'Write', { file_path: `${WT1}/src/b.ts`, content: 'x' })).decision).toBe('allow')
   // the lead (no agentId) and Bash are not judged here
   expect((await $.tool.check({ tool: 'Edit', input: { file_path: `${WT1}/README.md` } } as never) as { decision: string }).decision).toBe('allow')
@@ -339,7 +343,7 @@ test("an Edit outside a worker's files is refused with the reason and recorded; 
   await w.clock.settle()
   const t = w.task('T-1')
   expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'nb/x.ipynb'])
+  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'nb/x.ipynb', 'docs/m.md'])
   expect(w.git.state.main).toBe(main)
 })
 

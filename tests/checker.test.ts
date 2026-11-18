@@ -385,6 +385,25 @@ for (const [tool, args, status, again, againText] of [
   })
 }
 
+test('a checker that runs over max_minutes is stopped with the one stop text (halt), and gives no verdict', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { max_minutes: 7 }))
+  let fire: (() => void) | undefined
+  const clock = (w.$ as unknown as { clock: { after: (ms: number, f: () => void) => { cancel(): void } } }).clock
+  const after = clock.after
+  clock.after = (ms, f) => (ms === 7 * 60_000 ? ((fire = f), { cancel() {} }) : after(ms, f))
+  const t = await finish(w, async id => {
+    expect(fire).toBeDefined()
+    fire!()
+    expect(stopped.has(id)).toBe(true)
+    expect(checkerRuns.has(id)).toBe(false)
+    expect(w.sends.filter(m => m.to === id).map(m => m.text)).toEqual(["Stop now: your time is up. Don't change anything else; answer \"stopped\" and end."])
+  })
+  expect(t.status).toBe('review')
+  expect(t.note).toContain('it ran over 7 min and was stopped')
+  expect(w.git.main).toBe(M1)
+})
+
 test('a drop that comes before the checker is spawned starts no checker at all', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
