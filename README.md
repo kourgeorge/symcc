@@ -47,7 +47,7 @@ behind it: you keep talking, and the work keeps moving.
 
 The main parts:
 
-- **Scouts:** read-only helpers on a timer. A scout is a short instruction file ("look for code with no tests") that runs again and again and reports what it finds. See [scouts](docs/guide.md#scouts).
+- **Scouts:** helpers on a timer that look but don't change your project (symcc refuses their file edits and git writes; see [what is enforced](docs/guide.md#scouts)). A scout is a short instruction file ("look for code with no tests") that runs again and again and reports what it finds. See [scouts](docs/guide.md#scouts).
 - **Lead:** your normal Claude Code chat. It turns scout findings and your ideas into tasks, leads the workers, tests and merges, and tells you what matters. Change your mind any time: "do T-6 first".
 - **Board:** one list for work you asked for and work scouts found: todo / doing / review / done.
 - **Workers:** parallel agents, each in its own git worktree and branch, so your branch is untouched until merge.
