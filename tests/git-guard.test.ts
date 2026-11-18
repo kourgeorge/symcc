@@ -33,6 +33,11 @@ const READS = [
   'git reflog',
   'git reflog show HEAD -5',
   'git rev-parse --show-toplevel',
+  // checker round 4: a shell-like word as a text tool's search term or path is only text
+  'grep -rn "git" hooks | grep exec',
+  "rg git -g '*.sh' --type sh",
+  'grep -rn "git stash" docs/script',
+  'grep -n "eval" hooks/core/ask.ts && grep -n git README.md',
   'git ls-files hooks',
   'git cat-file -p HEAD',
   'git describe --tags',
@@ -167,6 +172,13 @@ const WRITES: [string, string][] = [
   ['grep -h "git stash" notes > /tmp/s; sh /tmp/s', 'git stash'],
   ['grep -h "git stash" notes > s; . s', 'git stash'],
   ['grep -h "git stash" notes > s; exec bash s', 'git stash'],
+  // checker round 4: `#` comments and `$'...'` quoting fool the command splitter, so no exception holds
+  ["grep x #'\ngit stash", 'git stash'],
+  ['cat x #"\ngit stash', 'git stash'],
+  ["ls #'\ngit stash\n#'", 'git stash'],
+  ["grep $'\\'' x; git stash; echo $'\\''", 'git stash'],
+  ['grep -h git notes\ngit stash', 'git notes'],
+  ['sudo sh s; grep -h "git stash" notes > s', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {

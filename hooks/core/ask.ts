@@ -639,7 +639,8 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * a pattern or a name (`grep -n "git stash" docs`), and a read-only git command, whose words aren't read again
  * (`git log --grep="git stash"`). In a line that pipes or runs a command inside another, they hold only when every
  * command in it is one of them (`grep -h git notes | sh` is refused), and never with a shell-like program in the line
- * (sh, bash, coproc, mkfifo, source, `.`, eval, exec...: `grep -h git notes > s; sh s` is refused). git run by xargs is refused.
+ * (sh, bash, coproc, mkfifo, source, `.`, eval, exec...: `grep -h git notes > s; sh s` is refused), nor in a line with
+ * a newline, a `#` comment or `$'` (`grep x #'` + newline + `git stash`). git run by xargs is refused.
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
@@ -785,12 +786,19 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
   // another, the exceptions hold only when every command in it is exempt; `eval` anywhere keeps the broad rule too.
   // A shell (or something like one) anywhere in the line may run what a text tool wrote, without a `|`
   // (`coproc sh; grep ... >&${COPROC[1]}`, `mkfifo p; sh < p & grep ... > p`, `grep ... > s; sh s`), so then the
-  // exceptions are off for the whole line. `.` counts only as a command's first word (`rg git .` is a folder).
+  // exceptions are off for the whole line. `.` counts only as a command's first word (`rg git .` is a folder). In a
+  // text tool's arguments a shell-like word is only text too (`grep -rn git hooks | grep exec`), so there only the
+  // program counts; in any other command every word does, as it may run the words after it (`sudo sh s`, `x=1 sh s`).
+  // The command splitter doesn't know `#` comments or `$'...'` quoting, so with a newline, a `#` that starts a word
+  // or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
   const linked = pieces.some(p => 'op' in p && p.op === '|') || RUNS_INSIDE.test(command)
   const shellish = simple.some(p =>
-    p.words.some((w, i) => w.split(/\s+/).some((t, k) => SHELL_LIKE.has(progName(t)) || (t === '.' && i === 0 && k === 0))),
+    (textTool(p.words) ? p.words.slice(0, 1) : p.words).some((w, i) =>
+      w.split(/\s+/).some((t, k) => SHELL_LIKE.has(progName(t)) || (t === '.' && i === 0 && k === 0)),
+    ),
   )
-  broad ||= shellish || (linked && !simple.every(exempt))
+  const unsplit = /\n|\$'|(?:^|[\s;&|()<>`])#/.test(command)
+  broad ||= unsplit || shellish || (linked && !simple.every(exempt))
   for (const p of simple) {
     const words = p.words
     for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
