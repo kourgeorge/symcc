@@ -5,10 +5,10 @@ import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
 import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
 import { namesFor } from '../../name'
-import { type PaneView, S } from '../state'
-import { logoNow } from '../logo'
+import { type PaneView, S } from '../../app/state'
+import { logoNow } from '../../app/logo'
 import { LOGO_AREA, LOGO_MIN_WIDTH } from '../../core/logo'
-import type { PaneTab } from './open'
+import type { PaneTab } from '../../app/open'
 import { CLICK_HINT } from './surface'
 
 /** What the VS Code pieces draw with: the surface's elements, the color cast and the panel's width. */

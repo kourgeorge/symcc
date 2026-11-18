@@ -1,8 +1,8 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
 import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion } from '../../board'
-import { openDays, S } from '../state'
-import { type $, panelValues } from '../../claude/panel'
+import { openDays, S } from '../../app/state'
+import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 

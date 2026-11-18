@@ -2,9 +2,9 @@
 // its tests, read-only git and throwaway files under /tmp are allowed. Worker and checker guards are unchanged.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { checkEdit } from '../hooks/plugin/ask'
+import { checkEdit } from '../hooks/app/ask'
 import { gitWriteText, workerGitWriteText, scoutGitWriteText, scoutEditText, editInProject } from '../hooks/board'
-import { S, scoutRuns, workers, checkerRuns } from '../hooks/plugin/state'
+import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
 
 const ROOT = '/repo'

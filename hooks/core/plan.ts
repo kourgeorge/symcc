@@ -1,7 +1,7 @@
 // Plan mode (the host's read-only planning mode; in Claude Code, Shift+Tab): while the main session is in it,
 // nothing starts. New tasks go to the backlog, pump and the scout timer skip, workers already
 // running keep going. The host's adapter turns its own signals into on (true) / off (false) / says
-// nothing (null) and passes them to plugin/plan.ts seePlan (for Claude Code, see claude/plan.ts).
+// nothing (null) and passes them to app/plan.ts seePlan (for Claude Code, see claude/plan.ts).
 // Until one of those is seen the mode is unknown, and symcc behaves as if not in plan mode.
 // Everything here is pure, so it can be tested without a host.
 import type { SymccTask } from '../../types'

@@ -2,7 +2,7 @@
 //
 // This file only wires Claude Code's events to symcc's entry points in app/symcc.ts (which any host can call), with
 // claudeHost($) (claude/host.ts) as the Host. What only Claude Code has stays here: its event shapes, its agent
-// types (claude/registration.ts), plan mode (claude/plan.ts) and the board panel's render hooks (plugin/ui/).
+// types (claude/registration.ts), plan mode (claude/plan.ts) and the board panel's render hooks (claude/ui/).
 import type { Register } from 'claude-code'
 import { claudeNames, isWorkerType } from './claude/agent-types'
 import { claudeHost } from './claude/host'
@@ -12,16 +12,16 @@ import { editTouch, fileTouch } from './claude/tools'
 import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
-import { S, useName } from './plugin/state'
-import { hookFailed } from './plugin/ask'
+import { S, useName } from './app/state'
+import { hookFailed } from './app/ask'
 import { spawnFailedText } from './core/ask'
 import { DEFAULT_NAME, cleanName } from './name'
-import { drainStarts, leadTurn } from './plugin/starts'
-import { findRoot } from './plugin/store'
-import { renderAbovePrompt } from './plugin/ui/above-prompt'
-import { arrowMove, noteFocus } from './plugin/ui/arrows'
-import { paneClosing } from './plugin/ui/esc'
-import { renderPane } from './plugin/ui/pane'
+import { drainStarts, leadTurn } from './app/starts'
+import { findRoot } from './app/store'
+import { renderAbovePrompt } from './claude/ui/above-prompt'
+import { arrowMove, noteFocus } from './claude/ui/arrows'
+import { paneClosing } from './claude/ui/esc'
+import { renderPane } from './claude/ui/pane'
 
 export { BOARD_OPENED } from './app/symcc'
 export { registerAll } from './claude/registration'
@@ -82,7 +82,7 @@ export const register: Register = on => {
     await registerAll($)
     const result = await next(e)
     await sessionStart(host)
-    // agents start only inside session.start, the main loop's turn.start and turn.complete (see plugin/starts.ts)
+    // agents start only inside session.start, the main loop's turn.start and turn.complete (see app/starts.ts)
     await drainStarts(host)
     return result
   })
@@ -181,7 +181,7 @@ export const register: Register = on => {
     const r = await next(e)
     agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
     if (!e.agentId) leadTurn(false)
-    // any turn's end (the lead's or an agent's) starts the queued agents (see plugin/starts.ts)
+    // any turn's end (the lead's or an agent's) starts the queued agents (see app/starts.ts)
     await drainStarts(host)
     return r
   })

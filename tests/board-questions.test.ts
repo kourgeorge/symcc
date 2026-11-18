@@ -1,8 +1,8 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { leadGuide } from '../hooks/plugin/tools'
-import { workerQuestionText, overtimeLeadText } from '../hooks/plugin/workers'
-import { S } from '../hooks/plugin/state'
+import { leadGuide } from '../hooks/app/tools'
+import { workerQuestionText, overtimeLeadText } from '../hooks/app/workers'
+import { S } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 
 // T-396: an AskUserQuestion dialog stays open in the chat when the owner answers on the

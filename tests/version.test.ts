@@ -4,8 +4,8 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { ICON } from '../hooks/name'
 import { bannerLines, bannerText, boardBrand, boardText, boardTitle, emptyBoard, versionOf } from '../hooks/board'
-import { S, loadVersion } from '../hooks/plugin/state'
-import { bandTitle } from '../hooks/plugin/ui/above-prompt'
+import { S, loadVersion } from '../hooks/app/state'
+import { bandTitle } from '../hooks/claude/ui/above-prompt'
 
 const PLUGIN = '/plugin'
 const PLUGIN_JSON = `${PLUGIN}/.claude-plugin/plugin.json`

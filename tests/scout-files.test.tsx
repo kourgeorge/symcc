@@ -1,7 +1,7 @@
 import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { fileToolHits } from '../hooks/plugin/scouts'
+import { fileToolHits } from '../hooks/app/scouts'
 import { fileTouch } from '../hooks/claude/tools'
 import { inProject } from './project'
 import { ran, readText, entry, pause } from './fakes'

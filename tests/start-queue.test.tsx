@@ -1,6 +1,6 @@
 // T-391: Claude Code skips symcc's own hooks (tool.check, tool.call) for an agent symcc starts from a timer or from
 // a lead tool call, so a worker's file limits, the Bash folder guard, a checker's git block and ask_owner would not
-// work for it. Every start is queued instead (hooks/plugin/starts.ts) and started only from session.start, the main
+// work for it. Every start is queued instead (hooks/app/starts.ts) and started only from session.start, the main
 // loop's turn.start and turn.complete, where the hooks are kept (T-384, T-389). An idle lead is woken once.
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
@@ -8,9 +8,9 @@ import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask, startRun } from '../hooks/board'
 import type { Host, HostAgentStart } from '../hooks/host'
 import { ALL_FEATURES, noUi } from '../hooks/host'
-import { S, leadQueue } from '../hooks/plugin/state'
-import { queuedNeverStarted, unclaimQueued } from '../hooks/plugin/workers'
-import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/plugin/starts'
+import { S, leadQueue } from '../hooks/app/state'
+import { queuedNeverStarted, unclaimQueued } from '../hooks/app/workers'
+import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/app/starts'
 import { ran } from './fakes'
 
 // ---------------- the queue itself ----------------

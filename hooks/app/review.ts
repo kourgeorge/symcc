@@ -92,7 +92,7 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * What checking (and maybe merging) a task's work came to; `untested`: the note "T-3 changed code but no test" when
  * the setting tests_with_changes flagged it (see untestedChange); `review`: the checks passed and it now waits for the owner;
  * `blocked`: everything passed, only the owner's files on the target branch are in the way of the merge (nothing moved).
- * The checker setting (see plugin/checker.ts): `held`: the checks passed and nothing merged, for a checker to look at first;
+ * The checker setting (see app/checker.ts): `held`: the checks passed and nothing merged, for a checker to look at first;
  * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
  * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
  * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
@@ -117,7 +117,7 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * `turn`: the caller's time limit. `turn(false)` when this check has to wait in line for its merge turn (or tries
  * again after the branch moved), `turn(true)` when that turn begins: waiting in line and earlier goes don't count.
  * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
- * is `held` (with `review` too when the task waits for review): the checker runs next (see plugin/checker.ts).
+ * is `held` (with `review` too when the task waits for review): the checker runs next (see app/checker.ts).
  */
 export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
@@ -505,7 +505,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
-  // the checker setting: a change that needs a checker stops here, before review or merge (see plugin/checker.ts)
+  // the checker setting: a change that needs a checker stops here, before review or merge (see app/checker.ts)
   const held = !!hold?.(changed)
   const holding = held ? { held: true } : {}
   if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })

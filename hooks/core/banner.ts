@@ -30,7 +30,7 @@ export function shortHome(path: string, home?: string): string {
 }
 
 // ---------------- the plugin's version in the titles ----------------
-// The version is read once when the plugin loads (see loadVersion in plugin/state.ts, kept in S.version) and passed in
+// The version is read once when the plugin loads (see loadVersion in app/state.ts, kept in S.version) and passed in
 // to each title below; '' = not known: no version shown.
 
 /** The version in plugin.json's text, e.g. "0.3.0"; '' when the text isn't JSON or has no short, plain version. Never throws. */

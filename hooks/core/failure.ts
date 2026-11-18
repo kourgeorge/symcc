@@ -49,7 +49,7 @@ const QUOTED = /```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|‘[^’\n]*�
 /**
  * The text check for whether a worker ended its turn while its work still runs ("The background runs are still
  * going; I'll continue when they finish."). It never fails a try (only the host's signal, TurnEnd.background in
- * plugin/workers.ts, does): it only adds a warning note (endedEarlyNote) to the lead's board update and the task's
+ * app/workers.ts, does): it only adds a warning note (endedEarlyNote) to the lead's board update and the task's
  * history, so a false alarm costs little. Still kept narrow: only the answer's last paragraph is read (not when it is a
  * bullet list), with quotes and code taken out, sentence by sentence, and a sentence counts only when it says something
  * is still running AND the writer goes on when it finishes (or is waiting for it). Offers ("If you want, I'll continue

@@ -4,8 +4,8 @@ import { fakeHost } from './fake-host'
 import { entry } from './fakes'
 import { roleChoices, rolesLeadText, checkRole, parseRole as parseRoleWith } from '../hooks/board'
 import { SYMCC_WORDS } from '../hooks/host'
-import { S, leadQueue, skippedRoles } from '../hooks/plugin/state'
-import { leadGuide, manual, runTool } from '../hooks/plugin/tools'
+import { S, leadQueue, skippedRoles } from '../hooks/app/state'
+import { leadGuide, manual, runTool } from '../hooks/app/tools'
 
 /** A role file read with the role tools symcc's own words allow (as plugin code does on the fake Host). */
 const parseRole = (name: string, text: string) => parseRoleWith(name, text, SYMCC_WORDS.roleTools)

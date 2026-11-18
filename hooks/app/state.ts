@@ -152,7 +152,7 @@ export const startS = () => ({
   toldCleanup: false,
   /**
    * Whether this session (the main chat, not a worker or scout) is in plan mode, as last seen on an event, and the
-   * tasks added to the backlog during it (see core/plan.ts and plugin/plan.ts). Per session: each session's plugin
+   * tasks added to the backlog during it (see core/plan.ts and app/plan.ts). Per session: each session's plugin
    * keeps its own; only the driving session's counts for starting work. on null = not seen yet: behave as before.
    */
   plan: emptyPlan() as PlanState,
@@ -198,7 +198,7 @@ export type Worker = { task: string; worktree: string; branch: string; since: nu
 export const workers = new Map<string, Worker>() // agentId → work
 /** tasks this copy has claimed and is starting a worker for (not yet in `workers`) */
 export const starting = new Set<string>()
-/** of those, the workers whose start waits in the start queue (see plugin/starts.ts): task id → work; a stop takes them out */
+/** of those, the workers whose start waits in the start queue (see app/starts.ts): task id → work; a stop takes them out */
 export const queuedWorkers = new Map<string, Worker>()
 /** tasks whose worker finished and whose work is being checked and merged now */
 export const finishing = new Set<string>()
@@ -206,7 +206,7 @@ export const scoutRuns = new Map<string, string>() // agentId → scout name
 /** How a checker's run ended: its answer (and tokens), or `answer` null when it was stopped or never answered (`why`). */
 export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTokens }
 /**
- * checkers running now (the checker setting, see plugin/checker.ts): agentId → its task, the task's folder it runs in
+ * checkers running now (the checker setting, see app/checker.ts): agentId → its task, the task's folder it runs in
  * (its Bash is kept inside it, see checkEdit), and how to hand its end to the step waiting for it
  */
 export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void }>()

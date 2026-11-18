@@ -1,4 +1,4 @@
-// The shared fake Host (T-246): what the tests of symcc's logic (hooks/plugin/, hooks/app/) run on, with no Claude Code
+// The shared fake Host (T-246): what the tests of symcc's logic (hooks/app/) run on, with no Claude Code
 // `$` at all. It is also the model for a new host (an OpenCode plugin, a standalone client): every member a Host has,
 // in symcc's words (hooks/host.ts). By default nothing is there: no files, every command answers exit 0 with no output,
 // timers never fire, no agents, no screen (but every feature on, as Claude Code has them); the lead's messages and the agents started and messaged are recorded.

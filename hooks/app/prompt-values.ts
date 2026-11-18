@@ -21,7 +21,7 @@ export const sharedValues = (t: SymccTask, dir: string): Record<string, string> 
   folder: dir,
   // The task's kind and what it is for (from its kind file; see loadKinds).
   kind: kindSection(kindOf(t), S.kinds),
-  // How a worker asks the owner and what a refused edit means (see hooks/plugin/ask.ts).
+  // How a worker asks the owner and what a refused edit means (see hooks/app/ask.ts).
   ask: ASK_LINE(toolName(ASK_TOOL)),
 })
 

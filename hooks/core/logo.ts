@@ -1,5 +1,5 @@
 // The banner logo's little moves (T-292): sway now and then, turn into a shape on an event, sing when all is done.
-// Pure: the frames, which move an event plays, and whether one may play. plugin/logo.ts plays them.
+// Pure: the frames, which move an event plays, and whether one may play. app/logo.ts plays them.
 import type { SymccStatus } from '../../types'
 import { ICON_ART } from '../name'
 
