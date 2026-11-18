@@ -2,7 +2,7 @@ import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, type BehindWhy } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
@@ -28,10 +28,19 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
 
 /**
  * The text added to a worker's prompt when its branch still lacks `behind` commits of the branch it merges into
- * (`into`) because it has commits of its own (T-482), so it knows it starts from older code. '' when it is up to date.
+ * (`into`) (T-482), so it knows it starts from older code. `why` (from catchUpBranch, T-483) picks the reason it is
+ * told: its branch has commits from an earlier try, its folder has uncommitted work from one, or moving the branch
+ * failed. '' when it is up to date.
  */
-export const behindNote = (behind: number, into: string) =>
-  behind > 0 ? `\n\nNote: your branch has commits from an earlier try, and ${into} has ${behind} newer commit${behind === 1 ? '' : 's'} your branch lacks. Your folder shows the older code; symcc brings your work up to date with ${into} when it merges.` : ''
+export const behindNote = (behind: number, into: string, why: BehindWhy = 'commits') => {
+  if (behind <= 0) return ''
+  const n = `${behind} commit${behind === 1 ? '' : 's'}`
+  const head =
+    why === 'changes' ? `your folder has uncommitted work from an earlier try and is ${n} behind ${into}.`
+    : why === 'failed' ? `symcc could not move your branch up to ${into}, so it is ${n} behind ${into}.`
+    : `your branch has commits from an earlier try, and ${into} has ${behind} newer commit${behind === 1 ? '' : 's'} your branch lacks.`
+  return `\n\nNote: ${head} Your folder shows the older code; symcc brings your work up to date with ${into} when it merges.`
+}
 
 export async function pump(host: Host) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
@@ -93,7 +102,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     if (await mergedBeforeStart(host, t0!)) return null
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone(host, b, t0!, 'start')) return null
-    const { dir, branch, behind } = await prepareWorktree(host, t0!, intoOf(t0!), true)
+    const { dir, branch, behind, why } = await prepareWorktree(host, t0!, intoOf(t0!), true)
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports(host, t0!, dir).catch(() => [])
     const roles = await loadRoles(host)
@@ -118,7 +127,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role) + behindNote(behind, intoOf(t)), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }

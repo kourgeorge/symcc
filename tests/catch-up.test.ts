@@ -89,11 +89,13 @@ test('a branch with a commit of its own is not moved, and the worker is told it 
   const w = world()
   w.branches.set(S.N.branch('T-1'), ['a', 'mine'])
   w.branches.set('main', ['a', 'b', 'c'])
-  const { behind } = await prepareWorktree(w.$, task, 'main', true)
+  const { behind, why } = await prepareWorktree(w.$, task, 'main', true)
   expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'mine'])
   expect(w.calls.some(c => c.includes('--ff-only'))).toBe(false)
   expect(behind).toBe(2)
-  expect(behindNote(behind, 'main')).toContain('main has 2 newer commits your branch lacks')
+  expect(why).toBe('commits')
+  expect(behindNote(behind, 'main', why)).toContain('your branch has commits from an earlier try')
+  expect(behindNote(behind, 'main', why)).toContain('main has 2 newer commits your branch lacks')
   expect(behindNote(0, 'main')).toBe('')
 })
 
@@ -102,10 +104,31 @@ test('a folder with uncommitted changes is not moved', async () => {
   await prepareWorktree(w.$, task, 'main', true)
   w.branches.set('main', ['a', 'b', 'c'])
   w.dirty.add(worktreeDir('T-1'))
-  const { behind } = await prepareWorktree(w.$, task, 'main', true)
+  const { behind, why } = await prepareWorktree(w.$, task, 'main', true)
   expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'b'])
   expect(w.calls.some(c => c.includes('--ff-only'))).toBe(false)
   expect(behind).toBe(1)
+  // T-483: the worker is told its earlier work is uncommitted, not that it has commits
+  expect(why).toBe('changes')
+  const note = behindNote(behind, 'main', why)
+  expect(note).toContain('your folder has uncommitted work from an earlier try and is 1 commit behind main')
+  expect(note).not.toContain('commits from an earlier try')
+})
+
+test('a fast-forward that fails leaves the branch behind and says the move failed', async () => {
+  const w = world()
+  w.branches.set(S.N.branch('T-1'), ['a'])
+  w.branches.set('main', ['a', 'b', 'c'])
+  // the folder is there already, so catchUp runs; the fake merge fails for this run only
+  await prepareWorktree(w.$, task, 'main', true)
+  w.branches.set('main', ['a', 'b', 'c', 'd'])
+  const real = w.$.run.bind(w.$)
+  ;(w.$ as { run: typeof real }).run = (async (argv: readonly string[], o?: { cwd?: string }) =>
+    argv.includes('--ff-only') ? { exitCode: 1, stdout: '', stderr: 'locked' } : real(argv as string[], o)) as typeof real
+  const { behind, why } = await prepareWorktree(w.$, task, 'main', true)
+  expect(behind).toBe(1)
+  expect(why).toBe('failed')
+  expect(behindNote(behind, 'main', why)).toContain('could not move your branch up to main')
 })
 
 test('without catchUp (e.g. a merge remaking the folder) the branch is left as it is', async () => {
