@@ -19,6 +19,8 @@ export type DefKind<D extends Def, A extends DefInput> = {
   /** the files skipped so far, with why (so each is told once) */
   skipped: Map<string, string>
   parse(name: string, text: string): D | null
+  /** a file's text moved to today's format, or null when it already is (one-time changes on load, written back) */
+  migrate?(text: string): string | null
   skipReason(name: string, text: string): string | null
   nameError(name: string): string | null
   fileText(d: Omit<D, 'name'>): string
@@ -61,7 +63,13 @@ export async function defFiles<D extends Def, A extends DefInput>(host: Host, k:
   for (const f of await host.fs.list(dir).catch(() => [])) {
     if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
     const text = await host.fs.read(`${dir}/${f.name}`).catch(() => '')
-    const body = typeof text === 'string' ? text : ''
+    let body = typeof text === 'string' ? text : ''
+    const moved = body ? k.migrate?.(body) : null
+    if (moved) {
+      body = moved
+      await host.fs.write(`${dir}/${f.name}`, moved).catch(() => {})
+      host.ui.log(`${S.N.name}: moved ${shown}/${f.name} to today's format`, { to: 'debug' })
+    }
     const name = f.name.replace(/\.md$/, '')
     const d = k.parse(name, body)
     if (d) {
