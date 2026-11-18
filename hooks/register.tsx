@@ -12,10 +12,10 @@
 // while loaded), store.ts (board.json), lead.ts, tell.ts, voice.ts (notify: sound or voice), git.ts, review.ts, workers.ts,
 // roles.ts, scouts.ts, plan.ts (Claude Code's plan mode), tools.ts (the lead's tools), and ui/ (the board panel and the band above the prompt).
 import type { Register } from 'claude-code'
-import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, WEB_SAFETY_LINE, intoOf, ASK_TOOL } from './board'
+import { LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, WEB_SAFETY_LINE, intoOf, ASK_TOOL, guardReason } from './board'
 import { workerAgentTypes, isWorkerType, EXTRA_TOOLS, SCOUT_TOOLS } from './claude/agent-types'
 import { findArchived, saveArchiveMigrated } from './plugin/archive'
-import { ASK_TOOL_DEF, askCall, checkEdit } from './plugin/ask'
+import { ASK_TOOL_DEF, askCall, checkEdit, guardFailed } from './plugin/ask'
 import { gitReady } from './plugin/git'
 import { claimLead, publish, handOver, releaseLead } from './plugin/lead'
 import { changedFiles, changesText } from './plugin/review'
@@ -264,6 +264,16 @@ export const register: Register = on => {
     } catch (err) {
       return { result: `error: ${(err as Error).message}` }
     }
+  }).catch(($, e, next) => {
+    // The hook threw or ran out of time. Once it had passed the call on (next), that answer stands. Otherwise one of
+    // symcc's own agents is refused (never let through unchecked); the lead's call of a symcc tool gets the error,
+    // and any other call of the lead goes on as if the hook were not there (see guardFailed).
+    if (next.called) return next(e)
+    useName($)
+    const deny = guardFailed(claudeHost($), 'tool.call', e.agentId, next.error)
+    if (deny) return { deny }
+    const ours = e.tool === S.N.tool(ASK_TOOL) || toolNames.some(t => e.tool === S.N.tool(t))
+    return ours ? { result: `error: ${S.N.name} couldn't run this tool: ${guardReason(next.error?.kind, next.error?.message)}` } : next(e)
   })
 
   // A worker's edit (Edit, Write, NotebookEdit) outside its change task's files is refused, and the path is
@@ -274,7 +284,14 @@ export const register: Register = on => {
     useName($)
     // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
     const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
-    const deny = e.agentId ? await checkEdit(host, e.agentId, e.tool, e.input, cwd).catch(() => undefined) : undefined
+    // an error in checkEdit is not swallowed here: the .catch below refuses the call of symcc's own agents
+    const deny = e.agentId ? await checkEdit(host, e.agentId, e.tool, e.input, cwd) : undefined
+    return deny ? { decision: 'deny', reason: deny } : next(e)
+  }).catch(($, e, next) => {
+    // The hook threw or ran out of time: a worker's, checker's or scout's call is refused, the lead's goes on (guardFailed).
+    if (next.called) return next(e)
+    useName($)
+    const deny = guardFailed(claudeHost($), 'tool.check', e.agentId, next.error)
     return deny ? { decision: 'deny', reason: deny } : next(e)
   })
 
