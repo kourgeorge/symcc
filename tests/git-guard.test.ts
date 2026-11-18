@@ -319,3 +319,43 @@ test('the git write reasons keep their exact text, and quoted braces stay text (
   expect(gitWriteIn(`bash -c 'git stash'`)).toBe('git stash')
   expect(gitWriteIn(`X='ls; git stash'`)).toBe('git stash')
 })
+
+test('braces in paths after `--` of a read-only git, and in echo, printf or `x=` text, are no git command (T-450)', async () => {
+  const $ = setup()
+  for (const command of ['git diff -- hooks/{a,b}.ts', 'git log -- {a,b}.ts', 'echo {git,stash}', "printf '%s\\n' {git,stash}", 'x={git,stash}', 'echo {git,} stash | grep x']) {
+    expect([command, gitWriteIn(command)]).toEqual([command, undefined])
+    expect(await checkEdit($, 'w1', { command }, WT)).toBeUndefined()
+    expect(await checkEdit($, 's1', { command }, ROOT)).toBeUndefined()
+    expect(await checkEdit($, 'c1', { command }, WT)).toBeUndefined()
+  }
+  // braces among git's own words, after `--` of a writing command, words that may be options, and printed or set
+  // text that another command may run again stay refused
+  for (const command of [
+    'git log "x" {a,b}',
+    'git -- {stash,}',
+    'git diff {--,} {a,b}',
+    'git stash -- {a,b}',
+    'git log --grep -- {--output=/tmp/x,}',
+    'echo {git,stash} | sh',
+    'echo {git,stash} > s',
+    "printf '%s\\n' {git,stash} | sh",
+    'x={git,stash}; eval $x',
+    'x={git,stash}; bash -c "$x"',
+    'x=a {git,stash}',
+    '/tmp/echo {git,stash}',
+    // zsh makes a range of any two characters ({*../} gives * + , - . /), so a range or a "-" part is never let through
+    'git grep -e -- {*../}Otouch',
+    'git grep -e -- {*../}-open-files-in-pager=touch',
+    'git log -S -- {*../}-output=/tmp/x',
+    'git diff -- {a..c}.ts',
+    'git diff -- {a,-x}.ts',
+    'echo {*..h}it stash',
+    'x={f..h}it',
+    'echo {-n,git} stash',
+  ]) {
+    expect([command, gitWriteIn(command)]).toEqual([command, 'git with {braces}'])
+    expect(await checkEdit($, 'w1', { command }, WT)).toBe(workerGitWriteText('git with {braces}'))
+    expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText('git with {braces}'))
+    expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText('git with {braces}'))
+  }
+})
