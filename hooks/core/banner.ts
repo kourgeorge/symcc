@@ -28,12 +28,35 @@ export function shortHome(path: string, home?: string): string {
   return path.startsWith(h + '/') ? '~' + path.slice(h.length) : path
 }
 
-/** "<icon> <name> board": the bold, colored part of a title (ICON from name.ts, then namesFor(name).boardName). */
-export const boardBrand = (name: string = DEFAULT_NAME) => `${ICON} ${namesFor(name).boardName}`
+// ---------------- the plugin's version in the titles ----------------
+// Read once from plugin.json when the plugin loads (see loadVersion in plugin/state.ts) and kept here, so every
+// title (the panel's, the band's, the board as text) shows it without each caller passing it. '' = not known: no version shown.
+let version = ''
+/** Sets the version the titles show ('' shows none). */
+export const setBoardVersion = (v: string) => void (version = v)
+/** The version the titles show now; '' when it isn't known. */
+export const boardVersion = () => version
+
+/** The version in plugin.json's text, e.g. "0.3.0"; '' when the text isn't JSON or has no short, plain version. Never throws. */
+export function versionOf(text: string): string {
+  try {
+    const v = (JSON.parse(text) as { version?: unknown } | null)?.version
+    return typeof v === 'string' && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,23}$/.test(v) ? v : ''
+  } catch {
+    return ''
+  }
+}
+
+/** " v0.3.0", or '' with no version. */
+export const versionMark = (v: string = version) => (v ? ` v${v}` : '')
+
+/** "<icon> <name> v<version> board": the bold, colored part of a title (ICON from name.ts, then the name, the version
+ *  when known and "board"). */
+export const boardBrand = (name: string = DEFAULT_NAME, v: string = version) => `${ICON} ${namesFor(name).name}${versionMark(v)} board`
 /** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
 /** The board's title: "<icon> <name> board · <folder>", or just "<icon> <name> board" when the folder is unknown. */
-export const boardTitle = (root: string, name: string = DEFAULT_NAME) => `${boardBrand(name)}${boardWhere(root)}`
+export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = version) => `${boardBrand(name, v)}${boardWhere(root)}`
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
@@ -162,8 +185,10 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const folder = folderName(root)
   // nothing starts while symcc is turned off or the board is in mode off: say so on the first line, in the warning color
   const off = b.enabled === false ? offStatusLine(name) : b.mode && modeOf({ mode: b.mode }) === 'off' ? `${modeLabel('off')}: nothing starts` : ''
-  const l1: BannerPart[] = [
-    { text: namesFor(name).boardName, tone: 'accent', bold: true },
+  const line1 = (v: string): BannerPart[] => [
+    ...(v
+      ? [{ text: namesFor(name).name, tone: 'accent' as const, bold: true }, { text: versionMark(v), tone: 'plain' as const }, { text: ' board', tone: 'accent' as const, bold: true }]
+      : [{ text: namesFor(name).boardName, tone: 'accent' as const, bold: true }]),
     ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : []),
     ...(off ? [sep, { text: off, tone: 'warning' as const }] : []),
   ]
@@ -178,6 +203,11 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     fact(`${b.max_minutes} min`),
     fact(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
   ])
+  // the version is the least important part of the first line: it goes first when the line doesn't fit
+  const w0 = Math.max(1, Math.floor(width))
+  const room1 = w0 - (w0 >= BANNER_NARROW && logo[0] !== undefined ? logo[0].length + 1 : 0)
+  const withV = line1(version)
+  const l1 = withV.reduce((n, p) => n + p.text.length, 0) <= room1 ? withV : line1('')
   const texts = [l1, l2, l3]
   const gone = archivedOf(b).done
   if (b.tasks.length || gone) {

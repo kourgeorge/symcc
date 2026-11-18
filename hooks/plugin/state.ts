@@ -3,7 +3,7 @@
 // directly, never a copy, so a change made in one module is seen by all.
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, setBoardVersion, versionOf } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 import type { Host, PanelValues } from '../host'
@@ -184,6 +184,21 @@ export function useName($: Pick<Host, 'plugin'>) {
   const name = cleanName($.plugin.name)
   if (name === S.N.name) return
   S.N = namesFor(name)
+}
+
+/** Reads the plugin's version from its plugin.json (in host.plugin.root) once, for the titles (see setBoardVersion).
+ *  A missing or broken file shows no version; it never throws. */
+let versionRead = false
+export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
+  if (versionRead) return
+  versionRead = true
+  const text = await host.fs.read(`${host.plugin.root}/.claude-plugin/plugin.json`).catch(() => '')
+  setBoardVersion(versionOf(text))
+}
+/** Forgets the version, so the next loadVersion reads it again (for the tests). */
+export function resetVersion() {
+  versionRead = false
+  setBoardVersion('')
 }
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */

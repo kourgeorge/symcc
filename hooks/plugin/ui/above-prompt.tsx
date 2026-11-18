@@ -1,11 +1,27 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
+import { statusCounts, newestFirst, bandStatus, boardBrand, boardVersion, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
 import { type $, type PaneView, S, panelValues } from '../state'
 import { openPane } from './open'
 import { claudeHost } from '../../claude/host'
 
 export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt' }>
+
+/**
+ * The band's first line: the brand ("𝄞 symcc v0.3.0 board") and the facts after it, made by `facts(room)` for the room
+ * left in `columns` beside the brand and the "open board" button. The version is dropped first: it stays only when the
+ * facts are as long with it as without it (nothing else had to be cut or left out for it) and the line still fits.
+ */
+export function bandTitle(columns: number, facts: (room: number) => string): { brand: string; facts: string } {
+  const roomFor = (brand: string) => columns - brand.length - ' open board'.length - 2
+  const bare = boardBrand(S.N.name, '')
+  const plain = facts(roomFor(bare))
+  if (!boardVersion()) return { brand: bare, facts: plain }
+  const brand = boardBrand(S.N.name)
+  const room = roomFor(brand)
+  const full = facts(room)
+  return full === plain && full.length <= room ? { brand, facts: full } : { brand: bare, facts: plain }
+}
 
 /** The band above the prompt: the board, always in view inside Claude Code's own screen. */
 export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1], next: Parameters<AbovePromptHook>[2]) {
@@ -23,10 +39,8 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const plan = (v as PaneView | undefined)?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   // the mode, the busy workers, the counts and the scouts, fitted beside the name and the "open board" button:
   // "(next: …)" goes first when short of room, then the scouts (see withCrew)
-  const brand = boardBrand(S.N.name)
-  const room = (e.props.bodyColumns ?? 80) - brand.length - ' open board'.length - 2
   const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: (v as PaneView | undefined)?.max_parallel, tasks, scouts: v?.scouts ?? [] }
-  const facts = withCrew((w, s) => `${boardWhere(S.root)} ${[modeLabel(modeOf(v)), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, Date.now(), room)
+  const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${boardWhere(S.root)} ${[modeLabel(modeOf(v)), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, Date.now(), room))
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
