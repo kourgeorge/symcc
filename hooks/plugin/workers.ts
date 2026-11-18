@@ -9,7 +9,7 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers } from './checker'
 import { loadKinds } from './kinds'
-import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded } from './state'
+import { S, type $, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -51,6 +51,7 @@ export async function startWorker($: $, id: string) {
   // Not while its last try is still being checked (it was resumed or retried meanwhile): it starts when the check ends.
   if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return
   starting.add(id)
+  onPurpose.delete(id) // a new try: an old stop on purpose is over
   try {
     const listed = await agentsNow($)
     if (!listed) return // can't see which agents run; try again on the next pump
@@ -1044,10 +1045,28 @@ export async function halt($: $, agentId: string, why: string) {
   await $.session.send({ to: { agentId }, text: `Stop now: ${why}. Don't change anything else; answer "stopped" and end.` }).catch(() => undefined)
 }
 
+/**
+ * Tasks whose worker is being stopped on purpose (pause, drop, ask, change, the board or symcc turned
+ * off, ...), with how many regular checks have seen the mark: the one stopping it changes the task's
+ * status right after, so meanwhile the regular check must not send it back to todo (sendBackIdle skips
+ * it). A mark is gone once the task is no longer "doing", or after one check saw it (the status change
+ * then failed: the task is treated as any other again).
+ */
+export const onPurpose = new Map<string, number>()
+
+/** Ages the stop-on-purpose marks at a regular check (see onPurpose). */
+function ageOnPurpose(b: Board) {
+  for (const [id, seen] of [...onPurpose]) {
+    if (find(b, id)?.status !== 'doing' || seen >= 1) onPurpose.delete(id)
+    else onPurpose.set(id, seen + 1)
+  }
+}
+
 /** Stops the workers `which` picks (all by default), one by one; `then` runs after each is told to stop. */
 export async function haltWorkers($: $, why: string, which: (w: Worker) => boolean = () => true, then?: (w: Worker) => Promise<unknown>) {
   for (const [agentId, w] of [...workers]) {
     if (!which(w)) continue
+    onPurpose.set(w.task, 0)
     workers.delete(agentId)
     await halt($, agentId, why)
     await then?.(w)
@@ -1309,8 +1328,23 @@ export async function answerOvertime($: $, id: string, answer: string): Promise<
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`
 }
 
-/** workers whose agent a check saw ended without a hand-back: failed on the next check if still not handed back */
+/** workers whose agent a check saw ended without a hand-back: failed a short while later (ENDED_GRACE_MS), or on the next check, if still not handed back */
 export const seenEnded = new Set<string>()
+
+/** How long after a check saw a worker's agent ended its report may still come (turn.complete hands it on a moment after the agent ends). */
+export const ENDED_GRACE_MS = 20_000
+
+/** A tracked worker whose agent ended with no hand-back: its task fails (not "todo", so a crashing worker doesn't start again and again). */
+async function failLost($: $, agentId: string, w: Worker) {
+  if (workers.get(agentId) !== w || finishing.has(w.task)) return
+  const t = find(await load($), w.task)
+  if (t && handedBack(t)) return
+  seenEnded.delete(agentId)
+  workers.delete(agentId)
+  await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(find(x, w.task)?.history ?? t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`], ...endedBy(find(x, w.task), now(), 'stopped', 'the worker ended without a result') }, now()))
+  tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
+  await publish($, await load($))
+}
 
 /**
  * A "doing" task no live worker works on any more, with no merge going on for it, goes back to
@@ -1321,13 +1355,13 @@ export const seenEnded = new Set<string>()
  * stopOrphans), or its work was being tested and merged by an old copy of the plugin (its finishing
  * mark is no longer refreshed). An agent this copy stopped never counts as working on a task: every
  * tool it tries is refused, even while it is still listed. Only tasks this session may take over
- * (ownedHere) are touched.
+ * (ownedHere) are touched, and never one whose worker is being stopped on purpose (onPurpose).
  */
 export async function sendBackIdle($: $, agents: AgentInfo[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
   const live = liveDriver(await $.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
   const working = agents.filter(a => !stopped.has(a.id))
-  const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !finishingNow(t, Date.now())
+  const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !onPurpose.has(t.id) && !finishingNow(t, Date.now())
   // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.
   const idle = (await load($)).tasks.filter(t => free(t) && ownedHere(t, S.me, live) && (handedBack(t) || !liveWorkersFor(t, working, S.N.name).length))
   const merged = new Map<string, string>()
@@ -1406,22 +1440,23 @@ export async function check($: $) {
       else if (minutes > hardCapOf(b.max_minutes, t)) await wrapUp($, w.task, `no answer from the owner after ${Math.round(minutes)} min`)
     }
     // The worker is gone without saying it finished (crashed, or lost): send the task back to the lead.
-    // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so it is
-    // only failed when it was already seen ended on an earlier check and is still not handed back.
-    const ended = minutes > 3 && info !== undefined && ENDED_STATUSES.includes(info.status)
+    // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so the
+    // first check that sees it ended gives it a short grace (ENDED_GRACE_MS) and fails it then if still
+    // not handed back; with no timer here, the next check fails it.
+    const ended = info !== undefined && ENDED_STATUSES.includes(info.status)
     if (!ended) {
       seenEnded.delete(agentId)
       continue
     }
     if (!seenEnded.has(agentId)) {
       seenEnded.add(agentId)
+      const timer = afterMs($, ENDED_GRACE_MS, () => void failLost($, agentId, w).catch(() => undefined))
+      if (timer) timers.push(timer)
       continue
     }
-    seenEnded.delete(agentId)
-    workers.delete(agentId)
-    await change($, x => patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: [...(t?.history ?? []), `${t ? tryLabel(t) : 'try ?'}: the worker ended without a result`], ...endedBy(find(x, w.task), now(), 'stopped', 'the worker ended without a result') }, now()))
-    tellLead($, `${w.task} "${t?.title ?? ''}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)
+    await failLost($, agentId, w)
   }
+  ageOnPurpose(await load($))
   if (agents) await sendBackIdle($, agents as AgentInfo[])
   // Failed tasks nobody acted on for 10 minutes: remind the lead once per failure.
   const late = (await load($)).tasks.filter(t => t.status === 'failed' && nowMs - Date.parse(t.updated_at || '') > 10 * 60_000 && reminded.get(t.id) !== t.updated_at)

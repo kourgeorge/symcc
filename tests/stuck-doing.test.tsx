@@ -21,7 +21,7 @@ type Agent = { id: string; name: string; status: string }
  * (`agents`, changed by the test). A message to an agent does not end it (`sent` keeps who got one).
  * `prompts` has what the lead was told.
  */
-function world(on: On, agents: Agent[], sid = 's1') {
+function world(on: On, agents: Agent[], sid = 's1', gate: { wait?: Promise<void> } = {}) {
   const files = new Map<string, string>()
   const key = (p: string) => (p.includes('/.symcc/') ? p.slice(p.indexOf('/.symcc/')) : p)
   const sent: string[] = []
@@ -54,9 +54,11 @@ function world(on: On, agents: Agent[], sid = 's1') {
   on('tool.check', () => ({ decision: 'allow' }) as never)
   on('prompt.submit', (_, e) => (prompts.push(e.text), { text: e.text }) as never)
   on('agent.list', () => ({ value: agents.map(a => ({ ...a, type: 'symcc:worker' })) }) as never)
-  on('session.send', (_, e) => {
+  // `gate.wait`, when set, holds every message until it resolves (a slow session.send)
+  on('session.send', async (_, e) => {
     const to = (e as unknown as { to: string | { agentId: string } }).to
     sent.push(typeof to === 'string' ? to : to.agentId)
+    if (gate.wait) await gate.wait
     return { isDelivered: true } as never
   })
   on('turn.complete', () => ({ text: '' }))
@@ -70,10 +72,19 @@ function world(on: On, agents: Agent[], sid = 's1') {
   return { files, sent, prompts, spawned, clock, board, task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 
-/** T-1 "doing" for `session` with agent `agent`; max_parallel 0, so no new worker starts by itself. */
-function doing(session: string, agent: string): Board {
+/**
+ * T-1 "doing" for `session` with agent `agent`; max_parallel 0, so no new worker starts by itself.
+ * Its run started `started` (the fake clock doesn't move Date.now(): pass a time from the real
+ * Date.now() where minutes since the start matter).
+ */
+function doing(session: string, agent: string, started = ISO): Board {
   const [b] = addTask({ ...emptyBoard(), mode: 'auto', max_parallel: 0 }, { origin: { why: 'a test' }, title: 'Build it', files: ['src/'], merge_into: 'main' }, ISO)
-  return patchTask(b, 'T-1', { status: 'doing', session, agent, attempts: 1, branch: 'symcc/T-1', runs: [{ started: ISO }] } as never, ISO)
+  return patchTask(b, 'T-1', { status: 'doing', session, agent, attempts: 1, branch: 'symcc/T-1', runs: [{ started }] } as never, ISO)
+}
+
+const tool = async ($: Engine, name: string, args: Record<string, unknown>) => {
+  const r = (await $.tool.call({ tool: `mcp__symcc__${name}`, ...args } as never)) as { result?: string } | string
+  return String(typeof r === 'string' ? r : r?.result ?? '')
 }
 
 const start = async ($: Engine, w: ReturnType<typeof world>) => {
@@ -81,6 +92,7 @@ const start = async ($: Engine, w: ReturnType<typeof world>) => {
   await w.clock.settle()
 }
 
+// guard: already worked before T-376 (main adopts this case too); kept so it stays that way
 test('(a) after a reload, the live worker of this session whose task is doing for it is adopted, not stopped', async ($, on) => {
   const w = world(on, [{ id: 'w1', name: 'symcc-T-1', status: 'running' }])
   w.files.set(BOARD, JSON.stringify(doing('s1', 'w1')))
@@ -143,6 +155,7 @@ test('(b, c) a worker this copy stopped that stays listed does not keep its task
   expect(w.prompts.filter(p => p.includes('no worker was working on it any more'))).toHaveLength(1)
 })
 
+// guard: already worked before T-376 (main sends such a task back too); kept so it stays that way
 test('(b) a doing task of this session whose worker ended with no hand-back goes back to todo at the next check', async ($, on) => {
   const w = world(on, [{ id: 'w1', name: 'symcc-T-1', status: 'completed' }])
   // no board at the start, so nothing is sent back then; then the board shows T-1 "doing" for w1, which
@@ -186,4 +199,65 @@ test('a task sent back to todo because its worker was stopped gets a fresh worke
   // (the test kit can't hand the plugin the new agent's id, so the start itself then counts as failed)
   expect(w.spawned).toEqual(['symcc-T-1'])
   expect(w.task('T-1').branch).toBe('symcc/T-1')
+})
+
+test('a worker stopped on purpose (pause) does not make the regular check send its task back, even while the stop is slow', async ($, on) => {
+  const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
+  const gate: { wait?: Promise<void> } = {}
+  const w = world(on, agents, 's1', gate)
+  w.files.set(BOARD, JSON.stringify({ ...doing('s1', 'w1', new Date(Date.now() - 10 * 60_000).toISOString()), max_parallel: 2 }))
+  w.files.set(LEAD, JSON.stringify({ session: 's1', heartbeat: T0 - 1000 }) + '\n')
+  await start($, w)
+  expect(w.task('T-1').status).toBe('doing')
+  // the message telling w1 to stop is slow: the pause waits for it
+  let release = () => {}
+  gate.wait = new Promise<void>(r => (release = r))
+  const paused = tool($, 'pause', { task: 'T-1' })
+  await w.clock.settle()
+  expect(w.sent).toEqual(['w1'])
+  // meanwhile the regular check runs (w1 is stopped and no longer tracked; T-1 is still "doing")
+  await w.clock.advance(2 * 60_000)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('doing')
+  release()
+  gate.wait = undefined
+  expect(await paused).toMatch(/T-1 paused/)
+  await w.clock.advance(2 * 60_000)
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('paused')
+  expect(t.history.some(h => /restarted/.test(h))).toBe(false)
+  expect(w.prompts.some(p => p.includes('no worker was working on it any more'))).toBe(false)
+  expect(w.spawned).toEqual([])
+})
+
+test('(c) a tracked worker that ends with no hand-back: its task fails right after the first check that sees it ended, not a check later', async ($, on) => {
+  const agents = [{ id: 'w1', name: 'symcc-T-1', status: 'running' }]
+  const w = world(on, agents)
+  w.files.set(BOARD, JSON.stringify(doing('s1', 'w1', new Date(Date.now() - 10 * 60_000).toISOString())))
+  w.files.set(LEAD, JSON.stringify({ session: 's1', heartbeat: T0 - 1000 }) + '\n')
+  await start($, w)
+  expect(w.task('T-1').status).toBe('doing')
+  // the adopted worker ends with no hand-back, 10 s in
+  await w.clock.advance(10_000)
+  agents[0]!.status = 'completed'
+  // the first check (at 2:00) sees it ended; its report may still come, so it waits a short grace
+  await w.clock.advance(2 * 60_000 - 10_000)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('doing')
+  // no report in the grace: the task fails, long before the next check (at 4:00)
+  await w.clock.advance(30_000)
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('failed')
+  expect(t.note).toBe('the worker ended without a result')
+  expect(t.branch).toBe('symcc/T-1')
+  await w.clock.advance(2_000)
+  await w.clock.settle()
+  expect(w.prompts.filter(p => p.includes('T-1 "Build it": the worker ended without a result'))).toHaveLength(1)
+  // the next check changes nothing more
+  await w.clock.advance(2 * 60_000)
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('failed')
+  expect(w.prompts.filter(p => p.includes('the worker ended without a result'))).toHaveLength(1)
 })
