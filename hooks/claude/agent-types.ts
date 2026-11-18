@@ -3,6 +3,7 @@
 // it Claude Code's (claude/host.ts hands them to the logic as host.words.roleTools).
 import { DEFAULT_NAME, cleanName } from '../name'
 import { ASK_TOOL } from '../core/ask'
+import { SCOUT_BOARD_TOOLS } from '../core/scouts'
 import type { RoleDef, RoleTools } from '../core/roles'
 
 /** Claude Code's names made from the plugin's name: its worker and scout agent types, and a tool's full name as the model sees it. */
@@ -24,6 +25,9 @@ export const EXTRA_TOOLS: readonly string[] = ['WebSearch', 'WebFetch']
 
 /** The tools a scout has: it reads and runs commands, and may search and read the web, but never edits. */
 export const SCOUT_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']
+
+/** Every tool the scout agent type gets (checkers run as it too): SCOUT_TOOLS, then symcc's read-only board tools (mcp__<name>__board, mcp__<name>__stats). */
+export const scoutAgentTools = (name: string = DEFAULT_NAME): string[] => [...SCOUT_TOOLS, ...SCOUT_BOARD_TOOLS.map(t => claudeNames(name).tool(t))]
 
 /** Claude Code's tool names for a role's `tools:` line: both extra tools reach the web. */
 export const ROLE_TOOLS: RoleTools = { extra: EXTRA_TOOLS, web: ['WebSearch', 'WebFetch'] }
