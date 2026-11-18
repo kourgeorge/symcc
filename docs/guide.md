@@ -702,14 +702,16 @@ colour.
 
 Under the last report, **Runs** lists the scout's recent runs, newest first, one line each:
 when it ended, how it ended (found, nothing, stopped, API error, refusal or couldn't start),
-how many findings its report numbers, and the tasks made from it (the tasks from this scout
-added after that run and before its next report). Open one to read that run's whole report.
+how many findings its report numbers, and the tasks made from it (a task the lead adds from
+this scout's finding is saved in the scout's latest run that reported something, so it stays
+listed after the task is archived). Open one to read that run's whole report; in VS Code's
+side panel each run is a button, and "← <scout>" goes back.
 When the last run ended on an API error or a refusal, the page says so under the header
 ("Its last run ended on an API error, so nothing was reported."). Each scout keeps its last
 50 runs in `.symcc/scouts/<name>.runs.json` and each run's full report in
 `.symcc/reports/scouts/<name>-<time>.md`; older runs and their report files are removed.
-The first time, a scout's last report from `.symcc/scouts.json` becomes its first run.
-(The Runs list is on the terminal page for now.)
+The first time, a scout's last report from `.symcc/scouts.json` becomes its first run (its
+tasks are worked out from the board: the scout's tasks added after it).
 
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same

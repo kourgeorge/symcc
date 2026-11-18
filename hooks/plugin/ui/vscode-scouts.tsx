@@ -6,10 +6,11 @@
 //     Checks the advisories …                (the summary, whole)
 //     last report: found 5: The package …    (the start of the last report, whole)
 // One scout's page: a "← Scouts" button, the name and state, its facts, Run now / Pause / Edit as buttons, then the
-// instructions and the whole last report as Markdown. No key hints.
+// instructions, the whole last report as Markdown, and its Runs (newest first; a press opens that run's full report,
+// with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
-import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE } from '../../board'
-import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout } from '../scouts'
+import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutRunOpen } from '../scouts'
 import { S } from '../state'
 import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
@@ -124,8 +125,8 @@ export function scoutsListVs($: $, pane: PaneParts) {
   )
 }
 
-/** One scout's page in VS Code. */
-export function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
+/** One scout's page in VS Code (or one of its runs, when one is open). */
+export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
   const { Box, Text, Button, act, C, vs } = pane
   const { Markdown } = vs
   const { nowMs } = pane
@@ -145,12 +146,41 @@ export function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
       {body.filter(Boolean) as never}
     </Box>
   )
+  // its runs, newest first, each with the tasks made from it
+  const host = claudeHost($)
+  const runs = await loadScoutRunHistory(host, sc.name)
+  const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
+  const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
+  const problem = sc.running ? '' : scoutLastRunProblem(runs)
+  const opened = scoutRunOpen.scout === sc.name ? shown.find(x => x.run.ended === scoutRunOpen.ended) : undefined
+  const closeRun = () => ((scoutRunOpen.scout = ''), (scoutRunOpen.ended = ''), $.ui.invalidate('ui.render'))
+  if (opened) {
+    const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
+    return (
+      <Box key="vs-scout-run-page" flexDirection="column" gap={1}>
+        <Box key="vs-scout-run-top" flexDirection="column">
+          <Box key="vs-run-back-row" flexDirection="row">
+            <Button key="scout-run-back" label={`← ${sc.name}`} variant="secondary" autoFocus onPress={closeRun} />
+          </Box>
+          <Text key="vs-run-title" wrap="wrap">
+            <Text bold color={C('claude')}>{sc.name}</Text>
+            <Text color={C('inactive')}>{` · run that ended ${opened.run.ended}`}</Text>
+          </Text>
+          {plain('vs-run-line', scoutRunLine(opened.run, opened.tasks, nowMs), scoutOutcomeTone(opened.run.outcome))}
+          {opened.run.why ? plain('vs-run-why', opened.run.why, 'error') : null}
+        </Box>
+        {section('run-report', 'Report', [text ? <Markdown key="vs-run-report-md" text={text} /> : plain('vs-run-report-none', opened.run.report ? `(its report file ${opened.run.report} can't be read)` : '(this run reported nothing)')])}
+        {opened.run.report ? section('run-file', 'File', [plain('vs-run-file', opened.run.report, 'autoAccept')]) : null}
+        {vsFooter(vs, 'scout-run-keys')}
+      </Box>
+    )
+  }
   const report = String(sc.last_report ?? '').trim()
   return (
     <Box key="vs-scout-page" flexDirection="column" gap={1}>
       <Box key="vs-scout-top" flexDirection="column">
         <Box key="vs-back-row" flexDirection="row">
-          <Button key="scout-back" label="← Scouts" variant="secondary" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />
+          <Button key="scout-back" label="← Scouts" variant="secondary" autoFocus onPress={act(() => (closeRun(), panelValues($).updateScoutOpen(() => '')))} />
         </Box>
         <Text key="vs-scout-status" wrap="wrap">
           <Text bold color={C('claude')}>{sc.name}</Text>
@@ -159,6 +189,7 @@ export function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
         </Text>
         {title ? plain('vs-scout-summary', title, 'text', true) : null}
         {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
+        {problem ? plain('vs-scout-problem', problem, 'error') : null}
       </Box>
       <Box key="vs-scout-facts" flexDirection="column">
         {plain('every', `runs: ${r.every}`)}
@@ -178,6 +209,17 @@ export function scoutPageVs($: $, pane: PaneParts, sc: SymccScout) {
         report && isNothing(report) && report.split('\n').length > 1 ? <Markdown key="vs-report-md" text={report} /> : null,
         report && !isNothing(report) ? <Markdown key="vs-report-md" text={report} /> : null,
       ])}
+      {shown.length
+        ? section(
+            'runs',
+            'Runs',
+            shown.map(x => (
+              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`Open the run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={() => ((scoutRunOpen.scout = sc.name), (scoutRunOpen.ended = x.run.ended), $.ui.invalidate('ui.render'))}>
+                <Text wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{scoutRunLine(x.run, x.tasks, nowMs)}</Text>
+              </Button>
+            )),
+          )
+        : null}
       {section('file', 'File', [plain('vs-scout-file', file, 'autoAccept')])}
       {vsFooter(vs, 'scout-keys')}
     </Box>

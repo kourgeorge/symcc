@@ -6,8 +6,9 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccScout } from '../types'
-import { emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
+import { emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, linkScoutRunTask, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
 import { scoutFinished, scheduleScouts } from '../hooks/plugin/scouts'
+import { runTool } from '../hooks/plugin/tools'
 import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
 import { fakeHost, memoryFs } from './fake-host'
 import { inProject } from './project'
@@ -217,5 +218,84 @@ test("the scout's page says when its last run ended on an API error, so nothing 
   const note = await ui.find({ type: 'Text', text: /^Its last run ended on an API error, so nothing was reported\.$/ })
   expect(note?.props.color).toBe('error')
   expect((await texts(ui)).some(t => / · API error · 0 findings · no tasks$/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+// ---------------- tasks saved in their run ----------------
+
+test("a task the lead adds from a scout's finding is saved in that scout's latest reported run, and stays there once archived", async () => {
+  const runs: ScoutRunRecord[] = [
+    { started: null, ended: '2026-11-10T00:00:00.000Z', outcome: 'found', findings: 1, tasks: [] },
+    { started: null, ended: '2026-11-11T00:00:00.000Z', outcome: 'error', findings: 0 },
+  ]
+  const w = world({ [RUNS]: scoutRunsText(runs) })
+  scoutState.clear()
+  scoutRuns.clear()
+  const said = await runTool(w.$, 'add', { title: 'Fix the crash', details: 'x', why: 'the parser crashes', origin_by: 'scout', scout: 'bugs' } as never)
+  expect(said).toMatch(/^added T-1 /)
+  const saved = w.runs()
+  expect(saved[0]!.tasks).toEqual(['T-1'])
+  // the error run reported nothing: no task goes there
+  expect(saved[1]!.tasks).toBeUndefined()
+  // a task from someone else is not linked
+  await runTool(w.$, 'add', { title: 'Other', details: 'x', why: 'mine', origin_by: 'lead' } as never)
+  expect(w.runs()[0]!.tasks).toEqual(['T-1'])
+  // archived (not on the board any more): the run still lists it
+  expect(scoutRunTasks(w.runs(), [], 'bugs')).toEqual([['T-1'], []])
+})
+
+test('a run recorded before tasks were saved gets its tasks from the board; linking a new one keeps them', () => {
+  const from = (scout: string) => ({ by: 'scout' as const, scout, why: 'x', at: '' })
+  const old: ScoutRunRecord[] = [{ started: null, ended: '2026-11-10T00:00:00.000Z', outcome: 'found', findings: 2 }]
+  const board = [{ id: 'T-1', created_at: '2026-11-10T01:00:00.000Z', origin: from('bugs') }]
+  const next = linkScoutRunTask(old, 'T-2', 'bugs', [...board, { id: 'T-2', created_at: '2026-11-10T02:00:00.000Z', origin: from('bugs') }])!
+  expect(next[0]!.tasks).toEqual(['T-1', 'T-2'])
+  // a saved run never takes board tasks it did not save
+  expect(scoutRunTasks([{ ...old[0]!, tasks: [] }], board, 'bugs')).toEqual([[]])
+  expect(linkScoutRunTask([{ started: null, ended: old[0]!.ended, outcome: 'error', findings: 0 }], 'T-3', 'bugs', [])).toBeNull()
+})
+
+// ---------------- the scout's page in VS Code ----------------
+
+test("the scout's page in VS Code lists its runs as buttons, opens one's full report and goes back", async ($, on) => {
+  const runs: ScoutRunRecord[] = [
+    { started: null, ended: '2026-11-12T00:00:00.000Z', outcome: 'found', findings: 2, report: '.symcc/reports/scouts/bugs-old.md', tasks: ['T-7'] },
+    { started: null, ended: LAST_RUN, outcome: 'nothing', findings: 0, report: '.symcc/reports/scouts/bugs-new.md', tasks: [] },
+  ]
+  page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs), '/.symcc/reports/scouts/bugs-old.md': '1. The parser crashes.\n2. The whole old report.\n', '/.symcc/reports/scouts/bugs-new.md': 'NOTHING\n' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect(await ui.find({ key: 'vs-sec-runs' })).toBeDefined()
+  const rows = (await ui.findAll({ type: 'Button' })).filter(b => String(b.props.key).startsWith('scout-run:'))
+  expect(rows.map(b => String(b.props.key))).toEqual([`scout-run:${LAST_RUN}`, 'scout-run:2026-11-12T00:00:00.000Z'])
+  const all = await texts(ui)
+  // whole, wrapped lines; no key hints
+  expect(all.some(t => / · found · 2 findings · task T-7$/.test(t))).toBe(true)
+  expect(all.some(t => / · nothing · 0 findings · no tasks$/.test(t))).toBe(true)
+  expect(all.filter(t => t.includes('…') || /\[[a-z]\]:/.test(t))).toEqual([])
+  expect(all.some(t => /so nothing was reported/.test(t))).toBe(false)
+  await ui.press({ key: 'scout-run:2026-11-12T00:00:00.000Z' })
+  expect((await ui.find({ key: 'scout-run-back' }))?.props.label).toBe('← bugs')
+  expect(String((await ui.find({ key: 'vs-run-report-md' }))?.props.text)).toContain('The whole old report')
+  expect(await ui.find({ type: 'Text', text: '.symcc/reports/scouts/bugs-old.md' })).toBeDefined()
+  await ui.press({ key: 'scout-run-back' })
+  expect(await ui.find({ key: 'vs-sec-runs' })).toBeDefined()
+  expect(await ui.find({ key: 'vs-run-report-md' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test("the scout's page in VS Code says when its last run ended on an API error, so nothing was reported", async ($, on) => {
+  const runs: ScoutRunRecord[] = [
+    { started: null, ended: '2026-11-12T00:00:00.000Z', outcome: 'found', findings: 1, report: '.symcc/reports/scouts/bugs-old.md', tasks: [] },
+    { started: null, ended: LAST_RUN, outcome: 'error', findings: 0 },
+  ]
+  page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs) })
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  const note = await ui.find({ type: 'Text', text: /^Its last run ended on an API error, so nothing was reported\.$/ })
+  expect(note, 'note').toBeDefined()
+  // in the error color: the same as the API error run's line
+  const errRow = (await ui.findAll({ type: 'Text' })).find(t => / · API error · 0 findings · no tasks$/.test(t.text))
+  expect(errRow, 'run line').toBeDefined()
+  expect(note?.props.color, 'color').toBe(errRow!.props.color)
+  expect((await ui.findAll({ type: 'Text' })).find(t => / · found · 1 finding · no tasks$/.test(t.text))?.props.color).not.toBe(errRow!.props.color)
   await ui.unmount()
 })

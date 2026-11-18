@@ -512,10 +512,11 @@ const OUTCOMES: readonly ScoutRunOutcome[] = ['found', 'nothing', 'stopped', 'er
 /**
  * One run of a scout, kept in <dir>/scouts/<scout>.runs.json: when it started (null when not known) and ended, how it
  * ended, how many findings its report numbers, its tokens, the file its full report is in (<dir>/reports/scouts/…;
- * none when it said nothing), and why it could not start (`why`, only for "not started"). The tasks made from a run
- * are not saved: they are the board's tasks from this scout made after it (see scoutRunTasks).
+ * none when it said nothing), why it could not start (`why`, only for "not started"), and the ids of the tasks made
+ * from it (`tasks`, saved when the lead adds them, so archived tasks still count). A run recorded before `tasks` was
+ * saved (the one moved from scouts.json) has none: its tasks are worked out from the board (see scoutRunTasks).
  */
-export type ScoutRunRecord = { started: string | null; ended: string; outcome: ScoutRunOutcome; findings: number; tokens?: SymccTokens; report?: string; why?: string }
+export type ScoutRunRecord = { started: string | null; ended: string; outcome: ScoutRunOutcome; findings: number; tokens?: SymccTokens; report?: string; why?: string; tasks?: string[] }
 
 /** How many runs each scout keeps; older ones (and their report files) are removed. */
 export const SCOUT_RUNS_KEPT = 50
@@ -564,6 +565,7 @@ export function parseScoutRuns(text: string | null | undefined): ScoutRunRecord[
     if (e.tokens && typeof e.tokens === 'object' && !Array.isArray(e.tokens)) r.tokens = e.tokens as SymccTokens
     if (isScoutRunReport(e.report)) r.report = e.report
     if (typeof e.why === 'string' && e.why) r.why = e.why
+    if (Array.isArray(e.tasks)) r.tasks = [...new Set(e.tasks.filter((x): x is string => typeof x === 'string' && /^[\w-]{1,40}$/.test(x)))]
     out.push(r)
   }
   return out.slice(-SCOUT_RUNS_KEPT)
@@ -591,14 +593,21 @@ export function migratedScoutRun(mem: { last_run: string | null; last_report?: s
   return { run, text }
 }
 
+const reported = (r: ScoutRunRecord) => r.outcome === 'found' || r.outcome === 'nothing'
+const byNumber = (ids: string[]) => {
+  const num = (id: string) => Number(/\d+/.exec(id)?.[0] ?? 0)
+  return [...new Set(ids)].sort((a, b) => num(a) - num(b))
+}
+
 /**
- * The ids of the tasks made from each run of scout `scout` (same order as `runs`): the board's tasks whose origin
- * names this scout, each linked to the last run that reported (found or nothing) and ended before the task was
- * made. So a task the lead adds while the next run is going still counts for the report it came from.
+ * The ids of the tasks made from each run of scout `scout` (same order as `runs`). A run's saved `tasks` when it has
+ * them (they stay even once the tasks are archived). Only a run recorded before those were saved (no `tasks`) gets
+ * them worked out from the board: the tasks whose origin names this scout, each linked to the last run that
+ * reported (found or nothing) and ended before the task was made.
  */
 export function scoutRunTasks(runs: ScoutRunRecord[], tasks: Pick<SymccTask, 'id' | 'created_at' | 'origin'>[], scout: string): string[][] {
-  const out = runs.map(() => [] as string[])
-  const ends = runs.map(r => (r.outcome === 'found' || r.outcome === 'nothing' ? Date.parse(r.ended) : NaN))
+  const out = runs.map(r => [...(r.tasks ?? [])])
+  const ends = runs.map(r => (reported(r) ? Date.parse(r.ended) : NaN))
   for (const t of tasks) {
     const o = originOf(t)
     if (o?.by !== 'scout' || o.scout !== scout) continue
@@ -606,10 +615,23 @@ export function scoutRunTasks(runs: ScoutRunRecord[], tasks: Pick<SymccTask, 'id
     if (!Number.isFinite(made)) continue
     let best = -1
     for (let i = 0; i < runs.length; i++) if (Number.isFinite(ends[i]!) && ends[i]! <= made && (best < 0 || ends[i]! >= ends[best]!)) best = i
-    if (best >= 0) out[best]!.push(t.id)
+    if (best >= 0 && !runs[best]!.tasks) out[best]!.push(t.id)
   }
-  const num = (id: string) => Number(/\d+/.exec(id)?.[0] ?? 0)
-  return out.map(ids => ids.sort((a, b) => num(a) - num(b)))
+  return out.map(byNumber)
+}
+
+/**
+ * `runs` with task `id` saved in the scout's latest run that reported something (found or nothing): the report the
+ * lead made it from. A run recorded before tasks were saved first takes the ones worked out from the board
+ * (`boardTasks`), so none are lost. Null when no run reported anything, or it is already there.
+ */
+export function linkScoutRunTask(runs: ScoutRunRecord[], id: string, scout: string, boardTasks: Pick<SymccTask, 'id' | 'created_at' | 'origin'>[]): ScoutRunRecord[] | null {
+  let i = runs.length - 1
+  while (i >= 0 && !reported(runs[i]!)) i--
+  if (i < 0) return null
+  const had = runs[i]!.tasks ?? scoutRunTasks(runs, boardTasks.filter(t => t.id !== id), scout)[i]!
+  if (had.includes(id)) return runs[i]!.tasks ? null : runs.map((r, j) => (j === i ? { ...r, tasks: had } : r))
+  return runs.map((r, j) => (j === i ? { ...r, tasks: byNumber([...had, id]) } : r))
 }
 
 /** A run's outcome in words: "found", "nothing", "stopped", "API error", "refusal", "couldn't start". */

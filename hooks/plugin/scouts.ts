@@ -1,5 +1,5 @@
-import type { SymccScout, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, countFindings, reportText } from '../board'
+import type { SymccScout, SymccTask, SymccTokens } from '../../types'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText } from '../board'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -181,7 +181,18 @@ async function addRunToHistory(host: Host, scout: string, run: ScoutRunRecord, a
   }
 }
 
-/** Scout `scout`'s runs, newest first, each with the ids of the board's tasks made from it. */
+/** Saves task `id` (just added by the lead, from scout `scout`'s finding) in that scout's latest run that reported
+ *  something, so the run still lists it once the task is archived. `boardTasks`: the board's tasks now, for a run
+ *  recorded before tasks were saved. A failure never stops the add. */
+export async function linkTaskToScoutRun(host: Host, scout: string, id: string, boardTasks: Pick<SymccTask, 'id' | 'created_at' | 'origin'>[]): Promise<void> {
+  if (safeScoutFile(scout, S.N.name) === null) return
+  await changeScoutRuns(host, scout, runs => {
+    const next = linkScoutRunTask(runs, id, scout, boardTasks)
+    return next ? { runs: next, dropped: [] } : null
+  }).catch(() => undefined)
+}
+
+/** Scout `scout`'s runs, newest first, each with the ids of the tasks made from it. */
 export async function scoutRunsWithTasks(host: Host, scout: string): Promise<{ run: ScoutRunRecord; tasks: string[] }[]> {
   const runs = await loadScoutRunHistory(host, scout)
   const tasks = runs.length ? await load(host).then(b => b.tasks).catch(() => []) : []
@@ -368,7 +379,7 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
   await addRunToHistory(
     host,
     name,
-    { started: started === undefined ? null : new Date(started).toISOString(), ended: new Date(endMs).toISOString(), outcome, findings: outcome === 'found' ? countFindings(answer) : 0, ...(tokens !== undefined ? { tokens } : {}) },
+    { started: started === undefined ? null : new Date(started).toISOString(), ended: new Date(endMs).toISOString(), outcome, findings: outcome === 'found' ? countFindings(answer) : 0, ...(tokens !== undefined ? { tokens } : {}), ...(outcome === 'found' || outcome === 'nothing' ? { tasks: [] } : {}) },
     answer,
   )
   if (reason !== 'answer') {
