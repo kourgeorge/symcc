@@ -2,8 +2,9 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, type KeyHint } from '../hooks/board'
+import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, type KeyHint } from '../hooks/board'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
+import type { SymccStatus } from '../types'
 import { sayQueue } from '../hooks/app/state'
 import { inProject } from './project'
 import { ran, readText, entry, slash, print } from './fakes'
@@ -104,9 +105,9 @@ test('the band above the prompt sums up the board and lists what needs you or is
     const ui = await $.ui.mount({ ...BAND, surface })
     expect((await ui.find({ type: 'Text', text: new RegExp(`^${ICON} symcc board$`, 'u') }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /1 doing · 1 to do · 1 waiting for you · 1 done/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^T-2  waiting for you$/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^T-2  \? waiting$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^T-3  ▶ $/ }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^T-3  ▶ {8}$/ }))).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Docs/ })).toBeUndefined()
     await ui.unmount()
   }
@@ -167,6 +168,34 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const later = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   expect(await later.find({ type: 'Text', text: /^T-40 ▶ 15m +$/ })).toBeDefined()
   await later.unmount()
+})
+
+test("every band row lines up in one title column, with the board list's short status for each state (T-461)", async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const tasks = [
+    task('T-62', 'doing', 'Run one', { note: 'worker on it', attempts: 1, runs: [{ started: iso(T0 - 12 * 60_000) }] }),
+    task('T-63', 'doing', 'Run two', { note: 'worker on it', attempts: 2, runs: [{ started: iso(T0 - 3 * 60_000) }] }),
+    task('T-60', 'waiting', 'Wait one', { question: 'Q?' }),
+    task('T-61', 'review', 'Rev one', { note: 'ready for review' }),
+    task('T-59', 'failed', 'Fail one', { note: 'tests failed' }),
+  ]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const leads = ['T-62 ▶ 12m        ', 'T-63 ▶ 3m  · try 2', 'T-60 ? waiting    ', 'T-61 ◆ review     ', 'T-59 ✗ failed     ']
+  // each state is the list's own mark and short cell
+  expect(tasks.map(t => `${STATUS_MARK[t.status as SymccStatus]} ${statusCell(t as never, T0)}`)).toEqual(['▶ 12m', '▶ 3m', '? waiting', '◆ review', '✗ failed'])
+  for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') })).toBeDefined()
+  // so every title starts in the same column, right after a lead of one width
+  expect(new Set(leads.map(l => l.length)).size).toBe(1)
+  const titles = ['Run one', 'Run two', 'Wait one', 'Rev one', 'Fail one']
+  for (const [i, title] of titles.entries()) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(leads[i]!)} ${esc(title)}`, 'u') })).toBeDefined()
+  // the waiting row keeps its question as its tail; the rest of the band is as before
+  expect(await ui.find({ type: 'Text', text: /Wait one — Q\?/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /2 doing/ })).toBeDefined()
+  await ui.unmount()
 })
 
 test("the band hides only the notes a doing row's state says; other notes stay as the row's tail (T-455)", async ($, on) => {
