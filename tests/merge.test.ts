@@ -7,9 +7,10 @@ import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/
 import { askCall, checkEdit } from '../hooks/plugin/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
-import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, type TurnEnd } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/plugin/workers'
 import { claimLead } from '../hooks/plugin/lead'
 import { finishing as finishingSet } from '../hooks/plugin/state'
+import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
@@ -1734,7 +1735,10 @@ test("a worker's question with options saves the options, and the lead is told t
   expect(t.question).toBe('Which colour?')
   expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
   expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
-  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text, plus "or answer on the board"')
+  // Claude Code's words name its pop-up question tool (T-371: another host may have none)
+  S.W = CLAUDE_WORDS
+  expect(workerQuestionText('T-1', 'Which colour?', ['red', 'blue', 'green'])).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
 })
 
 test('a change worker whose edits outside its files were refused waits for those files, and nothing is merged even with half-done edits', async () => {
@@ -1829,7 +1833,7 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   await saveBoard(f.$, b)
   f.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
   workers.clear()
   expect(await lateHandBack(f.$, 'ag1')).toBe(true)
@@ -2604,16 +2608,16 @@ test("a worker's edit in the owner's copy of the project is refused without a fi
   f.put(`${WT}/.git`, 'gitdir: x')
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${ROOT}/.symcc/board.json` })).toMatch(/^Refused: \.symcc\/board\.json is symcc's own data.*not yours to edit/)
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: '../../README.md' })).toMatch(/^Refused: \.symcc\/README\.md is symcc's own data.*not yours to edit/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: '/tmp/scratch.txt' })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', { path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${ROOT}/.symcc/board.json` })).toMatch(/^Refused: \.symcc\/board\.json is symcc's own data.*not yours to edit/)
+  expect(await checkEdit(f.$, 'ag1', { path: '../../README.md' })).toMatch(/^Refused: \.symcc\/README\.md is symcc's own data.*not yours to edit/)
+  expect(await checkEdit(f.$, 'ag1', { path: '/tmp/scratch.txt' })).toBeUndefined()
   // none of these became a file request
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
   // inside its own folder: in scope is allowed, out of scope is still a file request
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/src/a.ts` })).toBeUndefined()
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'src/b.ts' })).toBeUndefined()
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/a.ts` })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', { path: 'src/b.ts' })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
   workers.clear()
 })
@@ -2627,8 +2631,8 @@ test("with a data folder other than .symcc, a worker's edit under it is refused 
   S.N = { ...was, dir: '.other' }
   try {
     workers.set('ag1', { task: 'T-1', worktree: `${ROOT}/.other/worktrees/T-1`, branch: 'symcc/T-1', since: T0 })
-    expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${ROOT}/.other/board.json` })).toMatch(/^Refused: \.other\/board\.json is symcc's own data.*not yours to edit/)
-    expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${ROOT}/.other/worktrees/T-9/a.ts` })).toMatch(/^Refused: \.other\/worktrees\/T-9\/a\.ts is another worker's copy.*not yours to edit/)
+    expect(await checkEdit(f.$, 'ag1', { path: `${ROOT}/.other/board.json` })).toMatch(/^Refused: \.other\/board\.json is symcc's own data.*not yours to edit/)
+    expect(await checkEdit(f.$, 'ag1', { path: `${ROOT}/.other/worktrees/T-9/a.ts` })).toMatch(/^Refused: \.other\/worktrees\/T-9\/a\.ts is another worker's copy.*not yours to edit/)
   } finally {
     S.N = was
     workers.clear()
@@ -2664,12 +2668,12 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   }
   fs.list = async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 }))
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/link/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: 'link/.symcc/board.json' })).toMatch(/^Refused: \.symcc\/board\.json is symcc's own data.*not yours to edit/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/broken` })).toMatch(/^Refused: .*broken goes through a symbolic link that leads to nothing/)
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/scratch/notes.txt` })).toBeUndefined()
-  expect(await checkEdit(f.$, 'ag1', 'Write', { file_path: `${wt5}/src/new/b.ts` })).toBeUndefined()
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/link/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy of the project.*edit .*T-5\/README\.md instead/)
+  expect(await checkEdit(f.$, 'ag1', { path: 'link/.symcc/board.json' })).toMatch(/^Refused: \.symcc\/board\.json is symcc's own data.*not yours to edit/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/broken` })).toMatch(/^Refused: .*broken goes through a symbolic link that leads to nothing/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/scratch/notes.txt` })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/new/b.ts` })).toBeUndefined()
+  expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
   workers.clear()
 })
@@ -2681,7 +2685,7 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  const bash = (agent: string | undefined, command: string) => checkEdit(f.$, agent, 'Bash', { command })
+  const bash = (agent: string | undefined, command: string) => checkEdit(f.$, agent, { command })
   for (const c of [`echo x > ${ROOT}/README.md`, `cp a ${ROOT}/.symcc/board.json`, `cd ${ROOT} && git commit -m x`, 'echo x > ../../README.md'])
     expect(await bash('ag1', c)).toMatch(/^Refused: this command names .* outside your own folder/)
   for (const c of ['echo x > /tmp/a', 'echo x > src/a.ts', 'bun test', `cat ${wt5}/src/a.ts`]) expect(await bash('ag1', c)).toBeUndefined()
@@ -2700,10 +2704,10 @@ test('after a reload (no worker in memory), an edit outside the files is still r
   const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   f.put(`${WT}/.git`, 'gitdir: x')
-  expect(await checkEdit(f.$, 'ag1', 'Edit', { file_path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
+  expect(await checkEdit(f.$, 'ag1', { path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
   // an agent the board doesn't know: nothing refused, no failure
-  expect(await checkEdit(f.$, 'nobody', 'Edit', { file_path: `${WT}/README.md` })).toBeUndefined()
+  expect(await checkEdit(f.$, 'nobody', { path: `${WT}/README.md` })).toBeUndefined()
   workers.clear()
 })
 
