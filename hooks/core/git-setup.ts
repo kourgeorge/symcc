@@ -117,23 +117,45 @@ export function setupAskText(s: GitState, name: string = DEFAULT_NAME, setup = `
   return `${what}. ${name} needs one to give each worker its own copy. Set it up? (${steps}.) Nothing starts until it's done. Ask the owner; only if they say yes, run ${setup} (or they press g in the board panel). It never pushes and adds no remote.`
 }
 
+/**
+ * Name endings that mark a committed template, not a real secret: .env.example, .env.local.sample, id_rsa.example, ...
+ * Lower case only, so it agrees with the setup .gitignore's `!.env*.example` lines (git matches them case-sensitively on
+ * Linux): .env.EXAMPLE is still a secret.
+ */
+export const TEMPLATE_ENDINGS = ['example', 'sample', 'template', 'dist', 'defaults'] as const
+
+const isTemplateName = (base: string) => TEMPLATE_ENDINGS.some(e => base.endsWith(`.${e}`))
+
 /** The lines a .gitignore made by setup holds (the data folder first). */
-export const gitignoreBase = (dir: string = DATA_DIR) => [`${dir}/`, 'node_modules/', '.env', '.env.*', '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/']
+export const gitignoreBase = (dir: string = DATA_DIR) => [`${dir}/`, 'node_modules/', '.env', '.env.*', ...TEMPLATE_ENDINGS.map(e => `!.env*.${e}`), '.DS_Store', 'dist/', 'build/', '__pycache__/', '.venv/']
 
 /** A .gitignore line as git matches it, to spot one already there: no leading "/", no trailing "/", no spaces around. */
 const ignoreKey = (line: string) => line.trim().replace(/^\//, '').replace(/\/+$/, '')
 
+/** The ending (".sample") of a line's last part, lower case; '' when it has none. */
+const lineEnding = (line: string) => {
+  const last = ignoreKey(line).split('/').pop() ?? ''
+  const dot = last.lastIndexOf('.')
+  return dot > 0 ? last.slice(dot).toLowerCase() : ''
+}
+
 /**
  * The .gitignore text after adding `lines` to `old` (null = no file yet): only the lines not
  * there already (and each once), at the end. Returns `old` unchanged when nothing is missing.
+ * A `!` line (such as `!.env*.sample`) is skipped when the old file already ignores a name with the
+ * same ending (`.env.sample`, `config/.env.sample`, `*.sample`): added last it would win over the
+ * owner's line and commit a file they ignored on purpose.
  */
 export function gitignoreWith(old: string | null, lines: string[]): string {
   const text = old ?? ''
-  const have = new Set(text.split(/\r?\n/).map(ignoreKey).filter(Boolean))
+  const own = text.split(/\r?\n/).map(x => x.trim()).filter(x => x && !x.startsWith('#'))
+  const have = new Set(own.map(ignoreKey).filter(Boolean))
+  const ownEndings = new Set(own.filter(x => !x.startsWith('!')).map(lineEnding).filter(Boolean))
   const add: string[] = []
   for (const l of lines.map(x => x.trim()).filter(Boolean)) {
     const k = ignoreKey(l)
     if (!k || have.has(k)) continue
+    if (l.startsWith('!') && ownEndings.has(lineEnding(l))) continue
     have.add(k)
     add.push(l)
   }
@@ -145,9 +167,10 @@ export function gitignoreWith(old: string | null, lines: string[]): string {
 /** Files bigger than this are left out of the first commit. */
 export const BIG_FILE_BYTES = 50 * 1024 * 1024
 
-/** Whether a file's name looks like a secret: .env and .env.*, *.pem, *.key, and SSH private keys (id_rsa, id_ed25519, ...; not their .pub). */
+/** Whether a file's name looks like a secret: .env and .env.*, *.pem, *.key, and SSH private keys (id_rsa, id_ed25519, ...; not their .pub). Templates (a name ending in .example, .sample, .template, .dist or .defaults, lower case) are not secrets. */
 export function isSecretName(file: string): boolean {
   const base = file.split('/').pop() ?? ''
+  if (isTemplateName(base)) return false
   if (base === '.env' || base.startsWith('.env.')) return true
   if (/\.(pem|key)$/i.test(base)) return true
   return /^id_(rsa|dsa|ecdsa|ed25519)$/.test(base)

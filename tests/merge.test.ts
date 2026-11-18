@@ -803,6 +803,16 @@ test('*.pem, *.key and id_rsa files are left out the same way; id_rsa.pub is not
   expect(t.history.at(-1)).toContain('left out tests/cert.pem, tests/id_rsa, tests/server.key: the name looks like a secret')
 })
 
+test('a change to a tracked .env.example (a template, not a secret) merges like any file', async () => {
+  const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env.example', 'tests/config/.env.defaults'])
+  expect(t.status).toBe('done')
+  expect(restored).toEqual([])
+  expect(w.git.changed).toEqual(['src/a.ts', 'tests/.env.example', 'tests/config/.env.defaults'])
+  expect(w.git.main).toBe(H1)
+  expect(told).not.toContain('left out')
+  expect(t.history.at(-1)).not.toContain('left out')
+})
+
 test('a secret-looking file the worker already committed is taken out of the branch before it merges', async () => {
   const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env'], true)
   expect(t.status).toBe('done')
