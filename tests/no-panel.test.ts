@@ -22,7 +22,7 @@ const ROOT = '/repo'
 const ISO = '2026-11-18T10:00:00.000Z'
 
 /** A host with none of the extras: no panel, no band, no plan mode, no lead usage, and a lead reached on its next turn. */
-const BARE: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false }
+const BARE: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: true }
 
 /** The fake Host with `features`, its files in memory, and what it was asked to open, show and time. */
 function world(features: Partial<HostFeatures> = BARE) {

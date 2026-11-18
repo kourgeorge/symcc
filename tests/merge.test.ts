@@ -20,7 +20,7 @@ import { commandsOf } from './fakes'
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
 import { fakeHost, memoryFs } from './fake-host'
-import { drainStarts, queuedStarts } from '../hooks/app/starts'
+import { drainStarts, queuedStarts, QUEUED_NOTE } from '../hooks/app/starts'
 import { withStarts } from './starts'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
@@ -4366,6 +4366,34 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   expect(r.ok).toBe(true)
   expect(w.calls).toContain(`${wt}: git add -A -- .`)
   expect(t2.files).toEqual(['docs/research/do-it.md'])
+})
+
+test('T-470: on a host with no start queue (features.startQueue off) a worker starts at once: no queue, no wake-up line for the lead, no "starting at the next turn" note', async () => {
+  const w = world({ current: 'main' })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 0 }, ISO))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  const notes: (string | undefined)[] = []
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async () => (notes.push(find(await load(w.$), 'T-1')!.note), { agentId: 'ag1' })
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  // no drain (withStarts) here: startWorker itself starts the worker
+  await startWorker(w.$, 'T-1')
+  expect(notes.length).toBe(1)
+  expect(queuedStarts()).toBe(0)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('doing')
+  expect(t.agent).toBe('ag1')
+  expect(t.note).toBe('worker on it')
+  expect(notes[0]).not.toBe(QUEUED_NOTE)
+  expect(leadQueue).toEqual([])
+  expect(w.toasts).toEqual([])
+  workers.clear()
 })
 
 test('the investigation worker prompt after Ask more asks for the complete answer, not only what changed', () => {

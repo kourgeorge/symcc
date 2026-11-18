@@ -1,17 +1,19 @@
 // One symcc session on the Node host: the same entry points (hooks/app/symcc.ts) in the same order as Claude Code's
-// wiring (hooks/register.tsx), with no logic of its own. A session starts (useName, sessionStarting, sessionStart, then
-// the start queue is emptied), the lead's tools and slash commands run through toolCall and runCommand, an agent
-// process that ends goes to agentFinished (then the start queue is emptied again, as after a turn.complete), and the
-// session ends with sessionEnd. What the lead would be told is taken with leadUpdate and printed by the CLI.
+// wiring (hooks/register.tsx), with no logic of its own. A session starts (useName, sessionStarting, sessionStart),
+// the lead's tools and slash commands run through toolCall and runCommand, an agent process that ends goes to
+// agentFinished, and the session ends with sessionEnd. What the lead would be told is taken with leadUpdate and
+// printed by the CLI. This host has no start queue (features.startQueue off): an agent starts at once, but only
+// during a tick (settle with `work`); any other time its start is taken back, so its task stays "todo".
 import type { Host } from '../../hooks/host'
 import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentFinished, leadUpdate } from '../../hooks/app/symcc'
 import { S, useName, toolName, workers, starting, finishing, approving, queuedWorkers, scoutRuns, checkerRuns } from '../../hooks/app/state'
-import { drainStarts, queuedStarts, cancelStarts } from '../../hooks/app/starts'
-import { stopForQuit } from '../../hooks/app/workers'
+import { StartCancelled } from '../../hooks/app/starts'
+import { stopForQuit, pump } from '../../hooks/app/workers'
 import { nodeHost } from './host'
 import { processAgents, type AgentRunner, type ProcessAgents } from './runner'
 
-export type NodeSession = { host: Host; agents: ProcessAgents; say: (line: string) => void; closing: boolean }
+/** `working`: a tick runs now, so agents may start (see settle). */
+export type NodeSession = { host: Host; agents: ProcessAgents; say: (line: string) => void; closing: boolean; working: boolean }
 
 export type SessionOptions = { root: string; runner: AgentRunner; say?: (line: string) => void; sessionId?: string; pluginRoot?: string }
 
@@ -24,15 +26,15 @@ export async function openSession(o: SessionOptions): Promise<NodeSession> {
     useName(host)
     for (const d of end.denied ?? []) say(`${agentId}: its permission rules refused ${d}`)
     agentFinished(host, agentId, end)
-    // a closing session starts nothing new
-    if (!ref.s?.closing) void drainStarts(host).catch(() => undefined)
   })
-  const host = nodeHost({ root: o.root, agents, say, cost: agents.cost, ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
+  // Agents start only while a tick runs and the session isn't closing; any other start is taken back.
+  const gated: ProcessAgents = { ...agents, spawn: a => (ref.s?.working && !ref.s.closing ? agents.spawn(a) : Promise.reject(new StartCancelled('started only by a tick'))) }
+  const host = nodeHost({ root: o.root, agents: gated, say, cost: agents.cost, ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
   ref.host = host
   useName(host)
   sessionStarting()
   await sessionStart(host)
-  return (ref.s = { host, agents, say, closing: false })
+  return (ref.s = { host, agents, say, closing: false, working: false })
 }
 
 /** Runs one of the lead's tools (`tool` in symcc's plain words, e.g. "add") as the lead, and answers its text. */
@@ -49,21 +51,21 @@ export async function slashCommand(s: NodeSession, command: string, args: string
 
 /** Whether nothing of symcc's runs or waits now: no agent process, no start, no check or merge. */
 function idle(s: NodeSession): boolean {
-  return s.agents.running() === 0 && queuedStarts() === 0 && workers.size === 0 && starting.size === 0 && queuedWorkers.size === 0 && finishing.size === 0 && approving.size === 0 && scoutRuns.size === 0 && checkerRuns.size === 0
+  return s.agents.running() === 0 && workers.size === 0 && starting.size === 0 && queuedWorkers.size === 0 && finishing.size === 0 && approving.size === 0 && scoutRuns.size === 0 && checkerRuns.size === 0
 }
 
 /**
- * Waits until the session is quiet. `work` true (the CLI's tick): queued agents are started (the start queue is
- * emptied on every look, as Claude Code does on each turn) and their runs, checks and merges waited for. `work` false:
- * a start that got queued meanwhile (the add tool pumps) is taken back, so the task stays "todo" for the next tick.
- * Gives up after `timeoutMs`; answers whether it went quiet.
+ * Waits until the session is quiet. `work` true (the CLI's tick): agents may start, the ready tasks are started
+ * (pump) and their runs, checks and merges waited for. `work` false: nothing starts (a start, e.g. from the add
+ * tool's pump, is taken back, see openSession), so the task stays "todo" for the next tick. Gives up after
+ * `timeoutMs`; answers whether it went quiet.
  */
 export async function settle(s: NodeSession, work: boolean, timeoutMs = 60 * 60_000, lookMs = 200): Promise<boolean> {
   const until = Date.now() + timeoutMs
   let quiet = 0
+  s.working = work
+  if (work) await pump(s.host).catch(() => undefined)
   while (Date.now() < until) {
-    if (work) await drainStarts(s.host).catch(() => undefined)
-    else if (queuedStarts()) cancelStarts(() => true, 'started only by a tick')
     quiet = idle(s) ? quiet + 1 : 0
     if (quiet >= 3) return true
     await s.host.clock.sleep(lookMs)
@@ -78,7 +80,7 @@ export async function settle(s: NodeSession, work: boolean, timeoutMs = 60 * 60_
  */
 export async function closeSession(s: NodeSession, why = 'the command line stopped waiting'): Promise<string | undefined> {
   s.closing = true
-  cancelStarts(() => true, why)
+  s.working = false
   const back = await stopForQuit(s.host, why).catch(() => [] as string[])
   await s.agents.stopAll()
   await sessionEnd(s.host)

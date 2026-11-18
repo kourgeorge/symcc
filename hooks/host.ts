@@ -140,10 +140,16 @@ export type HostFeatures = {
   planMode: boolean
   /** lead.usage can tell the lead's model calls; without it the stats say they can't be read here */
   leadUsage: boolean
+  /**
+   * agent starts wait in a queue until a turn starts or ends, and an idle lead is woken for them (app/starts.ts):
+   * Claude Code needs it, as it skips a plugin's hooks for agents started from timers or tool calls. Without it an
+   * agent starts at once
+   */
+  startQueue: boolean
 }
 
 /** Every feature on: Claude Code's, and what symcc does when the host doesn't say. */
-export const ALL_FEATURES: HostFeatures = { panel: true, band: true, wakeLead: 'now', planMode: true, leadUsage: true }
+export const ALL_FEATURES: HostFeatures = { panel: true, band: true, wakeLead: 'now', planMode: true, leadUsage: true, startQueue: true }
 
 /**
  * What a file-changing tool call touches, in symcc's words: a file it writes or edits (`path`), or a shell command it

@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process'
 import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostRunResult, SYMCC_WORDS, noUi } from '../../hooks/host'
 
 /** What this host can do: no screen, and the lead is told when the CLI asks (it prints the update). */
-export const NODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false }
+export const NODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: false }
 
 /** The symcc folder this file ships in (where roles/, kinds/, examples/ and .claude-plugin/plugin.json are). */
 export const PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\//, '')).replace(/\/hosts\/node\/[^/]*$/, '')

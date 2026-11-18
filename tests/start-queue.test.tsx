@@ -12,6 +12,7 @@ import { S, leadQueue } from '../hooks/app/state'
 import { queuedNeverStarted, unclaimQueued } from '../hooks/app/workers'
 import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE } from '../hooks/app/starts'
 import { ran } from './fakes'
+import { fakeHost as sharedFakeHost } from './fake-host'
 
 // ---------------- the queue itself ----------------
 
@@ -111,6 +112,21 @@ test('while the lead is in a turn, a queued start wakes nobody: that turn ends a
   leadTurn(false)
   await drainStarts(host)
   expect(spawned).toEqual(['symcc-T-1'])
+})
+
+test('T-470: with no start queue (features.startQueue off) startAgent spawns at once: nothing queued, no wake-up, no lead message; a start no longer wanted is cancelled', async () => {
+  const timers: number[] = []
+  const f = sharedFakeHost({ features: { startQueue: false }, clock: { after: ms => (timers.push(ms), { cancel() {} }) } })
+  S.enabledNow = true
+  const p = startAgent(f.host, worker('symcc-T-1'))
+  expect(queuedStarts()).toBe(0)
+  expect(await p).toEqual({ agentId: 'agent-1' })
+  expect(f.spawns.map(a => a.name)).toEqual(['symcc-T-1'])
+  expect(startCancelled(await startAgent(f.host, worker('symcc-T-2'), () => false).catch(e => e))).toBe(true)
+  expect(f.spawns.length).toBe(1)
+  expect(timers).toEqual([])
+  expect(leadQueue).toEqual([])
+  expect(f.toLead).toEqual([])
 })
 
 // ---------------- through the loaded plugin ----------------

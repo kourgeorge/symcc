@@ -10,7 +10,7 @@ import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
-import { startAgent, cancelStarts, startCancelled, QUEUED_NOTE } from './starts'
+import { startAgent, cancelStarts, startCancelled, claimNote, QUEUED_NOTE } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
@@ -96,7 +96,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(x, id)
       if (!mayStart(cur, agents.map(agentState), S.N.name)) return [x, null]
       const at = now()
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: QUEUED_NOTE, runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: cur!.attempts + 1, branch, note: claimNote(host), runs: startRun(cur!.runs, at, !!cur!.merge_main) }, at)
       return [y, find(y, id)!]
     })
     if (!t) return null
@@ -133,7 +133,7 @@ async function workerStarted(host: Host, id: string, before: BoardTask, dir: str
       if (!onPurpose.has(id))
         await change(host, x => {
           const cur = find(x, id)
-          return cur?.status === 'doing' && cur.note === QUEUED_NOTE && cur.attempts === claimed && !handedBack(cur) ? putTask(x, unclaimed(cur, now())) : x
+          return cur?.status === 'doing' && cur.note === claimNote(host) && cur.attempts === claimed && !handedBack(cur) ? putTask(x, unclaimed(cur, now())) : x
         }).catch(() => undefined)
       return
     }
@@ -155,7 +155,7 @@ async function workerStarted(host: Host, id: string, before: BoardTask, dir: str
   notReady.delete(id)
   workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
   // Record which agent works on the task, so a reloaded copy can find it; the note says it runs now.
-  await change(host, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId, ...(find(x, id)!.note === QUEUED_NOTE ? { note: 'worker on it' } : {}) }, now()) : x))
+  await change(host, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId, ...(find(x, id)!.note === claimNote(host) ? { note: 'worker on it' } : {}) }, now()) : x))
 }
 
 /**

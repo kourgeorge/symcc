@@ -6,6 +6,8 @@
 // startAgent puts the start in this queue, and drainStarts, called from those hooks only (register.tsx), starts
 // what waits. When the lead is idle (no turn will start or end soon), the lead is woken once with a short board
 // update (tellLead): that turn's turn.start empties the queue, about 2 s later.
+// Only a host that needs it has the queue (features.startQueue, Claude Code's): on any other host startAgent starts
+// the agent at once, with no wake-up and no "starting at the next turn" note, and nothing needs draining.
 import type { Host, HostAgentStart, HostAgentStarted } from '../host'
 import { S } from './state'
 import { tellLead } from './tell'
@@ -37,12 +39,14 @@ export const wakeLine = (a: HostAgentStart) => `Starting ${a.kind} ${a.name} (${
 export const QUEUED_NOTE = 'starting at the next turn'
 
 /**
- * Asks for agent `input` to start: queued until the next drainStarts, never started here. Settles once it started
+ * Asks for agent `input` to start. A host with no start queue (features.startQueue off) starts it at once, after
+ * asking `still`. Else it is queued until the next drainStarts, never started here. Settles once it started
  * (with host.agents.spawn's answer, or its error). The lead is woken once when it is idle. `still`, asked right
  * before the start, says whether it is still wanted (e.g. its task wasn't dropped meanwhile): if not, it rejects
  * with StartCancelled and nothing starts.
  */
 export function startAgent(host: Host, input: HostAgentStart, still?: () => boolean | Promise<boolean>): Promise<HostAgentStarted> {
+  if (!host.features.startQueue) return startNow(host, { input, ...(still ? { still } : {}) })
   return new Promise<HostAgentStarted>((resolve, reject) => {
     waiting.push({ input, resolve, reject, ...(still ? { still } : {}) })
     if (leadBusy || woke) return
@@ -73,19 +77,18 @@ export function cancelStarts(which: (a: HostAgentStart) => boolean, why?: string
  */
 export async function drainStarts(host: Host) {
   woke = false
-  for (let w = waiting.shift(); w; w = waiting.shift()) {
-    try {
-      // still wanted? (a stop while it waited takes it out with cancelStarts; this catches every other change)
-      if (w.still && !(await w.still())) {
-        w.reject(new StartCancelled())
-        continue
-      }
-      w.resolve(await host.agents.spawn(w.input))
-    } catch (err) {
-      w.reject(err)
-    }
-  }
+  for (let w = waiting.shift(); w; w = waiting.shift()) await startNow(host, w).then(w.resolve, w.reject)
 }
+
+/** Starts `w.input` now, unless its `still` says it is no longer wanted (then it rejects with StartCancelled). */
+async function startNow(host: Host, w: Pick<Waiting, 'input' | 'still'>): Promise<HostAgentStarted> {
+  // still wanted? (a stop while it waited takes it out with cancelStarts; this catches every other change)
+  if (w.still && !(await w.still())) throw new StartCancelled()
+  return host.agents.spawn(w.input)
+}
+
+/** The note of a task whose worker is being started: QUEUED_NOTE on a host with the start queue, else a plain one. */
+export const claimNote = (host: Host) => (host.features.startQueue ? QUEUED_NOTE : 'worker starting')
 
 /** The lead's turn started (`busy`) or ended: while it runs, a queued start needs no wake-up (the turn's end starts it). */
 export function leadTurn(busy: boolean) {
