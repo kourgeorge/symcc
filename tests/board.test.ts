@@ -2950,7 +2950,16 @@ test('readBoard drops bad entries inside files, after, history and runs, and nam
   expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], history: ['h'], runs: [] }] })).fixed).toEqual([])
 })
 
+test('fixText lists dropped task entries as they are and keeps "set to the default" for settings only', () => {
+  const r = readBoard(JSON.stringify({ mode: 'zzz', tasks: [{ id: 'T-1', status: 'doing', title: 'x', files: ['a', 3], runs: 'abc' }] }))
+  expect(fixText(0, r.fixed)).toBe('bad value for mode set to the default; T-1: 1 bad files entry dropped; T-1: runs was not a list, cleared')
+  expect(fixText(0, ['mode', 'next_id'])).toBe('bad values for mode, next_id set to the default')
+  expect(fixText(2, ['T-1: 2 bad tries dropped'])).toBe('skipped 2 task entries that are not a task; T-1: 2 bad tries dropped')
+  expect(fixText(1, [])).toBe('skipped 1 task entry that is not a task')
+})
+
 // ---------------- a scout run that fails to start, or is stopped ----------------
+import { fixText } from '../hooks/plugin/store'
 import { runScout, runScoutNow, scoutFinished } from '../hooks/plugin/scouts'
 import { S as PS, scoutState, scoutRuns, timers as scoutTimers, leadQueue as scoutLeadQueue } from '../hooks/plugin/state'
 

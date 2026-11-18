@@ -102,6 +102,20 @@ async function keepCopy(host: Host, text: string, what: string, say: (copy: stri
   return name
 }
 
+/**
+ * What readBoard fixed, in words: skipped task entries, settings set to their default (plain names
+ * like "mode"), and whole-sentence fixes inside tasks (like "T-1: 2 bad files entries dropped") as they are.
+ */
+export function fixText(skipped: number, fixed: string[]): string {
+  const names = fixed.filter(f => /^\w+$/.test(f))
+  const notes = fixed.filter(f => !/^\w+$/.test(f))
+  return [
+    skipped ? `skipped ${skipped} task entr${skipped > 1 ? 'ies' : 'y'} that ${skipped > 1 ? 'are' : 'is'} not a task` : '',
+    names.length ? `bad value${names.length > 1 ? 's' : ''} for ${names.join(', ')} set to the default` : '',
+    ...notes,
+  ].filter(Boolean).join('; ')
+}
+
 export async function load(host: Host): Promise<Board> {
   const exists = await host.fs.exists(path(S.N.boardFile))
   if (!exists) {
@@ -118,7 +132,7 @@ export async function load(host: Host): Promise<Board> {
     throw new Error(brokenBoardText(S.N.boardFile, r.broken, copy || undefined))
   }
   if (r.skipped || r.fixed.length)
-    await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${r.skipped ? `skipped ${r.skipped} task entr${r.skipped > 1 ? 'ies' : 'y'} that ${r.skipped > 1 ? 'are' : 'is'} not a task` : ''}${r.skipped && r.fixed.length ? '; ' : ''}${r.fixed.length ? `bad value${r.fixed.length > 1 ? 's' : ''} for ${r.fixed.join(', ')} set to the default` : ''}${c ? `. The file as it was is kept in ${c}` : ''}.`)
+    await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, r.fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   S.enabledNow = symccOn(r.board)
   return r.board
 }
