@@ -39,28 +39,44 @@ function saidBefore(t: Failed, detail: RegExp): string {
   return ''
 }
 
+/** How many different tests failed in test output (each "(fail)" line once, even when the kept output shows it twice). */
+export const failCount = (output: string): number =>
+  new Set(output.split('\n').map(l => l.trim()).filter(l => /^\(fail\)\s/.test(l)).map(l => l.replace(/\s*\[[\d.]+\s*m?s\]$/, ''))).size
+
 /**
- * The failing tests in test output, as bun prints them: each "(fail) <name>" line, after the one or two
- * "error:" / "Expected" lines bun prints above it. "(pass)" lines are never taken. '' when the saved output
- * has no "(fail)" line (it was cut before it), so nothing is guessed. `n` is how many failing tests to show.
+ * The failing tests in test output: each "(fail) <name>" line with the first error lines of the first one,
+ * whether the runner prints them above it (plain bun: "error:" / "Expected" lines) or indented right after it
+ * (`claude plugin test`). Later failures show only their name, so up to `n` of them fit. "(pass)" lines are never
+ * taken. '' when the saved output has no "(fail)" line (it was cut before it), so nothing is guessed.
  */
 export function failingLines(output: string, n = 1): string {
-  const lines = output.split('\n').map(l => l.trim())
+  const raw = output.split('\n')
+  const lines = raw.map(l => l.trim())
   const picks: string[] = []
-  let fails = 0
+  const seen = new Set<string>()
   for (let i = 0; i < lines.length; i++) {
     if (!/^\(fail\)\s/.test(lines[i]!)) continue
-    fails++
+    // kept test output can show a failure twice: in the failed tests up front and again in its end
+    const name = lines[i]!.replace(/\s*\[[\d.]+\s*m?s\]$/, '')
+    if (seen.has(name)) continue
+    seen.add(name)
     if (picks.length >= n) continue
+    if (picks.length) {
+      picks.push(name)
+      continue
+    }
     const why: string[] = []
     for (let j = i - 1; j >= 0 && !/^\((pass|fail|skip|todo)\)\s/.test(lines[j]!); j--) {
       if (/^(error:|expected)/i.test(lines[j]!)) why.unshift(lines[j]!)
     }
-    picks.push([lines[i]!.replace(/\s*\[[\d.]+\s*m?s\]$/, ''), ...why.slice(0, 2)].join(' | '))
+    for (let j = i + 1; j < raw.length && /^\s/.test(raw[j]!) && !/^\s*\d+ (pass|fail)\b/.test(raw[j]!); j++) {
+      if (lines[j]) why.push(lines[j]!)
+    }
+    picks.push([name, ...why.slice(0, 2)].join(' | '))
   }
   if (!picks.length) return ''
-  const more = fails - picks.length
-  return cutLine(picks.join(' | ') + (more > 0 ? ` (and ${more} more)` : ''), 240)
+  const more = seen.size - picks.length
+  return cutLine(picks.join('; ') + (more > 0 ? ` (and ${more} more)` : ''), 240)
 }
 
 /**
@@ -126,9 +142,10 @@ export function whyFailed(t: Failed): string {
   switch (failedHow(t)) {
     case 'tests': {
       const cmd = /^\$ (.+?) \(exit (\d+)\)/m.exec(out) ?? /^tests failed: `(.+?)` \(exit (\d+)\)/.exec(note)
-      const lines = out ? failingLines(out) : ''
+      const fails = failCount(out)
+      const lines = out ? failingLines(out, 3) : ''
       const errors = out && !lines && !/^\(fail\)\s/m.test(out) ? errorLines(out) : ''
-      const which = lines ? `First failing test: ${end(lines)}` : errors ? `First error: ${end(errors)}` : out ? "The saved test output doesn't show which test failed." : ''
+      const which = lines ? `${fails === 1 ? 'Failing test' : `${fails} failing tests`}: ${end(lines)}` : errors ? `First error: ${end(errors)}` : out ? "The saved test output doesn't show which test failed." : ''
       return `The tests failed${cmd ? ` (\`${cmd[1]}\`, exit ${cmd[2]})` : ''}.${which ? ` ${which}` : ''}`
     }
     case 'checker': {

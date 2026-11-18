@@ -930,7 +930,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   if (r.ok) sayDone(host, b, t.id)
   // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
   if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await git(host, ['branch', '-d', taskBranch(t)])
-  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? "The checker's report" : 'The end of the last test output'}:\n${r.checker ? r.testOutput.replace(/^[^\n]*\n/, '') : r.testOutput}` : ''
+  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? "The checker's report" : 'The last test output (each failing test first when it was long, then its end)'}:\n${r.checker ? r.testOutput.replace(/^[^\n]*\n/, '') : r.testOutput}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }

@@ -1,7 +1,7 @@
 // resetPlugin() (tests/reset.ts) must start each test as a reload does: S back to its start values, timers
 // cancelled and dropped, and the private queues of store.ts and review.ts forgotten.
 import { expect } from 'claude-code/testing'
-import { test, resetPlugin } from './reset'
+import { test, resetPlugin, withTimeout, RESET_TEST_TIMEOUT_MS } from './reset'
 import { S, startS, timers } from '../hooks/plugin/state'
 import { oneAtATime } from '../hooks/plugin/store'
 import { mergeTurn } from '../hooks/plugin/review'
@@ -80,6 +80,13 @@ test('another test that leaves S.me set (the next one, given options, checks it 
 test('the reset test() given options before the body still starts fresh and runs the body with $', { timeoutMs: 5000 }, $ => {
   expect(S.me).toBe('')
   expect(typeof $.ui).toBe('object')
+})
+
+test('the reset test() gives every test RESET_TEST_TIMEOUT_MS unless it sets its own, and keeps its other options', () => {
+  expect(RESET_TEST_TIMEOUT_MS).toBeGreaterThanOrEqual(20_000)
+  expect(withTimeout()).toEqual({ timeoutMs: RESET_TEST_TIMEOUT_MS })
+  expect(withTimeout({ timeoutMs: 5000 })).toEqual({ timeoutMs: 5000 })
+  expect(withTimeout({ options: { a: 1 } } as never)).toEqual({ options: { a: 1 }, timeoutMs: RESET_TEST_TIMEOUT_MS } as never)
 })
 
 /** A stand-in $ for the logo player: a shown, placed board pane and a frame timer ticked by hand. */

@@ -1,13 +1,13 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, type BoardTask } from '../hooks/board'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
 
 // The notes and fields the plugin writes for each way a task fails (hooks/plugin/workers.ts, review.ts, checker.ts).
 const CASES: [string, BoardTask, RegExp][] = [
-  ['tests failed', failed({ note: 'tests failed: `npm test` (exit 1). boom', test_output: '$ npm test (exit 1)\n(pass) a guard refuses when it fails [1ms]\nerror: expect(received).toBe(expected)\n\nExpected: 2\nReceived: 3\n\n      at <anonymous> (tests/a.test.ts:4:3)\n(fail) adds numbers [1.0ms]\n' }), /^The tests failed \(`npm test`, exit 1\)\. First failing test: \(fail\) adds numbers \| error: expect\(received\)\.toBe\(expected\) \| Expected: 2\.$/],
+  ['tests failed', failed({ note: 'tests failed: `npm test` (exit 1). boom', test_output: '$ npm test (exit 1)\n(pass) a guard refuses when it fails [1ms]\nerror: expect(received).toBe(expected)\n\nExpected: 2\nReceived: 3\n\n      at <anonymous> (tests/a.test.ts:4:3)\n(fail) adds numbers [1.0ms]\n' }), /^The tests failed \(`npm test`, exit 1\)\. Failing test: \(fail\) adds numbers \| error: expect\(received\)\.toBe\(expected\) \| Expected: 2\.$/],
   ['checker problems', failed({ note: 'the checker found problems: the save button is never enabled', test_output: checkerOutput('The save button is never enabled.\nAlso no test.') }), /^The checker found problems with the work\. First problem: The save button is never enabled\.$/],
   ['out of scope', failed({ note: outOfScopeText(['src/b.ts', 'README.md'], ['src/a.ts'], true) }), /^The worker changed files outside the task's list: src\/b\.ts, README\.md, so nothing was merged\.$/],
   ['no change', failed({ note: 'the worker made no change', history: ['try 1: Found the cause: the cache key ignores the user. No code change needed; see below. → the worker made no change'] }), /^The worker finished without changing any files\. Its report says: Found the cause: the cache key ignores the user\. No code change needed; see below\.$/],
@@ -78,6 +78,90 @@ test('failing test lines: only "(fail)" lines and the error above each, never "(
   expect(failingLines(cut)).toBe('')
   expect(whyFailed(failed({ note: 'tests failed: `claude plugin test .` (exit 1)', test_output: cut })))
     .toBe("The tests failed (`claude plugin test .`, exit 1). The saved test output doesn't show which test failed.")
+})
+
+// Shaped like `claude plugin test .` output: test results on stdout, a test's console printout on stderr, which
+// review.ts puts after stdout; each "(fail)" line has its error indented right after it.
+const runnerOutput = (failures: { at: number; name: string; error: string[] }[], passes = 900) => {
+  const out = ['$ claude plugin test . (exit 1)', '']
+  for (let i = 0; i < passes; i++) {
+    if (i % 100 === 0) out.push('', `tests/file-${i / 100}.test.ts:`)
+    out.push(`(pass) passing test number ${i} does what its name says [${(i % 7) + 1}.25ms]`)
+    for (const f of failures.filter(f => f.at === i)) out.push(`(fail) ${f.name} [5001.00ms]`, ...f.error.map(e => `  ${e}`))
+  }
+  out.push('', ` ${passes} pass`, ` ${failures.length} fail`, `Ran ${passes + failures.length} tests across 9 files. [48.0s]`)
+  out.push('', 'scouts list printout:', ...Array.from({ length: 60 }, (_, i) => `  scout-${i}  every 30 min  last ran 2026-11-18`))
+  return out.join('\n')
+}
+
+test('kept test output: every "(fail)" line and its error survive when the output is very long', () => {
+  const failures = [
+    { at: 3, name: 'f opens the search; typing shows only matching tasks', error: ['Error: timed out after 5000 ms'] },
+    { at: 450, name: 'a merged task ends done', error: ['AssertionError: expect(received).toBe()', '', 'Expected: "done"', 'Received: "todo"'] },
+    { at: 800, name: 'the last test in the run', error: ['Error: boom'] },
+  ]
+  const full = runnerOutput(failures)
+  expect(full.length).toBeGreaterThan(50_000)
+  const kept = testTail(full)
+  // the old cut (only the end) lost them all: the end is the count lines and the printout
+  expect(full.slice(-TEST_OUTPUT_CHARS)).not.toContain('(fail)')
+  for (const f of failures) {
+    expect(kept).toContain(`(fail) ${f.name} [5001.00ms]`)
+    for (const e of f.error.filter(Boolean)) expect(kept).toContain(`  ${e}`)
+  }
+  // the command line first, then the heading, then the failures with their test file, then the end
+  const lines = kept.split('\n')
+  expect(lines[0]).toBe('$ claude plugin test . (exit 1)')
+  expect(lines[1]).toBe(failedTestsHead(3))
+  expect(lines[2]).toBe('tests/file-0.test.ts:')
+  expect(lines[3]).toBe('(fail) f opens the search; typing shows only matching tasks [5001.00ms]')
+  expect(kept).toContain('tests/file-4.test.ts:\n(fail) a merged task ends done')
+  expect(kept.endsWith(full.slice(-TEST_OUTPUT_CHARS))).toBe(true)
+  expect(kept).toContain(' 3 fail')
+  // a passing test is never taken as a failure, and the error stops at the next test
+  expect(kept).not.toContain('passing test number 4 ')
+  expect(failBlocks(full)[1]).toBe('tests/file-4.test.ts:\n(fail) a merged task ends done [5001.00ms]\n  AssertionError: expect(received).toBe()\n\n  Expected: "done"\n  Received: "todo"')
+  // the task page and the lead's board name them, counting each once (the kept output can show one twice)
+  expect(failCount(kept)).toBe(3)
+  expect(whyFailed(failed({ note: 'tests failed: `claude plugin test .` (exit 1)', test_output: kept })))
+    .toBe('The tests failed (`claude plugin test .`, exit 1). 3 failing tests: (fail) f opens the search; typing shows only matching tasks | Error: timed out after 5000 ms; (fail) a merged task ends done; (fail) the last test in the run.')
+})
+
+test('kept test output: short output is kept whole, and long output with no failure keeps only its end', () => {
+  const short = '$ claude plugin test . (exit 1)\n\ntests/a.test.ts:\n(pass) a [1ms]\n(fail) x [2ms]\n  Error: y\n\n 1 pass\n 1 fail\n'
+  expect(short.length).toBeLessThan(TEST_OUTPUT_CHARS)
+  expect(testTail(short)).toBe(short.trim())
+  const typecheck = '$ sh scripts/typecheck.sh (exit 1)\n' + 'hooks/a.ts(1,1): error TS2322: nope\n'.repeat(400)
+  const kept = testTail(typecheck)
+  expect(kept).toBe('…' + typecheck.trim().slice(-TEST_OUTPUT_CHARS))
+  expect(testTail('')).toBe('')
+})
+
+test('kept test output: a huge error is cut to its first lines, and past the room for errors only the "(fail)" lines stay', () => {
+  const long = Array.from({ length: 200 }, (_, i) => `diff line ${i} ${'y'.repeat(400)}`)
+  const many = Array.from({ length: 40 }, (_, i) => ({ at: 10 + i * 20, name: `broken test ${i}`, error: [`Error: wrong ${i}`, ...long] }))
+  const kept = testTail(runnerOutput(many))
+  for (let i = 0; i < 40; i++) expect(kept).toContain(`(fail) broken test ${i} [5001.00ms]`)
+  expect(kept).toContain('  Error: wrong 0')
+  expect(kept).toContain(`  … (${long.length + 1 - FAIL_ERROR_LINES} more error lines)`)
+  expect(kept).not.toContain('Error: wrong 39')
+  expect(kept).not.toContain('diff line 150')
+  // no line is longer than 300 characters, and the whole stays near its two limits
+  expect(Math.max(...kept.split('\n').map(l => l.length))).toBeLessThanOrEqual(300)
+  expect(kept.length).toBeLessThan(FAIL_BLOCK_CHARS + TEST_OUTPUT_CHARS + 40 * 120)
+})
+
+test('kept test output: plain bun output, with the error printed above "(fail)", keeps that error too', () => {
+  const bun = ['$ bun test (exit 1)', 'tests/a.test.ts:', '(pass) ok one [1ms]', '1 | import { test } from "bun:test"', '3 | test("bad one", () => { expect(1).toBe(2) })', '                                  ^',
+    'error: expect(received).toBe(expected)', '', 'Expected: 2', 'Received: 1', '', '      at <anonymous> (/x/tests/a.test.ts:3:35)', '(fail) bad one [0.84ms]', '(fail) slow one [51.28ms]', '  ^ this test timed out after 50ms.',
+    ...Array.from({ length: 200 }, (_, i) => `(pass) filler ${i} ${'z'.repeat(40)}`), '', ' 200 pass', ' 2 fail'].join('\n')
+  const blocks = failBlocks(bun)
+  expect(blocks).toEqual([
+    'tests/a.test.ts:\nerror: expect(received).toBe(expected)\n\nExpected: 2\nReceived: 1\n\n      at <anonymous> (/x/tests/a.test.ts:3:35)\n(fail) bad one [0.84ms]',
+    '(fail) slow one [51.28ms]\n  ^ this test timed out after 50ms.',
+  ])
+  expect(testTail(bun)).toContain(blocks.join('\n'))
+  expect(failingLines(testTail(bun), 3)).toBe('(fail) bad one | error: expect(received).toBe(expected) | Expected: 2; (fail) slow one')
 })
 
 test("the checker's first problem is taken from its list of problems, not its opening line", () => {

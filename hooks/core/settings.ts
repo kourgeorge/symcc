@@ -20,10 +20,93 @@ export function onTestFail(t: Pick<SymccTask, 'test_tries'>, max = DEFAULT_AUTO_
   return retryOrFail(t.test_tries, max)
 }
 
-/** The last `n` characters of the test output, so it fits in the next worker's prompt. */
+/** How much room the failed tests get, in front of the end of long test output (see testTail). */
+export const FAIL_BLOCK_CHARS = 4000
+
+/** At most this many error lines are kept with each "(fail)" line (the first ones). */
+export const FAIL_ERROR_LINES = 12
+
+/** The line in front of the failed tests that testTail keeps from long test output (`n` of them failed). */
+export const failedTestsHead = (n: number) => `${n} failed ${n === 1 ? 'test' : 'tests'}, each "(fail)" line with its error (the end of the output comes after):`
+
+const MARK_LINE = /^\((pass|fail|skip|todo)\)\s/
+const FILE_LINE = /^\S.*\.test\.[cm]?[jt]sx?:$/
+/** The runner's count lines at the end: " 935 pass", " 1 fail", " 3 expect() calls", "Ran 936 tests across 43 files." */
+const SUMMARY_LINE = /^\s*(\d+ (pass|fail|skip|todo)|\d+ expect\(\) calls?|Ran \d+ tests?\b)/
+
+/**
+ * Every failing test in test output, as one block each: the test file's line (for the first failure in that
+ * file), then the "(fail) <name>" line with its error in the order printed: the indented lines right after it
+ * (`claude plugin test`), or the lines from "error:" down to it (plain `bun test` prints the error above). Each error keeps at most
+ * FAIL_ERROR_LINES lines of at most 300 characters. [] when nothing failed.
+ */
+export function failBlocks(output: string): string[] {
+  const lines = String(output ?? '').split('\n').map(l => l.replace(/\s+$/, ''))
+  const blocks: string[] = []
+  let file = ''
+  let fileShown = ''
+  let lastMark = -1
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!
+    if (FILE_LINE.test(l)) {
+      file = l
+      lastMark = i
+      continue
+    }
+    if (!MARK_LINE.test(l)) continue
+    if (!l.startsWith('(fail)')) {
+      lastMark = i
+      continue
+    }
+    const prev = lines.slice(lastMark + 1, i)
+    const from = prev.findIndex(a => /^error:/i.test(a.trim()))
+    const before = from < 0 ? [] : prev.slice(from)
+    const after: string[] = []
+    for (let j = i + 1; j < lines.length; j++) {
+      const a = lines[j]!
+      if (MARK_LINE.test(a) || FILE_LINE.test(a) || SUMMARY_LINE.test(a) || (a !== '' && !/^\s/.test(a))) break
+      after.push(a)
+    }
+    while (after.length && after.at(-1)!.trim() === '') after.pop()
+    // in the order printed: plain bun's error above the "(fail)" line, `claude plugin test`'s below it
+    const tidy = (part: string[]) => part.filter((a, k) => a.trim() !== '' || (k > 0 && part[k - 1]!.trim() !== ''))
+    const cut = (a: string) => (a.length > 300 ? a.slice(0, 299) + '…' : a)
+    const above = tidy(before)
+    const below = tidy(after)
+    const up = above.slice(0, FAIL_ERROR_LINES).map(cut)
+    const down = below.slice(0, FAIL_ERROR_LINES - up.length).map(cut)
+    const left = above.length + below.length - up.length - down.length
+    if (left > 0) down.push(`  … (${left} more error lines)`)
+    const head = file && file !== fileShown ? [file] : []
+    fileShown = file || fileShown
+    blocks.push([...head, ...up, l, ...down].join('\n'))
+    lastMark = i
+  }
+  return blocks
+}
+
+/**
+ * The test output a task keeps (test_output), so it fits in the next worker's prompt: all of it when it is at
+ * most `n` characters; else every failing test with its error (failBlocks, FAIL_BLOCK_CHARS of them, then only
+ * the "(fail)" lines of the rest, so no failure is ever left out), then the last `n` characters. The "$ command
+ * (exit N)" first line stays first.
+ */
 export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
   const s = String(output ?? '').trim()
-  return s.length > n ? '…' + s.slice(-n) : s
+  if (s.length <= n) return s
+  const end = '…' + s.slice(-n)
+  const blocks = failBlocks(s)
+  if (!blocks.length) return end
+  const first = s.slice(0, s.indexOf('\n') < 0 ? s.length : s.indexOf('\n'))
+  const kept: string[] = []
+  let used = 0
+  for (const b of blocks) {
+    const short = b.split('\n').filter(l => FILE_LINE.test(l) || l.startsWith('(fail)')).join('\n')
+    const take = used + b.length <= FAIL_BLOCK_CHARS ? b : short
+    used += take.length
+    kept.push(take)
+  }
+  return [...(first.startsWith('$ ') ? [first] : []), failedTestsHead(blocks.length), ...kept, end].join('\n')
 }
 
 /** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */
