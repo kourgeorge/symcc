@@ -305,7 +305,11 @@ test("the checker role's page shows the checker's own built-in prompt, the one i
 })
 
 test("the checker role has no Turn on / off: its page points to the checker setting and says whether it is on", async ($, on) => {
-  stateOf(on, VIEW)
+  // the Settings view draws the checker setting from the published view, as publish (lead.ts) puts it there from the board
+  const view = { ...VIEW.view, value: { ...VIEW.view.value, checker: false } }
+  let version = 1
+  const seed: Record<string, unknown> = { ...VIEW, view }
+  on('state.get', (_, e, next) => (e.key in seed ? { value: { value: seed[e.key], version } } : next(e)))
   let checker = false
   fakeRoles(on, { 'checker.md': '---\ndescription: tries to break a change\noff: true\n---\n- try empty input\n' }, () => ({ ...emptyBoard(), checker }))
   const ui = await settings($)
@@ -316,6 +320,8 @@ test("the checker role has no Turn on / off: its page points to the checker sett
   expect(await ui.find({ type: 'Text', text: /the checker setting runs it \(Settings → checker, now off\)/ })).toBeDefined()
   await ui.press({ key: 'role-back' })
   checker = true
+  view.value.checker = true
+  version++
   await ui.press({ key: 'roleRow:checker' })
   expect(await ui.find({ type: 'Text', text: /Settings → checker, now on/ })).toBeDefined()
   // another role's page has no such line

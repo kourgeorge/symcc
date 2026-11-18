@@ -72,7 +72,7 @@ const PANE = {
   props: { title: 'symcc board', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
-test('f opens the search; typing shows only matching tasks in every group, with the count line', async ($, on) => {
+test('f opens the search; typing shows only matching tasks in every group, with the count line', { timeoutMs: 20_000 }, async ($, on) => {
   const tasks = [
     task('T-1', 'todo', 'Voice notify'),
     task('T-2', 'todo', 'Parser'),

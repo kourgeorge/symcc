@@ -19,16 +19,16 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
 }
 
 /** Tells the lead `text` now (in the next board update, sent in a moment when the chat is idle). */
-export function tellLead($: Host, text: string) {
+export function tellLead(host: Host, text: string) {
   if (!S.enabledNow) return // the plugin is off: no "[name] Board update" messages
   leadQueue.push(text)
   if (S.leadTimer) return
-  S.leadTimer = $.clock.after(1500, () => {
+  S.leadTimer = host.clock.after(1500, () => {
     S.leadTimer = null
     const body = leadQueue.splice(0).join('\n\n')
     if (!body || !S.enabledNow) return
     const before = meanwhileText(meanwhile.splice(0))
-    void $.prompt.submit({ text: `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.` }).catch(() => undefined)
+    void host.lead.send(`[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.`).catch(() => undefined)
   })
 }
 
