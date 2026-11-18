@@ -179,6 +179,13 @@ const WRITES: [string, string][] = [
   ["grep $'\\'' x; git stash; echo $'\\''", 'git stash'],
   ['grep -h git notes\ngit stash', 'git notes'],
   ['sudo sh s; grep -h "git stash" notes > s', 'git stash'],
+  // checker round 5: any command that isn't a text tool or read-only git turns the exceptions off for the line
+  ['grep -h "git stash" notes > s; $SHELL s', 'git stash'],
+  ['grep -h "git stash" notes > s; $0 s', 'git stash'],
+  ['grep -h "git stash" notes > s; /bin/s? s', 'git stash'],
+  ['grep -h "git stash" notes > s; /bin/[s]h s', 'git stash'],
+  ['grep -h "git stash" notes > s; tcsh s', 'git stash'],
+  ['grep -h "git stash" notes > s; chmod +x s; ./s', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {
