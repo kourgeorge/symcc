@@ -45,7 +45,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont  # noqa: E402
 
 # ---------------------------------------------------------------- settings
 
-# Another story (make_swarm_video.py) sets these, SCENE_FNS and thumbnail, then calls main.
+# Another story (make_organization_video.py) sets these, SCENE_FNS and thumbnail, then calls main.
 NAME = "symcc_scouts"
 NARRATION = os.path.join(HERE, "scouts_narration.md")
 MP4 = os.path.join(yt.OUT_DIR, NAME + ".mp4")
