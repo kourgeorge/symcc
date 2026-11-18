@@ -1595,7 +1595,7 @@ export async function check(host: Host) {
     // Its report may be on its way (turn.complete hands it on a moment after the agent ends), so the
     // first check that sees it ended gives it a short grace (ENDED_GRACE_MS) and fails it then if still
     // not handed back; with no timer here, the next check fails it.
-    // Claude Code drops an ended agent from $.agent.list() a while after it ends: a tracked worker
+    // Claude Code drops an ended agent from host.agents.list() a while after it ends: a tracked worker
     // missing from a list we did get counts as ended too, once it stays missing for one whole check.
     const missing = agents !== undefined && info === undefined
     const ended = missing || (info !== undefined && ENDED_STATUSES.includes(info.status))

@@ -2357,7 +2357,7 @@ async function overTime(then: (w: ReturnType<typeof world>, sent: { to: string; 
       S.driving = true
       sent = sentTo(w)
       // ag1 is still running: listed, so the check does not take it as gone (a missing worker fails)
-      ;(w.claude as unknown as { agent: Record<string, unknown> }).agent.list = async () => (workers.has('ag1') ? [{ id: 'ag1', type: 'general-purpose', status: 'running', description: '' }] : [])
+      w.$.agents.list = async () => (workers.has('ag1') ? [{ id: 'ag1', kind: 'worker', status: 'running', description: 'T-1' }] : [])
       await then(w, sent)
     })
   } finally {
