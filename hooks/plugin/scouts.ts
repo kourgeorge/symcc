@@ -3,6 +3,7 @@ import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentCl
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { type Host, notReadyYet } from '../host'
+import type { TurnEnd } from './workers'
 import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 
@@ -226,7 +227,13 @@ export async function recordScoutRun(host: Host, name: string, run: { endMs: num
   await changeScoutMemory(host, old => addScoutRun(old, name, run))
 }
 
-export async function scoutFinished(host: Host, agentId: string, answer: string, isAborted = false, tokens?: SymccTokens) {
+/**
+ * A scout's turn ended (turn.complete). `end`: why it ended (true: it was stopped). A stopped run, or one that ended
+ * on an API error or a refusal, reports nothing: its last text is only half an answer, so the last real run and
+ * report are kept.
+ */
+export async function scoutFinished(host: Host, agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens) {
+  const reason = end === true ? 'aborted' : end === false ? 'answer' : end.reason
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
   const started = runStarted.get(agentId)
@@ -237,14 +244,15 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
   const before = runBefore.get(agentId) ?? null
   runBefore.delete(agentId)
   const st = scoutState.get(name)
-  if (isAborted) {
-    // Stopped from the agent controls: what it said so far is not a report. Keep the last real run and report.
+  if (reason !== 'answer') {
+    // Stopped from the agent controls, or ended on an error or a refusal: what it said so far is not a report. Keep the last real run and report.
     if (st) {
       st.running = false
       st.last_run = before
     }
     await load(host).then(b => publish(host, b)).catch(() => undefined)
-    host.ui.toast(S.N.toast(`scout ${name} was stopped; nothing reported`))
+    const how = reason === 'aborted' ? ' was stopped' : reason === 'error' ? "'s run ended on an error" : "'s run ended on a refusal"
+    host.ui.toast(S.N.toast(`scout ${name}${how}; nothing reported`))
     return
   }
   if (st) {
