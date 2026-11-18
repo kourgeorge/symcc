@@ -1,8 +1,8 @@
 // The board panel's own pieces for VS Code's side panel (see surface.ts): a header on readable, wrapped lines, tabs
 // you click, a footer with real buttons and no key hints, small section headings and fold rows. The Tasks page uses
-// them, and the task page (vscode-task.tsx); the Scouts and Settings pages can take them up the same way.
+// them, and so do the task page (vscode-task.tsx) and the Scouts and Settings pages (vscode-scouts.tsx, vscode-settings.tsx).
 import type { SymccMode } from '../../../types'
-import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, TextProps } from 'claude-code'
+import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
 import { emptyBoard, bannerLines, folderName, shortHome, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
 import { namesFor } from '../../name'
 import { type PaneView, S } from '../state'
@@ -16,6 +16,8 @@ export type VsKit = {
   Button: ElementConstructor<ButtonProps>
   Input: ElementConstructor<InputProps>
   Markdown: ElementConstructor<MarkdownProps>
+  /** VS Code's own drop-down picker (the Settings page's choices). */
+  Select: ElementConstructor<SelectProps>
   C: (c: string) => never
   width: number
   /** The time the page is drawn at (see now.ts). */

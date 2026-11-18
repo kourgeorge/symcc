@@ -574,6 +574,21 @@ unchanged.
   button that opens it); the **Changes** of a task in review; **History**; **Time and cost**;
   and the latest **Report** as Markdown: its first lines, with `Show all` for the rest and a
   button for each try.
+- **Scouts**: each scout gets a few lines, wrapped, never cut: its name (a button that opens
+  it) and its state with a colored mark (`◉ running now`, `○ paused`, `◎ next in 3h`,
+  `◎ on demand`); then a dim line with how often it runs, its model and when it last ran; its
+  summary; and the start of its last report (`last report: found 2: …` with the first finding,
+  or `last report: nothing`). Under the list: `+ New scout` and `← Tasks`.
+- **A scout's page**: a `← Scouts` button; the name and state; when it runs, its model, the next
+  run and the last run; buttons `Run now` (not while it runs), `Pause` or `Resume`, and `Edit`;
+  then its **Instructions** and its whole **Last report**, both as Markdown, and its **File**.
+- **Settings**: every group is a heading (Work, Checks before merging, Workers, Scouts, Board
+  and alerts) with its settings under it, each on its own row with its value. A setting with
+  a fixed set of choices (mode, notify, checker, scout_findings, tests_with_changes,
+  open_on_start, enabled) is a drop-down: pick a value and it is saved at once. Numbers and the
+  test commands are boxes: type and press `Save` (a wrong value says why and saves nothing; an
+  empty test commands box clears them). Under each row, a dim line says the default and what
+  the setting does. Roles and Kinds are buttons that open their pages. No key hints.
 
 ---
 

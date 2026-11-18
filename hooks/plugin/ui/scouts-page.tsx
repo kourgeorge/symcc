@@ -6,6 +6,7 @@ import { type $, panelValues } from '../../claude/panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from './open'
+import { scoutPageVs, scoutsListVs } from './vscode-scouts'
 import { claudeHost } from '../../claude/host'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
@@ -69,6 +70,8 @@ export async function scoutsPage($: $, pane: PaneParts) {
   const { nowMs } = pane
   const opener = await panelValues($).readScoutOpen()
   const sc = typeof opener === 'string' && opener ? scouts.find(x => x.name === opener) : undefined
+  // VS Code's side panel: readable rows and pages, with buttons and no key hints (see vscode-scouts.tsx)
+  if (pane.vscode) return sc ? scoutPageVs($, pane, sc) : scoutsListVs($, pane)
   if (sc) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
