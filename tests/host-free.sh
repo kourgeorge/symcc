@@ -56,4 +56,23 @@ else
   bad "bunx (from bun) is not on PATH, so the type check with no Claude Code types was skipped"
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/ and hooks/core/ need no Claude Code"; else exit 1; fi
+# The Node host (hosts/node/, T-377) runs symcc with no Claude Code: it may use Node and Bun, but never imports
+# 'claude-code' or anything in hooks/claude/ or hooks/register.tsx, and it type-checks with its own Node declarations
+# (hosts/node/env.d.ts, hosts/node/tsconfig.json). hosts/node/tests/node-host.spec.ts checks the same imports under bun test.
+node_files=$(find hosts/node -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
+if [ -n "$node_files" ]; then
+  hits=$(grep -nHE "^[[:space:]]*(import|export|\})[^'\"]*['\"]" $node_files |
+    grep -E "['\"](claude-code(/[^'\"]*)?|[^'\"]*/claude/[^'\"]*|[^'\"]*/register(\.tsx)?)['\"]")
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: hosts/node/ imports Claude Code (it must run without it): $hit" >&2; done
+    fails=$((fails + 1))
+  fi
+  if [ -f hosts/node/tsconfig.json ] && command -v bunx >/dev/null 2>&1; then
+    if ! out=$(bunx -p typescript@5.9.3 tsc --noEmit --pretty false -p hosts/node/tsconfig.json 2>&1); then
+      echo "$out" | grep "error TS" | while IFS= read -r e; do echo "host-free: hosts/node/: $e" >&2; done
+      fails=$((fails + 1))
+    fi
+  fi
+fi
+
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/ and hosts/node/ need no Claude Code"; else exit 1; fi
