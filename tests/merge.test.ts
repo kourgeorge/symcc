@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
-import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn } from '../hooks/plugin/review'
+import { type Board, type BoardTask, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
 import { askCall, checkEdit } from '../hooks/plugin/ask'
@@ -725,6 +725,228 @@ test('tests_with_changes review: a code change with no test file waits for revie
   expect(movedMain(w)).toBe(false)
   expect(told).toContain('T-1 changed code but no test')
   expect(told).toContain('is ready for review')
+})
+
+// ---------------- secret-looking files are never committed or merged (T-383) ----------------
+
+/**
+ * A fake git for a worker change of `changed` in a task with files src/ and tests/: `git restore --staged`
+ * of a file takes it out of what is staged (git.changed), as real git does; `committed`: the worker already
+ * committed these files itself, so they are in the branch before symcc's own commit (nothing is staged).
+ */
+function secretWorld(changed: string[], committed = false, deleted: string[] = [], history: string[] = []) {
+  const w = world({ changed: [...changed] })
+  const restored: string[] = []
+  // --diff-filter=d: deleted files are not listed, as with real git
+  const listed = (args: string[]) => (args.includes('--diff-filter=d') ? w.git.changed.filter(f => !deleted.includes(f)) : w.git.changed)
+  w.git.answer = (args, cwd) => {
+    if (cwd === WT && args[0] === 'diff' && args.includes('--cached')) return ok(committed ? '' : listed(args).join('\0'))
+    // `history`: files any of the branch's commits added or changed, even ones a later commit deleted again
+    if (args[0] === 'log' && args.includes('--name-only')) return ok(history.join('\0'))
+    if (args[0] === 'diff' && args.includes('--name-only')) return ok(listed(args).join('\0'))
+    if (cwd === WT && args[0] === 'restore' && args.includes('--staged') && !args.includes('--worktree')) {
+      const files = args.slice(args.indexOf('--') + 1).map(a => a.replace(/^:\(literal\)/, ''))
+      restored.push(...files)
+      w.git.changed = w.git.changed.filter(f => !files.includes(f))
+      w.git.dirty = true
+      return ok()
+    }
+    return undefined
+  }
+  return { w, restored }
+}
+
+/** T-1's worker (agent ag1) finished with `changed` (files src/ and tests/), on a board in mode auto. */
+async function finishedWithSecrets(changed: string[], committed = false, { deleted = [] as string[], mode = 'auto' as 'auto' | 'review', history = [] as string[] } = {}) {
+  const { w, restored } = secretWorld(changed, committed, deleted, history)
+  const [b] = boardWith(mode, ['npm test'], { files: ['src/', 'tests/'] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  for (const f of changed) if (!deleted.includes(f)) w.put(`${WT}/${f}`, `contents of ${f}`)
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  return { w, restored, t: find(await load(w.$), 'T-1')!, told: leadQueue.join('\n') }
+}
+
+test('a change with src/a.ts and tests/.env merges src/a.ts only; the history and the lead name tests/.env', async () => {
+  const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env'])
+  expect(t.status).toBe('done')
+  // taken out of what is staged before symcc's commit, so no commit (and so not main) ever holds it
+  expect(restored).toEqual(['tests/.env'])
+  const unstage = w.calls.findIndex(c => c.startsWith('wt: git restore --staged'))
+  const commit = w.calls.findIndex(c => c.startsWith('wt: git ') && c.includes(' commit '))
+  expect(unstage).toBeGreaterThan(-1)
+  expect(unstage).toBeLessThan(commit)
+  // never restored in the folder itself: the file stays on disk there
+  expect(w.calls.some(c => c.includes('restore') && c.includes('--worktree'))).toBe(false)
+  expect(w.git.changed).toEqual(['src/a.ts'])
+  expect(w.git.main).toBe(H1)
+  expect(t.history.at(-1)).toContain('left out tests/.env: the name looks like a secret')
+  expect(told).toContain('left out tests/.env: the name looks like a secret, so it was not committed or merged')
+  // the merge removes the task's folder (worktree remove --force deletes untracked files), so the file is moved out first, and the text says where
+  expect(w.calls).toContain(`mkdir -p -m 700 ${ROOT}/.symcc/left-out`)
+  expect(w.files.get(`${ROOT}/.symcc/left-out/T-1/tests/.env`)).toBe('contents of tests/.env')
+  expect(w.files.has(`${WT}/tests/.env`)).toBe(false)
+  expect(w.files.get(`${ROOT}/.symcc/left-out/.gitignore`)).toBe('*\n')
+  expect(told).toContain("(moved to .symcc/left-out/T-1/, since the task's folder is removed after the merge)")
+  expect(t.history.at(-1)).not.toContain("still in the task's folder")
+})
+
+test('*.pem, *.key and id_rsa files are left out the same way; id_rsa.pub is not', async () => {
+  const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/cert.pem', 'tests/server.key', 'tests/id_rsa', 'tests/id_rsa.pub'])
+  expect(t.status).toBe('done')
+  expect(restored.sort()).toEqual(['tests/cert.pem', 'tests/id_rsa', 'tests/server.key'])
+  expect(w.git.changed).toEqual(['src/a.ts', 'tests/id_rsa.pub'])
+  expect(w.git.main).toBe(H1)
+  expect(told).toContain('left out tests/cert.pem, tests/id_rsa, tests/server.key')
+  expect(t.history.at(-1)).toContain('left out tests/cert.pem, tests/id_rsa, tests/server.key: the name looks like a secret')
+})
+
+test('a secret-looking file the worker already committed is taken out of the branch before it merges', async () => {
+  const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env'], true)
+  expect(t.status).toBe('done')
+  // the branch goes back to the merge base with its work staged, the file is taken out, the rest is committed again
+  const reset = w.calls.findIndex(c => c === `wt: git reset -q --soft ${M1}`)
+  expect(reset).toBeGreaterThan(-1)
+  expect(w.calls.findIndex(c => c.startsWith('wt: git restore --staged'))).toBeGreaterThan(reset)
+  expect(restored).toEqual(['tests/.env'])
+  expect(w.git.changed).toEqual(['src/a.ts'])
+  expect(w.git.main).toBe(w.git.head)
+  expect(told).toContain('left out tests/.env')
+})
+
+test('a change with only .env.local does not merge: the task waits for the owner with a question', async () => {
+  const { w, t, told } = await finishedWithSecrets(['tests/.env.local'])
+  expect(movedMain(w)).toBe(false)
+  expect(ranTests(w)).toEqual([])
+  expect(t.status).toBe('waiting')
+  expect(t.question).toContain('changed only files whose names look like secrets (tests/.env.local)')
+  expect(t.history.at(-1)).toContain('left out tests/.env.local')
+  expect(told).toContain('tests/.env.local')
+  // nothing merged, so the folder stays and the file stays in it
+  expect(w.files.get(`${WT}/tests/.env.local`)).toBe('contents of tests/.env.local')
+  expect(w.calls.some(c => c.includes('left-out'))).toBe(false)
+})
+
+test('a try whose earlier try already merged is done, even with a left-out secret still in its folder', async () => {
+  const w = world({ dirty: false, head: H1, changed: [], answer: (args, cwd) => {
+    if (args[0] === 'log' && args.at(-1) === H1) return ok(t1Commit(1))
+    if (cwd === WT && args[0] === 'diff' && args.includes('--cached')) return ok('tests/.env')
+    if (cwd === WT && args[0] === 'restore') return ok()
+    return undefined
+  } })
+  w.put(`${WT}/tests/.env`, 'S')
+  const [b, t] = boardWith('auto', [], { attempts: 2, files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(true)
+  expect(r.ask).toBeUndefined()
+  expect(r.merged).toBe(H1)
+  expect(r.detail).toMatch(/^already merged into main/)
+  expect(r.detail).toContain('left out tests/.env')
+  expect(w.files.get(`${ROOT}/.symcc/left-out/T-1/tests/.env`)).toBe('S')
+})
+
+test('deleting a tracked secret-looking file is allowed: the deletion is committed and merged', async () => {
+  // main tracks tests/.env; the worker ran git rm tests/.env
+  const { w, restored, t, told } = await finishedWithSecrets(['tests/.env'], false, { deleted: ['tests/.env'] })
+  expect(t.status).toBe('done')
+  expect(t.question ?? undefined).toBeUndefined()
+  expect(restored).toEqual([])
+  expect(movedMain(w)).toBe(true)
+  expect(w.git.main).toBe(H1)
+  expect(told).not.toContain('left out')
+  expect(t.history.at(-1)).not.toContain('left out')
+})
+
+test('a deletion of a secret-looking file the worker committed is not put back by taking secrets out of the branch', async () => {
+  const { w, restored, t } = await finishedWithSecrets(['src/a.ts', 'tests/server.key'], true, { deleted: ['tests/server.key'] })
+  expect(t.status).toBe('done')
+  expect(restored).toEqual([])
+  // no rewrite of the branch: the deletion stays in its commit and merges
+  expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
+  expect(w.git.main).toBe(w.git.head)
+})
+
+test('a secret the worker committed and then deleted in a later commit is taken out of the history that merges', async () => {
+  // the branch: commit tests/id_rsa, git rm it, commit src/a.ts; the net change is src/a.ts only
+  const { w, restored, t } = await finishedWithSecrets(['src/a.ts'], true, { history: ['src/a.ts', 'tests/id_rsa'] })
+  expect(t.status).toBe('done')
+  // the branch is made one commit again from the merge base, so the commit holding the key never reaches main
+  const reset = w.calls.findIndex(c => c === `wt: git reset -q --soft ${M1}`)
+  expect(reset).toBeGreaterThan(-1)
+  const commit = w.calls.findIndex((c, i) => i > reset && c.startsWith('wt: git ') && c.includes(' commit '))
+  expect(commit).toBeGreaterThan(reset)
+  // nothing to take out of the new commit: the file is gone already, and nothing is put back
+  expect(restored).toEqual([])
+  expect(w.git.changed).toEqual(['src/a.ts'])
+  expect(w.git.main).toBe(w.git.head)
+})
+
+test('a branch whose commits never held a secret-looking file is not rewritten', async () => {
+  const { w, t } = await finishedWithSecrets(['src/a.ts'], true, { history: ['src/a.ts', 'tests/id_rsa.pub'] })
+  expect(t.status).toBe('done')
+  expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
+})
+
+test('only secret-looking files: one question to the lead, and no "not used" line in the history', async () => {
+  const { t } = await finishedWithSecrets(['tests/.env.local'])
+  expect(t.status).toBe('waiting')
+  expect(t.history.some(l => l.includes('not used'))).toBe(false)
+  expect(t.history.filter(l => l.includes('left out tests/.env.local'))).toHaveLength(1)
+  expect(leadQueue.filter(m => m.includes('tests/.env.local'))).toHaveLength(1)
+  expect(leadQueue.join('\n')).toContain('waits for the owner')
+})
+
+test('review mode: a left-out secret in the folder is not the owner\'s edit, not in the diff, and approve says nothing about owner edits', async () => {
+  const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env.local'], false, { mode: 'review' })
+  expect(t.status).toBe('review')
+  expect(restored).toEqual(['tests/.env.local'])
+  expect(t.history.at(-1)).toContain("left out tests/.env.local: the name looks like a secret, so it was not committed or merged (still in the task's folder)")
+  expect(told).toContain('left out tests/.env.local')
+  // the file is still in the folder, untracked, as real git shows it
+  expect(w.files.get(`${WT}/tests/.env.local`)).toBe('contents of tests/.env.local')
+  w.git.wtStatus = '?? tests/.env.local\0'
+  const cur = find(await load(w.$), 'T-1')!
+  expect(await ownerEdits(w.$, cur, WT)).toEqual([])
+  w.calls.length = 0
+  await changesText(w.$, 'main', cur)
+  expect(w.calls.some(c => c.includes('add -N'))).toBe(false)
+  expect(w.calls.some(c => c.startsWith('wt: git diff'))).toBe(false)
+  const before = ranTests(w).length
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  const done = find(await load(w.$), 'T-1')!
+  expect(done.status).toBe('done')
+  expect(done.history.some(l => l.includes('owner edited'))).toBe(false)
+  // no edits, and main did not move: no retest
+  expect(ranTests(w).length).toBe(before)
+})
+
+test('review mode: the diff of real owner edits leaves out the secret-looking files in the folder', async () => {
+  const w = await inReview({ wtStatus: ' M src/a.ts\0?? tests/.env.local\0?? src/b.md\0' })
+  const cur = find(await load(w.$), 'T-1')!
+  expect(await ownerEdits(w.$, cur, WT)).toEqual(['src/a.ts', 'src/b.md'])
+  await changesText(w.$, 'main', cur)
+  expect(w.calls).toContain('wt: git add -N -- src/b.md')
+  expect(w.calls).toContain(`wt: git diff --no-color --no-ext-diff --no-renames ${M1} -- :(exclude,literal)tests/.env.local`)
+})
+
+test('the owner deleting a secret-looking file in review still counts as an edit', async () => {
+  const w = await inReview({ wtStatus: ' D tests/.env\0' })
+  expect(await ownerEdits(w.$, find(await load(w.$), 'T-1')!, WT)).toEqual(['tests/.env'])
+})
+
+test('only plain relative paths are moved out of the folder', () => {
+  expect(isPlainRelPath('tests/.env')).toBe(true)
+  for (const bad of ['', '/etc/passwd', '../.env', 'a/../../.env', 'a/./.env', 'a//.env', 'a\\..\\.env', 'a\0b']) expect(isPlainRelPath(bad)).toBe(false)
+})
+
+test('checkAndMerge with no secret-looking file leaves nothing out and says nothing about secrets', async () => {
+  const { w, restored } = secretWorld(['src/a.ts', 'tests/a.test.ts'])
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests passed` })
+  expect(restored).toEqual([])
+  expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
 })
 
 test('tests_with_changes off: a code change with no test file merges with nothing said about tests', async () => {

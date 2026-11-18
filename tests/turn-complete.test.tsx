@@ -75,7 +75,7 @@ function fakeGit(work: Record<string, string[]>) {
       const left = ancestors(a[1]!)
       return ok([...ancestors(a[2]!)].find(c => left.has(c)) ?? '')
     }
-    if (a[0] === 'diff' && a.includes('--name-only')) {
+    if ((a[0] === 'diff' || a[0] === 'log') && a.includes('--name-only')) {
       const [from, to] = a.at(-1)!.split('..') as [string, string]
       const before = ancestors(from)
       return ok([...new Set([...ancestors(to)].filter(c => !before.has(c)).flatMap(c => commits.get(c)!.files))].join('\0'))
