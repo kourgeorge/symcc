@@ -7,7 +7,7 @@ import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
-import { S, type CheckerEnd, checkerRuns, stopped } from './state'
+import { S, type CheckerEnd, checkerRuns, halt } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
@@ -76,8 +76,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     const min = b.max_minutes
     try {
       timer = $.clock.after(min * 60_000, () => {
-        stopped.add(agentId)
-        void $.agents.stop(agentId, 'Stop now: your time is up. Answer "stopped" and end.').catch(() => undefined)
+        void halt($, agentId, 'your time is up')
         done({ answer: null, why: `it ran over ${min} min and was stopped` })
       }) ?? null
     } catch {
@@ -85,8 +84,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     }
     const late = stop()
     if (late) {
-      stopped.add(agentId)
-      void $.agents.stop(agentId, `Stop now: the task was ${late}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
+      void halt($, agentId, `the task was ${late}`)
       done({ answer: null, why: `the task was ${late}` })
     }
   })
@@ -186,8 +184,7 @@ export async function haltChecker($: Host, taskId: string, why: string) {
 async function haltCheckersOf($: Host, why: string, which: (task: string) => boolean) {
   for (const [agentId, run] of [...checkerRuns]) {
     if (!which(run.task)) continue
-    stopped.add(agentId)
-    await $.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
+    await halt($, agentId, why)
     run.end({ answer: null, why })
   }
 }

@@ -541,3 +541,6 @@ export function guardReason(kind: string | undefined, message?: string): string 
 
 /** What one of symcc's own agents reads when a guard hook failed on its call, so the call was refused. */
 export const guardFailedText = (name: string, reason: string) => `${name} couldn't check this call, so it was refused: ${reason}`
+
+/** Why the start of one of the plugin's own agent types was refused when its agent.spawn hook failed (`reason`: guardReason). */
+export const spawnFailedText = (name: string, reason: string) => `${name} couldn't check this agent start, so it was refused: ${reason}`

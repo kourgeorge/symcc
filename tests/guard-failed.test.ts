@@ -2,9 +2,9 @@
 // (workers, checkers, scouts) and lets the lead's (and any other agent's) call go on; the reason is short and on one line.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { guardFailed, isOwnAgent } from '../hooks/plugin/ask'
+import { guardFailed } from '../hooks/plugin/ask'
 import { guardReason, guardFailedText, GUARD_REASON_MAX_CHARS } from '../hooks/board'
-import { workers, scoutRuns, checkerRuns, stopped } from '../hooks/plugin/state'
+import { workers, scoutRuns, checkerRuns, stopped, isOwnAgent } from '../hooks/plugin/state'
 
 const quiet = { ui: { log: () => undefined } } as never
 

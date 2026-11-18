@@ -7,6 +7,7 @@ import { type PaneEvent, type PaneHook, type PaneParts, paneParts } from './part
 import { scoutEditPage, scoutsPage } from './scouts-page'
 import { settingsPage } from './settings'
 import { taskPage } from './task-page'
+import { listPageVs } from './vscode-list'
 
 /** The board panel: the list (each task a button), or one task with its actions; or the Scouts or Settings view. */
 export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[2]) {
@@ -25,5 +26,6 @@ function page($: $, pane: PaneParts) {
   if (pane.onScouts && S.draft) return scoutEditPage($, pane)
   if (pane.onScouts) return scoutsPage($, pane)
   if (pane.t) return taskPage($, pane, pane.t)
-  return listPage($, pane)
+  // VS Code's side panel has its own Tasks page: readable rows, buttons, no key hints (see vscode-list.tsx)
+  return pane.vscode ? listPageVs($, pane) : listPage($, pane)
 }

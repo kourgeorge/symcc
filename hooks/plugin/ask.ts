@@ -6,7 +6,7 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
-import { S, toolName, type Worker, scoutRuns, checkerRuns, workers, stopped } from './state'
+import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
@@ -126,9 +126,6 @@ async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string, cwd
 export const guardLogged = new Set<string>()
 const GUARD_LOGGED_MAX = 50
 
-/** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
-export const isOwnAgent = (agentId: string | undefined): agentId is string =>
-  !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
 
 /**
  * A guard hook (tool.check, tool.call) threw or ran out of time on a call of agent `agentId` (`failure`: why, as the
@@ -137,17 +134,26 @@ export const isOwnAgent = (agentId: string | undefined): agentId is string =>
  * blocks the owner's own session). The failure is logged once.
  */
 export function guardFailed($: Pick<Host, 'ui'>, hook: string, agentId: string | undefined, failure: { kind?: string; message?: string } | undefined): string | undefined {
-  const reason = guardReason(failure?.kind, failure?.message)
   const own = isOwnAgent(agentId)
+  const reason = hookFailed($, hook, failure, own ? 'the call of its agent was refused' : 'the call went on unchecked')
+  return own ? guardFailedText(S.N.name, reason) : undefined
+}
+
+/**
+ * Hook `hook` threw or ran out of time (`failure`, as its .catch reads it on next.error) and `outcome` was done in
+ * its place. Logs that once per hook and reason (a failing log changes nothing) and answers the short reason.
+ */
+export function hookFailed($: Pick<Host, 'ui'>, hook: string, failure: { kind?: string; message?: string } | undefined, outcome: string): string {
+  const reason = guardReason(failure?.kind, failure?.message)
   const key = `${hook}: ${reason}`
   if (!guardLogged.has(key)) {
     if (guardLogged.size >= GUARD_LOGGED_MAX) guardLogged.clear()
     guardLogged.add(key)
     try {
-      $.ui.log(`${S.N.name}: the ${hook} hook ${reason}; ${own ? 'the call of its agent was refused' : 'the call went on unchecked'}.`, { to: 'debug' })
+      $.ui.log(`${S.N.name}: the ${hook} hook ${reason}; ${outcome}.`, { to: 'debug' })
     } catch {
-      // no log to write to: the decision below still stands
+      // no log to write to: the decision still stands
     }
   }
-  return own ? guardFailedText(S.N.name, reason) : undefined
+  return reason
 }
