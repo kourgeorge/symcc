@@ -222,6 +222,8 @@ export const leadQueue: string[] = []
 export const meanwhile: string[] = []
 /** task id → spawns in a row that failed only because the plugin wasn't ready yet (see notReadyYet in host.ts) */
 export const notReady = new Map<string, number>()
+/** task id → checker starts in a row, after a reload (see checkAgain in workers.ts), that failed only because the agent type wasn't loaded yet */
+export const checkerNotReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 export const openDays = new Set<string>()
 /** the scout being edited in the board panel (its edit mode), or null; `isNew` for one made with "new scout" */

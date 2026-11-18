@@ -9,11 +9,11 @@ import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
 import { S, type CheckerEnd, checkerRuns, stopped } from './state'
-import type { Host } from '../host'
+import { type Host, notReadyYet } from '../host'
 import { change, now } from './store'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
-export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string }
+export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean }
 
 /** The agent name of task `id`'s checker: "symcc-T-3-checker". */
 export const checkerName = (name: string, id: string) => agentSafeName(`${name}-${id}-checker`)
@@ -30,8 +30,10 @@ export const CHECKER_NOTE = 'a checker is trying to break it before it merges'
  * tokens are added to the task's current try. Never throws: a checker that can't start gives no verdict.
  * `stop`: why the task was stopped (dropped, paused, sent to the owner), if it was; looked at once the checker
  * started too, so a stop that came while it was starting up (before haltChecker could see it) still stops it at once.
+ * `tryLater`: asked when the checker couldn't start only because its agent type isn't loaded yet (just after a
+ * reload); when it says yes, nothing is written and the outcome is `again` (the caller tries again at the next check).
  */
-export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined): Promise<CheckerOutcome> {
+export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined, tryLater?: () => boolean): Promise<CheckerOutcome> {
   await markStep($, t, 'checking', () => undefined)
   await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: CHECKER_NOTE }, now()) : x)).catch(() => undefined)
   const into = intoOf(t)
@@ -56,6 +58,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     agentId = spawned.agentId
   } catch (err) {
     const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
+    if (notReadyYet(err) && tryLater?.()) return { verdict: null, why, again: true }
     await record($, t, null, why)
     return { verdict: null, why }
   }

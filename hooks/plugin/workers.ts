@@ -10,7 +10,7 @@ import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerg
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
-import { S, workers, starting, type Worker, notReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
+import { S, workers, starting, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, notReadyYet } from '../host'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
 import { tellLead, noteForLead } from './tell'
@@ -706,7 +706,8 @@ async function checkAgain(host: Host, t0: BoardTask) {
     }
     await markFinishing(host, id, tryNo).catch(() => undefined)
     beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
-    tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work (its tests had passed). This is not counted as a retry; nothing to do.`)
+    // told once: a start tried again because the agent type wasn't loaded yet is the same restart
+    if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work (its tests had passed). This is not counted as a retry; nothing to do.`)
     const limitMs = finishLimitMs(b.test_commands.length)
     const how = await withLimit(host, limitMs, (gaveUp, over, turn) => checkHeldAgain(host, t, b, dir, gaveUp, over, turn))
     if (how === OVER) {
@@ -735,7 +736,9 @@ async function checkHeldAgain(host: Host, t: SymccTask, b: Board, dir: string, g
   const tests = b.test_commands.length ? '; tests passed' : '; no test command set'
   const held: CheckResult = { ok: true, held: true, ...(needsReview(b, t) || (untested && flag === 'review') ? { review: true } : {}), ...(untested ? { untested } : {}), detail: `checks passed${tests}; the checker looks at it before it merges` }
   const made: string[] = []
-  const r = stop() ? { ok: false, detail: `not merged: the task was ${stop()} while it was being checked` } : await afterChecker(host, t, b, held, dir, made, stop, release, turn)
+  const r = stop() ? { ok: false, detail: `not merged: the task was ${stop()} while it was being checked` } : await afterChecker(host, t, b, held, dir, made, stop, release, turn, true)
+  // the checker's agent type isn't loaded yet (just after a reload): the task stays "doing" in its checker step, and the next check starts it again (restartCheckers)
+  if (r.again) return
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, t.agent, gaveUp)
 }
 
@@ -753,12 +756,22 @@ async function reportSummary(host: Host, t: SymccTask): Promise<string> {
  * failing tests, with the checker's report, so settle sends it back to its worker (counting a retry) or fails it.
  * No verdict (the checker was stopped, ran over its time or didn't start): it waits for the owner's review.
  */
-async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void): Promise<CheckResult> {
+async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, turn?: (go: boolean) => void, restarted = false): Promise<CheckResult & { again?: boolean }> {
   // the try's commits are saved now, before the checker runs: a reload meanwhile loses `made`, and the checker step started again (checkHeldAgain) only knows the board
   await recordCommits(host, t.id, made)
   turn?.(false)
-  const c = await runChecker(host, t, b, dir, stop)
+  // `restarted` (a checker started again after a reload): a start that fails only because the agent type isn't
+  // loaded yet is tried again at the next check, up to MAX_NOT_READY starts; after that it goes to review as below
+  const tryLater = () => {
+    const misses = checkerNotReady.get(t.id) ?? 0
+    if (onNotReady(misses) === 'fail') return false
+    checkerNotReady.set(t.id, misses + 1)
+    return true
+  }
+  const c = await runChecker(host, t, b, dir, stop, restarted ? tryLater : undefined)
   turn?.(true)
+  if (c.again) return { ok: false, again: true, detail: `the checker couldn't start yet (${c.why}); tried again at the next check` }
+  checkerNotReady.delete(t.id)
   const { held: _held, ...passed } = r
   if (c.verdict?.ok) {
     if (passed.review) return passed

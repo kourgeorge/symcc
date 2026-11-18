@@ -651,3 +651,61 @@ test('T-386: a reload after the checker said OK and the work reached main (befor
   expect(t.test_tries ?? 0).toBe(0)
   expect(w.git.main).toBe(H1)
 })
+
+/** The checker's next `n` starts throw "Agent type symcc:scout not found" (its type isn't loaded yet, just after a reload); later ones start as usual. */
+function scoutNotLoaded(w: ReturnType<typeof world>, n: number) {
+  const agent = w.claude.agent as { spawn: (o: { prompt: string; name?: string }) => Promise<{ agentId: string }> }
+  const real = agent.spawn
+  let left = n
+  agent.spawn = async o => {
+    if (left > 0) {
+      left--
+      throw new Error('Agent type symcc:scout not found')
+    }
+    return real(o)
+  }
+}
+
+test("T-386: a restarted checker whose agent type isn't loaded yet: the task stays doing, and the next check starts a checker", async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  scoutNotLoaded(w, 1)
+  await stopOrphans(w.$)
+  await stoppedHandBack(w.$, 'chk1')
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(checkerRuns.size).toBe(0)
+  const mid = find(await load(w.$), 'T-1')!
+  expect(mid.status).toBe('doing')
+  expect(mid.note).toBe('a checker is trying to break it before it merges')
+  expect(mid.history.some(l => l.includes('no verdict'))).toBe(false)
+  await check(w.$)
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+})
+
+test("T-386: a restarted checker whose agent type is still not loaded after 3 starts: the task goes to review with no verdict", async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  scoutNotLoaded(w, 99)
+  await stopOrphans(w.$)
+  await stoppedHandBack(w.$, 'chk1')
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  await check(w.$)
+  for (let i = 0; i < 2000; i++) await Promise.resolve()
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  await check(w.$)
+  for (let i = 0; i < 4000; i++) await Promise.resolve()
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.note).toMatch(/the checker gave no verdict \(the checker couldn't start: Agent type symcc:scout not found\)/)
+  expect(t.attempts).toBe(1)
+  expect(w.spawns.length).toBe(1)
+})
