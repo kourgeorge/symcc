@@ -1,7 +1,8 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
+import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS } from '../hooks/plugin/review'
+import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
-import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits } from '../hooks/plugin/review'
 import { removeWorktree } from '../hooks/plugin/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/plugin/state'
 import { askCall, checkEdit } from '../hooks/plugin/ask'
@@ -4549,4 +4550,210 @@ test('the worker prompt of an investigation asks for the answer in full and says
   const q = WORKER_PROMPT(c.tasks[0]!, c, WT)
   expect(q).toContain('Files you may change: src/.')
   expect(q).not.toContain('investigation')
+})
+
+// ---------------- one task's tests at a time, project-wide (T-416) ----------------
+
+const TLOCK = `${ROOT}/.symcc/tests.lock`
+const CHECKING_NOTE = 'checking and merging'
+
+/** A board with T-1 and T-2 both "doing", their work being checked right now (a fresh check mark), each noted "checking and merging". */
+async function twoChecking(w: ReturnType<typeof world>, t2: Partial<BoardTask> = {}): Promise<[SymccTask, SymccTask]> {
+  const [b0] = boardWith('auto', ['npm test'])
+  let [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)
+  // status first: a check mark given with a change of status is dropped (patchTask)
+  for (const id of ['T-1', 'T-2']) {
+    b = patchTask(b, id, { status: 'doing', attempts: 1 }, ISO)
+    b = patchTask(b, id, { note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() }, ...(id === 'T-2' ? t2 : {}) }, ISO)
+  }
+  await saveBoard(w.$, b)
+  return [find(b, 'T-1')!, find(b, 'T-2')!]
+}
+const noteOf = (w: ReturnType<typeof world>, id: string) => find(parseBoard(w.files.get(BOARD)!), id)!.note
+const lockTask = (w: ReturnType<typeof world>) => parseTestLock(w.files.get(TLOCK) ?? null)?.task
+
+test('two tasks reaching their tests at once run them one after the other; the second waits with a note, its time limit stopped', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1, t2] = await twoChecking(w)
+  const log: string[] = []
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const seen: (string | undefined)[] = []
+  w.onSleep(() => {
+    seen.push(noteOf(w, 'T-2'))
+    if (seen.length === 3) open()
+  })
+  const turn1: boolean[] = []
+  const turn2: boolean[] = []
+  const one = withTestLock(w.$, t1, () => undefined, go => turn1.push(go), async () => (log.push(`T-1 start (lock ${lockTask(w)})`), await gate, log.push('T-1 end'), 'one'))
+  const two = withTestLock(w.$, t2, () => undefined, go => turn2.push(go), async () => (log.push(`T-2 start (lock ${lockTask(w)})`), 'two'))
+  expect(await one).toBe('one')
+  expect(await two).toBe('two')
+  expect(log).toEqual(['T-1 start (lock T-1)', 'T-1 end', 'T-2 start (lock T-2)'])
+  // every look while it waits names T-1 (never itself, even when T-1 lets go between its try and its look)
+  expect(seen.length).toBeGreaterThanOrEqual(3)
+  expect(seen.every(n => n === waitingTestsNote('T-1'))).toBe(true)
+  expect(waitingTestsNote('T-5')).toBe("waiting for another task's tests (T-5)")
+  expect(w.sleeps.every(ms => ms === TEST_LOCK_POLL_MS)).toBe(true)
+  // the waiting one's time limit stops while it waits and starts again once its tests begin; the first never waited
+  expect(turn1).toEqual([])
+  expect(turn2).toEqual([false, true])
+  expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('a test lock older than 20 minutes is taken over at once', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1] = await twoChecking(w)
+  w.put(TLOCK, testLockText('T-2', 'other-session', 0))
+  let held: string | undefined
+  expect(await withTestLock(w.$, t1, () => undefined, undefined, async () => ((held = lockTask(w)), 'ran'))).toBe('ran')
+  expect(held).toBe('T-1')
+  expect(w.sleeps).toEqual([])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('a fresh test lock whose task is no longer being checked is taken over at once', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1] = await twoChecking(w, { status: 'todo', checking: undefined })
+  w.put(TLOCK, testLockText('T-2', 'other-session', Date.now()))
+  expect(await withTestLock(w.$, t1, () => undefined, undefined, async () => lockTask(w))).toBe('T-1')
+  expect(w.sleeps).toEqual([])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('a fresh test lock left by an earlier go of the same task (say before a reload) is taken over at once', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1] = await twoChecking(w)
+  w.put(TLOCK, testLockText('T-1', 'me', Date.now()))
+  expect(await withTestLock(w.$, t1, () => undefined, undefined, async () => 'ran')).toBe('ran')
+  expect(w.sleeps).toEqual([])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('the test lock is held while the merge step tests, and let go after a failing test', async () => {
+  S.me = 'me'
+  const w = world({}, { 'npm test': { exitCode: 2, stdout: '1 test failed', stderr: '' } })
+  const [b, t] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, b)
+  const during: (string | undefined)[] = []
+  w.onRun(async cmd => void (cmd.startsWith('/bin/sh -c ') && during.push(lockTask(w))))
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toContain('tests failed')
+  expect(during).toEqual(['T-1'])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('three tasks waiting for the test lock get it oldest first, even when the newest one looks first after it is let go', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b0] = boardWith('auto', ['npm test'])
+  let b = b0
+  for (const title of ['Second', 'Third', 'Holder']) [b] = addTask(b, { origin: { why: 'a test' }, title, files: ['lib/'] }, ISO)
+  for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) {
+    b = patchTask(b, id, { status: 'doing', attempts: 1 }, ISO)
+    b = patchTask(b, id, { note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() } }, ISO)
+  }
+  await saveBoard(w.$, b)
+  // T-4, in another session, holds the lock while T-1, T-2 and T-3 (in that order) come to their tests
+  w.put(TLOCK, testLockText('T-4', 'other-session', Date.now()))
+  const log: string[] = []
+  let looks3 = 0
+  // T-3 (the newest) lets T-4's lock go just before its own look, so it is the first to look once the lock is free
+  const stopped3 = () => {
+    if (++looks3 === 2) w.files.delete(TLOCK)
+    return undefined
+  }
+  const go = (t: SymccTask, stopped: () => undefined) => withTestLock(w.$, t, stopped, undefined, async () => (log.push(`${t.id} (lock ${lockTask(w)})`), t.id))
+  const runs = [go(find(b, 'T-1')!, () => undefined), go(find(b, 'T-2')!, () => undefined), go(find(b, 'T-3')!, stopped3)]
+  expect(await Promise.all(runs)).toEqual(['T-1', 'T-2', 'T-3'])
+  expect(looks3).toBeGreaterThanOrEqual(2)
+  expect(log).toEqual(['T-1 (lock T-1)', 'T-2 (lock T-2)', 'T-3 (lock T-3)'])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('the test lock is dated again before each test command, so a long run of several commands is never taken over as stale', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test', 'npm run e2e', 'npm run lint'])
+  await saveBoard(w.$, b)
+  // each command may take up to TEST_TIMEOUT_MS; three in a row are more than the 20 minutes after which a lock is stale
+  expect(3 * TEST_TIMEOUT_MS).toBeGreaterThan(TEST_LOCK_STALE_MS)
+  const steps: string[] = []
+  w.onRun(async cmd => {
+    if (cmd.startsWith('mv -f ') && cmd.endsWith(` ${TLOCK}`)) steps.push(`lock dated (${lockTask(w)})`)
+    if (cmd.startsWith('/bin/sh -c ')) steps.push(cmd.slice('/bin/sh -c '.length))
+  })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(true)
+  expect(steps).toEqual(['lock dated (T-1)', 'npm test', 'lock dated (T-1)', 'npm run e2e', 'lock dated (T-1)', 'npm run lint'])
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('the test lock is let go when the check is stopped after a test, and when the tests throw', async () => {
+  S.me = 'me'
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test', 'npm run e2e'])
+  await saveBoard(w.$, b)
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [], () => (ranTests(w).length ? 'dropped' : undefined))
+  expect(r).toEqual({ ok: false, detail: 'not merged: the task was dropped while it was being checked' })
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(w.files.has(TLOCK)).toBe(false)
+  await expect(withTestLock(w.$, t, () => undefined, undefined, async () => Promise.reject(new Error('broke')))).rejects.toThrow('broke')
+  expect(w.files.has(TLOCK)).toBe(false)
+})
+
+test('a task stopped while it waits for the test lock stops waiting, runs nothing, and leaves the other lock alone', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1] = await twoChecking(w)
+  const theirs = testLockText('T-2', 'other-session', Date.now())
+  w.put(TLOCK, theirs)
+  let why: string | undefined
+  w.onSleep(() => (why = 'paused'))
+  const stopped = () => (why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined)
+  let ran = false
+  const r = await withTestLock(w.$, t1, stopped, undefined, async () => ((ran = true), undefined))
+  expect(r).toEqual({ ok: false, detail: 'not merged: the task was paused while it was being checked' })
+  expect(ran).toBe(false)
+  expect(w.files.get(TLOCK)).toBe(theirs)
+  expect(noteOf(w, 'T-1')).toBe(CHECKING_NOTE)
+})
+
+test('a finished task waiting a long time for another task\'s tests still merges: the wait counts neither as running over nor as hung', async () => {
+  S.me = 'me'
+  const w = world()
+  const c = limitClock(w)
+  await aboutToFinish(w)
+  // T-2, in another session, is running its tests now and holds the test lock
+  await change(w.$, x => {
+    const [y] = addTask(x, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)
+    const z = patchTask(y, 'T-2', { status: 'doing', attempts: 1 }, ISO)
+    return patchTask(z, 'T-2', { checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
+  })
+  w.put(TLOCK, testLockText('T-2', 'other-session', Date.now()))
+  const notes: (string | undefined)[] = []
+  let waits = 0
+  // each look at the lock takes 5 min on the limit's clock; after 12 looks (an hour, four times the limit) T-2 lets go
+  w.onSleep(() => {
+    if (w.sleeps.at(-1) !== TEST_LOCK_POLL_MS) return
+    notes.push(noteOf(w, 'T-1'))
+    c.pass(5 * MIN)
+    if (++waits === 12) w.files.delete(TLOCK)
+  })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  expect(waits).toBe(12)
+  expect(12 * 5 * MIN).toBeGreaterThan(2 * finishLimitMs(1))
+  expect(notes.every(n => n === waitingTestsNote('T-2'))).toBe(true)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H1)
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+  expect(w.files.has(TLOCK)).toBe(false)
 })
