@@ -288,6 +288,8 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
   let text = ''
   let quote = ''
   let tick = false
+  // open `@{` braces (`HEAD@{1}`): a git revision, not a command group, so neither brace cuts the command
+  let atBrace = 0
   const docs: { end: string; tabs: boolean }[] = []
   const op = (o: '&&' | '||' | ';' | '|' | '&' | ')' | '(', sub = true) => {
     out.push(doc ? { text, doc } : { text }, o === '(' ? { op: o, sub } : { op: o })
@@ -332,6 +334,8 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
       }
       i = j - 1
     } else if (c === ';' || c === '\n') op(';')
+    else if (c === '{' && text.endsWith('@')) (text += c), atBrace++
+    else if (c === '}' && atBrace) (text += c), atBrace--
     else if (c === '(' || c === '{') op('(', c === '(')
     else if (c === ')' || c === '}') op(')')
     else if (c === '`') (tick = !tick) ? op('(') : op(')')
@@ -687,7 +691,7 @@ const TEXT_TOOLS: Record<string, RegExp | undefined> = {
   grep: undefined,
   egrep: undefined,
   fgrep: undefined,
-  rg: /^--p/,
+  rg: /^--(p|hostname-bin)/,
   ag: /^--p/,
   ack: /^--p/,
   cat: undefined,
@@ -724,6 +728,13 @@ function textTool(words: string[]): boolean {
   const refused = TEXT_TOOLS[name]
   return !refused || !words.slice(1).some(a => refused.test(a))
 }
+
+/**
+ * Whether simple command `p` is a plain `cd` or `pushd`: no folder, or one plain path (no `$`, quotes, `(`, `<`, `;`,
+ * glob, and not an option), so it only changes folder (`cd hooks && grep -n git ask.ts`).
+ */
+const plainCd = (p: { text: string; words: string[] }) =>
+  (p.words[0] === 'cd' || p.words[0] === 'pushd') && p.words.length <= 2 && /^\s*(cd|pushd)(\s+(?!-)[\w./~+,:%-]+)?\s*$/.test(p.text)
 
 /** Whether text holds a command run inside it (`$(...)`, backquotes, `<(...)`, `>(...)`). */
 const RUNS_INSIDE = /\$\(|`|<\(|>\(/
@@ -773,8 +784,10 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
   const exempt = (p: { text: string; doc?: boolean; words: string[]; adds: boolean }): boolean => {
     if (p.words.length === 0) return true
     if (p.doc || RUNS_INSIDE.test(p.text)) return false
-    if (textTool(p.words)) return true
+    if (textTool(p.words) || plainCd(p)) return true
     const w = p.words[0]!
+    // `HEAD@{1}` braces were cut at before T-439's round 6, so a line with `@{` gets no read-only git exception
+    if (command.includes('@{')) return false
     return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds)?.bad === undefined
   }
   // Text one command prints may be run by another (`grep -h git notes | sh`, `grep ... > s; $SHELL s`, `./s`), and a
@@ -783,7 +796,9 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
   // main's broad rule for all of it. The command splitter doesn't know `#` comments or `$'...'` quoting, so with a
   // newline, a `#` that starts a word or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
   const unsplit = /\n|\$'|(?:^|[\s;&|()<>`])#/.test(command)
-  broad ||= unsplit || !simple.every(exempt)
+  // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
+  const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
+  broad ||= unsplit || gitProgram || !simple.every(exempt)
   for (const p of simple) {
     const words = p.words
     for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]

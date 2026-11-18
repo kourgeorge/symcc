@@ -60,6 +60,11 @@ const READS = [
   'find hooks -name "*git*"',
   'head -5 .gitignore && tail -n 3 .git/HEAD',
   'diff hooks/core/ask.ts hooks/git.ts',
+  // round 6: a plain cd or pushd only changes folder
+  'cd hooks && grep -n git ask.ts',
+  'pushd docs && grep -rn "git stash" .',
+  'cd && ls .git',
+  'git reflog show HEAD -3 && cd hooks/core',
 ]
 
 const WRITES: [string, string][] = [
@@ -186,6 +191,21 @@ const WRITES: [string, string][] = [
   ['grep -h "git stash" notes > s; /bin/[s]h s', 'git stash'],
   ['grep -h "git stash" notes > s; tcsh s', 'git stash'],
   ['grep -h "git stash" notes > s; chmod +x s; ./s', 'git stash'],
+  // round 6: `HEAD@{1}` doesn't cut the command, and a line with `@{` gets no read-only git exception
+  ['git reflog show HEAD@{1} --output=/tmp/x', 'git reflog --output'],
+  ['git reflog show HEAD@{1} -o /tmp/x', 'git reflog -o'],
+  ['git log HEAD@{1} --output=/tmp/x', 'git log --output'],
+  // round 6: rg --hostname-bin runs a program, and a word naming a git program keeps main's rule
+  ['rg --hostname-bin=/Library/Developer/CommandLineTools/usr/libexec/git-core/git-stash x .', 'git stash'],
+  ['rg --hostname-bin /usr/libexec/git-core/git-stash x .', 'git stash'],
+  ['rg --hostname-bin=git stash .', 'git stash'],
+  ['grep x /usr/libexec/git-core/git-stash', 'git stash'],
+  // round 6: cd with anything but a plain path keeps main's rule
+  ['cd "$(git stash)"', 'git stash'],
+  ['cd $X && grep "git stash" y', 'git stash'],
+  ['cd `git stash`', 'git stash'],
+  ['cd -P x && grep "git stash" y', 'git stash'],
+  ['cd x y && grep "git stash" y', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {
