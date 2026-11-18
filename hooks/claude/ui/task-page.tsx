@@ -11,9 +11,9 @@ import { noteForLead, brief, tellLead } from '../../app/tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
-import { historyParts, taskPageVs, mergeFailed } from './vscode-task'
+import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../host'
-import { mergingNow } from '../../app/workers'
+import { mergingNow, mergeOutcome } from '../../app/workers'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
 export const MERGING_LINE = 'Merging… (tests running)'
@@ -22,7 +22,7 @@ const MERGE_KEYS = ['a', 'x', 'k', 'r']
 /** Tasks whose Approve, Done, Keep as a note or Merge now was pressed and still runs: the line their page shows meanwhile. */
 const pressed = new Map<string, string>()
 /** The last such press's result for each task, shown on its page once it ends (until the next press). */
-const lastResult = new Map<string, string>()
+const lastResult = new Map<string, { text: string; ok: boolean }>()
 /** What task `id`'s page says while its merge runs, or '' when none does (pressed here, or approved another way). */
 export const mergingLine = (id: string): string => pressed.get(id) ?? (mergingNow(id) ? MERGING_LINE : '')
 
@@ -52,8 +52,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     redraw()
     void run()
       .then(
-        r => (lastResult.set(t.id, r), $.ui.toast(S.N.toast(r)), tell(r)),
-        (err: Error) => (lastResult.set(t.id, err.message), $.ui.toast(S.N.toast(err.message))),
+        // its color comes from how it really ended (merged, done or failed), not from the words of the reply
+        r => (lastResult.set(t.id, { text: r, ok: ['merged', 'done'].includes(mergeOutcome(t.id) ?? '') }), $.ui.toast(S.N.toast(r)), tell(r)),
+        (err: Error) => (lastResult.set(t.id, { text: err.message, ok: false }), $.ui.toast(S.N.toast(err.message))),
       )
       .finally(() => (pressed.delete(t.id), redraw()))
   }
@@ -69,12 +70,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     () => runTool(claudeHost($), 'approve', { task: t.id, keep_note: true }),
     r => tellLead(claudeHost($), `The owner kept the answer of ${t.id} as a note: ${brief(r)}`),
   )
-  const result = merging ? '' : (lastResult.get(t.id) ?? '')
+  const last = merging ? undefined : lastResult.get(t.id)
+  const result = last?.text ?? ''
+  const resultOk = !!last?.ok
   /** The merging line, or the last merge press's result, in the status area. */
   const mergeStatus = merging ? (
     <Text key="merging" bold color={C('success')}>{merging}</Text>
   ) : result ? (
-    <Text key="merge-result" color={C(mergeFailed(result) ? 'warning' : 'success')}>{result}</Text>
+    <Text key="merge-result" color={C(resultOk ? 'success' : 'warning')}>{result}</Text>
   ) : null
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
   const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
@@ -152,7 +155,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Text>
           ))}
         </Box>
-        {footer(diffKeys(inReview, !!d.file), 'diff-keys')}
+        {footer(diffKeys(inReview && !merging, !!d.file), 'diff-keys')}
       </Box>
     )
   }
@@ -300,7 +303,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      agentId, inReview, answered, target, merging, result, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
+      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
       on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })

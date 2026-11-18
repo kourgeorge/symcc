@@ -43,8 +43,6 @@ export function reportPart(body: string, n = REPORT_FIRST_LINES): { text: string
   return { text: [...head, ...(fences % 2 ? ['```'] : [])].join('\n'), more: lines.length - n }
 }
 
-/** Whether a merge press's result (Approve, Done, Keep as a note, Merge now) says it didn't go through: drawn in the warning color. */
-export const mergeFailed = (result: string) => /not merged|stays in review|keeps waiting|fail|refused|error|already|could not|can't/i.test(result)
 
 /** What task-page.tsx worked out for the open task, and what its buttons do. */
 export type VsTaskCtx = {
@@ -66,6 +64,8 @@ export type VsTaskCtx = {
   merging: string
   /** the last such press's result, once it ended ('' when there is none to show) */
   result: string
+  /** whether that press really went through (merged, or done): its result is drawn in the success color, else the warning one */
+  resultOk: boolean
   overtime: boolean
   answerable: boolean
   askedQuestion: string | null | undefined
@@ -211,7 +211,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const mergeStatus = x.merging
     ? plain('merging', x.merging, 'success', { bold: true })
     : x.result
-      ? plain('merge-result', x.result, mergeFailed(x.result) ? 'warning' : 'success')
+      ? plain('merge-result', x.result, x.resultOk ? 'success' : 'warning')
       : null
   const rolePicking = S.rolePick?.task === t.id
   const acts = vsActions(t, x, on)

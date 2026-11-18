@@ -94,3 +94,49 @@ for (const surface of ['terminal', 'vscode'] as const)
     expect(await ui.find({ key: 'approve' })).toBeDefined()
     await ui.unmount()
   })
+
+for (const surface of ['terminal', 'vscode'] as const)
+  test(`${surface}: while the merge runs, the changes view shows no approve or reject key either`, async ($, on) => {
+    const gate: Gate = { reads: 0 }
+    seed(on, task('T-5', 'review', 'Blue button'), gate)
+    const ui = await $.ui.mount({ ...PANE, surface })
+    let release = () => {}
+    gate.wait = new Promise<void>(r => (release = r))
+    gate.hold = true
+    await ui.press({ key: 'approve' })
+    expect(await mergingShown(ui)).toBeDefined()
+    // VS Code drops Show changes with the review buttons; the terminal keeps it, so its changes view is checked there
+    if (surface === 'vscode') expect(await ui.find({ key: 'show-changes' })).toBeUndefined()
+    else await ui.press({ key: 'show-changes' })
+    await ui.redraw()
+    // the changes view is open (its Back button), but offers neither approve nor reject while the merge runs
+    if (surface === 'terminal') expect(await ui.find({ key: 'diff-back' })).toBeDefined()
+    expect(await ui.find({ key: 'approve' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /\ba approve\b/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /\bx reject\b/ })).toBeUndefined()
+    if (surface === 'terminal') await ui.press({ key: 'diff-back' })
+    await finish(ui, release)
+    // a failed approve: its result is drawn in the warning color
+    expect((await ui.find({ type: 'Text', text: /^T-5 stays in review/ }))?.props.color).toBe('warning')
+    await ui.unmount()
+  })
+
+for (const surface of ['terminal', 'vscode'] as const)
+  test(`${surface}: a Done that kept the branch because git could not tell is drawn as a success, not by its words`, async ($, on) => {
+    const gate: Gate = { reads: 0 }
+    const toasts = seed(on, task('T-6', 'review', 'Why is the cache slow', { kind: 'investigation', role: 'researcher', note: 'answered; waiting for you to read it', answer: 'The cache is never cleared.' }), gate)
+    const ui = await $.ui.mount({ ...PANE, surface })
+    let release = () => {}
+    gate.wait = new Promise<void>(r => (release = r))
+    gate.hold = true
+    await ui.press({ key: 'done' })
+    expect(await ui.find({ type: 'Text', text: /^Marking it done…$/ })).toBeDefined()
+    expect(await ui.find({ key: 'done' })).toBeUndefined()
+    release()
+    for (let i = 0; i < 400 && (await ui.find({ type: 'Text', text: /^Marking it done…$/ })); i++) await pause(5)
+    expect(toasts.at(-1) ?? '').toMatch(/T-6 done: .*could not tell/)
+    const line = await ui.find({ type: 'Text', text: /^T-6 done: the answer was read/ })
+    expect(line).toBeDefined()
+    expect((line as { props: { color?: string } }).props.color).toBe('success')
+    await ui.unmount()
+  })
