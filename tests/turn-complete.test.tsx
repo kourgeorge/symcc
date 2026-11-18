@@ -124,7 +124,8 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
     key(e.path) === SCOUTS_DIR ? { value: [...files.keys()].filter(f => f.startsWith(`${SCOUTS_DIR}/`)).map(f => entry(f.slice(SCOUTS_DIR.length + 1))) } : ({ value: [] } as never),
   )
   on('ui.status', () => ({ value: undefined }))
-  on('ui.toast', () => ({ value: undefined }))
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }) as never)
   on('process.run', async (_, e) => {
     const { argv, init } = e as unknown as { argv: string[]; init?: { cwd?: string } }
     const [cmd, ...rest] = argv
@@ -175,7 +176,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
   const board = () => JSON.parse(files.get(BOARD)!) as Board
-  return { files, git, prompts, reached, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
+  return { files, git, prompts, reached, toasts, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 
 type Eng = Engine
@@ -412,6 +413,30 @@ test('a refusal end fails the task with the refusal\'s explanation', async ($, o
   await finish($, 'a1', '', false, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help with that' } })
   await w.clock.settle()
   expect(w.task('T-1')).toMatchObject({ status: 'failed', note: 'the model refused to go on (cannot help with that)' })
+})
+
+// ---------------- T-452: a hand-back while board.json can't be read ----------------
+
+test("T-452: a worker's hand-back while board.json can't be read throws nothing, leaves the file alone with one toast, and is finished once the board is back", async ($, on) => {
+  const w = await trackedWorker($, on)
+  const toasts = w.toasts
+  toasts.length = 0
+  const good = w.files.get(BOARD)!
+  w.files.set(BOARD, '{ not json')
+  await finish($, 'a1', 'made the change')
+  await w.clock.settle()
+  expect(w.files.get(BOARD)).toBe('{ not json')
+  expect(toasts.filter(t => t.includes("can't be read")).length).toBe(1)
+  expect(toasts.length).toBe(1)
+  // the owner puts a valid board back; the regular check finishes the kept report as usual
+  w.files.set(BOARD, good)
+  await w.clock.advance(2 * 60_000)
+  await w.clock.settle()
+  const t = w.task('T-1')
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(JSON.stringify(t)).not.toContain('the old worker has ended')
+  expect(w.git.onMain()).toEqual([expect.stringMatching(/^T-1: /)])
 })
 
 // ---------------- T-435: the worker's own background commands still running when its turn ended ----------------
