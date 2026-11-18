@@ -446,6 +446,9 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
     over = true
     return all.slice(0, BASH_FOLDERS_MAX)
   }
+  // every folder a cd so far may have left the command in, for "||": it grows by at most BASH_FOLDERS_MAX + 1 per cd,
+  // and it is not capped, since a command whose folder is certain (`cd a && cd b && ...`) must not count as over
+  const union = (...lists: string[][]) => [...new Set(lists.flat())]
   // every folder the command may be in at this point
   let here = start
   let seen = start
@@ -486,7 +489,7 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
       const guess = cdTarget(`cd ${p.text.trim().replace(/^\S+\s*/, '')}`, home)
       const moved = [wt, ...(guess ? here.map(d => resolvePath(d, guess)) : [])]
       here = join(here, moved)
-      seen = join(seen, here)
+      seen = union(seen, here)
       continue
     }
     const to = cdTarget(p.text, home)
@@ -496,7 +499,7 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
     if (p.doc) {
       if (to !== null) {
         here = join(here, here.map(d => resolvePath(d, to)))
-        seen = join(seen, here)
+        seen = union(seen, here)
       }
       continue
     }
@@ -508,7 +511,7 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
     const moved = to === null ? [wt] : here.map(d => resolvePath(d, to))
     // only "&&" makes sure the cd worked before what follows runs
     here = op(after) === '&&' ? moved : join(here, moved)
-    seen = join(seen, moved)
+    seen = union(seen, moved)
   }
   return undefined
 }
@@ -554,8 +557,11 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   return undefined
 }
 
-/** The most paths bashPathsToCheck answers, so a long command costs a bounded number of disk lookups. */
-export const BASH_PATHS_MAX = 128
+/**
+ * The most distinct paths bashPathsToCheck answers, so a long command costs a bounded number of disk lookups; the
+ * caller only looks up on disk those that may go through a symbolic link (T-436).
+ */
+export const BASH_PATHS_MAX = 2000
 
 /**
  * The absolute paths a worker's Bash `command` may name, for the caller to look up on disk, so a symbolic link is
@@ -875,13 +881,18 @@ const hasBrace = (w: string) =>
 
 /** The most words braceExpand makes from one word before it gives up. */
 const BRACE_WORDS_MAX = 1024
+/** The longest word, and the most "{" in one, braceExpand works on before it gives up, so an odd word stays cheap. */
+const BRACE_CHARS_MAX = 2000
+const BRACE_OPEN_MAX = 50
 
 /**
  * The words bash's brace expansion makes of word `w` (`{a,b}x` gives `ax bx`, `g{h..i}t` gives `ght git`, nested
- * ones too), or null when that is more than BRACE_WORDS_MAX. A `{...}` with no comma and no range stays as it is.
+ * ones too), or null when that is more than BRACE_WORDS_MAX (or the word is longer than BRACE_CHARS_MAX, or has
+ * more than BRACE_OPEN_MAX "{"). A `{...}` with no comma and no range stays as it is.
  * A best effort, not bash: a superset of its words is fine here.
  */
 function braceExpand(w: string): string[] | null {
+  if (w.length > BRACE_CHARS_MAX || w.split('{').length - 1 > BRACE_OPEN_MAX) return null
   for (let i = w.indexOf('{'); i >= 0; i = w.indexOf('{', i + 1)) {
     let depth = 0
     let j = i

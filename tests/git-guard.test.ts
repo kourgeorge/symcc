@@ -293,3 +293,13 @@ test('git run as a command still refuses its writes, for a worker, a scout and a
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText(what))
   }
 })
+
+test('long odd brace words stay cheap for the git check, and a long word with git letters still counts (T-436)', () => {
+  const t0 = Date.now()
+  expect(gitWriteIn('echo ' + '{'.repeat(50000))).toBeUndefined()
+  expect(gitWriteIn('echo ' + '{a,'.repeat(60) + '}'.repeat(60))).toBeUndefined()
+  expect(gitWriteIn(`cat > a.json <<'EOF'\n${'{"a":'.repeat(2000)}1${'}'.repeat(2000)}\nEOF`)).toBeUndefined()
+  expect(Date.now() - t0).toBeLessThan(1500)
+  // past the work cap a word is judged by its letters: these could make git
+  expect(gitWriteIn(`${'{g,i}'.repeat(60)}{t..t} stash`)).toBe('git with {braces}')
+})

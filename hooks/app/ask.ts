@@ -95,13 +95,58 @@ async function bashOutside($: Host, command: string, worktree: string, root: str
   if (tooMany) return bashTooManyText(worktree)
   // only where links lead matters here (a link that leads nowhere is no way into the project), so no folder is listed
   const bashLook: PathLookup = { real: look.real, isLink: async () => false }
-  const reals = await Promise.all(paths.map(abs => realPathOf('/', abs, bashLook).catch(() => undefined)))
+  const linky = linkFinder($, wts)
+  const reals = await Promise.all(
+    paths.map(async abs => ((await linky(abs).catch(() => true)) ? realPathOf('/', abs, bashLook).catch(() => undefined) : abs)),
+  )
   for (const [i, real] of reals.entries()) {
     // a path that can't be looked up is judged as written
     const via = editOutsideFolder(real || paths[i]!, wts, tops)
     if (via !== undefined) return bashOutsideText(via, worktree)
   }
   return undefined
+}
+
+/**
+ * Whether clean absolute path `abs` may go through a symbolic link, so it is worth looking up where it leads (T-436):
+ * from the worker's folder (any of its names `wts`, when `abs` is inside it) or else from "/", each piece is found in
+ * its folder's list (each folder listed once per command, letter case ignored, as on macOS); a link piece answers
+ * true, a missing one false (nothing under it exists), a folder that can't be listed true. So a long command naming many plain files costs one listing
+ * per folder, not a lookup per path.
+ */
+function linkFinder($: Host, wts: readonly string[]): (abs: string) => Promise<boolean> {
+  const lists = new Map<string, Promise<Map<string, boolean> | null>>()
+  const listOf = (dir: string) => {
+    let got = lists.get(dir)
+    if (!got) {
+      got = Promise.resolve()
+        .then(() => $.fs.list(dir))
+        .then(
+          es => {
+            const m = new Map<string, boolean>()
+            for (const e of es) m.set(e.name.toLowerCase(), (m.get(e.name.toLowerCase()) ?? false) || e.isLink)
+            return m
+          },
+          () => null,
+        )
+      lists.set(dir, got)
+    }
+    return got
+  }
+  return async abs => {
+    const from = wts.filter(w => w.startsWith('/') && abs.startsWith(`${w}/`)).sort((a, b) => b.length - a.length)[0] ?? '/'
+    let dir = from
+    for (const part of abs.slice(from.length).split('/').filter(Boolean)) {
+      const m = await listOf(dir)
+      // a folder that can't be listed: looked up the slow way
+      if (!m) return true
+      const isLink = m.get(part.toLowerCase())
+      if (isLink === undefined) return false
+      if (isLink) return true
+      dir = dir === '/' ? `/${part}` : `${dir}/${part}`
+    }
+    return false
+  }
 }
 
 /**

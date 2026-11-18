@@ -2773,6 +2773,26 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await bash(`cat ${wt5}/src/a.ts`)).toBeUndefined()
   // too many paths to look up: refused, not cut short
   expect(await bash(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i}`).join(' ')} link/README.md`)).toBe(bashTooManyText(wt5))
+  // ordinary long commands main allowed are still allowed, and only paths that may go through a link are looked up
+  // the slow way: one folder listing each, not a lookup per path (T-436)
+  let slow = 0
+  const realStat = fs.stat as (p: string, o?: { resolve?: boolean }) => Promise<unknown>
+  fs.stat = async (p: string, o?: { resolve?: boolean }) => (o?.resolve && slow++, realStat(p, o))
+  const files = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i)).join(' ')
+  expect(await bash(`rm ${files(129, i => `f${i}.txt`)}`)).toBeUndefined()
+  expect(await bash(`cat ${files(130, i => `src/f${i}.ts`)}`)).toBeUndefined()
+  expect(await bash(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`)).toBeUndefined()
+  expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
+  expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
+  expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
+  const t0 = Date.now()
+  expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
+  expect(Date.now() - t0).toBeLessThan(1000)
+  // the folder lookups of the worker's own folder and the project, not one per path
+  expect(slow).toBeLessThan(30)
+  // a link among many plain paths is still followed
+  expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
+  fs.stat = realStat
   workers.clear()
 })
 
