@@ -18,6 +18,9 @@ export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string }
 /** The agent name of task `id`'s checker: "symcc-T-3-checker". */
 export const checkerName = (name: string, id: string) => agentSafeName(`${name}-${id}-checker`)
 
+/** The note of a task while its checker runs; a reloaded copy finds a task whose checker it lost by it (see restartCheckers in workers.ts). */
+export const CHECKER_NOTE = 'a checker is trying to break it before it merges'
+
 /**
  * Runs a checker on task `t`'s finished work in its folder `dir` (everything is committed there) and waits for its
  * verdict. The board shows the task's step as "checking" meanwhile. The checker runs as the read-only scout type
@@ -30,7 +33,7 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  */
 export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined): Promise<CheckerOutcome> {
   await markStep($, t, 'checking', () => undefined)
-  await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: 'a checker is trying to break it before it merges' }, now()) : x)).catch(() => undefined)
+  await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: CHECKER_NOTE }, now()) : x)).catch(() => undefined)
   const into = intoOf(t)
   const roles = await loadRoles($).catch(() => S.roles)
   const role = findRole(roles, CHECKER_ROLE)

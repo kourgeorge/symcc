@@ -4,12 +4,12 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
-import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked } from '../hooks/plugin/workers'
+import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
 import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
-import { test } from './reset'
+import { test, resetPlugin } from './reset'
 import { claudeHost } from '../hooks/claude/host'
 
 const ROOT = '/repo'
@@ -542,4 +542,83 @@ test("a checker's git commands that change anything are refused, read-only ones 
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   for (const command of ['git commit -am x', 'git stash', 'git reset --hard', 'git checkout -b x'])
     expect(await checkEdit(w.$, 'ag2', 'Bash', { command })).toBeUndefined()
+})
+
+// ---------------- a reload during the checker (T-386) ----------------
+
+/**
+ * T-1's worker hands back and its checker starts (chk1); then the plugin reloads (its memory starts over, as
+ * resetPlugin does): the old copy's step keeps waiting for chk1's answer, which never reaches it. `status`:
+ * chk1 as the agent list shows it after the reload. Returns the agents list (changed by the test).
+ */
+async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) {
+  await saveBoard(w.$, boardWith(true))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  void workerFinished(w.$, 'ag1', 'made the change')
+  await until(() => checkerRuns.size > 0)
+  expect(find(await load(w.$), 'T-1')!.note).toBe('a checker is trying to break it before it merges')
+  resetPlugin()
+  S.root = ROOT
+  S.driving = true
+  const agents = [{ id: 'chk1', name: 'symcc-T-1-checker', type: 'symcc:scout', status }]
+  ;(w.claude.agent as { list: () => Promise<unknown[]> }).list = async () => agents
+  return agents
+}
+
+test('T-386: a reload stops the running checker; at the next check the task gets a new checker on the same work, no retry counted, and the lead is told once', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  const sha = w.git.head
+  await check(w.$)
+  // the old checker (unknown to this copy) was told to stop, and a new one started at once
+  expect(w.sends.map(m => m.to.agentId)).toEqual(['chk1'])
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  const mid = find(await load(w.$), 'T-1')!
+  expect(mid.status).toBe('doing')
+  expect(mid.checking?.step).toBe('checking')
+  expect(w.git.head).toBe(sha)
+  const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
+  expect(told.length).toBe(1)
+  // a check meanwhile does not start a third one
+  await check(w.$)
+  expect(w.spawns.length).toBe(2)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.history).toContain('try 1: checker: OK')
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
+})
+
+test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  // the reload's own look for orphans (session start) stops the old checker; its "stopped" answer then comes in
+  await stopOrphans(w.$)
+  expect(w.spawns.length).toBe(1)
+  await stoppedHandBack(w.$, 'chk1')
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  checkerFinished([...checkerRuns.keys()][0]!, 'stopped', true)
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  // no verdict from the new one either: it waits for review, as without a reload; still try 1
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.attempts).toBe(1)
+})
+
+test('T-386: a checker shown as ended after the reload: the next check starts a new one', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'completed')
+  await check(w.$)
+  expect(w.sends).toEqual([])
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })
