@@ -11,13 +11,20 @@ import { setBoardMode } from '../workers'
 import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from './open'
 import { claudeHost } from '../../claude/host'
+import { isVscode, vscodeButton } from './surface'
+import { type VsKit, vsBanner, vsFooter, vsTabs } from './vscode'
 
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
 export type PaneEvent = Parameters<PaneHook>[1]
 
 /** What every page of the board panel draws with: the elements, the view, and the shared pieces (banner, tabs, key hints, text). */
 export async function paneParts($: $, e: PaneEvent) {
-  const { Box, Text, Button, Input } = $.ui.resolve(e)
+  const els = $.ui.resolve(e)
+  const { Box, Text, Input } = els
+  /** True in VS Code's side panel, where the board has its own layout (see surface.ts and vscode.tsx). */
+  const vscode = isVscode(e.surface)
+  // in VS Code a Button shows its label only, and letter keys do nothing: take the key marks off the labels
+  const Button = vscode ? vscodeButton(els.Button) : els.Button
   const v: PaneView = await panelValues($).readView()
   const open = await panelValues($).readOpened()
   const width = Math.max(20, e.props.bodyColumns ?? 60)
@@ -42,8 +49,11 @@ export async function paneParts($: $, e: PaneEvent) {
     $.ui.toast(S.N.toast(r))
     noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
+  /** What the VS Code pieces (vscode.tsx) draw with. */
+  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, C, width, surface: e.surface }
   /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
+    if (vscode) return vsBanner(vs, v, mode, gitRow())
     const d = emptyBoard()
     const facts = { ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
@@ -57,16 +67,19 @@ export async function paneParts($: $, e: PaneEvent) {
           ))}
         </Text>
       )),
-      ...(v.git_state === 'no-repo' || v.git_state === 'no-commits'
-        ? [
-            <Box key="banner-git" flexDirection="row">
-              <Text wrap="truncate" color={C('warning')}>{v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}</Text>
-              <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />
-            </Box>,
-          ]
-        : []),
+      ...gitRow(),
     ]
   }
+  /** The warning row under the banner when there is no git repo or no commit yet, with its "Set up git" button. */
+  const gitRow = () =>
+    v.git_state === 'no-repo' || v.git_state === 'no-commits'
+      ? [
+          <Box key="banner-git" flexDirection="row" {...(vscode ? { flexWrap: 'wrap' as const } : {})}>
+            <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}</Text>
+            <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />
+          </Box>,
+        ]
+      : []
   /** The tab row under the banner: "[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings", the active one bold, underlined and blue
    *  (the accent color), the whole tab underlined, "[t]: " included. Each tab is a `plain` Button with NO hotkey (a plain Button
    *  with a hotkey draws its own "t: " outside the Text, where the underline can't reach; a framed one draws "[ … ]" around it),
@@ -74,6 +87,12 @@ export async function paneParts($: $, e: PaneEvent) {
    *  hidden Buttons in a Box drawn `display="none"`: they take no room and draw nothing, but still carry the hotkeys. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
+    if (vscode)
+      return vsTabs(vs, [
+        { which: 'tasks', label: `Tasks (${v.tasks.length})`, active: !onScouts && !onSettings, onPress: go('tasks') },
+        { which: 'scouts', label: `Scouts (${scouts.length})`, active: onScouts, onPress: go('scouts') },
+        { which: 'settings', label: 'Settings', active: onSettings, onPress: go('settings') },
+      ])
     const keyOf = (which: PaneTab) => (which === 'settings' ? 'c' : which[0])
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
@@ -104,6 +123,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
   /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
+    vscode ? [vsFooter(vs, name)] :
     hintLines(hints, width).map((line, i) => (
       <Text key={`${name}-${i}`} color={C('subtle')}>
         {line.map((kh, j) => (
@@ -119,7 +139,8 @@ export async function paneParts($: $, e: PaneEvent) {
    *  its [m] button (and `extra`, the Tasks page's [f] search button), then the page's key hints. It comes right after the page's content. Off the Tasks page there is
    *  no [m] button, so m does nothing there. */
   const footer = (hints: KeyHint[], name: string, withMode = false, extra: unknown = null) => (
-    (arrows.move = saysArrowsMove(hints)),
+    (arrows.move = !vscode && saysArrowsMove(hints)),
+    vscode ? vsFooter(vs, name, withMode ? { mode, onSwitch: switchMode, extra: extra as never } : {}) :
     <Box key={`${name}-footer`} flexDirection="column">
       <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {withMode ? (
@@ -194,6 +215,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>
