@@ -235,6 +235,10 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     finished work that passes waits as "ready for review" (its branch and folder are kept).
     approve runs the same checked merge (brought up to date, scope checked, tests again if it
     had to merge); reject with a reason sends it back to "todo" for a fresh worker.
+  • Files whose names look like secrets (.env, .env.*, *.pem, *.key, id_rsa, ...) are left out of a
+    worker's commit and merge (after a merge they are kept in ${S.N.dir}/left-out/<task>/); deleting
+    one merges normally. A task that changed only such files waits with a question: answer to
+    retry without them (say what to do instead), or drop it.
   • A task's branch only moves by a checked merge. Your uncommitted edits on it are kept; only
     edits (or untracked files) in files the task changes make it wait, and it merges by itself
     once they are committed, stashed or undone ("retry T-x" merges it at once; no new worker).
