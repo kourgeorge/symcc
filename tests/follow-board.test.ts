@@ -4,7 +4,7 @@ import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, leadText, type Board } from '../hooks/board'
 import { claimLead } from '../hooks/app/lead'
 import { S } from '../hooks/app/state'
-import { saveBoard } from '../hooks/app/store'
+import { load, saveBoard } from '../hooks/app/store'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -115,4 +115,15 @@ test("the driving session's heartbeat works as before: it refreshes lead.json an
   expect(S.driving).toBe(true)
   expect(w.files.get(w.lead)).not.toBe(stale)
   expect(w.redraws()).toBe(redraws)
+})
+
+test('a plain board read (no redraw) just after another session writes board.json does not count the change as seen (T-431)', async () => {
+  const w = await follower()
+  another(w, 'Second')
+  // e.g. a board tool call: it reads the board but does not publish it
+  expect((await load(w.host)).tasks.map(t => t.title)).toEqual(['First', 'Second'])
+  const before = w.redraws()
+  expect(await claimLead(w.host)).toBe(false)
+  expect(w.redraws()).toBe(before + 1)
+  expect(w.panel.view().tasks.map(t => t.title)).toEqual(['First', 'Second'])
 })

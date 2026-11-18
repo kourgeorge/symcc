@@ -16,7 +16,10 @@ export function usageTokens(u: ClaudeUsage | undefined): SymccTokens | undefined
   return cleanTokens({ input: u.input_tokens, output: u.output_tokens, cache_write: u.cache_creation_input_tokens, cache_read: u.cache_read_input_tokens })
 }
 
-/** How a turn ended, from Claude Code's turn.complete event: its reason, and the refusal on a refusal alone. */
-export function turnEnd(e: { reason: TurnEnd['reason']; refusal?: TurnEnd['refusal'] }): TurnEnd {
-  return { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}) }
+/**
+ * How a turn ended, from Claude Code's turn.complete event: its reason, the refusal on a refusal alone, and the
+ * agent's own background commands still running (`background`, from its SubagentStop; see background.ts) when known.
+ */
+export function turnEnd(e: { reason: TurnEnd['reason']; refusal?: TurnEnd['refusal'] }, background?: readonly string[]): TurnEnd {
+  return { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}), ...(background ? { background } : {}) }
 }

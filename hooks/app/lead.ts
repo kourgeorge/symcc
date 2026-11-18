@@ -203,6 +203,8 @@ export async function handOver(host: Host) {
 }
 
 export async function publish(host: Host, b: Board) {
+  // the board drawn here is the one last loaded or saved, so its mtime now counts as seen (T-431)
+  S.boardMtime = S.readMtime
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   // (new tasks merge into it; a task that merges elsewhere shows "→ branch" in the list)

@@ -43,7 +43,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
   // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, test command, kind, ...)
   const facts = changeValues(t, b, dir)
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, S.W.roleTools), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`

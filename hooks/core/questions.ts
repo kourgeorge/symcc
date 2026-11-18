@@ -135,8 +135,12 @@ export function closedText(q: OwnerQuestion): string {
   return `answered ${q.answered_by === 'chat' ? 'in the chat' : 'on the board'}: "${q.answer ?? ''}"`
 }
 
-/** The "Meanwhile" line the lead gets when the owner answered a question on the board. */
-export const boardAnswerLine = (q: OwnerQuestion) => `The owner answered ${q.id} ("${q.text}"): ${q.answer ?? ''} (the question is closed; act on the answer)`
+/** The block the lead gets, in a board update sent at once, when the owner answered its question on the board. */
+export function boardAnswerLine(q: OwnerQuestion): string {
+  const answer = (q.answer ?? '').trim()
+  const end = /[.?!]$/.test(answer) ? '' : '.'
+  return `The owner answered your question ${q.id} ("${q.text}"): ${answer}${end} The question is closed. Act on it.`
+}
 
 /** The question tool's list: the open questions, then the last few closed ones. */
 export function questionsText(b: WithQuestions, recent = 5): string {

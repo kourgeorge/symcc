@@ -147,7 +147,11 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
     if (cmd === 'rm') for (const p of rest.filter(x => !x.startsWith('-'))) files.delete(key(p))
     return { value: ok() }
   })
-  on('tool.call', () => ({ result: 'ran' }))
+  // a Bash command sent to the background answers with the id of its background task, as Claude Code's Bash does
+  on('tool.call', (_, e) => {
+    const c = e as unknown as { tool: string; command?: string; run_in_background?: boolean }
+    return { result: c.tool === 'Bash' && c.run_in_background ? ({ stdout: '', stderr: '', backgroundTaskId: `bg:${c.command}` } as never) : 'ran' }
+  })
   // beneath the plugin, every tool is allowed (the engine's own rules)
   on('tool.check', () => ({ decision: 'allow' }) as never)
   on('prompt.submit', (_, e) => (prompts.push(e.text), { text: e.text }) as never)
@@ -161,6 +165,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
     if (e.agentId) (reached.push(e.agentId), ended.add(e.agentId))
     return { text: '' }
   })
+  on('classic.SubagentStop', () => ({}) as never)
   on('session.start', (_, e) => ({ cwd: e.cwd }) as never)
   on('session.repo', () => ({ value: { root: ROOT } }) as never)
   on('session.root', () => ({ value: ROOT }) as never)
@@ -405,6 +410,53 @@ test('a refusal end fails the task with the refusal\'s explanation', async ($, o
   await finish($, 'a1', '', false, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help with that' } })
   await w.clock.settle()
   expect(w.task('T-1')).toMatchObject({ status: 'failed', note: 'the model refused to go on (cannot help with that)' })
+})
+
+// ---------------- T-435: the worker's own background commands still running when its turn ended ----------------
+
+/** Agent `agentId` runs `command` in the background through Bash (the world answers with its task id `bg:<command>`). */
+const inBackground = ($: Eng, agentId: string | undefined, command: string) => $.tool.call({ tool: 'Bash', command, run_in_background: true, ...(agentId ? { agentId } : {}) } as never)
+/** SubagentStop of `agentId`, with the session's in-flight background work `running` (shell commands by id, and other kinds). */
+const subagentStop = ($: Eng, agentId: string, running: Record<string, unknown>[]) =>
+  $.classic.SubagentStop({ agent_id: agentId, agent_type: 'symcc:worker', agent_transcript_path: '/t.jsonl', stop_hook_active: false, background_tasks: running } as never)
+const shell = (command: string) => ({ id: `bg:${command}`, type: 'shell', status: 'running', description: command, command })
+const ENDED_EARLY = 'the worker ended its turn before its work finished'
+
+test("T-435: a worker whose own background command still runs when its turn ends fails its try, whatever its answer says", async ($, on) => {
+  const w = await trackedWorker($, on)
+  const main = w.git.state.main
+  await inBackground($, 'a1', 'bun test')
+  // the session's list also holds the worker itself (a background subagent) and the lead's own command
+  await inBackground($, undefined, 'npm run watch')
+  await subagentStop($, 'a1', [shell('bun test'), shell('npm run watch'), { id: 'a1', type: 'subagent', status: 'running', description: 'T-1', agent_type: 'symcc:worker' }])
+  await finish($, 'a1', 'Changed src/a.ts; tests/a.test.ts covers it.')
+  await w.clock.settle()
+  expect(w.task('T-1')).toMatchObject({ status: 'failed', note: ENDED_EARLY })
+  expect(w.git.state.main).toBe(main)
+})
+
+test("T-435: another agent's background command still running doesn't count; with none running the try goes on to its check and merge", async ($, on) => {
+  const w = await trackedWorker($, on)
+  // another worker's and the lead's commands still run; a1's own one had finished (it is not in the list)
+  await inBackground($, 'a1', 'bun test')
+  await inBackground($, 'a2', 'sleep 600')
+  await inBackground($, undefined, 'npm run watch')
+  await subagentStop($, 'a1', [shell('sleep 600'), shell('npm run watch'), { id: 'a1', type: 'subagent', status: 'running', description: 'T-1' }])
+  await finish($, 'a1', 'made the change')
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('done')
+  expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
+  expect(w.git.onMain()).toEqual([expect.stringMatching(/^T-1: /)])
+})
+
+test('T-435: with nothing in flight at its SubagentStop, a worker that says "still running" only gets a warning and is merged', async ($, on) => {
+  const w = await trackedWorker($, on)
+  await inBackground($, 'a1', 'bun test')
+  await subagentStop($, 'a1', [])
+  await finish($, 'a1', "The background runs are still going; I'll continue when they finish.")
+  await w.clock.settle()
+  expect(w.task('T-1').status).toBe('done')
+  expect(w.task('T-1').history.some(h => h.includes('warning:'))).toBe(true)
 })
 
 test('a hand-back that says "QUESTION:" and "NEED FILES:" with no ask_owner call or refused edit is merged normally', async ($, on) => {

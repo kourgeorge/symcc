@@ -32,10 +32,9 @@ if [ -n "$hits" ]; then
   fails=$((fails + 1))
 fi
 
-# Claude Code's tool names, quoted. host.ts's SYMCC_WORDS still spells the role files' web tools WebSearch and WebFetch
-# (the role file format; step 10 of the doc gives them symcc's words), so that one line is allowed.
+# Claude Code's tool names, quoted. Role files use symcc's words (tools: web); only hooks/claude/ maps them.
 TOOLS='Read|Edit|Write|MultiEdit|NotebookEdit|Bash|BashOutput|KillShell|Glob|Grep|LS|WebSearch|WebFetch|TodoWrite|Task|Agent|AskUserQuestion|ExitPlanMode|EnterPlanMode|Skill'
-hits=$(code | grep -E "['\"\`]($TOOLS)['\"\`]|mcp__" | grep -vE "^hooks/host\.ts:[0-9]+:[[:space:]]*roleTools: \{ extra: \['WebSearch', 'WebFetch'\], web: \['WebSearch', 'WebFetch'\] \},$")
+hits=$(code | grep -E "['\"\`]($TOOLS)['\"\`]|mcp__")
 if [ -n "$hits" ]; then
   echo "$hits" | while IFS= read -r hit; do echo "host-free: a Claude Code tool name (keep it in hooks/claude/): $hit" >&2; done
   fails=$((fails + 1))
