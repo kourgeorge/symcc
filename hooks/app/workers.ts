@@ -730,6 +730,8 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
     return
   }
   await recordCommits(host, t.id, made, r.merged)
+  // T-440: the branch it merges into was deleted during the tests, the merge-line wait or the checker: it waits with the "branch is gone" question, its work kept, no failed try
+  if (r.gone && (await waitIfBranchGone(host, b, t, 'merge'))) return
   if (r.blocked) await holdForFiles(host, t, b, r, `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`, worktree, agentId)
   else
     await settle(host, t, b, r, summary, worktree, agentId).catch(async (e: unknown) => {
@@ -1265,6 +1267,8 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       })
       return `${t.id} was not merged and ${stays}: ${off} while it was being merged. ${kind === 'approve' ? 'Approve it again.' : `Retry it, or it merges at a later check.`}`
     }
+    // T-440: the branch it merges into was deleted while it was being merged: it waits with the "branch is gone" question
+    if (r.gone && (await waitIfBranchGone(host, b, t, 'merge'))) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
     if (r.blocked) {
       // Only the owner's files are in the way: it waits for them (merge_wait); the regular check merges it once they are clear.
       await holdForFiles(host, t, b, r, `${tryLabel(t)}: ${kind === 'approve' ? 'approved by the owner' : 'merging again'} → ${r.detail}`, dir, undefined, kind === 'approve')
