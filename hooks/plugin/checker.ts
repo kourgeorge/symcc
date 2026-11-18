@@ -1,6 +1,6 @@
 // The checker setting (see core/checker.ts): a fresh agent tries to break a finished change before it merges.
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
-// verdict; turn.complete (register.tsx) hands the checker's answer back through checkerFinished.
+// verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
 import { type Board, CHECKER_ROLE, type CheckerVerdict, addTokens, agentSafeName, checkerDiff, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
 import { roleSection } from '../claude/agent-types'
