@@ -77,6 +77,7 @@ export async function forgetPane($: $) {
   S.rejecting = null
   S.rolePick = null
   S.answering = null
+  S.taskFolds = null
   S.settingEdit = null
   S.settingPick = null
   changesCache.clear()

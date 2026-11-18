@@ -582,17 +582,23 @@ unchanged.
   filters as you type, with `Clear search` while a search is on. No key hints; other pages
   say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
   (`Back`, not `Back (b)`).
-- **A task's page** uses the whole panel width and wraps every line, never cutting it with
-  "…". From the top: a `← Tasks` button back to the list; the status line (ID, the status in
-  its color, the try, the time, the role and the kind); the **Title**; one row of action
+- **A task's page** reads like a card. It uses the whole panel width and wraps every line,
+  never cutting it with "…". From the top: a `← Tasks` button back to the list; the task ID and
+  title, large and bold; a status badge in its color (`▶ doing`, `◆ ready for review`,
+  `? waiting for you`, `✗ failed`, `◆ answered: read it`), with the kind, role, try and time
+  as small dim tags beside it. What needs you comes next, in a box in its color with its
+  buttons inside: the **Question for you** (yellow) with its answers as buttons and a box for
+  your own answer (a file request has `Allow files` and `Don't allow`); **Why it failed** (red)
+  with `Retry`; **Waiting for your files** (yellow) with `Merge now`. Then one row of the other
   buttons that fit the status (for example Approve, Reject, Show changes, Drop, Copy for a task
-  in review), with at most one main button; then, when one waits, the **Question for you** with
-  its answers as buttons and a box for your own answer (a file request has `Allow files` and
-  `Don't allow`); **Why it failed** for a failed task; **Why / where it came from**; **What to
-  do** (the details, drawn as Markdown); **Files it may change**; **Waits for** (each task ID a
-  button that opens it); the **Changes** of a task in review; **History**; **Time and cost**;
-  and the latest **Report** as Markdown: its first lines, with `Show all` for the rest and a
-  button for each try.
+  in review), with at most one main button on the page. Then the sections, each under a clear
+  heading: **Why / where it came from**; **What to do** (the details, drawn as Markdown); the
+  **Changes** of a task in review; **History**, a timeline with the newest first (a mark, when
+  that try ran, then the whole line; merges in green, failures in red); and the latest
+  **Report** as Markdown: its first lines, with `Show all` for the rest and a button for each
+  try. Last come three folds, closed until you click them, each with a count:
+  `▸ Files it may change (3)`, `▸ Waits for (2)` (each task ID a button that opens it) and
+  `▸ Time and cost (2)`.
 - **Scouts**: each scout is one button of a few lines, wrapped, never cut: its name and its
   state as a filled badge in its color (`◉ running now`, `○ paused`, `◎ next in 3h`,
   `◎ on demand`); then a dim line with how often it runs, its model and when it last ran; its
