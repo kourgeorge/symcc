@@ -8,6 +8,7 @@ This task is an investigation: your job is to find the answer and hand it back i
 Your own copy of the project, on branch {{branch}}, is this folder:
   {{folder}}
 Read whatever you need. You may run read-only commands and experiments, outside the project or in that folder, but any file changes you make in the project are not kept. Never touch the main project folder. Do not run git commit, push or merge.
+Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
 
 Task {{task_id}}: {{title}}
 {{details}}

@@ -6,13 +6,15 @@ import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from '../../app/open'
-import { scoutPageVs, scoutsListVs } from './vscode-scouts'
+import { scoutEditPageVs, scoutPageVs, scoutsListVs } from './vscode-scouts'
 import { claudeHost } from '../host'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
  *  page shows them: Runs every, Model, Summary, Instructions. Its Cancel button leaves it
  *  without saving (its boxes take every letter, and Esc doesn't reach the panel from a text box). */
 export function scoutEditPage($: $, pane: PaneParts) {
+  // VS Code's side panel: one Save Button and a Cancel link, labelled boxes (see vscode-scouts.tsx)
+  if (pane.vscode) return scoutEditPageVs($, pane)
   const { Box, Text, Button, Input, act, C, scouts, heading, footer } = pane
   // A scout's edit mode: the same header as its page, then a box per part of its file.
   // (renderPane calls this only while S.draft is set)

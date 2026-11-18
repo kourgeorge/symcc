@@ -5,7 +5,8 @@ export default `You are a {{name}} checker. A worker has just finished task {{ta
 
 The change is in this folder, on branch {{branch}} (everything is committed):
   {{folder}}
-You may read anything there and run the project's tests and commands. Do NOT edit, create or delete files in that folder or anywhere in the project; anything you change there is thrown away. Throwaway scripts go outside the project (for example in /tmp) and are cleaned up after.
+You may read anything there and run the project's tests and commands. Do NOT edit, create or delete files in that folder (outside .scratch/) or anywhere in the project; anything you change there is thrown away.
+Put any throwaway script or note under .scratch/ in that folder (never commit it); /tmp also works.
 Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...): the branch must stay where it was tested, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine.
 
 Task {{task_id}}: {{title}}

@@ -59,6 +59,11 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   for (const k of Object.keys(ROLE_PROMPTS) as (keyof typeof ROLE_PROMPTS)[]) expect([k, ROLE_PROMPTS[k].includes(BG)]).toEqual([k, true])
   expect(Object.keys(ROLE_PROMPTS)).toContain('checker')
   expect(scoutPrompt({ scout: 's', root: ROOT, instructions: 'Go.', open: [] })).toContain(BG)
+  // T-456: workers are told to edit with the Edit tool and keep throwaway scripts and notes under .scratch/ (or /tmp); so is the checker
+  const SCRATCH = 'Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.'
+  expect(p).toContain(SCRATCH)
+  expect(q).toContain(SCRATCH)
+  expect(ROLE_PROMPTS.checker).toContain('Put any throwaway script or note under .scratch/ in that folder (never commit it); /tmp also works.')
   // every placeholder written in a built-in prompt is one symcc knows
   for (const k of PROMPT_KINDS) for (const p of placeholdersIn(BUILT_IN_PROMPTS[k])) expect(PROMPT_PLACEHOLDERS[k]).toHaveProperty(p)
 })

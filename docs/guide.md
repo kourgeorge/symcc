@@ -193,6 +193,11 @@ happens, never the words in its hand-back:
    files (press Allow on its page, or tell the lead, who uses `change`) or drop it. Files
    written another way (for example by a shell command) are still caught here, at the merge.
    An investigation has no file list, so its edits in its own folder are never refused (they are not kept anyway).
+   Each worker's folder has a `.scratch/` folder for throwaway scripts and notes. Workers and checkers may
+   write there freely: it is never refused, never a file request, and never committed or scope checked
+   (symcc lists it in that checkout's local ignore list, `info/exclude`, not in your `.gitignore`).
+   symcc empties it when a try ends and when the folder is used again. If your project keeps files under
+   `.scratch/` in git, all this is off: those are your files, checked and committed as usual.
    An edit (by any worker) that lands in your own copy of the project, outside the worker's own
    folder (for example your README.md, `.symcc/board.json` or another worker's folder), is always
    refused, without a file request: the worker is told to edit the file in its own folder instead.
