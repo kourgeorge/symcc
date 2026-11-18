@@ -7,6 +7,7 @@ import { LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { SCOUT_SOON_MS, scheduleScouts, scoutFinished } from '../hooks/plugin/scouts'
 import { S, scoutRuns, scoutState } from '../hooks/plugin/state'
 import { ran, entry, pause, slash } from './fakes'
+import { claudeHost } from '../hooks/claude/host'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -149,9 +150,9 @@ function memoryWorld() {
   const finishA = async () => {
     scoutState.get('a')!.running = true
     scoutRuns.set('x1', 'a')
-    await scoutFinished($ as never, 'x1', '1. a found something.')
+    await scoutFinished(claudeHost($ as never), 'x1', '1. a found something.')
   }
-  return { $: $ as never, o, memory, finishA }
+  return { $: claudeHost($ as never) as never, claude: $, o, memory, finishA }
 }
 
 test("a paused scout whose file can't be read keeps its pause, last run and report when another scout finishes", async () => {

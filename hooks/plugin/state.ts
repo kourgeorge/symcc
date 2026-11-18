@@ -28,33 +28,78 @@ const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], workin
 
 // The loader lets read and update take only an atom written in the same file, so the other
 // modules read and change these four through the functions below.
-// They take a Host, because the logic (publish, saveScout, openPane) calls them with one. Only Claude Code's `$`
-// holds these values, and every Host symcc runs on today is that `$` (see hooks/host.ts), so `$ as $` hands
-// the Host on as the `$` it is. It is a type-only cast: the loader must see `$` passed as it is, not through
-// a helper. A host with no panel state gets its own way to show the board in a later step.
-export function readOpened($: Host) {
-  return read($ as $, opened)
+// Only Claude Code's `$` holds these values, and the loader lets only `$` itself reach `read` and `update`, so
+// panelValues makes the reads and changes from one hook's `$`, and Claude Code's Host (claude/host.ts claudeHost)
+// carries them as its `panel`. The functions after it take that Host, because the logic (publish, saveScout,
+// openPane) calls them with one. A host with no panel has none of these values (noPanel); it gets its own way
+// to show the board in a later step.
+
+/** The board panel's values, read and changed through one hook's `$`. */
+export type PanelValues = {
+  readOpened: () => Promise<string>
+  updateOpened: (change: (value: string) => string) => Promise<unknown>
+  readTab: () => Promise<string>
+  updateTab: (change: (value: string) => string) => Promise<unknown>
+  readScoutOpen: () => Promise<string>
+  updateScoutOpen: (change: (value: string) => string) => Promise<unknown>
+  readView: () => Promise<SymccView>
+  updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
 }
-export function updateOpened($: Host, change: (value: string) => string) {
-  return update($ as $, opened, change)
+
+/** The board panel's values through Claude Code's `$` (for claude/host.ts). */
+export function panelValues($: $): PanelValues {
+  return {
+    readOpened: () => read($, opened),
+    updateOpened: change => update($, opened, change),
+    readTab: () => read($, tab),
+    updateTab: change => update($, tab, change),
+    readScoutOpen: () => read($, scoutOpen),
+    updateScoutOpen: change => update($, scoutOpen, change),
+    readView: () => read($, view),
+    updateView: change => update($, view, change),
+  }
 }
-export function readTab($: Host) {
-  return read($ as $, tab)
+
+/** A host with no board panel: each value reads as its start value, and a change goes nowhere. */
+const noPanel: PanelValues = {
+  readOpened: async () => opened.initial,
+  updateOpened: async () => undefined,
+  readTab: async () => tab.initial,
+  updateTab: async () => undefined,
+  readScoutOpen: async () => scoutOpen.initial,
+  updateScoutOpen: async () => undefined,
+  readView: async () => view.initial,
+  updateView: async () => undefined,
 }
-export function updateTab($: Host, change: (value: string) => string) {
-  return update($ as $, tab, change)
+
+/** A Host's board panel values; only Claude Code's Host has them so far (see noPanel for the others). */
+function panelOf(host: Host): PanelValues {
+  return (host as Host & { panel?: PanelValues }).panel ?? noPanel
 }
-export function readScoutOpen($: Host) {
-  return read($ as $, scoutOpen)
+
+export function readOpened(host: Host) {
+  return panelOf(host).readOpened()
 }
-export function updateScoutOpen($: Host, change: (value: string) => string) {
-  return update($ as $, scoutOpen, change)
+export function updateOpened(host: Host, change: (value: string) => string) {
+  return panelOf(host).updateOpened(change)
 }
-export function readView($: Host) {
-  return read($ as $, view)
+export function readTab(host: Host) {
+  return panelOf(host).readTab()
 }
-export function updateView($: Host, change: (value: SymccView) => SymccView) {
-  return update($ as $, view, change)
+export function updateTab(host: Host, change: (value: string) => string) {
+  return panelOf(host).updateTab(change)
+}
+export function readScoutOpen(host: Host) {
+  return panelOf(host).readScoutOpen()
+}
+export function updateScoutOpen(host: Host, change: (value: string) => string) {
+  return panelOf(host).updateScoutOpen(change)
+}
+export function readView(host: Host) {
+  return panelOf(host).readView()
+}
+export function updateView(host: Host, change: (value: SymccView) => SymccView) {
+  return panelOf(host).updateView(change)
 }
 
 // ---------------- what this module holds while it is loaded ----------------
@@ -142,7 +187,7 @@ export const startS = () => ({
 export const S = startS()
 
 /** Takes the plugin's name from plugin.json (via $.plugin.name), once; DEFAULT_NAME if it has none. */
-export function useName($: Host) {
+export function useName($: Pick<Host, 'plugin'>) {
   if (S.named) return
   S.named = true
   const name = cleanName($.plugin.name)
@@ -186,7 +231,7 @@ export const timers: { cancel(): void }[] = []
 export const leadQueue: string[] = []
 /** the owner's own actions since the last board update: short lines put at the top of the next one (see noteForLead) */
 export const meanwhile: string[] = []
-/** task id → spawns in a row that failed only because the plugin wasn't ready yet (see isNotReady) */
+/** task id → spawns in a row that failed only because the plugin wasn't ready yet (see notReadyYet in host.ts) */
 export const notReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 export const openDays = new Set<string>()

@@ -2963,7 +2963,7 @@ function scoutWorld(spawn: () => Promise<{ agentId?: string; deny?: string }>) {
   scoutRuns.clear()
   scoutTimers.splice(0)
   scoutLeadQueue.splice(0)
-  return { $: $ as never, files, toasts, later, prompts }
+  return { $: claudeHost($ as never) as never, claude: $, files, toasts, later, prompts }
 }
 
 const OLD_RUN = '2026-11-01T10:00:00.000Z'
@@ -3180,6 +3180,7 @@ test('backToTodo of a running task says in its history why it restarts', async (
 // ---------------- saved reports and clean cuts ----------------
 
 import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
+import { claudeHost } from '../hooks/claude/host'
 
 test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {
   expect(cutLine('  short\n text  ', 50)).toBe('short text')

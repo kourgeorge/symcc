@@ -1,15 +1,16 @@
 // The band above the prompt: the board in one or a few lines.
 import type { MatchedHook } from 'claude-code'
 import { statusCounts, newestFirst, bandStatus, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText } from '../../board'
-import { type $, readView, type PaneView, S } from '../state'
+import { type $, type PaneView, S, panelValues } from '../state'
 import { openPane } from './open'
+import { claudeHost } from '../../claude/host'
 
 export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt' }>
 
 /** The band above the prompt: the board, always in view inside Claude Code's own screen. */
 export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1], next: Parameters<AbovePromptHook>[2]) {
   if (e.props.hasSurvey || e.props.view.agentId) return next(e)
-  const v = await readView($)
+  const v = await panelValues($).readView()
   const tasks = v?.tasks ?? []
   if (!tasks.length || (v as PaneView | undefined)?.enabled === false) return next(e)
   const { Box, Text, Button } = $.ui.resolve(e)
@@ -33,7 +34,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
           <Text bold color={'ide' as never}>{brand}</Text>
           <Text color={'inactive' as never}>{facts}</Text>
         </Text>
-        <Button key="open-board" label="open board" dimColor onPress={() => void openPane($)} />
+        <Button key="open-board" label="open board" dimColor onPress={() => void openPane(claudeHost($))} />
       </Box>
       {live.slice(0, rows).map(t => (
         <Text wrap="truncate">

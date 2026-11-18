@@ -4,8 +4,9 @@
 // docs/research/esc-in-panels.md), so nothing in the panel needs Esc: every box and page has its own way out
 // (Enter on an empty box, a Cancel or Back button, the search's [x] clear search). This is the extra.
 import { cancelScoutEdit } from '../scouts'
-import { type $, S, readOpened, readScoutOpen, readTab } from '../state'
+import { type $, S, panelValues } from '../state'
 import { resetPane } from './open'
+import { claudeHost } from '../../claude/host'
 
 /** What Esc does on the board panel; null: nothing left to go back from, the panel closes. */
 export type EscStep =
@@ -39,11 +40,11 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
 
 /** Takes the board panel one step back (see escStep) and says whether it did; false: the panel closes. */
 export async function escBack($: $): Promise<boolean> {
-  const step = escStep({ tab: await readTab($), opened: await readOpened($), scout: await readScoutOpen($) }, S)
+  const step = escStep({ tab: await panelValues($).readTab(), opened: await panelValues($).readOpened(), scout: await panelValues($).readScoutOpen() }, S)
   if (!step) return false
-  if (step === 'cancel scout edit') cancelScoutEdit($)
-  else if (step === 'scouts list') await resetPane($, 'scouts')
-  else if (step === 'board list') await resetPane($, 'tasks')
+  if (step === 'cancel scout edit') cancelScoutEdit(claudeHost($))
+  else if (step === 'scouts list') await resetPane(claudeHost($), 'scouts')
+  else if (step === 'board list') await resetPane(claudeHost($), 'tasks')
   else {
     if (step === 'cancel setting') (S.settingEdit = null), (S.settingPick = null)
     if (step === 'cancel role pick') S.rolePick = null

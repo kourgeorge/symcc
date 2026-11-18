@@ -3,7 +3,7 @@
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { SCOUT_SOON_MS, SCOUT_SPREAD_MS } from '../hooks/plugin/scouts'
+import { SCOUT_SOON_MS, SCOUT_SPREAD_MS, PAUSED_RECHECK_MS } from '../hooks/plugin/scouts'
 import { ran, entry } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
 
@@ -85,8 +85,6 @@ const scoutFiles = (files: Map<string, string>) => [...files.keys()].filter(f =>
 // none of them is about the panel.
 const board = (extra: Record<string, unknown> = {}) => JSON.stringify({ tasks: [], open_on_start: false, ...extra })
 const scoutSpawns = (spawned: string[]) => spawned.filter(n => /scout/i.test(n))
-// scouts.ts checks a paused scout again this long after its timer fires (PAUSED_RECHECK_MS, not exported)
-const PAUSED_RECHECK_MS = 60_000
 // Past every scout's first timer (spread apart) and one paused recheck after it; a paused scout keeps its time,
 // so later ticks only repeat that recheck. Kept short on purpose: every 30 s of fake time also fires the lead
 // heartbeat (and more), and jumping an hour or so made these tests run over 5 s on a busy machine.

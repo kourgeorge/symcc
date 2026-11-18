@@ -4,11 +4,12 @@ import type { SymccMode } from '../../../types'
 import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows } from '../../board'
 import { setupGit } from '../git'
 import { logoNow, noteLogoWidth } from '../logo'
-import { type $, type PaneView, readView, readOpened, S, readTab } from '../state'
+import { type $, type PaneView, S, panelValues } from '../state'
 import { noteForLead, brief } from '../tell'
 import { setBoardMode } from '../workers'
 import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from './open'
+import { claudeHost } from '../../claude/host'
 
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
 export type PaneEvent = Parameters<PaneHook>[1]
@@ -16,8 +17,8 @@ export type PaneEvent = Parameters<PaneHook>[1]
 /** What every page of the board panel draws with: the elements, the view, and the shared pieces (banner, tabs, key hints, text). */
 export async function paneParts($: $, e: PaneEvent) {
   const { Box, Text, Button, Input } = $.ui.resolve(e)
-  const v: PaneView = await readView($)
-  const open = await readOpened($)
+  const v: PaneView = await panelValues($).readView()
+  const open = await panelValues($).readOpened()
   const width = Math.max(20, e.props.bodyColumns ?? 60)
   noteLogoWidth(width)
   // Theme colors, so the board reads well in both light and dark themes.
@@ -25,7 +26,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const word: Record<string, string> = STATUS_WORD
   const mark: Record<string, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
   const act = (fn: () => Promise<unknown>) => () => void fn().catch((err: Error) => $.ui.toast(S.N.toast(err.message)))
-  const tabNow = await readTab($)
+  const tabNow = await panelValues($).readTab()
   const onScouts = tabNow === 'scouts'
   const onSettings = tabNow === 'settings'
   const t = open && !onScouts && !onSettings ? v.tasks.find(x => x.id === open) : undefined
@@ -36,7 +37,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const switchTo: SymccMode = nextMode(mode)
   /** Switches the board mode between review and auto, the same as /<name>-mode with no word. */
   const switchMode = act(async () => {
-    const r = await setBoardMode($, switchTo, 'you')
+    const r = await setBoardMode(claudeHost($), switchTo, 'you')
     $.ui.toast(S.N.toast(r))
     noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
@@ -59,7 +60,7 @@ export async function paneParts($: $, e: PaneEvent) {
         ? [
             <Box key="banner-git" flexDirection="row">
               <Text wrap="truncate" color={C('warning')}>{v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}</Text>
-              <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit($, 'you'))))} />
+              <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />
             </Box>,
           ]
         : []),
@@ -71,7 +72,7 @@ export async function paneParts($: $, e: PaneEvent) {
    *  so the one Text inside is all the terminal draws, and a click on it switches. The "t", "s" and "c" keys belong to three
    *  hidden Buttons in a Box drawn `display="none"`: they take no room and draw nothing, but still carry the hotkeys. */
   const tabs = () => {
-    const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane($, which)))
+    const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
     const keyOf = (which: PaneTab) => (which === 'settings' ? 'c' : which[0])
     const one = (which: PaneTab, label: string) => {
       const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings

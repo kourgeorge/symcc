@@ -9,6 +9,7 @@ import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../h
 import { setupGit } from '../hooks/plugin/git'
 import { S, leadQueue, meanwhile } from '../hooks/plugin/state'
 import { load, saveBoard } from '../hooks/plugin/store'
+import { claudeHost } from '../hooks/claude/host'
 
 const ROOT = '/repo'
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -195,7 +196,7 @@ function world(start: Start = {}) {
   leadQueue.splice(0)
   meanwhile.splice(0)
   const gitCalls = (what: string) => calls.filter(c => c.includes(`: git ${what}`))
-  return { $: $ as never, files, sizes, calls, gitCalls, repo, root, top }
+  return { $: claudeHost($ as never) as never, claude: $, files, sizes, calls, gitCalls, repo, root, top }
 }
 
 /** The project's normal files, and an empty board. */

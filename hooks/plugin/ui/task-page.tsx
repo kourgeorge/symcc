@@ -4,17 +4,18 @@ import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, role
 import { folderDiff, changedFiles } from '../review'
 import { loadRoles } from '../roles'
 import { loadKinds } from '../kinds'
-import { type $, S, workers, updateOpened } from '../state'
+import { type $, S, workers, panelValues } from '../state'
 import { path } from '../store'
 import { noteForLead, brief, tellLead } from '../tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
 import type { PaneParts } from './parts'
+import { claudeHost } from '../../claude/host'
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const { Box, Text, Button, Input, v, width, color, word, mark, act, C, footer, buttonRows, heading, paragraphs } = pane
-  if (!S.roles.length) await loadRoles($).catch(() => undefined)
-  if (!S.kinds.length) await loadKinds($).catch(() => undefined)
+  if (!S.roles.length) await loadRoles(claudeHost($)).catch(() => undefined)
+  if (!S.kinds.length) await loadKinds(claudeHost($)).catch(() => undefined)
   // the branch this task merges into: its changes are shown against it
   const target = intoOf(t)
   const agentId = [...workers.entries()].find(([, w]) => w.task === t.id)?.[0]
@@ -23,17 +24,17 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const answered = isAnswered(t as BoardTask)
   const showDiff = (file: string) => () => ((S.diffOpen = { task: t.id, file }), $.ui.invalidate('ui.render'))
   const approveIt = act(async () => {
-    const r = await runTool($, 'approve', { task: t.id })
+    const r = await runTool(claudeHost($), 'approve', { task: t.id })
     S.diffOpen = null
     S.rejecting = null
     $.ui.toast(S.N.toast(r))
     noteForLead(answered ? `The owner read the answer of ${t.id} and marked it done: ${brief(r)}` : `The owner approved ${t.id}: ${brief(r)}`)
   })
   const keepNote = act(async () => {
-    const r = await runTool($, 'approve', { task: t.id, keep_note: true })
+    const r = await runTool(claudeHost($), 'approve', { task: t.id, keep_note: true })
     S.rejecting = null
     $.ui.toast(S.N.toast(r))
-    tellLead($, `The owner kept the answer of ${t.id} as a note: ${brief(r)}`)
+    tellLead(claudeHost($), `The owner kept the answer of ${t.id} as a note: ${brief(r)}`)
   })
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
   const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
@@ -58,7 +59,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             act(async () => {
               const why = value.trim()
               if (!why) return cancelReject()
-              const r = await runTool($, 'reject', { task: t.id, reason: why })
+              const r = await runTool(claudeHost($), 'reject', { task: t.id, reason: why })
               S.rejecting = null
               S.diffOpen = null
               $.ui.toast(S.N.toast(r))
@@ -73,7 +74,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   if (inReview && !answered && S.diffOpen?.task === t.id) {
     // The changes themselves: the folder as it is now (the owner's edits too) against the merge base, colored line by line.
     const d = S.diffOpen
-    const got = await folderDiff($, target, t, [], d.file).then(
+    const got = await folderDiff(claudeHost($), target, t, [], d.file).then(
       x => ({ lines: cutDiff(x.text, t.id, DIFF_LINES, d.file, S.N.name), error: '', mine: x.edits.length > 0 }),
       (err: Error) => ({ lines: [] as string[], error: err.message, mine: false }),
     )
@@ -116,14 +117,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const canPickRole = ['todo', 'paused', 'failed', 'backlog'].includes(t.status)
   if (S.rolePick && (S.rolePick.task !== t.id || !canPickRole)) S.rolePick = null
   const openRolePick = act(async () => {
-    S.rolePick = { task: t.id, options: roleChoices(await loadRoles($).catch(() => S.roles)) }
+    S.rolePick = { task: t.id, options: roleChoices(await loadRoles(claudeHost($)).catch(() => S.roles)) }
     $.ui.invalidate('ui.render')
   })
   const pickRole = (name: string) =>
     act(async () => {
       S.rolePick = null
       $.ui.invalidate('ui.render')
-      const r = await runTool($, 'change', { task: t.id, role: name })
+      const r = await runTool(claudeHost($), 'change', { task: t.id, role: name })
       $.ui.toast(S.N.toast(`${t.id} role: ${name}`))
       noteForLead(`The owner set the role of ${t.id} to ${name}: ${brief(r)}`)
     })
@@ -148,7 +149,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     ) : null
   // A task in review: the files it changed, each opening its diff.
   const changes = inReview && !answered
-    ? await changedFiles($, target, t).then(
+    ? await changedFiles(claudeHost($), target, t).then(
         files => ({ files, error: '' }),
         (err: Error) => ({ files: [] as DiffFile[], error: err.message }),
       )
@@ -214,17 +215,17 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const cancelAnswer = () => ((S.answering = null), $.ui.invalidate('ui.render'))
   // Enter on the empty "Your answer" box leaves it: back to the answer buttons when Answer… opened it, else (a
   // plain question: the box is all there is) back to the board list
-  const leaveAnswer = act(async () => (choices.length ? cancelAnswer() : await updateOpened($, () => '')))
+  const leaveAnswer = act(async () => (choices.length ? cancelAnswer() : await panelValues($).updateOpened(() => '')))
   const sendAnswer = (text: string) =>
     act(async () => {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
-      await runTool($, 'change', { task: t.id, answer: text.trim() })
+      await runTool(claudeHost($), 'change', { task: t.id, answer: text.trim() })
       noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : `The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
-    if (!overtime && asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles($, t.id) : await refuseAskedFiles($, t.id))))
+    if (!overtime && asked.asked_files?.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles(claudeHost($), t.id) : await refuseAskedFiles(claudeHost($), t.id))))
     return sendAnswer(choices[i]!)
   }
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
@@ -246,31 +247,31 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       </Box>
 
       {buttonRows([
-        <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await updateOpened($, () => '')))} />,
+        <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))} />,
         ...reviewButtons,
         inReview && !answered && <Button key="show-changes" label="Show changes" hotkey="d" onPress={showDiff('')} />,
         agentId && <Button key="watch" label="Watch worker" hotkey="w" onPress={act(() => $.ui.view({ agentId }))} />,
         (t.status === 'doing' || t.status === 'todo') && (
-          <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool($, 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))} />
+          <Button key="pause" label="Pause" hotkey="p" onPress={act(async () => (await runTool(claudeHost($), 'pause', { task: t.id, reason: 'paused by the owner' }), noteForLead(`The owner paused ${t.id}.`)))} />
         ),
         t.status === 'paused' && (
-          <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool($, 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))} />
+          <Button key="resume" label="Resume" hotkey="u" onPress={act(async () => (await runTool(claudeHost($), 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))} />
         ),
         fileWait && (
-          <Button key="merge-now" label="Merge now (r)" hotkey="r" onPress={act(async () => ($.ui.toast(S.N.toast(await runTool($, 'retry', { task: t.id }))), noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`)))} />
+          <Button key="merge-now" label="Merge now (r)" hotkey="r" onPress={act(async () => ($.ui.toast(S.N.toast(await runTool(claudeHost($), 'retry', { task: t.id }))), noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`)))} />
         ),
         (t.status === 'failed' || t.status === 'dropped') && (
-          <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool($, 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))} />
+          <Button key="retry" label="Retry" hotkey="r" onPress={act(async () => (await runTool(claudeHost($), 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))} />
         ),
         t.status === 'backlog' && (
-          <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))} />
+          <Button key="to-todo" label="Move to todo (o)" hotkey="o" onPress={act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))} />
         ),
         (t.status === 'todo' || t.status === 'paused' || t.status === 'failed') && (
-          <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool($, 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))} />
+          <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))} />
         ),
         canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />,
         t.status !== 'done' && t.status !== 'dropped' && (
-          <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool($, 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))} />
+          <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={act(async () => (await runTool(claudeHost($), 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))} />
         ),
         t.status !== 'done' && t.status !== 'dropped' && (
           <Button
@@ -278,7 +279,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             label={`Needs review: ${t.needs_review ? 'on' : 'off'}`}
             hotkey="n"
             onPress={act(async () => {
-              const r = await runTool($, 'change', { task: t.id, needs_review: !t.needs_review })
+              const r = await runTool(claudeHost($), 'change', { task: t.id, needs_review: !t.needs_review })
               $.ui.toast(S.N.toast(r))
               noteForLead(`The owner turned needs_review ${t.needs_review ? 'off' : 'on'} for ${t.id}.`)
             })}
