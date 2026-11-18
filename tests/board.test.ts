@@ -1484,14 +1484,17 @@ test("a worker's shell command: relative paths in quoted text are taken from the
   expect(no('cd tests && cat ../hooks/claude/tools.ts')).toBeUndefined()
   expect(no(`bun -e "import('../hooks/x')"`, `${wt}/tests`)).toBeUndefined()
   expect(no(`cd tests && bun -e "import('../hooks/x')"`)).toBeUndefined()
-  expect(no(`cd tests; bun -e "import('../hooks/claude/tools').then(t => console.log(t))"`)).toBeUndefined()
-  expect(no(`cd tests; node -e 'require("../hooks/x"); console.log(1)'`)).toBeUndefined()
-  expect(no(`cd ${wt}/tests; bun -e "const t = await import('../hooks/claude/tools'); console.log(t)"`)).toBeUndefined()
+  expect(no(`cd tests && bun -e "import('../hooks/claude/tools').then(t => console.log(t))"`)).toBeUndefined()
+  expect(no(`cd tests && node -e 'require("../hooks/x"); console.log(1)'`)).toBeUndefined()
+  expect(no(`cd ${wt}/tests && bun -e "const t = await import('../hooks/claude/tools'); console.log(t)"`)).toBeUndefined()
+  expect(no(`node -e 'require("../hooks/x")'`, `${wt}/tests`)).toBeUndefined()
+  // a here-string is no here-document: what follows it is plain shell
+  expect(no('cat <<< "x" && cat ../hooks/a.ts', `${wt}/tests`)).toBeUndefined()
   // a here-document's text: an apostrophe, ";" or "`" in it is no shell, and its relative paths are read from where the command is
   expect(no("cd tests && cat > /tmp/p.ts <<'EOF'\nconst s = \"don't\"; run(`x`)\nawait import('../hooks/x')\nEOF\nbun /tmp/p.ts")).toBeUndefined()
   expect(no("cd tests && bun - <<EOF\nimport('../hooks/x')\nEOF")).toBeUndefined()
   // a throwaway copy under /tmp, with relative paths inside it
-  expect(no('cp -r . /tmp/c && cd /tmp/c/tests; cat "../hooks/a.ts"')).toBeUndefined()
+  expect(no('cp -r . /tmp/c && cd /tmp/c/tests && cat "../hooks/a.ts"')).toBeUndefined()
   // must refuse: real reach-outs, quoted or not, also inside a here-document run by a shell
   expect(no('cat ../../README.md')).toBe('.symcc/README.md')
   expect(no('cat ../../../README.md')).toBe('README.md')
@@ -1506,6 +1509,19 @@ test("a worker's shell command: relative paths in quoted text are taken from the
   expect(no(`cd $D; bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
   expect(no(`(cd tests) && bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
   expect(no(`cd tests || bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
+  // a cd that may fail (";", a "{ }" group) leaves the shell in the worker's folder: quoted text is checked from there too
+  expect(no('cd /nope; cat "../../../README.md"')).toBe('README.md')
+  expect(no(`cd /nope; bun -e "require('../../../README.md')"`)).toBe('README.md')
+  expect(no('{ cd /nope; }; cat "../../../README.md"')).toBe('README.md')
+  expect(no(`cd tests; bun -e "import('../hooks/x')"`)).toBe('.symcc/worktrees/hooks/x')
+  expect(no('cd /tmp/c/tests; cat "../hooks/a.ts"')).toBe('.symcc/worktrees/hooks/a.ts')
+  // a cd in here-document text may be only text: the folder the command was in still counts
+  expect(no('cat > n <<EOF\ncd /nope\nEOF\ncat "../../../README.md"')).toBe('README.md')
+  expect(no('cat > n <<EOF\ncd /nope\nEOF\ncat ../../../README.md')).toBe('README.md')
+  expect(no("cd /nope; bash <<'X'\ncat ../../../README.md\nX")).toBe('README.md')
+  // a here-string ("<<<") is not a here-document: the lines after it are plain shell
+  expect(no('cat <<< "x"\ncd /nope\ncat ../../../README.md')).toBe('README.md')
+  expect(no("cat <<<'x'\ncat ../../../README.md")).toBe('README.md')
 })
 
 test('the waiting question and the failure note for files outside the list', async () => {

@@ -296,8 +296,11 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
   for (let i = 0; i < command.length; i++) {
     const c = command[i]!
     const n = command[i + 1]
-    const here = !doc && !quote && c === '<' && n === '<' ? HEREDOC.exec(command.slice(i)) : null
-    if (quote) {
+    // "<<<" is a here-string, not a here-document
+    const hereString = !doc && !quote && c === '<' && n === '<' && command[i + 2] === '<'
+    const here = !doc && !quote && !hereString && c === '<' && n === '<' ? HEREDOC.exec(command.slice(i)) : null
+    if (hereString) (text += '<<<'), (i += 2)
+    else if (quote) {
       if (c === '\\' && quote === '"') text += c + (n ?? ''), i++
       else {
         text += c
@@ -366,10 +369,10 @@ function cdTarget(text: string, home: string | undefined): string | null | undef
  * knows it and it is inside the worker's folder) or else the worker's folder, and a plain `cd` or `pushd` earlier in the
  * command moves it ("cd src && cat ../package.json" reads the worker's own file). When it can't be told for sure (a `cd`
  * that may fail before ";" or "||", a group in parentheses), every folder the command may be in is tried, and a `cd`
- * that can't be followed (a variable, `cd -`) goes back to the worker's folder. A word that is only text inside quotes
- * (an import path in `bun -e "..."`) or in a here-document is taken only from the folder the command is in when every
- * cd before it worked (T-417), so code or notes passed as text don't count as reaching out from a folder the command
- * is not in. A ".." word is also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too.
+ * that can't be followed (a variable, `cd -`) goes back to the worker's folder. Words inside quotes (an import path in
+ * `bun -e "..."`) and here-document text are checked the same way, from every folder the command may be in, since
+ * code passed as text may still read the path; a `cd` in here-document text only adds a folder it may be in, and `<<<` is a
+ * here-string, not a here-document (T-417). A ".." word is also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too.
  */
 function walkBash(command: string, wts: readonly string[], home: string | undefined, cwd: string | undefined, visit: (abs: string) => string | undefined): string | undefined {
   const wt = wts[0]!
@@ -377,31 +380,29 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
   const sh = cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
   const start = [sh !== undefined && insideAny(sh, wts, true) !== undefined ? sh : wt]
   const join = (...lists: string[][]) => [...new Set(lists.flat())]
-  // here: every folder the command may be in; main: the one it is in when every cd worked
+  // every folder the command may be in at this point
   let here = start
-  let main = start
   let seen = start
-  const groups: { here: string[]; main: string[]; sub: boolean }[] = []
+  const groups: { here: string[] }[] = []
   const pieces = shellPieces(command)
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i]!
     if ('op' in p) {
-      if (p.op === '(') groups.push({ here, main, sub: p.sub })
+      if (p.op === '(') groups.push({ here })
       else if (p.op === ')') {
         // a group may be a subshell (its cd stays inside) or not: either folder
         const g = groups.pop()
         here = join(g?.here ?? start, here)
-        if (g?.sub) main = g.main
       }
       // what runs after "||" may follow a failed cd anywhere before it
-      else if (p.op === '||') (here = join(here, seen)), (main = here)
+      else if (p.op === '||') here = join(here, seen)
       continue
     }
-    for (const [w, quoted] of pieceWords(p)) {
+    for (const w of pieceWords(p).keys()) {
       const climbs = w.split('/').includes('..')
       const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
       if (!w.startsWith('/') && !homeWord && !climbs) continue
-      const dirs = quoted ? main : here
+      const dirs = here
       const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : dirs.map(d => resolvePath(d, w))
       if (climbs && w.startsWith('/')) tries.push(...dirs.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
       for (const abs of tries) {
@@ -411,6 +412,12 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
     }
     const to = cdTarget(p.text, home)
     if (to === undefined) continue
+    // a "cd" in a here-document's text may run (`bash <<X`) or be only text (`cat > f <<X`): it adds a folder the
+    // command may be in, and never drops the one it was in (T-417)
+    if (p.doc) {
+      if (to !== null) (here = join(here, here.map(d => resolvePath(d, to)))), (seen = join(seen, here))
+      continue
+    }
     const before = pieces[i - 1]
     const after = pieces[i + 1]
     const op = (x: ShellPiece | undefined) => (x && 'op' in x ? x.op : undefined)
@@ -419,7 +426,6 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
     const moved = to === null ? [wt] : here.map(d => resolvePath(d, to))
     // only "&&" makes sure the cd worked before what follows runs
     here = op(after) === '&&' ? moved : join(here, moved)
-    main = to === null ? [wt] : main.map(d => resolvePath(d, to))
     seen = join(seen, moved)
   }
   return undefined
