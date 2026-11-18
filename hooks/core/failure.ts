@@ -39,12 +39,45 @@ function saidBefore(t: Failed, detail: RegExp): string {
   return ''
 }
 
-/** The first lines of failing test output that say what went wrong: lines naming a failure or an error, else the last lines. */
-export function failingLines(output: string, n = 2): string {
-  const lines = output.split('\n').map(l => l.trim()).filter(l => l && !/^\$ /.test(l) && l !== CHECKER_MARK)
-  const at = lines.findIndex(l => /fail|error|✗|✖|assert|expected/i.test(l))
-  const pick = at >= 0 ? lines.slice(at, at + n) : lines.slice(-n)
-  return cutLine(pick.join(' | '), 240)
+/**
+ * The failing tests in test output, as bun prints them: each "(fail) <name>" line, after the one or two
+ * "error:" / "Expected" lines bun prints above it. "(pass)" lines are never taken. '' when the saved output
+ * has no "(fail)" line (it was cut before it), so nothing is guessed. `n` is how many failing tests to show.
+ */
+export function failingLines(output: string, n = 1): string {
+  const lines = output.split('\n').map(l => l.trim())
+  const picks: string[] = []
+  let fails = 0
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\(fail\)\s/.test(lines[i]!)) continue
+    fails++
+    if (picks.length >= n) continue
+    const why: string[] = []
+    for (let j = i - 1; j >= 0 && !/^\((pass|fail|skip|todo)\)\s/.test(lines[j]!); j--) {
+      if (/^(error:|expected)/i.test(lines[j]!)) why.unshift(lines[j]!)
+    }
+    picks.push([lines[i]!.replace(/\s*\[[\d.]+\s*m?s\]$/, ''), ...why.slice(0, 2)].join(' | '))
+  }
+  if (!picks.length) return ''
+  const more = fails - picks.length
+  return cutLine(picks.join(' | ') + (more > 0 ? ` (and ${more} more)` : ''), 240)
+}
+
+/** A line naming a file and line, the way checkers list their problems: "path:12 - …" or "path:12-20 — …". */
+const PROBLEM_LINE = /^[-*\s]*`?\S+:\d+(?:-\d+)?`?\s+[—–-]\s/
+const NAMES_FILE = /(^|[\s(`/])(hooks|tests)\/\S/
+
+/**
+ * The first problem in a checker's report: the first "path:line — …" line (after a "Problems:" line when there
+ * is one), else the first line naming a file under hooks/ or tests/, else its first line.
+ */
+export function firstProblem(report: string): string {
+  const lines = report.split('\n').map(l => l.trim()).filter(l => l && l !== CHECKER_MARK && l !== '…')
+  const head = lines.findIndex(l => /^\**problems?:?\**:?$/i.test(l))
+  const pick = (head >= 0 ? lines.slice(head + 1).find(l => PROBLEM_LINE.test(l)) : undefined)
+    ?? lines.find(l => PROBLEM_LINE.test(l)) ?? lines.find(l => NAMES_FILE.test(l)) ?? lines[0] ?? ''
+  // a worktree's long absolute path says nothing the short one doesn't
+  return cutLine(pick.replace(/^[-*]\s+/, '').replace(/\S*\/\.symcc\/worktrees\/[^/\s]+\//g, ''), 240)
 }
 
 const end = (s: string) => (/[.!?…]$/.test(s) ? s : `${s}.`)
@@ -62,10 +95,11 @@ export function whyFailed(t: Failed): string {
     case 'tests': {
       const cmd = /^\$ (.+?) \(exit (\d+)\)/m.exec(out) ?? /^tests failed: `(.+?)` \(exit (\d+)\)/.exec(note)
       const lines = out ? failingLines(out) : ''
-      return `The tests failed${cmd ? ` (\`${cmd[1]}\`, exit ${cmd[2]})` : ''}${lines ? `. First failing lines: ${end(lines)}` : '.'}`
+      const which = lines ? `First failing test: ${end(lines)}` : out ? "The saved test output doesn't show which test failed." : ''
+      return `The tests failed${cmd ? ` (\`${cmd[1]}\`, exit ${cmd[2]})` : ''}.${which ? ` ${which}` : ''}`
     }
     case 'checker': {
-      const first = out ? cutLine(out.split('\n').map(l => l.trim()).find(l => l && l !== CHECKER_MARK) ?? '', 240) : cutLine(note.replace(/^the checker found problems:?\s*/i, ''), 240)
+      const first = out ? firstProblem(out) : cutLine(note.replace(/^the checker found problems:?\s*/i, ''), 240)
       return `The checker found problems with the work${first ? `. First problem: ${end(first)}` : '.'}`
     }
     case 'scope': {
@@ -136,7 +170,10 @@ export function failAsks(report: string | null | undefined): string {
   const lines = (report ?? '').split('\n').map(l => l.trim()).filter(Boolean)
   // Workers write "NEED FILES:" at the start of a line, in capitals; a report that only mentions the phrase doesn't count.
   const need = lines.find(l => /^NEED FILES:/.test(l))
-  if (need) return `The worker asks for more files: ${cutLine(need.replace(/^NEED FILES:\s*/, ''), 200) || '(none named)'}. Add them to the task with change, then Retry.`
+  if (need) {
+    const files = cutLine(need.replace(/^NEED FILES:\s*/, ''), 200) || '(none named)'
+    return `The worker asks for more files: ${end(files)} Add them to the task with change, then Retry.`
+  }
   // A question counts only in the report's last lines (an earlier one is usually answered later on), and only a
   // real sentence ending on a word and "?" (not a status line like "changed ?" or a link or code).
   const q = [...lines.slice(-3)].reverse().find(l => /[\w)'"`]\?\s*\**$/.test(l) && /^[-*#>\s]*\**[A-Za-z]/.test(l) && !/^[-*]?\s*(https?:|`)/.test(l) && !/^\w+:\s{2,}/.test(l))
