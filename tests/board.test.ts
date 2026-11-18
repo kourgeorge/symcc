@@ -11,7 +11,7 @@ import { putTask, tryMark, tryTone, bandStatus } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsOutside, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
 import { ROLE_TOOLS, EXTRA_TOOLS, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
@@ -1430,6 +1430,82 @@ test("a worker's shell command: a project path with a space in it, quoted or wit
   expect(no('cat "/Users/o/My Project2/a"')).toBeUndefined()
   expect(no('cat "/Users/o/My Projects/a" /tmp/b')).toBeUndefined()
   expect(no('echo "a b" > src/a.ts')).toBeUndefined()
+})
+
+test("a worker's shell command or edit naming the project through /tmp (when it is under /private/tmp) or a linked folder is refused like the direct path (T-417)", () => {
+  const root = '/private/tmp/t391-live/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
+  // the owner's copy and another task's folder, through /tmp or /private/tmp: refused
+  expect(no('test -e /tmp/t391-live/repo/README.md')).toBe('README.md')
+  expect(no('test -e /private/tmp/t391-live/repo/README.md')).toBe('README.md')
+  expect(no('cat /tmp/t391-live/repo/.symcc/worktrees/T-6/a.ts')).toBe('.symcc/worktrees/T-6/a.ts')
+  expect(no('cd /tmp/t391-live/repo && git status')).toBe('')
+  expect(no('echo "x" > "/tmp/t391-live/repo/README.md"')).toBe('README.md')
+  expect(no('cd /tmp/t391-live/repo/.symcc/worktrees/T-5 && cat ../../../README.md')).toBe('README.md')
+  // the same the other way round: the project known as /tmp, named through /private/tmp
+  expect(bashOutsideFolder('cat /private/tmp/r/README.md', '/tmp/r/.symcc/worktrees/T-5', '/tmp/r')).toBe('README.md')
+  expect(bashOutsideFolder('cat /private/var/r/README.md', '/var/r/.symcc/worktrees/T-5', '/var/r')).toBe('README.md')
+  // the worker's own folder, written either way, and a shell folder written through /tmp: allowed
+  expect(no('cat /tmp/t391-live/repo/.symcc/worktrees/T-5/src/a.ts')).toBeUndefined()
+  expect(no(`cat ${wt}/src/a.ts`)).toBeUndefined()
+  expect(no('cat ../x', '/tmp/t391-live/repo/.symcc/worktrees/T-5/src')).toBeUndefined()
+  expect(no('cd /tmp/t391-live/repo/.symcc/worktrees/T-5/src && cat ../package.json')).toBeUndefined()
+  expect(no('ls /tmp/other /private/tmp/t391-live/repo2')).toBeUndefined()
+  // a folder by two names (as written, and where its links lead): either name counts
+  const real = '/Users/o/real'
+  const roots = ['/Users/o/link', real]
+  const wts = ['/Users/o/link/.symcc/worktrees/T-5', `${real}/.symcc/worktrees/T-5`]
+  expect(bashOutsideFolder(`cat ${real}/README.md`, wts, roots)).toBe('README.md')
+  expect(bashOutsideFolder('cat /Users/o/link/README.md', wts, roots)).toBe('README.md')
+  expect(bashOutsideFolder(`cat ${real}/.symcc/worktrees/T-5/a.ts /Users/o/link/.symcc/worktrees/T-5/b.ts`, wts, roots)).toBeUndefined()
+  // edits: the same names match
+  expect(editOutsideFolder('/tmp/t391-live/repo/README.md', wt, root)).toBe('README.md')
+  expect(editOutsideFolder('/tmp/t391-live/repo/.symcc/worktrees/T-5/src/a.ts', wt, root)).toBeUndefined()
+  expect(editOutsideFolder(`${real}/README.md`, wts, roots)).toBe('README.md')
+  expect(blockedEdit('/tmp/t391-live/repo/.symcc/worktrees/T-5/docs/x.md', wt, ['src/'], '.symcc')).toBe('docs/x.md')
+  expect(blockedEdit('/tmp/t391-live/repo/.symcc/worktrees/T-5/src/a.ts', wt, ['src/'], '.symcc')).toBeUndefined()
+  // the macOS pairs
+  expect(pathAliases('/tmp/a')).toEqual(['/tmp/a', '/private/tmp/a'])
+  expect(pathAliases('/private/var/a')).toEqual(['/private/var/a', '/var/a'])
+  expect(pathAliases('/tmpx/a')).toEqual(['/tmpx/a'])
+  expect(pathAliases('/Users/o')).toEqual(['/Users/o'])
+  // the paths a caller looks up on disk for links elsewhere: outside the worker's folder only
+  expect(bashPathsOutside(`cat ~/link/README.md ${wt}/a.ts /tmp/t391-live/repo/.symcc/worktrees/T-5/b.ts`, wt, '/home/me')).toEqual(['/home/me/link/README.md'])
+  expect(bashPathsOutside(Array.from({ length: 50 }, (_, i) => `/x/${i}`).join(' '), wt)).toHaveLength(20)
+  expect(bashPathsOutside(undefined, wt)).toEqual([])
+})
+
+test("a worker's shell command: relative paths in quoted text are taken from the folder the command is really in (T-417)", () => {
+  const root = '/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
+  // must allow: the worker's own files reached from tests/, also as text in code passed to bun -e or node -e
+  expect(no('cd tests && cat ../hooks/claude/tools.ts')).toBeUndefined()
+  expect(no(`bun -e "import('../hooks/x')"`, `${wt}/tests`)).toBeUndefined()
+  expect(no(`cd tests && bun -e "import('../hooks/x')"`)).toBeUndefined()
+  expect(no(`cd tests; bun -e "import('../hooks/claude/tools').then(t => console.log(t))"`)).toBeUndefined()
+  expect(no(`cd tests; node -e 'require("../hooks/x"); console.log(1)'`)).toBeUndefined()
+  expect(no(`cd ${wt}/tests; bun -e "const t = await import('../hooks/claude/tools'); console.log(t)"`)).toBeUndefined()
+  // a here-document's text: an apostrophe, ";" or "`" in it is no shell, and its relative paths are read from where the command is
+  expect(no("cd tests && cat > /tmp/p.ts <<'EOF'\nconst s = \"don't\"; run(`x`)\nawait import('../hooks/x')\nEOF\nbun /tmp/p.ts")).toBeUndefined()
+  expect(no("cd tests && bun - <<EOF\nimport('../hooks/x')\nEOF")).toBeUndefined()
+  // a throwaway copy under /tmp, with relative paths inside it
+  expect(no('cp -r . /tmp/c && cd /tmp/c/tests; cat "../hooks/a.ts"')).toBeUndefined()
+  // must refuse: real reach-outs, quoted or not, also inside a here-document run by a shell
+  expect(no('cat ../../README.md')).toBe('.symcc/README.md')
+  expect(no('cat ../../../README.md')).toBe('README.md')
+  expect(no('cat "../../../README.md"')).toBe('README.md')
+  expect(no(`bun -e "import('../../../README.md')"`)).toBe('README.md')
+  expect(no(`cd tests; bun -e "require('../../../../README.md')"`)).toBe('README.md')
+  expect(no('cd tests; cat ../x')).toBe('.symcc/worktrees/x')
+  expect(no("bash <<'X'\ncd src\ncat ../../../../README.md\nX")).toBe('README.md')
+  expect(no('cat <<EOF\n../../../README.md\nEOF')).toBe('README.md')
+  expect(no("cat > /tmp/a <<'EOF'\nhello\nEOF\ncat ../../../README.md")).toBe('README.md')
+  expect(no("cat > /tmp/a <<'EOF'\nsee /repo/README.md\nEOF")).toBe('README.md')
+  expect(no(`cd $D; bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
+  expect(no(`(cd tests) && bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
+  expect(no(`cd tests || bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
 })
 
 test('the waiting question and the failure note for files outside the list', async () => {
