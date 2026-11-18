@@ -7,7 +7,7 @@ import type { Board } from './board-file'
 import { DOC_NAMES, MEDIA_EXTS } from './review'
 import { CHECKER_ROLE } from './roles'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { testTail } from './settings'
+import { TEST_OUTPUT_CHARS } from './settings'
 import { fillPlaceholders } from './prompts'
 
 export { CHECKER_ROLE }
@@ -76,8 +76,15 @@ export function checkerVerdict(answer: string): CheckerVerdict | null {
 /** The first line of a task's test_output when it holds a checker's report rather than test output. */
 export const CHECKER_MARK = 'The checker found these problems:'
 
-/** The checker's report as the task keeps it in test_output (cut like test output, so it fits in the next prompt). */
-export const checkerOutput = (report: string): string => `${CHECKER_MARK}\n${testTail(report)}`
+/**
+ * The checker's report as the task keeps it in test_output: its last TEST_OUTPUT_CHARS characters, so it fits in
+ * the next prompt. A plain cut, not testTail: a report that quotes "(fail)" lines is not test output, and a
+ * failed-tests heading in front of it would become its "first problem".
+ */
+export const checkerOutput = (report: string): string => {
+  const s = String(report ?? '').trim()
+  return `${CHECKER_MARK}\n${s.length <= TEST_OUTPUT_CHARS ? s : '…' + s.slice(-TEST_OUTPUT_CHARS)}`
+}
 
 /** Whether test_output `s` holds a checker's report (see checkerOutput). */
 export const isCheckerOutput = (s: string | undefined): boolean => typeof s === 'string' && s.startsWith(CHECKER_MARK)

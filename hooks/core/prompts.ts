@@ -32,7 +32,7 @@ export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = {
     files: 'the "Files you may change" lines (the task\'s files, or "whatever the task needs")',
     test_command: 'the "these must pass" line with the test commands (or "There is no test command")',
     merge_main: 'only when the branch it merges into moved and conflicts: how to merge it first',
-    test_output: 'only after a try failed its tests: the end of the test output',
+    test_output: 'only after a try failed its tests: its failing tests with their errors (when the output was long), then the end of the test output',
     earlier_tries: 'only when there were earlier tries: the last ones, and "Don\'t repeat those mistakes."',
     ask: 'how to ask the owner and what a refused edit means',
   },
