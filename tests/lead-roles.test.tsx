@@ -19,6 +19,7 @@ function setup(mine: Record<string, string> = {}) {
     'general.md': '---\ndescription: a plain worker\n---\n',
     'tester.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n',
     'docs.md': '---\ndescription: writes the docs\n---\n- plain words\n',
+    'checker.md': '---\ndescription: checks a finished change\noff: true\n---\n- never edit\n',
   }
   const touched: string[] = []
   const where = (p: string): [Record<string, string>, string] | null => {
@@ -178,6 +179,29 @@ test('an off role is not offered and not in the lead\'s roles; on brings it back
   expect(await call($, { action: 'on', name: 'docs' })).toContain('turned docs on again')
   expect(roleChoices(S.roles)).toEqual(['general', 'docs', 'tester'])
   expect(rolesLeadText(S.roles)).toContain('docs (writes the docs)')
+})
+
+test('the checker role can\'t be turned on or off (the checker setting runs it) and is never a task role, even when its file says on', async () => {
+  const { $, mine } = setup()
+  for (const action of ['on', 'off']) {
+    const out = await call($, { action, name: 'checker' })
+    expect(out).toContain("checker role can't be turned on or off")
+    expect(out).toContain('checker setting (Settings → checker)')
+  }
+  expect(mine['checker.md']).toBeUndefined()
+  expect(await call($, {})).toContain('- checker (built-in): checks a finished change')
+  expect(roleChoices(S.roles)).not.toContain('checker')
+  expect(rolesLeadText(S.roles)).not.toContain('checker')
+  expect(() => checkRole(S.roles, 'checker')).toThrow('checker setting')
+  // its checklist stays editable; an owner's copy without off: true is still not a task role
+  expect(await call($, { action: 'edit', name: 'checker', checklist: '- try it for real' })).toContain('saved role checker')
+  mine['checker.md'] = '---\ndescription: checks a finished change\n---\n- try it for real\n'
+  await call($, {})
+  expect(S.roles.find(r => r.name === 'checker')?.prompt).toBe('- try it for real')
+  expect(roleChoices(S.roles)).not.toContain('checker')
+  expect(rolesLeadText(S.roles)).not.toContain('checker')
+  expect(leadGuide()).not.toContain('checker (checks a finished change)')
+  expect(() => checkRole(S.roles, 'Checker')).toThrow('checker setting')
 })
 
 test('the file name is the role\'s name: a name: line is ignored with a warning, and every action works on that file only', async () => {

@@ -646,12 +646,30 @@ the lead "turn on the checker"). Then, when a change passes its tests, a fresh c
 built-in `checker` role) starts in the task's folder. It cannot edit files. It reads the task and
 the diff and tries to break the change, for example by running it with odd input.
 
+The checker may only read with git. Any git command that changes something (commit, checkout,
+switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is refused, and so are
+read-only commands with options or settings that write files or run programs (such as
+`git diff --output=...` or `-c` settings that run a program). This check works on the command text and
+is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
+get through. The real fix is the worker sandbox (T-365).
+
 - **OK:** the task goes on as usual, to review or to merge.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
   as one of the `auto_retries`.
 - **No answer** (the checker was stopped, ran longer than `max_minutes`, or could not start): the
   task waits for your review.
-- **Skipped** for investigations and for changes that touch only docs.
+- **Skipped** for investigations and for changes that touch only prose or media. Only these count:
+  `README`, `CHANGELOG`, `LICENSE`-style names (no extension, `.txt` or `.rst`), `.md` files that are not
+  instructions for agents, and images, video, audio, subtitles and fonts. A `.md` file is instructions
+  for agents, and so is checked, when it is under `roles/`, `kinds/`, `.claude/`, `.symcc/` or `skills/`,
+  or is named `CLAUDE.md`, `AGENTS.md` or `SKILL.md`. Everything else is checked, even under `docs/`:
+  `.mdx` files (they hold code), and config, build and CI files such as `package.json`, `.yaml`,
+  `.toml`, `Makefile` and `.github/workflows/`. (`tests_with_changes` keeps its wider docs rule: a role
+  file or a docs config file is not code that needs a test.)
+
+The `checker` role (Settings → Roles → checker) is only the checker's checklist: you can edit it, but
+it can't be turned on or off and is never a task's role. Its page says so and shows whether the
+`checker` setting is on; the lead's `roles on checker` is refused for the same reason.
 
 The checker's verdict is written in the task's history.
 

@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, untestedChange } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
@@ -179,7 +179,19 @@ test('a verdict is OK only when the last line says OK on its own; anything else 
   expect(isCheckerOutput('$ npm test (exit 1)')).toBe(false)
   expect(docsOnly(['README.md', 'docs/guide.md'])).toBe(true)
   expect(docsOnly(['README.md', 'src/a.ts'])).toBe(false)
+  expect(docsOnly([])).toBe(false)
   expect(finishedNote({ ok: false, detail: 'x', checker: true, testOutput: 'y' })).toBe('checker found problems')
+})
+
+test('docs-only, for the checker, is only prose and media: agent instructions, .mdx and config files are checked, even under docs/', () => {
+  for (const f of ['README.md', 'docs/guide.md', 'docs/img/x.png', 'CHANGELOG.md', 'LICENSE', 'README', 'docs/demo.mp4', 'assets/font.woff2', 'roles/logo.svg'])
+    expect([f, docsOnly([f])]).toEqual([f, true])
+  for (const f of ['roles/checker.md', 'kinds/bug.md', 'CLAUDE.md', 'sub/CLAUDE.md', 'AGENTS.md', '.claude/agents/x.md', '.claude/commands/go.md', '.symcc/roles/mine.md', 'skills/a/SKILL.md', 'SKILL.md', 'src/page.mdx', 'docs/page.mdx', 'docs/package.json', 'docs/Makefile', 'docs/openapi.yaml', 'docs/.github/workflows/ci.yml', 'docs/netlify.toml', 'docs/build.ts', 'license.ts'])
+    expect([f, docsOnly([f])]).toEqual([f, false])
+  expect(docsOnly(['README.md', 'roles/tester.md'])).toBe(false)
+  // tests_with_changes keeps the wider rule: a role file or docs config is not code that needs a test
+  expect(untestedChange(['roles/tester.md', 'docs/package.json', 'src/page.mdx'])).toBe(false)
+  expect(untestedChange(['src/a.ts'])).toBe(true)
 })
 
 // ---------------- finishing a change ----------------

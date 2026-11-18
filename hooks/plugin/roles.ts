@@ -1,4 +1,4 @@
-import { type RoleDef, type RolePromptKind, NEW_ROLE_TEMPLATE, mergeRoles, DEFAULT_ROLE, roleNameError, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
+import { type RoleDef, type RolePromptKind, NEW_ROLE_TEMPLATE, mergeRoles, DEFAULT_ROLE, CHECKER_ROLE_TEXT, isCheckerRole, roleNameError, roleFileText, leadRolesText, leadRoleText, leadBrokenLine } from '../board'
 import { parseRole, roleSkipReason, EXTRA_TOOLS, roleTools } from '../claude/agent-types'
 import type { BrokenDef } from '../core/def-files'
 import { skippedRoles, S } from './state'
@@ -53,7 +53,7 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
     const { name: _n, warning: _w, ...rest } = cur
     return { ...rest, off }
   },
-  alwaysOn: name => (name.toLowerCase() === DEFAULT_ROLE ? `${DEFAULT_ROLE} can't be turned off: it is the default role` : ''),
+  alwaysOn: (name, off) => (isCheckerRole(name) ? `Nothing changed: ${CHECKER_ROLE_TEXT}` : off && name.toLowerCase() === DEFAULT_ROLE ? `${DEFAULT_ROLE} can't be turned off: it is the default role` : ''),
   offSaid: "the lead won't pick it and it isn't offered on the task page; tasks that already have it keep it",
 }
 

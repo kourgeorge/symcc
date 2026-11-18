@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS } from '../../board'
+import { SETTINGS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { type $, S } from '../state'
 import { resetPane } from './open'
@@ -53,9 +53,10 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
   )
 }
 
-/** One role's page (opened from the Roles page; Back returns there): its front matter and checklist, with Back, Edit, Turn off / on (not for general),
- *  Reset to built-in (a replaced built-in only) and Remove (an added role only, after a confirm step). */
-function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
+/** One role's page (opened from the Roles page; Back returns there): its front matter and checklist, with Back, Edit, Turn off / on (not for general,
+ *  nor for the checker role: its page says the checker setting runs it and whether that is on, `checker`), Reset to built-in (a replaced built-in only)
+ *  and Remove (an added role only, after a confirm step). */
+function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker: boolean) {
   const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
   const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => act(async () => {
     const res = await changeRole($, input)
@@ -64,7 +65,10 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
     $.ui.toast(S.N.toast(res.text))
     $.ui.invalidate('ui.render')
   })
-  const canOff = r.name.toLowerCase() !== DEFAULT_ROLE
+  const isChecker = isCheckerRole(r.name)
+  // the checker role's off: true only keeps it out of the task roles, so it is not shown as off
+  const off = !!r.off && !isChecker
+  const canOff = r.name.toLowerCase() !== DEFAULT_ROLE && !isChecker
   const canReset = source === 'replaced'
   const canRemove = source === 'added'
   // one section per part of the file, named as the edit page's boxes; the description is the subheader
@@ -78,11 +82,12 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource) {
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
         <Text>
-          <Text bold color={C(r.off ? 'inactive' : 'claude')}>{r.name}</Text>
-          <Text color={C(r.off ? 'warning' : 'inactive')}> · {sourceLabel(source, r.off)}</Text>
+          <Text bold color={C(off ? 'inactive' : 'claude')}>{r.name}</Text>
+          <Text color={C(off ? 'warning' : 'inactive')}> · {sourceLabel(source, off)}</Text>
         </Text>
         <Text bold color={C('text')}>{r.description}</Text>
         {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
+        {isChecker ? <Text key="role-checker-setting" color={C('inactive')}>{`never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checker ? 'on' : 'off'})`}</Text> : null}
       </Box>
       {buttonRows([
         <Button key="role-back" label="Back" hotkey="b" autoFocus={roleView.confirmRemove ? undefined : true} onPress={() => ((roleView.open = ''), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
@@ -267,11 +272,12 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         const bad = brokenNamed(broken, r.name)
         if (bad) return brokenRow(bad, i === 0)
         const source = defSource(r.name, builtIn, project)!
+        const off = !!r.off && !isCheckerRole(r.name)
         return (
-          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${sourceLabel(source, r.off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
-            <Text bold={!r.off} color={C(r.off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
-            <Text color={C(r.off ? 'warning' : 'inactive')}>{` ${sourceLabel(source, r.off)}`}</Text>
-            <Text color={C(r.off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
+          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${sourceLabel(source, off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
+            <Text bold={!off} color={C(off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
+            <Text color={C(off ? 'warning' : 'inactive')}>{` ${sourceLabel(source, off)}`}</Text>
+            <Text color={C(off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
             {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
           </Button>
         )
@@ -466,7 +472,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (roleView.open && !opened) resetRoleOpen()
   if (opened && roleView.draft) return roleEditPage($, pane, defSource(opened.name, builtIn, project))
   if (opened && roleView.prompt) return rolePromptPage($, pane, opened, roleView.prompt)
-  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!)
+  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, checkerOn(file))
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
   const kl = await kindLists($)
   const kinds = mergeKinds(kl.builtIn, kl.project)
@@ -477,7 +483,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind ? defSource(openedKind.name, kl.builtIn, kl.project) : undefined, openedBrokenKind, kl.builtIn)
   if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
-  const offCount = roles.filter(r => r.off).length
+  const offCount = roles.filter(r => r.off && !isCheckerRole(r.name)).length
   const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
   const kindsOff = kinds.filter(k => k.off).length
   const kindsCount = `${kinds.length} kind${kinds.length === 1 ? '' : 's'}${kindsOff ? ` · ${kindsOff} off` : ''}`

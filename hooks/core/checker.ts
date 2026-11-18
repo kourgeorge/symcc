@@ -4,18 +4,41 @@
 // with that report, like a failed test run). Investigations and docs-only changes skip it. Everything here is pure.
 import CHECKER_PROMPT from '../../prompts/checker'
 import type { Board } from './board-file'
-import { isDocFile } from './review'
+import { DOC_NAMES, MEDIA_EXTS } from './review'
+import { CHECKER_ROLE } from './roles'
+import { DEFAULT_NAME, namesFor } from '../name'
 import { testTail } from './settings'
 import { fillPlaceholders } from './prompts'
 
-/** The role a checker runs as (roles/checker.md; the owner's .<name>/roles/checker.md is used instead). */
-export const CHECKER_ROLE = 'checker'
+export { CHECKER_ROLE }
 
 /** Whether the checker setting is on (off unless the board says on). */
 export const checkerOn = (b: Partial<Pick<Board, 'checker'>> | null | undefined): boolean => b?.checker === true
 
-/** Whether changed files `changed` are only docs (see isDocFile): such a change skips the checker. */
-export const docsOnly = (changed: readonly string[]): boolean => changed.length > 0 && changed.every(isDocFile)
+/** Folders whose .md files are instructions for agents (roles, kinds, Claude's agents and commands, skills), not prose. */
+const AGENT_DIRS = new Set(['roles', 'kinds', '.claude', '.symcc', namesFor(DEFAULT_NAME).dir, 'skills'])
+/** File names that are instructions for agents, wherever they are. */
+const AGENT_FILES = new Set(['claude.md', 'agents.md', 'skill.md'])
+
+/**
+ * Whether `path` is only prose or media, so a change to it alone may skip the checker. Stricter than isDocFile
+ * (which tests_with_changes uses): only README / CHANGELOG / LICENSE-style names (not code), .md files that are not
+ * instructions for agents (not under roles/, kinds/, .claude/, .symcc/ or skills/, not named CLAUDE.md, AGENTS.md
+ * or SKILL.md), and images, video, audio, subtitles and fonts. Everything else is checked, even under docs/:
+ * .mdx (it holds code), json, yaml, toml, Makefile, CI workflows.
+ */
+export function isCheckerDocFile(path: string): boolean {
+  const parts = String(path ?? '').toLowerCase().split('/').filter(Boolean)
+  const name = parts.at(-1) ?? ''
+  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
+  if (MEDIA_EXTS.has(ext)) return true
+  if (AGENT_FILES.has(name) || parts.slice(0, -1).some(d => AGENT_DIRS.has(d))) return false
+  if (ext === 'md') return true
+  return DOC_NAMES.has(name.split('.')[0] ?? '') && (ext === '' || ext === 'txt' || ext === 'rst')
+}
+
+/** Whether changed files `changed` are only prose or media (see isCheckerDocFile): such a change skips the checker. */
+export const docsOnly = (changed: readonly string[]): boolean => changed.length > 0 && changed.every(isCheckerDocFile)
 
 /** The most of the diff a checker's prompt holds; the rest it reads with git diff itself. */
 export const CHECKER_DIFF_CHARS = 40_000
