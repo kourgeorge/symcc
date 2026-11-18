@@ -8,7 +8,7 @@
 import type { EngineInterface } from 'claude-code'
 import { type Host, type HostAgentStart, type HostWords, ALL_FEATURES } from '../host'
 import { S } from '../app/state'
-import { ROLE_TOOLS, claudeNames, workerTypeFor } from './agent-types'
+import { claudeNames, workerTypeFor } from './agent-types'
 import { hostAgent, isNotReady, scoutNotReady } from './agents'
 import { leadUsage } from './lead-usage'
 import { panelValues } from './panel'
@@ -16,19 +16,18 @@ import { panelValues } from './panel'
 /** The Host register.tsx hands the logic (the board panel's values are its ui.panel). */
 export type ClaudeHost = Host
 
-/** The Claude Code agent type an agent of this kind is started as: a worker's fits its role's extra tools; scouts and checkers are scouts. */
+/** The Claude Code agent type an agent of this kind is started as: a worker's fits its role's tool words (web: "<name>:worker-web", which has WebSearch and WebFetch); scouts and checkers are scouts. */
 export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: string = S.N.name): string {
   return a.kind === 'worker' ? workerTypeFor({ tools: a.tools ? [...a.tools] : undefined }, name) : claudeNames(name).scout
 }
 
 /**
- * Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role may add WebSearch and WebFetch; a
+ * Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role's `tools: web` gives a worker WebSearch and WebFetch (claude/agent-types.ts); a
  * worker's file tools are Read, Edit and Write; plan mode is turned on with Shift+Tab; its question dialog is
  * AskUserQuestion.
  */
 export const CLAUDE_WORDS: HostWords = {
   tool: (name, tool) => claudeNames(name).tool(tool),
-  roleTools: ROLE_TOOLS,
   fileTools: 'Read, Edit and Write',
   planMode: "Claude Code's own planning mode, Shift+Tab",
   askPopup: 'AskUserQuestion',
