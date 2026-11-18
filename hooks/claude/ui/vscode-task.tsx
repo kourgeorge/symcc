@@ -340,11 +340,13 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
         x.changes.error ? plain('vs-changes-error', `Could not read the changes: ${x.changes.error}`, 'error') : null,
         !x.changes.error && !x.changes.files.length ? plain('vs-changes-none', 'no changes', 'inactive') : null,
         ...x.changes.files.map(f => (
-          <Button key={`file:${f.file}`} plain label={f.file} onPress={on.showDiff(f.file)}>
-            <Text color={C('autoAccept')}>{f.file}</Text>
-            {f.binary ? <Text color={C('inactive')}>  binary</Text> : <Text>{'  '}<Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text></Text>}
-            {f.edited ? <Text color={C('warning')}>  edited by you</Text> : null}
-          </Button>
+          <Box key={`vs-file-${f.file}`} flexDirection="column">
+            {vsLink(vs, `file:${f.file}`, mdLink(f.file, vsHref('file', f.file)), [[vsHref('file', f.file), on.showDiff(f.file)]])}
+            <Text key={`vs-file-${f.file}-info`} wrap="wrap">
+              {f.binary ? <Text color={C('inactive')}>binary</Text> : <Text><Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text></Text>}
+              {f.edited ? <Text color={C('warning')}> · edited by you</Text> : null}
+            </Text>
+          </Box>
         )),
         x.changes.files.length ? plain('vs-changes-hint', 'Click a file to see its changes.', 'inactive') : null,
       ])

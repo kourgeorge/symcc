@@ -2,12 +2,13 @@
 // the desktop it draws exactly as before (task-page-snapshot.ts holds the trees captured from the code before the change).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { PANE, T0, drawnData, changedTree } from './board-fixture'
+import { PANE, T0, BOARD_VIEW, drawnData, changedTree, seedBoard } from './board-fixture'
 import { TASK_BEFORE } from './task-page-snapshot'
 import { TASK_BEFORE_MOBILE } from './task-page-mobile-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
 import { CLICK_HINT } from '../hooks/claude/ui/surface'
-import { vsHref } from '../hooks/claude/ui/vscode'
+import { vsHref, mdLink, NO_TITLE } from '../hooks/claude/ui/vscode'
+import { ran } from './fakes'
 import { reportPart } from '../hooks/claude/ui/vscode-task'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -274,3 +275,46 @@ for (const [id, want] of Object.entries(CARDS))
       expect(await ui.find({ key: 'vs-sec-files-body' }), at).toBeUndefined()
       await ui.unmount()
     })
+
+// T-448: a task or question with an empty title shows its ID link and a dim "(no title)", never "****" (empty bold marks)
+test('in VS Code a row with an empty title or question text shows a dim "(no title)", never "****"', async ($, on) => {
+  const blank = { ...RICH_TASKS[0]!, id: 'T-601', order: 601, title: '' }
+  const question = { id: 'Q-9', text: '  ', options: ['Yes', 'No'], asked_at: new Date(T0 - 60_000).toISOString() }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [blank], questions: [question] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [40, 80]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const raw = elements(await ui.drawn()).map(n => n.props?.text).filter((t): t is string => typeof t === 'string')
+    expect(raw.filter(t => t.includes('****')), `width ${bodyColumns}`).toEqual([])
+    for (const [id, kind, href] of [['T-601', 'vs-task', vsHref('task', 'T-601')], ['Q-9', 'vs-question', vsHref('question', 'Q-9')]] as const) {
+      const link = await ui.find({ key: id })
+      expect([link?.type, link?.props.text, link?.props.pressableLinks], id).toEqual(['Markdown', mdLink(id, href), [href]])
+      const none = elements(await ui.find({ key: `${kind}-${id}-top` })).find(n => n.type === 'Text' && texts(n).join('').trim() === NO_TITLE)
+      expect([texts(none).join('').trim(), none?.props?.color], id).toEqual([NO_TITLE, 'inactive'])
+    }
+    await ui.unmount()
+  }
+})
+
+// T-448: the files under "Changes" on a task's page in VS Code are links (no Buttons); a press on one opens its diff
+test('in VS Code the changed files of a task in review are links, and pressing one opens its diff', async ($, on) => {
+  const stat = ' hooks/a.ts | 3 ++-\n docs/b.md  | 1 +\n 2 files changed, 3 insertions(+), 1 deletion(-)\n'
+  const diff = 'diff --git a/hooks/a.ts b/hooks/a.ts\n--- a/hooks/a.ts\n+++ b/hooks/a.ts\n@@ -1 +1,2 @@\n-old\n+new\n+more\n'
+  seedRich(on, 'T-501', argv => (argv[0] === 'git' && argv[1] === 'diff' ? ran({ stdout: argv.some(a => a.startsWith('--stat')) ? stat : diff }) : ran()))
+  for (const bodyColumns of [40, 80]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    expect(elements(await ui.drawn()).filter(n => n.type === 'Button' && String(n.props?.key).startsWith('file:')), at).toEqual([])
+    for (const f of ['hooks/a.ts', 'docs/b.md']) {
+      const link = await ui.find({ key: `file:${f}` })
+      expect([link?.type, link?.props.text, link?.props.pressableLinks], `${at} ${f}`).toEqual(['Markdown', mdLink(f, vsHref('file', f)), [vsHref('file', f)]])
+    }
+    expect(texts(await ui.find({ key: 'vs-file-hooks/a.ts' })).join(''), at).toBe('hooks/a.ts+2 -1')
+    await ui.press({ key: 'file:hooks/a.ts', link: { href: vsHref('file', 'hooks/a.ts') } })
+    expect(await ui.find({ key: 'diff-back' }), at).toBeDefined()
+    expect(texts(await ui.drawn()).join(''), at).toContain('changes in hooks/a.ts')
+    await ui.press({ key: 'diff-back' })
+    expect(await ui.find({ key: 'file:hooks/a.ts' }), at).toBeDefined()
+    await ui.unmount()
+  }
+})

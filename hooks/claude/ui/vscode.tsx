@@ -56,7 +56,7 @@ export const logoWidthFor = (vscode: boolean, width: number) => (vscode ? 0 : wi
 /** Where VS Code's links point: never opened (the plugin answers the press); `.invalid`, so no real site is named. */
 export const VS_LINK_BASE = 'https://symcc.invalid/'
 /** The link for a place on the board: vsHref('task', 'T-372') is "https://symcc.invalid/task/T-372". */
-export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more', id: string) => `${VS_LINK_BASE}${kind}/${encodeURIComponent(id)}`
+export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more' | 'file' | 'run', id: string) => `${VS_LINK_BASE}${kind}/${encodeURIComponent(id)}`
 
 /** Text put into markdown as it is: on one line, every markdown mark escaped (a title with "*" or "[x]" stays plain). */
 export const mdText = (s: string) => s.replace(/\s+/g, ' ').trim().replace(/[\\`*_[\]<>~|#!&]/g, '\\$&')
@@ -232,6 +232,8 @@ export function twoLines(title: string, columns: number, lead = 0): { text: stri
 }
 /** What a cut title ends with (see twoLines). */
 export const MORE = ' (more)'
+/** What a row with an empty title (or question text) shows, dim, beside its id: never "****" from empty bold marks. */
+export const NO_TITLE = '(no title)'
 
 /** A section heading on VS Code's task page: plain words, bold, in the heading color ("What to do"). */
 export function vsSection(k: VsKit, key: string, label: string): RenderChildren {

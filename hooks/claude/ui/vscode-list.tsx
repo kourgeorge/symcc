@@ -14,7 +14,7 @@ import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, MORE } from './vscode'
+import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, MORE, NO_TITLE } from './vscode'
 
 /** The status groups of the VS Code list, top to bottom: what needs you first, then what runs and what waits. */
 const GROUPS: { label: string; has: SymccStatus[] }[] = [
@@ -91,9 +91,10 @@ export function listPageVs($: $, pane: PaneParts) {
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
         <Box key={`vs-task-${x.id}-top`} flexDirection="row">
           {needs ? <Text key="needs" bold color={C(tone[x.status] ?? 'warning')}>● </Text> : null}
-          <Box key="title" flexDirection="column" flexGrow={1} flexShrink={1}>
-            {vsLink(vs, row(x.id), `${mdLink(x.id, href)} \u00a0${needs ? `**${words}**` : words}`, [[href, act(() => panelValues($).updateOpened(() => x.id))]], closed)}
+          <Box key="title" flexDirection="column" flexGrow={words ? 1 : 0} flexShrink={1}>
+            {vsLink(vs, row(x.id), words ? `${mdLink(x.id, href)} \u00a0${needs ? `**${words}**` : words}` : mdLink(x.id, href), [[href, act(() => panelValues($).updateOpened(() => x.id))]], closed)}
           </Box>
+          {words ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
         </Box>
         <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
           <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
@@ -120,9 +121,10 @@ export function listPageVs($: $, pane: PaneParts) {
               <Box key={`vs-question-${q.id}`} flexDirection="column">
                 <Box key={`vs-question-${q.id}-top`} flexDirection="row">
                   <Text key="needs" bold color={C('warning')}>● </Text>
-                  <Box key="title" flexDirection="column" flexGrow={1} flexShrink={1}>
-                    {vsLink(vs, row(q.id), `${mdLink(q.id, href)} \u00a0**${mdText(q.text)}**`, [[href, act(() => panelValues($).updateOpened(() => q.id))]])}
+                  <Box key="title" flexDirection="column" flexGrow={mdText(q.text) ? 1 : 0} flexShrink={1}>
+                    {vsLink(vs, row(q.id), mdText(q.text) ? `${mdLink(q.id, href)} \u00a0**${mdText(q.text)}**` : mdLink(q.id, href), [[href, act(() => panelValues($).updateOpened(() => q.id))]])}
                   </Box>
+                  {mdText(q.text) ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
                 </Box>
                 <Text key={`vs-question-${q.id}-info`} wrap="wrap" color={C('inactive')}>
                   <Text color={C('warning')}>{`? question for you${asked ? ` for ${asked}` : ''}`}</Text>

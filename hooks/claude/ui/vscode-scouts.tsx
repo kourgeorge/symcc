@@ -219,11 +219,19 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
         ? section(
             'runs',
             'Runs',
-            shown.map(x => (
-              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`Open the run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={showRun(x.run.ended)}>
-                <Text wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{scoutRunLine(x.run, x.tasks, nowMs)}</Text>
-              </Button>
-            )),
+            // each run: its time a link that opens its report (text, not a Button: VS Code draws a Button as a blue box),
+            // and under it what it found, in its outcome's color
+            shown.map(x => {
+              const line = scoutRunLine(x.run, x.tasks, nowMs)
+              const cut = line.indexOf(' · ')
+              const href = vsHref('run', x.run.ended)
+              return (
+                <Box key={`vs-run-${x.run.ended}`} flexDirection="column">
+                  {vsLink(vs, row(`scout-run:${x.run.ended}`), `run ${mdLink(cut < 0 ? line : line.slice(0, cut), href)}`, [[href, showRun(x.run.ended)]])}
+                  {cut < 0 ? null : <Text key={`vs-run-${x.run.ended}-info`} wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{line.slice(cut + 3)}</Text>}
+                </Box>
+              )
+            }),
           )
         : null}
       {section('file', 'File', [plain('vs-scout-file', file, 'autoAccept')])}
