@@ -631,14 +631,14 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * The first git command in Bash `command` that may change anything or run another program (a commit, a branch, the
  * stash, the index, a tag, a push, `--output=<file>`, `grep -O<cmd>`, `-c core.pager=...`, `GIT_EXTERNAL_DIFF=...`), as
  * `git <command>` (or `git <command> <option>`, or the setting's name), or undefined when every git command in it only
- * reads (diff, log, show, status, branch --list, stash list, remote -v, config --get, reflog...). Only a `git` run as a
- * command counts (T-439): first in a command (after &&, ;, |, (, `$(...)`, `x=1` settings), after sudo, env, exec,
- * command, xargs and the like, after `find -exec`, in the text run by `sh -c`, `bash -c`, `eval`, and git's own
- * programs (`git-stash`). As a plain argument (`grep -n "git stash" docs`, `rg git`, a path) it is only text. Text from
- * a `git` on is still checked in option values (`-O"git stash"`), `VAR=` values and the code given to python, node,
- * awk and the like. git run by xargs is refused, as its input adds words. Past git's own options (`git -C <dir>`).
- * When text is piped into a shell, run by eval, or given to a shell or source as `<(...)`/`$(...)`, any word `git`
- * counts again (the old broad rule), as the git that runs can't be found in the text (`echo git stash | sh`).
+ * reads (diff, log, show, status, branch --list, stash list, remote -v, config --get, reflog...). Looks inside compound
+ * commands (&&, ;, |, `$(...)`), past git's own options (`git -C <dir>`), and inside any word that has `git` in it
+ * (quoted text run by `sh -c`, a `VAR=` value, an option value like `-O"git stash"`). Any word `git` (or ending in
+ * `/git`, or `git-xyz`) counts, so an odd read may be refused too; that is the safe side. Two exceptions (T-439): a
+ * command run by a read-only text tool (grep, rg, cat, ls, find without -exec... see TEXT_TOOLS), where `git` is only
+ * a pattern or a name (`grep -n "git stash" docs`), and a read-only git command, whose words aren't read again
+ * (`git log --grep="git stash"`). In a line that pipes or runs a command inside another, they hold only when every
+ * command in it is one of them (`grep -h git notes | sh` is refused), and never with `eval`. git run by xargs is refused.
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
@@ -677,181 +677,131 @@ export const mergeStepAllow =
     return names.length === 1 && names[0] === into
   }
 
-/** A shell setting `NAME=value` (alone, after env, export, alias...). */
-const ASSIGN = /^[A-Za-z_]\w*=/
-
-/** Shell words after which the next word is run as a command (`if git ...`, `! git ...`). */
-const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', 'coproc'])
-
 /**
- * Programs that run the command written after them (and their own options): `sudo git`, `env X=1 git`, `xargs git`,
- * `timeout 5 git`. Their option values can't be told from the command, so a word right after an option is checked as
- * a command too (`sudo -u root git` is caught; `xargs -0 grep git` may be refused: the safe side).
+ * Read-only text tools: in a command run by one of these, the word `git` in an argument is only text (a search
+ * pattern, a file name), never run. Each value: an option of that tool that runs another program or deletes, which
+ * puts the piece back under the broad rule (rg --pre, ag/ack --pager, sort --compress-program, less +!cmd, find -exec).
  */
-const RUN_NEXT = new Set(['env', 'sudo', 'doas', 'command', 'builtin', 'exec', 'xargs', 'parallel', 'nohup', 'time', 'nice', 'ionice', 'timeout', 'gtimeout', 'stdbuf', 'chrt', 'taskset', 'caffeinate', 'unbuffer', 'rlwrap', 'strace', 'ltrace', 'flock', 'setsid', 'chroot', 'arch'])
-
-/** Shells and `source`/`.`, which run text they read (from a pipe, `<(...)`), not only their arguments. */
-const READS_SHELL = (name: string) => SHELLS.has(name) || name === 'source' || name === '.'
-
-/**
- * Whether shell line `pieces` (of `command`) may run git text the narrow walk can't see: something piped into a shell
- * (`echo git stash | sh`), `eval` (`eval $(echo git stash)`), or a shell, source, eval, trap or watch given
- * `<(...)`, `$(...)` or backquotes. Then gitScan falls back to the old broad rule: any word `git` counts.
- */
-function runsHiddenText(pieces: ShellPiece[], command: string): boolean {
-  const piped = pieces.some(p => 'op' in p && p.op === '|')
-  const made = piped || /<\(|>\(|\$\(|`/.test(command)
-  for (const p of pieces) {
-    if ('op' in p) continue
-    const words = plainWords(p.text)
-    const cmds: { at: number; adds: boolean }[] = []
-    commandWords(words, 0, cmds)
-    for (let i = 0; i < words.length; i++) if (FIND_EXEC.has(words[i]!)) commandWords(words, i + 1, cmds)
-    for (const c of cmds) {
-      const name = progName(words[c.at]!)
-      if (name === 'eval') return true
-      if (made && (READS_SHELL(name) || RUN_WORDS.has(name))) return true
-    }
-  }
-  return false
+const TEXT_TOOLS: Record<string, RegExp | undefined> = {
+  grep: undefined,
+  egrep: undefined,
+  fgrep: undefined,
+  rg: /^--p/,
+  ag: /^--p/,
+  ack: /^--p/,
+  cat: undefined,
+  head: undefined,
+  tail: undefined,
+  less: /^(\+|-k|--lesskey)/,
+  more: /^(\+|-k|--lesskey)/,
+  wc: undefined,
+  sort: /^--co/,
+  uniq: undefined,
+  cut: undefined,
+  ls: undefined,
+  file: undefined,
+  stat: undefined,
+  diff: undefined,
+  find: /^-(exec|execdir|ok|okdir|delete)$/,
 }
 
-/** Programs that add words from their input to the command they run (`echo stash | xargs git`). */
-const ADDS_WORDS = new Set(['xargs', 'parallel'])
-
-/** Shells whose arguments (`sh -c "git stash"`) are run as commands; each argument is checked as a shell line. */
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash', 'mksh', 'fish', 'su', 'script'])
-
-/** Commands that run their arguments, put together, as a shell line (`eval git stash`, `watch "git stash"`). */
-const RUN_WORDS = new Set(['eval', 'trap', 'watch'])
-
-/**
- * Program runners whose arguments may hold code that runs git (`python -c "os.system('git stash')"`); in their
- * arguments, as in option values and settings, any text from a `git` on is checked as a shell line.
- */
-const INTERPRETERS = /^(python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|lua|tclsh|osascript|awk|gawk|mawk|nawk)$/
-
-/** `find` options whose next word is run as a command. */
-const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
+/** Folders a text tool may be run from by its full path (`/usr/bin/grep`); any other path may be a script of the same name. */
+const TOOL_DIR = /^(\/usr\/local\/bin|\/opt\/homebrew\/bin|\/usr\/bin|\/bin)\/[^/]+$/
 
 /** The program name of word `w` (`/usr/bin/sudo` gives `sudo`), in small letters. */
 const progName = (w: string) => w.slice(w.lastIndexOf('/') + 1).toLowerCase()
 
-/**
- * Where in simple command `words`, from word `i` on, a command is run: the first word after settings (`x=1`) and
- * redirections, and the command each RUN_NEXT program or SHELL_KEYWORDS word runs; `adds` when a program that adds
- * words from its input (xargs) runs it. Pushed onto `out`.
- */
-function commandWords(words: string[], i: number, out: { at: number; adds: boolean }[], adds = false, depth = 0): void {
-  if (depth > 8) return
-  while (i < words.length && (ASSIGN.test(words[i]!) || /^(\d*|&)[<>]/.test(words[i]!)))
-    i += /^(\d*|&)[<>]+&?$/.test(words[i]!) ? 2 : 1
-  if (i >= words.length) return
-  out.push({ at: i, adds })
-  const name = progName(words[i]!)
-  if (SHELL_KEYWORDS.has(name)) return commandWords(words, i + 1, out, adds, depth + 1)
-  if (!RUN_NEXT.has(name)) return
-  const more = adds || ADDS_WORDS.has(name)
-  let k = i + 1
-  for (; k < words.length; k++) {
-    const w = words[k]!
-    if (w.startsWith('-') || ASSIGN.test(w) || /^\d/.test(w)) continue
-    // maybe the value of the option before it (`sudo -u root git`), maybe the command: check it as both
-    if (k - 1 > i && words[k - 1]!.startsWith('-') && !isGit(w) && !/(?:^|\/)git-/i.test(w) && !RUN_NEXT.has(progName(w))) {
-      out.push({ at: k, adds: more })
-      continue
-    }
-    break
-  }
-  commandWords(words, k, out, more, depth + 1)
+/** Programs that add words from their input to the command they run (`echo stash | xargs git`). */
+const ADDS_WORDS = new Set(['xargs', 'parallel'])
+
+/** Whether simple command `words` is a read-only text tool (TEXT_TOOLS), first word and without its refused options. */
+function textTool(words: string[]): boolean {
+  const w = words[0]
+  if (w === undefined || (w.includes('/') && !TOOL_DIR.test(w))) return false
+  const name = progName(w)
+  if (!Object.hasOwn(TEXT_TOOLS, name)) return false
+  const refused = TEXT_TOOLS[name]
+  return !refused || !words.slice(1).some(a => refused.test(a))
 }
+
+/** Whether text holds a command run inside it (`$(...)`, backquotes, `<(...)`, `>(...)`). */
+const RUNS_INSIDE = /\$\(|`|<\(|>\(/
 
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
 function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
   if (depth > 4) return out
   const pieces = shellPieces(command)
-  // git text a shell reads from a pipe or eval runs can't be followed: then any word `git` counts (main's old rule)
-  broad ||= runsHiddenText(pieces, command)
-  // `text` run as a shell line of its own
-  const inner = (text: string): string | undefined => {
-    const r = gitScan(text, depth + 1, allow, broad)
-    out.git ||= r.git
-    out.env ??= r.env
-    return r.bad
-  }
-  // text from the first "git" that ends a word on, when more words or commands follow it (`X='git stash;:'`, `-O"git stash"`)
-  const fromGit = (w: string): string | undefined => {
-    const at = w.search(/git(?!\w)/i)
-    return at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at)) ? inner(w.slice(at)) : undefined
-  }
-  for (const p of pieces) {
-    if ('op' in p) continue
+  // `adds`: an xargs or parallel comes before it in the line (`xargs -I{} git {}` is cut at the braces)
+  let seen = false
+  const simple = pieces.flatMap(p => {
+    if ('op' in p) return []
     const words = plainWords(p.text)
-    const cmds: { at: number; adds: boolean }[] = []
-    commandWords(words, 0, cmds)
-    const gitLike = (w: string) => isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)
-    const isCmd = (i: number) => cmds.find(c => c.at === i) ?? (broad && gitLike(words[i]!) ? { at: i, adds: false } : undefined)
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i]!
-      out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
-      if (FIND_EXEC.has(w)) commandWords(words, i + 1, cmds)
-      const cmd = isCmd(i)
-      if (cmd) {
-        const bad = gitCommandAt(words, i, cmd.adds) ?? (broad && !gitLike(w) ? fromGit(w) : undefined)
-        if (bad) return { ...out, bad }
-        continue
-      }
-      // a command run inside quotes (`"$(git stash)"`, "`git stash`"); unquoted ones are pieces of their own
-      const sub = w.search(/\$\(|`/)
-      let bad = sub >= 0 ? inner(w.slice(sub + (w[sub] === '`' ? 1 : 2))) : undefined
-      // option values, settings and code for a program runner may hold a git command; other words are only text
-      // (a search pattern, a path, a message), so `grep -n "git stash" docs` reads
-      const runner = cmds.filter(c => c.at < i).map(c => progName(words[c.at]!))
-      if (!bad && (broad || w.startsWith('-') || ASSIGN.test(w) || runner.some(r => INTERPRETERS.test(r)))) bad = fromGit(w)
-      if (bad) return { ...out, bad }
-    }
-  }
-  return out
-
-  /** The git write run by the command at `words[at]` (git, git-xyz, or a shell or eval running a line), or undefined. */
-  function gitCommandAt(words: string[], at: number, adds: boolean): string | undefined {
+    const adds = seen
+    seen ||= words.some(a => ADDS_WORDS.has(progName(a)))
+    return [{ ...p, words, adds }]
+  })
+  /** The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined when it isn't git. */
+  const gitAt = (words: string[], at: number, adds: boolean): { bad?: string } | undefined => {
     const w = words[at]!
-    const name = progName(w)
-    if (SHELLS.has(name)) {
-      for (const a of words.slice(at + 1)) {
-        const bad = inner(a)
-        if (bad) return bad
-      }
-      return undefined
-    }
-    if (RUN_WORDS.has(name)) {
-      // past watch's own options (`watch -n 1 -d git stash`); the word after an option may be its value or the
-      // command, so the line is checked from both
-      let k = at + 1
-      if (name === 'watch') while (k < words.length && words[k]!.startsWith('-')) if (words[k++] === '--') break
-      return inner(words.slice(k).join(' ')) ?? (k - 1 > at && words[k - 1]!.startsWith('-') ? inner(words.slice(k + 1).join(' ')) : undefined)
-    }
     // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
     const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
-    if (!dashed && !isGit(w)) return undefined
+    // an option whose value is git runs it with the words after (`rg --pre=git stash .` runs `git stash`)
+    if (!dashed && !isGit(w) && !/=git$/i.test(w)) return undefined
     out.git = true
+    // xargs and parallel add words from their input (`stash`, `--output=x`), so what that git does can't be known
+    if (adds || words.slice(0, at).some(a => ADDS_WORDS.has(progName(a)))) return { bad: 'xargs git' }
     let j = at + 1
     let sub = dashed
     if (!dashed) {
       for (; j < words.length && words[j]!.startsWith('-'); j += GIT_GLOBAL_VALUE.has(words[j]!) ? 2 : 1)
-        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return `git ${words[j]!.split('=')[0]}`
+        if (GIT_GLOBAL_REFUSED.test(words[j]!)) return { bad: `git ${words[j]!.split('=')[0]}` }
       sub = words[j++]
     }
-    // xargs adds words from its input (`--output=x`, `stash`), so what a git run by it does can't be known from the text
-    if (adds) return 'xargs git'
-    if (sub === undefined) return undefined
+    if (sub === undefined) return {}
     const args = words.slice(j)
-    if (allow?.(sub, args)) return undefined
-    if (!gitReadOnly(sub, args)) return `git ${sub}`
+    if (allow?.(sub, args)) return {}
+    if (!gitReadOnly(sub, args)) return { bad: `git ${sub}` }
     const opt = gitBadOption(sub, args)
-    return opt ? `git ${sub} ${opt}` : undefined
+    return opt ? { bad: `git ${sub} ${opt}` } : {}
   }
+  /**
+   * Whether a simple command's `git` words are only text: a TEXT_TOOLS command, or a read-only git command (checked
+   * by gitAt), with no command run inside it and not in a here-document.
+   */
+  const exempt = (p: { text: string; doc?: boolean; words: string[]; adds: boolean }): boolean => {
+    if (p.words.length === 0) return true
+    if (p.doc || RUNS_INSIDE.test(p.text)) return false
+    if (textTool(p.words)) return true
+    const w = p.words[0]!
+    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds)?.bad === undefined
+  }
+  // Text one command prints may be run by another (`grep -h git notes | sh`, `python -c $(grep ...)`, `eval`), and
+  // a list of programs that run their input can never be complete. So in a line that pipes or runs a command inside
+  // another, the exceptions hold only when every command in it is exempt; `eval` anywhere keeps the broad rule too.
+  const linked = pieces.some(p => 'op' in p && p.op === '|') || RUNS_INSIDE.test(command)
+  broad ||= simple.some(p => p.words.some(w => w.split(/\s+/).some(t => progName(t) === 'eval'))) || (linked && !simple.every(exempt))
+  for (const p of simple) {
+    const words = p.words
+    for (const w of words) out.env ??= GIT_ENV_REFUSED.exec(w)?.[1]
+    if (!broad && exempt(p)) continue
+    // main's broad rule: any word `git` (or ending in `/git`, or `git-xyz`) counts, and text from a `git` on in any
+    // word that holds more than one word or command (quoted text run by sh -c, `X='git stash'`, `-O"git stash"`)
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]!
+      const g = gitAt(words, i, p.adds)
+      if (g?.bad) return { ...out, bad: g.bad }
+      if (g) continue
+      const at = w.search(/git(?!\w)/i)
+      if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
+        const inner = gitScan(w.slice(at), depth + 1, allow, broad)
+        out.git ||= inner.git
+        out.env ??= inner.env
+        if (inner.bad) return { ...out, bad: inner.bad }
+      }
+    }
+  }
+  return out
 }
 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */

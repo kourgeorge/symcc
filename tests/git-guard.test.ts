@@ -1,5 +1,6 @@
-// T-439: the git guard counts `git` only where it runs as a command, so "git" as search text, an argument or in a path
-// no longer refuses a worker's or a scout's command; clearly read-only git (remote -v, config --get, reflog) passes too.
+// T-439: the git guard keeps main's broad rule (any word `git` counts) except in a read-only text tool's arguments
+// (grep, rg, cat, ls...) and the words of a read-only git command, so "git" as search text or in a path no longer
+// refuses a worker's or a scout's command; clearly read-only git (remote -v, config --get, reflog) passes too.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { checkEdit } from '../hooks/plugin/ask'
@@ -39,15 +40,21 @@ const READS = [
   'git worktree list',
   'git branch --list',
   'cat hooks/git-stash.md',
-  'echo "git commit later" | wc -l',
   'grep -c "git reset --hard" docs/guide.md && grep -n git README.md',
-  'sh -c "grep -n git docs/guide.md"',
   'ls .git',
   'git reflog --date=iso',
   'watch -n 1 git status',
-  'watch -n 1 grep -n git docs/guide.md',
   'time -p git log -1',
   'echo git status | sh',
+  'grep --regexp="git stash" docs',
+  'grep -e "git stash" docs',
+  'git log --grep="git stash"',
+  'git ls-files | grep -n git',
+  'grep -rn git hooks | sort | uniq | wc -l',
+  '/usr/bin/grep -n git docs/guide.md',
+  'find hooks -name "*git*"',
+  'head -5 .gitignore && tail -n 3 .git/HEAD',
+  'diff hooks/core/ask.ts hooks/git.ts',
 ]
 
 const WRITES: [string, string][] = [
@@ -119,6 +126,41 @@ const WRITES: [string, string][] = [
   ['bash <(echo git stash)', 'git stash'],
   ['sh -c "$(echo git stash)"', 'git stash'],
   ['echo git stash | source /dev/stdin', 'git stash'],
+  // the checker's try-3 holes: programs that run the command after them stay under main's broad rule
+  ['script -q /dev/null git stash', 'git stash'],
+  ['env -S "git stash"', 'git stash'],
+  ['xcrun git stash', 'git stash'],
+  ['busybox git stash', 'git stash'],
+  ['busybox sh -c "git stash"', 'git stash'],
+  ['npm exec git stash', 'git stash'],
+  ['pnpm exec git stash', 'git stash'],
+  ['uv run git stash', 'git stash'],
+  ['direnv exec . git stash', 'git stash'],
+  ['sandbox-exec -p x git stash', 'git stash'],
+  ['unshare git stash', 'git stash'],
+  ['watchexec -- git stash', 'git stash'],
+  ['nix-shell --run "git stash"', 'git stash'],
+  ['hyperfine "git stash"', 'git stash'],
+  ['echo stash | xargs -I{} git {}', 'xargs git'],
+  ['xargs -I {} git {}', 'xargs git'],
+  ['echo stash | xargs -I % git %', 'xargs git'],
+  // a text tool's output run by another program, a text tool's options that run a program, a look-alike script
+  ['grep -h "git stash" notes | sh', 'git stash'],
+  ['grep -h "git stash" notes | python3 -c "import os,sys; os.system(sys.stdin.read())"', 'git stash'],
+  ['python3 -c $(grep -h "git stash" notes)', 'git stash'],
+  ['git log --format="git stash" | sh', 'git stash'],
+  ['eval grep git stash', 'git stash'],
+  ['rg --pre git stash .', 'git stash'],
+  ['rg --pre=git stash .', 'git stash'],
+  ['ack --pager=git stash x', 'git stash'],
+  ['ag --pager "git stash" x', 'git stash'],
+  ['ack --pag="git stash" x', 'git stash'],
+  ['less "+!git stash" notes', 'git stash'],
+  ['find . -name x -exec git stash ;', 'git stash'],
+  ['./grep git stash', 'git stash'],
+  ['grep "$(git stash)" x', 'git stash'],
+  ['grep x <(git stash)', 'git stash'],
+  ['cat <<EOF\ngit stash\nEOF', 'git stash'],
 ]
 
 test('"git" as text and read-only git pass for a worker, a scout and a checker (T-439)', async () => {
