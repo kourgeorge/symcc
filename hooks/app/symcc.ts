@@ -29,7 +29,7 @@ import { loadKinds } from './kinds'
 import { checkerFinished } from './checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './scouts'
 import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
-import { path, load, isOn, now, saveMigrated, startWait, findRoot, startingText } from './store'
+import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
 import { noteForLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
@@ -91,6 +91,12 @@ export function leadBeat(host: Host) {
  * claims the lead, loads scouts, roles and kinds, starts the timers and opens the board panel.
  */
 export async function sessionStart(host: Host) {
+  // A session in one of symcc's worker folders (<main project>/.<name>/worktrees/...) only guards (see guardStart);
+  // any other folder, an owner's own second checkout too, runs normally with its own root.
+  const own = await sessionFolder(host)
+  const main = await mainRoot(host, own).catch(() => own)
+  if (await isWorkerFolder(host, own, main).catch(() => false)) return guardStart(host, main)
+  S.guardOnly = false
   // claimLead may wait on the clock: for the board lock (up to 5 s), for old workers it stopped
   // to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (2 s). A hook has 10 s and
   // clock waits count against it, so session start doesn't wait for those: once claimLead is
@@ -103,7 +109,7 @@ export async function sessionStart(host: Host) {
   // Even if a later step throws, pump must not stay blocked for the whole session.
   try {
     await loadVersion(host)
-    S.root = (await host.session.repo())?.root ?? (await host.session.root())
+    S.root = main || (await host.session.repo())?.root || (await host.session.root())
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
     // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
@@ -155,11 +161,44 @@ export async function sessionStart(host: Host) {
   }
 }
 
+/** The session's own folder: its git repo's top folder, else its folder ('' when neither is known). */
+async function sessionFolder(host: Host): Promise<string> {
+  const repo = await host.session.repo().catch(() => null)
+  return repo?.root || (await host.session.root().catch(() => '')) || ''
+}
+
+/**
+ * A "guard only" start, for a copy of the plugin running in a worker's folder (a worktree): S.root is the main project
+ * (`root` when the host passes it, else from git, see mainRoot), and the roles, kinds and board are read, so toolCheck
+ * and checkEdit can judge that copy's tool calls. It never claims lead.json, starts no timer, seeds no scouts, and
+ * never publishes or creates board.json; the session that drives the board does all of that.
+ */
+export async function guardStart(host: Host, root?: string) {
+  S.guardOnly = true
+  S.driving = false
+  await loadVersion(host).catch(() => undefined)
+  S.root = root || (await mainRoot(host, await sessionFolder(host)).catch(() => '')) || S.root
+  S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
+  S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
+  if (!S.root) return
+  await loadRoles(host).catch(() => undefined)
+  await loadKinds(host).catch(() => undefined)
+  await load(host).catch(() => undefined)
+}
+
+/** What a guard-only copy (see guardStart) answers for symcc's own tools and commands: the board is run from the main project. */
+const guardOnlyText = () => `This ${S.N.name} copy runs in a worker's folder and only guards tool calls; use the ${S.N.name} board from the main project folder.`
+
 /**
  * The chat was cleared (Claude Code's /clear): the session ends but the process goes on under a new session id, and
  * no session start follows: the timers, workers and scouts are kept, and the lead is handed over to the new id.
  */
 export async function sessionCleared(host: Host) {
+  // a guard-only copy only follows the new id: it never touches the lead or the board
+  if (S.guardOnly) {
+    S.me = (await host.session.id().catch(() => S.me)) || S.me
+    return
+  }
   await handOver(host).catch(() => undefined)
 }
 
@@ -170,7 +209,8 @@ export async function sessionEnd(host: Host) {
   S.watchdog = null
   S.beat?.cancel()
   S.beat = null
-  await releaseLead(host)
+  // a guard-only copy never claimed the lead, so it has nothing to let go (and takes no board lock for it)
+  if (!S.guardOnly) await releaseLead(host)
 }
 
 // ---------------- the lead's prompt ----------------
@@ -179,6 +219,7 @@ export async function sessionEnd(host: Host) {
 export async function leadGuideText(host: Host): Promise<string | undefined> {
   // Before session start set the project folder (a plugin reload): learn it first; unknown, add nothing.
   if (!(await findRoot(host))) return undefined
+  if (S.guardOnly) return undefined
   // Read on every call, so /<name>-off and /<name>-on count from the next message.
   if (!(await isOn(host))) return undefined
   return leadGuide(host.features)
@@ -240,6 +281,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
   // Before session start set the project folder (e.g. right after a plugin reload), learn it from the
   // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { result: startingText() }
+  if (S.guardOnly) return { result: guardOnlyText() }
   if (!(await isOn(host))) return { result: offAnswer(S.N.name) }
   try {
     return { result: await runTool(host, name, input as In) }
@@ -255,7 +297,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
  * Runs in the background.
  */
 export function otherToolDone(host: Host, touch: FileTouch | null) {
-  if (!touch) return
+  if (!touch || S.guardOnly) return
   const hit = fileToolHits(touch, S.N.scouts, `${S.N.dir}/roles`)
   if (!hit.scouts && !hit.roles) return
   void (async () => {
@@ -329,6 +371,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   // Before session start set the project folder (a plugin reload): learn it from the session first;
   // if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { text: startingText(), isTextDisplayOnly: true }
+  if (S.guardOnly) return { text: guardOnlyText(), isTextDisplayOnly: true }
   // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
   if (isStats) return { text: await statsText(host, args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
   // A broken board.json makes load throw (it is never written over): the commands that don't need the
