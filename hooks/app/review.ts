@@ -130,17 +130,23 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
   await markStep($, t, 'checking', stopped)
-  // the worker's throwaway folder is never staged (T-456): its info/exclude line keeps it out already, and so does this;
-  // not where the project keeps files there in git (scratchOn false): those are staged as usual
-  const keepOut = (await scratchOn($, dir)) ? [`:(exclude)${SCRATCH_DIR}`] : []
-  const add = await git($, ['add', '-A', '--', '.', ...keepOut], dir)
+  // The worker's throwaway folder (T-456) is kept out by its info/exclude line. It is not named in the add: git add
+  // fails on a pathspec naming an ignored path (T-477). As a second safeguard, anything under it that still got staged
+  // is unstaged below, but not where the project keeps files there in git (scratchOn false): those are staged as usual.
+  const add = await git($, ['add', '-A', '--', '.'], dir)
   if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
   // Files whose names look like secrets (.env, *.pem, *.key, id_rsa, ...) are taken out of what is staged
   // before the commit: they stay in the folder, but never reach a commit or the target branch.
   // Deletions are kept (--diff-filter=d): removing such a file from the project is allowed.
   const staged = await git($, ['diff', '--cached', '--name-only', '--no-renames', '--diff-filter=d', '-z'], dir)
   if (staged.exitCode !== 0) return { ok: false, detail: `symcc could not list the staged work (git diff --cached): ${gitFailText(staged)}` }
-  const left = secretFiles(staged.stdout.split('\0').filter(Boolean))
+  const stagedNames = staged.stdout.split('\0').filter(Boolean)
+  const left = secretFiles(stagedNames)
+  if (await scratchOn($, dir)) {
+    const inScratch = stagedNames.filter(f => f.startsWith(`${SCRATCH_DIR}/`))
+    const why = await unstage($, dir, inScratch)
+    if (why) return { ok: false, detail: `symcc could not leave out the worker's ${SCRATCH_DIR}/ folder: ${why}` }
+  }
   const unstaged = await unstage($, dir, left)
   if (unstaged) return { ok: false, detail: `symcc could not leave out files that look like secrets (${secretsLeftText(left)}): ${unstaged}` }
   const committed = await commitTry($, t, dir, made)
