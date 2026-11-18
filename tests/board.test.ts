@@ -1118,7 +1118,7 @@ test('diff lines are colored: added in success, removed in error, headers and hu
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
-  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-off', 'symcc-on'])
+  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-off', 'symcc-on', 'symcc-drive'])
   expect(commandNames('crew')[0]).toBe('crew')
   expect(commandNames('crew')).toContain('crew-help')
   expect(parseCommand('symcc', '')).toEqual({ kind: 'open' })

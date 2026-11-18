@@ -152,6 +152,8 @@ You never have to type a command. Just talk to the lead:
 - "stash this idea" · "show the backlog" · "move T-5 to todo"
 - "use the security role for T-12"
 
+A few things are slash commands: `/symcc` opens the board, `/symcc-off` and `/symcc-on` switch symcc off and on, and `/symcc-drive` makes the window you type it in drive the board (when several windows have the project open). `/symcc-help` lists them all.
+
 ## More
 
 - [Guide](docs/guide.md): a task's life, review, the panel, scouts, branches, where files live, safety

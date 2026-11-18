@@ -1040,6 +1040,12 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+To move driving to the window you are in, type `/symcc-drive` there. If another window
+drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
+ones), steps down, and your window starts driving and restarts those tasks from their kept
+folders and branches. A task stopped this way does not use up a try; its history says
+"restarted: the owner moved driving to another session". There are never two drivers at
+once. If the other window doesn't answer within 3 minutes, yours takes over anyway.
 
 ### How the lead keeps the board in order
 
