@@ -20,6 +20,13 @@ function setup() {
 }
 
 const READS = [
+  // T-436: a range that spells no git is no git
+  'echo {1..3}',
+  'echo {a..f}it',
+  // T-436: a range too big to spell out, of numbers only, can never spell git
+  'echo {1..2000}',
+  'touch f{1..1100}.txt',
+  'mkdir -p d{0..9}{0..9}{0..9}{0..9}',
   'grep -n "git" docs/guide.md',
   'grep -rn git hooks',
   'rg "git stash" .',
@@ -246,6 +253,16 @@ const WRITES: [string, string][] = [
   ['bash -c "{,git} stash"', 'git with {braces}'],
   ["bash -c 'echo; {git,stash}'", 'git with {braces}'],
   ["bash -c 'cd x && {git,stash}'", 'git with {braces}'],
+  // T-436: a letter range spells git too (`g{i..i}t` is `git`, `{g..h}it` is `git hit`)
+  ['g{i..i}t stash', 'git with {braces}'],
+  ['{g..g}it push origin main', 'git with {braces}'],
+  ['gi{t..t} reset --hard', 'git with {braces}'],
+  ['bash -c "g{i..i}t stash"', 'git with {braces}'],
+  ['{g..h}it stash', 'git with {braces}'],
+  ['{f,{g..g}}it stash', 'git with {braces}'],
+  // too big to spell out, but its letters and letter ranges could still make git
+  ['{a..z}{a..z}{a..z} stash', 'git with {braces}'],
+  ['{1..2000}g{h..j}t stash', 'git with {braces}'],
   ['git log "x" {a,b}', 'git with {braces}'],
   ['find . -maxdepth 0 -exec git -C {} stash +', 'git stash'],
   ['find . -exec git stash {} +', 'git stash'],
@@ -275,4 +292,14 @@ test('git run as a command still refuses its writes, for a worker, a scout and a
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText(what))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText(what))
   }
+})
+
+test('long odd brace words stay cheap for the git check, and a long word with git letters still counts (T-436)', () => {
+  const t0 = Date.now()
+  expect(gitWriteIn('echo ' + '{'.repeat(50000))).toBeUndefined()
+  expect(gitWriteIn('echo ' + '{a,'.repeat(60) + '}'.repeat(60))).toBeUndefined()
+  expect(gitWriteIn(`cat > a.json <<'EOF'\n${'{"a":'.repeat(2000)}1${'}'.repeat(2000)}\nEOF`)).toBeUndefined()
+  expect(Date.now() - t0).toBeLessThan(1500)
+  // past the work cap a word is judged by its letters: these could make git
+  expect(gitWriteIn(`${'{g,i}'.repeat(60)}{t..t} stash`)).toBe('git with {braces}')
 })

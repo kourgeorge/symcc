@@ -27,17 +27,30 @@ export function noteBackground(agentId: string | undefined, call: Record<string,
   started.set(agentId, mine)
 }
 
-/** SubagentStop of agent `agentId`: of the session's `tasks`, its own shell commands still running are kept for its turn's end. */
+/**
+ * SubagentStop of agent `agentId`: of the session's `tasks`, its own shell commands still running are kept for its turn's end.
+ * A command is only ever tied to the agent by its task id, never by its text alone (another agent may run the same
+ * text). A command tied to it by id that is still running is always kept. Only when none is, some of its commands had
+ * no id and a running shell task is tied to no agent by id, whose that is can't be told: nothing is kept (unknown), and
+ * the text check stands in.
+ */
 export function stopSeen(agentId: unknown, tasks: unknown) {
   if (typeof agentId !== 'string' || !agentId || !Array.isArray(tasks)) return
   const mine = started.get(agentId)
-  const own = (tasks as BackgroundTask[]).filter(t => !!t && t.type === 'shell' && !!mine && ((typeof t.id === 'string' && mine.ids.has(t.id)) || (typeof t.command === 'string' && mine.commands.has(t.command))))
+  const shells = (tasks as BackgroundTask[]).filter(t => !!t && t.type === 'shell')
+  const isMine = (t: BackgroundTask) => !!mine && typeof t.id === 'string' && mine.ids.has(t.id)
+  const ownedBySomeone = (t: BackgroundTask) => typeof t.id === 'string' && [...started.values()].some(s => s.ids.has(t.id as string))
+  const own = shells.filter(isMine)
+  if (own.length === 0 && mine && mine.commands.size > 0 && shells.some(t => !ownedBySomeone(t))) {
+    atStop.delete(agentId)
+    return
+  }
   atStop.set(agentId, own.map(t => (typeof t.command === 'string' && t.command) || (typeof t.description === 'string' && t.description) || String(t.id)))
 }
 
 /**
  * At the turn's end of agent `agentId`: its own background commands still running at its SubagentStop ([] for none),
- * or undefined when no SubagentStop was heard (the host can't tell; the text check stands in). Taken once.
+ * or undefined when no SubagentStop was heard or whose commands they are can't be told (the text check stands in). Taken once.
  */
 export function takeBackground(agentId: string | undefined): string[] | undefined {
   if (!agentId) return undefined
