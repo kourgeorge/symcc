@@ -6,6 +6,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Added
 - A task's page in VS Code's side panel is wide and readable: the full title and every section wrap to the panel instead of being cut, with clear headings (Title, Why / where it came from, What to do, Files it may change, Waits for, History, Time and cost, Report), the details and report drawn as Markdown (the report's first part, then `Show all`), one row of only the buttons that fit the status, a waiting question with its answers as buttons and a box for your own, and a `← Tasks` button back. The terminal task page is unchanged.
+- Scouts (and checkers) can read the board with symcc's `board` (no arguments, `status`, `search` or `task`) and `stats` tools instead of reading `.symcc/board.json`. Every symcc tool that changes something is refused for them with "scouts can only read the board".
 
 ## 0.4.0 (2026-11-18)
 

@@ -611,7 +611,11 @@ A scout does what its file says. It can read files, run shell commands (these fo
 normal permission rules, like workers) and search or fetch web pages. It can't edit or write
 files, and it is told not to change the project at all: no installs, no git commands that
 change anything. Changes only go through board tasks. It also sees the open tasks, so it
-doesn't suggest them again.
+doesn't suggest them again. To look further at the board it has symcc's two read-only tools:
+`board` (no arguments: the open tasks; `status` and `search` narrow it; `task`: one task in full
+with its latest report) and `stats`. Every symcc tool that changes something (`add`, `change`,
+`drop`, `approve`, `settings`, ...) is refused for a scout with "scouts can only read the board".
+A checker gets the same read-only tools.
 
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
 tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message.
