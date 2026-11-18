@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Changed
+- Role files name their extra tools in symcc's own words: `tools: web` instead of `tools: WebSearch, WebFetch`, so a role means the same in every host (in Claude Code, `web` is still WebSearch and WebFetch). Your own `.symcc/roles/*.md` files with the old names are changed once when symcc reads them. The lead's `roles` tool and the Roles page take `web`.
+
 ## 0.4.1 (2026-11-18)
 
 ### Added

@@ -16,7 +16,6 @@
 
 import type { SymccView } from '../types'
 import type { AgentState } from './core/agents'
-import type { RoleTools } from './core/roles'
 import type { StatsRange, TeamInput } from './core/stats'
 
 /** What a command's run answers: its exit code and its output. */
@@ -51,7 +50,7 @@ export function agentState(a: HostAgent): AgentState {
 
 /**
  * How to start an agent: what kind it is, its prompt, its name and short description, the extra tools its role asks
- * for (a worker's; see roles), the folder it works in and its model. The host picks how to run it (for Claude Code,
+ * for in symcc's words (a worker's, e.g. ['web']; the host maps them to its own tools), the folder it works in and its model. The host picks how to run it (for Claude Code,
  * a background subagent of the agent type that fits; elsewhere a child session, or a process of its own).
  */
 export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; cwd?: string; model?: string }
@@ -92,14 +91,13 @@ export type HostLead = {
 export type LeadUsage = Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem' | 'leadFrom'>
 
 /**
- * The names that differ from host to host: what the model calls symcc's tools, and which extra tools a role may ask
- * for in its `tools:` line (see core/roles.ts RoleTools).
+ * The names that differ from host to host: what the model calls symcc's tools, what the prompts call its file tools,
+ * its plan mode and its question dialog. A role's `tools:` line is in symcc's words (core/roles.ts ROLE_TOOL_WORDS)
+ * in every host; each host maps them to its own tools when it starts a worker (HostAgentStart.tools).
  */
 export type HostWords = {
   /** the name the model calls symcc's tool `tool` (e.g. "board") by, for plugin `name` */
   tool: (name: string, tool: string) => string
-  /** the extra tools a role may add, as its file spells them, and which of them reach the web */
-  roleTools: RoleTools
   /** what a worker uses on files, after "Use absolute paths under that folder for every " (Claude Code: "Read, Edit and Write") */
   fileTools: string
   /** what the host's plan mode is and how it is turned on, for the lead guide (Claude Code: "Claude Code's own planning mode, Shift+Tab") */
@@ -110,12 +108,10 @@ export type HostWords = {
 
 /**
  * symcc's own words, for a host that adds nothing: its tools are called by their plain names, and the prompts name no
- * tools. The role files spell the web tools WebSearch and WebFetch for now (step 10 of
- * docs/research/host-independence.md gives them symcc's words).
+ * tools.
  */
 export const SYMCC_WORDS: HostWords = {
   tool: (_name, tool) => tool,
-  roleTools: { extra: ['WebSearch', 'WebFetch'], web: ['WebSearch', 'WebFetch'] },
   fileTools: 'file you read or change',
   planMode: "the host's own planning mode",
   askPopup: '',
