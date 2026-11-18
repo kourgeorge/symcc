@@ -77,7 +77,10 @@ export function listPageVs($: $, pane: PaneParts) {
     const tried = tryMark(x)
     let rest = tried && extra.endsWith(tried) ? extra.slice(0, extra.length - tried.length).replace(/ · $/, '') : extra
     const kind = kindMark(x)
-    if (kind && !rest.includes(kind)) rest = rest ? `${kind} · ${rest}` : kind
+    // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
+    // or failure reason that only mentions the word does not count
+    const tagged = rest.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
+    if (kind && !tagged) rest = rest ? `${kind} · ${rest}` : kind
     const title = twoLines(x.title, width - depth, (needs ? 2 : 0) + x.id.length + 2)
     const open = act(() => panelValues($).updateOpened(() => x.id))
     return (
@@ -122,7 +125,7 @@ export function listPageVs($: $, pane: PaneParts) {
                   {'\n'}
                   <Text wrap="wrap" color={C('inactive')}>
                     <Text color={C('warning')}>{`? question for you${asked ? ` for ${asked}` : ''}`}</Text>
-                    {choices ? ` · ${choices} choices` : ''}
+                    {choices ? ` · ${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''}
                   </Text>
                 </Button>
               </Box>
