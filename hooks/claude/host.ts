@@ -1,6 +1,6 @@
 // Claude Code's side of the Host (hooks/host.ts): claudeHost makes a Host from one hook's `$`. Most members are the
 // same calls under the same names; `agents` is in Claude Code's terms here: symcc's workers, scouts and checkers are
-// background subagents of the agent types register.tsx registers ("<name>:worker", "<name>:worker-web", ...,
+// background subagents of the agent types claude/registration.ts registers ("<name>:worker", "<name>:worker-web", ...,
 // "<name>:scout"), listed by $.agent.list() and told to stop with $.session.send. The lead is the main chat, sent a
 // prompt with $.prompt.submit; `ui.refresh` is $.ui.invalidate('ui.render'), and `ui.panel` carries the board panel's
 // values, which only Claude Code's `$` holds.
@@ -49,7 +49,7 @@ export function claudeAgents($: EngineInterface): Host['agents'] {
 }
 
 /**
- * The environment variables symcc reads (claude/lead-usage.ts, register.tsx). Claude Code's loader wants each name
+ * The environment variables symcc reads (claude/lead-usage.ts, app/symcc.ts). Claude Code's loader wants each name
  * `$.env.get` reads written out, so the modules' reads can be listed: one more name means one more line here.
  */
 function envGet($: EngineInterface, name: string): Promise<string | undefined> {
