@@ -229,10 +229,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     return sendAnswer(choices[i]!)
   }
   // A failed task: why it failed (the same sentence as its board row and the lead's board), what to do next, and
-  // what the worker's latest report asks for (a NEED FILES line or a question), if anything.
+  // what the failed try's report asks for (a NEED FILES line or a question), if anything. Only the report of the
+  // try that failed counts: a try that left no report (no result, could not start) must not show an older try's ask.
   const failed = t.status === 'failed'
   const latest = reports[reports.length - 1]
-  const latestBody = !failed || !latest ? null : latest === shown ? reportBody : await $.fs.read(path(latest.file)).then(x => String(x), () => null)
+  const latestBody = !failed || !latest || latest.try !== t.attempts ? null : latest === shown ? reportBody : await $.fs.read(path(latest.file)).then(x => String(x), () => null)
   const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1) ?? '') } : null
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
   const copyTask = (press?: { surface?: Parameters<typeof $.ui.copy>[0]['surface'] }) =>

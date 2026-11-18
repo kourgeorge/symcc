@@ -1898,6 +1898,20 @@ test('a failed task page starts with "Why it failed": the reason, what the repor
   await ui.unmount()
 })
 
+test('the "Why it failed" block does not show an earlier try\'s file request when the failed try left no report', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-1.md': 'I need one more file.\nNEED FILES: src/cache.ts\n' })
+  const t = task('T-1', 'failed', 'Fix the cache', { attempts: 2, note: 'the worker ended without a result', runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '' }], history: ['try 1: worker asked for more files: src/cache.ts', 'try 2: the worker ended without a result'] })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  const head = L.findIndex(l => l === '▍Why it failed')
+  expect(head).toBeGreaterThan(-1)
+  const block = L.slice(head, L.findIndex(l => l === '▍Details')).join(' ').replace(/\s+/g, ' ')
+  expect(block).toContain('The worker ended without handing back a result')
+  expect(block).not.toContain('asks for more files')
+  await ui.unmount()
+})
+
 test('a task that did not fail has no "Why it failed" block', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
