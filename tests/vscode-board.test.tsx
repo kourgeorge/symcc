@@ -387,6 +387,31 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
   }
 })
 
+test('in VS Code a done or dropped task is one line: its mark, the ID link, the title; open tasks keep their status line', async ($, on) => {
+  seedBoard(on)
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  for (const k of ['day:done', 'day:dropped']) await ui.press({ key: k, link: { href: vsHref('fold', k) } })
+  for (const [id, m, tone] of [['T-414', '✓', 'success'], ['T-417', '–', 'inactive']] as const) {
+    const box = (await ui.find({ key: `vs-task-${id}` })) as Node
+    const parts = box.children!.filter(n => n && typeof n === 'object') as Node[]
+    expect(parts.length, id).toBe(1) // no second "done" line
+    const top = parts[0]!
+    expect(texts(top).join(''), id).toMatch(new RegExp(`^${m} ${id}\\s+\\S`))
+    expect(elements(top).find(n => texts(n).join('') === `${m} `)?.props?.color, id).toBe(tone)
+    const md = await ui.find({ key: id })
+    expect([md?.type, md?.props.dimColor, md?.props.pressableLinks], id).toEqual(['Markdown', true, [vsHref('task', id)]])
+    expect(String(md?.props.text).startsWith(mdLink(id, vsHref('task', id))), id).toBe(true)
+  }
+  // a doing and a waiting task keep their dim status line
+  expect(await rowText(ui, 'T-401')).toContain('\n▶ 2m')
+  expect(await rowText(ui, 'T-404')).toMatch(/\n\? waiting/)
+  // the done row's link still opens its page
+  await ui.press({ key: 'T-414', link: { href: vsHref('task', 'T-414') } })
+  expect((await ui.find({ key: 'vs-head' }))?.text).toMatch(/^T-414/)
+  await ui.unmount()
+})
+
 test('in VS Code the mode switch is a link that switches the mode', async ($, on) => {
   seedBoard(on)
   const toasts: string[] = []

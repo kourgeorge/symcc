@@ -109,7 +109,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
@@ -241,7 +241,8 @@ export type TurnEndReason = 'answer' | 'aborted' | 'refusal' | 'error'
 export type TurnRefusal = { category: string | null; explanation: string | null }
 
 /** A worker's hand-back `answer` arrived; `end`: why its turn ended. */
-export async function workerFinished(host: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens) {
+/** `cost`: what the try cost in US dollars, when the host knows it (e.g. a `claude -p` process's result says it). */
+export async function workerFinished(host: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens, cost?: number) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
@@ -262,7 +263,7 @@ export async function workerFinished(host: Host, agentId: string, answer: string
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
       limitMs = finishLimitMs(x.test_commands.length)
-      return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens }) } : {}) }, ended), t.attempts] as [Board, number]
+      return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) } : {}) }, ended), t.attempts] as [Board, number]
     })
   } catch {
     // T-452: board.json can't be read (load already told the owner, once). The report is kept here and
@@ -1089,11 +1090,17 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
+/** How the last Approve, Done, Keep as a note or Merge now of each task ended: 'merged', 'done' (an investigation's Done), or 'failed'. */
+const outcomes = new Map<string, 'merged' | 'done' | 'failed'>()
+/** How task `id`'s last Approve, Done, Keep as a note or Merge now ended (see outcomes); undefined when none ran. */
+export const mergeOutcome = (id: string) => outcomes.get(id)
+
 /**
  * The owner approved task `id` (in "review"): the same checked merge as for a finished worker. An answered
  * investigation has nothing to merge: approve is its Done (see endInvestigation), and `keepNote` its Keep as a note.
  */
 export async function approve(host: Host, id: string, keepNote = false): Promise<string> {
+  if (!approving.has(id)) outcomes.set(id, 'failed')
   const b = await load(host)
   const t = reviewTask(b, id, 'approve')
   if (isInvestigation(t)) return endInvestigation(host, t, keepNote)
@@ -1138,6 +1145,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean): Pr
   if ((await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) && !keep) await git(host, ['branch', '-D', branch])
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`)
   void pump(host)
+  outcomes.set(t.id, 'done')
   if (!added) return `${t.id} done: the answer was read; nothing was merged${kept ? `.${kept}` : ''}`
   return `${t.id} done: the answer was read; nothing was merged. Added ${added.id} "${added.title}": it writes ${added.files[0]} from the answer and merges as usual${kept ? `.${kept}` : ''}`
 }
@@ -1148,6 +1156,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean): Pr
  * merged). A task in review (an approve that was blocked) is approved again.
  */
 export async function mergeWaiting(host: Host, id: string): Promise<string> {
+  if (!approving.has(id)) outcomes.set(id, 'failed')
   const b = await load(host)
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
@@ -1264,6 +1273,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     await recordCommits(host, t.id, made, r.merged)
     const cur = find(await load(host), t.id)
     if (r.merged) {
+      outcomes.set(t.id, 'merged')
       // The work is on the target branch: the task is done, whatever happened to it meanwhile
       // (settle marks it done; when it changed meanwhile, with a line saying the change came too late).
       const sha = shortSha(r.merged)
@@ -1316,6 +1326,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       return `${t.id} was not merged and stays in review: ${r.detail}${/approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'}`
     }
     await settle(host, cur, b, r, by, dir)
+    if (r.ok) outcomes.set(t.id, 'merged')
     const label = kind === 'approve' ? 'approved, but not merged' : 'not merged'
     return r.ok ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} ${label}: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
   } finally {
@@ -1448,6 +1459,26 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
   void pump(host)
   if (!before) tellLead(host, `The owner turned ${S.N.name} back on with /${S.N.name}-on. You are the lead again; the board is in mode ${modeOf(b)}.`)
   return `${S.N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}`
+}
+
+/**
+ * The host is about to quit (`why`, e.g. a command line that stops waiting): every worker, scout and checker of this
+ * copy is stopped, and the tasks they worked on go back to "todo" (their folders and branches are kept), so the next
+ * run starts them again instead of finding them "doing" with no worker. Answers the ids of the tasks put back.
+ */
+export async function stopForQuit(host: Host, why: string): Promise<string[]> {
+  const ids: string[] = []
+  await haltAll(host, why, async w => {
+    ids.push(w.task)
+    await change(host, x => {
+      const cur = find(x, w.task)
+      if (cur?.status !== 'doing') return x
+      return patchTask(x, w.task, { status: 'todo', note: `stopped: ${why}; continues on the next run`, history: [...cur.history, stoppedLine(cur, why)], ...endedBy(cur, now(), 'stopped', why) }, now())
+    })
+  })
+  ids.push(...(await stopChecks(host, why)).back)
+  if (ids.length) await publish(host, await load(host))
+  return ids
 }
 
 export const LIVE = new Set(['pending', 'running', 'waiting'])

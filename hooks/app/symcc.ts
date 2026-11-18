@@ -293,21 +293,21 @@ export function toolCheckFailed(host: Host, agentId: string | undefined, error: 
 
 // ---------------- agents ----------------
 
-/** How an agent's run ended: its final answer, why (`end`), whether it was cut off, and the tokens it used. */
-export type AgentRunEnd = { answer: string; end: TurnEnd; isAborted: boolean; tokens: SymccTokens | undefined }
+/** How an agent's run ended: its final answer, why (`end`), whether it was cut off, the tokens it used, and its cost in US dollars when the host knows it (a worker's is kept on its try). */
+export type AgentRunEnd = { answer: string; end: TurnEnd; isAborted: boolean; tokens: SymccTokens | undefined; cost?: number }
 
 /** An agent's run ended (a worker, scout or checker of symcc's, or one this copy lost track of in a reload); other agents are left alone. */
 export function agentFinished(host: Host, agentId: string | undefined, run: AgentRunEnd) {
-  const { answer, end, isAborted, tokens } = run
+  const { answer, end, isAborted, tokens, cost } = run
   // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
   const broken = !isAborted && (end.reason === 'error' || end.reason === 'refusal')
-  if (agentId && workers.has(agentId)) void workerFinished(host, agentId, answer, end, tokens).catch(() => undefined)
+  if (agentId && workers.has(agentId)) void workerFinished(host, agentId, answer, end, tokens, cost).catch(() => undefined)
   else if (agentId && scoutRuns.has(agentId)) void scoutFinished(host, agentId, answer, broken ? end : isAborted, tokens)
   // a checker's verdict (the checker setting) goes to the finish step waiting for it
   else if (agentId && checkerRuns.has(agentId)) checkerFinished(agentId, answer, broken ? end : isAborted || end.reason === 'aborted', tokens)
   // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
   // (a worker this copy stopped, e.g. an orphan after a reload: its task is put back to "todo" at once instead)
-  else if (agentId) void lateHandBack(host, agentId).then(ok => (ok ? workerFinished(host, agentId, answer, end, tokens) : stoppedHandBack(host, agentId))).catch(() => undefined)
+  else if (agentId) void lateHandBack(host, agentId).then(ok => (ok ? workerFinished(host, agentId, answer, end, tokens, cost) : stoppedHandBack(host, agentId))).catch(() => undefined)
 }
 
 // ---------------- commands ----------------
