@@ -111,6 +111,15 @@ expect_host_bound "hosts/node/: await import of hooks/claude/" hosts/node/n.ts "
 expect_host_bound "hosts/node/: multi-line name list" hosts/node/n.ts "import { a,\n  b } from '../../hooks/claude/host'\n" "hosts/node/ imports Claude Code.*n.ts:2"
 expect_host_bound "hosts/node/: the hooks/claude folder itself" hosts/node/n.ts "import { claudeHost } from '../../hooks/claude'\n" "hosts/node/ imports Claude Code.*n.ts:1"
 rm -rf "$tmp/hosts"
+# T-462: hooks/app/ and hooks/core/ never import OpenCode; the OpenCode plugin never imports Claude Code
+expect_host_bound "@opencode import" hooks/app/a.ts "import type { Plugin } from '@opencode/plugin'\nexport type A = Plugin\n" "a host-bound import.*@opencode/plugin"
+expect_host_bound "import from hooks/opencode/" hooks/core/c.ts "import { x } from '../opencode/host'\nexport const c = x\n" "a host-bound import.*opencode/host"
+mkdir -p "$tmp/hooks/opencode" "$tmp/opencode"
+expect_host_bound "hooks/opencode/: claude-code import" hooks/opencode/o.ts "import type { On } from 'claude-code'\n" "the OpenCode plugin imports Claude Code.*o.ts:1"
+expect_host_bound "hooks/opencode/: import of hooks/claude/" hooks/opencode/o.ts "import { claudeHost } from '../claude/host'\n" "the OpenCode plugin imports Claude Code.*o.ts:1"
+rm -f "$tmp/hooks/opencode/o.ts"
+expect_host_bound "opencode/: import of hooks/claude/" opencode/server.ts "export const h = await import('../hooks/claude/host')\n" "the OpenCode plugin imports Claude Code.*server.ts:1"
+rm -rf "$tmp/hooks/opencode" "$tmp/opencode"
 # and through scripts/typecheck.sh, on code that type-checks fine with Claude Code's types
 clean
 printf "export const c = 'WebFetch'\n" > "$tmp/hooks/core/c.ts"

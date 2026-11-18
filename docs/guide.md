@@ -195,7 +195,10 @@ happens, never the words in its hand-back:
    An investigation has no file list, so its edits in its own folder are never refused (they are not kept anyway).
    Each worker's folder has a `.scratch/` folder for throwaway scripts and notes. Workers and checkers may
    write there freely: it is never refused, never a file request, and never committed or scope checked
-   (symcc lists it in that checkout's local ignore list, `info/exclude`, not in your `.gitignore`).
+   (symcc adds a `/.scratch/` line to git's local ignore list, not to your `.gitignore`). Worker folders
+   share that list with your own project folder: it is your repository's `.git/info/exclude`, so a
+   `.scratch/` folder in your own project folder is ignored by git as well. To undo it, remove the
+   `/.scratch/` line from `.git/info/exclude`.
    symcc empties it when a try ends and when the folder is used again. If your project keeps files under
    `.scratch/` in git, all this is off: those are your files, checked and committed as usual.
    An edit (by any worker) that lands in your own copy of the project, outside the worker's own
@@ -1294,6 +1297,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
 | [`tests/`](../tests/) | The tests: one file per area (the board logic, the panel, merging, scouts, stats, and so on) |
 | [`hosts/node/`](../hosts/node/) | symcc with no Claude Code: a `Host` made of plain Node/Bun calls (`host.ts`), agents as `claude -p` processes (`runner.ts`), and a tiny command line (`main.ts`). See "Running symcc without Claude Code" below |
+| [`hooks/opencode/`](../hooks/opencode/), [`opencode/`](../opencode/) | symcc in OpenCode 2.x (in progress): the plugin's setup and which copy runs the board (`plugin.ts`), its `Host` (`host.ts`), the edit guard (`guard.ts`), and the plugin entries OpenCode loads (`opencode/server.ts`, `opencode/tui.ts`). See "symcc in OpenCode (in progress)" below |
 
 **Where to add a new feature:** pure logic goes in `hooks/core/`; what symcc does goes in `hooks/app/`; Claude Code wiring goes in `hooks/claude/`; panel pages go in `hooks/claude/ui/`. `hooks/app/` and `hooks/core/` must not import `claude-code` or `node:` modules, or name Claude Code's tools: `sh tests/host-free.sh` (run by `sh scripts/typecheck.sh`) checks this.
 
@@ -1310,6 +1314,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 - **Where tests live:** in `tests/`, one file per area (for example `board.test.ts` for the board logic and `pane.test.tsx` for the panel).
 - **Layout:** `hooks/core/` holds the logic you can test (plain data, no Claude Code calls). `hooks/app/` holds what symcc does, also with no Claude Code. `hooks/claude/` and `hooks/claude/ui/` do the wiring to Claude Code, and `hooks/register.tsx` only connects events. Put new logic in `hooks/core/` when you can. See the code map above.
 - **Test the Node host:** `sh scripts/test-node-host.sh` (bun test, not `claude plugin test`: it needs files and processes).
+- **Test the OpenCode plugin:** `sh scripts/test-opencode-host.sh` (bun test with a fake OpenCode context; OpenCode itself is not needed).
 - **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).
 
 ### Running symcc without Claude Code
@@ -1325,3 +1330,14 @@ bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash com
 ```
 
 What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended.
+
+### symcc in OpenCode (in progress)
+
+`opencode/` is a plugin for OpenCode 2.x (the 2.3 line; the older 1.x line is different and not supported). It has a server part (`server.ts`) and a TUI part (`tui.ts`, empty for now). To try it, link the folder into OpenCode's plugins folder, for example `ln -s <symcc folder>/opencode ~/.config/opencode/plugins/symcc`.
+
+What works so far:
+
+- **One copy runs the board.** OpenCode starts the plugin once for each folder a session works in, workers' folders too. Only the copy for the project's main folder runs symcc's engine: it takes the lead (`.symcc/lead.json`, the same lock as in Claude Code), starts the timers and seeds the scouts. The copies in workers' folders only guard. If two copies point at the same real folder (on macOS, `/tmp/...` and `/private/tmp/...`), the first one runs the board and the other takes over when the first is unloaded.
+- **Edits are guarded.** Every copy checks OpenCode's permission requests with symcc's usual checks. A worker's edit outside its task's files is refused, a shell command that writes into your copy is refused (judged by the command's text), and an agent symcc stopped is refused anything. A tool-call hook stays behind it as a backstop.
+
+Not built yet: starting workers and scouts, waking the lead, symcc's tools and slash commands, and the board panel. Until then a task that is ready waits instead of starting. The code is in `hooks/opencode/`.

@@ -4,8 +4,8 @@
 # (an OpenCode plugin, a standalone client) with no Claude Code. Not a `claude plugin test` file: that runtime can't
 # read files or run processes. scripts/typecheck.sh runs it. Usage: sh tests/host-free.sh [folder]
 # It fails when one of those files
-#   1. imports 'claude-code' (or 'claude-code/...'), a Node built-in ('node:...', 'fs', ...), Bun, or anything in
-#      hooks/claude/ or hooks/register.tsx;
+#   1. imports 'claude-code' (or 'claude-code/...'), OpenCode ('@opencode/...'), a Node built-in ('node:...', 'fs',
+#      ...), Bun, or anything in hooks/claude/, hooks/opencode/ or hooks/register.tsx;
 #   2. names a Claude Code tool in its code ('Read', 'WebSearch', mcp__..., not in comments): those live in hooks/claude/;
 #   3. does not type-check with no Claude Code types loaded (plain es2023, "types": []).
 set -u
@@ -31,9 +31,9 @@ code() { grep -nHvE '^[[:space:]]*(//|/?\*)' $files; }
 
 NODE='fs|fs/promises|path|os|child_process|process|crypto|util|events|stream|url|http|https|net|tty|readline|buffer|assert|zlib|worker_threads|module|vm'
 hits=$(code | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]" |
-  grep -E "['\"](claude-code(/[^'\"]*)?|node:[^'\"]*|bun(:[^'\"]*)?|($NODE))['\"]|['\"][^'\"]*(/claude/|/claude['\"]|register(\.tsx)?['\"])")
+  grep -E "['\"](claude-code(/[^'\"]*)?|@opencode/[^'\"]*|node:[^'\"]*|bun(:[^'\"]*)?|($NODE))['\"]|['\"][^'\"]*(/claude/|/claude['\"]|/opencode/|/opencode['\"]|register(\.tsx)?['\"])")
 if [ -n "$hits" ]; then
-  echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (keep it in hooks/claude/): $hit" >&2; done
+  echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (keep it in hooks/claude/ or hooks/opencode/): $hit" >&2; done
   fails=$((fails + 1))
 fi
 
@@ -83,4 +83,24 @@ if [ -n "$node_files" ]; then
   fi
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/ and hosts/node/ need no Claude Code"; else exit 1; fi
+# The OpenCode plugin (hooks/opencode/ and its entries in opencode/, T-462) may use Node, Bun and OpenCode, but never
+# imports 'claude-code' or anything in hooks/claude/ or hooks/register.tsx, and it type-checks with its own settings
+# (hooks/opencode/tsconfig.json, with hosts/node/env.d.ts's Node declarations and its own OpenCode types in ctx.ts).
+oc_files=$(find hooks/opencode opencode -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
+if [ -n "$oc_files" ]; then
+  q="['\"\`]"
+  nq="[^'\"\`]"
+  hits=$(grep -nHE "(^|[^[:alnum:]_\$.])(from|import)[[:space:]]*\(?[[:space:]]*$q(claude-code(/$nq*)?|$nq*/claude(/$nq*)?|$nq*/register(\.tsx)?)$q" $oc_files)
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: the OpenCode plugin imports Claude Code (it must run without it): $hit" >&2; done
+    fails=$((fails + 1))
+  fi
+  if [ -f hooks/opencode/tsconfig.json ] && have_tsc; then
+    if ! out=$(tsc --noEmit --pretty false -p hooks/opencode/tsconfig.json 2>&1); then
+      echo "$out" | grep "error TS" | while IFS= read -r e; do echo "host-free: hooks/opencode/: $e" >&2; done
+      fails=$((fails + 1))
+    fi
+  fi
+fi
+
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hosts/node/ and hooks/opencode/ need no Claude Code"; else exit 1; fi
