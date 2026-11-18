@@ -7,6 +7,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ### Added
 - `/symcc-drive` makes the session you type it in drive the board. If another session drives, it hands over within 30 s: it stops its workers, steps down, and your session restarts those tasks from their kept folders and branches, without using up a try. There are never two drivers at once, and a session that doesn't answer is taken over after the usual 3 minutes.
 
+### Changed
+- The header shows just the name and version ("𝄞 symcc v0.4.1 · <folder>"), without the word "board" after them, in the board tool's text, the band above the prompt and the terminal, desktop and mobile header. With no version known it still reads "symcc board".
+
 ## 0.4.1 (2026-11-18)
 
 ### Added
