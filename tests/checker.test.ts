@@ -2,10 +2,11 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/plugin/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked } from '../hooks/plugin/workers'
 import { checkerFinished } from '../hooks/plugin/checker'
+import { checkEdit } from '../hooks/plugin/ask'
 import { load, saveBoard } from '../hooks/plugin/store'
 import { runTool } from '../hooks/plugin/tools'
 import { test } from './reset'
@@ -21,7 +22,7 @@ const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 
 /** In-memory files, a small fake git (main, the worker's HEAD, the changed files) and a fake agent spawn that records each checker started. */
 function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
-  const git = { main: M1, head: H0, dirty: true }
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false }
   const files = new Map<string, string>()
   const calls: string[] = []
   const spawns: { prompt: string; subagentType?: string; cwd?: string; name?: string }[] = []
@@ -38,6 +39,14 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
     }
     if (s === 'rev-parse -q --verify HEAD' || s === 'rev-parse HEAD') return ok(git.head)
     if (s === 'rev-parse refs/heads/main') return ok(git.main)
+    if (s === 'symbolic-ref -q HEAD') return git.detached ? fail() : ok('refs/heads/symcc/T-1')
+    if (s === 'rev-parse -q --verify refs/heads/symcc/T-1') return ok(git.head)
+    if (a[0] === 'checkout' && a.includes('-B')) {
+      if (git.checkoutFails) return fail('cannot checkout')
+      git.head = a.at(-1)!
+      git.detached = false
+      return ok()
+    }
     if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return ok()
     if (a[0] === 'merge-base') return ok(git.main)
     if (a[0] === 'diff' && a.includes('--name-only')) return ok(changed.join('\0'))
@@ -375,4 +384,72 @@ test('a drop that comes before the checker is spawned starts no checker at all',
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('dropped')
   expect(checkingNow('T-1')).toBe(false)
+})
+
+// ---------------- a checker's git and shell are kept to its task (T-369) ----------------
+
+const C9 = 'c9'.repeat(20)
+for (const [what, move] of [
+  ['commits', (g: { head: string }) => void (g.head = C9)],
+  ['resets HEAD~1', (g: { head: string }) => void (g.head = H0)],
+  ['checks out a bare commit', (g: { head: string; detached: boolean }) => void ((g.head = C9), (g.detached = true))],
+] as const) {
+  test(`a checker that ${what} in the task's folder: the branch is put back at the tested HEAD, and only that merges`, async () => {
+    const w = world()
+    await saveBoard(w.$, boardWith(true))
+    const t = await finish(w, async id => {
+      expect(w.git.head).toBe(H1)
+      move(w.git)
+      checkerFinished(id, 'OK')
+    })
+    expect(w.calls).toContain(`git checkout -q -f -B symcc/T-1 ${H1}`)
+    expect(w.git.head).toBe(H1)
+    expect(w.git.main).toBe(H1)
+    expect(t.status).toBe('done')
+    expect(t.history).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
+    expect(t.history).toContain('try 1: checker: OK')
+  })
+}
+
+test('a checker that leaves the branch alone: nothing is put back and nothing extra goes in the history', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, 'OK'))
+  expect(w.calls.some(c => c.includes('checkout'))).toBe(false)
+  expect(t.history.some(h => h.includes('moved the branch'))).toBe(false)
+  expect(w.git.main).toBe(H1)
+})
+
+test("a checker that moved the branch when it can't be put back gives no verdict: nothing merges, the task waits for review", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => {
+    w.git.head = C9
+    w.git.checkoutFails = true
+    checkerFinished(id, 'OK')
+  })
+  expect(w.git.main).toBe(M1)
+  expect(t.status).toBe('review')
+  expect(t.history).toContain("try 1: checker gave no verdict (it moved the task's branch symcc/T-1 and it could not be put back)")
+})
+
+test("a checker's Bash aimed at the owner's project folder is refused as a worker's is; inside the task's folder it is allowed", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  await finish(w, async id => {
+    expect(await checkEdit(w.$, id, 'Bash', { command: `echo x > ${ROOT}/README.md` })).toBe(bashOutsideText('README.md', WT))
+    expect(await checkEdit(w.$, id, 'Bash', { command: `cd ${ROOT} && git reset --hard HEAD~1` })).toBeDefined()
+    expect(await checkEdit(w.$, id, 'Bash', { command: `cat ${ROOT}/.symcc/board.json` })).toBeDefined()
+    expect(await checkEdit(w.$, id, 'Edit', { file_path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
+    expect(await checkEdit(w.$, id, 'Bash', { command: `cat ${WT}/src/a.ts && npm test` })).toBeUndefined()
+    checkerFinished(id, 'OK')
+  })
+})
+
+test('the checker prompt tells it not to run git commands that change anything', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  await finish(w, async id => checkerFinished(id, 'OK'))
+  expect(w.spawns[0]!.prompt).toContain('Do NOT run git commands that change anything (commit, reset, checkout')
+  expect(w.spawns[0]!.prompt).toContain('Read-only ones like git diff, git log, git show and git status are fine.')
 })

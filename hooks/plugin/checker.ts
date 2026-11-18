@@ -19,7 +19,8 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
 /**
  * Runs a checker on task `t`'s finished work in its folder `dir` (everything is committed there) and waits for its
  * verdict. The board shows the task's step as "checking" meanwhile. The checker runs as the read-only scout type
- * (no Edit or Write), and whatever it still changed in the folder is thrown away after. Its time limit is the board's
+ * (no Edit or Write), and whatever it still changed in the folder is thrown away after; if it moved the task's branch
+ * (a commit, a reset), the branch is put back where it was tested (putBack). Its time limit is the board's
  * max_minutes: past it, it is stopped and there is no verdict. Its verdict goes into the task's history and its
  * tokens are added to the task's current try. Never throws: a checker that can't start gives no verdict.
  * `stop`: why the task was stopped (dropped, paused, sent to the owner), if it was; looked at once the checker
@@ -41,6 +42,8 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop
     await record($, t, null, why)
     return { verdict: null, why }
   }
+  // where the task's branch is now (the work that was tested): put back after the checker if it moved it
+  const saved = await gitPlace($, dir, taskBranch(t))
   let agentId: string
   try {
     const spawned = await $.agent.spawn({ prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, subagentType: S.N.scout, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
@@ -60,7 +63,7 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop
       timer?.cancel()
       resolve(e)
     }
-    checkerRuns.set(agentId, { task: t.id, end: done })
+    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done })
     const min = b.max_minutes
     try {
       timer = $.clock.after(min * 60_000, () => {
@@ -79,19 +82,25 @@ export async function runChecker($: $, t: SymccTask, b: Board, dir: string, stop
     }
   })
   await cleanFolder($, dir)
-  const verdict = end.answer === null ? null : checkerVerdict(end.answer)
-  const why = end.answer === null ? end.why : verdict ? undefined : 'it handed back nothing'
-  await record($, t, verdict, why, end.tokens)
+  const back = await putBack($, dir, saved)
+  let verdict = end.answer === null ? null : checkerVerdict(end.answer)
+  let why = end.answer === null ? end.why : verdict ? undefined : 'it handed back nothing'
+  if (back === 'failed') {
+    // the branch is not where it was tested: no verdict, so nothing merges on the checker's word
+    verdict = null
+    why = `it moved the task's branch ${taskBranch(t)} and it could not be put back`
+  }
+  await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined)
   return { verdict, ...(why ? { why } : {}) }
 }
 
 /** The checker's verdict (`v`, or none with `why`) as a history line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */
-async function record($: $, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens) {
+async function record($: $, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string) {
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
     const runs = cur.runs?.length && tokens ? [...cur.runs.slice(0, -1), { ...cur.runs.at(-1)!, tokens: addTokens(cur.runs.at(-1)!.tokens, tokens) }] : undefined
-    return patchTask(x, t.id, { history: [...cur.history, checkerLine(tryLabel(cur), v, why)], ...(runs ? { runs } : {}) }, now())
+    return patchTask(x, t.id, { history: [...cur.history, ...(before ? [before] : []), checkerLine(tryLabel(cur), v, why)], ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }
 
@@ -101,6 +110,35 @@ async function cleanFolder($: $, dir: string) {
   if (!st || st.exitCode !== 0 || !st.stdout) return
   await git($, ['reset', '-q', '--hard', 'HEAD'], dir).catch(() => undefined)
   await git($, ['clean', '-fdq'], dir).catch(() => undefined)
+}
+
+/** Where folder `dir` is in git: the commit of HEAD, the branch HEAD is on (empty when detached), and the commit of the task's branch `branch`. Null when HEAD can't be read. */
+type Place = { head: string; on: string; tip: string; branch: string }
+async function gitPlace($: $, dir: string, branch: string): Promise<Place | null> {
+  const [h, on, tip] = await Promise.all([
+    git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null),
+    git($, ['symbolic-ref', '-q', 'HEAD'], dir).catch(() => null),
+    git($, ['rev-parse', '-q', '--verify', `refs/heads/${branch}`], dir).catch(() => null),
+  ])
+  const head = h && h.exitCode === 0 ? h.stdout.trim() : ''
+  if (!/^[0-9a-f]{7,64}$/.test(head)) return null
+  return { head, on: on && on.exitCode === 0 ? on.stdout.trim() : '', tip: tip && tip.exitCode === 0 ? tip.stdout.trim() : '', branch }
+}
+
+/**
+ * The checker may have run git in folder `dir` (a commit, a reset, a checkout...): when HEAD, the branch it is on or
+ * the task's branch moved from `saved`, the task's branch is put back at the saved commit and checked out again, so
+ * only the tested work can merge. 'same': nothing moved; 'moved': it moved and was put back; 'failed': it couldn't be.
+ */
+async function putBack($: $, dir: string, saved: Place | null): Promise<'same' | 'moved' | 'failed'> {
+  if (!saved) return 'same'
+  const now = await gitPlace($, dir, saved.branch)
+  if (now && now.head === saved.head && now.on === saved.on && now.tip === saved.tip) return 'same'
+  // -B sets the branch to the saved commit (wherever the checker left it) and checks it out; -f drops what is in the way
+  const r = await git($, ['checkout', '-q', '-f', '-B', saved.branch, saved.head], dir).catch(() => null)
+  await git($, ['clean', '-fdq'], dir).catch(() => undefined)
+  const after = r && r.exitCode === 0 ? await gitPlace($, dir, saved.branch) : null
+  return after && after.head === saved.head && after.tip === saved.head ? 'moved' : 'failed'
 }
 
 /** A checker's turn ended (turn.complete): its answer goes to the step waiting for it; `aborted`: it was stopped, so there is no verdict. */

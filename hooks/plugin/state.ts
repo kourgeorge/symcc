@@ -165,8 +165,11 @@ export const finishing = new Set<string>()
 export const scoutRuns = new Map<string, string>() // agentId → scout name
 /** How a checker's run ended: its answer (and tokens), or `answer` null when it was stopped or never answered (`why`). */
 export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTokens }
-/** checkers running now (the checker setting, see plugin/checker.ts): agentId → its task, and how to hand its end to the step waiting for it */
-export const checkerRuns = new Map<string, { task: string; end: (e: CheckerEnd) => void }>()
+/**
+ * checkers running now (the checker setting, see plugin/checker.ts): agentId → its task, the task's folder it runs in
+ * (its Bash is kept inside it, see checkEdit), and how to hand its end to the step waiting for it
+ */
+export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */

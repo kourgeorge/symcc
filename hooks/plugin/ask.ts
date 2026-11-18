@@ -5,7 +5,7 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
-import { S, type $, type Worker, scoutRuns } from './state'
+import { S, type $, type Worker, scoutRuns, checkerRuns } from './state'
 import { load, change, now } from './store'
 import { workerOf } from './workers'
 
@@ -77,14 +77,13 @@ async function realEdit($: $, tool: string, input: unknown, worktree: string, ro
  */
 export async function checkEdit($: $, agentId: string | undefined, tool: string, input: unknown, cwd?: string): Promise<string | undefined> {
   if (!agentId || (!EDIT_PATH_FIELD[tool] && tool !== 'Bash')) return undefined
+  // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
+  const chk = checkerRuns.get(agentId)
+  if (chk) return outsideOwnFolder($, tool, input, chk.worktree, cwd)
   // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
   const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
-  if (tool === 'Bash') {
-    const cmd = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined
-    const rel = S.root ? bashOutsideFolder(cmd, w.worktree, S.root, S.home || undefined, cwd) : undefined
-    return rel !== undefined ? bashOutsideText(rel, w.worktree) : undefined
-  }
+  if (tool === 'Bash') return outsideOwnFolder($, tool, input, w.worktree, cwd)
   const real = await realEdit($, tool, input, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
   if (real === null) return brokenLinkText(editTarget(tool, input)!)
@@ -97,4 +96,20 @@ export async function checkEdit($: $, agentId: string | undefined, tool: string,
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
+}
+
+/**
+ * Why a Bash command or an edit of a checker in folder `worktree` is refused: it names a path in the project outside
+ * that folder (the owner's copy, the board, another worker's folder). Undefined: allowed.
+ */
+async function outsideOwnFolder($: $, tool: string, input: unknown, worktree: string, cwd?: string): Promise<string | undefined> {
+  if (tool === 'Bash') {
+    const cmd = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined
+    const rel = S.root ? bashOutsideFolder(cmd, worktree, S.root, S.home || undefined, cwd) : undefined
+    return rel !== undefined ? bashOutsideText(rel, worktree) : undefined
+  }
+  const real = await realEdit($, tool, input, worktree, S.root)
+  if (real === null) return brokenLinkText(editTarget(tool, input)!)
+  const outside = real.root ? editOutsideFolder(tool, real.input, real.worktree, real.root) : undefined
+  return outside !== undefined ? outsideFolderText(outside, worktree, S.N.dir) : undefined
 }
