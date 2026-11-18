@@ -4,7 +4,7 @@
 //   and the path is recorded as a request to the owner.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, gitWriteIn, gitWriteText, EDIT_PATH_FIELD, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, type PathLookup } from '../board'
 import { S, type Worker, scoutRuns, checkerRuns } from './state'
 import type { Host } from '../host'
 import { load, change, now } from './store'
@@ -80,7 +80,12 @@ export async function checkEdit($: Host, agentId: string | undefined, tool: stri
   if (!agentId || (!EDIT_PATH_FIELD[tool] && tool !== 'Bash')) return undefined
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
   const chk = checkerRuns.get(agentId)
-  if (chk) return outsideOwnFolder($, tool, input, chk.worktree, cwd)
+  if (chk) {
+    // a checker only reads with git: its branch names are shared with the owner's folder (main too), and so is the stash
+    const git = tool === 'Bash' ? gitWriteIn(input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined) : undefined
+    if (git) return gitWriteText(git)
+    return outsideOwnFolder($, tool, input, chk.worktree, cwd)
+  }
   // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
   const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
