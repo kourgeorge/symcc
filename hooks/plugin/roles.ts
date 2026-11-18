@@ -58,13 +58,13 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
 }
 
 /** Reads the roles again: the plugin's roles/, then the project's .<name>/roles/ over them. */
-export function loadRoles($: Host): Promise<RoleDef[]> {
-  return loadDefs($, ROLES)
+export function loadRoles(host: Host): Promise<RoleDef[]> {
+  return loadDefs(host, ROLES)
 }
 
 /** The plugin's roles and the project's own, read again (S.roles too); `broken` is the project's files that can't be read, with why. */
-export function roleLists($: Host): Promise<{ builtIn: RoleDef[]; project: RoleDef[]; broken: BrokenDef[]; dir: string }> {
-  return defLists($, ROLES)
+export function roleLists(host: Host): Promise<{ builtIn: RoleDef[]; project: RoleDef[]; broken: BrokenDef[]; dir: string }> {
+  return defLists(host, ROLES)
 }
 
 /**
@@ -72,13 +72,13 @@ export function roleLists($: Host): Promise<{ builtIn: RoleDef[]; project: RoleD
  * reset (back to the built-in), remove (an added role), off / on. Every name is checked before any path is made
  * (letters, digits, - and _ only), so nothing outside <dir>/roles is touched. The roles are read again after a change.
  */
-export async function leadRoles($: Host, a: LeadRoleInput): Promise<string> {
-  return (await changeRole($, a)).text
+export async function leadRoles(host: Host, a: LeadRoleInput): Promise<string> {
+  return (await changeRole(host, a)).text
 }
 
 /** The roles tool's work (see leadRoles); `ok` says a role file was written or removed. */
-export function changeRole($: Host, a: LeadRoleInput): Promise<{ ok: boolean; text: string }> {
-  return manageDefs($, ROLES, a)
+export function changeRole(host: Host, a: LeadRoleInput): Promise<{ ok: boolean; text: string }> {
+  return manageDefs(host, ROLES, a)
 }
 
 // ---------------- the Roles page of the panel's Settings view ----------------
@@ -114,26 +114,26 @@ export function roleDraftOf(r: RoleDef): RoleDraft {
 }
 
 /** Saves the edit mode through the roles tool's edit (a built-in is copied to the project's folder first); says what happened, or keeps the edit mode open with the error. */
-export async function saveRoleDraft($: Host): Promise<string> {
+export async function saveRoleDraft(host: Host): Promise<string> {
   const d = roleView.draft
   if (!d) return ''
   if (!d.description.trim()) {
     d.error = 'description is missing: say in a few words what the role is for'
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return ''
   }
-  const r = await changeRole($, { action: 'edit', name: d.role, description: d.description, model: d.model, skills: d.skills, tools: d.tools, checklist: d.checklist })
+  const r = await changeRole(host, { action: 'edit', name: d.role, description: d.description, model: d.model, skills: d.skills, tools: d.tools, checklist: d.checklist })
   if (!r.ok) {
     d.error = r.text
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return ''
   }
   roleView.draft = null
-  $.ui.invalidate('ui.render')
+  host.ui.refresh()
   return r.text
 }
 
 /** "New role": makes .<name>/roles/<role>.md from the short template and opens it in the edit mode; a bad, taken or broken name stays in the name box with the reason. */
-export function newRoleFile($: Host, name: string): Promise<string> {
-  return newDefFile($, ROLES, roleView, name, NEW_ROLE_TEMPLATE, roleDraftOf)
+export function newRoleFile(host: Host, name: string): Promise<string> {
+  return newDefFile(host, ROLES, roleView, name, NEW_ROLE_TEMPLATE, roleDraftOf)
 }

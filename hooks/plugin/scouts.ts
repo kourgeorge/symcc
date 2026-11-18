@@ -16,14 +16,14 @@ export const unreadableScoutsText = () => unreadableScouts.map(f => `${f}: can't
 
 /** The scouts in <dir>/scouts/*.md. A file that can't be read is skipped (and kept in unreadableScouts), so one
  *  broken file never stops the other scouts or the session start. */
-export async function loadScouts($: Host): Promise<ScoutDef[]> {
+export async function loadScouts(host: Host): Promise<ScoutDef[]> {
   const dir = path(S.N.scouts)
-  if (!(await $.fs.exists(dir))) return (unreadableScouts = [], [])
+  if (!(await host.fs.exists(dir))) return (unreadableScouts = [], [])
   const out: ScoutDef[] = []
   const bad: string[] = []
-  for (const f of await $.fs.list(dir)) {
+  for (const f of await host.fs.list(dir)) {
     if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
-    const text = await $.fs.read(`${dir}/${f.name}`).then(
+    const text = await host.fs.read(`${dir}/${f.name}`).then(
       t => t,
       () => null,
     )
@@ -45,32 +45,32 @@ export async function loadScouts($: Host): Promise<ScoutDef[]> {
  * when the examples can't be read or a copy fails, the owner is told once in a toast and symcc starts as usual.
  * Returns the names copied.
  */
-export async function seedExampleScouts($: Host): Promise<string[]> {
+export async function seedExampleScouts(host: Host): Promise<string[]> {
   try {
     const dir = path(S.N.scouts)
-    if (await $.fs.exists(dir)) return []
-    const from = `${$.plugin.root}/examples/scouts`
+    if (await host.fs.exists(dir)) return []
+    const from = `${host.plugin.root}/examples/scouts`
     const examples: { name: string; text: string }[] = []
-    for (const f of await $.fs.list(from)) {
+    for (const f of await host.fs.list(from)) {
       if (f.kind !== 'file' || !f.name.endsWith('.md')) continue
       const name = f.name.replace(/\.md$/, '')
       if (!SCOUT_FILE_NAME.test(name)) continue
-      examples.push({ name, text: await $.fs.read(`${from}/${f.name}`) })
+      examples.push({ name, text: await host.fs.read(`${from}/${f.name}`) })
     }
     if (!examples.length) return []
     // Paused first: a scout file never lands without its pause, so no timer runs one before the owner resumes it.
-    await changeScoutMemory($, old => {
+    await changeScoutMemory(host, old => {
       let text = old ?? ''
       for (const e of examples) text = scoutPausedText(parseScoutMemory(text), e.name, true)
       return text
     })
-    const r = await $.process.run(['mkdir', '-p', dir])
+    const r = await host.process.run(['mkdir', '-p', dir])
     if (r.exitCode !== 0) throw new Error(r.stderr || r.stdout || `mkdir exit ${r.exitCode}`)
-    for (const e of examples) await $.fs.write(`${dir}/${e.name}.md`, e.text)
-    $.ui.toast(S.N.toast(`added ${examples.length} example scouts, all paused: try one with Run now (r on its page) or /${S.N.name}-scout <name>, or resume its timer with p or /${S.N.name}-scout <name> resume`))
+    for (const e of examples) await host.fs.write(`${dir}/${e.name}.md`, e.text)
+    host.ui.toast(S.N.toast(`added ${examples.length} example scouts, all paused: try one with Run now (r on its page) or /${S.N.name}-scout <name>, or resume its timer with p or /${S.N.name}-scout <name> resume`))
     return examples.map(e => e.name)
   } catch (e) {
-    $.ui.toast(S.N.toast(`couldn't add the example scouts: ${String((e as Error)?.message ?? e).slice(0, 200)}`))
+    host.ui.toast(S.N.toast(`couldn't add the example scouts: ${String((e as Error)?.message ?? e).slice(0, 200)}`))
     return []
   }
 }
@@ -94,39 +94,39 @@ export function resetScoutRuns() {
  * worked, so a failed try doesn't hide the commits since the last real run. When the scout type isn't ready yet
  * (just after a reload) it tries again shortly (`misses` such tries so far); other failures are told to the owner.
  */
-export async function runScout($: Host, s: ScoutDef, misses = 0): Promise<string> {
+export async function runScout(host: Host, s: ScoutDef, misses = 0): Promise<string> {
   const st = scoutState.get(s.name)
   if (!st) return `no scout named ${s.name}`
   // A pause only stops the timer (armScout checks it), so a paused scout still runs here when asked to run now;
   // st.paused is brought up to date from scouts.json so the board and the lead's note show it.
-  if (!st.running) await pausedNow($, st)
-  const b = await load($)
+  if (!st.running) await pausedNow(host, st)
+  const b = await load(host)
   const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
   const lastRun = st.last_run
   const lastReport = st.last_report
   st.running = true
-  await publish($, b)
+  await publish(host, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
   const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name })
   let agentId: string
   try {
-    const spawned = await $.agents.spawn({ kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
+    const spawned = await host.agents.spawn({ kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
     if (!spawned.agentId) throw new Error('the scout did not start')
     agentId = spawned.agentId
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err)
     st.running = false
     st.last_run = lastRun
-    await load($).then(b => publish($, b)).catch(() => undefined)
+    await load(host).then(b => publish(host, b)).catch(() => undefined)
     if (notReadyYet(err) && onNotReady(misses) === 'retry') {
-      timers.push($.clock.after(SCOUT_RETRY_MS, () => void runScout($, s, misses + 1)))
+      timers.push(host.clock.after(SCOUT_RETRY_MS, () => void runScout(host, s, misses + 1)))
       return `scout ${s.name} can't start yet (${msg}); trying again in a few seconds`
     }
     const text = `scout ${s.name} didn't start: ${msg}`
     if (!startWarned.has(s.name)) {
       startWarned.add(s.name)
-      $.ui.toast(S.N.toast(text))
+      host.ui.toast(S.N.toast(text))
     }
     return text
   }
@@ -137,7 +137,7 @@ export async function runScout($: Host, s: ScoutDef, misses = 0): Promise<string
   runBefore.set(agentId, lastRun)
   runStarted.set(agentId, Date.now())
   scoutRuns.set(agentId, s.name)
-  await load($).then(b => publish($, b)).catch(() => undefined)
+  await load(host).then(b => publish(host, b)).catch(() => undefined)
   return ''
 }
 
@@ -145,14 +145,14 @@ export async function runScout($: Host, s: ScoutDef, misses = 0): Promise<string
 export const scoutMemoryFile = () => path(`${S.N.dir}/scouts.json`)
 
 /** The saved scout memory; a missing or broken file counts as "no scout has run yet". */
-export async function loadScoutMemory($: Host) {
-  const text = await $.fs.read(scoutMemoryFile()).catch(() => null)
+export async function loadScoutMemory(host: Host) {
+  const text = await host.fs.read(scoutMemoryFile()).catch(() => null)
   return parseScoutMemory(text)
 }
 
 /** Saves scouts.json once with old one-number token totals marked unsplit (see migrateScoutUsage); nothing when already current. */
-export async function saveScoutsMigrated($: Host) {
-  await changeScoutMemory($, old => migrateScoutUsage(old))
+export async function saveScoutsMigrated(host: Host) {
+  await changeScoutMemory(host, old => migrateScoutUsage(old))
 }
 
 /**
@@ -161,22 +161,22 @@ export async function saveScoutsMigrated($: Host) {
  * the file are kept when the new text carries none. Changes in this session go one at a time, each reading what
  * the one before saved, so a run's totals and a timer or pause change at the same time are both kept.
  */
-export function changeScoutMemory($: Host, fn: (old: string | null) => string | null): Promise<void> {
+export function changeScoutMemory(host: Host, fn: (old: string | null) => string | null): Promise<void> {
   const file = scoutMemoryFile()
   return oneAtATime(file, async () => {
-    const old = await $.fs.read(file).catch(() => null)
+    const old = await host.fs.read(file).catch(() => null)
     const next = fn(typeof old === 'string' ? old : null)
     if (next === null) return
-    await $.process.run(['mkdir', '-p', path(S.N.dir)])
-    await safeWrite($, file, keepScoutUsage(next, old), `${S.N.dir}/scouts.json`)
+    await host.process.run(['mkdir', '-p', path(S.N.dir)])
+    await safeWrite(host, file, keepScoutUsage(next, old), `${S.N.dir}/scouts.json`)
   })
 }
 
 /** Saves the scouts in scoutState; scouts no longer in scouts/ are dropped. Whether each is paused is taken from
  *  the file first, since the owner may have paused or resumed one from another session. A scout whose file is
  *  there but can't be read now (unreadableScouts) keeps its saved entry as it is, so its pause is not lost. */
-export async function saveScoutMemory($: Host) {
-  await changeScoutMemory($, old => {
+export async function saveScoutMemory(host: Host) {
+  await changeScoutMemory(host, old => {
     const saved = parseScoutMemory(old)
     for (const st of scoutState.values()) st.paused = saved[st.name]?.paused === true
     const kept = unreadableScouts
@@ -188,8 +188,8 @@ export async function saveScoutMemory($: Host) {
 }
 
 /** True when scout `st` is paused, as scouts.json says now (st.paused is brought up to date). */
-export async function pausedNow($: Host, st: SymccScout): Promise<boolean> {
-  const saved = await loadScoutMemory($)
+export async function pausedNow(host: Host, st: SymccScout): Promise<boolean> {
+  const saved = await loadScoutMemory(host)
   st.paused = saved[st.name]?.paused === true
   return st.paused
 }
@@ -199,13 +199,13 @@ export async function pausedNow($: Host, st: SymccScout): Promise<boolean> {
  * happened. Only the pause flag in scouts.json changes, never the scout's file. A run going on now is not
  * stopped: it finishes and reports, and its timer doesn't start another. Run now still runs a paused scout.
  */
-export async function setScoutPaused($: Host, name: string, paused: boolean): Promise<string> {
+export async function setScoutPaused(host: Host, name: string, paused: boolean): Promise<string> {
   if (!SCOUT_FILE_NAME.test(name)) return scoutFileNameError(name)
-  const defs = await scheduleScouts($)
+  const defs = await scheduleScouts(host)
   const st = scoutState.get(name)
   if (!st || !defs.some(d => d.name === name)) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
   let already = false
-  await changeScoutMemory($, old => {
+  await changeScoutMemory(host, old => {
     const saved = parseScoutMemory(old)
     already = (saved[name]?.paused === true) === paused
     return already ? null : scoutPausedText(saved, name, paused)
@@ -215,25 +215,25 @@ export async function setScoutPaused($: Host, name: string, paused: boolean): Pr
     return paused ? `${name} is already paused; resume its timer with p on its page or /${S.N.name}-scout ${name} resume` : `${name} is not paused`
   }
   st.paused = paused
-  await publish($, await load($))
-  $.ui.invalidate('ui.render')
+  await publish(host, await load(host))
+  host.ui.refresh()
   if (!paused) return onDemand(st) ? `${name} resumed: it runs only on demand (run now, or /${S.N.name}-scout ${name})` : `${name} resumed: it runs ${everyText(st.every_minutes)} again`
   return `${name} paused: it doesn't run on its timer until you resume it (run now still runs it)${st.running ? '; the run going now finishes first' : ''}`
 }
 
 /** Adds one run of scout `name` (its tokens and time) to the running totals in scouts.json, for /<name>-stats. */
-export async function recordScoutRun($: Host, name: string, run: { endMs: number; ms: number; tokens?: SymccTokens }) {
-  await changeScoutMemory($, old => addScoutRun(old, name, run))
+export async function recordScoutRun(host: Host, name: string, run: { endMs: number; ms: number; tokens?: SymccTokens }) {
+  await changeScoutMemory(host, old => addScoutRun(old, name, run))
 }
 
-export async function scoutFinished($: Host, agentId: string, answer: string, isAborted = false, tokens?: SymccTokens) {
+export async function scoutFinished(host: Host, agentId: string, answer: string, isAborted = false, tokens?: SymccTokens) {
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
   const started = runStarted.get(agentId)
   runStarted.delete(agentId)
   // A stopped run still used tokens: count it too.
   const endMs = Date.now()
-  await recordScoutRun($, name, { endMs, ms: started === undefined ? 0 : endMs - started, ...(tokens !== undefined ? { tokens } : {}) }).catch(() => undefined)
+  await recordScoutRun(host, name, { endMs, ms: started === undefined ? 0 : endMs - started, ...(tokens !== undefined ? { tokens } : {}) }).catch(() => undefined)
   const before = runBefore.get(agentId) ?? null
   runBefore.delete(agentId)
   const st = scoutState.get(name)
@@ -243,23 +243,23 @@ export async function scoutFinished($: Host, agentId: string, answer: string, is
       st.running = false
       st.last_run = before
     }
-    await load($).then(b => publish($, b)).catch(() => undefined)
-    $.ui.toast(S.N.toast(`scout ${name} was stopped; nothing reported`))
+    await load(host).then(b => publish(host, b)).catch(() => undefined)
+    host.ui.toast(S.N.toast(`scout ${name} was stopped; nothing reported`))
     return
   }
   if (st) {
     st.running = false
     st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
-    await saveScoutMemory($).catch((e: Error) => tellLead($, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
+    await saveScoutMemory(host).catch((e: Error) => tellLead(host, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
   }
   // a broken board.json must not lose the report: telling the lead still happens
-  await load($).then(b => publish($, b)).catch(() => undefined)
+  await load(host).then(b => publish(host, b)).catch(() => undefined)
   const msg = scoutLeadMessage(name, answer, st?.paused === true)
   if (msg) {
     const at = now()
     heard.scouts[name] = at
     heard.last = { what: `scout ${name} report`, at }
-    tellLead($, msg)
+    tellLead(host, msg)
   }
 }
 
@@ -279,23 +279,23 @@ export function nextRunFrom(lastRun: string | null, everyMinutes: number, soon: 
 
 /** Sets the timer for scout `st` to its next_run. When next_run moved since (the scout ran by hand, so it counts
  *  from that run) it waits the rest; a paused scout keeps its time and checks again shortly. */
-function armScout($: Host, s: ScoutDef, st: SymccScout) {
+function armScout(host: Host, s: ScoutDef, st: SymccScout) {
   const armedFor = st.next_run
   const at = Date.parse(armedFor ?? '')
   const wait = Number.isFinite(at) ? Math.max(0, at - Date.now()) : s.every_minutes * 60_000
   timers.push(
-    $.clock.after(wait, () => {
+    host.clock.after(wait, () => {
       if (scoutState.get(s.name) !== st) return
-      if (st.next_run !== armedFor) return armScout($, s, st)
+      if (st.next_run !== armedFor) return armScout(host, s, st)
       void (async () => {
-        if (!st.running && (await pausedNow($, st).catch(() => false))) {
-          timers.push($.clock.after(PAUSED_RECHECK_MS, () => scoutState.get(s.name) === st && armScout($, s, st)))
+        if (!st.running && (await pausedNow(host, st).catch(() => false))) {
+          timers.push(host.clock.after(PAUSED_RECHECK_MS, () => scoutState.get(s.name) === st && armScout(host, s, st)))
           return
         }
         // if it didn't start (another session drives the board, the board is off, …) try again an interval later
         st.next_run = new Date(Date.now() + s.every_minutes * 60_000).toISOString()
-        await runScout($, s).catch(() => undefined)
-        if (scoutState.get(s.name) === st) armScout($, s, st)
+        await runScout(host, s).catch(() => undefined)
+        if (scoutState.get(s.name) === st) armScout(host, s, st)
       })()
     }),
   )
@@ -306,12 +306,12 @@ function armScout($: Host, s: ScoutDef, st: SymccScout) {
  * (kept in scouts.json): last_run + every_minutes, or soon after start when that is past or it never ran. A scout
  * already known with the same every_minutes keeps its next run, so editing one scout doesn't move the others.
  */
-export async function scheduleScouts($: Host) {
+export async function scheduleScouts(host: Host) {
   for (const t of timers.splice(0)) t.cancel()
-  const defs = await loadScouts($)
+  const defs = await loadScouts(host)
   for (const k of [...scoutState.keys()]) if (!defs.some(d => d.name === k)) scoutState.delete(k)
   // after a restart the map is empty: take each scout's last run and report from scouts.json
-  const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory($) : {}
+  const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory(host) : {}
   let soonCount = 0
   // one start time for all of them, so the spacing between scouts is exactly SPREAD_MS
   const startedAt = Date.now()
@@ -332,91 +332,91 @@ export async function scheduleScouts($: Host) {
     if (old?.paused) st.paused = true
     scoutState.set(s.name, st)
     // every_minutes 0 (or a bad value): only on demand, so no timer
-    if (timed) armScout($, s, st)
+    if (timed) armScout(host, s, st)
   }
   // the line above the prompt says when the next scout runs ("in 38m"): draw it again every minute so it counts down
-  if (defs.some(d => !onDemand(d))) timers.push($.clock.every(60_000, () => refreshStatus($)))
+  if (defs.some(d => !onDemand(d))) timers.push(host.clock.every(60_000, () => refreshStatus(host)))
   return defs
 }
 
 /** Runs scout `name` now (/<name>-scout <scout>, "run now" in the panel, or the lead's scouts run); says what
  *  happened. A paused scout runs too, once, and stays paused (its timer stays stopped). */
-export async function runScoutNow($: Host, name: string): Promise<string> {
+export async function runScoutNow(host: Host, name: string): Promise<string> {
   if (!SCOUT_FILE_NAME.test(name)) return scoutFileNameError(name)
-  const defs = await scheduleScouts($)
+  const defs = await scheduleScouts(host)
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
   const st = scoutState.get(s.name)
-  if (st) await pausedNow($, st)
-  const cur = await load($)
+  if (st) await pausedNow(host, st)
+  const cur = await load(host)
   const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
-  return (await runScout($, s)) || `scout ${s.name} started`
+  return (await runScout(host, s)) || `scout ${s.name} started`
 }
 
 /** A scout file's text, or null when there is none (or it can't be read). */
-export async function readScoutFile($: Host, scout: string): Promise<string | null> {
+export async function readScoutFile(host: Host, scout: string): Promise<string | null> {
   const rel = safeScoutFile(scout, S.N.name)
   if (rel === null) return null
   const file = path(rel)
-  return (await $.fs.exists(file).catch(() => false)) ? await $.fs.read(file).catch(() => null) : null
+  return (await host.fs.exists(file).catch(() => false)) ? await host.fs.read(file).catch(() => null) : null
 }
 
 /** Opens the panel's edit mode for scout `sc`, filled from its file (or from what the panel knows). */
-export async function editScout($: Host, sc: SymccScout) {
-  const text = await readScoutFile($, sc.name)
+export async function editScout(host: Host, sc: SymccScout) {
+  const text = await readScoutFile(host, sc.name)
   const def = text === null ? null : parseScout(sc.name, text)
   S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', summary: def?.summary ?? sc.summary ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
-  $.ui.invalidate('ui.render')
+  host.ui.refresh()
 }
 
 /** Starts a new scout named as typed: refused when the name is bad or taken; else opens the edit mode. */
-export async function newScout($: Host, name: string, shown: string[] = []) {
+export async function newScout(host: Host, name: string, shown: string[] = []) {
   const s = name.trim()
-  const have = [...shown, ...scoutState.keys(), ...(await loadScouts($).catch(() => [] as ScoutDef[])).map(d => d.name)]
+  const have = [...shown, ...scoutState.keys(), ...(await loadScouts(host).catch(() => [] as ScoutDef[])).map(d => d.name)]
   let err = scoutNameError(s, have)
-  if (!err && (await readScoutFile($, s)) !== null) err = `a scout named ${s} already exists`
+  if (!err && (await readScoutFile(host, s)) !== null) err = `a scout named ${s} already exists`
   if (err) {
     S.naming = { name: s, error: err }
   } else {
     S.naming = null
     S.draft = { scout: s, isNew: true, every: '60', model: '', summary: '', body: '', error: '' }
   }
-  $.ui.invalidate('ui.render')
+  host.ui.refresh()
 }
 
 /** Saves the edit mode to .<name>/scouts/<scout>.md, keeping the other front matter keys, and reloads the scouts. */
-export async function saveScout($: Host) {
+export async function saveScout(host: Host) {
   const d = S.draft
   if (!d) return
   const err = scoutDraftError(d)
   if (err) {
     d.error = err
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return
   }
   const rel = safeScoutFile(d.scout, S.N.name)
   if (rel === null) {
     d.error = scoutFileNameError(d.scout)
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return
   }
-  const old = await readScoutFile($, d.scout)
+  const old = await readScoutFile(host, d.scout)
   if (d.isNew && old !== null) {
     d.error = `a scout named ${d.scout} already exists`
-    $.ui.invalidate('ui.render')
+    host.ui.refresh()
     return
   }
   const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary }, d.body)
-  await $.process.run(['mkdir', '-p', path(S.N.scouts)])
-  await $.fs.write(path(rel), text)
+  await host.process.run(['mkdir', '-p', path(S.N.scouts)])
+  await host.fs.write(path(rel), text)
   S.draft = null
   // The same path as a Write to a scout file: reschedule, so the new timing applies now.
-  await scheduleScouts($)
-  await publish($, await load($))
-  await updateScoutOpen($, () => d.scout)
-  $.ui.toast(S.N.toast(`saved ${scoutFile(d.scout, S.N.name)}`))
-  $.ui.invalidate('ui.render')
+  await scheduleScouts(host)
+  await publish(host, await load(host))
+  await updateScoutOpen(host, () => d.scout)
+  host.ui.toast(S.N.toast(`saved ${scoutFile(d.scout, S.N.name)}`))
+  host.ui.refresh()
 }
 
 /** What the lead's scouts tool gets: action (list by default), name, every_minutes, model, prompt. */
@@ -431,7 +431,7 @@ const leadEvery = (v: unknown): number | null => (typeof v === 'number' ? (Numbe
  * scouts so the board shows the change at once. run is the owner's "run now". Pause and resume are refused:
  * only the owner does those.
  */
-export async function leadScouts($: Host, a: LeadScoutInput): Promise<string> {
+export async function leadScouts(host: Host, a: LeadScoutInput): Promise<string> {
   const action = typeof a.action === 'string' && a.action.trim() ? a.action.trim().toLowerCase() : 'list'
   const name = typeof a.name === 'string' ? a.name.trim() : ''
   if (action === 'pause' || action === 'resume') return 'only the owner pauses or resumes scouts'
@@ -444,32 +444,32 @@ export async function leadScouts($: Host, a: LeadScoutInput): Promise<string> {
   } else if (name) {
     if (safeScoutFile(name, S.N.name) === null) return `"${name}" is not a valid scout name: ${SCOUT_FILE_NAME_RULE} (and no "." or ".." alone)`
   } else if (action !== 'list' && action !== 'run') return `say which scout to ${action} (name)`
-  const defs = await scheduleScouts($)
+  const defs = await scheduleScouts(host)
   const have = () => `have: ${defs.map(d => d.name).join(', ') || 'none'}`
   const known = defs.some(d => d.name === name)
   if (action === 'list') {
     if (!name) return leadScoutsText([...scoutState.values()], Date.now(), S.N.scouts)
     const st = scoutState.get(name)
     if (!st || !known) return `no scout named ${name} (${have()})`
-    await pausedNow($, st).catch(() => undefined)
+    await pausedNow(host, st).catch(() => undefined)
     return leadScoutText(st, Date.now(), true)
   }
   if (action === 'run') {
     if (!name) return 'say which scout to run (name)'
-    return runScoutNow($, name)
+    return runScoutNow(host, name)
   }
   if (action !== 'add' && action !== 'edit' && action !== 'remove') return `unknown action "${action}": use list, add, edit, remove or run`
   // The name was checked above (add: leadScoutNameError, a stricter rule; edit and remove: safeScoutFile), so this is a file.
   const file = safeScoutFile(name, S.N.name)!
-  const old = await readScoutFile($, name)
+  const old = await readScoutFile(host, name)
   if (action === 'remove') {
     if (old === null && !known) return `no scout named ${name} (${have()})`
     // An argument list (no shell), with "--" so the path can never be read as an option.
-    const r = await $.process.run(['rm', '-f', '--', path(file)])
+    const r = await host.process.run(['rm', '-f', '--', path(file)])
     if (r.exitCode !== 0) return `could not remove ${file}: ${r.stderr || r.stdout || `exit ${r.exitCode}`}`
-    await scheduleScouts($)
-    await publish($, await load($))
-    $.ui.invalidate('ui.render')
+    await scheduleScouts(host)
+    await publish(host, await load(host))
+    host.ui.refresh()
     return `removed scout ${name} (${file})`
   }
   if (action === 'add' && (old !== null || known)) return `a scout named ${name} already exists; use action "edit" to change it`
@@ -481,19 +481,19 @@ export async function leadScouts($: Host, a: LeadScoutInput): Promise<string> {
   const prompt = typeof a.prompt === 'string' && a.prompt.trim() ? a.prompt : (def?.prompt ?? '')
   if (!prompt.trim()) return 'prompt is missing: say in plain words what the scout looks for'
   const model = typeof a.model === 'string' ? a.model.trim() : (def?.model ?? '')
-  await $.process.run(['mkdir', '-p', path(S.N.scouts)])
-  await $.fs.write(path(file), scoutText(old, { every_minutes: every, model }, prompt))
-  await scheduleScouts($)
-  await publish($, await load($))
-  $.ui.invalidate('ui.render')
+  await host.process.run(['mkdir', '-p', path(S.N.scouts)])
+  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model }, prompt))
+  await scheduleScouts(host)
+  await publish(host, await load(host))
+  host.ui.refresh()
   return `${action === 'add' ? 'added' : 'saved'} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ''}`
 }
 
 /** Leaves the edit mode (and the new scout name box) without saving. */
-export function cancelScoutEdit($: Host) {
+export function cancelScoutEdit(host: Host) {
   S.draft = null
   S.naming = null
-  $.ui.invalidate('ui.render')
+  host.ui.refresh()
 }
 
 /**

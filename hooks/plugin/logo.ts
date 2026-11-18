@@ -27,18 +27,18 @@ export const logoNow = (): LogoFrame => logoFrame(logo.play, logo.t)
 export const noteLogoWidth = (width: number) => void (logo.width = width)
 
 /** Is the board panel shown (placed and the pane in front)? */
-async function paneShown($: Host): Promise<boolean> {
+async function paneShown(host: Host): Promise<boolean> {
   try {
-    return (await $.ui.panes()).some(p => p.id === S.N.pane && p.isShown && p.isPlaced)
+    return (await host.ui.panes()).some(p => p.id === S.N.pane && p.isShown && p.isPlaced)
   } catch {
     return false
   }
 }
 
 /** Plays `move` now, if one may play (see mayMove) and none plays yet; one that comes while another plays is dropped. */
-export async function playLogo($: Host, move: LogoMove, v: Partial<PaneView>): Promise<boolean> {
+export async function playLogo(host: Host, move: LogoMove, v: Partial<PaneView>): Promise<boolean> {
   if (isPlaying(logo.play, logo.t)) return false
-  if (!mayMove({ enabled: v.enabled, mode: v.mode, width: logo.width, shown: await paneShown($) })) return false
+  if (!mayMove({ enabled: v.enabled, mode: v.mode, width: logo.width, shown: await paneShown(host) })) return false
   if (isPlaying(logo.play, logo.t)) return false
   logo.play = startMove(logo.play, move, logo.t)
   logo.last = Date.now()
@@ -48,10 +48,10 @@ export async function playLogo($: Host, move: LogoMove, v: Partial<PaneView>): P
     logo.play = null
   }
   try {
-    const timer = $.clock.every(LOGO_FRAME_MS, () => {
+    const timer = host.clock.every(LOGO_FRAME_MS, () => {
       logo.t += LOGO_FRAME_MS
       if (!isPlaying(logo.play, logo.t)) stop()
-      $.ui.invalidate('ui.render')
+      host.ui.refresh()
     })
     logo.ticker = () => timer.cancel()
   } catch {
@@ -59,22 +59,22 @@ export async function playLogo($: Host, move: LogoMove, v: Partial<PaneView>): P
     stop()
     return false
   }
-  $.ui.invalidate('ui.render')
+  host.ui.refresh()
   return true
 }
 
 /** After each publish: plays the move for what changed (a merge, a worker start, a scout finding, all done). */
-export async function logoOnPublish($: Host, v: PaneView): Promise<void> {
+export async function logoOnPublish(host: Host, v: PaneView): Promise<void> {
   const facts: LogoFacts = { tasks: v.tasks.map(t => ({ id: t.id, status: t.status })), scouts: (v.scouts ?? []).map(s => ({ name: s.name, last_run: s.last_run, last_report: s.last_report })) }
   const move = pickMove(logo.before, facts, isNothing)
   logo.before = facts
-  if (move) await playLogo($, move, v)
+  if (move) await playLogo(host, move, v)
 }
 
 /** On the heartbeat: the idle sway, about every SWAY_EVERY_MS while the panel is open and nothing else played. */
-export async function logoIdle($: Host): Promise<void> {
+export async function logoIdle(host: Host): Promise<void> {
   if (isPlaying(logo.play, logo.t) || !swayDue(null, logo.last, Date.now())) return
-  await playLogo($, 'sway', await readView($))
+  await playLogo(host, 'sway', await readView(host))
 }
 
 /** Stops a running move's frame timer and puts the logo's memory back to its start values (what a reload starts with); for the tests' resetPlugin() only. */
