@@ -343,6 +343,15 @@ test('braces in paths after `--` of a read-only git, and in echo, printf or `x=`
     'x={git,stash}; bash -c "$x"',
     'x=a {git,stash}',
     '/tmp/echo {git,stash}',
+    // zsh makes a range of any two characters ({*../} gives * + , - . /), so a range or a "-" part is never let through
+    'git grep -e -- {*../}Otouch',
+    'git grep -e -- {*../}-open-files-in-pager=touch',
+    'git log -S -- {*../}-output=/tmp/x',
+    'git diff -- {a..c}.ts',
+    'git diff -- {a,-x}.ts',
+    'echo {*..h}it stash',
+    'x={f..h}it',
+    'echo {-n,git} stash',
   ]) {
     expect([command, gitWriteIn(command)]).toEqual([command, 'git with {braces}'])
     expect(await checkEdit($, 'w1', { command }, WT)).toBe(workerGitWriteText('git with {braces}'))

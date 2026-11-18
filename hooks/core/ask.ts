@@ -900,6 +900,9 @@ function braceExpand(w: string): string[] | null {
         alts = Array.from({ length: Math.abs(a - b) + 1 }, (_, k) => String.fromCharCode(Math.min(a, b) + k))
       }
     }
+    // zsh makes a range of any two characters (`{*../}` gives `* + , - . /`), so a range that isn't letters or
+    // numbers can't be told here (T-450)
+    if (!alts && body.includes('..')) return null
     if (!alts) continue
     const out: string[] = []
     for (const a of alts) {
@@ -937,7 +940,30 @@ const braceLetters = (w: string) => {
       return Array.from({ length: y - x + 1 }, (_, k) => String.fromCharCode(x + k)).join('')
     })
     .toLowerCase()
+  // a range left (`{*..h}`) may make any character in zsh (T-450)
+  if (/\{[^{}]*\.\.[^{}]*\}/.test(letters)) return true
   return [...'git'].every(c => letters.includes(c))
+}
+
+/**
+ * Whether every brace group in word `w` is a plain comma list: no `..` range in it (zsh makes a range of any two
+ * characters, `{*../}`), and no comma part that starts with "-" (it may make an option). A word may only keep its
+ * braces as a path after `--` or as echo, printf or `x=` text when this holds (T-450).
+ */
+const plainBraces = (w: string) => {
+  const v = w.replace(/[@$]\{[^{}]*\}/g, '').replace(/\{\}/g, '')
+  // a word too big to look at stays refused, so an odd word stays cheap
+  if (v.length > BRACE_CHARS_MAX || v.split('{').length - 1 > BRACE_OPEN_MAX || /[{,]-/.test(v)) return false
+  for (let i = v.indexOf('{'); i >= 0; i = v.indexOf('{', i + 1)) {
+    let depth = 0
+    let j = i
+    for (; j < v.length; j++) {
+      if (v[j] === '{') depth++
+      else if (v[j] === '}' && --depth === 0) break
+    }
+    if (v.slice(i + 1, j).includes('..')) return false
+  }
+  return true
 }
 
 /**
@@ -1052,7 +1078,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     const dashes = sub !== undefined && GIT_READ.has(sub) ? words.indexOf('--', j) : -1
     const own = dashes < 0 ? braces.slice(at + 1) : braces.slice(at + 1, dashes)
     const paths = dashes < 0 ? [] : braces.slice(dashes + 1).filter(hasBrace)
-    if (own.some(hasBrace) || paths.some(w => braceExpand(w)?.every(e => !e.startsWith('-')) !== true)) return { bad: `git ${BRACE_WHAT}` }
+    if (own.some(hasBrace) || paths.some(w => !plainBraces(w) || braceExpand(w)?.every(e => !e.startsWith('-')) !== true)) return { bad: `git ${BRACE_WHAT}` }
     if (refused) return { bad: `git ${refused}` }
     if (sub === undefined) return {}
     const args = words.slice(j)
@@ -1117,7 +1143,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
       // a word given to a text tool run by find -exec is its text, not a git command (`find . -exec grep -l git {} +`)
-      const g = toolArgs.has(i) || (textBraces.has(i) && hasBrace(p.braces[i] ?? '')) ? undefined : gitAt(words, i, p.adds, p.braces)
+      const g = toolArgs.has(i) || (textBraces.has(i) && hasBrace(p.braces[i] ?? '') && plainBraces(p.braces[i] ?? '')) ? undefined : gitAt(words, i, p.adds, p.braces)
       if (g?.bad) return { ...out, bad: g.bad }
       if (g) continue
       const at = w.search(/git(?!\w)/i)
