@@ -334,7 +334,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'bad':
       return say(cmd.message)
     case 'help':
-      return say(manual(cmd.topic))
+      return say(manual(cmd.topic, host.features))
     case 'open':
     case 'tasks':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)

@@ -23,13 +23,15 @@ export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: st
 
 /**
  * Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role may add WebSearch and WebFetch; a
- * worker's file tools are Read, Edit and Write; plan mode is turned on with Shift+Tab.
+ * worker's file tools are Read, Edit and Write; plan mode is turned on with Shift+Tab; its question dialog is
+ * AskUserQuestion.
  */
 export const CLAUDE_WORDS: HostWords = {
   tool: (name, tool) => claudeNames(name).tool(tool),
   roleTools: ROLE_TOOLS,
   fileTools: 'Read, Edit and Write',
   planMode: "Claude Code's own planning mode, Shift+Tab",
+  askPopup: 'AskUserQuestion',
 }
 
 /** An error from a start, marked when it only means the agent type isn't there yet (see notReadyYet in host.ts). */

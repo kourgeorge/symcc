@@ -14,8 +14,8 @@ import type { Board } from '../hooks/board'
 import { publish } from '../hooks/plugin/lead'
 import { tellLead, noteForLead } from '../hooks/plugin/tell'
 import { seePlan } from '../hooks/plugin/plan'
-import { WORKER_PROMPT } from '../hooks/plugin/workers'
-import { LEAD_USAGE_UNREAD, leadGuide, statsText } from '../hooks/plugin/tools'
+import { WORKER_PROMPT, overtimeLeadText, workerQuestionText } from '../hooks/plugin/workers'
+import { LEAD_USAGE_UNREAD, leadGuide, manual, statsText } from '../hooks/plugin/tools'
 import { BOARD_OPENED, leadUpdate, runCommand, toolCheck } from '../hooks/app/symcc'
 
 const ROOT = '/repo'
@@ -174,4 +174,32 @@ test("Claude Code's tool calls for the edit guard: Edit, Write and NotebookEdit 
   expect(editTouch('Bash', null)).toEqual({ command: '' })
   expect(editTouch('Read', { file_path: '/a' })).toBe(null)
   expect(editTouch('Grep', { pattern: 'x' })).toBe(null)
+})
+
+test("no pop-up question tool: the lead guide and lead notes don't name one; Claude Code's AskUserQuestion text stays word for word", () => {
+  S.W = SYMCC_WORDS
+  const guide = leadGuide(BARE)
+  const notes = workerQuestionText('T-2', 'Which one?', ['A', 'B']) + overtimeLeadText('T-3', 'Add search', 30)
+  for (const text of [guide, notes]) expect(text).not.toContain('AskUserQuestion')
+  expect(guide).toContain('you ask as plain chat text with numbered options, plus "or answer on the board".\n')
+  expect(notes).toContain('offering the options as numbered plain chat text, plus "or answer on the board"')
+  expect(notes).toContain('offering these as numbered plain chat text, plus "or answer on the board"')
+  S.W = CLAUDE_WORDS
+  expect(leadGuide()).toContain('plus "or answer on the board". Never use AskUserQuestion for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep AskUserQuestion only for questions that are not on the board.')
+  expect(workerQuestionText('T-2', 'Which one?', ['A', 'B'])).toContain('numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+  expect(overtimeLeadText('T-3', 'Add search', 30)).toContain('numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+})
+
+test('no panel: /symcc-help says /symcc shows the board, not that it opens the panel; with a panel it opens it', async () => {
+  const bare = manual('commands', BARE)
+  expect(bare).not.toContain('open the board panel')
+  expect(bare).not.toContain('open the panel on')
+  expect(bare).toContain(`/${S.N.name}                     show the board`)
+  expect(manual('', BARE)).not.toContain('open the board panel (')
+  expect(manual('commands')).toContain(`/${S.N.name}                     open the board panel (`)
+  // through the command, with the host's features
+  const w = world()
+  const r = await runCommand(w.host, `${S.N.name}-help`, 'commands')
+  expect(r?.text).toContain('show the board')
+  expect(r?.text).not.toContain('open the board panel')
 })

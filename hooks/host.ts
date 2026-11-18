@@ -104,6 +104,8 @@ export type HostWords = {
   fileTools: string
   /** what the host's plan mode is and how it is turned on, for the lead guide (Claude Code: "Claude Code's own planning mode, Shift+Tab") */
   planMode: string
+  /** the host's tool that asks the owner in a dialog in the chat, which stays open when they answer on the board; '' when it has none (Claude Code: "AskUserQuestion") */
+  askPopup: string
 }
 
 /**
@@ -116,6 +118,7 @@ export const SYMCC_WORDS: HostWords = {
   roleTools: { extra: ['WebSearch', 'WebFetch'], web: ['WebSearch', 'WebFetch'] },
   fileTools: 'file you read or change',
   planMode: "the host's own planning mode",
+  askPopup: '',
 }
 
 /**

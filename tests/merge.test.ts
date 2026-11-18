@@ -7,9 +7,10 @@ import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/
 import { askCall, checkEdit } from '../hooks/plugin/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/plugin/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/plugin/voice'
-import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, type TurnEnd } from '../hooks/plugin/workers'
+import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/plugin/workers'
 import { claimLead } from '../hooks/plugin/lead'
 import { finishing as finishingSet } from '../hooks/plugin/state'
+import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/plugin/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/plugin/tools'
 import { archiveOld } from '../hooks/plugin/archive'
@@ -1707,7 +1708,10 @@ test("a worker's question with options saves the options, and the lead is told t
   expect(t.question).toBe('Which colour?')
   expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
   expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
-  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+  expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text, plus "or answer on the board"')
+  // Claude Code's words name its pop-up question tool (T-371: another host may have none)
+  S.W = CLAUDE_WORDS
+  expect(workerQuestionText('T-1', 'Which colour?', ['red', 'blue', 'green'])).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
 })
 
 test('a change worker whose edits outside its files were refused waits for those files, and nothing is merged even with half-done edits', async () => {

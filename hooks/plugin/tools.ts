@@ -61,7 +61,8 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   return L.join('\n')
 }
 
-export const MANUAL = (): Record<string, string> => ({
+/** The /symcc-help manual, for the host's `features` (every one on unless given): without a panel /symcc shows the board as text. */
+export const MANUAL = (features: HostFeatures = ALL_FEATURES): Record<string, string> => ({
   overview: `${S.N.name} turns this session into a small team.
   • The board (${S.N.dir}/board.json) holds the tasks. You and the lead manage it by talking.
   • The lead is this chat. It turns what you want into tasks and decides what happens next.
@@ -81,9 +82,11 @@ export const MANUAL = (): Record<string, string> => ({
   (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
   (approve, reject, diff), and mode and settings change how the board works. The "board" is
   the whole panel: tasks, scouts and settings.
-  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / s / c switch views)
+${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / s / c switch views)
   /${S.N.name}-tasks               open the panel on the tasks view
-  /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files
+  /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
+  /${S.N.name}-tasks               show the tasks
+  /${S.N.name}-scouts              show the scouts and reload the scout files`}
   /${S.N.name}-task T-3            open one task
   /${S.N.name}-approve T-5         merge a task that is ready for review
   /${S.N.name}-reject T-5 REASON   send it back to "todo" with the reason
@@ -260,8 +263,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     over 50 MB. It never pushes or adds a remote. With git not installed nothing starts at all.`,
 })
 
-export function manual(arg: string): string {
-  const MAN = MANUAL()
+export function manual(arg: string, features: HostFeatures = ALL_FEATURES): string {
+  const MAN = MANUAL(features)
   const key = arg.trim().toLowerCase()
   if (!key) return Object.values(MAN).join('\n\n')
   const hit = Object.keys(MAN).find(k => k.startsWith(key))
@@ -284,7 +287,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / order, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board". Never use AskUserQuestion for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep AskUserQuestion only for questions that are not on the board.
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board".${S.W.askPopup ? ` Never use ${S.W.askPopup} for them: it opens a dialog that waits in the chat and stays open when the owner answers on the board. Keep ${S.W.askPopup} only for questions that are not on the board.` : ''}
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - Investigation or change (kind in ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
