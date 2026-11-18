@@ -10,6 +10,7 @@ import { path } from '../store'
 import { noteForLead, brief, tellLead } from '../tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../tools'
 import type { PaneParts } from './parts'
+import { answerBox } from './answer-box'
 import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../../claude/host'
 
@@ -370,22 +371,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {answerable && (
-        <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
-          <Text>
-            <Text bold color={C('warning')}>asks: </Text>
-            <Text color={C('text')}>{askedQuestion ?? '(no question)'}</Text>
-          </Text>
-          {choices.length > 0 &&
-            buttonRows(
-              choices.map((c, i) => <Button key={`choice-${i + 1}`} label={`${i + 1} ${c}`} hotkey={i < 9 ? String(i + 1) : undefined} autoFocus={i === 0 && !typing ? true : undefined} onPress={choicePress(i)} />),
-              'answer-buttons',
-            )}
-          {typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => sendAnswer(value)()} />}
-          {typing && choices.length > 0 && <Button key="answer-cancel" label="Cancel (c)" hotkey="c" onPress={cancelAnswer} />}
-          {typing && <Text color={C('inactive')}>{boxHint('Enter sends', choices.length ? 'cancels' : 'goes back')}</Text>}
-        </Box>
-      )}
+      {answerable && answerBox(pane, { question: askedQuestion ?? '(no question)', choices, typing, onChoice: choicePress, onSubmit: value => sendAnswer(value)(), onCancel: cancelAnswer })}
 
       <Box flexDirection="column">
         {heading('What to do')}

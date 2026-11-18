@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsOutside, gitWriteIn, gitWriteText, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsOutside, gitWriteIn, gitWriteText, workerGitWriteText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
@@ -106,8 +106,9 @@ async function bashOutside($: Host, command: string, worktree: string, root: str
  * On a change task, an edit in its folder outside the task's files is refused (the reason the worker reads) and its path
  * recorded on its try on the board. Undefined: not ours to decide. An investigation
  * has no file list, so its edits are never refused (they are not kept anyway). A worker's shell command that names a path
- * in the project outside its own folder is refused too (bashOutsideFolder); the merge-time scope check stays the backstop
- * for files written through the shell inside its folder. `cwd` is the folder the worker's shell is in (a shell tool may
+ * in the project outside its own folder is refused too (bashOutsideFolder), and so is one that writes with git
+ * (workerGitWrite), as for a checker; files written through the shell inside its folder are only caught by the
+ * merge-time scope check. `cwd` is the folder the worker's shell is in (a shell tool may
  * keep it between calls); relative paths start there when it is inside the worker's folder.
  */
 export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string): Promise<string | undefined> {
@@ -123,7 +124,7 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   // a worker this copy lost in a reload is found again from the board, as for ask_owner; if not found, nothing is refused
   const w = await workerOf($, agentId).catch(() => undefined)
   if (!w) return undefined
-  if ('command' in touch) return outsideOwnFolder($, touch, w.worktree, cwd)
+  if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command)
   const real = await realEdit($, touch.path, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
   if (real === null) return brokenLinkText(editTarget(touch.path)!)
@@ -136,6 +137,22 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
+}
+
+/**
+ * Why worker `w`'s shell `command` is refused for a git write (gitWriteIn: a commit, a push, a merge, update-ref, a
+ * branch, tag, stash or reset...): its branch names, tags and stash are shared with the owner's folder (main too), so
+ * `git update-ref refs/heads/main HEAD` from its own folder would move main. A "merge it in" try (merge_main on its
+ * task, after a clash with the branch it merges into) may still run `git merge <that branch>` and `git merge --abort`
+ * (mergeStepAllow), as its prompt asks; symcc adds and commits the resolved files as for any try. Undefined: allowed.
+ */
+async function workerGitWrite($: Host, w: Worker, command: string): Promise<string | undefined> {
+  if (!gitWriteIn(command)) return undefined
+  // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed)
+  const t = find(await load($), w.task)
+  const into = t?.merge_main ? intoOf(t) : undefined
+  const git = gitWriteIn(command, into ? mergeStepAllow(into) : undefined)
+  return git ? workerGitWriteText(git, into) : undefined
 }
 
 /**

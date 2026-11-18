@@ -76,12 +76,34 @@ export function listPageVs($: $, pane: PaneParts) {
 
   const open = [...parts.needsYou, ...parts.doing, ...parts.todo]
   const groups = GROUPS.map(g => ({ ...g, tasks: open.filter(t => g.has.includes(t.status)) })).filter(g => g.tasks.length)
-  const active = groups.map(g => (
-    <Box key={`vs-group-${g.label}`} flexDirection="column">
-      {vsHeading(vs, `vs-head-${g.label}`, mark[g.has[0]!]!, tone[g.has[0]!]!, g.label, g.tasks.length)}
-      {g.tasks.map(t => taskRow(t))}
-    </Box>
-  ))
+  // the lead's open questions for the owner, first of all (not while searching); each ID opens its answer page
+  const questions = filtering ? [] : (v.questions ?? [])
+  const asks = questions.length
+    ? [
+        <Box key="vs-group-questions" flexDirection="column">
+          {vsHeading(vs, 'vs-head-questions', '?', 'warning', 'Questions for you', questions.length)}
+          {questions.map(q => (
+            <Box key={`vs-question-${q.id}`} flexDirection="column">
+              <Button key={row(q.id)} plain label={`Open ${q.id}`} autoFocus={focusFirst()} onPress={act(() => panelValues($).updateOpened(() => q.id))}>
+                <Text bold color={C('claude')}>{q.id}</Text>
+              </Button>
+              <Box key={`vs-question-${q.id}-body`} paddingLeft={2}>
+                <Text key="title" wrap="wrap" bold color={C('text')}>{q.text}</Text>
+              </Box>
+            </Box>
+          ))}
+        </Box>,
+      ]
+    : []
+  const active = [
+    ...asks,
+    ...groups.map(g => (
+      <Box key={`vs-group-${g.label}`} flexDirection="column">
+        {vsHeading(vs, `vs-head-${g.label}`, mark[g.has[0]!]!, tone[g.has[0]!]!, g.label, g.tasks.length)}
+        {g.tasks.map(t => taskRow(t))}
+      </Box>
+    )),
+  ]
 
   const backlogShown = S.backlogAll || filtering ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
   const backlogMore = parts.backlog.length - backlogShown.length

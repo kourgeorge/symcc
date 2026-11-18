@@ -41,6 +41,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const onScouts = tabNow === 'scouts'
   const onSettings = tabNow === 'settings'
   const t = open && !onScouts && !onSettings ? v.tasks.find(x => x.id === open) : undefined
+  // a question for the owner opened from the "Questions for you" list (see question-page.tsx); gone once it is answered
+  const q = open && !t && !onScouts && !onSettings ? (v.questions ?? []).find(x => x.id === open) : undefined
   const C = (c: string) => c as never
   const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
   const mode = modeOf(v)
@@ -218,6 +220,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, t, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, t, q, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>
