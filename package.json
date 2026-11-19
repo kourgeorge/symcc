@@ -1,0 +1,10 @@
+{
+  "name": "symcc",
+  "private": true,
+  "type": "module",
+  "description": "symcc as an OpenCode 2.x plugin package (T-497): lets `opencode plugin add github:kourgeorge/symcc` find opencode/server.ts and opencode/tui.ts. The Claude Code plugin is .claude-plugin/plugin.json and doesn't use this file.",
+  "exports": {
+    "./server": "./opencode/server.ts",
+    "./tui": "./opencode/tui.ts"
+  }
+}
