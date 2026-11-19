@@ -4,7 +4,7 @@ import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INV
 import { depDone } from './archive'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun, keepAgentIds, withAgentId } from './runs'
-import { clean, num } from './text'
+import { clean, num, shownPath } from './text'
 
 /** The most a task's details may hold (addTask and patchTask cut the rest). */
 const DETAILS_MAX = 8000
@@ -206,10 +206,7 @@ export function refuseFiles(b: Board, id: string, now: string): Board {
 
 /** Why a try failed when files outside the task's list changed. `undone`: they were undone on the task's branch (a worker's try), so the next try starts without them. */
 export function outOfScopeText(bad: string[], allowed: string[], undone = false): string {
-  // A name may hold any character but NUL: control characters (newlines, terminal escapes) are shown as "?".
-  // eslint-disable-next-line no-control-regex
-  const shown = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
-  const head = `changed files outside the task (${bad.slice(0, 5).map(shown).join(', ')}); allowed: ${allowed.join(', ') || '-'}`
+  const head = `changed files outside the task (${bad.slice(0, 5).map(shownPath).join(', ')}); allowed: ${allowed.join(', ') || '-'}`
   if (undone) return `${head}. Those changes were undone on the task's branch, so the next try starts without them; if the task needs those files, add them to files with change (or split the task) before it tries again`
   // approve: change sends a task in review back to work (a fresh worker runs); the edits stay committed on the task's branch
   return `${head}. To fix: add them to files with change, or split the task. Adding them with change sends the task back to work with these edits kept, and it comes back to review, where you approve it again`

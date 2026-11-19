@@ -222,6 +222,23 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   await ui.unmount()
 })
 
+test('the band shows a waiting task that only reruns its tests as running ("retest"), not as waiting for you; one with a question is unchanged (T-534)', async ($, on) => {
+  const tasks = [
+    task('T-70', 'waiting', 'Rerun one', { test_rerun: 1, note: 'tests ran out of time' }),
+    task('T-71', 'waiting', 'Wait one', { question: 'Q?' }),
+  ]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const lead = await ui.find({ type: 'Text', text: /^T-70 .*retest *$/u })
+  expect(lead?.props.color).toBe('green')
+  expect(await ui.find({ type: 'Text', text: /^ — rerunning its tests$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /tests ran out of time/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^T-71 \? waiting *$/u }))?.props.color).toBe('yellow')
+  expect(await ui.find({ type: 'Text', text: /Wait one — Q\?/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('with an empty board the band shows nothing of its own', async ($, on) => {
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
