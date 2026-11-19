@@ -118,9 +118,9 @@ export type HistoryEvent = {
   label: string
   /** the line without its label */
   text: string
-  /** what was said before the last " → " of a try's result line (else the whole text) */
+  /** what was said before the " → " of a try's result line (else the whole text) */
   said: string
-  /** a try's result, after its last " → " ('' when there is none) */
+  /** a try's result, after its " → " ('' when there is none) */
   result: string
 }
 
@@ -138,10 +138,21 @@ const PLAIN_KINDS: [HistoryKind, RegExp][] = [
 /** How a try's own line (no result) starts when it went badly. */
 const TRY_BAD = /^(stopped|out of time|rejected|the worker ended without a result|ran \d+ min, over|time is up|approved, but)|; nothing was checked or merged$/
 
+/** How a try's line starts when it is a step that is not a result, whatever words follow (a question, an answer, a rerun). */
+const TRY_STEP = /^(worker asked|answered\b|the owner asked)/
+
+/**
+ * How symcc starts a try's result, the words it puts right after " → " (hooks/app/review.ts, workers.ts): good results,
+ * then bad ones. Any other result is a step (checks passed and waiting, a new checker starts, the owner's files in the way …).
+ */
+const RESULT_GOOD = /^(merged into|already merged into|done\b)/
+const RESULT_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
+const RESULT_KNOWN = new RegExp(`${RESULT_GOOD.source}|${RESULT_BAD.source}|^(checks passed|the checker (was stopped|couldn't start|gave no verdict)|you have )`)
+
 /**
  * A history line as an event: its kind, how it went (and so its mark), its try and its words. The kind and the tone come
  * from what symcc wrote the line for (a try's result, a checker verdict, created, a note, waits changed …), read from
- * how the line starts and, for a try's result, from the words symcc put after its last " → ". Words inside quoted text,
+ * how the line starts and, for a try's result, from the words symcc put after its " → ". Words inside quoted text,
  * a reason or a worker's summary never make a line bad or good.
  */
 export function historyEvent(line: string): HistoryEvent {
@@ -157,16 +168,18 @@ export function historyEvent(line: string): HistoryEvent {
   if (/^checker: OK\b/.test(body)) return ev('checker', 'good', body)
   if (/^checker found problems\b/.test(body)) return ev('checker', 'bad', body)
   if (/^checker\b/.test(body)) return ev('checker', 'step', body)
-  const arrow = body.lastIndexOf(' → ')
-  if (arrow >= 0) {
+  if (TRY_STEP.test(body)) return ev('step', 'step', body)
+  if (TRY_BAD.test(body)) return ev('stopped', 'bad', body)
+  // The result starts after the first " → " followed by words symcc writes there, so a "→" in the worker's summary
+  // or in the test output inside the result never moves it.
+  const arrows = [...body.matchAll(/ → /g)].map(a => a.index!)
+  const arrow = arrows.find(i => RESULT_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
+  if (arrow !== undefined) {
     const said = body.slice(0, arrow)
     const result = body.slice(arrow + 3)
-    const tone: HistoryTone = /^(merged|done)\b/i.test(result)
-      ? 'good'
-      : /not merged|fail|stopped|refused|error|outside|without a result|given up|nothing was checked or merged|ended its turn before/i.test(result) ? 'bad' : 'step'
+    const tone: HistoryTone = RESULT_GOOD.test(result) ? 'good' : RESULT_BAD.test(result) ? 'bad' : 'step'
     return ev('result', tone, said, result)
   }
-  if (TRY_BAD.test(body)) return ev('stopped', 'bad', body)
   if (/, so it is done$/.test(body)) return ev('result', 'good', body)
   return ev('step', 'step', body)
 }

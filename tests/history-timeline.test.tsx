@@ -34,6 +34,22 @@ test('historyEvent: the kind and the mark come from what the line is, not from w
   expect(Object.values(HISTORY_MARK)).toEqual(['✓', '✗', '●', '○'])
 })
 
+test('historyEvent: a try\'s result is read from the words symcc writes after " → ", not from a "→" in free text', () => {
+  const mark = (l: string) => historyEvent(l).mark
+  expect(mark('try 2: x → already merged into main (abc1234) by an earlier try; nothing new to merge')).toBe('✓')
+  expect(mark('try 2: x → the checker found problems: the test is missing')).toBe('✗')
+  expect(mark('try 2: x → conflicts with the latest main, still after 3 tries to merge it in')).toBe('✗')
+  expect(mark('try 2: x → tests failed: `bun test` (exit 1). expected a → b')).toBe('✗')
+  expect(historyEvent('try 2: renamed a → b → tests failed: `bun test` (exit 1). expected a → merged')).toMatchObject({ said: 'renamed a → b', tone: 'bad' })
+  expect(mark('try 2: renamed a → b → merged into main (abc1234)')).toBe('✓')
+  expect(mark('try 2: x → checks passed; the checker looks at it before it merges')).toBe('●')
+  expect(mark('try 2: out of time; handed back: renamed a → b (its work so far is kept in its folder and branch)')).toBe('✗')
+  expect(mark('try 2: stopped: Owner: rename a → b first')).toBe('✗')
+  expect(mark('try 2: rejected by the owner: use a → b')).toBe('✗')
+  expect(mark('try 2: worker asked: should x → fail?')).toBe('●')
+  expect(mark('try 2: answered: the build → error path is fine')).toBe('●')
+})
+
 const TASK = {
   id: 'T-504', title: 'The scouts keep stopping', details: '', files: ['tests/'], status: 'todo', note: '', question: null, order: 504, after: ['T-500'],
   attempts: 2, history: HISTORY, branch: null, created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000), role: 'worker',
