@@ -106,6 +106,15 @@ export async function recorded(host: Host, id: string, kind: HostAgentKind): Pro
   return on?.kind === 'worker' || on?.kind === 'checker'
 }
 
+/** A session in folder `at` can be the lead of the project whose main folder is `main`: `at` is that folder or inside
+ * it, and not a worker's folder. */
+export async function isLeadFolder(host: Host, at: string | undefined, main: string, realMain: string): Promise<boolean> {
+  if (!at) return false
+  const real = await realPathOf(at).catch(() => at)
+  if (real !== realMain && !real.startsWith(realMain.endsWith('/') ? realMain : realMain + '/')) return false
+  return !(await isWorkerFolder(host, at, main).catch(() => true))
+}
+
 /** The server plugin, as OpenCode wants its default export ({ id, setup }). */
 export function symccServer(o: ServerOptions = {}): OcServerPlugin {
   const engine = o.engine ?? SYMCC_ENGINE
@@ -139,6 +148,10 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       const say = (text: string) => host.ui.toast(text)
       useName(host)
       const regs: OcRegistration[] = []
+      // where this copy's project is (set below): a session elsewhere (another project on the same server, or one
+      // opened in a worker's folder) is never this project's lead
+      let placed!: (v: { main: string; realMain: string; inMain: boolean }) => void
+      const place = new Promise<{ main: string; realMain: string; inMain: boolean }>(r => (placed = r))
       regs.push(
         await ctx.session.hook('prompt', async e => {
           const id = e.sessionID
@@ -146,6 +159,9 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
           // a child session (one of symcc's agents from an earlier copy, or OpenCode's own subagent) is never the lead
           const info = await ctx.session.get({ sessionID: id }).catch(() => undefined)
           if (!info || info.parentID || info.metadata?.symcc) return
+          const at = await place
+          if (!at.inMain || !(await isLeadFolder(host, info.location?.directory, at.main, at.realMain))) return
+          if (id === lead()) return
           ownLead = id
           if (leadKey) leads().set(leadKey, id)
           await leadApi?.known()
@@ -159,6 +175,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       // the main folder or any folder inside it (not a worker's folder) is a main copy, as Claude Code's sessionStart
       // treats it; the owner's own worktree outside the project has itself as its main root
       const inMain = !(await isWorkerFolder(host, dir, main || dir).catch(() => false))
+      placed({ main: main || dir, realMain, inMain })
       const token = {}
       let running = false
       let slot: Slot | undefined

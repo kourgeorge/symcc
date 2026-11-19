@@ -591,7 +591,7 @@ test('host.lead on OpenCode: a board update is a queued session.prompt into the 
   expect(await lead.usage('/p', { kind: 'all' }, 5)).toEqual({ lead: [], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
 })
 
-test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agents); a finished task\'s update goes queued, a "needs you" one steers, the owner\'s own actions wait as "Meanwhile" lines', async () => {
+test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agents, in this project\'s main folder); a finished task\'s update goes queued, a "needs you" one steers, the owner\'s own actions wait as "Meanwhile" lines', async () => {
   reset()
   const p = await project()
   try {
@@ -608,6 +608,13 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
     await c.hooks.prompt!({ sessionID: 'ses_agent' })
     expect(leads().size).toBe(0)
     await c.hooks.prompt!({ sessionID: owner })
+    expect([...leads().values()]).toEqual([owner])
+    // every copy sees every session: a top-level session in another project, or one opened in a worker's folder,
+    // never takes over this project's lead
+    const elsewhere = f.lead('/some/other/project')
+    const inWorker = f.lead(`${p.main}/.symcc/worktrees/T-1`)
+    await c.hooks.prompt!({ sessionID: elsewhere })
+    await c.hooks.prompt!({ sessionID: inWorker })
     expect([...leads().values()]).toEqual([owner])
     S.enabledNow = true
     // the owner's own action wakes nobody; it rides along in the next real update
