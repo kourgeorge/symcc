@@ -4,7 +4,8 @@ import { expect } from 'claude-code/testing'
 import { test, resetPlugin, withTimeout, RESET_TEST_TIMEOUT_MS } from './reset'
 import { S, startS, timers } from '../hooks/app/state'
 import { oneAtATime } from '../hooks/app/store'
-import { mergeTurn } from '../hooks/app/review'
+import { inMergeLine } from '../hooks/app/merge-line'
+import { fakeHost } from './fake-host'
 import { logo, playLogo, resetLogo } from '../hooks/app/logo'
 
 const never = () => new Promise<never>(() => undefined)
@@ -49,10 +50,11 @@ test('resetPlugin goes on when a left-over timer fails to cancel', () => {
   expect(S.me).toBe('')
 })
 
-test('a merge into a branch left hanging before resetPlugin does not hold up the next one', async () => {
-  void mergeTurn('main', never)
+test('a merge turn left hanging before resetPlugin does not hold up the next one', async () => {
+  const { host } = fakeHost()
+  void inMergeLine(host, 'T-1', never)
   resetPlugin()
-  expect(await mergeTurn('main', async () => 'ran')).toBe('ran')
+  expect(await inMergeLine(host, 'T-2', async () => 'ran')).toBe('ran')
 })
 
 test('a job left hanging in a store queue before resetPlugin does not hold up the next one', async () => {

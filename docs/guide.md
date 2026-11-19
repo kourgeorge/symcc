@@ -261,12 +261,19 @@ prep · title"), all with the same short words:
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
    a new try as usual.
-   **One task's tests at a time.** Tests run for one task at a time across all tasks,
-   sessions and target branches, oldest first. A task that has to wait shows the note
-   "waiting for another task's tests (T-x)", where T-x is the task running its tests now.
-   So when several tasks finish together, merges can take longer. The turn is kept with
-   the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
-   you never need to delete it by hand.
+   **One merge line.** Every way into a merge (a worker's hand-back, your approve, a test
+   rerun, finished work whose files are clear again, a checker's pass) joins one line for
+   the whole project, shared by all sessions and target branches, oldest first. Only the
+   task at the front has its turn, and does it in one go: it catches up with the branch it
+   merges into, runs the tests (skipped when this exact code already passed), and merges.
+   So the branch can't move under it, and the next task catches up with that merge before
+   its own tests. A task waiting for its turn shows the note "in line (n)", n being its
+   place in line (the task merging now is 1). Merges go one at a time, so when several
+   tasks finish together the last one waits longer: the fifth of five tasks with 10-minute
+   tests waits about 40 minutes before its own turn. The line is kept in the file
+   `.symcc/merge-line.json`; it survives a reload (a task that was in line just joins again),
+   and a stale entry (left by a session that died, or older than twice `test_minutes`) is
+   cleared by itself, so you never need to edit or delete it by hand.
    **Tests that run out of time.** A test command stopped by its time limit (`test_minutes`,
    10 minutes by default) is not a
    failed test: nothing failed, so no new worker try starts and no automatic retry is used.
@@ -285,10 +292,9 @@ prep · title"), all with the same short words:
    project with a slow test suite can raise it, e.g. "set test_minutes to 20"). The whole
    checking and merging gets `test_minutes` for each test command (at least one), plus 5
    minutes for git and the board: with the default, 15 minutes with one test command, 35 with
-   three. The test lock is taken as stale after twice `test_minutes`. Only the task's own
-   work counts: the clock stops while it waits in line behind other merges into the same
-   branch (each of those has its own limit, so the line keeps moving) and while it waits for
-   another task's tests (see below), and starts again
+   three. A merge line entry is taken as stale after twice `test_minutes`. Only the task's own
+   work counts: the clock stops while it waits in the merge line behind other tasks
+   (each of those has its own limit, so the line keeps moving), and starts again
    from zero when its turn begins, and again each time it is brought up to date and
    tested again because the branch moved meanwhile. A step still running past the limit
    is taken as stuck and given up: a finished worker's task goes back to `todo` for a

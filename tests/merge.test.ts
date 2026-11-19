@@ -1,7 +1,8 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS, testsRunningNow } from '../hooks/app/review'
-import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, testLockStaleMs, testMinutesOf, testTimeoutMs, taskTestMinutes, putTask, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
+import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, ownerEdits } from '../hooks/app/review'
+import { inMergeLine, mergeLineBusy, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
+import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, taskTestMinutes, putTask, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { PREP_NOTE, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -381,9 +382,9 @@ test('T-527: a second merge of the same tree with the same test commands skips t
   again()
   const r2 = await checkAndMerge(w.$, { ...t, attempts: 2 }, WT, b, 'finish', [])
   expect(r2).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests: this exact code already passed (tree ${TREE1.slice(0, 7)}); not run again` })
-  // no test command started, and the test lock was never taken
+  // no test command started, and the task left the merge line
   expect(ranTests(w)).toEqual([])
-  expect(w.calls.some(c => c.includes('tests.lock'))).toBe(false)
+  expect(w.files.has(LINE)).toBe(false)
   expect(w.git.main).toBe(H1)
 })
 
@@ -682,21 +683,26 @@ test('checkAndMerge when main is locked (a stale lock file) gives git\'s error o
   expect(w.git.main).toBe(M1)
 })
 
-test('mergeTurn runs merges into the same branch one after another, even when one fails; other branches do not wait', async () => {
+test('the merge line runs turns one after another, oldest first, even when one fails; a merge into another branch waits too (one line for the whole project)', async () => {
+  const w = world()
   const log: string[] = []
   let open: () => void = () => {}
   const gate = new Promise<void>(r => (open = r))
-  const a = mergeTurn('main', async () => (log.push('a start'), await gate, log.push('a end'), 'a'))
-  const b = mergeTurn('main', async () => (log.push('b'), Promise.reject(new Error('b broke'))))
-  const c = mergeTurn('main', async () => (log.push('c'), 'c'))
-  const d = mergeTurn('dev', async () => (log.push('d'), 'd'))
-  expect(await d).toBe('d')
-  expect(log).toEqual(['a start', 'd'])
+  const a = inMergeLine(w.$, 'T-1', async () => (log.push('a start'), await gate, log.push('a end'), 'a'))
+  const b = inMergeLine(w.$, 'T-2', async () => (log.push('b'), Promise.reject(new Error('b broke'))))
+  const c = inMergeLine(w.$, 'T-3', async () => (log.push('c'), 'c'))
+  // T-4 merges into another branch: it is in the same line
+  const d = inMergeLine(w.$, 'T-4', async () => (log.push('d'), 'd'))
+  await turns(w, () => lineTasks(w).length === 4)
+  expect(lineTasks(w)).toEqual(['T-1', 'T-2', 'T-3', 'T-4'])
+  expect(log).toEqual(['a start'])
   open()
   expect(await a).toBe('a')
   await expect(b).rejects.toThrow('b broke')
   expect(await c).toBe('c')
-  expect(log).toEqual(['a start', 'd', 'a end', 'b', 'c'])
+  expect(await d).toBe('d')
+  expect(log).toEqual(['a start', 'a end', 'b', 'c', 'd'])
+  expect(w.files.has(LINE)).toBe(false)
 })
 
 test('checkAndMerge on a checked-out main merges around the owner\'s uncommitted changes in other files, and leaves them alone', async () => {
@@ -3804,13 +3810,14 @@ test('a step given up after the limit whose work already reached main is done, n
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })
 
-test('a stuck merge step given up lets the next merge into the same branch go on', async () => {
+test('a stuck merge step given up lets the next one in the merge line go on', async () => {
+  const w = world()
   let release = () => {}
   const gone = new Promise<void>(r => (release = r))
   const order: string[] = []
-  void mergeTurn('main', () => new Promise<void>(() => {}), gone)
-  const next = mergeTurn('main', async () => void order.push('next'))
-  for (let i = 0; i < 50; i++) await Promise.resolve()
+  void inMergeLine(w.$, 'T-8', () => new Promise<void>(() => {}), { release: gone })
+  const next = inMergeLine(w.$, 'T-9', async () => void order.push('next'))
+  await turns(w, () => lineTasks(w).length === 2)
   expect(order).toEqual([])
   release()
   await next
@@ -3900,7 +3907,7 @@ test('a finish step given up while it waits for its merge turn runs no git comma
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   // an earlier merge into main holds the turn until let go
   let letGo = () => {}
-  const earlier = mergeTurn('main', () => new Promise<void>(r => (letGo = r)))
+  const earlier = inMergeLine(w.$, 'T-9', () => new Promise<void>(r => (letGo = r)))
   let ended = false
   void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   await turns(w, () => w.calls.some(c => c.includes('git diff --name-only')))
@@ -4411,11 +4418,11 @@ function slowTests(w: ReturnType<typeof world>, pass: (ms: number) => void, ms: 
 /** Promise turns until the step waits in line for its merge turn: its limit was started, then stopped. */
 const inLine = (w: ReturnType<typeof world>, c: ReturnType<typeof limitClock>) => turns(w, () => c.timers.length > 0 && !c.live().length)
 
-/** `n` earlier merges into main (other tasks finishing at the same time), one after another, each holding its turn until let go. */
-function earlierMerges(n: number) {
+/** `n` earlier merges (other tasks finishing at the same time), in the merge line one after another, each holding its turn until let go. */
+function earlierMerges(w: ReturnType<typeof world>, n: number) {
   const free: (() => void)[] = []
   const ran: number[] = []
-  const all = Array.from({ length: n }, (_, i) => mergeTurn('main', () => new Promise<void>(r => (ran.push(i), (free[i] = r)))))
+  const all = Array.from({ length: n }, (_, i) => inMergeLine(w.$, `T-${90 + i}`, () => new Promise<void>(r => (ran.push(i), (free[i] = r)))))
   return { free, ran, all }
 }
 
@@ -4430,7 +4437,7 @@ for (const [ahead, mins] of [[1, 8], [2, 6]] as const) {
     slowTests(w, pass, mins * MIN)
     await aboutToFinish(w)
     // the other tasks' merges are first in line; each takes as long as its tests
-    const { free, ran, all } = earlierMerges(ahead)
+    const { free, ran, all } = earlierMerges(w, ahead)
     let ended = false
     void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
     await inLine(w, c)
@@ -4496,7 +4503,7 @@ test('a step really stuck in its own merge turn is still given up after the limi
   })
   await aboutToFinish(w)
   // one merge in front of it, 12 min long
-  const { free, ran, all } = earlierMerges(1)
+  const { free, ran, all } = earlierMerges(w, 1)
   let ended = false
   void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   // waiting in line: no limit running
@@ -4504,7 +4511,7 @@ test('a step really stuck in its own merge turn is still given up after the limi
   expect(ran.length).toBe(1)
   // the next merge into main is in line after it
   let next = false
-  const after = mergeTurn('main', async () => void (next = true))
+  const after = inMergeLine(w.$, 'T-89', async () => void (next = true))
   pass(12 * MIN)
   free[0]!()
   await all[0]
@@ -4539,7 +4546,7 @@ test('an approve waiting in line behind two slow merges, then main moving under 
   const c = limitClock(w)
   const { pass } = c
   slowTests(w, pass, 10 * MIN)
-  const { free, ran, all } = earlierMerges(2)
+  const { free, ran, all } = earlierMerges(w, 2)
   let out: string | undefined
   void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
   await inLine(w, c)
@@ -5109,9 +5116,9 @@ test('the worker prompt of an investigation asks for the answer in full and says
   expect(q).not.toContain('investigation')
 })
 
-// ---------------- one task's tests at a time, project-wide (T-416) ----------------
+// ---------------- one merge line for the whole project (T-546; it grew out of T-416's test lock) ----------------
 
-const TLOCK = `${ROOT}/.symcc/tests.lock`
+const LINE = `${ROOT}/.symcc/merge-line.json`
 const CHECKING_NOTE = 'checking and merging'
 
 /** A board with T-1 and T-2 both "doing", their work being checked right now (a fresh check mark), each noted "checking and merging". */
@@ -5127,132 +5134,221 @@ async function twoChecking(w: ReturnType<typeof world>, t2: Partial<BoardTask> =
   return [find(b, 'T-1')!, find(b, 'T-2')!]
 }
 const noteOf = (w: ReturnType<typeof world>, id: string) => find(parseBoard(w.files.get(BOARD)!), id)!.note
-const lockTask = (w: ReturnType<typeof world>) => parseTestLock(w.files.get(TLOCK) ?? null)?.task
+/** The tasks in the merge line file, front first. */
+const lineTasks = (w: ReturnType<typeof world>) => parseMergeLine(w.files.get(LINE) ?? null).map(e => e.task)
+/** A merge line entry of task `task` from session `session` (by default another one), dated `at`. */
+const lineEntry = (task: string, session = 'other-session', at = Date.now()): LineEntry => ({ task, key: `${session}:${task}`, session, joined: new Date(at).toISOString(), at })
 
-test('two tasks reaching their tests at once run them one after the other; the second waits with a note, its time limit stopped', async () => {
+test('two tasks in the merge line take turns; the second waits noted "in line (2)", its time limit stopped, with no polling between tasks of one copy', async () => {
   S.me = 'me'
   const w = world()
   const [t1, t2] = await twoChecking(w)
   const log: string[] = []
   let open = () => {}
   const gate = new Promise<void>(r => (open = r))
-  const seen: (string | undefined)[] = []
-  w.onSleep(() => {
-    seen.push(noteOf(w, 'T-2'))
-    if (seen.length === 3) open()
-  })
   const turn1: boolean[] = []
   const turn2: boolean[] = []
-  const one = withTestLock(w.$, t1, () => undefined, go => turn1.push(go), async () => (log.push(`T-1 start (lock ${lockTask(w)})`), await gate, log.push('T-1 end'), 'one'))
-  const two = withTestLock(w.$, t2, () => undefined, go => turn2.push(go), async () => (log.push(`T-2 start (lock ${lockTask(w)})`), 'two'))
+  const one = inMergeLine(w.$, 'T-1', async () => (log.push(`T-1 start (line ${lineTasks(w).join(' ')})`), await gate, log.push('T-1 end'), 'one'), { t: t1, turn: go => turn1.push(go) })
+  const two = inMergeLine(w.$, 'T-2', async () => (log.push(`T-2 start (line ${lineTasks(w).join(' ')})`), 'two'), { t: t2, turn: go => turn2.push(go) })
+  await turns(w, () => noteOf(w, 'T-2') === inLineNote(2))
+  expect(log).toEqual(['T-1 start (line T-1)'])
+  expect(lineTasks(w)).toEqual(['T-1', 'T-2'])
+  expect(turn2).toEqual([false])
+  expect(inLineNote(3)).toBe('in line (3)')
+  open()
   expect(await one).toBe('one')
   expect(await two).toBe('two')
-  expect(log).toEqual(['T-1 start (lock T-1)', 'T-1 end', 'T-2 start (lock T-2)'])
-  // every look while it waits names T-1 (never itself, even when T-1 lets go between its try and its look)
-  expect(seen.length).toBeGreaterThanOrEqual(3)
-  expect(seen.every(n => n === waitingTestsNote('T-1'))).toBe(true)
-  expect(waitingTestsNote('T-5')).toBe("waiting for another task's tests (T-5)")
-  expect(w.sleeps.every(ms => ms === TEST_LOCK_POLL_MS)).toBe(true)
-  // the waiting one's time limit stops while it waits and starts again once its tests begin; the first never waited
+  expect(log).toEqual(['T-1 start (line T-1)', 'T-1 end', 'T-2 start (line T-2)'])
+  expect(w.sleeps).toEqual([])
+  // the waiting one's time limit stops while it waits and starts again once its turn begins; the first never waited
   expect(turn1).toEqual([])
   expect(turn2).toEqual([false, true])
   expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
-  expect(w.files.has(TLOCK)).toBe(false)
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('a test lock older than 20 minutes is taken over at once', async () => {
+test('two tasks finishing at once and an approve take turns in order through one line; the second catches up with the first one\'s merge before its tests', async () => {
+  S.me = 'me'
+  const w = world()
+  await aboutToFinish(w)
+  const log: string[] = []
+  w.onRun(async cmd => {
+    if (cmd.startsWith('/bin/sh -c ')) log.push('T-1 tests')
+    if (cmd.startsWith('wt: ') && cmd.includes(' merge --no-edit ')) log.push(`T-1 catches up with ${cmd.trim().split(' ').at(-1)!.slice(0, 2)}`)
+    if (cmd.includes('git update-ref') && cmd.includes('refs/heads/main') && !cmd.includes(' -d ')) log.push('T-1 merges')
+  })
+  // T-2 finished first: its turn moves main on
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const first = inMergeLine(w.$, 'T-2', async () => {
+    await gate
+    w.git.main = M2
+    w.git.upToDate = false
+    log.push('T-2 merges')
+  })
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
+  await turns(w, () => noteOf(w, 'T-1') === inLineNote(2))
+  // the owner approves T-3 meanwhile: it joins the back of the same line
+  const approve = inMergeLine(w.$, 'T-3', async () => void log.push('T-3 merges'))
+  await turns(w, () => lineTasks(w).length === 3)
+  expect(lineTasks(w)).toEqual(['T-2', 'T-1', 'T-3'])
+  expect(log).toEqual([])
+  open()
+  await first
+  await turns(w, () => ended)
+  await approve
+  expect(log).toEqual(['T-2 merges', 'T-1 catches up with a2', 'T-1 tests', 'T-1 merges', 'T-3 merges'])
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H2)
+  expect(w.git.main).toBe(H2)
+  expect(w.files.has(LINE)).toBe(false)
+})
+
+test("an approve waits in the merge line behind another task's turn, then catches up with what that one merged and tests it", async () => {
+  S.me = 'me'
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, b)
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const first = inMergeLine(w.$, 'T-2', async () => {
+    await gate
+    w.git.main = M2
+    w.git.upToDate = false
+  })
+  const r = checkAndMerge(w.$, t, WT, b, 'approve')
+  await turns(w, () => noteOf(w, 'T-1') === inLineNote(2))
+  expect(ranTests(w)).toEqual([])
+  expect(w.calls.some(c => c.includes('git update-ref'))).toBe(false)
+  open()
+  await first
+  expect(await r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); approved by the owner; tests passed` })
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+})
+
+test('a merge line entry older than 20 minutes is stale: it is cleared and the task goes at once', async () => {
   S.me = 'me'
   const w = world()
   const [t1] = await twoChecking(w)
-  w.put(TLOCK, testLockText('T-2', 'other-session', 0))
-  let held: string | undefined
-  expect(await withTestLock(w.$, t1, () => undefined, undefined, async () => ((held = lockTask(w)), 'ran'))).toBe('ran')
-  expect(held).toBe('T-1')
+  w.put(LINE, mergeLineText([lineEntry('T-2', 'other-session', 0)]))
+  let held: string[] = []
+  expect(await inMergeLine(w.$, 'T-1', async () => ((held = lineTasks(w)), 'ran'), { t: t1 })).toBe('ran')
+  expect(held).toEqual(['T-1'])
   expect(w.sleeps).toEqual([])
-  expect(w.files.has(TLOCK)).toBe(false)
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('a fresh test lock whose task is no longer being checked is taken over at once', async () => {
+test('a fresh merge line entry whose task is no longer being checked is stale: cleared at once', async () => {
   S.me = 'me'
   const w = world()
   const [t1] = await twoChecking(w, { status: 'todo', checking: undefined })
-  w.put(TLOCK, testLockText('T-2', 'other-session', Date.now()))
-  expect(await withTestLock(w.$, t1, () => undefined, undefined, async () => lockTask(w))).toBe('T-1')
+  w.put(LINE, mergeLineText([lineEntry('T-2')]))
+  expect(await inMergeLine(w.$, 'T-1', async () => lineTasks(w), { t: t1 })).toEqual(['T-1'])
   expect(w.sleeps).toEqual([])
-  expect(w.files.has(TLOCK)).toBe(false)
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('a fresh test lock left by an earlier go of the same task (say before a reload) is taken over at once', async () => {
+test('the merge line file survives a reload; a task that was in line joins again (its old entry goes), behind the ones still in front', async () => {
   S.me = 'me'
   const w = world()
   const [t1] = await twoChecking(w)
-  w.put(TLOCK, testLockText('T-1', 'me', Date.now()))
-  expect(await withTestLock(w.$, t1, () => undefined, undefined, async () => 'ran')).toBe('ran')
-  expect(w.sleeps).toEqual([])
-  expect(w.files.has(TLOCK)).toBe(false)
+  let going = false
+  void inMergeLine(w.$, 'T-1', () => ((going = true), new Promise<void>(() => {})), { t: t1 })
+  await turns(w, () => going)
+  const old = parseMergeLine(w.files.get(LINE)!)[0]!
+  // a reload: this copy forgets its tasks in line; the file stays
+  resetMergeLine()
+  expect(lineTasks(w)).toEqual(['T-1'])
+  // T-2, in another session, joined meanwhile and is in front
+  w.put(LINE, mergeLineText([lineEntry('T-2'), old]))
+  const seen: string[][] = []
+  const notes: (string | undefined)[] = []
+  w.onSleep(() => {
+    if (w.sleeps.at(-1) !== MERGE_LINE_POLL_MS) return
+    seen.push(lineTasks(w))
+    notes.push(noteOf(w, 'T-1'))
+    // T-2's turn ends
+    if (seen.length === 3) w.put(LINE, mergeLineText(parseMergeLine(w.files.get(LINE)!).filter(e => e.task !== 'T-2')))
+  })
+  const ran = await inMergeLine(w.$, 'T-1', async () => parseMergeLine(w.files.get(LINE)!), { t: t1 })
+  expect(seen).toEqual([['T-2', 'T-1'], ['T-2', 'T-1'], ['T-2', 'T-1']])
+  expect(notes.every(n => n === inLineNote(2))).toBe(true)
+  expect(ran.map(e => e.task)).toEqual(['T-1'])
+  expect(ran[0]!.key).not.toBe(old.key)
+  expect(noteOf(w, 'T-1')).toBe(CHECKING_NOTE)
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('the test lock is held while the merge step tests, and let go after a failing test', async () => {
+test("the place in line comes from the file's order alone: when it differs from this copy's join order, all tasks still run, in the file's order", async () => {
+  S.me = 'me'
+  const w = world()
+  // T-2 is another session's task, being checked now (so its entry is not stale)
+  await twoChecking(w)
+  const log: string[] = []
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const five = inMergeLine(w.$, 'T-5', async () => (await gate, log.push('T-5')))
+  await turns(w, () => lineTasks(w).length === 1)
+  const one = inMergeLine(w.$, 'T-1', async () => void log.push('T-1'))
+  const four = inMergeLine(w.$, 'T-4', async () => void log.push('T-4'))
+  await turns(w, () => lineTasks(w).length === 3)
+  expect(lineTasks(w)).toEqual(['T-5', 'T-1', 'T-4'])
+  // the file's order no longer matches this copy's join order (say another session took an entry out and it joined again)
+  const mine = new Map(parseMergeLine(w.files.get(LINE)!).map(e => [e.task, e]))
+  w.put(LINE, mergeLineText([mine.get('T-5')!, mine.get('T-4')!, lineEntry('T-2'), mine.get('T-1')!]))
+  let polls = 0
+  let fourDone = false
+  void four.then(() => (fourDone = true))
+  w.onSleep(() => {
+    if (w.sleeps.at(-1) !== MERGE_LINE_POLL_MS || !fourDone) return
+    // T-2's turn (in the other session) ends after a few looks, once T-4 is through (this write skips the board lock)
+    if (++polls === 3) w.put(LINE, mergeLineText(parseMergeLine(w.files.get(LINE)!).filter(e => e.task !== 'T-2')))
+  })
+  open()
+  await five
+  await four
+  await one
+  expect(log).toEqual(['T-5', 'T-4', 'T-1'])
+  expect(polls).toBe(3)
+  expect(w.files.has(LINE)).toBe(false)
+})
+
+test('the merge line is held for the whole turn: the task is at its front while it tests, and leaves after a failing test', async () => {
   S.me = 'me'
   const w = world({}, { 'npm test': { exitCode: 2, stdout: '1 test failed', stderr: '' } })
   const [b, t] = boardWith('auto', ['npm test'])
   await saveBoard(w.$, b)
-  const during: (string | undefined)[] = []
-  w.onRun(async cmd => void (cmd.startsWith('/bin/sh -c ') && during.push(lockTask(w))))
+  const during: string[][] = []
+  w.onRun(async cmd => void (cmd.startsWith('/bin/sh -c ') && during.push(lineTasks(w))))
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r.ok).toBe(false)
   expect(r.detail).toContain('tests failed')
-  expect(during).toEqual(['T-1'])
-  expect(w.files.has(TLOCK)).toBe(false)
+  expect(during).toEqual([['T-1']])
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('three tasks waiting for the test lock get it oldest first, even when the newest one looks first after it is let go', async () => {
-  S.me = 'me'
-  const w = world()
-  const [b0] = boardWith('auto', ['npm test'])
-  let b = b0
-  for (const title of ['Second', 'Third', 'Holder']) [b] = addTask(b, { origin: { why: 'a test' }, title, files: ['lib/'] }, ISO)
-  for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) {
-    b = patchTask(b, id, { status: 'doing', attempts: 1 }, ISO)
-    b = patchTask(b, id, { note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() } }, ISO)
-  }
-  await saveBoard(w.$, b)
-  // T-4, in another session, holds the lock while T-1, T-2 and T-3 (in that order) come to their tests
-  w.put(TLOCK, testLockText('T-4', 'other-session', Date.now()))
-  const log: string[] = []
-  let looks3 = 0
-  // T-3 (the newest) lets T-4's lock go just before its own look, so it is the first to look once the lock is free
-  const stopped3 = () => {
-    if (++looks3 === 2) w.files.delete(TLOCK)
-    return undefined
-  }
-  const go = (t: SymccTask, stopped: () => undefined) => withTestLock(w.$, t, stopped, undefined, async () => (log.push(`${t.id} (lock ${lockTask(w)})`), t.id))
-  const runs = [go(find(b, 'T-1')!, () => undefined), go(find(b, 'T-2')!, () => undefined), go(find(b, 'T-3')!, stopped3)]
-  expect(await Promise.all(runs)).toEqual(['T-1', 'T-2', 'T-3'])
-  expect(looks3).toBeGreaterThanOrEqual(2)
-  expect(log).toEqual(['T-1 (lock T-1)', 'T-2 (lock T-2)', 'T-3 (lock T-3)'])
-  expect(w.files.has(TLOCK)).toBe(false)
-})
-
-test('the test lock is dated again before each test command, so a long run of several commands is never taken over as stale', async () => {
+test('the merge line entry is dated again before each test command, so a long run of several commands is never taken as stale', async () => {
   S.me = 'me'
   const w = world()
   const [b, t] = boardWith('auto', ['npm test', 'npm run e2e', 'npm run lint'])
   await saveBoard(w.$, b)
-  // each command may take up to TEST_TIMEOUT_MS; three in a row are more than the 20 minutes after which a lock is stale
-  expect(3 * TEST_TIMEOUT_MS).toBeGreaterThan(TEST_LOCK_STALE_MS)
+  // each command may take up to TEST_TIMEOUT_MS; three in a row are more than the 20 minutes after which an entry is stale
+  expect(3 * TEST_TIMEOUT_MS).toBeGreaterThan(MERGE_LINE_STALE_MS)
   const steps: string[] = []
   w.onRun(async cmd => {
-    if (cmd.startsWith('mv -f ') && cmd.endsWith(` ${TLOCK}`)) steps.push(`lock dated (${lockTask(w)})`)
+    if (cmd.startsWith('mv -f ') && cmd.endsWith(` ${LINE}`)) steps.push(`line saved (${lineTasks(w).join(' ')})`)
     if (cmd.startsWith('/bin/sh -c ')) steps.push(cmd.slice('/bin/sh -c '.length))
   })
   const r = await checkAndMerge(w.$, t, WT, b)
   expect(r.ok).toBe(true)
-  expect(steps).toEqual(['lock dated (T-1)', 'npm test', 'lock dated (T-1)', 'npm run e2e', 'lock dated (T-1)', 'npm run lint'])
-  expect(w.files.has(TLOCK)).toBe(false)
+  // joined, then dated again before each command
+  expect(steps).toEqual(['line saved (T-1)', 'line saved (T-1)', 'npm test', 'line saved (T-1)', 'npm run e2e', 'line saved (T-1)', 'npm run lint'])
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('the test lock is let go when the check is stopped after a test, and when the tests throw', async () => {
+test('the task leaves the merge line when the check is stopped after a test, and when its turn throws', async () => {
   S.me = 'me'
   const w = world()
   const [b, t] = boardWith('auto', ['npm test', 'npm run e2e'])
@@ -5260,59 +5356,59 @@ test('the test lock is let go when the check is stopped after a test, and when t
   const r = await checkAndMerge(w.$, t, WT, b, 'finish', [], () => (ranTests(w).length ? 'dropped' : undefined))
   expect(r).toEqual({ ok: false, detail: 'not merged: the task was dropped while it was being checked' })
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
-  expect(w.files.has(TLOCK)).toBe(false)
-  await expect(withTestLock(w.$, t, () => undefined, undefined, async () => Promise.reject(new Error('broke')))).rejects.toThrow('broke')
-  expect(w.files.has(TLOCK)).toBe(false)
+  expect(w.files.has(LINE)).toBe(false)
+  await expect(inMergeLine(w.$, 'T-1', async () => Promise.reject(new Error('broke')))).rejects.toThrow('broke')
+  expect(w.files.has(LINE)).toBe(false)
 })
 
-test('a task stopped while it waits for the test lock stops waiting, runs nothing, and leaves the other lock alone', async () => {
+test('a task stopped while it waits in the merge line stops waiting, runs nothing, and leaves the other entry alone', async () => {
   S.me = 'me'
   const w = world()
   const [t1] = await twoChecking(w)
-  const theirs = testLockText('T-2', 'other-session', Date.now())
-  w.put(TLOCK, theirs)
+  const theirs = lineEntry('T-2')
+  w.put(LINE, mergeLineText([theirs]))
   let why: string | undefined
   w.onSleep(() => (why = 'paused'))
   const stopped = () => (why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined)
   let ran = false
-  const r = await withTestLock(w.$, t1, stopped, undefined, async () => ((ran = true), undefined))
+  const r = await inMergeLine<{ ok: boolean; detail: string } | undefined>(w.$, 'T-1', async () => ((ran = true), undefined), { t: t1, stopped })
   expect(r).toEqual({ ok: false, detail: 'not merged: the task was paused while it was being checked' })
   expect(ran).toBe(false)
-  expect(w.files.get(TLOCK)).toBe(theirs)
+  expect(parseMergeLine(w.files.get(LINE)!)).toEqual([theirs])
   expect(noteOf(w, 'T-1')).toBe(CHECKING_NOTE)
 })
 
-test('a finished task waiting a long time for another task\'s tests still merges: the wait counts neither as running over nor as hung', async () => {
+test("a finished task waiting a long time in the merge line behind another session's task still merges: the wait counts neither as running over nor as hung", async () => {
   S.me = 'me'
   const w = world()
   const c = limitClock(w)
   await aboutToFinish(w)
-  // T-2, in another session, is running its tests now and holds the test lock
+  // T-2, in another session, has its turn now
   await change(w.$, x => {
     const [y] = addTask(x, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)
     const z = patchTask(y, 'T-2', { status: 'doing', attempts: 1 }, ISO)
     return patchTask(z, 'T-2', { checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
   })
-  w.put(TLOCK, testLockText('T-2', 'other-session', Date.now()))
+  w.put(LINE, mergeLineText([lineEntry('T-2')]))
   const notes: (string | undefined)[] = []
   let waits = 0
-  // each look at the lock takes 5 min on the limit's clock; after 12 looks (an hour, four times the limit) T-2 lets go
+  // each look at the line takes 5 min on the limit's clock; after 12 looks (an hour, four times the limit) T-2's turn ends
   w.onSleep(() => {
-    if (w.sleeps.at(-1) !== TEST_LOCK_POLL_MS) return
+    if (w.sleeps.at(-1) !== MERGE_LINE_POLL_MS) return
     notes.push(noteOf(w, 'T-1'))
     c.pass(5 * MIN)
-    if (++waits === 12) w.files.delete(TLOCK)
+    if (++waits === 12) w.files.delete(LINE)
   })
   await workerFinished(w.$, 'ag1', 'made the change')
   expect(waits).toBe(12)
   expect(12 * 5 * MIN).toBeGreaterThan(2 * finishLimitMs(1))
-  expect(notes.every(n => n === waitingTestsNote('T-2'))).toBe(true)
+  expect(notes.every(n => n === inLineNote(2))).toBe(true)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.merged).toBe(H1)
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
-  expect(w.files.has(TLOCK)).toBe(false)
+  expect(w.files.has(LINE)).toBe(false)
 })
 
 // ---------------- T-491: a worker that can't start ----------------
@@ -5545,11 +5641,11 @@ test("T-511: a rerun that passes but waits for the owner's files runs the tests 
   expect(c.spawned()).toBe(0)
 })
 
-test("T-511: the rerun waits while another task's tests run (the test lock is held)", async () => {
+test("T-511: the rerun waits while another task is in the merge line", async () => {
   const c = await timingOut(() => true)
-  // the lock is fresh only while its task is being checked: T-9 is, on the board
+  // the entry is fresh only while its task is being checked: T-9 is, on the board
   await change(c.w.$, x => ({ ...x, tasks: [...x.tasks, { ...x.tasks[0]!, id: 'T-9', status: 'doing' as const, test_rerun: undefined, checking: { step: 'testing' as const, at: new Date().toISOString() } }] }))
-  c.w.put(`${ROOT}/.symcc/tests.lock`, testLockText('T-9', 'other', Date.now()))
+  c.w.put(LINE, mergeLineText([lineEntry('T-9', 'other')]))
   c.w.calls.length = 0
   await rerunTimedOutTests(c.w.$)
   expect(ranTests(c.w)).toEqual([])
@@ -5632,13 +5728,13 @@ function testLimits(w: ReturnType<typeof world>): (number | undefined)[] {
   return seen
 }
 
-test('T-510: with no test_minutes each test command may run 10 min; the check, its limit and the lock follow that', async () => {
+test('T-510: with no test_minutes each test command may run 10 min; the check, its limit and the merge line follow that', async () => {
   expect(DEFAULT_TEST_MINUTES).toBe(10)
   expect(testMinutesOf(emptyBoard())).toBe(10)
   expect(testTimeoutMs(emptyBoard())).toBe(10 * MIN)
   expect(TEST_TIMEOUT_MS).toBe(10 * MIN)
   expect(finishLimitMs(1)).toBe(15 * MIN)
-  expect(TEST_LOCK_STALE_MS).toBe(20 * MIN)
+  expect(MERGE_LINE_STALE_MS).toBe(20 * MIN)
   const w = world()
   const limits = testLimits(w)
   const [b, t] = boardWith('auto', ['npm test'])
@@ -5674,15 +5770,15 @@ test("T-510: a finished worker's checking and merging gets its limit from test_m
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })
 
-test("T-510: the test lock goes stale after twice test_minutes: a 25 min old lock of a task still being checked is stale at 10, not at 30", async () => {
-  expect(testLockStaleMs(30)).toBe(60 * MIN)
+test("T-510: a merge line entry goes stale after twice test_minutes: a 25 min old entry of a task still being checked is stale at 10, not at 30", async () => {
+  expect(mergeLineStaleMs(30)).toBe(60 * MIN)
   for (const [minutes, running] of [[undefined, false], [30, true]] as const) {
     const w = world()
     const [b0] = boardWith('auto', ['npm test'])
     const b = patchTask(b0, 'T-1', { checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
     await saveBoard(w.$, minutes ? { ...b, test_minutes: minutes } : b)
-    w.put(TLOCK, testLockText('T-1', 'other', Date.now() - 25 * MIN))
-    expect(await testsRunningNow(w.$)).toBe(running)
+    w.put(LINE, mergeLineText([lineEntry('T-1', 'other', Date.now() - 25 * MIN)]))
+    expect(await mergeLineBusy(w.$)).toBe(running)
   }
 })
 

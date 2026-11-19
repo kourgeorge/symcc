@@ -218,31 +218,38 @@ export const taskTestMinutes = (b: { test_minutes?: unknown }, t?: { test_rerun?
   t?.test_rerun !== undefined && isRerunMinutes(t?.rerun_minutes) ? t.rerun_minutes : testMinutesOf(b)
 
 /**
- * The project-wide test lock (<data folder>/tests.lock): symcc's merge step runs only one task's test commands at a time,
- * across tasks and sessions (see withTestLock in app/review.ts). The holder writes its task, session and time, and
- * dates it again before each test command; older than testLockStaleMs (twice one command's time limit, the board's
- * test_minutes) it is stale. TEST_LOCK_STALE_MS is that with the default 10 minutes.
+ * The project-wide merge line (<data folder>/merge-line.json, T-546): every way into a merge (a hand-back, an approve, a
+ * rerun, finished work whose files are clear again, a checker's pass) joins it, across tasks and sessions, and only
+ * the task at its front has its turn: catch up with the target branch, run the tests, move the branch (see inMergeLine
+ * in app/merge-line.ts). Entries are kept oldest first: the task, a key for that one go, its session, when it joined,
+ * and `at`, the last time its copy of the plugin said it is still alive. An entry dated more than mergeLineStaleMs
+ * ago (twice one test command's time limit, the board's test_minutes) is stale. MERGE_LINE_STALE_MS is that with the
+ * default 10 minutes. The file survives a reload; a task that was in line then simply joins again.
  */
-export const TEST_LOCK_FILE = 'tests.lock'
-export const testLockStaleMs = (testMinutes: number) => 2 * testMinutes * 60_000
-export const TEST_LOCK_STALE_MS = testLockStaleMs(DEFAULT_TEST_MINUTES)
-export type TestLock = { task: string; session: string; at: number }
-export const testLockText = (task: string, session: string, at: number) => JSON.stringify({ task, session, at }) + '\n'
-export function parseTestLock(text: string | null): TestLock | null {
-  const l = parseStamp(text, 'at', true)
-  if (!l) return null
+export const MERGE_LINE_FILE = 'merge-line.json'
+export const mergeLineStaleMs = (testMinutes: number) => 2 * testMinutes * 60_000
+export const MERGE_LINE_STALE_MS = mergeLineStaleMs(DEFAULT_TEST_MINUTES)
+export type LineEntry = { task: string; key: string; session: string; joined: string; at: number }
+export const mergeLineText = (line: readonly LineEntry[]) => JSON.stringify({ line }, null, 2) + '\n'
+/** The entries of merge line file text `text`, oldest first; entries that are not one are skipped, a file that can't be read is an empty line. */
+export function parseMergeLine(text: string | null): LineEntry[] {
+  let raw: unknown
   try {
-    const task = (JSON.parse(text ?? '') as Record<string, unknown>).task
-    return typeof task === 'string' && task ? { task, session: l.session, at: l.at } : null
+    raw = (JSON.parse(text ?? '') as { line?: unknown })?.line
   } catch {
-    return null
+    return []
   }
+  if (!Array.isArray(raw)) return []
+  const str = (v: unknown) => typeof v === 'string' && v.length > 0
+  return raw.filter((e): e is LineEntry => !!e && typeof e === 'object' && str(e.task) && str(e.key) && typeof e.session === 'string' && typeof e.joined === 'string' && typeof e.at === 'number' && Number.isFinite(e.at))
 }
-/** A task's note while its tests wait for task `holder`'s tests to end. */
-export const waitingTestsNote = (holder: string) => `waiting for another task's tests (${holder})`
+/** Whether line entry `e` is older (or dated further ahead) than `maxAgeMs`. */
+export const lineEntryStale = (e: Pick<LineEntry, 'at'>, nowMs: number, maxAgeMs: number) => nowMs - e.at > maxAgeMs || e.at - nowMs > maxAgeMs
+/** A task's note while it waits in the merge line, `n` being its place in line (the task whose turn it is now is 1). */
+export const inLineNote = (n: number) => `in line (${n})`
 
 /** The files of the data folder that are saved through a temp file (see tmpName). */
-const TMP_OWNERS = ['board.lock', 'tests.lock', 'lead.json', 'board.json', 'scouts.json', 'archive.json', 'passed-trees.json']
+const TMP_OWNERS = ['board.lock', 'merge-line.json', 'lead.json', 'board.json', 'scouts.json', 'archive.json', 'passed-trees.json']
 
 /**
  * The temp file a save of `file` writes first (then renames over `file`): `<file>.<session>.<n>.tmp`, where `n`
@@ -259,7 +266,7 @@ const LEFTOVER_TMP = new RegExp(`^(?:${TMP_OWNERS.map(n => n.replace(/\./g, '\\.
 
 /**
  * Which files in the data folder are leftover temp files that may be deleted: only
- * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, tests.lock, lead.json, board.json, scouts.json,
+ * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, merge-line.json, lead.json, board.json, scouts.json,
  * archive.json, passed-trees.json), and only once they are older than maxAgeMs (a fresh one may still be in use by another
  * session). A file with no usable time, or dated in the future, is kept. Anything else (board.json, lead.json,
  * ...) is never chosen.
