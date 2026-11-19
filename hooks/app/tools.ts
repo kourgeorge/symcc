@@ -283,13 +283,13 @@ export function manual(arg: string, features: HostFeatures = ALL_FEATURES): stri
   return hit ? MAN[hit]! : `No topic "${arg.trim()}". Topics: ${Object.keys(MAN).join(', ')}`
 }
 
+/** Added to the add tool's answer in mode review: the owner's yes comes in the chat, which symcc can't see. */
+export const REVIEW_ADD_REMINDER = '\nReview mode: did the owner say yes to this task?'
+
 /**
  * The lead's guide, for the host's `features` (see HostFeatures; every one on unless given): without plan mode the
  * plan mode paragraph is left out. The host's words (S.W) name its plan mode.
  */
-/** Added to the add tool's answer in mode review: the owner's yes comes in the chat, which symcc can't see. */
-export const REVIEW_ADD_REMINDER = '\nReview mode: did the owner say yes to this task?'
-
 export const leadGuide = (features: HostFeatures = ALL_FEATURES) => `## ${S.N.name}: you are the lead (main conversation only)
 This section is for the main conversation only. If you are a subagent (a ${S.N.name} worker or scout, or any other), ignore it and do the job you were given.
 
