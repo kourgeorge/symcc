@@ -6,7 +6,7 @@
 // OpenCode plugin or a standalone client builds its Host the same way.
 import { readFile, writeFile, mkdir, readdir, lstat, stat, realpath, access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostRunResult, SYMCC_WORDS, noUi } from '../../hooks/host'
+import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostRunResult, SYMCC_WORDS, manifestVersion, noUi } from '../../hooks/host'
 
 /** What this host can do: no screen, and the lead is told when the CLI asks (it prints the update). */
 export const NODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: false }
@@ -102,7 +102,7 @@ export function nodeHost(o: NodeHostOptions): Host {
   const id = o.sessionId ?? 'node-host'
   return {
     features: NODE_FEATURES,
-    plugin: { name: 'symcc', root: pluginRoot },
+    plugin: { name: 'symcc', root: pluginRoot, version: () => manifestVersion(nodeFs, pluginRoot) },
     session: {
       id: async () => id,
       async repo() {

@@ -3,7 +3,8 @@
 // `stopped`, a task in `finishing`, S.me, ...) changes what a later test sees. resetPlugin() empties them all
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
 import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
-import { emptyHeard } from '../hooks/board'
+import { emptyHeard, useAssistantWord } from '../hooks/board'
+import { SYMCC_WORDS } from '../hooks/host'
 import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, boardAgents, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
 import { resetScoutRuns } from '../hooks/app/scouts'
 import { resetStarts } from '../hooks/app/starts'
@@ -28,6 +29,7 @@ export function resetPlugin() {
   timers.length = 0
   for (const k of Object.keys(S)) delete (S as Record<string, unknown>)[k]
   Object.assign(S, startS())
+  useAssistantWord(SYMCC_WORDS.assistant)
   resetScoutRuns()
   resetStarts()
   resetStore()

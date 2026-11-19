@@ -113,7 +113,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        per task and per try, the biggest tasks, how tasks ended, by role,
                        origin and day (all tasks, the last N days, or an id range);
                        "full" adds the long explanations
-  /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
+  /${S.N.name}-off                 turn ${S.N.name} off for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
