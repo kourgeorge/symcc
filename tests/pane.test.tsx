@@ -492,7 +492,9 @@ test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on key
     expect(b?.props.label).toBe(label)
     expect(b?.props.hotkey).toBe(String(n))
   }
-  expect(await ui.find({ type: 'Text', text: /1 allow · 2 don't allow · 3 answer/ })).toBeDefined()
+  // the keys are told once, in the dim line under the buttons, not again in the bottom key list (T-513)
+  expect(await ui.find({ type: 'Text', text: 'keys 1-3 pick a choice' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: / allow/ })).toBeUndefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
@@ -513,7 +515,8 @@ test('a question with options shows one button per option plus Answer…; pickin
   expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('red')
   expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('blue')
   expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('Answer…')
-  expect(await ui.find({ type: 'Text', text: /1-2 pick · 3 answer/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'keys 1-3 pick a choice' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: / pick$/ })).toBeUndefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-2' })
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
@@ -522,6 +525,21 @@ test('a question with options shows one button per option plus Answer…; pickin
   expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “blue”')
   expect(saved[0].tasks[0]).not.toHaveProperty('options')
   await ui.unmount()
+})
+
+test('the answer keys are told once on the task page: the dim line under the buttons, not the bottom key list (terminal, desktop, mobile)', async ($, on) => {
+  const options = ['Keep as is', 'Once a day', 'Every 2 days', 'Only on demand']
+  const board = { tasks: [task('T-2', 'waiting', 'Checks', { question: 'How often?', options })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    const tree = JSON.stringify(await ui.drawn())
+    expect(tree.match(/pick/g)?.length, surface).toBe(1)
+    expect(tree, surface).toContain('keys 1-5 pick a choice')
+    expect(tree, surface).not.toContain('" answer"')
+    await ui.unmount()
+  }
 })
 
 test('the answer buttons show only the choice (no number key inside); keys 1-5 still pick, told in a dim line under them', async ($, on) => {

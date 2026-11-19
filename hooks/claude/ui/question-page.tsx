@@ -1,7 +1,7 @@
 // The board panel's page for one question for the owner (see core/questions.ts): the question, one button per
 // option and "Answer…" for their own words (the same answer box as a waiting task's page). An answer closes it,
 // the lead hears it in its next board update, and the page goes back to the list.
-import { answerChoices, answerKeys, type OwnerQuestion, type KeyHint } from '../../board'
+import { answerChoices, type OwnerQuestion, type KeyHint } from '../../board'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { when } from '../../app/tools'
@@ -11,8 +11,8 @@ import { answerBox } from './answer-box'
 import { vsCallout, vsFooter, vsHref, vsLink, mdLink } from './vscode'
 import { claudeHost } from '../host'
 
-/** The keys at the bottom of a question's page: the answer keys, then b back. */
-export const questionKeys = (options: readonly string[]): KeyHint[] => [...answerKeys(undefined, options), { key: 'b', word: 'back' }]
+/** The keys at the bottom of a question's page: only b back; the answer keys are told under the buttons (choiceKeysHint). */
+export const questionKeys = (): KeyHint[] => [{ key: 'b', word: 'back' }]
 
 /** One question for the owner opened: what the lead asks, with a button per option and Answer…. */
 export function questionPage($: $, pane: PaneParts, q: OwnerQuestion) {
@@ -42,7 +42,7 @@ export function questionPage($: $, pane: PaneParts, q: OwnerQuestion) {
       </Box>
       {buttonRows([<Button key="back" label="Back" hotkey="b" onPress={back} />], 'question-actions')}
       {answerBox(pane, { question: q.text, choices, typing, onChoice: choicePress, onSubmit: value => send(value)(), onCancel: cancelAnswer })}
-      {footer(questionKeys(q.options), 'question-keys')}
+      {footer(questionKeys(), 'question-keys')}
     </Box>
   )
 }

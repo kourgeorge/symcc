@@ -271,10 +271,11 @@ export const viewKeys = (enter = true): KeyHint[] => [
 
 /** The keys at the bottom of a task's page, the ones that matter most for its state first; "y copy", "↑↓ scroll" and
  *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
- *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answer`: the keys of a
- *  waiting task's answer buttons (answerKeys); they then take the number keys instead of the reports. `fileWait`:
+ *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answering`: a waiting
+ *  task's answer buttons are shown; they then take the number keys instead of the reports, and the dim line under
+ *  them tells those keys (choiceKeysHint), so they are not listed here again. `fileWait`:
  *  its finished work waits only for the owner's files (fileWaitText), so r merges it now. `investigation`: the task is an investigation (in review: a done · k keep as a note · x ask more). */
-export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answer: readonly KeyHint[] = [], fileWait = false, investigation = false): KeyHint[] {
+export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answering = false, fileWait = false, investigation = false): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = []
   // an answered investigation: Done, Keep as a note, Ask more instead of approve and reject
@@ -287,10 +288,8 @@ export function taskKeys(status: SymccStatus, worker = false, reports: readonly 
   if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
   if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
   // A waiting task's answer buttons (Allow, Don't allow, Answer… or the worker's options), or a running one's
-  // "more time?" buttons, take the number keys.
-  const answering = (status === 'waiting' || status === 'doing') && answer.length > 0
-  if (answering) keys.push(...answer)
-  const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
+  // "more time?" buttons, take the number keys (told under the buttons).
+  const keyed = answering && (status === 'waiting' || status === 'doing') ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
   return [...keys, k('y', 'copy'), k('↑↓', 'scroll'), k('b', 'back')]
 }
@@ -301,14 +300,6 @@ export function answerChoices(files: readonly string[] | undefined, options: rea
   if (files?.length) return ['Allow', "Don't allow", 'Answer…']
   if (options?.length) return [...options.slice(0, 8), 'Answer…']
   return []
-}
-
-/** The key hints for answerChoices: "1 allow · 2 don't allow · 3 answer", or "1-3 pick · 4 answer". */
-export function answerKeys(files: readonly string[] | undefined, options: readonly string[] | undefined): KeyHint[] {
-  const n = answerChoices(files, options).length
-  if (!n) return []
-  if (files?.length) return [{ key: '1', word: 'allow' }, { key: '2', word: "don't allow" }, { key: '3', word: 'answer' }]
-  return [{ key: n - 1 > 1 ? `1-${n - 1}` : '1', word: 'pick' }, { key: String(n), word: 'answer' }]
 }
 
 /** The keys at the bottom of a task's diff view: a and x while it is in review, d when one file is shown. */
