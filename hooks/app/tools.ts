@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -33,7 +33,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   L.push(fromText(t, 120))
   if (t.origin?.why) L.push(`why: ${t.origin.why}`)
   if (t.origin?.evidence) L.push(`seen by ${S.N.name}: ${t.origin.evidence}`)
-  if (t.note) L.push(`now: ${t.note}`)
+  if (t.note) L.push(`${stateLabelLower()}: ${t.note}`)
   if (t.status === 'waiting' && t.question) L.push('', `ASKS: ${t.question}`)
   const bt = t as BoardTask
   if (t.status === 'waiting' && bt.options?.length) L.push(`OPTIONS: ${bt.options.join(' | ')}`)
