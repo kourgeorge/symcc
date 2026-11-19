@@ -80,7 +80,7 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
  * state columns). Every row shows the list's own mark and short status cell (statusCell): a doing task "▶ 12m"
  * (time on this try), "▶ prep", "▶ test", "▶ checker", "▶ merge", with the total work time of all tries (triesTotal) and its try
- * after it from try 2 on ("T-434 ▶ 15m · 1h 40m in all · try 2"); in a row narrower than `width` "in all" goes first, then the total;
+ * after it from try 2 on ("T-434 ▶ 15m · Σ1h 40m · try 2"); in a row narrower than `width` the total is left out;
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or
  * the longest other cell), so every title starts in one column. `since(id)` is when this session's worker started.
  */
@@ -94,7 +94,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
   // a waiting task whose tests only run again (not waitsForYou) shows the running mark, like the rest of its row (T-541)
   const rowMark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
   const leadsWith = (form: TotalForm) => {
-    // the total work time of all tries, between this try's time and the try: "▶ 15m · 1h 40m in all · try 3"
+    // the total work time of all tries, between this try's time and the try: "▶ 15m · Σ1h 40m · try 3"
     const totals = new Map(doing.map(t => [t.id, cells.get(t.id) ? triesTotal(t, nowMs, form) : '']))
     const totalWidth = Math.max(0, ...[...totals.values()].map(s => (s ? ` · ${s}`.length : 0)))
     const states = new Map(
@@ -108,7 +108,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
     const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
     return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
   }
-  // too narrow: "in all" goes first, then the total, so the titles keep TITLE_ROOM
+  // too narrow: the total is left out, so the titles keep TITLE_ROOM
   let leads = new Map<string, string>()
   for (const form of TOTAL_FORMS) {
     leads = leadsWith(form)

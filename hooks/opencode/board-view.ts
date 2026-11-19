@@ -171,7 +171,7 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
   const idWidth = Math.max(4, ...ids.map(id => id.length))
-  // a doing task on a later try: "15m · 1h 40m in all"; narrow, "in all" goes first, then the total
+  // a doing task on a later try: "15m · Σ1h 40m"; narrow, the total is left out
   const cells = fittedCells(listed, nowMs, since, w - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))

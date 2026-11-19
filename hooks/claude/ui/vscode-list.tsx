@@ -69,7 +69,7 @@ export function listPageVs($: $, pane: PaneParts) {
     const waited = waitsForYou(x) || x.status === 'review' || x.status === 'failed' ? ago(x.updated_at) : ''
     // with a time, the short word ("waiting for 1m", not "waiting for you for 1m")
     if (waited) return `${statusMark({ ...x, status: st })} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
-    // a doing task on a later try also shows the work time of all its tries: "▶ 15m · 1h 40m in all"
+    // a doing task on a later try also shows the work time of all its tries: "▶ 15m · Σ1h 40m"
     const total = triesTotal(x, nowMs)
     return `${statusMark({ ...x, status: st })} ${cell && cell !== x.status ? cell : word[x.status]}${total ? ` · ${total}` : ''}`
   }

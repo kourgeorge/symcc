@@ -70,6 +70,23 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   expect(bandLines(null, NOW, 120)).toEqual([])
 })
 
+test('a doing row on a later try shows "Σ" with the total work time of all tries in the band and the list, never "in all"; a narrow row drops it (T-545)', () => {
+  const f0 = viewFile()
+  const min = (m: number) => new Date(NOW - m * 60_000).toISOString()
+  const runs = [{ started: min(300), ended: min(250) }, { started: min(200), ended: min(165) }, { started: min(15) }]
+  const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 3, runs, note: '' } : t)), working: [] } }
+  const row = (lines: string[]) => lines.find(l => /T-1 /.test(l))!
+  const band = bandLines(f, NOW, 120).map(lineText)
+  expect(row(band)).toContain('15m · Σ1h 40m · try 3')
+  const list = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)
+  expect(row(list)).toContain('15m · Σ1h 40m')
+  for (const l of [...band, ...list]) expect(l).not.toContain('in all')
+  // narrow: the total is left out, this try's time stays
+  expect(row(bandLines(f, NOW, 40).map(lineText))).not.toContain('Σ')
+  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 40).lines.map(lineText))).not.toContain('Σ')
+  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 40).lines.map(lineText))).toContain('15m')
+})
+
 test('a waiting task that only reruns its tests shows with the running ones as "retest", not as waiting for you; a waiting task with a question is unchanged (T-534)', () => {
   const f0 = viewFile()
   const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-4' ? { ...t, status: 'waiting' as const, test_rerun: 1, note: 'tests ran out of time' } : t)) } }

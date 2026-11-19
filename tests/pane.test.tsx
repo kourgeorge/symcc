@@ -642,6 +642,8 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
   expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens in all/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 2: 1h 00m · ~\$0\.42/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens in all · ~\$0\.42/ })).toBeDefined()
+  // with more than one try it says once what the rows' Σ means (T-545)
+  expect(await ui.find({ type: 'Text', text: /\(Σ on its row: total work time of all tries\)/ })).toBeDefined()
   await ui.unmount()
 })
 

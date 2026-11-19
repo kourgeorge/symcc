@@ -1074,10 +1074,11 @@ in the band above the prompt and the status line, and `T-5 doing · try 2/3` in 
 board (the `/3` shows the limit while the try is an automatic retry after failing tests).
 A first try shows no mark. From the second try on, a doing task's row also shows the total
 work time of all its tries, so a task that is really stuck stands out:
-`T-5 ▶ 15m · 1h 40m in all · try 3` (15 minutes on this try, 1 hour 40 in all). This is the
+`T-5 ▶ 15m · Σ1h 40m · try 3` (15 minutes on this try; **Σ** is the total work time of all
+tries, here 1 hour 40; the task page says so too, under its total). This is the
 same number as the task page's "Time and cost" total: each try's time from start to end, added
 up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between
-tries is not counted. When a row is short of room, "in all" is left out first, then the total. When the status line is short of room, the try marks are left out
+tries is not counted. When a row is short of room, the total is left out. When the status line is short of room, the try marks are left out
 first, so failed tasks and reviews always stay in view.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big
