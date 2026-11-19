@@ -1,4 +1,4 @@
-// Failing tests, turning things on and off, the settings, and branch conflicts.
+// Failing tests, turning things on and off, and the settings.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
@@ -14,8 +14,9 @@ const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' =
 export const TEST_OUTPUT_CHARS = 3000
 
 /**
- * A task's tests failed. 'retry': send it back to "todo" so a new worker fixes it, with the
- * test output; 'fail': it already had `max` automatic retries, so the lead decides.
+ * A task's try failed (its tests or the checker failed, or it clashed with the branch it merges into, T-548).
+ * 'retry': send it back to "todo" so a new worker fixes it; 'fail': it already had `max` automatic retries
+ * (counted in test_tries), so the lead decides.
  */
 export function onTestFail(t: Pick<SymccTask, 'test_tries'>, max = DEFAULT_AUTO_RETRIES): 'retry' | 'fail' {
   return retryOrFail(t.test_tries, max)
@@ -569,19 +570,6 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
       ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)'] : []),
     ]),
   ].join('\n')
-}
-
-// ---------------- when the branch conflicts with main ----------------
-
-/** How many new tries a task gets to merge main into its branch after a conflict. */
-export const MAX_CONFLICT_TRIES = DEFAULT_AUTO_RETRIES
-
-/**
- * A task's branch conflicted with the latest main. 'retry': send it back to "todo" so a new
- * worker merges main and resolves the conflict; 'fail': it was already tried `max` times.
- */
-export function onConflict(t: Pick<SymccTask, 'conflict_tries'>, max = MAX_CONFLICT_TRIES): 'retry' | 'fail' {
-  return retryOrFail(t.conflict_tries, max)
 }
 
 /** For showing the board: newest task first (by when it was made, then by its number). */

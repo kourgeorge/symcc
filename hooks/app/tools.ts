@@ -624,13 +624,13 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
       // Finished work that waited only for the owner's files: just the merge runs again, no worker.
       if (waitsForFiles(t)) return mergeWaiting($, t.id)
-      // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
+      // Its automatic retries start over; if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
       const fromDropped = t.status === 'dropped'
       await change($, x => {
         const cur = find(x, t.id)
         const history = fromDropped && cur ? withHistory(cur.history, now(), ['retried', 'brought back from dropped']) : undefined
-        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, conflict_tries: 0, merge_main: clashed, ...(history ? { history } : {}) }, now())
+        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, merge_main: clashed, ...(history ? { history } : {}) }, now())
       })
       void pump($)
       return fromDropped ? `${t.id} brought back from dropped and queued` : `${t.id} queued${clashed ? '; its new worker merges the latest main first' : ''}`

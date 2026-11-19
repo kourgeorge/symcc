@@ -43,7 +43,7 @@ And the ideas that tie them together:
 |---|---|
 | **Discovery → triage → implementation → review → merge** | A scout or you find work, the lead puts it on the board, a worker builds it, you review it, symcc merges it |
 | **Scope check** | Each task lists the files it may change (its scope); anything else is not merged; a worker's edit outside it is refused and becomes a file request to you |
-| **Automatic retries** | Failing tests send the task back to a new worker with the failing test output, up to `auto_retries` times (2 by default) |
+| **Automatic retries** | Failing tests, or a clash with your branch, send the task back to a new worker (with the failing test output, or told to merge your branch in first), up to `auto_retries` times in all (2 by default) |
 | **Test gate** | Your test commands must pass before anything is merged |
 | **Approval before merge** | Human-in-the-loop review: modes `auto`, `review` or `off`; see the diff, approve, or reject with a reason; one task can be marked "needs review" |
 | **Merge into the target branch** | Commit, scope check, update on the latest target branch, re-run tests, then merge; your branch only moves this way |
@@ -242,7 +242,9 @@ prep · title"), all with the same short words:
    variable) is not seen. Paths outside the project, such as `/tmp`, are not checked, and the lead is never refused.
 3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
    another task was merged), symcc brings those changes into the task's copy first.
-   If they clash, a new worker is started to sort out the clash (up to 2 times).
+   If they clash, that try failed like failing tests do: it uses one of the `auto_retries`, and the
+   next worker is told to merge your branch in first and sort out the clash. When the retries are used
+   up, the task is marked `failed` with the clash as its reason.
 4. **Test gate.** symcc runs your test commands on the combined code. If they fail,
    automatic retries kick in: the task goes back to `todo` and the next worker is shown the end of the failing output and
    told to fix it (2 times by itself; then it is marked `failed` for the lead).

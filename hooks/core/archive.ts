@@ -2,7 +2,7 @@
 // Every function here is pure; the plugin (app/archive.ts) reads and writes the files.
 import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId, withoutStages } from './board-file'
+import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId, withoutConflictTries, withoutStages } from './board-file'
 import { migrateHistory, withHistory } from './history'
 import { addTokens, sumRuns } from './runs'
 
@@ -46,7 +46,10 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   // fields are dropped (see withoutStages); `migrated` counts the tasks changed so the file is saved once.
   let migrated = 0
   const clean = ok.map(t0 => {
-    const bare = withoutStages(t0)
+    const stageless = withoutStages(t0) ?? t0
+    // T-548: the old conflict_tries field is dropped (see withoutConflictTries)
+    const clash = withoutConflictTries(stageless)
+    const bare = clash ?? (stageless === t0 ? null : stageless)
     const t = bare ?? t0
     const split = migrateRunTokens(t.runs)
     // T-522: history lines saved as plain strings become records (see migrateHistory)
@@ -122,7 +125,7 @@ export function removeArchived(b: Board, tasks: BoardTask[]): Board {
 export function bringBack(b: Board, t: BoardTask, now: string): Board {
   if (find(b, t.id)) throw new Error(`${t.id} is already on the board`)
   if (t.status !== 'dropped') throw new Error(`${t.id} is archived and done; add a new task instead`)
-  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', question: null, test_tries: 0, conflict_tries: 0, history: withHistory(t.history, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
+  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', question: null, test_tries: 0, history: withHistory(t.history, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
   return { ...b, archived: addTotals(archivedOf(b), t, -1), tasks: [...b.tasks, back] }
 }
 

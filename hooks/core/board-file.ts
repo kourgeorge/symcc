@@ -443,7 +443,8 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - stage, stages and backs (from the stage engine, now removed): dropped (see withoutStages);
  * - history lines saved as plain strings (before T-522): records { at, kind, text }, the time and kind guessed (see migrateHistory);
  * - test_rerun and rerun_minutes (from the tests-only rerun, removed in T-547): dropped; a task that waited for that
- *   rerun (or for the owner's answer after two time-outs) goes back to "todo" for a new try (see withoutTestRerun).
+ *   rerun (or for the owner's answer after two time-outs) goes back to "todo" for a new try (see withoutTestRerun);
+ * - conflict_tries (the separate count of tries to merge main in, removed in T-548): dropped (see withoutConflictTries).
  */
 export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = withoutStages(t) ?? t
@@ -469,7 +470,19 @@ export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   }
   const rerun = withoutTestRerun(out)
   if (rerun) out = rerun
+  const clash = withoutConflictTries(out)
+  if (clash) out = clash
   return out === t ? null : out
+}
+
+/**
+ * Task `t` without the old conflict_tries field (its own count of tries to merge main in, removed in T-548: a clash
+ * now uses one of the auto retries, counted in test_tries), or null when it has none.
+ */
+export function withoutConflictTries<T extends object>(t: T): T | null {
+  if (!('conflict_tries' in t)) return null
+  const { conflict_tries: _c, ...rest } = t as T & { conflict_tries?: unknown }
+  return rest as T
 }
 
 /** The note of a task that waited to rerun only its tests when that rerun was removed (T-547): it is sent to a new try. */

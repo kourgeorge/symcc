@@ -3,7 +3,7 @@ import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, ownerEdits } from '../hooks/app/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
-import { PREP_NOTE, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { PREP_NOTE, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -1948,31 +1948,102 @@ test('a task dropped while its branch clashes with main does not go back to "tod
   await workerFinished(w.$, 'ag1', 'made the change')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('dropped')
-  expect(t.conflict_tries ?? 0).toBe(0)
+  expect(t.test_tries ?? 0).toBe(0)
   expect(t.merge_main ?? false).toBe(false)
 })
 
-test('retry after a clash with main gives the task its merge-main tries again, starting with a merge', async () => {
+/** T-1's worker (agent ag1) finished while its branch clashes with main; `extra`: task fields, `board`: board fields. */
+async function clashing(extra: Partial<BoardTask> = {}, board: Partial<Board> = {}) {
+  const w = world({ upToDate: false, conflict: true })
+  const [b] = boardWith('auto', [], { runs: [{ started: ISO }], ...extra })
+  await saveBoard(w.$, { ...b, ...board })
+  w.put(`${WT}/.git`, 'gitdir: x')
+  ;(w.$.agents as { spawn: unknown }).spawn = async () => Promise.reject(new Error('no agents in this world'))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  leadQueue.splice(0)
+  await workerFinished(w.$, 'ag1', 'made the change')
+  const after = await load(w.$)
+  return { b: after, t: find(after, 'T-1')! }
+}
+
+test('T-548: a clash with main is one normal failed try: a new try, told to merge main first, uses one auto retry', async () => {
+  try {
+    const { b, t } = await clashing({ test_output: 'old failing output' })
+    expect(t.status).toBe('todo')
+    expect(t.test_tries).toBe(1)
+    expect(t.merge_main).toBe(true)
+    expect(t.test_output).toBe(undefined)
+    expect(t.note).toBe('conflicts with the latest main; a new try will merge it in (1 of 2)')
+    expect('conflict_tries' in t).toBe(false)
+    expect(t.runs?.at(-1)?.ended_note).toBe('clash with main')
+    expect(leadQueue.join('\n')).toContain('conflicts with the latest main; retrying on its own, the new try merges it in first (1 of 2)')
+    // the next worker is told to merge main in first
+    expect(WORKER_PROMPT(t, b, WT)).toContain('run `git merge main` and resolve the conflicts')
+  } finally {
+    cleanUp()
+  }
+})
+
+test('T-548: clashes and failing tests share auto_retries; when they are used up the task fails with the clash as its reason', async () => {
+  try {
+    // one retry already went to failing tests and the board allows two: this clash uses the second
+    let { t } = await clashing({ test_tries: 1, test_output: 'FAIL a.test' })
+    expect(t.status).toBe('todo')
+    expect(t.test_tries).toBe(2)
+    expect(t.note).toBe('conflicts with the latest main; a new try will merge it in (2 of 2)')
+    cleanUp()
+    ;({ t } = await clashing({ test_tries: 2 }))
+    expect(t.status).toBe('failed')
+    expect(t.merge_main).toBe(false)
+    expect(t.test_tries).toBe(2)
+    expect(t.note).toBe('conflicts with the latest main (after 2 automatic retries)')
+    expect(t.history.at(-1)!.text).toContain('→ conflicts with the latest main (after 2 automatic retries)')
+    expect(leadQueue.join('\n')).toContain('✗ T-1 "Do it" was not merged: conflicts with the latest main (after 2 automatic retries)')
+    cleanUp()
+    // auto_retries 0: the first clash fails the task
+    ;({ t } = await clashing({}, { auto_retries: 0 }))
+    expect(t.status).toBe('failed')
+    expect(t.note).toBe('conflicts with the latest main (after 0 automatic retries)')
+  } finally {
+    cleanUp()
+  }
+})
+
+test('retry after a clash with main gives the task its auto retries again, starting with a merge', async () => {
   const w = world()
-  const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main, still after 2 tries to merge it in', conflict_tries: 2, merge_main: false })
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', test_tries: 2, merge_main: false })
   await saveBoard(w.$, b)
-  expect(onConflict(find(await load(w.$), 'T-1')!)).toBe('fail')
   const out = await runTool(w.$, 'retry', { task: 'T-1' })
   expect(out).toBe('T-1 queued; its new worker merges the latest main first')
   const t = find(await load(w.$), 'T-1')!
-  expect(t.conflict_tries).toBe(0)
+  expect(t.test_tries).toBe(0)
   expect(t.merge_main).toBe(true)
-  expect(onConflict(t)).toBe('retry')
 })
 
-test('retry after a failure that was not a clash resets the merge-main tries but does not ask for a merge', async () => {
+test('retry after a failure that was not a clash resets the auto retries but does not ask for a merge', async () => {
   const w = world()
-  const [b] = boardWith('auto', [], { status: 'failed', note: 'tests failed', conflict_tries: 1, merge_main: false })
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'tests failed', test_tries: 2, merge_main: false })
   await saveBoard(w.$, b)
   expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 queued')
   const t = find(await load(w.$), 'T-1')!
-  expect(t.conflict_tries).toBe(0)
+  expect(t.test_tries).toBe(0)
   expect(t.merge_main ?? false).toBe(false)
+})
+
+test('T-548: the old conflict_tries field is dropped from the board (once) and from the archive', () => {
+  const [b, x] = boardWith('auto', [], { status: 'todo', merge_main: true })
+  const r = readBoard(JSON.stringify({ ...b, tasks: [{ ...x, conflict_tries: 2 }] }))
+  const t = find(r.board, 'T-1')!
+  expect('conflict_tries' in t).toBe(false)
+  expect(t.merge_main).toBe(true)
+  expect(t.status).toBe('todo')
+  expect(r.migrated).toBeGreaterThan(0)
+  const again = readBoard(JSON.stringify(r.board))
+  expect(again.board.tasks).toEqual(r.board.tasks)
+  expect(again.migrated).toBe(0)
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...x, status: 'done', conflict_tries: 1 }] }))
+  expect('conflict_tries' in a.archive.tasks[0]!).toBe(false)
+  expect(a.migrated).toBe(1)
 })
 
 // ---------------- old tasks: archive.json ----------------

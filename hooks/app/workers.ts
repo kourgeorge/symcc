@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { FINISH_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
+import { FINISH_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -1135,31 +1135,31 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
     tellLead(host, `${r.noVerdict ? `${t.id}: ${r.noVerdict}. ` : ''}${r.untested ? `${r.untested}. ` : ''}${r.secrets?.length ? `${t.id}: ${secretsLeftText(r.secrets)}. ` : ''}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`)
     return
   }
-  const tries = t.conflict_tries ?? 0
-  if (r.conflict && onConflict(t) === 'retry') {
-    // Don't fail yet: a new worker merges main into the branch and resolves the conflicts.
-    const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES})`
-    if (!(await write(cur => ({ status: 'todo', note, conflict_tries: tries + 1, merge_main: true, history: withHistory(cur.history, now(), line) })))) return
-    tellLead(host, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; starting a new try to merge it in (${tries + 1} of ${MAX_CONFLICT_TRIES}).`)
+  const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
+  const tries = t.test_tries ?? 0
+  // A clash with the branch it merges into is one normal failed try (T-548): the merge line keeps that branch still
+  // during a turn, so the clash is real. Like failing tests it uses one auto retry; the new worker merges that branch in first.
+  if (r.conflict && onTestFail(t, retries) === 'retry') {
+    const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${retries})`
+    if (!(await write(cur => ({ status: 'todo', note, test_tries: tries + 1, test_output: undefined, merge_main: true, history: withHistory(cur.history, now(), line) })))) return
+    tellLead(host, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; retrying on its own, the new try merges it in first (${tries + 1} of ${retries}). Nothing to do.`)
     return
   }
-  const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
-  const testTries = t.test_tries ?? 0
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
     // Don't fail yet: a new worker gets the failing test output (or the checker's report) and fixes it.
     // T-547: tests that ran out of time fail the same way; the note says so (and to raise test_minutes if they are just slow).
-    const note = r.timedOut !== undefined ? timedOutRetryNote(r.timedOut, testTries + 1, retries) : `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${testTries + 1} of ${retries})`
-    if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: withHistory(cur.history, now(), line) })))) return
-    tellLead(host, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : 'failed its tests'}; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
+    const note = r.timedOut !== undefined ? timedOutRetryNote(r.timedOut, tries + 1, retries) : `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${tries + 1} of ${retries})`
+    if (!(await write(cur => ({ status: 'todo', note, test_tries: tries + 1, test_output: r.testOutput, merge_main: false, history: withHistory(cur.history, now(), line) })))) return
+    tellLead(host, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : 'failed its tests'}; retrying on its own (${tries + 1} of ${retries}). Nothing to do.`)
     return
   }
-  const detail = r.conflict ? `conflicts with the latest ${intoOf(t)}, still after ${tries} tries to merge it in` : r.detail
+  const detail = r.conflict ? `conflicts with the latest ${intoOf(t)} (after ${tries} automatic ${tries === 1 ? 'retry' : 'retries'})` : r.detail
   const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
   if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: withHistory(cur.history, now(), [resultKind(r), done]), ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
   if (r.ok) sayDone(host, b, t.id)
   // Merged: its folder goes, then its branch, only when all its work is in the branch it merged into (deleteMergedBranch), so nothing is lost.
   if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await deleteMergedBranch(host, taskBranch(t), intoOf(t))
-  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? `The checker's report:\n${r.testOutput.replace(/^[^\n]*\n/, '')}` : `The last test run: ${gaveUpTestsText(r.testOutput)}`}` : ''
+  const gaveUp = r.testOutput !== undefined ? `\nIt already had ${tries} automatic ${tries === 1 ? 'retry' : 'retries'}. ${r.checker ? `The checker's report:\n${r.testOutput.replace(/^[^\n]*\n/, '')}` : `The last test run: ${gaveUpTestsText(r.testOutput)}`}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }

@@ -418,5 +418,5 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const body = answer.trim() || t.answer?.trim() || ''
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
-  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`]) }, now)
 }

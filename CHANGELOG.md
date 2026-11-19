@@ -6,6 +6,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Changed
 - A test command that runs past `test_minutes` now fails like a failing test: a new worker try starts with the output (it uses one automatic retry), and the note says the tests ran out of time after N min and to raise `test_minutes` if they are just slow. symcc no longer reruns only the tests, and no longer asks "the tests ran out of time twice" (with "Run the tests again", "Give them more time", "Stop it"); no task waits for a rerun or shows "retest" any more. A task on your board that was waiting for such a rerun goes back to to do once, with a note.
+- A clash with your branch is now one normal failed try: it uses one of the `auto_retries` (shared with failing tests), and the next worker is told to merge your branch in first. It no longer has its own two tries to merge it in; when the retries are used up the task fails with "conflicts with the latest main (after N automatic retries)". The old `conflict_tries` count is removed from your board once.
 
 ## 0.5.4 (2026-11-19)
 
