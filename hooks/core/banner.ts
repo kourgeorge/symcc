@@ -10,7 +10,7 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, rowCell } from './panel'
 import { checkStepNow } from './lead'
 import { statusMark } from './details'
 import { whyFailed } from './failure'
@@ -77,36 +77,34 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
 
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
- * state columns). Every row shows the list's own mark and short status cell (statusCell): a doing task "▶ 12m"
- * (time on this try), "▶ prep", "▶ test", "▶ checker", "▶ merge", with the total work time of all tries (triesTotal) and its try
- * after it from try 2 on ("T-434 ▶ 15m · Σ1h 40m · try 2"); in a row narrower than `width` the total is left out;
- * the others "? waiting", "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or
- * the longest other cell), so every title starts in one column. `since(id)` is when this session's worker started.
+ * state columns). Every row shows the list's own mark and short status cell (rowCell): a doing task "▶ 1h40m" (the
+ * total work time of all its tries), "▶ test 9m", "▶ prep 2h5m", "▶ checker", "▶ merge 40m", with its try after it from
+ * try 2 on ("T-434 ▶ 1h40m · try 3"); in a row narrower than `width` the time is left out; the others "? waiting",
+ * "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or the longest other cell),
+ * so every title starts in one column. `since(id)` is when this session's worker started.
  */
 export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
   const idWidth = Math.max(4, ...tasks.map(t => t.id.length))
-  const cells = new Map(tasks.map(t => [t.id, statusCell(t, nowMs, since(t.id))]))
   const doing = tasks.filter(t => t.status === 'doing')
-  const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
   const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
-  const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? ` · ${m}`.length : 0)))
   const rowMark = (t: (typeof tasks)[number]): string => statusMark(t)
   const leadsWith = (form: TotalForm) => {
-    // the total work time of all tries, between this try's time and the try: "▶ 15m · Σ1h 40m · try 3"
-    const totals = new Map(doing.map(t => [t.id, cells.get(t.id) ? triesTotal(t, nowMs, form) : '']))
-    const totalWidth = Math.max(0, ...[...totals.values()].map(s => (s ? ` · ${s}`.length : 0)))
+    const cells = new Map(tasks.map(t => [t.id, rowCell(t, nowMs, since(t.id), form)]))
+    const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
+    // the try after the time: "▶ 1h40m · try 3"; with no time in any doing row, just "▶ try 3"
+    const sep = cellWidth ? ' · ' : ''
+    const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? `${sep}${m}`.length : 0)))
     const states = new Map(
       tasks.map(t => {
         if (t.status !== 'doing') return [t.id, cells.get(t.id)!]
         const mark = tries.get(t.id)
-        const total = totals.get(t.id)
-        return [t.id, `${cells.get(t.id)!.padEnd(cellWidth)}${(total ? ` · ${total}` : '').padEnd(totalWidth)}${(mark ? ` · ${mark}` : '').padEnd(tryWidth)}`]
+        return [t.id, `${cells.get(t.id)!.padEnd(cellWidth)}${(mark ? `${sep}${mark}` : '').padEnd(tryWidth)}`]
       }),
     )
     const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
     return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
   }
-  // too narrow: the total is left out, so the titles keep TITLE_ROOM
+  // too narrow: the time is left out, so the titles keep TITLE_ROOM
   let leads = new Map<string, string>()
   for (const form of TOTAL_FORMS) {
     leads = leadsWith(form)

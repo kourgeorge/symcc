@@ -3587,7 +3587,7 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-369 doing (try 2)')
   // the band above the prompt
   expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 1 }], 0).get('T-369')).toBe('T-369 ▶ ')
-  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶  · try 2')
+  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶ try 2')
   // the lead's text board, with the auto retry limit while the retry is automatic
   let [b] = addTask(emptyBoard(), { origin: W, title: 'First' }, at)
   ;[b] = addTask(b, { origin: W, title: 'Second' }, at)
@@ -3599,45 +3599,58 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(text.split('\n').find(l => l.includes('First'))).not.toContain('try')
 })
 
-test('a doing row on a later try shows this try and the work time of all tries, without the gaps; narrow rows drop it (T-523, T-545: "Σ1h 40m", never "in all")', () => {
+test('a doing row shows one time, the total work time of all tries without the gaps, no Σ; a step row "test 9m"; narrow rows drop the time (T-557)', () => {
   const at = (min: number) => new Date(Date.parse(T) + min * 60_000).toISOString()
   const now = Date.parse(T) + 1000 * 60_000
   // try 1 alone: just this try's time
   const first = { id: 'T-1', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
-  expect(core.triesTotal(first, now)).toBe('')
+  expect(core.rowTime(first, now)).toBe('15m')
   expect(bandLeads([first], now).get('T-1')).toBe('T-1  ▶ 15m')
-  expect(core.cellWithTotal(first, now)).toBe('15m')
+  expect(core.rowCell(first, now)).toBe('15m')
   // try 3: 50m and 35m before, long gaps (paused, waiting, todo) between them that do not count, 15m now
   const third = { id: 'T-2', status: 'doing' as const, attempts: 3, runs: [{ started: at(0), ended: at(50) }, { started: at(400), ended: at(435) }, { started: at(985) }] as SymccTask['runs'] }
-  expect(core.triesTotal(third, now)).toBe('Σ1h 40m')
-  expect(core.triesTotal(third, now, 'none')).toBe('')
-  expect(core.cellWithTotal(third, now)).toBe('15m · Σ1h 40m')
+  expect(core.rowTime(third, now)).toBe('1h40m')
+  expect(core.rowCell(third, now)).toBe('1h40m')
+  expect(core.rowCell(third, now, undefined, 'none')).toBe('')
   // the same total as the task page's "Time and cost"
   expect(fmtDuration(sumRuns(third.runs, now).ms)).toBe('1h 40m')
-  // the band: lined up, the total between this try's time and the try
+  // short times without inner spaces or a leading zero
+  expect(core.rowDuration(125 * 60_000)).toBe('2h5m')
+  expect(core.rowDuration(180 * 60_000)).toBe('3h')
+  expect(core.rowDuration(40 * 60_000)).toBe('40m')
+  // in a step: the step word, one space, the total of all tries
+  const testing = { id: 'T-3', status: 'doing' as const, attempts: 1, runs: [{ started: at(985), ended: at(994) }] as SymccTask['runs'], checking: { step: 'testing' as const, at: new Date(now).toISOString() } }
+  expect(core.rowCell(testing, now)).toBe('test 9m')
+  expect(core.rowCell(testing, now, undefined, 'none')).toBe('test')
+  const prep = { ...testing, id: 'T-4', runs: [{ started: at(0), ended: at(80) }, { started: at(900), ended: at(945) }] as SymccTask['runs'], checking: { step: 'prep' as const, at: new Date(now).toISOString() } }
+  expect(core.rowCell(prep, now)).toBe('prep 2h5m')
+  expect(bandLeads([testing], now).get('T-3')).toBe('T-3  ▶ test 9m')
+  // the band: lined up, the try after the one time
   const leads = bandLeads([first, third], now)
-  expect(leads.get('T-2')).toBe('T-2  ▶ 15m · Σ1h 40m · try 3')
-  // the rows never write "in all" (T-545): the Σ mark keeps the title's room
-  for (const l of leads.values()) expect(l).not.toContain('in all')
+  expect(leads.get('T-2')).toBe('T-2  ▶ 1h40m · try 3')
+  for (const l of [...leads.values(), ...bandLeads([testing, prep], now).values()]) {
+    expect(l).not.toContain('Σ')
+    expect(l).not.toContain('in all')
+  }
   expect(leads.get('T-1')!.length).toBe(leads.get('T-2')!.length)
-  // narrow: the total is left out; the try stays
+  // narrow: the time is left out; the try stays
   const lead = (w: number) => bandLeads([first, third], now, () => undefined, w).get('T-2')
-  expect(lead(60)).toBe('T-2  ▶ 15m · Σ1h 40m · try 3')
-  expect(lead(50)).toBe('T-2  ▶ 15m · Σ1h 40m · try 3')
-  expect(lead(40)).toBe('T-2  ▶ 15m · try 3')
+  expect(lead(60)).toBe('T-2  ▶ 1h40m · try 3')
+  expect(lead(41)).toBe('T-2  ▶ 1h40m · try 3')
+  expect(lead(40)).toBe('T-2  ▶ try 3')
   // the lists' cells the same way
   const cells = (room: number) => core.fittedCells([first, third], now, () => undefined, room).get('T-2')
-  expect(cells(30)).toBe('15m · Σ1h 40m')
-  expect(cells(13)).toBe('15m · Σ1h 40m')
-  expect(cells(12)).toBe('15m')
-  expect(cells(5)).toBe('15m')
-  // not doing: no total
-  expect(core.triesTotal({ ...third, status: 'paused' }, now)).toBe('')
-  // a later try with no time to show (its last try ended, no fresh step): no total either, so no stray " · "
+  expect(cells(30)).toBe('1h40m')
+  expect(cells(5)).toBe('1h40m')
+  expect(cells(4)).toBe('')
+  // not doing: no time
+  expect(core.rowTime({ ...third, status: 'paused' }, now)).toBe('')
+  // a later try with no time to show (its last try ended, no fresh step): no stray " · "
   const ended = { id: 'T-9', status: 'doing' as const, attempts: 2, runs: [{ started: at(0), ended: at(50) }, { started: at(900), ended: at(990) }] as SymccTask['runs'] }
-  expect(core.cellWithTotal(ended, now)).toBe('')
-  expect(bandLeads([ended], now).get('T-9')).not.toContain('Σ')
-  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ +· try 2$/)
+  expect(core.rowCell(ended, now)).toBe('')
+  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ try 2$/)
+  // with no open try, the session worker's start counts as this try (added to the earlier tries)
+  expect(core.rowCell(ended, now, now - 10 * 60_000)).toBe('2h30m')
 })
 
 test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {

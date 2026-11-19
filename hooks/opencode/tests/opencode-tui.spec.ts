@@ -70,21 +70,23 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   expect(bandLines(null, NOW, 120)).toEqual([])
 })
 
-test('a doing row on a later try shows "Σ" with the total work time of all tries in the band and the list, never "in all"; a narrow row drops it (T-545)', () => {
+test('a doing row shows only the total work time of all tries in the band and the list, no Σ, never "in all"; a narrow row drops the time (T-557)', () => {
   const f0 = viewFile()
   const min = (m: number) => new Date(NOW - m * 60_000).toISOString()
   const runs = [{ started: min(300), ended: min(250) }, { started: min(200), ended: min(165) }, { started: min(15) }]
   const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 3, runs, note: '' } : t)), working: [] } }
   const row = (lines: string[]) => lines.find(l => /T-1 /.test(l))!
   const band = bandLines(f, NOW, 120).map(lineText)
-  expect(row(band)).toContain('15m · Σ1h 40m · try 3')
+  expect(row(band)).toContain('▶ 1h40m · try 3')
   const list = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)
-  expect(row(list)).toContain('15m · Σ1h 40m')
-  for (const l of [...band, ...list]) expect(l).not.toContain('in all')
-  // narrow: the total is left out, this try's time stays
-  expect(row(bandLines(f, NOW, 40).map(lineText))).not.toContain('Σ')
-  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 40).lines.map(lineText))).not.toContain('Σ')
-  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 40).lines.map(lineText))).toContain('15m')
+  expect(row(list)).toContain('▶ 1h40m')
+  for (const l of [...band, ...list]) {
+    expect(l).not.toContain('in all')
+    expect(l).not.toContain('Σ')
+  }
+  // narrow: the time is left out
+  expect(row(bandLines(f, NOW, 40).map(lineText))).not.toContain('1h40m')
+  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 30).lines.map(lineText))).not.toContain('1h40m')
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {

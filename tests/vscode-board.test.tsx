@@ -521,13 +521,14 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   await ui.unmount()
 })
 
-test('in VS Code a doing row on a later try shows "Σ" with the total work time of all tries, never "in all"; try 1 only its own time (T-545)', async ($, on) => {
+test('in VS Code a doing row shows only the total work time of all tries, no Σ, never "in all"; try 1 only its own time (T-557)', async ($, on) => {
   const at = (min: number) => new Date(T0 - min * 60_000).toISOString()
   const runs = [{ started: at(300), ended: at(250) }, { started: at(200), ended: at(165) }, { started: at(2) }]
   const tasks = BOARD_TASKS.map(t => (t.id === 'T-402' ? { ...t, attempts: 3, runs } : t))
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect(await rowText(ui, 'T-402')).toContain('▶ 2m · Σ1h 27m')
+  expect(await rowText(ui, 'T-402')).toContain('▶ 1h27m')
+  expect(await rowText(ui, 'T-402')).not.toContain('Σ')
   expect(await rowText(ui, 'T-402')).not.toContain('in all')
   expect(await rowText(ui, 'T-401')).not.toContain('Σ')
   await ui.unmount()

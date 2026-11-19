@@ -156,9 +156,10 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   // the same labels the board list gives (statusCell), fixed-width state and try columns
   expect(tasks.map(t => statusCell(t as never, T0))).toEqual(['12m', 'test', 'prep', 'merge', '5m'])
-  for (const text of ['T-40 ▶ 12m          ', 'T-41 ▶ test         ', 'T-42 ▶ prep  · try 2', 'T-43 ▶ merge        ', 'T-44 ▶ 5m    · try 3']) expect(await row(ui, text)).toBeDefined()
+  // the row shows the total work time of all tries, a step row the step and that total: "test 20m" (T-557)
+  for (const text of ['T-40 ▶ 12m              ', 'T-41 ▶ test 20m         ', 'T-42 ▶ prep 20m  · try 2', 'T-43 ▶ merge 20m        ', 'T-44 ▶ 5m        · try 3']) expect(await row(ui, text)).toBeDefined()
   // the titles start in one column
-  expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {11}Running worker$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {15}Running worker$/ })).toBeDefined()
   // no "doing" word and no "— worker on it" tail: the state says it
   expect(await ui.find({ type: 'Text', text: /^T-\d+ .*doing/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /worker on it/ })).toBeUndefined()
@@ -184,8 +185,8 @@ test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plai
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-50 ▶ prep +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-51 ▶ checker +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-50 ▶ prep 20m +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-51 ▶ checker 20m +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /T-50 ▶ checker/ })).toBeUndefined()
   await ui.unmount()
 })
@@ -234,7 +235,7 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^T-50 ▶ 1h 02m$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-50 ▶ 1h2m *$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /running the tests/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /starting at the next turn/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /worker starting/ })).toBeUndefined()
@@ -624,8 +625,8 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
   expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens in all/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 2: 1h 00m · ~\$0\.42/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens in all · ~\$0\.42/ })).toBeDefined()
-  // with more than one try it says once what the rows' Σ means (T-545)
-  expect(await ui.find({ type: 'Text', text: /\(Σ on its row: total work time of all tries\)/ })).toBeDefined()
+  // no Σ note any more: the rows show only the total (T-557)
+  expect(await ui.find({ type: 'Text', text: /Σ/ })).toBeUndefined()
   await ui.unmount()
 })
 
