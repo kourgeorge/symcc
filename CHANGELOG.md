@@ -2,10 +2,28 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
-## Unreleased
+## 0.5.3 (2026-11-19)
 
 ### Added
+- Search filter words in the board search (terminal and VS Code panels) and in the lead's board tool: `last:N`, `top:N`, `since:2d` (also `30m`, `2h`, `1w` or a date), `status:` (and `open`), `kind:`, `role:`; they mix with plain words. The board tool also takes `limit` and `sort`.
+- Setting `test_minutes`: how long each test command may run before merging (1-120, default 10). "Give them more time" after two time-outs gives only that task's next rerun twice its limit; the board's setting stays.
+- History entries are timed records; the task pages and the text board show when each one happened ("10:42", "Nov 18 22:49"). Existing boards and archives are converted once, with a `before-migrate` copy kept first. Marks (✓ ✗ ●) come from each entry's kind, not from its words.
+- The task page history is a timeline, with a line joining the events.
+- Running rows on a later try show the total work time of all tries ("▶ 15m · 1h 40m in all · try 3"); paused and waiting time isn't counted.
+- `symcc merged T-5`: marks a task done whose branch was already merged by hand (checked with git).
+- A to do task that was worked on before shows ● (a fresh one keeps ○).
+- `scripts/test-files.sh` runs only some test files; workers are told to use it.
 - symcc's repository has a `package.json` at its top (private, no packages, no scripts) that points OpenCode at `opencode/server.ts` and `opencode/tui.ts`, so `opencode plugin add github:kourgeorge/symcc` can install it once that file is on GitHub. Not seen working yet; `sh scripts/install-opencode.sh` stays the way to install. The guide now says what `opencode plugin list` really shows for the linked folder (no ID; symcc only in the folder path).
+
+### Changed
+- The step before testing is called "prep" (symcc commits the work and checks its files) and the checker agent's step "checker", on every view; before, both showed "check".
+- A task that is only rerunning its tests no longer shows as "waiting for you" (VS Code list, band, task page badge, OpenCode views).
+- The answer keys are told once (the dim "keys 1-5 pick a choice" line), not again in the bottom key list.
+- OpenCode: `/symcc` says it shows the board as text, and the panel no longer names a g key.
+
+### Fixed
+- `/symcc-off` could let a waiting board update reach the lead's chat next to its reply.
+- Flaky OpenCode tests that failed other tasks' merges.
 
 ## 0.5.2 (2026-11-19)
 
