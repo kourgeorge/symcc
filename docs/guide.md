@@ -288,6 +288,12 @@ says why). When symcc's run did not happen (no test commands set, or the code is
 record), the checker runs the tests itself. A worker that skips the full run may now and
 then hand back work that fails symcc's run; that costs one new try, with the failing output.
 
+A narrow test command is one that runs only some test files. On symcc itself that is
+`sh scripts/test-files.sh tests/checker.test.ts tests/merge.test.ts`: it runs just those files
+through `claude plugin test` (from a temporary copy of the plugin) and exits non-zero when one
+fails. The repo's `CLAUDE.md` tells workers and checkers about it. In your own project, say how
+to run one test file in its `CLAUDE.md` (or `AGENTS.md`) the same way.
+
 ### A code change with no test
 
 Before a change task is merged, symcc looks at the files its
