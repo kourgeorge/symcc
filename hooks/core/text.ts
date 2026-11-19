@@ -14,6 +14,10 @@ export function parseStamp<K extends string>(text: string | null, key: K, emptyO
 // eslint-disable-next-line no-control-regex
 export const clean = (s: unknown, n: number) => String(s ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, n)
 
+/** A path made safe to show: control characters (newlines, terminal escapes) become "?". A name may hold any character but NUL. */
+// eslint-disable-next-line no-control-regex
+export const shownPath = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
+
 export const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 /** `s` cut to `n` characters, ending with "…" when cut. */
