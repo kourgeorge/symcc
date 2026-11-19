@@ -51,3 +51,18 @@ test('settings still changes a setting, and the list shows the new value', async
   expect(JSON.parse(files['/board.json']!).max_parallel).toBe(4)
   expect(await call($, {})).toContain('max_parallel: 4 (default 3')
 })
+
+test('T-510: test_minutes is listed under "Checks before merging" (default 10), can be set, and a bad value is refused', async ($, on) => {
+  const files = setup(on, { tasks: [] })
+  let out = await call($, {})
+  expect(out).toMatch(/^test_minutes: 10 \(default 10/m)
+  expect(out.indexOf('test_minutes:')).toBeGreaterThan(out.indexOf('Checks before merging'))
+  expect(out.indexOf('test_minutes:')).toBeLessThan(out.indexOf('Workers'))
+  expect(await call($, { test_minutes: 20 })).toContain('each test command may run 20 min before merging')
+  expect(JSON.parse(files['/board.json']!).test_minutes).toBe(20)
+  expect(await call($, {})).toMatch(/^test_minutes: 20 \(default 10/m)
+  for (const bad of [0, 121, 2.5, -3]) {
+    expect(await call($, { test_minutes: bad })).toContain('test_minutes must be a whole number of minutes from 1 to 120')
+    expect(JSON.parse(files['/board.json']!).test_minutes).toBe(20)
+  }
+})

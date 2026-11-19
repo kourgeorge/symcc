@@ -194,7 +194,7 @@ export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
 export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

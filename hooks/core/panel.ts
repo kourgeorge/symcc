@@ -1,8 +1,8 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, type CheckStep, emptyBoard, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, type CheckStep, emptyBoard, OPEN, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
-import { boardSections, type DayGroup, dayLabel, dayOf, taskDay } from './days'
+import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
 import { originOf } from './origin'
 import { overtimeQuestion, timeLimitOf } from './task'
@@ -220,13 +220,97 @@ export function packRows(widths: number[], width: number, gap: number): number[]
   return rows
 }
 
-/** Whether task `t` matches the board panel's search `query`: case-insensitive, every word must match (AND). A word
+/** The status words a search (status:) and the lead's board tool take; "open" stands for every OPEN status (not done, dropped or backlog). */
+export const BOARD_STATUSES: SymccStatus[] = ['todo', 'doing', 'review', 'waiting', 'failed', 'paused', 'done', 'dropped', 'backlog']
+
+/** A search, read once from its text (see parseSearch): the plain words, the filter words, and how many to keep in which order. */
+export type SearchQuery = {
+  /** Plain words: every one must match the task's text (see taskMatches). */
+  words: string[]
+  status?: SymccStatus[]
+  kinds?: string[]
+  roles?: string[]
+  /** since:<when>: only tasks changed at or after this moment (ms). */
+  sinceMs?: number
+  /** last:N (newest: the most recently changed first) or top:N (order: what runs next first); `n` left out = all. */
+  pick?: { by: 'newest' | 'order'; n?: number }
+  /** What's wrong with a status: or kind: word (an unknown status or kind); the panel ignores these and keeps the word plain. */
+  errors: string[]
+}
+
+/** The filter words a search takes, for hints and help. */
+export const SEARCH_WORDS = 'last:N top:N since:2d status: kind: role:'
+
+/** How long ago `when` points, in ms ("30m", "2h", "2d", "1w"), or the moment of a local day ("2026-11-18");
+ *  undefined when it can't be read. */
+function sinceOf(when: string, nowMs: number, offsetMin: number): number | undefined {
+  const ago = /^(\d+)(m|h|d|w)$/.exec(when)
+  if (ago) return nowMs - Number(ago[1]) * { m: 60_000, h: 3_600_000, d: 86_400_000, w: 7 * 86_400_000 }[ago[2] as 'm']
+  if (/^\d{4}-\d{2}-\d{2}$/.test(when)) {
+    const at = Date.parse(`${when}T00:00:00Z`)
+    return Number.isFinite(at) ? at - offsetMin * 60_000 : undefined
+  }
+  return undefined
+}
+
+/** Reads a search text: plain words, and the filter words last:N, top:N, since:<30m|2h|2d|1w|2026-11-18>,
+ *  status:<word or open>, kind:<kind> and role:<role> (case-insensitive; a value may list several, "status:done,dropped").
+ *  A word that isn't a filter word, or whose value can't be read (foo:bar, last:x), stays a plain word. An unknown
+ *  status (or a kind not in `kinds`, when given) is noted in `errors` and the word stays plain too. */
+export function parseSearch(query: string, nowMs: number = Date.now(), offsetMin: number = localOffset(nowMs), kinds?: readonly string[]): SearchQuery {
+  const q: SearchQuery = { words: [], errors: [] }
+  for (const w of query.toLowerCase().split(/\s+/).filter(Boolean)) {
+    const m = /^(last|top|since|status|kind|role):(.+)$/.exec(w)
+    if (!m) {
+      q.words.push(w)
+      continue
+    }
+    const [, key, value] = m as unknown as [string, string, string]
+    const list = value.split(',').filter(Boolean)
+    if (key === 'last' || key === 'top') {
+      if (/^\d+$/.test(value) && Number(value) > 0) q.pick = { by: key === 'last' ? 'newest' : 'order', n: Number(value) }
+      else q.words.push(w)
+    } else if (key === 'since') {
+      const at = sinceOf(value, nowMs, offsetMin)
+      if (at === undefined) q.words.push(w)
+      else q.sinceMs = Math.max(q.sinceMs ?? -Infinity, at)
+    } else if (key === 'status') {
+      const bad = list.filter(s => s !== 'open' && !(BOARD_STATUSES as string[]).includes(s))
+      if (bad.length) {
+        q.errors.push(`unknown status "${bad[0]}": use ${BOARD_STATUSES.join(', ')} or open`)
+        q.words.push(w)
+      } else q.status = [...new Set([...(q.status ?? []), ...list.flatMap(s => (s === 'open' ? OPEN : [s as SymccStatus]))])]
+    } else if (key === 'kind') {
+      const bad = kinds ? list.filter(k => !kinds.includes(k)) : []
+      if (bad.length) {
+        q.errors.push(`unknown kind "${bad[0]}"; the kinds are: ${kinds!.join(', ')}`)
+        q.words.push(w)
+      } else q.kinds = [...(q.kinds ?? []), ...list]
+    } else q.roles = [...(q.roles ?? []), ...list]
+  }
+  return q
+}
+
+/** When a task last changed (its updated_at, else created_at), in ms; NaN when neither can be read. */
+export const changedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
+  const u = Date.parse(t.updated_at || '')
+  return Number.isFinite(u) ? u : Date.parse(t.created_at || '')
+}
+
+/** Whether task `t` matches the board panel's search `query` (a text, read with parseSearch, or one already read):
+ *  every filter word (status:, kind:, role:, since:) and every plain word must match (AND); last: and top: pick from
+ *  the list instead (see searchTasks). Plain words are case-insensitive. A word
  *  shaped like a task id ("T-12", "t12" or just "12") matches that task's id exactly (not T-120), or the word in its
  *  text; any other
  *  word matches part of the id, title, details, role, status (its word too, e.g. "waiting for you"), origin (owner,
  *  scout or worker, the scout's name, the task it came from) or the owner's request. An empty query matches every task. */
-export function taskMatches(t: SymccTask, query: string): boolean {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: number = Date.now()): boolean {
+  const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
+  if (q.status && !q.status.includes(t.status)) return false
+  if (q.kinds && !q.kinds.includes(kindOf(t))) return false
+  if (q.roles && !q.roles.includes(roleOf(t).toLowerCase())) return false
+  if (q.sinceMs !== undefined && !(changedMs(t) >= q.sinceMs)) return false
+  const words = q.words
   if (!words.length) return true
   const o = originOf(t)
   const text = [t.title, t.details, roleOf(t), kindOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? ''].join('\n').toLowerCase()
@@ -236,6 +320,22 @@ export function taskMatches(t: SymccTask, query: string): boolean {
     if (asId) return Number(asId[1]) === id || text.includes(w)
     return t.id.toLowerCase().includes(w) || text.includes(w)
   })
+}
+
+/** Run order: lower `order` first, then the lower number (each task after the ones it waits for, see waitOrder). */
+const byRunOrder = (x: SymccTask, y: SymccTask) => x.order - y.order || num(x.id) - num(y.id)
+
+/** The tasks of `tasks` that match the search `query` (see taskMatches). With last:N, the N changed most recently,
+ *  newest first; with top:N, the first N in run order (what runs next: without a status: word only the tasks waiting
+ *  to run, todo, are taken). Without either, the matches in the order given. */
+export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now()): T[] {
+  const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
+  const hits = tasks.filter(t => taskMatches(t, q, nowMs))
+  if (!q.pick) return hits
+  const sorted = q.pick.by === 'newest'
+    ? [...hits].sort((x, y) => (changedMs(y) || 0) - (changedMs(x) || 0) || num(y.id) - num(x.id))
+    : waitOrder(q.status ? hits : hits.filter(t => t.status === 'todo'), byRunOrder)
+  return q.pick.n === undefined ? sorted : sorted.slice(0, q.pick.n)
 }
 
 /** The line over the board list while a search filter is on: "search: notify · 3 of 144 tasks", or
@@ -383,10 +483,7 @@ export const scoutKeys = (paused = false, running = false): KeyHint[] => [
 ]
 
 /** When a task finished (its updated_at, else created_at), in ms; NaN when neither can be read. */
-const finishedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
-  const u = Date.parse(t.updated_at || '')
-  return Number.isFinite(u) ? u : Date.parse(t.created_at || '')
-}
+const finishedMs = changedMs
 /** Finished tasks, the one that finished last first (then the higher number). */
 const finishedFirst = (x: SymccTask, y: SymccTask) => (finishedMs(y) || 0) - (finishedMs(x) || 0) || num(y.id) - num(x.id)
 
