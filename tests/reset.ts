@@ -18,7 +18,7 @@ import { resetBackground } from '../hooks/claude/background'
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {
   // A timer left by an earlier test must not go off during this one.
-  for (const t of [...timers, S.watchdog, S.leadTimer, S.beat, S.sayTimer]) {
+  for (const t of [...timers, S.watchdog, S.leadTimer, S.leadRetry, S.beat, S.sayTimer]) {
     try {
       t?.cancel()
     } catch {

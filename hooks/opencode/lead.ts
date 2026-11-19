@@ -49,14 +49,27 @@ export function opencodeLead(api: OcSessionApi, o: OpencodeLeadOptions): Opencod
     log(`board update to the lead ${sessionID} (${urgent ? 'steer' : 'queue'})`)
     return api.prompt({ sessionID, text: leadText(text), delivery: urgent ? 'steer' : 'queue' })
   }
+  /** `had` didn't reach the lead: they wait again at the front (still at most 20), and go with the next update. */
+  const putBack = (had: typeof kept, err: unknown) => {
+    kept.unshift(...had)
+    if (kept.length > 20) kept.splice(0, kept.length - 20)
+    log(`board update kept: the send to the lead failed (${(err as Error)?.message ?? err})`)
+  }
   return {
     async send(text: string, how?: LeadSend) {
       const id = o.lead()
       const urgent = how?.urgent === true
       if (id && kept.length) {
         // the lead became known through another main copy: what this copy kept goes first, with this one
-        const all = [...kept.splice(0), { text, urgent }]
-        return give(id, all.map(k => k.text).join('\n\n'), all.some(k => k.urgent))
+        const had = kept.splice(0)
+        const all = [...had, { text, urgent }]
+        try {
+          return await give(id, all.map(k => k.text).join('\n\n'), all.some(k => k.urgent))
+        } catch (err) {
+          // the kept ones wait again; this one goes back to its sender's queue (app/tell.ts) through the error
+          putBack(had, err)
+          throw err
+        }
       }
       if (id) return give(id, text, urgent)
       kept.push({ text, urgent })
@@ -68,7 +81,7 @@ export function opencodeLead(api: OcSessionApi, o: OpencodeLeadOptions): Opencod
       const id = o.lead()
       if (!id || !kept.length) return
       const all = kept.splice(0)
-      await give(id, all.map(k => k.text).join('\n\n'), all.some(k => k.urgent)).catch(() => undefined)
+      await give(id, all.map(k => k.text).join('\n\n'), all.some(k => k.urgent)).catch(err => putBack(all, err))
     },
     async usage(_root, range, nowMs): Promise<LeadUsage> {
       const id = o.lead()

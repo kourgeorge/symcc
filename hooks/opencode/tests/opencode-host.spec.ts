@@ -39,7 +39,7 @@ import { parseViewFile } from '../board-view'
 
 /** Puts symcc's memory back to its start values, as a fresh copy of the plugin has (bun shares one copy across tests). */
 function reset() {
-  for (const t of [...timers, S.watchdog, S.leadTimer, S.beat, S.sayTimer]) t?.cancel()
+  for (const t of [...timers, S.watchdog, S.leadTimer, S.leadRetry, S.beat, S.sayTimer]) t?.cancel()
   timers.length = 0
   for (const k of Object.keys(S)) delete (S as Record<string, unknown>)[k]
   Object.assign(S, startS())
@@ -677,6 +677,37 @@ test('host.lead on OpenCode: a board update is a queued session.prompt into the 
   ])
   // no tokens yet: no calls, but the session counts
   expect(await lead.usage('/p', { kind: 'all' }, 5)).toEqual({ lead: [], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
+})
+
+test("host.lead on OpenCode: kept updates whose send to the lead fails wait again (still urgent) and go with the next update, once (T-490)", async () => {
+  const f = fakeSessions()
+  let id: string | undefined
+  let fails = 0
+  const logged: string[] = []
+  const api: OcSessionApi = { ...f.api, prompt: async p => (fails > 0 ? (fails--, Promise.reject(new Error('server restarting'))) : f.api.prompt(p)) }
+  const leadId = f.lead('/p')
+  const lead = opencodeLead(api, { lead: () => id, log: t => void logged.push(t) })
+  await lead.send('T-5 needs you', { urgent: true })
+  await lead.send('T-6 was merged')
+  id = leadId
+  // known(): the send fails, nothing is lost and one line is logged
+  fails = 1
+  await lead.known()
+  expect(f.prompts).toEqual([])
+  expect(logged.filter(l => l.includes('failed')).length).toBe(1)
+  // the next update carries them, still urgent; once
+  await lead.send('T-7 is done')
+  expect(f.prompts).toEqual([{ sessionID: id, text: leadText('T-5 needs you\n\nT-6 was merged\n\nT-7 is done'), delivery: 'steer' }])
+  await lead.known()
+  expect(f.prompts.length).toBe(1)
+  // a failing send with kept updates: they wait again, the new one is the sender's to put back (the error says so)
+  id = undefined
+  await lead.send('T-8 needs you', { urgent: true })
+  id = leadId
+  fails = 1
+  expect(await lead.send('T-9 failed').then(() => 'sent', (e: Error) => e.message)).toBe('server restarting')
+  await lead.known()
+  expect(f.prompts.slice(1)).toEqual([{ sessionID: id, text: leadText('T-8 needs you'), delivery: 'steer' }])
 })
 
 test('the OpenCode lead\'s tokens (a whole-session total, no times): counted in "all", left out of a "7d" and a task-range stats call', async () => {

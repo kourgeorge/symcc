@@ -89,6 +89,8 @@ export const startS = () => ({
   leadTimer: null as { cancel(): void } | null,
   /** a line waiting in leadQueue is urgent (tellLead's `urgent`): the next board update is sent as urgent (LeadSend) */
   leadUrgent: false,
+  /** a board update whose send failed waits for this timer (or the next update) to try again (see tellLead) */
+  leadRetry: null as { cancel(): void } | null,
   writing: Promise.resolve() as Promise<unknown>,
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
