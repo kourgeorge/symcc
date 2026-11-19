@@ -7,17 +7,22 @@
 // symcc's agents are children of the lead's session, and OpenCode tells a parent on its own when a child ends (a
 // synthetic "subagent completed" message). symcc's board update about the same agent says what happens next, so each
 // update is labelled: the lead takes the board update as the one to act on, and the automatic message as no news.
-// The lead's usage: its tokens from session.get (the whole session so far; cost is 0 for subscription models).
+// The lead's usage: its tokens from session.get (cost is 0 for subscription models). OpenCode 2.3 gives them only as
+// the whole session's total, with no time per message (session.context's messages carry no tokens or times), so that
+// total is counted only in the stats for everything; a ranged call ("7d", T-100..T-130) leaves the lead out and says why.
 // See docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, point 3.
 import type { HostLead, LeadSend, LeadUsage } from '../host'
 import { cleanTokens } from '../core/runs'
 import type { OcSessionApi } from './ctx'
 
 /** Where the lead's tokens come from, for the stats. */
-export const OPENCODE_LEAD_FROM = "OpenCode's session.get on the lead's session (the whole session so far, counted at once)"
+export const OPENCODE_LEAD_FROM = "OpenCode's session.get on the lead's session (the whole session so far, counted only in the stats with no range)"
 
 /** Why the lead's tokens can't be told before any lead session is known. */
 export const NO_LEAD_YET = 'no OpenCode lead session yet (the owner has not typed in one)'
+
+/** Why the lead's tokens are left out of a ranged stats call ("7d", an id range). */
+export const LEAD_WHOLE_SESSION_ONLY = "OpenCode only tells the lead session's whole total, not when each part was used, so it is counted only in the stats with no range"
 
 /** The label at the end of every board update: OpenCode's own "subagent completed" messages are not news of their own. */
 export const SUBAGENT_LABEL =
@@ -65,9 +70,10 @@ export function opencodeLead(api: OcSessionApi, o: OpencodeLeadOptions): Opencod
       const all = kept.splice(0)
       await give(id, all.map(k => k.text).join('\n\n'), all.some(k => k.urgent)).catch(() => undefined)
     },
-    async usage(_root, _range, nowMs): Promise<LeadUsage> {
+    async usage(_root, range, nowMs): Promise<LeadUsage> {
       const id = o.lead()
       if (!id) return { leadProblem: NO_LEAD_YET }
+      if (range.kind !== 'all') return { leadProblem: LEAD_WHOLE_SESSION_ONLY }
       try {
         const t = (await api.get({ sessionID: id })).tokens
         const tokens = t ? cleanTokens({ input: t.input, output: (t.output ?? 0) + (t.reasoning ?? 0), cache_read: t.cache?.read, cache_write: t.cache?.write }) : undefined

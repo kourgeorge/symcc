@@ -23,7 +23,8 @@ import { toolTouches } from '../guard'
 import { pump } from '../../app/workers'
 import { load } from '../../app/store'
 import { symccServer, owners, leads, SYMCC_ENGINE, type CopyRole, type Engine } from '../plugin'
-import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, NO_LEAD_YET } from '../lead'
+import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, NO_LEAD_YET, LEAD_WHOLE_SESSION_ONLY } from '../lead'
+import { leadTotals, rangeSpan, teamLines } from '../../core/stats'
 import { tellLead, noteForLead } from '../../app/tell'
 import { PLUGIN_ROOT, opencodeHost } from '../host'
 import type { Host } from '../../host'
@@ -589,6 +590,30 @@ test('host.lead on OpenCode: a board update is a queued session.prompt into the 
   ])
   // no tokens yet: no calls, but the session counts
   expect(await lead.usage('/p', { kind: 'all' }, 5)).toEqual({ lead: [], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
+})
+
+test('the OpenCode lead\'s tokens (a whole-session total, no times): counted in "all", left out of a "7d" and a task-range stats call', async () => {
+  const f = fakeSessions()
+  const id = f.lead('/p')
+  f.sessions.get(id)!.info = { ...f.sessions.get(id)!.info, tokens: { input: 1000, output: 500 }, cost: 0 }
+  const lead = opencodeLead(f.api, { lead: () => id })
+  const now = Date.parse('2026-11-19T12:00:00Z')
+  const tasks = [{ created_at: new Date(now - 3_600_000).toISOString(), updated_at: new Date(now - 60_000).toISOString() }]
+  const workers = { tokens: {}, tries: 0 }
+  // all: the whole session counts, and the lead's line says 1 session
+  const all = await lead.usage('/p', { kind: 'all' }, now)
+  expect(leadTotals(all.lead!, rangeSpan({ kind: 'all' }, tasks, now))).toEqual({ calls: 1, tokens: { input: 1000, output: 500 } })
+  expect(teamLines(all, rangeSpan({ kind: 'all' }, tasks, now), workers, 0).find(l => l.includes('lead'))).toContain('1 session')
+  // a task range and 7d: the lead is left out (not 0 tokens with "1 session", nor the whole session), and the line says why
+  for (const range of [{ kind: 'ids', from: 100, to: 130 }, { kind: 'days', days: 7 }] as const) {
+    const u = await lead.usage('/p', range, now)
+    expect(u).toEqual({ leadProblem: LEAD_WHOLE_SESSION_ONLY })
+    const lines = teamLines(u, rangeSpan(range, tasks, now), workers, 0)
+    const line = lines.find(l => l.includes('lead'))!
+    expect(line).toContain(`not counted: ${LEAD_WHOLE_SESSION_ONLY}`)
+    expect(line).not.toContain('1 session')
+    expect(lines.find(l => l.trimStart().startsWith('total'))).toContain('(without the lead)')
+  }
 })
 
 test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agents, in this project\'s main folder); a finished task\'s update goes queued, a "needs you" one steers, the owner\'s own actions wait as "Meanwhile" lines', async () => {
