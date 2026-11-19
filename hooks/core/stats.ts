@@ -106,10 +106,10 @@ export function failReason(line: string): FailReason | null {
 export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'outside' | null {
   if (isInvestigation(t as { kind?: unknown })) return 'answered'
   // T-514: merged by hand, then marked done on the board
-  if (t.history.some(l => /^merged outside the board\b/.test(l))) return 'outside'
-  const merged = t.history.filter(l => / → merged into /.test(l))
+  if (t.history.some(l => /^merged outside the board\b/.test(l.text))) return 'outside'
+  const merged = t.history.filter(l => / → merged into /.test(l.text))
   if (!merged.length) return null
-  return merged.some(l => /approved by the owner/.test(l)) ? 'approved' : 'own'
+  return merged.some(l => /approved by the owner/.test(l.text)) ? 'approved' : 'own'
 }
 
 /** Who a task came from, as one word: "owner", "scout bugs", "worker", "lead", or "unknown" (no usable origin). */
@@ -361,7 +361,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const unclear = finished.length - own - approved - answeredDone - outside
   const reasons: Record<FailReason, number> = { tests: 0, clash: 0, scope: 0, stopped: 0, rejected: 0 }
   for (const t of all) for (const l of t.history) {
-    const r = failReason(l)
+    const r = failReason(l.text)
     if (r) reasons[r]++
   }
   const ended: [string, number][] = [['merged on its own', own], ['approved by you', approved], ...(outside ? [['merged outside the board', outside] as [string, number]] : []), ...(answeredDone ? [['answered (investigation)', answeredDone] as [string, number]] : []), ...(unclear ? [['not clear from history', unclear] as [string, number]] : [])]
@@ -424,8 +424,8 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
 
   // Footnotes
   out.push('')
-  if (full) out.push(`Waiting: time waiting for you is not shown: history lines carry no times, so it can't be read reliably.`, `Tokens "in all" add every kind up; billed is ${BILLED_NOTE}.`)
-  else out.push(BILLED_FOOTNOTE, 'Time waiting for you is not shown: history lines carry no times.', `Every detail: /${name}-stats full`)
+  if (full) out.push(`Waiting: time waiting for you is not shown: history entries from older boards carry no times, so it can't be read reliably.`, `Tokens "in all" add every kind up; billed is ${BILLED_NOTE}.`)
+  else out.push(BILLED_FOOTNOTE, 'Time waiting for you is not shown: history entries from older boards carry no times.', `Every detail: /${name}-stats full`)
   return done$()
 }
 

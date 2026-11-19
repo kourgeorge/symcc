@@ -3,6 +3,7 @@
 import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId, withoutStages } from './board-file'
+import { migrateHistory, withHistory } from './history'
 import { addTokens, sumRuns } from './runs'
 
 /** Archiving runs at most this often (ms), on the regular check of the driving session. */
@@ -48,8 +49,10 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
     const bare = withoutStages(t0)
     const t = bare ?? t0
     const split = migrateRunTokens(t.runs)
-    if (split || bare) migrated++
-    return { ...cleanCommitFields(split ? { ...t, runs: split } : t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }
+    // T-522: history lines saved as plain strings become records (see migrateHistory)
+    const history = migrateHistory(t)
+    if (split || bare || history) migrated++
+    return { ...cleanCommitFields(split ? { ...t, runs: split } : t), after: Array.isArray(t.after) ? t.after : [], history: history ?? (Array.isArray(t.history) ? t.history : []), files: Array.isArray(t.files) ? t.files : [] }
   })
   return { archive: { version: 1, tasks: clean }, ...(migrated ? { migrated } : {}) }
 }
@@ -119,7 +122,7 @@ export function removeArchived(b: Board, tasks: BoardTask[]): Board {
 export function bringBack(b: Board, t: BoardTask, now: string): Board {
   if (find(b, t.id)) throw new Error(`${t.id} is already on the board`)
   if (t.status !== 'dropped') throw new Error(`${t.id} is archived and done; add a new task instead`)
-  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', question: null, test_tries: 0, conflict_tries: 0, history: [...t.history, 'brought back from the archive (was dropped)'], updated_at: now }
+  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', question: null, test_tries: 0, conflict_tries: 0, history: withHistory(t.history, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
   return { ...b, archived: addTotals(archivedOf(b), t, -1), tasks: [...b.tasks, back] }
 }
 

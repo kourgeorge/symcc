@@ -1274,7 +1274,7 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     expect(answered.text).toContain('T-2')
     expect(meanwhile.some(l => l.startsWith('The owner answered T-2 ("postgres")'))).toBe(true)
     await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status !== 'waiting')
-    expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.history.some(l => l.includes('postgres'))).toBe(true)
+    expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.history.some(l => l.text.includes('postgres'))).toBe(true)
     // a question for the owner, answered from the board panel
     await tool('symcc_question', { action: 'add', text: 'Add a scout?', options: ['yes', 'no'] })
     await until(async () => ((await view())!.view.questions ?? []).length === 1)

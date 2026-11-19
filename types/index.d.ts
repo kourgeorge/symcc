@@ -54,6 +54,13 @@ export type SymccTokens = { input?: number; output?: number; cache_write?: numbe
 export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | 'asked'
 
 /**
+ * One event in a task's history: when it happened (`at`, an ISO time; missing on an entry converted from an old board
+ * whose time could not be guessed), what kind of event it is (`kind`, one of HISTORY_KINDS in hooks/core/history.ts,
+ * e.g. "created", "checker-ok", "merged", "note") and its line as the owner reads it (`text`, e.g. "try 1: checker: OK").
+ */
+export type SymccHistoryEntry = { at?: string; kind: string; text: string }
+
+/**
  * Where a task came from, so it can be traced back to the request that started it.
  * `by`: who asked for it (the owner, a scout's report, a worker's report, or the lead's own idea).
  * `evidence`: what the plugin itself saw just before the task was added (the last owner prompt,
@@ -96,7 +103,8 @@ export type SymccTask = {
   test_tries?: number
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
-  history: string[]
+  /** what happened to the task, oldest first: one record per event (see SymccHistoryEntry) */
+  history: SymccHistoryEntry[]
   /** who made the task, why and from which request (a task from before origins were kept was given one by the lead, why "made before origins were kept") */
   origin?: SymccOrigin
   /** the worker role (a role file's name) the lead picked; missing = "general" */

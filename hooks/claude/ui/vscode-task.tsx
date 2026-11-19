@@ -12,7 +12,7 @@
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, statusWordOf, shownStatus, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
 import { squash } from '../../core/text'
-import { historyEvent, HISTORY_COLOR } from '../../core/history'
+import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import { when } from '../../app/tools'
 import type { PaneParts } from './parts'
@@ -362,12 +362,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     : null
 
   // the history as a timeline (T-512), newest first: the same events and marks as the terminal page (historyEvent),
-  // each mark in its tone, the try and when it ran, then the words, wrapped whole; a dim connector (│) between events
+  // each mark in its tone, when it happened (T-522, historyTime) and its try, then the words, wrapped whole; a dim connector (│) between events
   const events = [...t.history].reverse().map(historyEvent)
   const history = events.length
     ? section('history', `History (${events.length}, newest first)`, events.flatMap((e, i) => {
-        const run = e.try ? t.runs?.[e.try - 1] : undefined
-        const stamp = [run ? when(run.ended ?? run.started) : '', e.label].filter(Boolean).join(' · ')
+        const stamp = [historyTime(e.at, nowMs), e.label].filter(Boolean).join(' · ')
         const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
         const event = (
           <Box key={`vs-history-${i}`} flexDirection="row" gap={1}>

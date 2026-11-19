@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, endedEarly, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, type BoardTask } from '../hooks/board'
+import { hist } from './history-fixture'
 
 const T = '2026-11-18T10:00:00.000Z'
 const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
@@ -10,7 +11,7 @@ const CASES: [string, BoardTask, RegExp][] = [
   ['tests failed', failed({ note: 'tests failed: `npm test` (exit 1). boom', test_output: '$ npm test (exit 1)\n(pass) a guard refuses when it fails [1ms]\nerror: expect(received).toBe(expected)\n\nExpected: 2\nReceived: 3\n\n      at <anonymous> (tests/a.test.ts:4:3)\n(fail) adds numbers [1.0ms]\n' }), /^The tests failed \(`npm test`, exit 1\)\. Failing test: \(fail\) adds numbers \| error: expect\(received\)\.toBe\(expected\) \| Expected: 2\.$/],
   ['checker problems', failed({ note: 'the checker found problems: the save button is never enabled', test_output: checkerOutput('The save button is never enabled.\nAlso no test.') }), /^The checker found problems with the work\. First problem: The save button is never enabled\.$/],
   ['out of scope', failed({ note: outOfScopeText(['src/b.ts', 'README.md'], ['src/a.ts'], true) }), /^The worker changed files outside the task's list: src\/b\.ts, README\.md, so nothing was merged\.$/],
-  ['no change', failed({ note: 'the worker made no change', history: ['try 1: Found the cause: the cache key ignores the user. No code change needed; see below. → the worker made no change'] }), /^The worker finished without changing any files\. Its report says: Found the cause: the cache key ignores the user\. No code change needed; see below\.$/],
+  ['no change', failed({ note: 'the worker made no change', history: hist('try 1: Found the cause: the cache key ignores the user. No code change needed; see below. → the worker made no change') }), /^The worker finished without changing any files\. Its report says: Found the cause: the cache key ignores the user\. No code change needed; see below\.$/],
   ['ended without a result', failed({ note: 'the worker ended without a result' }), /^The worker ended without handing back a result/],
   ['timed out', failed({ note: outOfTimeNote(45), runs: [{ started: T, ended: T, ended_by: 'timed out', ended_note: 'ran over 45 min' }] }), /^It ran out of time \(over 45 min\) before it finished/],
   ['API error', failed({ note: "the worker's turn ended on an error (retries used up or the context limit)" }), /API error/],
@@ -51,7 +52,7 @@ test("the worker's report asking for files or a question is pointed out", () => 
 })
 
 test('the "try N (role X):" label is left out of the report quote, like "try N:"', () => {
-  expect(whyFailed(failed({ note: 'the worker made no change', history: ['try 2 (role tester): Found the cause. → the worker made no change'] })))
+  expect(whyFailed(failed({ note: 'the worker made no change', history: hist('try 2 (role tester): Found the cause. → the worker made no change') })))
     .toBe('The worker finished without changing any files. Its report says: Found the cause.')
 })
 

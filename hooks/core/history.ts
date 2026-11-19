@@ -1,5 +1,5 @@
 // Short history lines for things that stop or restart a task, or that the owner said.
-import type { SymccTask } from '../../types'
+import type { SymccHistoryEntry, SymccRun, SymccTask } from '../../types'
 import { tryLabel } from './roles'
 import { ellipsis, squash } from './text'
 
@@ -62,21 +62,24 @@ export function stoppedLine(t: Pick<SymccTask, 'role' | 'attempts'>, why: string
   return `${tryLabel(t)}: ${/^restarted\b/.test(why) ? why : `stopped: ${why}`}`
 }
 
+/** stoppedLine as an entry to add: "restarted" when `why` says so, else "stopped". */
+export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: string): HistoryAdd => [/^restarted\b/.test(why) ? 'restarted' : 'stopped', stoppedLine(t, why)]
+
 /**
  * The history lines of a change to task `t` (as it was) with `patch`: the restart line when its
  * worker was stopped (`wasDoing`), "files widened" when files were added, "waits on changed"
  * when its after list changed, the owner's answer and the lead's added note.
  */
-export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string, note?: string): string[] {
-  const lines: string[] = []
-  if (wasDoing) lines.push(changeRestartLine(t, changedFields(t, patch)))
+export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string, note?: string): HistoryAdd[] {
+  const lines: HistoryAdd[] = []
+  if (wasDoing) lines.push(['restarted', changeRestartLine(t, changedFields(t, patch))])
   const widened = filesWidenedLine(t.files ?? [], patch.files)
-  if (widened) lines.push(widened)
+  if (widened) lines.push(['files-widened', widened])
   const waits = afterChangedLine(t.after ?? [], patch.after)
-  if (waits) lines.push(waits)
-  if (answer?.trim()) lines.push(ownerAnsweredLine(answer))
-  if (note?.trim()) lines.push(noteAddedLine(note))
-  if (patch.merge_into !== undefined && patch.merge_into !== (t.merge_into ?? 'main')) lines.push(`now merges into ${patch.merge_into} (was ${t.merge_into ?? 'main'})`)
+  if (waits) lines.push(['waits-changed', waits])
+  if (answer?.trim()) lines.push(['answer', ownerAnsweredLine(answer)])
+  if (note?.trim()) lines.push(['note', noteAddedLine(note)])
+  if (patch.merge_into !== undefined && patch.merge_into !== (t.merge_into ?? 'main')) lines.push(['merge-into', `now merges into ${patch.merge_into} (was ${t.merge_into ?? 'main'})`])
   return lines
 }
 
@@ -95,11 +98,108 @@ export function detailsBothRefusal(a: { details?: unknown; add_details?: unknown
   return given(a.details) && given(a.add_details) ? 'Nothing changed: give either details (rewrites the whole text) or add_details (adds a note to it), not both. To rewrite and add a note, put the note at the end of the new details.' : null
 }
 
-/** What kind of event a history line is (see historyEvent). */
-export type HistoryKind = 'created' | 'note' | 'answer' | 'waits' | 'files' | 'backlog' | 'checker' | 'result' | 'stopped' | 'step' | 'other'
-
 /** How a history event went: well (✓), badly (✗), a step of a try (●), or anything else (○). */
 export type HistoryTone = 'good' | 'bad' | 'step' | 'other'
+
+/**
+ * Every kind of history entry symcc writes (T-522), with how it went (its tone, and so its mark). This is the one list:
+ * a new kind of event gets its name here.
+ */
+export const HISTORY_KINDS = {
+  /** the task was made ("created by the owner because ...") */
+  created: 'other',
+  /** the lead added a note to its details */
+  note: 'other',
+  /** the owner answered a question */
+  answer: 'other',
+  /** its after list changed ("waits on changed: ...") */
+  'waits-changed': 'other',
+  /** files were added to the task (a change, the owner allowing a request, the owner's edits before an approve) */
+  'files-widened': 'other',
+  /** the owner didn't allow the files a worker asked for */
+  'files-refused': 'other',
+  /** moved to or from the backlog */
+  'moved-backlog': 'other',
+  /** brought back (from the archive, from dropped) */
+  retried: 'other',
+  /** resumed after a pause */
+  resumed: 'other',
+  /** the branch it merges into changed */
+  'merge-into': 'other',
+  /** someone asked something: the worker asked the owner, the lead asked the owner, the owner asked for a rerun */
+  asked: 'step',
+  /** an investigation's worker answered */
+  answered: 'step',
+  /** a checker step with no verdict (it was stopped, it could not start …) */
+  checker: 'step',
+  /** the checker passed the try */
+  'checker-ok': 'good',
+  /** the checker found problems */
+  'checker-problems': 'bad',
+  /** a try's result that neither merged nor failed (checks passed and waiting, files in the way …) */
+  'try-result': 'step',
+  /** any other step of a try (a warning, more time given, the tests run again …) */
+  step: 'step',
+  /** a running worker was stopped and its task starts again (the task was changed) */
+  restarted: 'step',
+  /** a running worker was stopped (paused, the board off, the lead's handover …) */
+  stopped: 'bad',
+  /** a try ran out of time, or went over its limit */
+  'out-of-time': 'bad',
+  /** the owner rejected the try */
+  rejected: 'bad',
+  /** the owner approved, but it could not merge (its edits fail the tests …) */
+  approved: 'bad',
+  /** a try's result that went badly (tests failed, conflicts, no change, ended without a result …) */
+  failed: 'bad',
+  /** something kept it from merging or starting ("not merged: ...", "not started: ...") */
+  'not-merged': 'bad',
+  /** its work was merged (by its try, by an earlier try, or outside the board) */
+  merged: 'good',
+  /** it is done without a merge (an answered investigation …) */
+  done: 'good',
+  /** anything else */
+  other: 'other',
+} as const satisfies Record<string, HistoryTone>
+
+/** The name of a kind of history entry (see HISTORY_KINDS). */
+export type HistoryKind = keyof typeof HISTORY_KINDS
+
+/** A history entry (the record saved in board.json). */
+export type HistoryEntry = SymccHistoryEntry
+
+/** One entry to add: its kind and its text. */
+export type HistoryAdd = [kind: HistoryKind, text: string]
+
+/** Whether `k` is a kind symcc knows (see HISTORY_KINDS). */
+export const isHistoryKind = (k: unknown): k is HistoryKind => typeof k === 'string' && Object.prototype.hasOwnProperty.call(HISTORY_KINDS, k)
+
+/** The one way a history entry is made: `{ at, kind, text }`, `at` the time it happened (ISO). */
+export const historyEntry = (kind: HistoryKind, text: string, at: string): HistoryEntry => ({ at, kind, text })
+
+/** Task history `history` with entries added (each one [kind, text]), all at time `at`. */
+export function withHistory(history: readonly HistoryEntry[] | undefined, at: string, ...adds: HistoryAdd[]): HistoryEntry[] {
+  return [...(history ?? []), ...adds.map(([kind, text]) => historyEntry(kind, text, at))]
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** When an entry happened, short and in local time: "10:42" for today, "Nov 18 22:49" for an older day; '' when it has no time. */
+export function historyTime(at: string | undefined, nowMs = Date.now()): string {
+  const ms = at ? Date.parse(at) : NaN
+  if (!Number.isFinite(ms)) return ''
+  const d = new Date(ms)
+  const today = new Date(nowMs)
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+  return sameDay ? hm : `${MONTHS[d.getMonth()]} ${d.getDate()} ${hm}`
+}
+
+/** "10:42  try 1: checker: OK": an entry's line for plain text, its time first when it has one. */
+export const historyLineText = (e: HistoryEntry, nowMs = Date.now()): string => {
+  const when = historyTime(e.at, nowMs)
+  return when ? `${when}  ${e.text}` : e.text
+}
 
 /** The mark drawn for each tone, the same in every view. */
 export const HISTORY_MARK: Record<HistoryTone, string> = { good: '✓', bad: '✗', step: '●', other: '○' }
@@ -107,11 +207,13 @@ export const HISTORY_MARK: Record<HistoryTone, string> = { good: '✓', bad: '�
 /** The theme color of each tone's mark (a try's good or bad result is drawn in it too), the same in every view. */
 export const HISTORY_COLOR: Record<HistoryTone, string> = { good: 'success', bad: 'error', step: 'text', other: 'inactive' }
 
-/** A history line in parts (T-512). */
+/** A history entry in parts (T-512), for drawing. */
 export type HistoryEvent = {
   kind: HistoryKind
   tone: HistoryTone
   mark: string
+  /** when it happened (ISO), or '' when the entry has no time */
+  at: string
   /** the try it is about (0 when it names none) */
   try: number
   /** its "try 2" or "try 3 (role tester)" label ('' when it names none) */
@@ -124,62 +226,126 @@ export type HistoryEvent = {
   result: string
 }
 
-/** Lines that are not about a try, by how they start: [kind, start]. */
+/** Old lines that are not about a try, by how they start: [kind, start]. */
 const PLAIN_KINDS: [HistoryKind, RegExp][] = [
   ['created', /^created by /],
   ['note', /^the lead added a note:/],
   ['answer', /^the owner answered:/],
-  ['waits', new RegExp(`^${AFTER_CHANGED}`)],
-  ['files', /^(files widened:|the owner allowed files:|the owner didn't allow files:|owner edited files)/],
-  ['backlog', /^(moved to the backlog|moved from the backlog|brought back from the archive)/],
-  ['stopped', /^(not merged|not started):/],
+  ['waits-changed', new RegExp(`^${AFTER_CHANGED}`)],
+  ['files-refused', /^the owner didn't allow files:/],
+  ['files-widened', /^(files widened:|the owner allowed files:|owner edited files)/],
+  ['moved-backlog', /^(moved to the backlog|moved from the backlog)/],
+  ['retried', /^brought back from/],
+  ['resumed', /^resumed\b/],
+  ['merge-into', /^now merges into /],
+  ['merged', /^merged outside the board\b/],
+  ['not-merged', /^(not merged|not started):/],
 ]
 
-/** How a try's own line (no result) starts when it went badly. */
-const TRY_BAD = /^(stopped|out of time|rejected|the worker ended without a result|ran \d+ min, over|time is up|approved, but)|; nothing was checked or merged$/
-
-/** How a try's line starts when it is a step that is not a result, whatever words follow (a question, an answer, a rerun). */
-const TRY_STEP = /^(worker asked|answered\b|the owner asked)/
-
-/**
- * How symcc starts a try's result, the words it puts right after " → " (hooks/app/review.ts, workers.ts): good results,
- * then bad ones. Any other result is a step (checks passed and waiting, a new checker starts, the owner's files in the way …).
- */
+/** How symcc starts a try's result, the words it puts right after " → ": good results, then bad ones. */
 const RESULT_GOOD = /^(merged into|already merged into|done\b)/
 const RESULT_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
 const RESULT_KNOWN = new RegExp(`${RESULT_GOOD.source}|${RESULT_BAD.source}|^(checks passed|the checker (was stopped|couldn't start|gave no verdict)|you have )`)
 
 /**
- * A history line as an event: its kind, how it went (and so its mark), its try and its words. The kind and the tone come
- * from what symcc wrote the line for (a try's result, a checker verdict, created, a note, waits changed …), read from
- * how the line starts and, for a try's result, from the words symcc put after its " → ". Words inside quoted text,
- * a reason or a worker's summary never make a line bad or good.
+ * The index of the " → " that starts a try's result in `body`: the first one followed by words symcc writes there,
+ * so a "→" in the worker's summary or in the test output never moves it (else the last one); undefined when none.
  */
-export function historyEvent(line: string): HistoryEvent {
-  const m = /^(try (\d+)(?: \([^)]*\))?):\s*(.*)$/s.exec(line)
-  const ev = (kind: HistoryKind, tone: HistoryTone, said: string, result = ''): HistoryEvent => ({
-    kind, tone, mark: HISTORY_MARK[tone], try: m ? Number(m[2]) : 0, label: m ? m[1]! : '', text: m ? m[3]! : line, said, result,
-  })
-  if (!m) {
-    const kind = PLAIN_KINDS.find(([, re]) => re.test(line))?.[0] ?? 'other'
-    return ev(kind, kind === 'stopped' ? 'bad' : 'other', line)
-  }
-  const body = m[3]!
-  if (/^checker: OK\b/.test(body)) return ev('checker', 'good', body)
-  if (/^checker found problems\b/.test(body)) return ev('checker', 'bad', body)
-  if (/^checker\b/.test(body)) return ev('checker', 'step', body)
-  if (TRY_STEP.test(body)) return ev('step', 'step', body)
-  if (TRY_BAD.test(body)) return ev('stopped', 'bad', body)
-  // The result starts after the first " → " followed by words symcc writes there, so a "→" in the worker's summary
-  // or in the test output inside the result never moves it.
+function resultArrow(body: string): number | undefined {
   const arrows = [...body.matchAll(/ → /g)].map(a => a.index!)
-  const arrow = arrows.find(i => RESULT_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
+  return arrows.find(i => RESULT_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
+}
+
+/** A line's "try 2 (role tester): " label split off: [label, try number, the rest], or null when it names no try. */
+function tryParts(text: string): [label: string, n: number, body: string] | null {
+  const m = /^(try (\d+)(?: \([^)]*\))?):\s*(.*)$/s.exec(text)
+  return m ? [m[1]!, Number(m[2]), m[3]!] : null
+}
+
+/**
+ * The kind of an old history line (a plain string from before T-522), guessed from how it starts and, for a try's
+ * result, from the words symcc put after its " → ". Only used to convert old boards once (see oldHistoryEntry).
+ */
+export function guessHistoryKind(line: string): HistoryKind {
+  const parts = tryParts(line)
+  if (!parts) return PLAIN_KINDS.find(([, re]) => re.test(line))?.[0] ?? 'other'
+  const body = parts[2]
+  if (/^checker: OK\b/.test(body)) return 'checker-ok'
+  if (/^checker found problems\b/.test(body)) return 'checker-problems'
+  if (/^checker\b/.test(body)) return 'checker'
+  if (/^(worker asked|the owner asked)/.test(body)) return 'asked'
+  if (/^answered\b/.test(body)) return 'answered'
+  if (/^restarted\b/.test(body)) return 'restarted'
+  if (/^stopped/.test(body)) return 'stopped'
+  if (/^rejected/.test(body)) return 'rejected'
+  if (/^approved, but/.test(body)) return 'approved'
+  if (/^(out of time|ran \d+ min, over|time is up)/.test(body)) return 'out-of-time'
+  if (/^the worker ended without a result|; nothing was checked or merged$/.test(body)) return 'failed'
+  const arrow = resultArrow(body)
   if (arrow !== undefined) {
-    const said = body.slice(0, arrow)
     const result = body.slice(arrow + 3)
-    const tone: HistoryTone = RESULT_GOOD.test(result) ? 'good' : RESULT_BAD.test(result) ? 'bad' : 'step'
-    return ev('result', tone, said, result)
+    return /^done\b/.test(result) ? 'done' : RESULT_GOOD.test(result) ? 'merged' : RESULT_BAD.test(result) ? 'failed' : 'try-result'
   }
-  if (/, so it is done$/.test(body)) return ev('result', 'good', body)
-  return ev('step', 'step', body)
+  if (/, so it is done$/.test(body)) return 'done'
+  return 'step'
+}
+
+/**
+ * An old history line (a plain string) as a record: its kind guessed from its text (guessHistoryKind), its time
+ * guessed from the try it names (that try's end, else its start) or, for "created", the task's created_at; no time
+ * when neither is known. Only for the one-time conversion of old boards and archives.
+ */
+export function oldHistoryEntry(line: string, t: { runs?: readonly SymccRun[]; created_at?: string } = {}): HistoryEntry {
+  const kind = guessHistoryKind(line)
+  const n = tryParts(line)?.[1]
+  const run = n ? t.runs?.[n - 1] : undefined
+  const at = run ? run.ended ?? run.started : kind === 'created' ? t.created_at : undefined
+  return { ...(typeof at === 'string' && at ? { at } : {}), kind, text: line }
+}
+
+/**
+ * A task's history in the current shape (one-time conversion, T-522): old string lines become records (oldHistoryEntry),
+ * a record with a kind symcc doesn't know gets "other", and anything else (null, a number, a record without a text, as
+ * in a damaged archive.json) is dropped. Null when there is nothing to convert.
+ */
+export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[]; created_at?: string }): HistoryEntry[] | null {
+  const h = t.history
+  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && historyEntryOk(e) && isHistoryKind((e as HistoryEntry).kind))) return null
+  const out: HistoryEntry[] = []
+  for (const e of h) {
+    if (typeof e === 'string') { out.push(oldHistoryEntry(e, t)); continue }
+    if (!e || typeof e !== 'object' || Array.isArray(e) || typeof (e as HistoryEntry).text !== 'string') continue
+    const r = e as HistoryEntry
+    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), kind: isHistoryKind(r.kind) ? r.kind : 'other', text: r.text })
+  }
+  return out
+}
+
+/** Whether `v` can be a history entry read from a file: an old string line (converted on load) or a record with a text and a kind. */
+export function historyEntryOk(v: unknown): boolean {
+  if (typeof v === 'string') return true
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+  const e = v as Partial<HistoryEntry>
+  return typeof e.text === 'string' && typeof e.kind === 'string' && (e.at === undefined || typeof e.at === 'string')
+}
+
+/** The kinds of a try's result line ("try 2: <what the worker said> → <the result>"), whose text is split at the " → ". */
+const RESULT_KINDS = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approved'] as const satisfies readonly HistoryKind[]
+
+/**
+ * A history entry as an event to draw: its mark and tone come from its saved kind (HISTORY_KINDS), never from words in
+ * its text. Its try label and, for a try's result, what was said before the " → " and the result after it, are split
+ * off the text for drawing only.
+ */
+export function historyEvent(e: HistoryEntry): HistoryEvent {
+  const kind: HistoryKind = isHistoryKind(e.kind) ? e.kind : 'other'
+  const tone: HistoryTone = HISTORY_KINDS[kind]
+  const parts = tryParts(e.text)
+  const text = parts ? parts[2] : e.text
+  const isResult = (RESULT_KINDS as readonly string[]).includes(kind)
+  const arrow = parts && isResult ? resultArrow(text) : undefined
+  return {
+    kind, tone, mark: HISTORY_MARK[tone], at: e.at ?? '', try: parts ? parts[1] : 0, label: parts ? parts[0] : '', text,
+    said: arrow === undefined ? text : text.slice(0, arrow), result: arrow === undefined ? '' : text.slice(arrow + 3),
+  }
 }

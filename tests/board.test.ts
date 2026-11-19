@@ -1015,12 +1015,12 @@ test('add and change set needs_review on a task', () => {
 
 test('reject sends a task in review back to "todo" with the reason in its history', () => {
   let [b, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
-  b = patchTask(b, t.id, { status: 'review', attempts: 1, test_tries: 1, history: ['try 1: did it → checks passed'] }, T)
+  b = patchTask(b, t.id, { status: 'review', attempts: 1, test_tries: 1, history: hist('try 1: did it → checks passed') }, T)
   const r = rejectTask(b, 't-1', 'the button should be blue', '2026-11-09T01:00:00.000Z')
   const x = r.tasks[0]!
   expect(x.status).toBe('todo')
   expect(x.note).toContain('the button should be blue')
-  expect(x.history[x.history.length - 1]).toContain('rejected by the owner: the button should be blue')
+  expect(x.history[x.history.length - 1]!.text).toContain('rejected by the owner: the button should be blue')
   expect(x.history.length).toBe(2)
   expect(x.test_tries).toBe(0)
   expect(ready(r).map(y => y.id)).toEqual([t.id])
@@ -1617,7 +1617,7 @@ test('a backlog task never starts until it is moved to todo', async () => {
   b = promoteTask(b, idea.id, T)
   const p = b.tasks.find(t => t.id === idea.id)!
   expect(p.status).toBe('todo')
-  expect(p.history[p.history.length - 1]).toBe('moved from the backlog to todo')
+  expect(p.history[p.history.length - 1]!.text).toBe('moved from the backlog to todo')
   expect(ready(b).map(t => t.id)).toEqual([idea.id])
   expect(ready(b).map(t => t.id)).not.toContain(later.id)
   expect(() => promoteTask(b, idea.id, T)).toThrow()
@@ -1632,11 +1632,11 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
   b = stashTask(b, a.id, T, 'not clear yet')
   const x = b.tasks.find(t => t.id === a.id)!
   expect(x.status).toBe('backlog')
-  expect(x.history[x.history.length - 1]).toBe('moved to the backlog (was todo): not clear yet')
+  expect(x.history[x.history.length - 1]!.text).toBe('moved to the backlog (was todo): not clear yet')
   expect(ready(b).map(t => t.id)).toEqual([])
   b = stashTask(stashTask(b, c.id, T), d.id, T)
   expect(b.tasks.every(t => t.status === 'backlog')).toBe(true)
-  expect(b.tasks.find(t => t.id === d.id)!.history.at(-1)).toBe('moved to the backlog (was failed)')
+  expect(b.tasks.find(t => t.id === d.id)!.history.at(-1)?.text).toBe('moved to the backlog (was failed)')
   b = patchTask(b, a.id, { status: 'done' }, T)
   expect(() => stashTask(b, a.id, T)).toThrow()
 })
@@ -2252,10 +2252,10 @@ test('runMs: bad times or an end before the start give 0', () => {
 test('a new task keeps where it came from, and its first history line says who and why', () => {
   const [b1, a] = addTask(emptyBoard(), { title: 'Search', origin: { by: 'owner', request: 'add a search command that finds tasks by word', why: 'the owner asked for search' } }, T)
   expect(a.origin).toEqual({ by: 'owner', request: 'add a search command that finds tasks by word', why: 'the owner asked for search', at: T })
-  expect(a.history[0]).toBe('created by the owner because the owner asked for search')
+  expect(a.history[0]!.text).toBe('created by the owner because the owner asked for search')
   const [b2, s] = addTask(b1, { title: 'Fix crash', origin: { by: 'scout', scout: 'bugs', why: 'the bugs scout found a crash', evidence: 'scout bugs report at 2026-11-09 00:00 UTC' } }, T)
   expect(s.origin).toMatchObject({ by: 'scout', scout: 'bugs', evidence: 'scout bugs report at 2026-11-09 00:00 UTC' })
-  expect(s.history[0]).toBe('created by scout bugs because the bugs scout found a crash')
+  expect(s.history[0]!.text).toBe('created by scout bugs because the bugs scout found a crash')
   const [b3, w] = addTask(b2, { title: 'Half of search', origin: { by: 'lead', task: 't1', how: 'split', why: 'search was too big' } }, T)
   expect(w.origin).toMatchObject({ by: 'lead', task: 'T-1', how: 'split' })
   // it survives a save and load, and a change keeps it even when a patch tries to replace it
@@ -2263,7 +2263,7 @@ test('a new task keeps where it came from, and its first history line says who a
   expect(back.tasks[0]!.origin).toEqual(a.origin)
   const changed = patchTask(back, a.id, { title: 'Search v2', origin: { by: 'lead', why: 'other', at: T } }, '2026-11-10T00:00:00.000Z')
   expect(changed.tasks[0]!.origin).toEqual(a.origin)
-  expect(changed.tasks[0]!.history[0]).toBe('created by the owner because the owner asked for search')
+  expect(changed.tasks[0]!.history[0]!.text).toBe('created by the owner because the owner asked for search')
 })
 
 test('a task without a why, or with a wrong origin, is refused with a clear error', () => {
@@ -2571,8 +2571,8 @@ test('a task found already merged names its commit by the short sha', () => {
   const [, t] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const done = mergedDone(t, SHA1, 'sent back to todo', T)
   expect(done.note).toBe('merged into main (aaaaaaaa)')
-  expect(done.history!.at(-1)).toBe(alreadyMergedLine(t, SHA1, 'sent back to todo'))
-  expect(done.history!.at(-1)).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
+  expect(done.history!.at(-1)?.text).toBe(alreadyMergedLine(t, SHA1, 'sent back to todo'))
+  expect(done.history!.at(-1)?.text).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
 })
 
 import { symccOn, setEnabled, offAnswer, offStatusLine, offStatusParts } from '../hooks/board'
@@ -3130,10 +3130,10 @@ test('readBoard drops bad entries inside files, after, history and runs, and nam
   const r2b = readBoard(JSON.stringify({ tasks: [{ ...base, runs: [{ started: T }, 'x', 4] }] }))
   expect(r2b.board.tasks[0]!.runs).toHaveLength(1)
   expect(r2b.fixed).toContain('T-1: 2 bad tries dropped')
-  // (3) after keeps only task ids (normalised), history only strings
+  // (3) after keeps only task ids (normalised), history only entries (an old string line is converted, T-522)
   const r3 = readBoard(JSON.stringify({ tasks: [{ ...base, after: [5, null, 'T-2'], history: [7, 'made'] }] }))
   expect(r3.board.tasks[0]!.after).toEqual(['T-2'])
-  expect(r3.board.tasks[0]!.history).toEqual(['made'])
+  expect(r3.board.tasks[0]!.history).toEqual([{ kind: 'other', text: 'made' }])
   expect(r3.fixed).toEqual(['T-1: 2 bad after entries dropped', 'T-1: 1 bad history entry dropped'])
   // a clean task reports nothing
   expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], history: ['h'], runs: [] }] })).fixed).toEqual([])
@@ -3376,7 +3376,7 @@ test('archive: the file is read safely; a broken one is reported, and an archive
   const back = bringBack(y, a.tasks[1]!, T)
   const t = find(back, 'T-2')!
   expect(t.status).toBe('todo')
-  expect(t.history.at(-1)).toBe('brought back from the archive (was dropped)')
+  expect(t.history.at(-1)?.text).toBe('brought back from the archive (was dropped)')
   expect(back.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: { input: 1000 } })
   expect(() => bringBack(y, a.tasks[0]!, T)).toThrow(/done/)
 })
@@ -3400,14 +3400,14 @@ import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppe
 test('changeLines names the changed fields of a restart, the widened files and the owner answer', async () => {
   const t = { attempts: 2, role: 'general', files: ['hooks/'], details: 'old', after: [] as string[] }
   expect(changedFields(t, { details: 'old', files: ['hooks/', 'tests/'], after: [] })).toEqual(['files'])
-  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual(['try 2: restarted: the task was changed (details, after)', 'waits on changed: nothing → T-1'])
-  expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual(['files widened: + a.ts, + b.ts'])
-  expect(changeLines(t, {}, false, ' yes, go ')).toEqual(['the owner answered: “yes, go”'])
+  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual([['restarted', 'try 2: restarted: the task was changed (details, after)'], ['waits-changed', 'waits on changed: nothing → T-1']])
+  expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual([['files-widened', 'files widened: + a.ts, + b.ts']])
+  expect(changeLines(t, {}, false, ' yes, go ')).toEqual([['answer', 'the owner answered: “yes, go”']])
   expect(changeLines(t, { files: ['hooks/'] }, false)).toEqual([])
   expect(filesWidenedLine(['a'], undefined)).toBe(null)
   expect(ownerAnsweredLine('x'.repeat(1000)).length).toBeLessThan(ANSWER_LINE_CHARS + 30)
   expect(stoppedLine({ attempts: 3, role: 'tester' }, 'paused')).toBe('try 3 (role tester): stopped: paused')
-  expect(changeLines(t, {}, false, undefined, ' check docs ')).toEqual(['the lead added a note: “check docs”'])
+  expect(changeLines(t, {}, false, undefined, ' check docs ')).toEqual([['note', 'the lead added a note: “check docs”']])
 })
 
 import { addDetailsText, detailsBothRefusal } from '../hooks/board'
@@ -3423,7 +3423,7 @@ test('addDetailsText keeps the old details and adds the note as a new paragraph;
 test('backToTodo of a running task says in its history why it restarts', async () => {
   const [b] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const t = { ...b.tasks[0]!, status: 'doing' as const, attempts: 1 }
-  expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).history.at(-1)?.text).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
   expect(backToTodo({ ...t, status: 'failed' }, 'x', T).history).toEqual(t.history)
 })
 
@@ -3431,6 +3431,7 @@ test('backToTodo of a running task says in its history why it restarts', async (
 
 import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
 import { fakeHost } from './fake-host'
+import { hist } from './history-fixture'
 
 test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {
   expect(cutLine('  short\n text  ', 50)).toBe('short text')

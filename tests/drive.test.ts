@@ -78,7 +78,7 @@ test("a task stopped by the owner's hand-over goes back to todo without using up
   expect(t.session).toBeUndefined()
   expect(t.note).toBe(HANDOVER_NOTE)
   expect(t.runs?.length).toBe(1)
-  expect(t.history.at(-1)).toBe('try 2: restarted: the owner moved driving to another session')
+  expect(t.history.at(-1)?.text).toBe('try 2: restarted: the owner moved driving to another session')
   // a task no longer doing is left as it is
   expect(handedOff(t, T)).toBe(t)
 })
@@ -165,7 +165,7 @@ test('/symcc-drive asks the driving session to hand over; it stops its workers o
   const t = (JSON.parse(w.files.get(`${ROOT}/${S.N.boardFile}`)!) as Board).tasks[0]!
   expect(t.status).toBe('todo')
   expect(t.attempts).toBe(0)
-  expect(t.history.at(-1)).toContain(HANDOVER_NOTE)
+  expect(t.history.at(-1)?.text).toContain(HANDOVER_NOTE)
 
   // b's heartbeat: it claims, and writes its own plain heartbeat
   S.me = 'b'

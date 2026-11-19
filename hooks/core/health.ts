@@ -72,7 +72,7 @@ export function shareFiles(a: readonly string[], b: readonly string[]): boolean 
 }
 
 /** How many times task `t`'s after list was changed, by its history lines. */
-export const afterChanges = (t: Pick<BoardTask, 'history'>) => (t.history ?? []).filter(l => l.startsWith(AFTER_CHANGED)).length
+export const afterChanges = (t: Pick<BoardTask, 'history'>) => (t.history ?? []).filter(l => l.text.startsWith(AFTER_CHANGED)).length
 
 function stuck(b: Board): HealthFinding[] {
   const out: HealthFinding[] = []

@@ -4,6 +4,7 @@ import type { On, ProcessRunResult } from 'claude-code'
 import type { MockClock } from 'claude-code/testing'
 import { T0, seedBoard } from './board-fixture'
 import { ran, readText } from './fakes'
+import { hist } from './history-fixture'
 
 const iso = (ms: number) => new Date(ms).toISOString()
 
@@ -41,7 +42,7 @@ const task = (id: string, status: string, extra: Record<string, unknown> = {}) =
   order: Number(id.slice(2)),
   after: ['T-499', 'T-498'],
   attempts: 2,
-  history: HISTORY,
+  history: hist(...HISTORY),
   branch: null,
   created_at: iso(T0 - 86_400_000),
   updated_at: iso(T0 - 60_000),
