@@ -8,7 +8,7 @@ import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
-import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
+import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
@@ -4969,4 +4969,89 @@ test('a finished task waiting a long time for another task\'s tests still merges
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
   expect(w.files.has(TLOCK)).toBe(false)
+})
+
+// ---------------- T-491: a worker that can't start ----------------
+
+/**
+ * A world in auto mode with T-1 to do (the extra fields in `extra`), driven by this session, on a host with no start
+ * queue (so pump starts the worker itself); `spawn` answers the worker's start. `spawned` counts the starts asked for.
+ */
+async function cantStartWorld(spawn: () => Promise<{ agentId?: string }>, extra: Partial<BoardTask> = {}, g: Partial<Git> = {}) {
+  const w = world({ current: 'main', ...g })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 0, ...extra }, ISO))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  let spawned = 0
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async () => (spawned++, spawn())
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  return { w, spawned: () => spawned, t1: async () => find(await load(w.$), 'T-1')! }
+}
+
+const cantStartLines = () => leadQueue.filter(l => l.startsWith("T-1 couldn't start"))
+
+test("T-491: a worker start the host refuses fails the task once: note \"couldn't start: <why>\", one try counted, one line to the lead", async () => {
+  const c = await cantStartWorld(() => Promise.reject(new Error('no agents allowed here')))
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(c.spawned()).toBe(1)
+  expect(t.status).toBe('failed')
+  expect(t.note!.startsWith("couldn't start: no agents allowed here")).toBe(true)
+  expect(t.attempts).toBe(1)
+  expect(cantStartLines()).toEqual(["T-1 couldn't start: no agents allowed here"])
+  cleanUp()
+})
+
+test("T-491: a worker type not loaded yet puts the task back as it was twice (no try counted); the 3rd miss fails it as \"couldn't start\"", async () => {
+  const c = await cantStartWorld(() => Promise.reject(Object.assign(new Error("Agent type 'symcc:worker' not found"), { notReady: true })), { branch: 'symcc/T-1', note: 'waiting for its turn', runs: [{ started: ISO, ended: ISO }] })
+  const runs = (await c.t1()).runs
+  expect(runs?.length).toBe(1)
+  for (const n of [1, 2]) {
+    await pump(c.w.$)
+    const t = await c.t1()
+    expect(c.spawned()).toBe(n)
+    expect(t.status).toBe('todo')
+    expect(t.attempts).toBe(0)
+    expect(t.branch).toBe('symcc/T-1')
+    expect(t.note).toBe('waiting for its turn')
+    expect(t.runs).toEqual(runs)
+    expect(cantStartLines()).toEqual([])
+  }
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(c.spawned()).toBe(3)
+  expect(t.status).toBe('failed')
+  expect(t.note!.startsWith("couldn't start: Agent type 'symcc:worker' not found")).toBe(true)
+  expect(cantStartLines().length).toBe(1)
+  cleanUp()
+})
+
+test('T-491: a worker start that answers no agent id fails the task with "couldn\'t start: the worker did not start"', async () => {
+  const c = await cantStartWorld(async () => ({ agentId: '' }))
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(t.status).toBe('failed')
+  expect(t.note).toBe("couldn't start: the worker did not start")
+  expect(workers.size).toBe(0)
+  expect(cantStartLines()).toEqual(["T-1 couldn't start: the worker did not start"])
+  cleanUp()
+})
+
+test("T-491: when git can't make the task's folder (worktree add fails), the task fails with git's words and no worker is asked for", async () => {
+  const fatal = `fatal: '${WT}' already exists`
+  const c = await cantStartWorld(async () => ({ agentId: 'ag1' }), {}, { answer: args => (args[0] === 'worktree' && args[1] === 'add' ? fail(fatal, 128) : undefined) })
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(c.spawned()).toBe(0)
+  expect(t.status).toBe('failed')
+  expect(t.note!.startsWith("couldn't start: git worktree add")).toBe(true)
+  expect(t.note).toContain(fatal)
+  expect(cantStartLines().length).toBe(1)
+  cleanUp()
 })
