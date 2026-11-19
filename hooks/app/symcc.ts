@@ -264,6 +264,10 @@ export function isSymccTool(tool: string): boolean {
  * and the workers' question tool (it knows the calling worker from `agentId`) run here.
  * An agent this copy doesn't hold is looked up on the board (agentOnBoard, T-471), so a checker or a stopped agent
  * of another session's copy is treated as here; an unreadable board throws (toolCallFailed then decides).
+ * The lead is the caller with no `agentId` (the host's main chat; a host whose lead has an id of its own, as OpenCode's
+ * session, passes none for it). Any other agent is refused the lead's tools (T-525), whether or not the board still
+ * names it: an agent of an old try whose id the board no longer keeps (runs keeps only the last few) is never taken for
+ * the lead.
  */
 export async function toolCall(host: Host, tool: string, agentId: string | undefined, input: Record<string, unknown>): Promise<{ deny: string } | { result: string } | null> {
   if (agentId && stopped.has(agentId)) return { deny: stoppedText() }
@@ -274,6 +278,10 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
     const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find(t => tool === toolName(t))
     const why = short ? scoutToolRefusal(short, S.N.name) : null
     if (why) return { deny: why }
+  } else if (agentId) {
+    // T-525: an agent that is no scout or checker (a worker, one symcc no longer has on record, or any other) never gets the lead's tools
+    const lead = toolNames().find(t => tool === toolName(t))
+    if (lead) return { deny: notLeadText(lead) }
   }
   if (tool === toolName(ASK_TOOL)) {
     if (!(await findRoot(host))) return { result: startingText() }
@@ -292,6 +300,10 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
     return { result: `error: ${(err as Error).message}` }
   }
 }
+
+/** Why an agent's call of lead tool `tool` (plain name) is refused: only the lead (the main chat) may call it. */
+export const notLeadText = (tool: string) =>
+  `Refused: ${toolName(tool)} is only for the ${S.N.name} lead (the main chat), and you are not it. Change nothing on the board; put anything for it in your final answer, and end.`
 
 /**
  * A tool that is not symcc's ran, and touched what `touch` says (a file it wrote or edited, or a shell command it ran;
