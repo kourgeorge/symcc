@@ -355,6 +355,23 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
 }
 
 /**
+ * Deletes task branch `branch` when all its work is in `into`, the branch the task merged into (T-493). `git branch -d`
+ * checks the current HEAD instead, so a task merged into a branch that isn't checked out kept its branch. Here the
+ * branch's tip is read, checked to be in `into`, and the branch is deleted only if it is still at that tip (so work
+ * added meanwhile is never lost). A branch checked out in a worktree is kept. Returns whether it was deleted.
+ */
+export async function deleteMergedBranch($: Host, branch: string, into: string): Promise<boolean> {
+  const ref = `refs/heads/${branch}`
+  const tip = await git($, ['rev-parse', '--verify', '-q', ref])
+  const sha = tip.stdout.trim()
+  if (tip.exitCode !== 0 || !/^[0-9a-f]{7,64}$/i.test(sha)) return false
+  if ((await git($, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`])).exitCode !== 0) return false
+  const list = await git($, ['worktree', 'list', '--porcelain'])
+  if (list.exitCode !== 0 || list.stdout.split('\n').some(l => l.trim() === `branch ${ref}`)) return false
+  return (await git($, ['update-ref', '-d', ref, sha])).exitCode === 0
+}
+
+/**
  * Part of the regular check: removes leftover worktrees of done and dropped tasks (never with
  * --force, never while a worker runs there) and deletes the branches of done tasks that git
  * lists as merged into the branch they merged into. Only the plugin's own branches (N.branch) are touched.
@@ -386,7 +403,7 @@ export async function cleanupMerged($: Host, b: Board) {
     const merged = await git($, ['branch', '--merged', into, '--format=%(refname:short)'])
     if (merged.exitCode !== 0) continue
     const done = b.tasks.filter(t => intoOf(t) === into)
-    for (const br of branchesToDelete(done, merged.stdout.split('\n'), S.N.branch(''))) if ((await git($, ['branch', '-d', br])).exitCode === 0) branches++
+    for (const br of branchesToDelete(done, merged.stdout.split('\n'), S.N.branch(''))) if (await deleteMergedBranch($, br, into)) branches++
   }
   const text = S.toldCleanup ? '' : cleanupText(branches, dirs)
   if (text) {
