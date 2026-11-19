@@ -84,22 +84,34 @@ export const MORE_TIME_CELL = 'more time?'
  *  "prep" for symcc's own pre-merge step, "checker" only while a checker agent runs (the checker setting). */
 export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' }
 
-/** The note of a finished task while symcc's own pre-merge step runs (step "prep"): it says plainly what it does. */
-export const PREP_NOTE = 'preparing to merge: committing and checking files'
+/**
+ * The one small set of notes a task shows between its hand-back (or the owner's approve, or "your files are clear") and its
+ * merge, the same in every board view (terminal list, band, VS Code, OpenCode, text board):
+ * - while it waits for its merge turn: "in line (n)" (inLineNote, in board-file.ts);
+ * - during its turn, the note of its step: prep, test, merge (and checker, only while a checker agent runs);
+ * - once the turn is over, how it went: merged (done), failed with the reason, waiting for your files (waitFilesNote), or in review.
+ */
+export const STEP_NOTE: Record<CheckStep, string> = {
+  prep: 'preparing to merge: committing and checking files',
+  testing: 'running the tests',
+  checker: 'a checker agent is trying to break it before it merges',
+  merging: 'merging',
+}
 
-/** The note a finished task gets while symcc checks and merges it (it replaces PREP_NOTE once the prep step is over). */
-export const FINISH_NOTE = 'checking and merging'
+/** The note of a finished task in symcc's own pre-merge step (step "prep"); set at the hand-back and on approve. */
+export const PREP_NOTE = STEP_NOTE.prep
 
 /** The note of a task while its checker runs; a reloaded copy finds a task whose checker it lost by it (see restartCheckers in workers.ts). */
-export const CHECKER_NOTE = 'a checker agent is trying to break it before it merges'
+export const CHECKER_NOTE = STEP_NOTE.checker
 
-/** The note task `note` gets when check step `step` begins: PREP_NOTE in the prep step of a plain finish (also after
- *  the checker's verdict, so the checker note doesn't stay once no checker runs), back to FINISH_NOTE in the test and
- *  merge steps; the checker step keeps it (runChecker then sets CHECKER_NOTE), and any other note stays. */
+/** Whether `note` is one of the notes a task shows during its merge turn or while it waits for it (see STEP_NOTE). */
+export const isMergeNote = (note: string | undefined): boolean => !!note && (Object.values(STEP_NOTE).includes(note) || /^in line \(\d+\)$/.test(note))
+
+/** The note task `note` gets when check step `step` begins: the step's note (STEP_NOTE) in place of any other merge note;
+ *  the checker step keeps it (runChecker then sets CHECKER_NOTE), and a note that is not a merge note stays. */
 export function stepNote(step: CheckStep, note: string | undefined): string | undefined {
   if (step === 'checker') return note
-  if (step === 'prep') return note === FINISH_NOTE || note === CHECKER_NOTE ? PREP_NOTE : note
-  return note === PREP_NOTE || note === CHECKER_NOTE ? FINISH_NOTE : note
+  return isMergeNote(note) ? STEP_NOTE[step] : note
 }
 
 /** The short status column of a task row in the board list: the step while symcc checks its finished work

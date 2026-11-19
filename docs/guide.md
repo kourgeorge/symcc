@@ -186,20 +186,42 @@ happens, never the words in its hand-back:
 - otherwise it is finished, and its work goes through these steps (an investigation goes to
   review with its answer instead):
 
-**Step words.** While a finished task goes through these steps, every board view (the board
-list, the band above the prompt, the VS Code list and task page and the OpenCode board) shows
-the step in place of its time, and the lead's text board shows it after the status ("doing
-prep · title"), all with the same short words:
+**The merge line.** Every way into a merge (a worker's hand-back, your approve, finished work
+whose files are clear again, a checker's pass, a reload) joins one line for the whole project,
+shared by all sessions and target branches, oldest first. Only the task at the front of the line
+has its turn, and does it all in one go:
 
-- `prep`: symcc's own step before the merge (steps 1 and 2: commit, leave out secret-looking
-  files, scope check, wait for its merge turn). Its note says "preparing to merge: committing
-  and checking files". No agent runs in this step.
-- `test`: the test commands run.
+    hand-back / approve / "your files are clear" / reload
+      → the merge line (whole project, all sessions, oldest first)
+      → at its turn, in one go:
+          catch up with the branch it merges into
+          → tests (skipped if this exact code already passed)
+          → merge
+
+So the branch it merges into only moves at the front of the line: nobody else's merge can slip
+in between a task's tests and its merge. If the branch still moved during a turn (you committed
+to it by hand meanwhile), nothing is merged and that turn fails as one normal try ("main moved
+during the merge (someone committed to it by hand), so nothing was merged"): a worker's task gets
+a new try as usual, an approve stays in review (approve it again).
+
+**What a task shows on its way to the merge.** Every board view (the board list, the band above
+the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
+the same small set of words and notes. While it waits for its turn its note says "in line (n)",
+n being its place (the task merging now is 1). During its turn the step shows in place of its
+time (the lead's text board shows it after the status: "doing prep · title"):
+
+- `prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
+  files, scope check). Its note says "preparing to merge: committing and checking files". No
+  agent runs in this step.
+- `test`: the test commands run. Its note says "running the tests".
 - `checker`: a checker agent is trying to break the change (only with the `checker` setting
   on; with it off no task ever shows this word). Its note says "a checker agent is trying to
   break it before it merges".
-- `merge`: the task is brought up to date with the target branch and merged.
+- `merge`: the task is brought up to date with the target branch and merged. Its note says
+  "merging".
 
+Once the turn is over, the note says how it went: merged (the task is done), failed with the
+reason (tests failed, a clash, out of time, ...), waiting for your files, or in review.
 
 1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
@@ -263,19 +285,13 @@ prep · title"), all with the same short words:
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
    a new try as usual.
-   **One merge line.** Every way into a merge (a worker's hand-back, your approve,
-   finished work whose files are clear again, a checker's pass) joins one line for
-   the whole project, shared by all sessions and target branches, oldest first. Only the
-   task at the front has its turn, and does it in one go: it catches up with the branch it
-   merges into, runs the tests (skipped when this exact code already passed), and merges.
-   So the branch can't move under it, and the next task catches up with that merge before
-   its own tests. A task waiting for its turn shows the note "in line (n)", n being its
-   place in line (the task merging now is 1). Merges go one at a time, so when several
-   tasks finish together the last one waits longer: the fifth of five tasks with 10-minute
-   tests waits about 40 minutes before its own turn. The line is kept in the file
-   `.symcc/merge-line.json`; it survives a reload (a task that was in line just joins again),
-   and a stale entry (left by a session that died, or older than twice `test_minutes`) is
-   cleared by itself, so you never need to edit or delete it by hand.
+   **One merge line.** Steps 3, 4 and 6 are one turn in the merge line (see "The merge line"
+   above): only one task merges at a time, so the next task catches up with that merge before
+   its own tests. Merges go one at a time, so when several tasks finish together the last one
+   waits longer: the fifth of five tasks with 10-minute tests waits about 40 minutes before its
+   own turn. The line is kept in the file `.symcc/merge-line.json`; it survives a reload (a task
+   that was in line just joins again), and a stale entry (left by a session that died, or older
+   than twice `test_minutes`) is cleared by itself, so you never need to edit or delete it by hand.
    **Tests that run out of time.** A test command stopped by its time limit (`test_minutes`,
    10 minutes by default) fails like a failing test: a new worker try starts with the output
    (it counts as one of the `auto_retries`), and the task's note says the tests ran out of time
@@ -289,7 +305,7 @@ prep · title"), all with the same short words:
    minutes with one test command, 35 with three. A merge line entry is taken as stale after
    twice `test_minutes`. The limit counts only from the start of the task's own turn: waiting
    in the merge line behind other tasks doesn't count (each of those has its own limit, so the
-   line keeps moving), and each new turn (after the branch moved meanwhile) starts from zero.
+   line keeps moving).
    A turn still running past the limit is taken as stuck and given up, as one normal failed
    try: like failing tests it uses one of the `auto_retries`, so the task goes back to `todo`
    for a new try (its folder and branch are kept), and once they are used up it is marked
@@ -307,9 +323,11 @@ prep · title"), all with the same short words:
 
 ### Tests run once per try
 
-The full test commands run once per try, by symcc, in step 4 (and not even then when the
-same code, with the same commands, already passed: see `passed-trees.json` in the board
-folder). The worker is told the commands, but while it works it runs only the tests for the
+The full test commands run once per try, by symcc, during the task's turn in the merge line
+(step 4), and not even then when the same code, with the same commands, already passed (see
+`passed-trees.json` in the board folder). As only the task at the front of the line merges, a
+try never needs a second test run because another merge came first.
+The worker is told the commands, but while it works it runs only the tests for the
 files it changed (one test file, say) and a cheap type check if the project has one; it does
 not run the full commands at the end, as symcc does that and sends it the output if any
 fail. The checker is told that symcc already ran these exact commands on this commit and

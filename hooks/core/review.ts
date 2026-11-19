@@ -284,6 +284,9 @@ const fixText = (b: Blockers) => `${fixWays(b)} them`
 export type BlockedAction = 'retry' | 'approve'
 
 /** The end of a "fix your files" message: 'say "retry T-1"' or 'approve T-1 again'. */
+/** Why a merge failed when `target` moved during the task's turn: only a commit made by hand can do that (only the front of the merge line moves it). */
+export const movedText = (target: string) => `${target} moved during the merge (someone committed to it by hand), so nothing was merged`
+
 const thenDo = (action: BlockedAction, id: string) => action === 'approve' ? `approve ${id} again` : `say "retry ${id}"`
 
 /**
@@ -320,10 +323,10 @@ const gitError = (r: { stdout: string; stderr: string }) => `${r.stderr}\n${r.st
  * files) and says why. Their other uncommitted changes are kept as they are (read-tree -m -u leaves
  * files the merge doesn't change alone). If updating
  * the files fails after the branch moved, the branch is put back, so the owner's folder is left as it was.
- * `ok` only when the branch moved and (if checked out) the files were updated; `raced` when the
- * branch was no longer at `from` (something else moved it first), so bringing the work up to date and trying again can work.
+ * `ok` only when the branch moved and (if checked out) the files were updated. When the branch was no longer at `from`
+ * (it was moved by hand meanwhile, as only the front of the merge line moves it), nothing moves and the caller's turn fails.
  */
-export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; raced?: boolean; blocked?: Blockers }> {
+export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; blocked?: Blockers }> {
   const ref = `refs/heads/${o.target}`
   const action = o.action ?? 'retry'
   if (o.checkedOut) {
@@ -341,9 +344,9 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
   }
   const cas = await run(['update-ref', '-m', o.note, ref, o.to, o.from])
   if (cas.exitCode !== 0) {
-    // Raced only when the branch really is somewhere else now; otherwise (e.g. a stale lock file) trying again can't help.
+    // Moved by hand only when the branch really is somewhere else now; otherwise it is git's error (e.g. a stale lock file).
     const now = await run(['rev-parse', ref])
-    if (now.exitCode === 0 && now.stdout.trim() !== o.from) return { ok: false, raced: true, detail: `${o.target} moved during the merge; try again` }
+    if (now.exitCode === 0 && now.stdout.trim() !== o.from) return { ok: false, detail: movedText(o.target) }
     const lock = /Unable to create '([^']+\.lock)'/.exec(`${cas.stderr}\n${cas.stdout}`)?.[1]
     if (lock) return { ok: false, detail: `could not move ${o.target}: a git lock file is in the way: ${lock}; if no git is running, remove it, then ${thenDo(action, o.id)}` }
     return { ok: false, detail: `could not move ${o.target}: ${gitError(cas)}; fix that, then ${thenDo(action, o.id)}` }
