@@ -37,7 +37,7 @@ export function listPage($: $, pane: PaneParts) {
   const toggleDone = () => ((S.doneOpen = !S.doneOpen), $.ui.invalidate('ui.render'))
   const toggleDropped = () => ((S.droppedOpen = !S.droppedOpen), $.ui.invalidate('ui.render'))
   const showAllBacklog = () => ((S.backlogAll = true), $.ui.invalidate('ui.render'))
-  /** A list row: a task (`indent`: 2 or 4 columns); a row one can press (`day`: 'backlog', 'done', 'dropped',
+  /** A list row: a task (`indent`: 0, 2 or 4 columns); a row one can press (`day`: 'backlog', 'done', 'dropped',
    *  'backlog-more' or an older day of Done); a section label (`head`); a secondary-color line (`line`); or a blank line. */
   type Row = { task: SymccTask; indent: number } | { question: OwnerQuestion } | { day: string; label: string; extra?: string; indent: number } | { head: string } | { line: string } | { blank: true }
   const tasksOf = (ts: SymccTask[], indent: number): Row[] => ts.map(task => ({ task, indent }))
@@ -47,16 +47,16 @@ export function listPage($: $, pane: PaneParts) {
   const questions = filtering ? [] : (v.questions ?? [])
   const active: Row[][] = [
     questions.length ? [{ head: questionsLabel(questions.length) }, ...questions.map(question => ({ question }))] : [],
-    parts.needsYou.length ? [{ head: SECTION_LABEL.needsYou }, ...tasksOf(parts.needsYou, 2)] : [],
-    tasksOf([...parts.doing, ...parts.todo], 2),
+    parts.needsYou.length ? [{ head: SECTION_LABEL.needsYou }, ...tasksOf(parts.needsYou, 0)] : [],
+    tasksOf([...parts.doing, ...parts.todo], 0),
   ].filter(s => s.length)
   const countWidth = Math.max(1, ...[parts.backlog, parts.done, parts.dropped].map(ts => String(ts.length).length))
   const backlogShown = S.backlogAll || filtering ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)
   const backlogMore = parts.backlog.length - backlogShown.length
   const backlogRows: Row[] = parts.backlog.length
     ? [
-        { day: 'backlog', label: foldedRow('Backlog', parts.backlog.length, backlogOpen, countWidth), indent: 2 },
-        ...(!backlogOpen ? [] : [...tasksOf(backlogShown, 4), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore), indent: 4 }] : [])]),
+        { day: 'backlog', label: foldedRow('Backlog', parts.backlog.length, backlogOpen, countWidth), indent: 0 },
+        ...(!backlogOpen ? [] : [...tasksOf(backlogShown, 2), ...(backlogMore > 0 ? [{ day: 'backlog-more', label: backlogMoreLabel(backlogMore), indent: 2 }] : [])]),
       ]
     : []
   // tasks moved to archive.json are not listed, only counted: "▸ Done  12 (+96 archived)"; a search leaves them out
@@ -64,17 +64,17 @@ export function listPage($: $, pane: PaneParts) {
   const doneHead = parts.done.length || gone ? [foldedRow('Done', parts.done.length, doneOpen, countWidth), archivedNote(gone)].filter(Boolean).join(' ') : ''
   const doneRows: Row[] = doneHead
     ? [
-        { day: 'done', label: doneHead, indent: 2 },
+        { day: 'done', label: doneHead, indent: 0 },
         ...(!doneOpen
           ? []
           : [
-              ...tasksOf(parts.doneToday, 4),
-              ...parts.doneDays.flatMap(g => [{ day: g.day, label: groupLabel(g, dayOpen(g.day)), indent: 4 }, ...(dayOpen(g.day) ? tasksOf(g.tasks, 6) : [])]),
+              ...tasksOf(parts.doneToday, 2),
+              ...parts.doneDays.flatMap(g => [{ day: g.day, label: groupLabel(g, dayOpen(g.day)), indent: 2 }, ...(dayOpen(g.day) ? tasksOf(g.tasks, 4) : [])]),
             ]),
       ]
     : []
   const droppedRows: Row[] = parts.dropped.length
-    ? [{ day: 'dropped', label: foldedRow('Dropped', parts.dropped.length, droppedOpen, countWidth), indent: 2 }, ...(droppedOpen ? tasksOf(parts.dropped, 4) : [])]
+    ? [{ day: 'dropped', label: foldedRow('Dropped', parts.dropped.length, droppedOpen, countWidth), indent: 0 }, ...(droppedOpen ? tasksOf(parts.dropped, 2) : [])]
     : []
   const folded = [...backlogRows, ...doneRows, ...droppedRows]
   const blank: Row = { blank: true }
@@ -134,16 +134,15 @@ export function listPage($: $, pane: PaneParts) {
       {searchButtons}
       {list.map((r, i) => {
         if ('blank' in r) return <Text key={`blank-${i}`}> </Text>
-        if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('inactive')}>{`  ${r.line}`}</Text>
+        if ('line' in r) return <Text key={`clear-${i}`} wrap="truncate" color={C('inactive')}>{r.line}</Text>
         if ('head' in r) return <Text key={`head:${r.head}`} bold color={C('text')}>{r.head}</Text>
         if ('question' in r) {
           const q = r.question
           return (
             <Button key={row(q.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => q.id))}>
-              <Text>{'  '}</Text>
               <Text bold color={C('claude')}>{q.id.padEnd(idWidth)}</Text>
               <Text color={C('warning')}>{' ? '}</Text>
-              <Text bold color={C('text')}>{fitRow(2 + idWidth + 3, q.text, '', width, false).title}</Text>
+              <Text bold color={C('text')}>{fitRow(idWidth + 3, q.text, '', width, false).title}</Text>
             </Button>
           )
         }
@@ -167,7 +166,7 @@ export function listPage($: $, pane: PaneParts) {
         const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), width, x.status === 'failed')
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => x.id))}>
-            <Text>{' '.repeat(r.indent)}</Text>
+            {r.indent ? <Text>{' '.repeat(r.indent)}</Text> : null}
             <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
               {x.id.padEnd(idWidth)}
             </Text>

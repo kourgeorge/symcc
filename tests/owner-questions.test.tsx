@@ -202,6 +202,9 @@ test('the panel lists the open questions above the tasks; a button answers one a
   expect(tree.indexOf('Questions for you (1)')).toBeGreaterThan(-1)
   expect(tree.indexOf('Questions for you (1)')).toBeLessThan(tree.indexOf('Docs'))
   expect(await ui.find({ type: 'Text', text: /Raise the version\?/ })).toBeDefined()
+  // the question row and the task row start at the first column, no indent (T-556)
+  expect((await ui.find({ key: 'Q-1' }))!.text).toMatch(/^Q-1 +\? Raise the version\?/)
+  expect((await ui.find({ key: 'T-1' }))!.text).toMatch(/^T-1 /)
   // its page: the question, one button per option plus Answer…
   await ui.press({ key: 'Q-1' })
   expect(await ui.find({ type: 'Text', text: /Question for you/ })).toBeDefined()
