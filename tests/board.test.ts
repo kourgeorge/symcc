@@ -2761,6 +2761,23 @@ test("T-542: symcc's own pre-merge step is \"prep\", a running checker is \"chec
   expect(stepNote('prep', 'approved; checking and merging')).toBe('approved; checking and merging')
 })
 
+test('T-542: the lead\'s text board shows the same step words ("prep", "checker") on a task in that step', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const stamp = new Date(now - 10_000).toISOString()
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, stamp)
+  const doing = patchTask(b0, 'T-1', { status: 'doing' }, stamp)
+  const row = (b: typeof doing) => boardText(b, now).split('\n').find(l => l.startsWith('T-1'))!
+  expect(row(patchTask(doing, 'T-1', { checking: { step: 'prep', at: stamp } }, stamp))).toContain('doing   prep · Fix it')
+  expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: stamp } }, stamp))).toContain('doing   checker · Fix it')
+  // no step (e.g. the checker setting off and no pre-merge step running): no step word at all
+  const plain = row(doing)
+  expect(plain).toContain('doing   Fix it')
+  expect(plain).not.toContain('checker')
+  expect(plain).not.toContain('prep')
+  // a stale step (its copy is gone) shows no word
+  expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: new Date(now - 3_600_000).toISOString() } }, stamp))).not.toContain('checker')
+})
+
 test('task rows: a short status column and an inactive-colored extra; the extra goes first when the row is narrow', () => {
   const now = Date.parse('2026-11-11T12:00:00Z')
   const base = { ...at('T-5', 'doing', '2026-11-11T10:00:00Z'), title: 'Secrets scout example', role: 'frontend', attempts: 1, runs: [{ started: '2026-11-11T11:56:00Z' }] }

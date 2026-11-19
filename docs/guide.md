@@ -187,8 +187,9 @@ happens, never the words in its hand-back:
   review with its answer instead):
 
 **Step words.** While a finished task goes through these steps, every board view (the board
-list, the band above the prompt, the VS Code list and task page, the OpenCode board and the
-lead's text board) shows the step in place of its time, with the same short words:
+list, the band above the prompt, the VS Code list and task page and the OpenCode board) shows
+the step in place of its time, and the lead's text board shows it after the status ("doing
+prep · title"), all with the same short words:
 
 - `prep`: symcc's own step before the merge (steps 1 and 2: commit, leave out secret-looking
   files, scope check, wait for its merge turn). Its note says "preparing to merge: committing
