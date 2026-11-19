@@ -19,6 +19,13 @@ type Mine = { entry: LineEntry; gone: boolean }
 const local: Mine[] = []
 let count = 0
 
+/**
+ * The keys of this copy's entries that left the line. Their removal from the file waits for the board lock, so for a
+ * moment the file may still have them: they are skipped when the line is read, or the next task of this copy would
+ * take such an entry as another session's task in front of it (and wait for nothing).
+ */
+const departed = new Set<string>()
+
 /** Settles when one of this copy's entries leaves the line, so the ones behind it look again at once (no polling between tasks of one copy). */
 let wake: () => void = () => {}
 let woken = new Promise<void>(r => (wake = r))
@@ -31,13 +38,14 @@ function signal() {
 /** Forgets this copy's entries (what a reload starts with); for the tests' resetPlugin() only. The file stays, as it does over a reload. */
 export function resetMergeLine() {
   local.length = 0
+  departed.clear()
   signal()
 }
 
 const lineFile = () => path(`${S.N.dir}/${MERGE_LINE_FILE}`)
 
 /** The line as the file has it; empty when there is no file or it can't be read. */
-export async function readMergeLine($: Host): Promise<LineEntry[]> {
+async function readFile($: Host): Promise<LineEntry[]> {
   try {
     return parseMergeLine(await $.fs.read(lineFile()).catch(() => null))
   } catch {
@@ -45,12 +53,17 @@ export async function readMergeLine($: Host): Promise<LineEntry[]> {
   }
 }
 
+/** The line as the file has it, less this copy's entries that already left (departed); empty when there is no file or it can't be read. */
+export async function readMergeLine($: Host): Promise<LineEntry[]> {
+  return (await readFile($)).filter(e => !departed.has(e.key))
+}
+
 /** Changes the line file under the board lock (so two sessions never lose each other's change); an empty line removes the file. Never throws: null when it could not be done. */
 async function editLine($: Host, fn: (line: LineEntry[]) => LineEntry[]): Promise<LineEntry[] | null> {
   try {
     return await locked($, async () => {
-      const before = await readMergeLine($)
-      const after = fn(before)
+      const before = await readFile($)
+      const after = fn(before.filter(e => !departed.has(e.key)))
       if (after.length === before.length && after.every((e, i) => e === before[i])) return after
       if (after.length) await safeWrite($, lineFile(), mergeLineText(after), 'the merge line')
       else await $.run(['rm', '-f', lineFile()])
@@ -91,7 +104,9 @@ function join($: Host, task: string): { me: Mine; joined: Promise<unknown> } {
   // an entry of the same task not of a go running now is an earlier go's (a task that was in line before a reload joins again)
   const joined = editLine($, line => {
     const keys = liveKeys()
-    return [...line.filter(e => e.task !== task || keys.has(e.key)), entry]
+    const kept = line.filter(e => e.task !== task || keys.has(e.key))
+    // let go (`release`) before its place was written: it stays out
+    return me.gone ? kept : [...kept, entry]
   })
   return { me, joined }
 }
@@ -100,10 +115,11 @@ function join($: Host, task: string): { me: Mine; joined: Promise<unknown> } {
 async function leave($: Host, me: Mine) {
   if (me.gone) return
   me.gone = true
+  departed.add(me.entry.key)
   const at = local.indexOf(me)
   if (at >= 0) local.splice(at, 1)
   signal()
-  await editLine($, line => line.filter(e => e.key !== me.entry.key))
+  if (await editLine($, line => line.filter(e => e.key !== me.entry.key))) departed.delete(me.entry.key)
 }
 
 /** Dates this copy's entries again, so no other session takes them as stale while a long turn (or wait) goes on. */
