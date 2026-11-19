@@ -194,6 +194,12 @@ test("the scout's page lists its runs, newest first, and opening one shows its f
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs), '/.symcc/reports/scouts/bugs-old.md': '1. The parser crashes.\n2. The whole old report.\n', '/.symcc/reports/scouts/bugs-new.md': 'NOTHING\n' }, [task])
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
+  // T-516: no report text on the scout's page (no "Last report" section); a hint says how to see a run's report
+  const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
+  expect(heads).toEqual(['▍Instructions', '▍Runs', '▍File'])
+  expect(await ui.find({ type: 'Text', text: /Old crash/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /The parser crashes/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^  Enter on a run shows its report$/ })).toBeDefined()
   const rows = (await ui.findAll({ type: 'Button' })).map(b => String(b.props.key)).filter(k => k.startsWith('scout-run:'))
   expect(rows).toEqual([`scout-run:${LAST_RUN}`, 'scout-run:2026-11-12T00:00:00.000Z'])
   const all = await texts(ui)
@@ -307,6 +313,10 @@ test("the scout's page in VS Code lists its runs as links (no Buttons), opens on
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs), '/.symcc/reports/scouts/bugs-old.md': '1. The parser crashes.\n2. The whole old report.\n', '/.symcc/reports/scouts/bugs-new.md': 'NOTHING\n' })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   expect(await ui.find({ key: 'vs-sec-runs' })).toBeDefined()
+  // T-516: no "Last report" section and no report text on the page itself; a hint says how to see a run's report
+  expect(await ui.find({ key: 'vs-sec-report' })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Markdown' })).filter(m => /Old crash|The parser crashes/.test(String(m.props.text)))).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /^Click a run to see its report$/ })).toBeDefined()
   expect((await ui.findAll({ type: 'Button' })).filter(b => String(b.props.key).startsWith('scout-run:'))).toEqual([])
   const rows = (await ui.findAll({ type: 'Markdown' })).filter(b => String(b.props.key).startsWith('scout-run:'))
   expect(rows.map(b => String(b.props.key))).toEqual([`scout-run:${LAST_RUN}`, 'scout-run:2026-11-12T00:00:00.000Z'])

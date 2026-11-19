@@ -7,7 +7,7 @@ import { PANE, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } from './board
 import { SCOUTS_SETTINGS_BEFORE } from './scouts-settings-snapshot'
 import { SCENES, OLD_SURFACES, ROLE_KIND_SCENES, ROLE_KIND_PAGES } from './scouts-settings-scenes'
 import { ROLES_KINDS_BEFORE } from './roles-kinds-snapshot'
-import { LONG_REPORT, SCOUTS, SCOUTS_VIEW, seedScouts, seedRolesKinds } from './scouts-settings-fixture'
+import { SCOUTS, SCOUTS_VIEW, seedScouts, seedRolesKinds } from './scouts-settings-fixture'
 import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
@@ -178,7 +178,7 @@ test('the Scouts list in VS Code with no scouts: the how-to text without termina
 })
 
 for (const s of SCOUTS) {
-  test(`${s.name}'s scout page in VS Code at width 50: whole text, its facts, buttons for its actions, the report as Markdown`, async ($, on) => {
+  test(`${s.name}'s scout page in VS Code at width 50: whole text, its facts, buttons for its actions, no report text`, async ($, on) => {
     seedScouts(on, 'scouts', s.name)
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
     const tree = await ui.drawn()
@@ -194,10 +194,12 @@ for (const s of SCOUTS) {
     const keys = elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key)
     expect(keys, s.name).toEqual([...(s.running ? [] : ['scout-run']), 'scout-pause', 'scout-edit'])
     expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe(s.paused ? 'Resume' : 'Pause')
-    // the instructions and the report are Markdown, given whole
+    // the instructions are Markdown, given whole; no report text on the page (T-516: a run's page shows its report)
     const md = elements(tree).filter(n => n.type === 'Markdown').map(n => String(n.props?.text))
     expect(md, s.name).toContain(s.prompt)
-    if (s.last_report === LONG_REPORT) expect(md, s.name).toContain(LONG_REPORT)
+    expect(md.filter(t => t.includes('Findings') || t.includes('NOTHING')), s.name).toEqual([])
+    expect(await ui.find({ key: 'vs-sec-report' }), s.name).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^\(no runs yet\)$/ }), s.name).toBeDefined()
     await ui.unmount()
   })
 }
