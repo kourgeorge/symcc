@@ -2774,6 +2774,11 @@ test('T-542: the lead\'s text board shows the same step words ("prep", "checker"
   expect(plain).toContain('doing   Fix it')
   expect(plain).not.toContain('checker')
   expect(plain).not.toContain('prep')
+  // a later try: one separator between the step word and the try mark ("prep · try 2", not "prep · · try 2")
+  const later = row(patchTask(patchTask(doing, 'T-1', { attempts: 2 }, stamp), 'T-1', { checking: { step: 'prep', at: stamp } }, stamp))
+  expect(later).toMatch(/doing {3}prep · try 2\S* Fix it/)
+  expect(later).not.toContain('· ·')
+  expect(row(patchTask(doing, 'T-1', { attempts: 2 }, stamp))).toMatch(/doing {3}· try 2\S* Fix it/)
   // a stale step (its copy is gone) shows no word
   expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: new Date(now - 3_600_000).toISOString() } }, stamp))).not.toContain('checker')
 })

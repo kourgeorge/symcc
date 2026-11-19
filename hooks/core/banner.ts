@@ -323,9 +323,10 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number):
   const mark = tryMark(t, autoRetries)
   // the step a finished task is in, with the same short word as every other view (STEP_WORD): "T-5   ▶ doing   prep · title"
   const step = checkStepNow(t, nowMs)
-  const stepText = step ? `${STEP_WORD[step]} · ` : ''
+  // with both, one separator between them: "prep · try 2 title" (not "prep · · try 2")
+  const lead = step ? `${STEP_WORD[step]} · ${mark ? `${mark} ` : ''}` : mark ? `· ${mark} ` : ''
   // the task's own mark first (● a to do task worked on before, see statusMark): "T-5   ● todo    title"
-  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${stepText}${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
+  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${lead}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
 }
 
 /** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */
