@@ -198,6 +198,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   S.driving = false
   S.startupDone = false
   S.enabledNow = true
+  S.leadUrgent = false
   leadQueue.splice(0)
   meanwhile.splice(0)
   return { $: host, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
@@ -1781,6 +1782,8 @@ test("a worker's ask_owner question makes the task wait for the owner with the q
   expect(t.question).toBe('Should the button be red or blue?')
   expect(t.note).toBe('waiting for you')
   expect(t.history.at(-1)).toBe('try 1: worker asked: Should the button be red or blue?')
+  // it needs the owner now: the update is urgent (OpenCode steers it into a busy lead, T-464)
+  expect(S.leadUrgent).toBe(true)
   expect(leadQueue.join('\n')).toContain('T-1 is waiting for the owner: Should the button be red or blue? Answer it yourself only if the owner already clearly said the answer: then symcc change T-1 with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short, and say they can also answer on the board; put their answer into the task with symcc change T-1 and answer: their words. If they answer on the board first (a "Meanwhile" line), don\'t ask again.')
   expect(movedMain(w)).toBe(false)
   expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
@@ -1808,6 +1811,7 @@ test('a change worker whose edits outside its files were refused waits for those
   expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md, docs/a.md')
   expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'docs/a.md'])
   expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
+  expect(S.leadUrgent).toBe(true)
   expect(sayQueue).toEqual(['?T-1'])
   expect(movedMain(w)).toBe(false)
   expect(w.calls.some(c => / git commit/.test(c))).toBe(false)

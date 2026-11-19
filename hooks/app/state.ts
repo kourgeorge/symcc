@@ -87,6 +87,8 @@ export const startS = () => ({
   home: '',
   watchdog: null as { cancel(): void } | null,
   leadTimer: null as { cancel(): void } | null,
+  /** a line waiting in leadQueue is urgent (tellLead's `urgent`): the next board update is sent as urgent (LeadSend) */
+  leadUrgent: false,
   writing: Promise.resolve() as Promise<unknown>,
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',

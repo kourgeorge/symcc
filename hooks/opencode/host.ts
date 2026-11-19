@@ -1,19 +1,20 @@
 // OpenCode's side of the Host (hooks/host.ts), T-462: opencodeHost makes a Host for one copy of the OpenCode plugin
 // (OpenCode starts one per folder a session works in, see plugin.ts). Files, commands and timers are plain Node/Bun,
 // shared with the Node host (hosts/node/host.ts: nodeFs, runCommand, nodeClock); the session is the copy's folder.
-// The agents are OpenCode sessions (agents.ts, T-463), passed in by plugin.ts as `agents`. Not built yet, and filled
-// by the next OpenCode tasks: the lead (session.prompt), symcc's tools and slash commands, and the TUI's board panel
-// and band. Until then a board update for the lead goes nowhere; with no `agents` given, no agent can start (its
-// start is "not ready", so a task waits).
+// The agents are OpenCode sessions (agents.ts, T-463) and the lead is the owner's session (lead.ts, T-464: board
+// updates as session.prompt, queue or steer; its tokens from session.get), passed in by plugin.ts as `agents` and
+// `lead`. Not built yet, and filled by the next OpenCode tasks: symcc's tools and slash commands, and the TUI's board
+// panel and band. With no `agents` given, no agent can start (its start is "not ready", so a task waits); with no
+// `lead`, a board update goes nowhere.
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import { nodeFs, runCommand, nodeClock } from '../../hosts/node/host'
 
 /**
- * What OpenCode can do here, for now: no panel and no band yet (the TUI part comes later), no plan mode and no lead
- * usage. The lead is woken at once (session.prompt, once lead.send is built), and agents start at once: OpenCode
- * runs a plugin's hooks for every session, so no start queue is needed (HostFeatures.startQueue, T-470).
+ * What OpenCode can do here, for now: no panel and no band yet (the TUI part comes later), and no plan mode. The lead
+ * is woken at once (session.prompt, lead.ts) and its tokens are read from session.get, and agents start at once:
+ * OpenCode runs a plugin's hooks for every session, so no start queue is needed (HostFeatures.startQueue, T-470).
  */
-export const OPENCODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'now', planMode: false, leadUsage: false, startQueue: false }
+export const OPENCODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'now', planMode: false, leadUsage: true, startQueue: false }
 
 /** OpenCode's words: a plugin tool is named "<name>_<tool>"; its file tools are read, edit and write; its read-only agent is Plan. */
 export const OPENCODE_WORDS: HostWords = {
@@ -48,7 +49,7 @@ export type OpencodeHostOptions = {
   say?: (line: string) => void
   /** the agents (default: a stub that can't start any, see notBuilt) */
   agents?: Host['agents']
-  /** the lead (default: a stub; a board update goes nowhere yet) */
+  /** the lead (default: a stub; a board update goes nowhere) */
   lead?: Host['lead']
 }
 

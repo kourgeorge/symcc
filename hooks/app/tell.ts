@@ -22,17 +22,20 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
 /**
  * Tells the lead `text` in the next board update. A host that wakes the lead at once (features.wakeLead 'now') sends
  * it in a moment, so several close together go in one message; on any other the update waits until the host takes
- * it (takeBoardUpdate) on its next hook that can carry text.
+ * it (takeBoardUpdate) on its next hook that can carry text. `urgent`: the owner must act on it now (a worker needs
+ * them, a worker's time is up); the update it goes in is sent as urgent (LeadSend: OpenCode gives it mid-turn).
  */
-export function tellLead(host: Host, text: string) {
+export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
   if (!S.enabledNow) return // the plugin is off: no "[name] Board update" messages
   leadQueue.push(text)
+  if (how?.urgent) S.leadUrgent = true
   if (host.features.wakeLead !== 'now') return
   if (S.leadTimer) return
   S.leadTimer = host.clock.after(1500, () => {
     S.leadTimer = null
+    const urgent = S.leadUrgent
     const update = takeBoardUpdate()
-    if (update) void host.lead.send(update).catch(() => undefined)
+    if (update) void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).catch(() => undefined)
   })
 }
 
@@ -41,6 +44,7 @@ export function tellLead(host: Host, text: string) {
  * undefined when nothing waits (only "Meanwhile" lines don't make one) or the plugin is off.
  */
 export function takeBoardUpdate(): string | undefined {
+  S.leadUrgent = false
   const body = leadQueue.splice(0).join('\n\n')
   if (!body || !S.enabledNow) return undefined
   const before = meanwhileText(meanwhile.splice(0))

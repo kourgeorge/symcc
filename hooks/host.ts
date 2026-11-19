@@ -88,13 +88,20 @@ export type HostPane = { id: string; isShown: boolean; isPlaced: boolean }
  * that chat. Rejects when it can't be given.
  */
 export type HostLead = {
-  send: (text: string) => Promise<unknown>
+  send: (text: string, how?: LeadSend) => Promise<unknown>
   /**
    * The lead's model calls for the stats, for project folder `root` in `range` (each call's tokens, how many sessions,
    * where they were read from), or why they can't be told (`leadProblem`). A host that can't tell answers {}.
    */
   usage: (root: string, range: StatsRange, nowMs: number) => Promise<LeadUsage>
 }
+
+/**
+ * How a board update is given to the lead. `urgent`: it holds something the owner must act on now (a worker needs
+ * them, a worker's time is up), so a host that can should give it to a busy lead mid-turn (OpenCode: delivery "steer")
+ * rather than after its turn (delivery "queue"). A host that can't tell the two apart ignores it.
+ */
+export type LeadSend = { urgent?: boolean }
 
 /** What host.lead.usage answers. */
 export type LeadUsage = Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem' | 'leadFrom'>

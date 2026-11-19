@@ -6,7 +6,10 @@
 // and a stopped agent is refused anything; the tool backstop reads OpenCode 2.3's real tool inputs (and a multiedit).
 // The agents (T-463) on a fake session API (fakeSessions): create as the lead's child -> move, waited for -> prompt once
 // recorded -> end with tokens and the final text, an interrupt, the model per role, and a worker the main copy starts
-// from the board through to agentFinished. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
+// from the board through to agentFinished. The lead (T-464): a finished task's board update reaches the owner's session
+// with delivery "queue", a "needs you" one with "steer", an update sent before the lead is known waits for it, starting
+// a worker sends the lead nothing, and OpenCode's own "subagent completed" message doesn't double symcc's update; the
+// lead's tokens come from session.get. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../../board'
@@ -19,7 +22,9 @@ import { opencodeAgents, opencodeModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMIS
 import { toolTouches } from '../guard'
 import { pump } from '../../app/workers'
 import { load } from '../../app/store'
-import { symccServer, owners, SYMCC_ENGINE, type CopyRole, type Engine } from '../plugin'
+import { symccServer, owners, leads, SYMCC_ENGINE, type CopyRole, type Engine } from '../plugin'
+import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, NO_LEAD_YET } from '../lead'
+import { tellLead, noteForLead } from '../../app/tell'
 import { PLUGIN_ROOT, opencodeHost } from '../host'
 import type { Host } from '../../host'
 
@@ -33,6 +38,7 @@ function reset() {
   for (const m of [workers, scoutRuns, checkerRuns, queuedWorkers]) m.clear()
   for (const s of [stopped, boardAgents, starting]) s.clear()
   owners().clear()
+  leads().clear()
 }
 
 /** One session of the fake session API. */
@@ -47,6 +53,12 @@ type FakeSession = { info: OcSessionInfo; moveTo?: string; looksLeft: number; en
 function fakeSessions(moveLag = 2) {
   const sessions = new Map<string, FakeSession>()
   const calls: string[] = []
+  /** every session.prompt, with its text */
+  const prompts: { sessionID: string; text: string; delivery?: string }[] = []
+  /** the "subagent completed" messages children posted into their parents ("child -> parent") */
+  const subagent: string[] = []
+  /** told when a child posts OpenCode's own "subagent completed" message into its parent */
+  const hooks: { onSubagent?: (parentID: string) => void } = {}
   let n = 0
   const one = (id: string) => {
     const s = sessions.get(id)
@@ -77,6 +89,7 @@ function fakeSessions(moveLag = 2) {
     },
     async prompt({ sessionID, text, delivery }) {
       calls.push(`prompt ${sessionID} in ${one(sessionID).info.location.directory} (${delivery})`)
+      prompts.push({ sessionID, text, delivery })
       one(sessionID).messages.push({ type: 'user', content: [{ type: 'text', text }] })
       return {}
     },
@@ -95,12 +108,21 @@ function fakeSessions(moveLag = 2) {
     },
     hook: async () => ({ dispose: async () => undefined }),
   }
-  /** Session `id`'s run ends: it said `text`, with these tokens. */
+  /**
+   * Session `id`'s run ends: it said `text`, with these tokens. A child also posts OpenCode's own "subagent completed"
+   * message into its parent (as OpenCode 2.3 does), and hooks.onSubagent hears of it.
+   */
   const end = (id: string, text: string, tokens = { input: 10, output: 484, reasoning: 330, cache: { read: 154787, write: 2261 } }) => {
     const s = one(id)
     s.messages.push({ type: 'assistant', content: [{ type: 'text', text }], finish: 'stop' })
     s.info = { ...s.info, outcome: 'succeeded', tokens, cost: 0 }
     s.ended?.()
+    const parent = s.info.parentID ? sessions.get(s.info.parentID) : undefined
+    if (parent) {
+      parent.messages.push({ type: 'synthetic', content: [{ type: 'text', text: `subagent ${id} completed` }] })
+      subagent.push(`${id} -> ${s.info.parentID}`)
+      hooks.onSubagent?.(s.info.parentID!)
+    }
   }
   /** A lead session in folder `dir` (as the owner's own chat). */
   const lead = (dir: string) => {
@@ -108,7 +130,7 @@ function fakeSessions(moveLag = 2) {
     sessions.set(id, { info: { id, location: { directory: dir } }, looksLeft: 0, messages: [] })
     return id
   }
-  return { api, calls, end, lead, sessions }
+  return { api, calls, prompts, subagent, end, lead, sessions, hooks }
 }
 
 /** A fake OpenCode ctx for folder `dir`: it keeps the hooks the plugin registers, and counts their disposals. */
@@ -487,7 +509,7 @@ test('the tool backstop reads OpenCode 2.3\'s real tool inputs: edit and write {
   }
 })
 
-test('the main folder\'s copy starts a worker as an OpenCode session: the role\'s model, a child of the lead, moved into its worktree, prompted once the board names it; its end reaches agentFinished with its tokens', async () => {
+test('the main folder\'s copy starts a worker as an OpenCode session: the role\'s model, a child of the lead, moved into its worktree, prompted once the board names it, with no wake line for the lead; its end reaches agentFinished with its tokens, and the lead gets one queued board update despite OpenCode\'s "subagent completed" message', async () => {
   reset()
   const p = await project()
   try {
@@ -511,6 +533,11 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     await until(() => f.calls.some(x => x.startsWith('prompt')), 15_000)
     const wt = `${p.main}/.symcc/worktrees/T-3`
     expect(f.calls).toEqual([`create ses_2 parent ${lead} model openai/gpt-5`, 'move ses_2', `prompt ses_2 in ${wt} (queue)`])
+    // starting the worker woke nobody: no start queue on OpenCode, so no "Starting worker" line for the lead
+    await new Promise<void>(r => setTimeout(() => r(), 1700))
+    expect(f.prompts.filter(x => x.sessionID === lead)).toEqual([])
+    // OpenCode's own "subagent completed" message fires the lead's prompt hook, as a prompt does
+    f.hooks.onSubagent = id => void c.hooks.prompt!({ sessionID: id })
     const t = (await load(host!)).tasks.find(x => x.id === 'T-3')!
     expect(t.status).toBe('doing')
     expect(t.agent).toBe('ses_2')
@@ -521,9 +548,96 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     f.end('ses_2', 'Nothing to change.')
     await until(async () => !!(await load(host!)).tasks.find(x => x.id === 'T-3')!.runs?.at(-1)?.tokens, 15_000)
     expect((await load(host!)).tasks.find(x => x.id === 'T-3')!.runs!.at(-1)!.tokens).toEqual({ input: 10, output: 814, cache_read: 154787, cache_write: 2261 })
+    expect(f.subagent).toEqual([`ses_2 -> ${lead}`])
+    // symcc's board update about T-3 reaches the lead once, queued, labelled so the automatic message isn't a second report
+    await until(() => f.prompts.some(x => x.sessionID === lead), 15_000)
+    await new Promise<void>(r => setTimeout(() => r(), 1700))
+    const toLead = f.prompts.filter(x => x.sessionID === lead)
+    expect(toLead.length).toBe(1)
+    expect(toLead[0]!.delivery).toBe('queue')
+    expect(toLead[0]!.text).toContain('[symcc] Board update:')
+    expect(toLead[0]!.text).toContain('T-3')
+    expect(toLead[0]!.text).toContain(SUBAGENT_LABEL)
+    // the lead's tokens for the stats, from session.get
+    f.sessions.get(lead)!.info = { ...f.sessions.get(lead)!.info, tokens: { input: 3, output: 4, reasoning: 1, cache: { read: 9 } }, cost: 0 }
+    expect(await host!.lead.usage(p.main, { kind: 'all' }, 1000)).toEqual({ lead: [{ id: lead, atMs: 1000, tokens: { input: 3, output: 5, cache_read: 9 }, from: OPENCODE_LEAD_FROM }], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
     await endCopy!()
   } finally {
     reset()
     await p.done()
   }
 }, 60_000)
+
+test('host.lead on OpenCode: a board update is a queued session.prompt into the lead, an urgent one steers; one sent before the lead is known waits for it; usage from session.get', async () => {
+  const f = fakeSessions()
+  let id: string | undefined
+  const lead = opencodeLead(f.api, { lead: () => id })
+  expect(await lead.usage('/p', { kind: 'all' }, 5)).toEqual({ leadProblem: NO_LEAD_YET })
+  await lead.send('early news')
+  await lead.send('a worker needs you', { urgent: true })
+  expect(f.prompts).toEqual([])
+  id = f.lead('/p')
+  await lead.known()
+  expect(f.prompts).toEqual([{ sessionID: id, text: leadText('early news\n\na worker needs you'), delivery: 'steer' }])
+  await lead.known()
+  expect(f.prompts.length).toBe(1)
+  await lead.send('T-1 is done')
+  await lead.send('T-2 needs you', { urgent: true })
+  expect(f.prompts.slice(1)).toEqual([
+    { sessionID: id, text: leadText('T-1 is done'), delivery: 'queue' },
+    { sessionID: id, text: leadText('T-2 needs you'), delivery: 'steer' },
+  ])
+  // no tokens yet: no calls, but the session counts
+  expect(await lead.usage('/p', { kind: 'all' }, 5)).toEqual({ lead: [], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
+})
+
+test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agents); a finished task\'s update goes queued, a "needs you" one steers, the owner\'s own actions wait as "Meanwhile" lines', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    let host: Host | undefined
+    const plugin = symccServer({ engine: recordingEngine().engine, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-lead' } })
+    const c = fakeCtx(p.main, f.api)
+    const endCopy = await plugin.setup(c.ctx)
+    // a child session (OpenCode's own subagent) and one of symcc's agents from an earlier copy are never the lead
+    const owner = f.lead(p.main)
+    const child = (await f.api.create({ parentID: owner, location: { directory: p.main } })).id
+    f.sessions.set('ses_agent', { info: { id: 'ses_agent', metadata: { symcc: 'scout' }, location: { directory: p.main } }, looksLeft: 0, messages: [] })
+    await c.hooks.prompt!({ sessionID: child })
+    await c.hooks.prompt!({ sessionID: 'ses_agent' })
+    expect(leads().size).toBe(0)
+    await c.hooks.prompt!({ sessionID: owner })
+    expect([...leads().values()]).toEqual([owner])
+    S.enabledNow = true
+    // the owner's own action wakes nobody; it rides along in the next real update
+    noteForLead('approved T-9')
+    tellLead(host!, '✓ T-1 "a change in src" merged into main (abc1234); it is done.')
+    await until(() => f.prompts.length === 1)
+    expect(f.prompts[0]!.sessionID).toBe(owner)
+    expect(f.prompts[0]!.delivery).toBe('queue')
+    expect(f.prompts[0]!.text).toContain('Meanwhile the owner (nothing to answer):\n- approved T-9')
+    expect(f.prompts[0]!.text).toContain('T-1 "a change in src" merged')
+    // a worker needs the owner: the update steers, even with a plain line in the same batch
+    tellLead(host!, 'T-4 "x": something plain.')
+    tellLead(host!, 'T-1 is waiting for the owner: which name?', { urgent: true })
+    await until(() => f.prompts.length === 2)
+    expect(f.prompts[1]!.delivery).toBe('steer')
+    expect(f.prompts[1]!.text).toContain('T-4 "x": something plain.')
+    expect(f.prompts[1]!.text).toContain('which name?')
+    // the next plain one queues again
+    tellLead(host!, 'T-5 is done.')
+    await until(() => f.prompts.length === 3)
+    expect(f.prompts[2]!.delivery).toBe('queue')
+    // only "Meanwhile" lines make no update
+    noteForLead('dropped T-6')
+    await new Promise<void>(r => setTimeout(() => r(), 1700))
+    expect(f.prompts.length).toBe(3)
+    await endCopy!()
+    // the lead is kept for the board owner when the copy goes: a copy loaded again knows it at once
+    expect([...leads().values()]).toEqual([owner])
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 30_000)

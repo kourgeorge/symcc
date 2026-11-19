@@ -215,7 +215,7 @@ export async function waitIfBranchGone(host: Host, b: Board, t: SymccTask, when:
   })
   if (asked) {
     sayNeedsYou(host, b, t, question)
-    tellLead(host, `${t.id} "${t.title}" ${when === 'start' ? "can't start" : "can't be merged"}: the branch it merges into, ${into}, is gone. It now waits for the owner: ${question} An answer of yes moves it to ${instead}; or ${S.N.name} change ${t.id} with merge_into set to an existing branch.`)
+    tellLead(host, `${t.id} "${t.title}" ${when === 'start' ? "can't start" : "can't be merged"}: the branch it merges into, ${into}, is gone. It now waits for the owner: ${question} An answer of yes moves it to ${instead}; or ${S.N.name} change ${t.id} with merge_into set to an existing branch.`, { urgent: true })
     await publish(host, await load(host))
   }
   return true
@@ -774,12 +774,12 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
     const { question, options } = q
     if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked: ${question}`], ...endedBy(cur, now(), 'asked', 'question') }))) return false
     sayNeedsYou(host, b, t, question)
-    tellLead(host, workerQuestionText(t.id, question, options))
+    tellLead(host, workerQuestionText(t.id, question, options), { urgent: true })
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need)
     if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: [...cur.history, `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`], ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
     sayNeedsYou(host, b, t, question)
-    tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`)
+    tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`, { urgent: true })
   } else if (end.reason === 'aborted') {
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: [...cur.history, `${tryLabel(t)}: stopped before finishing`], ...endedBy(cur, now(), 'stopped', 'stopped from Claude Code') }))) return false
     tellLead(host, `${t.id} "${t.title}": the worker was stopped before finishing.`)
@@ -1123,7 +1123,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
       return
     }
     sayNeedsYou(host, b, t, ask)
-    tellLead(host, `${ask} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`)
+    tellLead(host, `${ask} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`, { urgent: true })
     return
   }
   if (r.review) {
@@ -1519,6 +1519,7 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
     meanwhile.splice(0)
     S.leadTimer?.cancel()
     S.leadTimer = null
+    S.leadUrgent = false
     sayQueue.splice(0)
     await publish(host, await load(host))
     const stopped = `${ids.length ? ` Stopped ${ids.join(', ')}.` : ''}${checks ? ` ${checks[0]!.toUpperCase()}${checks.slice(1)}.` : ''}`
@@ -1680,7 +1681,7 @@ async function askOvertime(host: Host, b: Board, id: string, limit: number) {
   })
   if (!t) return
   sayNeedsYou(host, b, t, overtimeQuestion(id, limit))
-  tellLead(host, overtimeLeadText(id, t.title, limit))
+  tellLead(host, overtimeLeadText(id, t.title, limit), { urgent: true })
 }
 
 /** Task `id`'s time is up (`why`): its worker is told to write down what it has and hand back; it is stopped WRAP_UP_GRACE_MS later. */

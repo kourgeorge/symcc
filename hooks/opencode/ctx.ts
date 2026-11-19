@@ -35,6 +35,8 @@ export type OcModelRef = { readonly providerID: string; readonly id: string }
 export type OcSessionInfo = {
   readonly id: string
   readonly parentID?: string
+  /** what session.create was given (symcc's agents carry { symcc: their kind }) */
+  readonly metadata?: Readonly<Record<string, unknown>>
   /** set once the session's last run ended */
   readonly outcome?: 'succeeded' | 'failed' | 'interrupted'
   readonly tokens?: { readonly input?: number; readonly output?: number; readonly reasoning?: number; readonly cache?: { readonly read?: number; readonly write?: number } }

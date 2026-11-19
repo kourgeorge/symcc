@@ -13,9 +13,11 @@
 //   - every copy registers the edit guard (guard.ts).
 // A copy that is unloaded and loaded again (a file edit reloads every copy) starts cleanly: cleanup ends its engine
 // and timers (sessionEnd), and the next setup starts them again. Only the engine copy may act on OpenCode's events
-// (every copy sees every session's): the next OpenCode tasks add those, and the lead, tools and TUI. The agents are
-// OpenCode sessions (agents.ts, T-463), children of the lead's session (the last one in the copy's folder given a
-// prompt that is none of symcc's agents).
+// (every copy sees every session's): the next OpenCode tasks add those, and the tools and TUI. The agents are
+// OpenCode sessions (agents.ts, T-463), children of the lead's session. The lead (lead.ts, T-464) is the session the
+// owner talks to: the last one in a main copy's folder given a prompt that is no child session and none of symcc's
+// agents. It is kept per board owner (by real main folder, see leads), so a copy that takes over the engine, or one
+// loaded again, still knows it; board updates sent before it was known go to it then.
 import type { Host, HostAgentKind } from '../host'
 import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished } from '../app/symcc'
 import { useName, scoutRuns } from '../app/state'
@@ -25,6 +27,7 @@ import type { OcContext, OcRegistration, OcServerPlugin } from './ctx'
 import { opencodeHost, type OpencodeHostOptions } from './host'
 import { onEvaluate, onToolBefore, realPathOf } from './guard'
 import { opencodeAgents, type OpencodeAgentsOptions } from './agents'
+import { opencodeLead } from './lead'
 
 /** What a copy does with symcc's engine: run it (the main folder's copy), only guard (any other), or end it. */
 export type Engine = {
@@ -64,6 +67,18 @@ export function owners(): Map<string, Slot> {
   return g[OWNERS_KEY] as Map<string, Slot>
 }
 
+const LEADS_KEY = '__symccOpencodeLeads'
+
+/**
+ * The lead's OpenCode session, by real main folder (the board owner's), shared by every copy of the plugin in this
+ * server process and kept when the copies are unloaded, so a copy that takes over (or a reloaded one) still knows it.
+ */
+export function leads(): Map<string, string> {
+  const g = globalThis as unknown as Record<string, unknown>
+  if (!(g[LEADS_KEY] instanceof Map)) g[LEADS_KEY] = new Map<string, string>()
+  return g[LEADS_KEY] as Map<string, string>
+}
+
 /** How a copy's role was decided (for its log line and the tests). */
 export type CopyRole = 'engine' | 'guard' | 'waiting'
 
@@ -98,16 +113,19 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
     id: 'symcc',
     async setup(ctx: OcContext) {
       const dir = ctx.location.directory
-      // the agents are OpenCode sessions (agents.ts), children of the lead's session: the last session in this
-      // copy's folder that was given a prompt and is none of symcc's agents. Only the engine copy starts any.
-      let lead: string | undefined
+      // the agents are OpenCode sessions (agents.ts), children of the lead's session: the last session in a main
+      // copy's folder that was given a prompt and is no child and none of symcc's agents, kept per real main folder
+      // (leads) once this copy knows it is a main copy. Only the engine copy starts any.
+      let ownLead: string | undefined
+      let leadKey: string | undefined
+      const lead = () => (leadKey ? leads().get(leadKey) : undefined) ?? ownLead
       const ref: { host?: Host } = {}
       const agents = o.hostOptions?.agents
         ? undefined
         : opencodeAgents(ctx.session, {
             ...o.agentOptions,
             dir,
-            lead: () => lead,
+            lead,
             ready: (id, kind) => recorded(ref.host!, id, kind),
             onEnd: (id, end) => {
               useName(ref.host!)
@@ -115,14 +133,22 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
             },
             log: text => ref.host?.ui.log(text),
           })
-      const host = (o.host ?? opencodeHost)({ ...o.hostOptions, ...(agents ? { agents } : {}), dir })
+      const leadApi = o.hostOptions?.lead ? undefined : opencodeLead(ctx.session, { lead, log: text => ref.host?.ui.log(text) })
+      const host = (o.host ?? opencodeHost)({ ...o.hostOptions, ...(agents ? { agents } : {}), ...(leadApi ? { lead: leadApi } : {}), dir })
       ref.host = host
       const say = (text: string) => host.ui.toast(text)
       useName(host)
       const regs: OcRegistration[] = []
       regs.push(
-        await ctx.session.hook('prompt', e => {
-          if (e.sessionID && !agents?.has(e.sessionID)) lead = e.sessionID
+        await ctx.session.hook('prompt', async e => {
+          const id = e.sessionID
+          if (!id || id === lead() || agents?.has(id)) return
+          // a child session (one of symcc's agents from an earlier copy, or OpenCode's own subagent) is never the lead
+          const info = await ctx.session.get({ sessionID: id }).catch(() => undefined)
+          if (!info || info.parentID || info.metadata?.symcc) return
+          ownLead = id
+          if (leadKey) leads().set(leadKey, id)
+          await leadApi?.known()
         }),
       )
       // the guard first, so a session's edits are judged from the start (an unknown project refuses nothing)
@@ -145,6 +171,8 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       if (inMain) {
         slot = owners().get(realMain) ?? { waiting: [] }
         owners().set(realMain, slot)
+        leadKey = realMain
+        if (ownLead) leads().set(realMain, ownLead)
         if (!slot.owner) await takeOver()
         else {
           slot.waiting.push({ token, takeOver })
