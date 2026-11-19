@@ -9,7 +9,7 @@ import { kindMark } from './kinds'
 import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
-import { shownStatus } from './commands'
+import { shownStatus, waitsForYou } from './commands'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
 import { statusMark } from './details'
@@ -90,6 +90,8 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
   const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
   const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
   const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? ` · ${m}`.length : 0)))
+  // a waiting task whose tests only run again (not waitsForYou) shows the running mark, like the rest of its row (T-541)
+  const rowMark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
   const leadsWith = (form: TotalForm) => {
     // the total work time of all tries, between this try's time and the try: "▶ 15m · 1h 40m in all · try 3"
     const totals = new Map(doing.map(t => [t.id, triesTotal(t, nowMs, form)]))
@@ -103,7 +105,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
       }),
     )
     const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
-    return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${statusMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+    return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
   }
   // too narrow: "in all" goes first, then the total, so the titles keep TITLE_ROOM
   let leads = new Map<string, string>()
