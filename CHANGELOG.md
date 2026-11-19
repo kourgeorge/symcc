@@ -2,6 +2,14 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.4 (2026-11-19)
+
+### Changed
+- Running rows show the total work time of all tries as a short mark, "▶ 15m · Σ1h 40m · try 3", instead of "1h 40m in all", so the title keeps its room; narrow rows drop it. The task page explains Σ once.
+
+### Fixed
+- The guard no longer refuses a worker's or checker's own-folder command just because it holds a `../..` path as text: sed scripts, grep patterns, echo/printf text written to a file, and quoted here-documents written to a file with cat or tee (e.g. a probe script in `.scratch/` importing `../hooks/board`). Real reads and writes of your copy are still refused, including a redirect stuck to a word (`a.ts>../../x`) and brace expansion (`{a,../../x}`); perl, bun and node code is still checked word by word.
+
 ## 0.5.3 (2026-11-19)
 
 ### Added
