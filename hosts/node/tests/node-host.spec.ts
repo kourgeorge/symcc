@@ -89,6 +89,32 @@ test('claude -p gets the task\'s files as its permission rules, and its result l
   expect(claudeResult({ stdout: JSON.stringify({ type: 'result', subtype: 'error_max_turns', is_error: true, result: '' }), stderr: '', exitCode: 1, killed: false }).end).toEqual({ reason: 'error' })
 })
 
+// Claude Code's Bash rule matching: `Bash(x:*)` is x alone or x then a space; another `*` matches anything.
+function bashRuleMatches(rule: string, cmd: string): boolean {
+  const m = /^Bash\((.*)\)$/.exec(rule)
+  const r = m?.[1]
+  if (r === undefined) return false
+  const p = r.endsWith(':*') ? `${r.slice(0, -2)} *` : r
+  if (p.endsWith(' *') && cmd === p.slice(0, -2)) return true
+  return new RegExp(`^${p.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(cmd)
+}
+
+test('T-496: claude -p deny rules refuse every git write for a worker and a checker, also through -C, --git-dir and wrappers', () => {
+  const bad = [
+    'git commit -m x', 'git merge main', 'git init', 'git init /tmp/x', 'git -C /tmp/x commit -m x', 'git -C . merge main',
+    'git -C .. init', 'git --git-dir=/r/.git commit', 'git --work-tree=/r reset --hard', 'git -c core.hooksPath=x commit',
+    'git --no-pager commit', 'git reset --hard', 'git checkout main', 'git switch -c x', 'git branch -f main HEAD',
+    'git branch -D x', 'git push', 'git stash', 'git stash pop', 'git rebase main', 'git cherry-pick abc', 'git tag v1',
+    'git update-ref refs/heads/main HEAD', 'git add -A', 'git restore .', 'git clean -fd', 'git worktree add x',
+    'git config user.name x', 'git am p', 'git pull', 'env git commit', 'xargs git commit', 'command git push',
+  ]
+  const good = ['git status', 'git diff', 'git log -3', 'git show HEAD', 'git blame a.ts', 'git ls-files', 'git rev-parse HEAD', 'git grep x', 'bun test', 'sh scripts/test-node-host.sh']
+  for (const p of [claudePermissions({ kind: 'worker', files: ['tests/'] }), claudePermissions({ kind: 'checker' }), claudePermissions({ kind: 'worker' }, true), claudePermissions({ kind: 'checker' }, true)]) {
+    for (const c of bad) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: true`)
+    for (const c of good) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: false`)
+  }
+})
+
 test('one task end to end on the Node host: add, a fake claude -p worker edits its worktree, tests run, it merges, the board says done', async () => {
   const repo = await mkdtemp('/tmp/symcc-node-host-')
   const log = `${repo}.fake`
