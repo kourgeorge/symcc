@@ -73,6 +73,8 @@ export type VsTaskCtx = {
   choices: string[]
   why: { reason: string; next: string; asks: string } | null
   canPickRole: boolean
+  /** whether "Already merged" fits (T-514): its work was merged by hand, outside the board */
+  canMarkMerged?: boolean
   nowRole: string
   redraw: () => void
   on: {
@@ -90,6 +92,7 @@ export type VsTaskCtx = {
     retry: () => void
     toTodo: () => void
     stash: () => void
+    markMerged: () => void
     drop: () => void
     watch: () => void
     toggleReview: () => void
@@ -108,7 +111,7 @@ type Press = { surface?: Parameters<$['ui']['copy']>[0]['surface'] }
 type Action = { key: string; label: string; onPress: (press?: Press) => void; main?: boolean }
 
 /** The action buttons that fit task `t` now, in order; `main` marks the one to press (one at most, none while a question waits). */
-export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview' | 'answered' | 'fileWait' | 'answerable' | 'canPickRole'> & Partial<Pick<VsTaskCtx, 'merging'>>, on: VsTaskCtx['on']): Action[] {
+export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview' | 'answered' | 'fileWait' | 'answerable' | 'canPickRole' | 'canMarkMerged'> & Partial<Pick<VsTaskCtx, 'merging'>>, on: VsTaskCtx['on']): Action[] {
   const s = t.status
   const open = s !== 'done' && s !== 'dropped'
   // while it merges: no Approve, Reject, Done, Keep as a note, Ask more or Merge now (see MERGING_LINE)
@@ -134,6 +137,7 @@ export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview
     s === 'backlog' && { key: 'to-todo', label: 'Move to todo', onPress: on.toTodo, main: true },
     (s === 'todo' || s === 'paused' || s === 'failed') && { key: 'stash', label: 'Stash to backlog', onPress: on.stash },
     x.canPickRole && { key: 'role', label: 'Role', onPress: on.openRolePick },
+    !!x.canMarkMerged && { key: 'already-merged', label: 'Already merged', onPress: on.markMerged },
     open && { key: 'drop', label: 'Drop', onPress: on.drop },
     open && { key: 'needs-review', label: `Needs review: ${t.needs_review ? 'on' : 'off'}`, onPress: on.toggleReview },
     { key: 'copy', label: 'Copy', onPress: (press?: Press) => on.copy(press) },

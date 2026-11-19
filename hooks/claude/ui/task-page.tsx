@@ -18,6 +18,8 @@ import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
+/** The statuses whose page offers "Already merged (h)": work that stopped short of the board's merge (the lead's tool takes more). */
+export const MARK_MERGED_FROM: readonly SymccTask['status'][] = ['failed', 'waiting', 'paused', 'dropped']
 export const MERGING_LINE = 'Merging… (tests running)'
 /** The keys of the review and merge buttons (approve or done, reject or ask more, keep as a note, merge now): not offered while it merges. */
 const MERGE_KEYS = ['a', 'x', 'k', 'r']
@@ -290,6 +292,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const toTodo = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))
   const stashIt = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))
   const dropIt = act(async () => (await runTool(claudeHost($), 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))
+  // Already merged (h, T-514): the owner merged its branch by hand; symcc checks it with git and marks it done (nothing is merged or tested)
+  const canMarkMerged = MARK_MERGED_FROM.includes(t.status) && !isInvestigation(t) && t.attempts > 0
+  const markMergedIt = act(async () => {
+    const r = await runTool(claudeHost($), 'merged', { task: t.id, by: 'the owner' })
+    $.ui.toast(S.N.toast(r))
+    noteForLead(`The owner marked ${t.id} done: its work was already merged outside the board.`)
+  })
   const watchIt = act(async () => (agentId ? $.ui.view({ agentId }) : undefined))
   const toggleReview = act(async () => {
     const r = await runTool(claudeHost($), 'change', { task: t.id, needs_review: !t.needs_review })
@@ -306,9 +315,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
+      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
-      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
+      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
   return (
     <Box flexDirection="column" gap={1}>
@@ -354,6 +363,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={stashIt} />
         ),
         canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />,
+        canMarkMerged && <Button key="already-merged" label="Already merged (h)" hotkey="h" onPress={markMergedIt} />,
         t.status !== 'done' && t.status !== 'dropped' && (
           <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={dropIt} />
         ),

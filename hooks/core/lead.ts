@@ -2,7 +2,7 @@
 import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf } from './board-file'
 import { parseStamp } from './text'
 import { stoppedLine, stopEnd } from './history'
-import { shortSha } from './commits'
+import { addCommits, shortSha } from './commits'
 import { tryLabel } from './roles'
 import { endedBy, withEnd } from './runs'
 
@@ -217,6 +217,35 @@ export function mergedDone(t: BoardTask, sha: string, when: string, now: string)
   const { session: _s, finishing: _f, checking: _c, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), alreadyMergedLine(t, sha, when)], ...(runs ? { runs } : {}) }
+}
+
+// ---------------- merged outside the board (T-514) ----------------
+// The owner or the lead merged a task's branch by hand (e.g. its only failure was the merge test timing out).
+// symcc checks with git that the work is in the branch it merges into, then marks it done: no test run, no merge.
+
+/** The statuses a task can be marked "merged outside the board" from (a running one is stopped first). */
+export const MERGED_OUTSIDE_FROM: readonly BoardTask['status'][] = ['todo', 'doing', 'failed', 'waiting', 'paused', 'review', 'dropped']
+
+/** The history line of a task marked done because its work was merged outside the board (`sha`), by `by` ("the owner", "the lead"). */
+export const mergedOutsideLine = (sha: string, by: string) => `merged outside the board (${shortSha(sha)}); marked done by ${by}`
+
+/** Whether history line `l` says the task was merged outside the board (see mergedOutsideLine). */
+export const isMergedOutsideLine = (l: string) => /^merged outside the board\b/.test(l)
+
+/** The refusal when task `id`'s branch has `n` commits that `into` doesn't have. */
+export const notMergedText = (id: string, n: number, into: string) => `${id}'s branch has ${n} commit${n === 1 ? '' : 's'} that ${n === 1 ? "isn't" : "aren't"} in ${into} yet`
+
+/**
+ * Task `t` as "done" because its work is already in the branch it merges into (`sha`: the merge commit there, or
+ * the branch tip when it was fast-forwarded): merged outside the board, marked done by `by`. Its `commits` are
+ * recorded on its last try, which ends as finished, merged (a running one too). Questions, waits and check marks
+ * it had are cleared.
+ */
+export function mergedOutside(t: BoardTask, sha: string, by: string, commits: readonly string[], now: string): BoardTask {
+  const { session: _s, finishing: _f, checking: _c, test_output: _o, merge_wait: _w, time_ask: _a, wrap_up: _u, test_rerun: _r, options: _p, asked_files: _af, ...rest } = t
+  const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
+  const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
+  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), mergedOutsideLine(sha, by)], ...(runs ? { runs } : {}) }
 }
 
 /**

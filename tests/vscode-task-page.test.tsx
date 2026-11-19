@@ -48,16 +48,16 @@ const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[â
 /** The action buttons each rich task shows in VS Code, in order, and the one primary (if any) on its page. */
 const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
   'T-501': { keys: ['approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'], primary: 'approve' },
-  'T-502': { keys: ['stash', 'role', 'drop', 'needs-review', 'copy'], primary: 'retry' },
-  'T-503': { keys: ['drop', 'needs-review', 'copy'], primary: 'choice-1' },
+  'T-502': { keys: ['stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'], primary: 'retry' },
+  'T-503': { keys: ['already-merged', 'drop', 'needs-review', 'copy'], primary: 'choice-1' },
   'T-504': { keys: ['pause', 'drop', 'needs-review', 'copy'] },
-  'T-505': { keys: ['resume', 'stash', 'role', 'drop', 'needs-review', 'copy'], primary: 'resume' },
+  'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'], primary: 'resume' },
   'T-506': { keys: ['pause', 'stash', 'role', 'drop', 'needs-review', 'copy'] },
   'T-507': { keys: ['to-todo', 'role', 'drop', 'needs-review', 'copy'], primary: 'to-todo' },
   'T-508': { keys: ['copy'] },
-  'T-509': { keys: ['retry', 'copy'] },
+  'T-509': { keys: ['retry', 'already-merged', 'copy'] },
   'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'needs-review', 'copy'], primary: 'done' },
-  'T-511': { keys: ['drop', 'needs-review', 'copy'], primary: 'choice-1' },
+  'T-511': { keys: ['already-merged', 'drop', 'needs-review', 'copy'], primary: 'choice-1' },
 }
 
 for (const id of RICH_IDS) {
