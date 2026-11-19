@@ -90,3 +90,12 @@ test('the old-line guess: a kind for each kind of line symcc wrote, and records 
   expect(r.fixed).toEqual(['T-1: 1 bad history entry dropped'])
   expect(historyLineText({ kind: 'other', text: 'no time' })).toBe('no time')
 })
+
+test('a damaged archive.json history (null, a number, a record without text) loads, the bad entries dropped', () => {
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...OLD_TASK, status: 'done', history: [null, 5, { kind: 'note' }, 'created by the lead because x'] }] }))
+  expect(a.broken).toBeUndefined()
+  const t = a.archive.tasks[0]!
+  expect(t.history.map(e => e.text)).toEqual(['created by the lead because x'])
+  expect(taskText(t, false)).not.toContain('undefined')
+  expect(migrateHistory({ history: [null] })).toEqual([])
+})

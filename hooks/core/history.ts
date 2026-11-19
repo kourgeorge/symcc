@@ -305,12 +305,20 @@ export function oldHistoryEntry(line: string, t: { runs?: readonly SymccRun[]; c
 
 /**
  * A task's history in the current shape (one-time conversion, T-522): old string lines become records (oldHistoryEntry),
- * a record with a kind symcc doesn't know gets "other". Null when there is nothing to convert.
+ * a record with a kind symcc doesn't know gets "other", and anything else (null, a number, a record without a text, as
+ * in a damaged archive.json) is dropped. Null when there is nothing to convert.
  */
 export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[]; created_at?: string }): HistoryEntry[] | null {
   const h = t.history
-  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && isHistoryKind((e as HistoryEntry)?.kind))) return null
-  return h.map(e => (typeof e === 'string' ? oldHistoryEntry(e, t) : { ...(e as HistoryEntry), kind: isHistoryKind((e as HistoryEntry).kind) ? (e as HistoryEntry).kind : 'other' }))
+  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && historyEntryOk(e) && isHistoryKind((e as HistoryEntry).kind))) return null
+  const out: HistoryEntry[] = []
+  for (const e of h) {
+    if (typeof e === 'string') { out.push(oldHistoryEntry(e, t)); continue }
+    if (!e || typeof e !== 'object' || Array.isArray(e) || typeof (e as HistoryEntry).text !== 'string') continue
+    const r = e as HistoryEntry
+    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), kind: isHistoryKind(r.kind) ? r.kind : 'other', text: r.text })
+  }
+  return out
 }
 
 /** Whether `v` can be a history entry read from a file: an old string line (converted on load) or a record with a text and a kind. */
