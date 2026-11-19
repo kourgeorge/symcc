@@ -14,6 +14,12 @@ export type Seg = { text: string; color: string; bold?: boolean; italic?: boolea
 /** One labelled row on the task page ("Role:", "From:", …); a row with an empty label continues the one above. */
 export type DetailRow = { label: string; segs: Seg[] }
 
+/** The name of a task's current-state line (its `note`, e.g. "worker on it") on every view: the task page, the VS Code
+ *  task page, the text board and the copied text. Change it here only; each view keeps its own casing. */
+export const STATE_LABEL = 'Now'
+/** STATE_LABEL in lower case, for the plain-text views ("now: worker on it"). */
+export const stateLabelLower = () => STATE_LABEL.toLowerCase()
+
 /** The status badge colors on the task page: doing blue, review and waiting yellow, done green, failed red, the rest dim. */
 export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'inactive', todo: 'inactive', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'inactive' }
 export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
@@ -41,14 +47,14 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
 }
 
 /**
- * The labelled rows of the task page, in order: Status, Note, Role, From, Why, Request, Seen, Files, Into (the branch it
+ * The labelled rows of the task page, in order: Status, Now (STATE_LABEL), Role, From, Why, Request, Seen, Files, Into (the branch it
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; kinds?: KindDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
   R.push({ label: 'Status', segs: [{ text: `${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
-  if (t.note) R.push({ label: 'Note', segs: [{ text: t.note, color: 'inactive', italic: true }] })
+  if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')
@@ -171,7 +177,7 @@ export function taskCopyText(t: SymccTask, o: { roles?: RoleDef[]; report?: stri
   const kind = kindMark(t)
   const L = [`${t.id}  ${t.title}`, `${STATUS_WORD[t.status]} · ${kind ? `${kind} · ` : ''}${role} · from: ${from}`]
   if (og?.why) L.push(`why: ${squash(og.why)}`)
-  if (t.note) L.push(`note: ${t.note}`)
+  if (t.note) L.push(`${stateLabelLower()}: ${t.note}`)
   L.push('What to do:', t.details.trim() ? t.details.trimEnd() : '(no details)')
   L.push(`May change: ${t.files.length ? t.files.join(', ') : 'anywhere in the project'}`)
   if (t.after.length) L.push(`Waits for: ${t.after.join(', ')}`)
