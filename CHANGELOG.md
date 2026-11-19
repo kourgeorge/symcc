@@ -4,6 +4,14 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.5.1 (2026-11-19)
+
+### Added
+- symcc no longer runs the tests before a merge when this exact code already passed them. It remembers each tested git tree (the content of every file) with the test commands it passed, in `.symcc/passed-trees.json` (the newest 200). When the same tree comes up again with the same commands (a retry where nothing changed, a try sent back and handed back unchanged), no test command runs, and the task's history says "tests: this exact code already passed (tree abc1234); not run again". Any change to the work, to the branch it merges into, or to the test commands runs the tests as usual. A failed, timed-out or stopped run is never remembered. Deleting the file makes the next run test again.
+
+### Changed
+- When the tests before a merge only run out of time (a command still running at its 10-minute limit, not a failing test), the task no longer gets a new worker try and uses no automatic retry. It keeps its work, shows as "retest" with the running tasks, and symcc runs only the tests again, once, when no other task's tests are running. If they run out of time a second time, the task waits for you with "Run the tests again" or "Stop it" ("Stop it" pauses it with its work kept). A real test failure still starts a new try. An approval whose tests run out of time stays in review; approve it again to run them again. Known gap: the VS Code Tasks list, the band's counts and the task page's badge still call such a task "waiting for you".
+
 ## 0.5.0 (2026-11-19)
 
 ### Added
@@ -32,6 +40,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Role files name their extra tools in symcc's own words: `tools: web` instead of `tools: WebSearch, WebFetch`, so a role means the same in every host (in Claude Code, `web` is still WebSearch and WebFetch). Your own `.symcc/roles/*.md` files with the old names are changed once when symcc reads them. The lead's `roles` tool and the Roles page take `web`.
 - The header shows just the name and version ("𝄞 symcc v0.4.1 · <folder>"), without the word "board" after them, in the board tool's text, the band above the prompt and the terminal, desktop and mobile header. With no version known it still reads "symcc board".
 - The band above the prompt shows each doing task's real state and time, like the board's Tasks list: "T-440 ▶ 12m", "T-373 ▶ test", "T-435 ▶ check", "T-436 ▶ merge", with the try after it from try 2 on ("T-434 ▶ check · try 2"), in lined-up columns. The word "doing" is gone, and so are the notes the state already says ("worker on it", "checking and merging", "starting at the next turn"); every other note, such as "time is up: the worker was told to hand back", stays as the row's tail.
+- When symcc is off, the line under the prompt says how to turn it on in plain words: "symcc is off · /symcc-on to turn it on", with the command in its own color.
+- A scout's page no longer has a "Last report" section; a report shows when you open one of the scout's runs.
 
 ## 0.4.1 (2026-11-18)
 
