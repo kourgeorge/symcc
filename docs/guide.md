@@ -665,7 +665,7 @@ before this was kept show `from: unknown`.
   when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
   Tasks from before this was kept say "no saved report".
 - **The research note.** When a task's merged work adds or changes a file under
-  `docs/research/`, the task page shows it in Details as `Note: docs/research/<file>.md`.
+  `docs/research/`, the task page shows it in Details as `Research: docs/research/<file>.md`.
 - **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
   while: it is not kept. The report file and the commit are what stay.
 
