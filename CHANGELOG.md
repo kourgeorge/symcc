@@ -4,6 +4,11 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.5.2 (2026-11-19)
+
+### Changed
+- The full test commands run once per try: in symcc's run before merging. A worker's prompt now lists the test commands and says symcc runs them all before merging and sends back the output if any fail; while working it runs only the tests for the files it changed (plus a cheap type check), not the full commands at the end. The checker is told that symcc already ran these exact commands on this commit and tree (from `.symcc/passed-trees.json`), which files changed, and to run only the tests for them and its own probes, not the full commands again; it no longer has to look for the setup. If symcc's run isn't on record, or no test commands are set, the checker runs the tests as before. The checker, refactor and tester roles point to the narrow tests too, and the guide has a new section, "Tests run once per try".
+
 ## 0.5.1 (2026-11-19)
 
 ### Added
