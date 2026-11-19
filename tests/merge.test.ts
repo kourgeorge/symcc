@@ -2,7 +2,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS, testsRunningNow } from '../hooks/app/review'
 import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, testLockStaleMs, testMinutesOf, testTimeoutMs, taskTestMinutes, putTask, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
-import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { PREP_NOTE, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -3385,6 +3385,29 @@ test('a finishing task\'s row says "test" while its tests run and "merge" while 
   const b = await finishing(cell, {}, /git update-ref/)
   expect(b.said[0]).toBe('merge')
   expect(b.t.checking).toBeUndefined()
+})
+
+test('T-542: a finishing task\'s row says "prep" with a plain note in symcc\'s own pre-merge step; with the checker off no step is ever "checker"', async () => {
+  const seen = async (w: ReturnType<typeof world>) => {
+    const t = find(await load(w.$), 'T-1')!
+    return `${statusCell(t, Date.now())} | ${t.note}`
+  }
+  const a = await finishing(seen, {}, /\badd -A\b/)
+  expect(a.said[0]).toBe(`prep | ${PREP_NOTE}`)
+  expect(a.t.status).toBe('done')
+  // every step of the same finish, the checker setting being off (the default)
+  const steps: unknown[] = []
+  const w = world()
+  const [b0] = boardWith('auto', ['npm test'])
+  await saveBoard(w.$, b0)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  w.onRun(async () => { steps.push(statusCell(find(await load(w.$), 'T-1')!, Date.now())) })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  expect(steps).toContain('prep')
+  expect(steps).toContain('test')
+  expect(steps).not.toContain('checker')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })
 
 test('the check step is cleared when the tests fail', async () => {

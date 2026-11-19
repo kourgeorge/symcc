@@ -66,7 +66,7 @@ const BAND_COLOR: Record<string, string> = { review: 'cyan', waiting: 'yellow', 
 /**
  * The band above the prompt, like Claude Code's (T-455/T-461): the header line (brand, folder, mode, questions for
  * you, workers, counts, scouts; the version dropped first when short of room), the owner's open questions, then the
- * tasks that need the owner or run, newest first, each with its lined-up front ("T-434 ▶ check · try 2", see
+ * tasks that need the owner or run, newest first, each with its lined-up front ("T-434 ▶ prep · try 2", see
  * bandLeads) and its note when the state doesn't already say it (bandNote), and "+N more" when they don't all fit.
  * [] when there is nothing to show (an empty board, or symcc turned off). `rows`: at most this many rows under the header.
  */

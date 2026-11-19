@@ -182,7 +182,7 @@ export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: 
   return Number.isFinite(at) && isFresh(at, nowMs, staleMs)
 }
 
-/** The step symcc is in while it checks task `t`'s finished work ("checking", "testing", "merging"), or '' when none is going on (or its mark is stale). */
+/** The step symcc is in while it checks task `t`'s finished work ("prep", "testing", "checker", "merging"), or '' when none is going on (or its mark is stale). */
 export function checkStepNow(t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number, staleMs = FINISH_STALE_MS): CheckStep | '' {
   if (!t.checking || !CHECKED_STATUSES.includes(t.status)) return ''
   const at = Date.parse(t.checking.at)

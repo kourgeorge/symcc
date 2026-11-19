@@ -520,3 +520,20 @@ test('T-532: in VS Code a task waiting only to rerun its tests is under Doing as
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ▶ rerunning its tests /)
   await ui.unmount()
 })
+
+test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running checker \"checker\"; the page says what each does", async ($, on) => {
+  const fresh = new Date(T0 - 10_000).toISOString()
+  const base = BOARD_TASKS.find(t => t.id === 'T-401')!
+  const prep = { ...base, id: 'T-497', title: 'In the prep step', note: 'preparing to merge: committing and checking files', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }], checking: { step: 'prep', at: fresh } }
+  const checker = { ...prep, id: 'T-498', title: 'Checker on it', note: 'a checker agent is trying to break it before it merges', checking: { step: 'checker', at: fresh } }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, prep, checker] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect(await rowText(ui, 'T-497')).toMatch(/\n▶ prep/)
+  expect(await rowText(ui, 'T-498')).toMatch(/\n▶ checker/)
+  // only the task whose checker runs says "checker"
+  expect(texts(await ui.drawn()).join('\n').match(/▶ checker/g)?.length).toBe(1)
+  await ui.press({ key: 'T-497', link: { href: vsHref('task', 'T-497') } })
+  expect(texts(await ui.drawn()).join('\n')).toContain('preparing to merge: committing and checking files')
+  await ui.unmount()
+})

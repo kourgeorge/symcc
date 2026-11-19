@@ -11,7 +11,8 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { shownStatus, waitsForYou } from './commands'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, FINISH_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
+import { checkStepNow } from './lead'
 import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
@@ -78,7 +79,7 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
  * state columns). Every row shows the list's own mark and short status cell (statusCell): a doing task "▶ 12m"
- * (time on this try), "▶ test", "▶ check", "▶ merge", with the total work time of all tries (triesTotal) and its try
+ * (time on this try), "▶ prep", "▶ test", "▶ checker", "▶ merge", with the total work time of all tries (triesTotal) and its try
  * after it from try 2 on ("T-434 ▶ 15m · 1h 40m in all · try 2"); in a row narrower than `width` "in all" goes first, then the total;
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or
  * the longest other cell), so every title starts in one column. `since(id)` is when this session's worker started.
@@ -119,10 +120,10 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
-/** The notes a doing row's state already says ("▶ 12m", "▶ check"), so the band leaves them out when it shows one:
+/** The notes a doing row's state already says ("▶ 12m", "▶ prep"), so the band leaves them out when it shows one:
  *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
  *  "worker starting" without it, e.g. on OpenCode). */
-const STATE_NOTES = new Set(['worker on it', 'checking and merging', 'starting at the next turn', 'worker starting'])
+const STATE_NOTES = new Set(['worker on it', FINISH_NOTE, 'starting at the next turn', 'worker starting'])
 
 /** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>
@@ -326,7 +327,7 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 }
 
 /** One row (and its "from:" line) of the board as text. */
-function boardRow(t: SymccTask, autoRetries?: number): string[] {
+function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number): string[] {
   const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.status === 'failed' ? ` — ${whyFailed(t)}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
@@ -334,8 +335,12 @@ function boardRow(t: SymccTask, autoRetries?: number): string[] {
   const role = tag ? ` [${tag}]` : ''
   // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)
+  // the step a finished task is in, with the same short word as every other view (STEP_WORD): "T-5   ▶ doing   prep · title"
+  const step = checkStepNow(t, nowMs)
+  // with both, one separator between them: "prep · try 2 title" (not "prep · · try 2")
+  const lead = step ? `${STEP_WORD[step]} · ${mark ? `${mark} ` : ''}` : mark ? `· ${mark} ` : ''
   // the task's own mark first (● a to do task worked on before, see statusMark): "T-5   ● todo    title"
-  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
+  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${lead}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
 }
 
 /** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */
@@ -379,10 +384,10 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const asked = [picked, filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
     // with last / top the line says how many matched in all: "10 of 37 matching shown (484 tasks on the board; ...)"
     const count = q.pick ? `${rows.length} of ${q.pick.by === 'order' && !q.status ? matched.filter(t => t.status === 'todo').length : matched.length} matching shown (${b.tasks.length} tasks on the board; ${asked})` : `${rows.length} of ${b.tasks.length} tasks (${asked})`
-    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries)), count] : [`No tasks match (${asked}).`]
+    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now())), count] : [`No tasks match (${asked}).`]
   } else {
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
-    body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries)), ...(hidden ? [hidden] : [])]
+    body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now())), ...(hidden ? [hidden] : [])]
   }
   return [...top, head, ...asks, ...body, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
 }

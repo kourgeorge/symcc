@@ -2,7 +2,7 @@
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
 // verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, type HistoryAdd } from '../board'
+import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, type HistoryAdd } from '../board'
 import { isTreeId, treePassed } from '../core/passed-trees'
 import { git, taskBranch } from './git'
 import { markStep, readPassedTrees, testedTree } from './review'
@@ -20,12 +20,12 @@ export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; aga
 /** The agent name of task `id`'s checker: "symcc-T-3-checker". */
 export const checkerName = (name: string, id: string) => agentSafeName(`${name}-${id}-checker`)
 
-/** The note of a task while its checker runs; a reloaded copy finds a task whose checker it lost by it (see restartCheckers in workers.ts). */
-export const CHECKER_NOTE = 'a checker is trying to break it before it merges'
+/** The note of a task while its checker runs (kept in core/panel.ts, as stepNote swaps it back once the verdict is in). */
+export { CHECKER_NOTE } from '../board'
 
 /**
  * Runs a checker on task `t`'s finished work in its folder `dir` (everything is committed there) and waits for its
- * verdict. The board shows the task's step as "checking" meanwhile. The checker runs as the read-only scout type
+ * verdict. The board shows the task's step as "checker" meanwhile. The checker runs as the read-only scout type
  * (no Edit or Write), and whatever it still changed in the folder is thrown away after; if it moved the task's branch
  * (a commit, a reset), the branch is put back where it was tested (putBack). Its time limit is the board's
  * max_minutes: past it, it is stopped and there is no verdict. Its verdict goes into the task's history and its
@@ -36,7 +36,7 @@ export const CHECKER_NOTE = 'a checker is trying to break it before it merges'
  * reload); when it says yes, nothing is written and the outcome is `again` (the caller tries again at the next check).
  */
 export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined, tryLater?: () => boolean): Promise<CheckerOutcome> {
-  await markStep($, t, 'checking', () => undefined)
+  await markStep($, t, 'checker', () => undefined)
   await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: CHECKER_NOTE }, now()) : x)).catch(() => undefined)
   const into = intoOf(t)
   const roles = await loadRoles($).catch(() => S.roles)

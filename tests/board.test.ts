@@ -12,7 +12,7 @@ import { putTask, tryMark, tryTone, bandLeads } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { STEP_WORD, asChecking, stepNote, FINISH_NOTE, PREP_NOTE, CHECKER_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_CONFLICT_TRIES, onConflict, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
@@ -2745,6 +2745,47 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   expect(withCrew((w, s) => [w, s].join('|'), undefined, now)).toBe('|')
   expect(nextScoutText([{ name: 'bugs', running: true }, ...scouts], now)).toBe('running: bugs')
   expect(nextScoutText([], now)).toBe('')
+})
+
+test("T-542: symcc's own pre-merge step is \"prep\", a running checker is \"checker\"; an old saved \"checking\" reads as prep", () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const stamp = new Date(now - 10_000).toISOString()
+  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'prep', at: stamp } }, now)).toBe('prep')
+  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'checker', at: stamp } }, now)).toBe('checker')
+  expect(STEP_WORD).toEqual({ prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' })
+  // a board saved with the old step value: read as the prep step
+  expect(asChecking({ step: 'checking', at: stamp })).toEqual({ step: 'prep', at: stamp })
+  expect(asChecking({ step: 'nope', at: stamp })).toBeUndefined()
+  // the prep step says plainly what it does in the note, and gives the plain note back after
+  expect(stepNote('prep', FINISH_NOTE)).toBe(PREP_NOTE)
+  expect(stepNote('testing', PREP_NOTE)).toBe(FINISH_NOTE)
+  // once the checker's verdict is in, its note goes: prep note in the prep step, the finish note in the merge step
+  expect(stepNote('prep', CHECKER_NOTE)).toBe(PREP_NOTE)
+  expect(stepNote('merging', CHECKER_NOTE)).toBe(FINISH_NOTE)
+  expect(stepNote('checker', PREP_NOTE)).toBe(PREP_NOTE)
+  expect(stepNote('prep', 'approved; checking and merging')).toBe('approved; checking and merging')
+})
+
+test('T-542: the lead\'s text board shows the same step words ("prep", "checker") on a task in that step', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const stamp = new Date(now - 10_000).toISOString()
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, stamp)
+  const doing = patchTask(b0, 'T-1', { status: 'doing' }, stamp)
+  const row = (b: typeof doing) => boardText(b, now).split('\n').find(l => l.startsWith('T-1'))!
+  expect(row(patchTask(doing, 'T-1', { checking: { step: 'prep', at: stamp } }, stamp))).toContain('doing   prep · Fix it')
+  expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: stamp } }, stamp))).toContain('doing   checker · Fix it')
+  // no step (e.g. the checker setting off and no pre-merge step running): no step word at all
+  const plain = row(doing)
+  expect(plain).toContain('doing   Fix it')
+  expect(plain).not.toContain('checker')
+  expect(plain).not.toContain('prep')
+  // a later try: one separator between the step word and the try mark ("prep · try 2", not "prep · · try 2")
+  const later = row(patchTask(patchTask(doing, 'T-1', { attempts: 2 }, stamp), 'T-1', { checking: { step: 'prep', at: stamp } }, stamp))
+  expect(later).toMatch(/doing {3}prep · try 2\S* Fix it/)
+  expect(later).not.toContain('· ·')
+  expect(row(patchTask(doing, 'T-1', { attempts: 2 }, stamp))).toMatch(/doing {3}· try 2\S* Fix it/)
+  // a stale step (its copy is gone) shows no word
+  expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: new Date(now - 3_600_000).toISOString() } }, stamp))).not.toContain('checker')
 })
 
 test('task rows: a short status column and an inactive-colored extra; the extra goes first when the row is narrow', () => {
