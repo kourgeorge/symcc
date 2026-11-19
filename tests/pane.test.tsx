@@ -487,7 +487,7 @@ test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on key
   const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  for (const [n, label] of [[1, '1 Allow'], [2, "2 Don't allow"], [3, '3 Answer…']] as const) {
+  for (const [n, label] of [[1, 'Allow'], [2, "Don't allow"], [3, 'Answer…']] as const) {
     const b = await ui.find({ key: `choice-${n}` })
     expect(b?.props.label).toBe(label)
     expect(b?.props.hotkey).toBe(String(n))
@@ -510,9 +510,9 @@ test('a question with options shows one button per option plus Answer…; pickin
   const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('1 red')
-  expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('2 blue')
-  expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('3 Answer…')
+  expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('red')
+  expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('blue')
+  expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('Answer…')
   expect(await ui.find({ type: 'Text', text: /1-2 pick · 3 answer/ })).toBeDefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-2' })
@@ -521,6 +521,25 @@ test('a question with options shows one button per option plus Answer…; pickin
   expect(saved[0].tasks[0].status).toBe('todo')
   expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “blue”')
   expect(saved[0].tasks[0]).not.toHaveProperty('options')
+  await ui.unmount()
+})
+
+test('the answer buttons show only the choice (no number key inside); keys 1-5 still pick, told in a dim line under them', async ($, on) => {
+  const options = ['Keep as is', 'Once a day', 'Every 2 days', 'Only on demand']
+  const board = { tasks: [task('T-2', 'waiting', 'Checks', { question: 'How often?', options })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const [i, label] of [...options, 'Answer…'].entries()) {
+    const b = await ui.find({ key: `choice-${i + 1}` })
+    expect(b?.props.label).toBe(label)
+    expect(b?.props.hotkey).toBe(String(i + 1))
+  }
+  expect(await ui.find({ type: 'Text', text: 'keys 1-5 pick a choice' })).toBeDefined()
+  await ui.press({ key: 'choice-2' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “Once a day”')
   await ui.unmount()
 })
 
