@@ -86,6 +86,12 @@ const READS = [
   'find . -exec grep -l git {} +',
   'find . -name x -exec grep -n git {} \\;',
   'find . -type f -exec grep -l "git" {} +',
+  // T-485: a backslash inside quotes is plain text to bash (grep's `\|`), so the text-tool exception holds
+  'grep -rn "git init\\|x" hooks',
+  'grep -rn "a\\|git init" hooks',
+  `grep -rn "git init\\|'init'" hooks/core/ask.ts`,
+  "grep -rn 'git stash\\|x' hooks",
+  'rg "git (init|stash)\\.\\w+" hooks | head -5',
 ]
 
 const WRITES: [string, string][] = [
@@ -208,6 +214,20 @@ const WRITES: [string, string][] = [
   ['grep x a\\>& git stash', 'git stash'],
   ['grep x a\\<& git stash', 'git stash'],
   ['cat x\\>& git stash', 'git stash'],
+  // T-485: a backslash outside quotes still turns the exceptions off, also next to a quoted one, or in an unclosed quote
+  ['grep x a \\| git init', 'git init'],
+  ['grep "x" a; git init', 'git init'],
+  ['grep "a\\|b" x\\>& git stash', 'git stash'],
+  ["grep 'a\\|b' x\\>& git stash", 'git stash'],
+  ['grep "a\\|b" x | git init', 'git init'],
+  ['grep "a\\|b" x && git init', 'git init'],
+  ['grep "a\\|b" "$(git stash)"', 'git stash'],
+  ['grep "a\\|b" `git stash`', 'git stash'],
+  ['grep "a\\\\" x\\>& git stash', 'git stash'],
+  ['grep "a\\"b" x\\>& git stash', 'git stash'],
+  ['grep x\\>& git stash "a\\|b', 'git stash'],
+  // a backslash inside "..." that escapes there (`\$`, `\"`, `\\`) still counts, on the safe side
+  ['grep -E "a\\$|git init" x', 'git init'],
   ['sudo sh s; grep -h "git stash" notes > s', 'git stash'],
   // checker round 5: any command that isn't a text tool or read-only git turns the exceptions off for the line
   ['grep -h "git stash" notes > s; $SHELL s', 'git stash'],

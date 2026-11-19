@@ -749,7 +749,7 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  * a pattern or a name (`grep -n "git stash" docs`), and a read-only git command, whose words aren't read again
  * (`git log --grep="git stash"`). They hold only when every command in the whole line is one of them, so
  * `grep -h git notes | sh` and `grep -h git notes > s; $SHELL s` are refused, and never in a line with a newline, a
- * `#` comment, `$'` or a backslash (`grep x #'` + newline + `git stash`, `grep x a\>& git stash`). git run by xargs is
+ * `#` comment, `$'` or a backslash outside quotes (`grep x #'` + newline + `git stash`, `grep x a\>& git stash`). git run by xargs is
  * refused.
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
@@ -988,6 +988,33 @@ function findExecTextArgs(words: string[]): Set<number> {
 const unsplit_ = (text: string) => /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(text)
 
 /**
+ * `text` without the backslashes that are plain text to bash (T-485): each one inside '...', and each one inside
+ * "..." before a letter it doesn't escape there (`"a\|b"`, `"\.ts"`). Those can't hide a `&`, `;` or `|` from the
+ * command splitter, which reads quotes as bash does. A backslash outside quotes, or one inside "..." before `\`, `"`,
+ * `$`, a backquote or a newline, is kept, as is all of an unclosed quote, so unsplit_ still sees it.
+ */
+function dropQuotedBackslashes(text: string): string {
+  let out = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (c === '\\') (out += c + (text[i + 1] ?? '')), i++
+    else if (c === "'" || c === '"') {
+      let j = i + 1
+      let inner = ''
+      for (; j < text.length && text[j] !== c; j++) {
+        const d = text[j]!
+        if (d !== '\\') inner += d
+        else if (c === '"' && /[\\"$`\n]/.test(text[j + 1] ?? '\n')) (inner += d + (text[j + 1] ?? '')), j++
+      }
+      if (j >= text.length) return out + text.slice(i)
+      out += c + inner + c
+      i = j
+    } else out += c
+  }
+  return out
+}
+
+/**
  * `text` with each '...' outside double quotes and outside a backslash's reach replaced by `''` (what is in it is
  * plain text to bash). An unclosed one is kept as it is.
  */
@@ -1105,14 +1132,15 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
   // command in the whole line is exempt; one other command anywhere (sh, $SHELL, ./s, chmod, echo, tee...) keeps
   // main's broad rule for all of it. The command splitter doesn't know `#` comments or `$'...'` quoting, so with a
   // newline, a `#` that starts a word or `$'` in the line (`grep x #'` + newline + `git stash`) no exception holds either.
-  // Nor with a backslash anywhere: an escape like `a\>&` hides a background `&` from the splitter (T-439 round 7).
+  // Nor with a backslash outside quotes: an escape like `a\>&` hides a background `&` from the splitter (T-439 round 7).
   /** Adds inner gitScan result `inner` to `out`; the result to return when it found a git write. */
   const fold = (inner: { bad?: string; git: boolean; env?: string }) => {
     out.git ||= inner.git
     out.env ??= inner.env
     return inner.bad ? { ...out, bad: inner.bad } : undefined
   }
-  const unsplit = unsplit_(command)
+  // a backslash inside quotes that is plain text to bash (`grep "a\|b" x`) doesn't count (T-485)
+  const unsplit = unsplit_(dropQuotedBackslashes(command))
   // a word anywhere that names a git program (`.../git-core/git-stash`, as an option's value too) keeps main's rule
   const gitProgram = simple.some(p => p.words.some(w => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)))
   broad ||= unsplit || gitProgram || !simple.every(exempt)
