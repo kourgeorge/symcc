@@ -1,7 +1,7 @@
 // What OpenCode's TUI part (opencode/tui.ts, T-466) draws, as plain data: the band above the prompt
 // (session.composer.top) and the board panel (session.panel), each as lines of colored text (core's Seg), made from
 // the view file the engine writes (view.ts) with hooks/core's own helpers: the band's row fronts and notes
-// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, statusCell,
+// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, fittedCells,
 // rowExtra, fitRow), the banner (bannerLines) and a task's rows (detailRows). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468).
@@ -11,7 +11,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
+  fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
   waitsForYou, shownStatus, statusWordOf,
 } from '../board'
@@ -92,7 +92,7 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
   for (const q of asks) out.push([{ text: `${q.id} for you`, color: 'yellow' }, { text: ` ${q.text}`, color: 'text' }, ...(q.options.length ? [{ text: ` — ${q.options.join(' | ')}`, color: 'inactive' }] : [])])
   const shown = live.slice(0, Math.max(0, rows - asks.length))
   const since = (id: string) => v.working?.find(w => w.task === id)?.since
-  const leads = bandLeads(shown, nowMs, since)
+  const leads = bandLeads(shown, nowMs, since, width)
   for (const t of shown) {
     const note = bandNote(t, nowMs, since(t.id))
     // a waiting task whose tests only run again (not waitsForYou) shows with the running ones: "rerunning its tests" (T-534)
@@ -170,8 +170,9 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
   const at = ids.length ? Math.min(Math.max(0, cursor), ids.length - 1) : -1
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
-  const cells = new Map(listed.map(x => [x.id, statusCell(x, nowMs, since(x.id))]))
   const idWidth = Math.max(4, ...ids.map(id => id.length))
+  // a doing task on a later try: "15m · 1h 40m in all"; narrow, "in all" goes first, then the total
+  const cells = fittedCells(listed, nowMs, since, w - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))
   const lines: Line[] = []
