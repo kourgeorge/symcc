@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { addTask, emptyBoard, patchTask, bandNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
@@ -36,6 +36,15 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   expect(parseViewFile(viewFileText(f))).toEqual(f)
   for (const bad of [null, '', '{', '{"view":{}}', '[]']) expect(parseViewFile(bad)).toBe(null)
   expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toContain('/work/proj/.symcc/view.json')
+})
+
+test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
+  const f = viewFile()
+  for (const git_state of ['no-repo', 'no-commits'] as const) {
+    const lines = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')
+    expect(lines).toContain('set up git (ask the lead)')
+    expect(lines).not.toContain('(g)')
+  }
 })
 
 test('the band: the header, then the tasks that need you or run with the list\'s marks and short states; a "worker starting" row shows its time and no stray note', () => {
