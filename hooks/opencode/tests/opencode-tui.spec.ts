@@ -89,6 +89,16 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(asks).toContain('  2 postgres')
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'back'])
+  // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
+  const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
+  expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'back'])
+  expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
+  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  1 +30 min')
+  // a waiting task whose finished work only waits for the owner's files: nothing to answer
+  const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
+  expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['back'])
+  expect(answerOptions(files, 'T-3')).toEqual([])
+  expect(panelLines(files, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks:'))).toBe(false)
   // the actions are symcc's slash commands
   expect(actionCommand({ kind: 'approve', id: 'T-2' })).toEqual({ name: 'symcc-approve', text: 'T-2' })
   expect(actionCommand({ kind: 'reject', id: 'T-2', reason: ' too big ' })).toEqual({ name: 'symcc-reject', text: 'T-2 too big' })

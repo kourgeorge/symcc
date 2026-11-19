@@ -12,7 +12,7 @@ import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, STATUS_MARK, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
-  type KeyHint, type Seg,
+  type KeyHint, type Seg, type BoardTask, asksMoreTime, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
 } from '../board'
 import { restFrame } from '../core/logo'
 import { DEFAULT_NAME } from '../name'
@@ -132,7 +132,7 @@ export function panelKeys(f: ViewFile | null, opened: string): KeyHint[] {
   const back = { key: 'b', word: 'back' }
   if (q) return [{ key: 'a', word: 'answer' }, back]
   if (t?.status === 'review') return [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, back]
-  if (t?.status === 'waiting') return [{ key: 'a', word: 'answer' }, back]
+  if (t && asksWhat(t, f?.view.max_minutes)) return [{ key: 'a', word: 'answer' }, back]
   return [back]
 }
 
@@ -242,7 +242,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines:
   if (!t) return null
   const lines: Line[] = [...wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w)]
   for (const r of detailRows(t, { roles: [], all: v.tasks, when, nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) lines.push(...detailRowLines(r, w))
-  const asked = t.status === 'waiting' ? t.question ?? t.note : ''
+  const asked = asksWhat(t, v.max_minutes)
   if (asked) {
     lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked, color: 'text' }], w))
     lines.push(...choiceLines(answerOptions(f, id), w))
@@ -261,10 +261,19 @@ export const OWN_ANSWER = 'Answer…'
 export function answerOptions(f: ViewFile | null, id: string): string[] {
   const q = f?.view.questions?.find(x => x.id === id)
   if (q) return [...q.options.slice(0, 8), OWN_ANSWER]
-  const t = f?.view.tasks.find(x => x.id === id)
-  if (!t || t.status !== 'waiting') return []
-  const c = answerChoices(t.asked_files, t.options)
+  const t: BoardTask | undefined = f?.view.tasks.find(x => x.id === id)
+  if (!t || !asksWhat(t, f?.view.max_minutes)) return []
+  const c = asksMoreTime(t) ? answerChoices(undefined, [...OVERTIME_OPTIONS]) : answerChoices(t.asked_files, t.options)
   return c.length ? c : [OWN_ANSWER]
+}
+
+/** What task `t` asks the owner, '' when nothing (as Claude's task page): a running worker past its time limit asks
+ *  for more time; a waiting task asks its question, unless its finished work only waits for the owner's files (it
+ *  merges on its own once they are committed or stashed, so there is nothing to answer). */
+export function asksWhat(t: BoardTask, maxMinutes: number | undefined): string {
+  if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t))
+  if (t.status !== 'waiting' || fileWaitText(t)) return ''
+  return t.question || t.note || 'it waits for your answer'
 }
 
 /** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason) or answer. */
