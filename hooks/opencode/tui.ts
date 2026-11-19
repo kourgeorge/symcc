@@ -33,6 +33,42 @@ export type TuiRuntime = {
   insert: (parent: TuiNode, value: unknown) => void
 }
 
+/** How opencode/tui.ts loads the two modules of OpenCode's TUI (T-500): each loader is `() => import('<name>')`
+ *  with the name written out. OpenCode 2.3 gives a TUI plugin its own copies (the same Solid its TUI uses) by
+ *  rewriting those plain names in the plugin's files; a name kept in a variable is not rewritten, so Bun looks for it
+ *  next to the plugin, where nothing is installed ("Cannot find package 'solid-js'"). */
+export type TuiRuntimeLoaders = { solid: () => Promise<unknown>; opentui: () => Promise<unknown> }
+
+/** The two packages, and what is taken from each. */
+export const TUI_PACKAGES = { solid: { name: 'solid-js', uses: ['createSignal'] }, opentui: { name: '@opentui/solid', uses: ['createElement', 'setProp', 'insert'] } } as const
+
+/** Loads OpenCode's Solid and OpenTUI for the TUI part. When one can't be loaded, or lacks a function symcc uses, it
+ *  fails with an error that names the package and says where it comes from, instead of a bare import error. */
+export async function loadTuiRuntime(load: TuiRuntimeLoaders): Promise<TuiRuntime> {
+  const got: Record<string, Record<string, unknown>> = {}
+  for (const key of ['solid', 'opentui'] as const) {
+    const { name, uses } = TUI_PACKAGES[key]
+    let mod: unknown
+    try {
+      mod = await load[key]()
+    } catch (e) {
+      throw new Error(`symcc's OpenCode board can't load '${name}', which OpenCode's TUI gives its plugins (OpenCode 2.3 or newer; check with: opencode --version): ${e instanceof Error ? e.message : String(e)}`)
+    }
+    const m = (mod && typeof mod === 'object' ? mod : {}) as Record<string, unknown>
+    const missing = uses.filter(f => typeof m[f] !== 'function')
+    if (missing.length) throw new Error(`symcc's OpenCode board: '${name}' from OpenCode's TUI has no ${missing.join(', ')} (symcc needs OpenCode 2.3 or newer; check with: opencode --version)`)
+    got[key] = m
+  }
+  const solid = got.solid!
+  const tui = got.opentui!
+  return {
+    createSignal: solid.createSignal as TuiRuntime['createSignal'],
+    createElement: tui.createElement as TuiRuntime['createElement'],
+    setProp: tui.setProp as TuiRuntime['setProp'],
+    insert: tui.insert as TuiRuntime['insert'],
+  }
+}
+
 /** The session.panel slot's input (PanelInput): the panel's session, width and focus. */
 export type TuiPanelInput = { readonly name: string; readonly sessionID: string; readonly width: number; readonly focused: boolean; readonly close: () => void }
 

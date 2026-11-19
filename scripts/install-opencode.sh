@@ -60,7 +60,7 @@ echo "install-opencode: linked $link -> $here/opencode"
 if command -v opencode >/dev/null 2>&1; then
   v=$(opencode --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
   if [ -n "$v" ] && [ "$v" -lt 2 ]; then
-    echo "install-opencode: the opencode on your PATH is version $v.x; symcc needs OpenCode 2.3 or newer." >&2
+    echo "install-opencode: the opencode on your PATH is version $v.x; symcc needs OpenCode 2.3 or newer (npm install -g @opencode/cli; Homebrew's opencode is the old 1.x line)." >&2
   fi
 fi
 echo "install-opencode: start OpenCode in your project; check with: opencode plugin list"
