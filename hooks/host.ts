@@ -17,6 +17,7 @@
 import type { SymccView } from '../types'
 import type { AgentState } from './core/agents'
 import type { StatsRange, TeamInput } from './core/stats'
+import { versionOf } from './core/banner'
 
 /** What a command's run answers: its exit code and its output. */
 export type HostRunResult = { exitCode: number; stdout: string; stderr: string }
@@ -120,18 +121,30 @@ export type HostWords = {
   planMode: string
   /** the host's tool that asks the owner in a dialog in the chat, which stays open when they answer on the board; '' when it has none (Claude Code: "AskUserQuestion") */
   askPopup: string
+  /** who answers in the chat, as the owner calls it, in "off: ... works as normal" (Claude Code: "Claude"); default "the assistant" */
+  assistant?: string
+  /** the program symcc runs in, in "stopped from ..." and "restarted after ... was reopened" (Claude Code: "Claude Code"); default "the app" */
+  app?: string
+  /** the keys that go back to the open board panel, in "(... goes back to it.)" after the board opens (Claude Code: "ctrl+x tab"); '' (the default) says nothing */
+  backToBoard?: string
 }
 
 /**
  * symcc's own words, for a host that adds nothing: its tools are called by their plain names, and the prompts name no
  * tools.
  */
-export const SYMCC_WORDS: HostWords = {
+export const SYMCC_WORDS: Required<HostWords> = {
   tool: (_name, tool) => tool,
   fileTools: 'file you read or change',
   planMode: "the host's own planning mode",
   askPopup: '',
+  assistant: 'the assistant',
+  app: 'the app',
+  backToBoard: '',
 }
+
+/** A host's words with symcc's own for every word it leaves out. */
+export const wordsOf = (words: HostWords): Required<HostWords> => ({ ...SYMCC_WORDS, ...Object.fromEntries(Object.entries(words).filter(([, v]) => v !== undefined)) })
 
 /**
  * What the host can do, beyond the members every Host has; symcc falls back to text where one is missing (T-371, step 8
@@ -188,8 +201,11 @@ export type PanelValues = {
 export interface Host {
   /** what this host can do (see HostFeatures) */
   features: HostFeatures
-  /** this plugin: its name (from plugin.json) and its folder, where roles/, kinds/ and examples/ ship */
-  plugin: { name: string; root: string }
+  /**
+   * this plugin: its name (from plugin.json), its folder, where roles/, kinds/ and examples/ ship, and its version
+   * ('' = not known; never rejects). A host with no `version` has it read from the plugin's manifest (manifestVersion).
+   */
+  plugin: { name: string; root: string; version?: () => Promise<string> }
   session: {
     /** this session's id */
     id: () => Promise<string>
@@ -260,4 +276,9 @@ export const noUi: Host['ui'] = {
   refresh: () => undefined,
   open: async () => ({ isPlaced: false }),
   panes: async () => [],
+}
+
+/** The plugin's version from the manifest in its folder `root` ('' when it can't be read or has none); never rejects. */
+export async function manifestVersion(fs: Pick<Host['fs'], 'read'>, root: string): Promise<string> {
+  return versionOf(await fs.read(`${root}/.claude-plugin/plugin.json`).catch(() => ''))
 }

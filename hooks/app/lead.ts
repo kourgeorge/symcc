@@ -45,7 +45,7 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     // A task whose old worker is still alive after that stays "doing"; the regular check
     // sends it back to "todo" once that worker has ended, so a task never has two workers.
     const alive = await waitEnded(host, orphans, ORPHAN_WAIT_MS)
-    const note = move === 'claim' ? HANDOVER_NOTE : move === 'takeover' ? 'restarted: the session driving the board stopped answering' : move === 'keep' ? 'restarted: the plugin reloaded and the old worker was gone' : 'restarted after Claude Code was reopened'
+    const note = move === 'claim' ? HANDOVER_NOTE : move === 'takeover' ? 'restarted: the session driving the board stopped answering' : move === 'keep' ? 'restarted: the plugin reloaded and the old worker was gone' : `restarted after ${S.W.app} was reopened`
     // Only tasks of this session, of a session that no longer drives, or with no session
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await host.fs.exists(path(S.N.boardFile)))

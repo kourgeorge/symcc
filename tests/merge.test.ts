@@ -16,6 +16,7 @@ import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
+import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld } from '../hooks/app/archive'
@@ -2709,7 +2710,11 @@ test('a finished try ends with the outcome of its check', async () => {
 test('a try that asks ends as asked (a question, or files outside its list); one stopped from Claude Code as stopped; an error as stopped with the reason', async () => {
   expect((await tryEnds(answers('', undefined, { question: { question: 'red or blue?' } }))).end).toEqual(['asked', 'question'])
   expect((await tryEnds(answers('', undefined, { requested: ['README.md'] }))).end).toEqual(['asked', 'files outside its list'])
+  expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from the app'])
+  // Claude Code's words name it (T-475)
+  S.W = CLAUDE_WORDS
   expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from Claude Code'])
+  S.W = SYMCC_WORDS
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 

@@ -7,7 +7,9 @@
 #   1. imports 'claude-code' (or 'claude-code/...'), OpenCode ('@opencode/...'), a Node built-in ('node:...', 'fs',
 #      ...), Bun, or anything in hooks/claude/, hooks/opencode/ or hooks/register.tsx;
 #   2. names a Claude Code tool in its code ('Read', 'WebSearch', mcp__..., not in comments): those live in hooks/claude/;
-#   3. does not type-check with no Claude Code types loaded (plain es2023, "types": []).
+#   3. does not type-check with no Claude Code types loaded (plain es2023, "types": []);
+#   4. (hooks/app/ and hooks/core/ only) says "Claude" or "ctrl+x" in its code, not in comments (T-475): the texts the
+#      owner sees take those from the host's words (HostWords.assistant, app, backToBoard; claude/host.ts CLAUDE_WORDS).
 set -u
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 cd "$root"
@@ -43,6 +45,15 @@ hits=$(code | grep -E "['\"\`]($TOOLS)['\"\`]|mcp__")
 if [ -n "$hits" ]; then
   echo "$hits" | while IFS= read -r hit; do echo "host-free: a Claude Code tool name (keep it in hooks/claude/): $hit" >&2; done
   fails=$((fails + 1))
+fi
+
+# Texts the owner sees name no host: "Claude", "Claude Code" and Claude Code's keys come from the host's words.
+if [ -n "$shared" ]; then
+  hits=$(grep -nHvE '^[[:space:]]*(//|/?\*)' $shared | grep -E 'Claude|ctrl\+x')
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: a Claude Code word in a shared text (take it from the host's words, HostWords): $hit" >&2; done
+    fails=$((fails + 1))
+  fi
 fi
 
 # They type-check on their own, with no Claude Code types: an import of 'claude-code' or 'node:...' can't be found then.
