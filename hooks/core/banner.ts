@@ -11,7 +11,7 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { shownStatus, waitsForYou } from './commands'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, FINISH_NOTE } from './panel'
 import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
@@ -78,7 +78,7 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
  * state columns). Every row shows the list's own mark and short status cell (statusCell): a doing task "▶ 12m"
- * (time on this try), "▶ test", "▶ check", "▶ merge", with its try after it from try 2 on ("T-434 ▶ check · try 2");
+ * (time on this try), "▶ prep", "▶ test", "▶ checker", "▶ merge", with its try after it from try 2 on ("T-434 ▶ prep · try 2");
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or
  * the longest other cell), so every title starts in one column. `since(id)` is when this session's worker started.
  */
@@ -105,10 +105,10 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
-/** The notes a doing row's state already says ("▶ 12m", "▶ check"), so the band leaves them out when it shows one:
+/** The notes a doing row's state already says ("▶ 12m", "▶ prep"), so the band leaves them out when it shows one:
  *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
  *  "worker starting" without it, e.g. on OpenCode). */
-const STATE_NOTES = new Set(['worker on it', 'checking and merging', 'starting at the next turn', 'worker starting'])
+const STATE_NOTES = new Set(['worker on it', FINISH_NOTE, 'starting at the next turn', 'worker starting'])
 
 /** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>

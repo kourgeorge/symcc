@@ -84,11 +84,22 @@ export const MORE_TIME_CELL = 'more time?'
 /** The status column of a task whose tests ran out of time once and run again on their own (T-511: rerunDue). */
 export const RERUN_CELL = 'retest'
 
-/** The short word the board list shows for each check step. */
-const STEP_WORD: Record<CheckStep, string> = { checking: 'check', testing: 'test', merging: 'merge' }
+/** The short word every board view (terminal list, band, VS Code, OpenCode, text board) shows for each check step:
+ *  "prep" for symcc's own pre-merge step, "checker" only while a checker agent runs (the checker setting). */
+export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' }
+
+/** The note of a finished task while symcc's own pre-merge step runs (step "prep"): it says plainly what it does. */
+export const PREP_NOTE = 'preparing to merge: committing and checking files'
+
+/** The note a finished task gets while symcc checks and merges it (it replaces PREP_NOTE once the prep step is over). */
+export const FINISH_NOTE = 'checking and merging'
+
+/** The note task `note` gets when check step `step` begins: PREP_NOTE in the prep step of a plain finish, back to FINISH_NOTE after it; any other note stays. */
+export const stepNote = (step: CheckStep, note: string | undefined): string | undefined =>
+  step === 'prep' ? (note === FINISH_NOTE ? PREP_NOTE : note) : note === PREP_NOTE ? FINISH_NOTE : note
 
 /** The short status column of a task row in the board list: the step while symcc checks its finished work
- *  ("check", "test", "merge", the short words for checkStepNow's steps), else the time of the running try ("4m") for a task being
+ *  ("prep", "test", "checker", "merge", the short words for checkStepNow's steps), else the time of the running try ("4m") for a task being
  *  worked on ("more time?" while its worker, over its time limit, waits for the owner's answer), "review", "waiting",
  *  "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */

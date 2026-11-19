@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR, stepNote } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -133,7 +133,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   }
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
-  await markStep($, t, 'checking', stopped)
+  await markStep($, t, 'prep', stopped)
   // The worker's throwaway folder (T-456) is kept out by its info/exclude line. It is not named in the add: git add
   // fails on a pathspec naming an ignored path (T-477). As a second safeguard, anything under it that still got staged
   // is unstaged below, but not where the project keeps files there in git (scratchOn false): those are staged as usual.
@@ -476,14 +476,15 @@ async function noteTask($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'
 /**
  * Says on the board which step of checking task `t` is going on now (BoardTask.checking), so the list
  * shows it; only while the task is still as it was when the check began and the check was not
- * stopped or given up. Never fails the check: a board that can't be written only misses the word.
+ * stopped or given up; the prep step also says it in the note (stepNote). Never fails the check: a board that can't be written only misses the word.
  */
 export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
   if (stopped()) return
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped() || cur.checking?.step === step) return x
-    return patchTask(x, t.id, { checking: { step, at: now() } }, cur.updated_at)
+    const note = stepNote(step, cur.note)
+    return patchTask(x, t.id, { checking: { step, at: now() }, ...(note !== cur.note ? { note } : {}) }, cur.updated_at)
   }).catch(() => undefined)
 }
 

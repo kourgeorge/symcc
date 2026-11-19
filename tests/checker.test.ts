@@ -217,7 +217,7 @@ test('with the checker on, a passing change waits for a checker (shown as checki
     expect(w.git.main).toBe(M1)
     const now = find(await load(w.$), 'T-1')!
     expect(now.status).toBe('doing')
-    expect(now.checking?.step).toBe('checking')
+    expect(now.checking?.step).toBe('checker')
     checkerFinished(id, 'I tried empty input and the old path.\nOK', false, { output: 500 })
   })
   expect(w.spawns.length).toBe(1)
@@ -710,7 +710,7 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   void workerFinished(w.$, 'ag1', 'made the change')
   await until(() => checkerRuns.size > 0)
-  expect(find(await load(w.$), 'T-1')!.note).toBe('a checker is trying to break it before it merges')
+  expect(find(await load(w.$), 'T-1')!.note).toBe('a checker agent is trying to break it before it merges')
   resetPlugin()
   S.root = ROOT
   S.driving = true
@@ -731,7 +731,7 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
-  expect(mid.checking?.step).toBe('checking')
+  expect(mid.checking?.step).toBe('checker')
   expect(w.git.head).toBe(sha)
   const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
   expect(told.length).toBe(1)
@@ -784,7 +784,7 @@ test('T-386: a checker shown as ended after the reload: the next check starts a 
 test('T-386: a reload after the checker said OK and the work reached main (before the outcome was written): the task ends done, no new checker', async () => {
   const w = world()
   // finishing: the old copy's mark (its merge was under way); a board field not in SymccTask
-  const left = { note: 'a checker is trying to break it before it merges', finishing: ISO, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
+  const left = { note: 'a checker agent is trying to break it before it merges', finishing: ISO, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
   await saveBoard(w.$, boardWith(true, left))
   w.git.head = H1
   w.git.main = H1
@@ -830,7 +830,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
   expect(checkerRuns.size).toBe(0)
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
-  expect(mid.note).toBe('a checker is trying to break it before it merges')
+  expect(mid.note).toBe('a checker agent is trying to break it before it merges')
   expect(mid.history.some(l => l.includes('no verdict'))).toBe(false)
   await check(w.$)
   await until(() => checkerRuns.size > 0)

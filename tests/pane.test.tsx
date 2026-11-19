@@ -2,7 +2,8 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, type KeyHint } from '../hooks/board'
+import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, type KeyHint } from '../hooks/board'
+import { CHECKER_NOTE } from '../hooks/app/checker'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
 import type { SymccStatus } from '../types'
 import { sayQueue } from '../hooks/app/state'
@@ -144,7 +145,7 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const tasks = [
     task('T-40', 'doing', 'Running worker', { note: 'worker on it', attempts: 1, runs: [{ started: iso(T0 - 12 * 60_000) }] }),
     task('T-41', 'doing', 'Being tested', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'testing', at: fresh } }),
-    task('T-42', 'doing', 'Being checked', { attempts: 2, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'checking', at: fresh } }),
+    task('T-42', 'doing', 'Being checked', { attempts: 2, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'prep', at: fresh } }),
     task('T-43', 'doing', 'Being merged', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'merging', at: fresh } }),
     task('T-44', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: iso(T0 - 5 * 60_000) }] }),
   ]
@@ -153,8 +154,8 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const row = (ui: TestMounted<"terminal", "AbovePrompt">, text: string) => ui.find({ type: 'Text', text: new RegExp(`^${esc(text)}$`, 'u') })
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   // the same labels the board list gives (statusCell), fixed-width state and try columns
-  expect(tasks.map(t => statusCell(t as never, T0))).toEqual(['12m', 'test', 'check', 'merge', '5m'])
-  for (const text of ['T-40 ▶ 12m          ', 'T-41 ▶ test         ', 'T-42 ▶ check · try 2', 'T-43 ▶ merge        ', 'T-44 ▶ 5m    · try 3']) expect(await row(ui, text)).toBeDefined()
+  expect(tasks.map(t => statusCell(t as never, T0))).toEqual(['12m', 'test', 'prep', 'merge', '5m'])
+  for (const text of ['T-40 ▶ 12m          ', 'T-41 ▶ test         ', 'T-42 ▶ prep  · try 2', 'T-43 ▶ merge        ', 'T-44 ▶ 5m    · try 3']) expect(await row(ui, text)).toBeDefined()
   // the titles start in one column
   expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {11}Running worker$/ })).toBeDefined()
   // no "doing" word and no "— worker on it" tail: the state says it
@@ -168,6 +169,24 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const later = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   expect(await later.find({ type: 'Text', text: /^T-40 ▶ 15m +$/ })).toBeDefined()
   await later.unmount()
+})
+
+test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plain note, and a running checker as \"checker\"", async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const fresh = iso(T0 - 10_000)
+  const tasks = [
+    task('T-50', 'doing', 'Prep one', { note: PREP_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'prep', at: fresh } }),
+    task('T-51', 'doing', 'Checked one', { note: CHECKER_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'checker', at: fresh } }),
+  ]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-50 ▶ prep +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-51 ▶ checker +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /T-50 ▶ checker/ })).toBeUndefined()
+  await ui.unmount()
 })
 
 test("every band row lines up in one title column, with the board list's short status for each state (T-461)", async ($, on) => {
@@ -205,7 +224,7 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   const fresh = iso(T0 - 10_000)
   const tasks = [
     task('T-50', 'doing', 'Wrap up', { note: 'time is up: the worker was told to hand back', attempts: 1, runs: [{ started: iso(T0 - 62 * 60_000) }] }),
-    task('T-51', 'doing', 'Being checked', { note: 'checking and merging', attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'checking', at: fresh } }),
+    task('T-51', 'doing', 'Being checked', { note: 'checking and merging', attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'prep', at: fresh } }),
     task('T-52', 'doing', 'Queued', { note: 'starting at the next turn', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
     // T-470's claim note on a host with no start queue (OpenCode): the time says it, so no stray note (T-466)
     task('T-53', 'doing', 'Starting', { note: 'worker starting', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
