@@ -13,7 +13,7 @@ import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches, statusCell } from './panel'
 import { STATUS_MARK } from './details'
 import { whyFailed } from './failure'
-import { offStatusLine, testCommandsText } from './settings'
+import { offStatusParts, testCommandsText } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
@@ -232,13 +232,19 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const fact = (text: string): BannerPart[] => [{ text, tone: 'plain' }]
   const folder = folderName(root)
   // nothing starts while symcc is turned off or the board is in mode off: say so on the first line, in the warning color
-  const off = b.enabled === false ? offStatusLine(name) : b.mode && modeOf({ mode: b.mode }) === 'off' ? `${modeLabel('off')}: nothing starts` : ''
+  // turned off: "symcc is off · /symcc-on to turn it on", the command in the accent color (bold) so it stands out
+  const off: BannerPart[] =
+    b.enabled === false
+      ? offStatusParts(name).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
+      : b.mode && modeOf({ mode: b.mode }) === 'off'
+        ? [{ text: `${modeLabel('off')}: nothing starts`, tone: 'warning' }]
+        : []
   const line1 = (v: string): BannerPart[] => [
     ...(v
       ? [{ text: namesFor(name).name, tone: 'accent' as const, bold: true }, { text: versionMark(v), tone: 'plain' as const }]
       : [{ text: namesFor(name).boardName, tone: 'accent' as const, bold: true }]),
     ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : []),
-    ...(off ? [sep, { text: off, tone: 'warning' as const }] : []),
+    ...(off.length ? [sep, ...off] : []),
   ]
   const l2 = join([
     ...(root ? [fact(shortHome(root, home))] : []),

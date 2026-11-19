@@ -481,7 +481,15 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
   expect(more[0]!.parts.at(-1)).toEqual({ text: '⏹ off: nothing starts', tone: 'warning' })
-  expect(bannerLines({ ...b, enabled: false }, '', '', true, 80)[0]!.parts.at(-1)).toEqual({ text: 'symcc off · /symcc-on', tone: 'warning' })
+  // turned off: the header says how to turn it on in words, the command in the accent color (as the name), the rest a warning
+  const offLine = bannerLines({ ...b, enabled: false }, '', '', true, 80, undefined, 'symcc', undefined, '0.4.1')[0]!
+  expect(offLine.parts.slice(-3)).toEqual([
+    { text: 'symcc is off · ', tone: 'warning' },
+    { text: '/symcc-on', tone: 'accent', bold: true },
+    { text: ' to turn it on', tone: 'warning' },
+  ])
+  expect(bannerText(offLine)).toMatch(/symcc is off · \/symcc-on to turn it on$/)
+  expect(bannerText(offLine)).not.toMatch(/symcc off/)
   expect(more.some(l => /workers|scouts?\b/.test(bannerText(l)))).toBe(false)
   expect(more[4]!.parts.some(p => p.bold)).toBe(false)
   expect(more[4]!.parts.some(p => p.tone === 'dim' && p.text !== ' · ')).toBe(false)
@@ -2563,7 +2571,7 @@ test('a task found already merged names its commit by the short sha', () => {
   expect(done.history!.at(-1)).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
 })
 
-import { symccOn, setEnabled, offAnswer, offStatusLine } from '../hooks/board'
+import { symccOn, setEnabled, offAnswer, offStatusLine, offStatusParts } from '../hooks/board'
 
 test('symcc is on for a board without the setting and new ones, and off only when the board says so', () => {
   expect(symccOn(parseBoard(JSON.stringify({ tasks: [] })))).toBe(true)
@@ -2578,7 +2586,10 @@ test('symcc is on for a board without the setting and new ones, and off only whe
   expect(settingValue(off, 'enabled')).toBe('off')
   expect(settingValue(b, 'enabled')).toBe('on')
   expect(offAnswer()).toBe('symcc is off. The owner can turn it on with /symcc-on.')
-  expect(offStatusLine()).toBe('symcc off · /symcc-on')
+  expect(offStatusLine()).toBe('symcc is off · /symcc-on to turn it on')
+  // under the prompt Claude Code already puts "⚠ symcc: " in front, so the name is left out there
+  expect(offStatusLine('symcc', false)).toBe('off · /symcc-on to turn it on')
+  expect(offStatusParts().filter(p => p.command)).toEqual([{ text: '/symcc-on', command: true }])
 })
 
 test('/symcc-off and /symcc-on parse, and take no words', () => {
