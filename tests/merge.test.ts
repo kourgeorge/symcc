@@ -796,8 +796,10 @@ function secretWorld(changed: string[], committed = false, deleted: string[] = [
 }
 
 /** T-1's worker (agent ag1) finished with `changed` (files src/ and tests/), on a board in mode auto. */
-async function finishedWithSecrets(changed: string[], committed = false, { deleted = [] as string[], mode = 'auto' as 'auto' | 'review', history = [] as string[] } = {}) {
+async function finishedWithSecrets(changed: string[], committed = false, { deleted = [] as string[], mode = 'auto' as 'auto' | 'review', history = [] as string[], prep = (_w: ReturnType<typeof world>) => {} } = {}) {
   const { w, restored } = secretWorld(changed, committed, deleted, history)
+  // `prep`: changes the fake git before the worker finishes (e.g. makes a step fail)
+  prep(w)
   const [b] = boardWith(mode, ['npm test'], { files: ['src/', 'tests/'] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -929,6 +931,107 @@ test('a secret the worker committed and then deleted in a later commit is taken 
   expect(restored).toEqual([])
   expect(w.git.changed).toEqual(['src/a.ts'])
   expect(w.git.main).toBe(w.git.head)
+})
+
+// ---- T-507: a failing git step while secret-looking files are kept out: nothing merges, the task fails, its folder stays ----
+
+/** Makes the fake git answer `f` first (undefined: the fake's own answer, secretWorld's included). */
+const failFirst = (w: ReturnType<typeof world>, f: (args: string[], cwd: string) => Res | undefined) => {
+  const before = w.git.answer
+  w.git.answer = (args, cwd) => f(args, cwd) ?? before?.(args, cwd)
+}
+const commitCalls = (w: ReturnType<typeof world>) => w.calls.filter(c => c.startsWith('wt: git ') && c.includes(' commit '))
+const GPG = 'error: gpg failed to sign the data'
+const LOCKED = "fatal: Unable to create '/repo/.git/index.lock': File exists."
+
+test('T-507: a committed secret that cannot be recommitted without it (signing fails) fails the task: nothing merges, no tests run, the folder is kept', async () => {
+  const { w, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env'], true, {
+    // the worker committed everything itself: nothing is staged, so symcc's first commit has nothing to commit;
+    // the recommit after the reset has work staged, and signing it fails
+    prep: w => {
+      w.git.dirty = false
+      failFirst(w, a => (a.includes('commit') && w.git.dirty ? fail(`${GPG}\nfatal: failed to write commit object`, 128) : undefined))
+    },
+  })
+  expect(w.calls).toContain(`wt: git reset -q --soft ${M1}`)
+  expect(movedMain(w)).toBe(false)
+  expect(w.git.main).toBe(M1)
+  expect(ranTests(w)).toEqual([])
+  expect(t.status).toBe('failed')
+  expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
+  expect(w.files.get(`${WT}/tests/.env`)).toBe('contents of tests/.env')
+  const why = `symcc could not take files that look like secrets out of the task's branch (tests/.env): ${GPG}`
+  expect(t.history.join('\n')).toContain(why)
+  expect(told).toContain(why)
+})
+
+test('T-507: checkAndMerge names git\'s signing error and the gpgsign hint when the recommit without a committed secret fails', async () => {
+  const { w } = secretWorld(['src/a.ts', 'tests/.env'], true)
+  w.git.dirty = false
+  failFirst(w, a => (a.includes('commit') && w.git.dirty ? fail(GPG, 128) : undefined))
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail.startsWith(`symcc could not take files that look like secrets out of the task's branch (tests/.env): ${GPG}`)).toBe(true)
+  expect(r.detail).toContain('git config commit.gpgsign false')
+  expect(r.merged).toBeUndefined()
+  expect(movedMain(w)).toBe(false)
+  expect(ranTests(w)).toEqual([])
+})
+
+test('T-507: when the reset that takes a committed secret out fails, checkAndMerge gives git\'s error, unstages nothing and merges nothing', async () => {
+  const { w, restored } = secretWorld(['src/a.ts', 'tests/.env'], true)
+  failFirst(w, a => (a[0] === 'reset' ? fail(LOCKED, 128) : undefined))
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail).toBe(`symcc could not take files that look like secrets out of the task's branch (tests/.env): ${LOCKED}`)
+  const reset = w.calls.indexOf(`wt: git reset -q --soft ${M1}`)
+  expect(reset).toBeGreaterThan(-1)
+  expect(w.calls.slice(reset).some(c => c.includes('restore --staged'))).toBe(false)
+  expect(restored).toEqual([])
+  expect(movedMain(w)).toBe(false)
+  expect(ranTests(w)).toEqual([])
+})
+
+test('T-507: when unstaging an uncommitted secret fails, checkAndMerge gives git\'s error and commits nothing', async () => {
+  const { w } = secretWorld(['src/a.ts', 'tests/.env'])
+  failFirst(w, (a, cwd) => (cwd === WT && a[0] === 'restore' && a.includes('--staged') ? fail(LOCKED, 128) : undefined))
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: `symcc could not leave out files that look like secrets (tests/.env): ${LOCKED}` })
+  expect(commitCalls(w)).toEqual([])
+  expect(movedMain(w)).toBe(false)
+  expect(ranTests(w)).toEqual([])
+})
+
+test('T-507: when git diff --cached fails, checkAndMerge says it could not list the staged work and commits nothing', async () => {
+  const { w } = secretWorld(['src/a.ts', 'tests/.env'])
+  failFirst(w, (a, cwd) => (cwd === WT && a[0] === 'diff' && a.includes('--cached') ? fail('fatal: index file corrupt', 128) : undefined))
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['src/', 'tests/'] })
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r.ok).toBe(false)
+  expect(r.detail.startsWith('symcc could not list the staged work (git diff --cached):')).toBe(true)
+  expect(r.detail).toContain('fatal: index file corrupt')
+  expect(commitCalls(w)).toEqual([])
+  expect(movedMain(w)).toBe(false)
+})
+
+test('T-507: when unstaging the worker\'s .scratch/ folder fails, checkAndMerge gives git\'s error and commits nothing', async () => {
+  const w = world({
+    answer: (a, cwd) => {
+      if (cwd === WT && a[0] === 'diff' && a.includes('--cached')) return ok(['src/a.ts', 'src/a.test.ts', '.scratch/edit.py'].join('\0'))
+      if (cwd === WT && a[0] === 'restore' && a.includes('--staged')) return fail(LOCKED, 128)
+      return undefined
+    },
+  })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, detail: `symcc could not leave out the worker's .scratch/ folder: ${LOCKED}` })
+  expect(w.calls).toContain('wt: git restore --staged -- :(literal).scratch/edit.py')
+  expect(commitCalls(w)).toEqual([])
+  expect(movedMain(w)).toBe(false)
+  expect(ranTests(w)).toEqual([])
 })
 
 test('a branch whose commits never held a secret-looking file is not rewritten', async () => {

@@ -129,7 +129,7 @@ What you need: OpenCode 2.3 or newer, and nothing else (no `npm install` in symc
 
 - **The lead** is the OpenCode session you type in. Talk to it as in Claude Code; the slash commands (`/symcc`, `/symcc-stats` ...) are the same.
 - **Workers, scouts and checkers** are OpenCode sessions, each in its task's own folder, with the same file checks. Each role picks its model in its `model:` line: a Claude name (`sonnet`, `haiku` ...) runs on OpenCode's Claude Agent provider with your Claude Code login, and any other model is written `provider/model` (for example `openai/gpt-5`); with no `model:` line, it runs on the lead's own current model.
-- **The board:** `/symcc` opens it in OpenCode's session panel, and a strip above the prompt shows what needs you and what runs.
+- **The board:** in a session, `/symcc-board` (or "symcc board" in the command palette, ctrl+p) opens it in OpenCode's session panel, and a strip above the prompt shows what needs you and what runs. Plain `/symcc` prints the board as text.
 - **What differs:** the cost shows 0 on subscription models (tokens are still counted); the all-time stats count the lead's full total, while ranged stats (`7d`, task ranges) count its answers since the last compaction, and older tokens show as "not dated" and are left out; and some things have no OpenCode hook yet (no plan mode, the panel doesn't open by itself, no settings or scouts pages in the panel).
 - **The Claude login:** whether Anthropic allows using your Claude login through OpenCode's Claude Agent provider is not settled. Other models avoid that question.
 
