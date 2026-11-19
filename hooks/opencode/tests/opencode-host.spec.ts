@@ -648,3 +648,43 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
     await p.done()
   }
 }, 30_000)
+
+test('two main copies: updates the engine copy kept before the lead was known still reach the lead when the other copy\'s hook records it first', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    const hosts: Host[] = []
+    const plugin = symccServer({ engine: recordingEngine().engine, host: o => { const h = opencodeHost(o); hosts.push(h); return h }, hostOptions: { say: () => undefined, sessionId: 'opencode-lead' } })
+    const a = fakeCtx(p.main, f.api)
+    const endA = await plugin.setup(a.ctx)
+    const b = fakeCtx(`${p.main}/src`, f.api)
+    const endB = await plugin.setup(b.ctx)
+    await hosts[0]!.lead.send('early news')
+    const owner = f.lead(p.main)
+    // the waiting copy's hook records the lead first; the engine copy's hook still sends what it kept, once
+    await b.hooks.prompt!({ sessionID: owner })
+    expect([...leads().values()]).toEqual([owner])
+    await a.hooks.prompt!({ sessionID: owner })
+    expect(f.prompts.map(x => x.text.split('\n\n')[0])).toEqual(['early news'])
+    expect(f.prompts[0]!.sessionID).toBe(owner)
+    // the same prompt again sends nothing more
+    await a.hooks.prompt!({ sessionID: owner })
+    expect(f.prompts.length).toBe(1)
+    // kept while no lead was known, and the engine copy's hook never runs after the other copy records one:
+    // its next update carries the kept one along
+    leads().clear()
+    await hosts[0]!.lead.send('kept news')
+    const owner2 = f.lead(p.main)
+    await b.hooks.prompt!({ sessionID: owner2 })
+    await hosts[0]!.lead.send('later news')
+    expect(f.prompts.length).toBe(2)
+    expect(f.prompts[1]!.sessionID).toBe(owner2)
+    expect(f.prompts[1]!.text).toContain('kept news\n\nlater news')
+    await endA!()
+    await endB!()
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 30_000)

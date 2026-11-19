@@ -155,15 +155,18 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       regs.push(
         await ctx.session.hook('prompt', async e => {
           const id = e.sessionID
-          if (!id || id === lead() || agents?.has(id)) return
+          if (!id || agents?.has(id)) return
+          // the lead may already be known from another main copy's hook (copies share it): still send what this copy kept
+          if (id === lead()) return void (await leadApi?.known())
           // a child session (one of symcc's agents from an earlier copy, or OpenCode's own subagent) is never the lead
           const info = await ctx.session.get({ sessionID: id }).catch(() => undefined)
           if (!info || info.parentID || info.metadata?.symcc) return
           const at = await place
           if (!at.inMain || !(await isLeadFolder(host, info.location?.directory, at.main, at.realMain))) return
-          if (id === lead()) return
-          ownLead = id
-          if (leadKey) leads().set(leadKey, id)
+          if (id !== lead()) {
+            ownLead = id
+            if (leadKey) leads().set(leadKey, id)
+          }
           await leadApi?.known()
         }),
       )

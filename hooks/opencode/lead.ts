@@ -48,6 +48,11 @@ export function opencodeLead(api: OcSessionApi, o: OpencodeLeadOptions): Opencod
     async send(text: string, how?: LeadSend) {
       const id = o.lead()
       const urgent = how?.urgent === true
+      if (id && kept.length) {
+        // the lead became known through another main copy: what this copy kept goes first, with this one
+        const all = [...kept.splice(0), { text, urgent }]
+        return give(id, all.map(k => k.text).join('\n\n'), all.some(k => k.urgent))
+      }
       if (id) return give(id, text, urgent)
       kept.push({ text, urgent })
       if (kept.length > 20) kept.shift()
