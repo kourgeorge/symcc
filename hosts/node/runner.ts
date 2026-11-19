@@ -127,8 +127,38 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
 
 // ---------------- claude -p ----------------
 
-/** Shell commands a worker may not run: git writes symcc makes itself (commit, merge into main) or that move shared refs. */
-export const WORKER_DENIED_COMMANDS = ['git commit', 'git push', 'git reset', 'git update-ref', 'git tag', 'git stash', 'git branch', 'git checkout', 'git switch', 'git rebase']
+/**
+ * git subcommands a `claude -p` agent may not run (T-496): every one that writes a commit, a ref, the index, the
+ * config, the stash or the worktree's files, or that makes or fetches a repository. symcc commits and merges itself.
+ * Read-only use (status, diff, log, show, blame, grep, ls-files, rev-parse ...) stays allowed.
+ */
+export const GIT_DENIED_SUBCOMMANDS = [
+  'commit', 'merge', 'init', 'clone', 'push', 'pull', 'fetch', 'reset', 'checkout', 'switch', 'restore', 'branch',
+  'tag', 'stash', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'add', 'rm', 'mv', 'clean', 'update-ref',
+  'symbolic-ref', 'update-index', 'read-tree', 'write-tree', 'commit-tree', 'hash-object', 'mktag', 'mktree',
+  'fast-import', 'worktree', 'config', 'remote', 'submodule', 'notes', 'replace', 'reflog', 'gc', 'prune', 'repack',
+  'pack-refs', 'maintenance', 'filter-branch', 'bisect', 'sparse-checkout', 'merge-file', 'merge-tree', 'lfs',
+]
+
+/**
+ * Claude Code's Bash rules match the start of a command, not the folder it acts on, so `git -C <dir> commit` or
+ * `git --git-dir=x commit` slip past `git commit`. Node-host agents have no symcc hook guard, so instead every git
+ * call that starts with an option is refused (`git -*`; the named ones are listed too, for prefix-only matching),
+ * as are the usual wrappers in front of git. With no scratch-git allowance, there are no git writes at all.
+ */
+export const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
+const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
+
+/** The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). */
+export function gitDeniedRules(): string[] {
+  return [
+    ...GIT_DENIED_SUBCOMMANDS.map(c => `Bash(git ${c}:*)`),
+    'Bash(git -*)',
+    ...GIT_DENIED_OPTIONS.map(o => `Bash(git ${o}:*)`),
+    'Bash(git --git-dir=*)', 'Bash(git --work-tree=*)', 'Bash(git --namespace=*)', 'Bash(git --exec-path=*)', 'Bash(git --config-env=*)',
+    ...GIT_WRAPPERS.map(w => `Bash(${w} git:*)`),
+  ]
+}
 
 /** The `--allowedTools` rule that lets the agent edit `file` (relative to its folder; a folder ends with "/" or is "."). */
 export function editRule(file: string): string[] {
@@ -151,7 +181,7 @@ export function editRule(file: string): string[] {
 export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false): { allowed: string[]; denied: string[] } {
   const read = ['Read', 'Glob', 'Grep', 'Bash']
   const web = a.tools?.includes('web') ? ['WebSearch', 'WebFetch'] : []
-  const denied = WORKER_DENIED_COMMANDS.map(c => `Bash(${c}:*)`)
+  const denied = gitDeniedRules()
   const scratchRules = scratch && a.kind !== 'scout' ? editRule(`${SCRATCH_DIR}/`) : []
   if (a.kind !== 'worker') {
     // a deny rule beats an allow rule, so a checker with scratch rules gets no blanket Edit/Write deny (dontAsk still refuses every other edit)
