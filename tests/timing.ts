@@ -3,8 +3,10 @@
 // `times` the small case, plus a little slack for timer noise, and (2) keeps a generous absolute cap. The bugs these
 // catch were doubling per cd or brace (2^40 steps for 40 cd lines): that never finishes, so it fails both checks.
 
-// the absolute cap for one speed check: far above a normal run, far below the seconds-long doubling bug
-export const SPEED_CAP_MS = 3000
+// the absolute cap for one speed check: far above a normal run, far below the doubling bug (which never finishes).
+// T-509: 3000 ms was too close under load: T-436's big case (about 100 ms on a quiet machine) took about 1 s per run
+// at load 160 with the full suite, and the workers' machines reach load 200-500
+export const SPEED_CAP_MS = 10_000
 // timer noise allowed on top of the growth ratio, so a tiny small case (well under 1 ms) can't make the check flaky
 export const GROWTH_SLACK_MS = 50
 
@@ -27,6 +29,18 @@ export const bestMsOfAsync = async (f: () => Promise<unknown>, runs = 3): Promis
   let best = Infinity
   for (let i = 0; i < runs; i++) best = Math.min(best, await msOfAsync(f))
   return best
+}
+
+// T-509: the fastest small and big runs of a growth check, timed in turns (small, big, small, big...). Timing all the
+// small runs first and then all the big ones let one busy stretch (load 200-500) slow every big run and none of the
+// small ones, so the ratio failed (T-436's check); in turns, a busy stretch slows both, and the fastest of each is kept
+export const bestPairMsOf = (small: () => unknown, big: () => unknown, runs = 5): { small: number; big: number } => {
+  let s = Infinity, b = Infinity
+  for (let i = 0; i < runs; i++) {
+    s = Math.min(s, msOf(small))
+    b = Math.min(b, msOf(big))
+  }
+  return { small: s, big: b }
 }
 
 // true when the big case took at most `times` the small one (plus slack) and stayed under the cap

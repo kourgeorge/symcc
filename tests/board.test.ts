@@ -3,7 +3,7 @@ import { test } from './reset'
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../types'
 import { pause, commandsOf, entry } from './fakes'
 import { turnNow, withStarts } from './starts'
-import { SPEED_CAP_MS, bestMsOf, growsSlowly } from './timing'
+import { SPEED_CAP_MS, bestMsOf, bestPairMsOf, growsSlowly } from './timing'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
@@ -1501,21 +1501,23 @@ test("a worker's shell command: plain relative paths are looked up for links, th
   expect(many).toEqual({ paths: [], tooMany: true })
   // the folder list stops at BASH_FOLDERS_MAX: 40 cd lines, plain and in a here-document, are checked fast
   const cds = Array.from({ length: 40 }, (_, i) => `cd d${i}`).join('\n')
-  const t0 = performance.now()
-  expect(no(`${cds}\ncat ../../../../README.md`)).toBe(BASH_TOO_MANY)
-  expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`)).toBeUndefined()
-  expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\ncat ../x\nEOF`)).toBe(BASH_TOO_MANY)
-  expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF\ncat /repo/README.md`)).toBe('README.md')
-  expect(paths(`${cds}\ncat x`).tooMany).toBe(true)
-  expect(paths(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`).tooMany).toBe(false)
-  // a certain folder (cds joined with &&) is never over the cap, and many plain paths are not too many (T-436)
-  expect(paths(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toEqual({ paths: [...Array.from({ length: 17 }, (_, i) => `${wt}/${Array.from({ length: i + 1 }, (_, k) => `d${k}`).join('/')}`), `${wt}/${Array.from({ length: 17 }, (_, k) => `d${k}`).join('/')}/x`], tooMany: false })
-  expect(paths(`cd a; cd b; cd c; cd d; cat ${Array.from({ length: 9 }, (_, i) => `f${i}`).join(' ')}`).tooMany).toBe(false)
-  expect(paths(`rm ${Array.from({ length: 129 }, (_, i) => `f${i}.txt`).join(' ')}`).tooMany).toBe(false)
-  expect(paths(`git add ${Array.from({ length: 130 }, (_, i) => `src/f${i}.ts`).join(' ')}`).tooMany).toBe(false)
-  expect(paths(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`).tooMany).toBe(false)
-  expect(paths(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i} f${i}`).join(' ')}`).tooMany).toBe(false)
-  expect(performance.now() - t0).toBeLessThan(SPEED_CAP_MS)
+  // the fastest of 3 runs (T-509): one busy moment of the machine does not count against the cap
+  const checks = () => {
+    expect(no(`${cds}\ncat ../../../../README.md`)).toBe(BASH_TOO_MANY)
+    expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`)).toBeUndefined()
+    expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\ncat ../x\nEOF`)).toBe(BASH_TOO_MANY)
+    expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF\ncat /repo/README.md`)).toBe('README.md')
+    expect(paths(`${cds}\ncat x`).tooMany).toBe(true)
+    expect(paths(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`).tooMany).toBe(false)
+    // a certain folder (cds joined with &&) is never over the cap, and many plain paths are not too many (T-436)
+    expect(paths(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toEqual({ paths: [...Array.from({ length: 17 }, (_, i) => `${wt}/${Array.from({ length: i + 1 }, (_, k) => `d${k}`).join('/')}`), `${wt}/${Array.from({ length: 17 }, (_, k) => `d${k}`).join('/')}/x`], tooMany: false })
+    expect(paths(`cd a; cd b; cd c; cd d; cat ${Array.from({ length: 9 }, (_, i) => `f${i}`).join(' ')}`).tooMany).toBe(false)
+    expect(paths(`rm ${Array.from({ length: 129 }, (_, i) => `f${i}.txt`).join(' ')}`).tooMany).toBe(false)
+    expect(paths(`git add ${Array.from({ length: 130 }, (_, i) => `src/f${i}.ts`).join(' ')}`).tooMany).toBe(false)
+    expect(paths(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`).tooMany).toBe(false)
+    expect(paths(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i} f${i}`).join(' ')}`).tooMany).toBe(false)
+  }
+  expect(bestMsOf(checks)).toBeLessThan(SPEED_CAP_MS)
   // the work grows slowly with the number of cd lines (T-478): the old doubling made 40 lines take 2^30 times 10 lines
   const cdWork = (n: number) => () => {
     const c = Array.from({ length: n }, (_, i) => `cd d${i}`).join('\n')
@@ -1524,7 +1526,7 @@ test("a worker's shell command: plain relative paths are looked up for links, th
     paths(`${c}\ncat x`)
     paths(`cat > /tmp/s.sh <<'EOF'\n${c}\nEOF`)
   }
-  const small = bestMsOf(cdWork(10)), big = bestMsOf(cdWork(40))
+  const { small, big } = bestPairMsOf(cdWork(10), cdWork(40))
   expect({ small, big, slow: growsSlowly(small, big, 5) }).toMatchObject({ slow: true })
   expect(bashOutsideText(BASH_TOO_MANY, wt)).toBe(bashTooManyText(wt))
   expect(bashTooManyText(wt)).toMatch(/^Refused: this command has too many paths or folder changes \(cd\) to check/)
