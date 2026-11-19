@@ -28,8 +28,8 @@ export type OcToolBefore = {
   input: unknown
 }
 
-/** A model, as OpenCode names one: its provider and its id there (e.g. claude-agent / sonnet). */
-export type OcModelRef = { readonly providerID: string; readonly id: string }
+/** A model, as OpenCode names one: its provider and its id there (e.g. claude-agent / sonnet), and maybe a variant (ModelRef). */
+export type OcModelRef = { readonly providerID: string; readonly id: string; readonly variant?: string }
 
 /** Token counts, as OpenCode tells them (TokenUsageInfo): a session's total, or one assistant message's. */
 export type OcTokens = { readonly input?: number; readonly output?: number; readonly reasoning?: number; readonly cache?: { readonly read?: number; readonly write?: number } }
@@ -38,6 +38,8 @@ export type OcTokens = { readonly input?: number; readonly output?: number; read
 export type OcSessionInfo = {
   readonly id: string
   readonly parentID?: string
+  /** the model the session uses now */
+  readonly model?: OcModelRef
   /** what session.create was given (symcc's agents carry { symcc: their kind }) */
   readonly metadata?: Readonly<Record<string, unknown>>
   /** set once the session's last run ended */
@@ -57,6 +59,8 @@ export type OcSessionMessage = {
   readonly content?: ReadonlyArray<{ readonly type: string; readonly text?: string }>
   readonly finish?: string
   readonly error?: unknown
+  /** the model an assistant message was made with, or switched to ("model-switched") */
+  readonly model?: OcModelRef
   readonly time?: { readonly created?: number; readonly completed?: number }
   readonly tokens?: OcTokens
   /** US dollars */
