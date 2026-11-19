@@ -15,7 +15,7 @@
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../../board'
-import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns } from '../../app/state'
+import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile } from '../../app/state'
 import { resetStore } from '../../app/store'
 import { stoppedText } from '../../app/ask'
 import { runCommand } from '../../../hosts/node/host'
@@ -921,9 +921,14 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
       return f.synthetic.at(-1)!
     }
     expect((await run('')).text).toContain('/symcc-answer T-5 <answer>')
+    // a to-do task: the change tool changes nothing, so the lead gets no "owner answered" note
+    meanwhile.splice(0)
+    expect((await run('T-1 hello')).text).toContain('nothing changed')
+    expect(meanwhile.filter(l => l.includes('The owner answered'))).toEqual([])
     const answered = await run('T-2 postgres')
     expect(answered.resume).toBe(false)
     expect(answered.text).toContain('T-2')
+    expect(meanwhile.some(l => l.startsWith('The owner answered T-2 ("postgres")'))).toBe(true)
     await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status !== 'waiting')
     expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.history.some(l => l.includes('postgres'))).toBe(true)
     // a question for the owner, answered from the board panel

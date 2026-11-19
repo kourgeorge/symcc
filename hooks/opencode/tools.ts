@@ -149,6 +149,10 @@ export async function answerCommand(host: Host, _command: string, args: string):
   if (t.status === 'waiting' && t.asked_files?.length && (text === allow || text === refuse)) return say(await (text === allow ? allowAskedFiles : refuseAskedFiles)(host, id).catch((err: Error) => err.message))
   const r = await toolCall(host, toolName('change'), undefined, { task: id, answer: text })
   if (!r || 'deny' in r) return say(r ? r.deny : `couldn't answer ${id}`)
-  if (!r.result.startsWith('error')) noteForLead(t.time_ask ? `The owner answered ${id}'s "more time?" question: "${brief(text)}".` : `The owner answered ${id} ("${brief(text)}"); it went back to work.`)
+  // the lead hears of it only when the call really answered something: the task was waiting (or had a "more time?"
+  // question) and isn't any more; the change tool's plain "already answered … nothing changed" texts change nothing
+  const after = (await load(host)).tasks.find(x => x.id === id) as typeof t | undefined
+  const answered = (t.status === 'waiting' && after?.status !== 'waiting') || (!!t.time_ask && !after?.time_ask)
+  if (answered && !r.result.startsWith('error')) noteForLead(t.time_ask ? `The owner answered ${id}'s "more time?" question: "${brief(text)}".` : `The owner answered ${id} ("${brief(text)}"); it went back to work.`)
   return say(r.result)
 }
