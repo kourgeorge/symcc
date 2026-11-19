@@ -83,6 +83,8 @@ type Git = {
   status: string
   /** `git status --porcelain -z` in the task's folder (WT): the owner's edits there; cleared by a commit */
   wtStatus: string
+  /** the project has a commit-msg (and pre-merge-commit) hook that always fails: a commit, or a merge that makes a commit, without --no-verify is refused */
+  failingHook?: boolean
   answer?: (args: string[], cwd: string) => Res | undefined
 }
 
@@ -106,7 +108,10 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     if (own) return own
     const a = args.filter((x, i) => x !== '-c' && args[i - 1] !== '-c')
     const s = a.join(' ')
+    const hookFails = () => (git.failingHook && !a.includes('--no-verify') ? { exitCode: 1, stdout: '', stderr: 'husky - commit-msg script failed (code 1)' } : undefined)
     if (a[0] === 'commit') {
+      const h = hookFails()
+      if (h) return h
       if (!git.dirty) return fail('nothing to commit')
       git.dirty = false
       git.wtStatus = ''
@@ -122,6 +127,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     if (s === 'merge --abort') return ok()
     if (a[0] === 'merge') {
       if (git.conflict) return { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' }
+      const h = a.includes('--ff-only') ? undefined : hookFails()
+      if (h) return h
       git.head = H2
       return ok()
     }
@@ -412,8 +419,18 @@ test('checkAndMerge brings the branch up to date when main moved on, tests that,
   const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
   expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
   expect(made).toEqual([H1, H2])
-  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M1}`))).toBe(true)
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M1}`))).toBe(true)
   expect(ranTests(w).length).toBe(1)
+  expect(w.git.main).toBe(H2)
+})
+
+test('checkAndMerge brings the branch up to date even when the project has a commit-msg hook that always fails (--no-verify)', async () => {
+  const w = world({ upToDate: false, failingHook: true })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const made: string[] = []
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
+  expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
+  expect(made).toEqual([H1, H2])
   expect(w.git.main).toBe(H2)
 })
 
@@ -446,7 +463,7 @@ test('checkAndMerge when main moved during the merge brings it in, tests again a
   expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
   expect(made).toEqual([H1, H2])
   // the other change was brought in (M2), then the tests ran again on top of it
-  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M2}`))).toBe(true)
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M2}`))).toBe(true)
   expect(ranTests(w).length).toBe(2)
   expect(w.git.main).toBe(H2)
 })
