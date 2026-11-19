@@ -6,7 +6,8 @@
 # OpenCode left behind never blocks the next start, and scripts/install-opencode.sh links the plugin (T-467). Not a `claude plugin test` file: that runtime has
 # no files or processes, and OpenCode itself isn't needed. Needs bun and git on PATH.
 # When a test fails, a short summary comes last (T-515): each failing test's name and the first lines of its error,
-# so a board that keeps only the tail of the output still shows which test failed and why.
+# so a board that keeps only the tail of the output still shows which test failed and why. A test that
+# timed out shows bun's "this test timed out after Nms" line.
 # Usage: sh scripts/test-opencode-host.sh [folder]
 set -eu
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
@@ -28,6 +29,8 @@ if [ "$status" != 0 ]; then
     /^(error|[A-Za-z]*Error)(:| )/ { cap = 1; n = 0; delete buf; if (src != "") buf[++n] = src; src = "" }
     cap && NF { if (n < 12) buf[++n] = $0; if ($0 ~ /^ +at /) cap = 0 }
     /^\(fail\) / { fails++; print "FAILED: " substr($0, 8); for (i = 1; i <= n; i++) print "    " buf[i]; n = 0; cap = 0 }
+    # a time-out reason comes on the line after "(fail) <name>"
+    /this test timed out/ { sub(/^[ ^]*/, ""); print "    " $0 }
     /[Uu]nhandled error/ { print "FAILED: " $0 }
     BEGIN { print ""; print "test-opencode-host: failed tests (bun exit " status "):" }
     END { if (!fails) print "    (no failing test named: see the output above)" }
