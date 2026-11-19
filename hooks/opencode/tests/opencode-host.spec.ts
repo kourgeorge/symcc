@@ -176,21 +176,36 @@ function fakeCtx(dir: string, session: OcSessionApi = fakeSessions().api) {
   return { ctx, hooks, tools, commands, disposed: () => disposed }
 }
 
-/** Waits until `check` is true (looking every 20 ms, for at most `ms`). */
-async function until(check: () => boolean | Promise<boolean>, ms = 5000) {
+/** Waits until `check` is true (looking every 20 ms, for at most `ms`; a busy machine can take seconds for a copy's start). */
+async function until(check: () => boolean | Promise<boolean>, ms = 15_000) {
   for (const end = Date.now() + ms; Date.now() < end; await new Promise<void>(r => setTimeout(() => r(), 20))) if (await check()) return
   throw new Error('timed out waiting')
 }
 
-/** Waits until no board write is running or starts within 300 ms, so none of a test's follow-ups lands in the next test. */
-async function settle(ms = 10_000) {
+/**
+ * Waits until no worker start is under way (`starting`: a task the engine's pump picked up, e.g. one a test added,
+ * makes its folder with git before it writes the board) and no board write is running or starts within 300 ms, so
+ * none of a test's follow-ups lands in the next test after reset() (T-489: a late write found no project folder).
+ */
+async function settle(ms = 20_000) {
   for (const end = Date.now() + ms; Date.now() < end; ) {
     const w = S.writing
     await w
     await new Promise<void>(r => setTimeout(() => r(), 300))
-    if (S.writing === w) return
+    if (S.writing === w && starting.size === 0) return
   }
-  throw new Error('board writes never settled')
+  throw new Error(`board writes never settled (still starting: ${[...starting].join(', ') || 'none'})`)
+}
+
+/**
+ * A project() test's cleanup: lets the engine's follow-ups (a worker start the pump picked up, board writes) finish
+ * (see settle; a failed test's copy may never settle, so its error stays the one shown), then reset() and the scratch
+ * folder goes.
+ */
+async function finish(p: { done: () => Promise<void> }) {
+  await settle().catch(() => undefined)
+  reset()
+  await p.done()
 }
 
 /** Asks the copy's permission hook about `action` on `resources` for session `sessionID`; answers the check as it ended. */
@@ -200,8 +215,11 @@ async function evaluate(c: ReturnType<typeof fakeCtx>, sessionID: string, action
   return e
 }
 
+/** The scratch repos' git: no global or system config (so none of the owner's hooks, hooksPath or settings), fixed name. */
+const GIT_ENV = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' }
+
 async function git(cwd: string, ...args: string[]) {
-  const r = await runCommand(['git', ...args], { cwd })
+  const r = await runCommand(['git', ...args], { cwd, env: GIT_ENV })
   if (r.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
   return r.stdout
 }
@@ -219,8 +237,8 @@ async function project() {
   await writeFile(`${main}/src/a.ts`, 'export const a = 1\n')
   await writeFile(`${main}/.gitignore`, '.symcc/\n')
   await git(main, 'init', '-q', '-b', 'main')
-  await git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '-A')
-  await git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'start')
+  await git(main, 'add', '-A')
+  await git(main, 'commit', '-q', '--no-verify', '-m', 'start')
   const wt = `${main}/.symcc/worktrees/T-1`
   await mkdir(`${main}/.symcc/worktrees`, { recursive: true })
   await git(main, 'worktree', 'add', '-q', '-b', 'symcc/T-1', wt)
@@ -279,7 +297,7 @@ test('one copy runs the engine: the main folder\'s first copy; a second copy for
   } finally {
     await p.done()
   }
-})
+}, 30_000)
 
 test('a worktree\'s copy refuses a worker\'s edit outside its files through permission.evaluate, lets an allowed one pass, and refuses a shell write into the owner\'s copy', async () => {
   reset()
@@ -319,10 +337,9 @@ test('a worktree\'s copy refuses a worker\'s edit outside its files through perm
     expect(await readFile(`${p.main}/.symcc/lead.json`, 'utf8').catch(() => 'none')).toBe('none')
     await end!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
-})
+}, 30_000)
 
 test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and starts the timers; cleanup stops them', async () => {
   reset()
@@ -338,8 +355,7 @@ test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and star
     expect(S.beat).toBe(null)
     expect(S.watchdog).toBe(null)
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -359,6 +375,7 @@ test('a copy in a subfolder of the main project runs the engine (as Claude Code\
     await end!()
     expect(S.beat).toBe(null)
     // one engine per project: the main folder's copy and a subfolder's share one owner
+    await settle()
     reset()
     const { engine } = recordingEngine()
     const roles2: string[] = []
@@ -370,8 +387,41 @@ test('a copy in a subfolder of the main project runs the engine (as Claude Code\
     await endMain!()
     expect(owners().size).toBe(0)
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
+  }
+}, 30_000)
+
+test('the scratch project ignores the owner\'s global git config: a global core.hooksPath pre-commit hook that fails never runs, and project() still commits', async () => {
+  const fake = await realpath(await mkdtemp('/tmp/symcc-oc-gitcfg-'))
+  const marker = `${fake}/hook-ran`
+  await mkdir(`${fake}/hooks`, { recursive: true })
+  await writeFile(`${fake}/hooks/pre-commit`, `#!/bin/sh\ntouch '${marker}'\nexit 1\n`)
+  await runCommand(['chmod', '+x', `${fake}/hooks/pre-commit`])
+  await writeFile(`${fake}/gitconfig`, `[core]\n\thooksPath = ${fake}/hooks\n`)
+  const before = process.env.GIT_CONFIG_GLOBAL
+  process.env.GIT_CONFIG_GLOBAL = `${fake}/gitconfig`
+  try {
+    // The fake hook really fails a plain commit that reads the global config (else this test proves nothing).
+    const check = `${fake}/check`
+    await mkdir(check, { recursive: true })
+    await writeFile(`${check}/x`, 'x\n')
+    const plain = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: check })
+    await plain('init', '-q')
+    await plain('add', '-A')
+    expect((await plain('commit', '-q', '-m', 'x')).exitCode).not.toBe(0)
+    expect((await readdir(fake, { withFileTypes: true })).map(e => e.name)).toContain('hook-ran')
+    await rm(marker, { recursive: true, force: true })
+    const p = await project()
+    try {
+      expect((await git(p.main, 'log', '--format=%s')).trim()).toBe('start')
+      expect((await readdir(fake, { withFileTypes: true })).map(e => e.name)).not.toContain('hook-ran')
+    } finally {
+      await p.done()
+    }
+  } finally {
+    if (before === undefined) delete process.env.GIT_CONFIG_GLOBAL
+    else process.env.GIT_CONFIG_GLOBAL = before
+    await rm(fake, { recursive: true, force: true })
   }
 }, 30_000)
 
@@ -544,10 +594,9 @@ test('the tool backstop reads OpenCode 2.3\'s real tool inputs: edit and write {
     expect(await before('shell', { command: 'ls src', workdir: p.wt })).toBe('')
     await end!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
-})
+}, 30_000)
 
 test('the main folder\'s copy starts a worker as an OpenCode session: the role\'s model, a child of the lead, moved into its worktree, prompted once the board names it, with no wake line for the lead; its end reaches agentFinished with its tokens, and the lead gets one queued board update despite OpenCode\'s "subagent completed" message', async () => {
   reset()
@@ -603,8 +652,7 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     expect(await host!.lead.usage(p.main, { kind: 'all' }, 1000)).toEqual({ lead: [{ id: lead, atMs: 1000, tokens: { input: 3, output: 5, cache_read: 9 }, from: OPENCODE_LEAD_FROM }], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
     await endCopy!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 60_000)
 
@@ -708,8 +756,7 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
     // the lead is kept for the board owner when the copy goes: a copy loaded again knows it at once
     expect([...leads().values()]).toEqual([owner])
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -748,8 +795,7 @@ test('two main copies: updates the engine copy kept before the lead was known st
     await endA!()
     await endB!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -809,8 +855,7 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     await end!()
     await settle()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -845,8 +890,7 @@ test('each session is offered only the symcc tools it may call, and the lead get
     await end!()
     await settle()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -892,8 +936,7 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     await end!()
     await settle()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 60_000)
 
