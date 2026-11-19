@@ -13,6 +13,7 @@ import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../host'
+import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
@@ -263,7 +264,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool(claudeHost($), 'change', { task: t.id, answer: text.trim() })
-      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : `The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
+      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : answeredLeadLine(t, text.trim(), brief))
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))

@@ -1136,7 +1136,7 @@ async function holdForFiles(host: Host, t: SymccTask, b: Board, r: CheckResult, 
     if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur]
     const first = !waitsForFiles(cur)
     const status = cur.status === 'review' ? 'review' : 'waiting'
-    const y = patchTask(x, t.id, { status, merge_wait: files, note, ...(first ? { history: [...cur.history, line] } : {}), ...endedBy(cur, now(), 'finished', 'waiting for your files') }, now())
+    const y = patchTask(x, t.id, { status, merge_wait: files, note, test_rerun: undefined, ...(first ? { history: [...cur.history, line] } : {}), ...endedBy(cur, now(), 'finished', 'waiting for your files') }, now())
     return [y, first]
   })
   if (res === 'gone') return
@@ -1189,7 +1189,8 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   // T-511: on a rerun of only the tests, the try already ended ("tests ran out of time"): its outcome now is this check's
   const ended = (cur: SymccTask) => ((cur as BoardTask).test_rerun && cur.status === 'doing' && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', finishedNote(r), true) } : endedBy(cur, now(), 'finished', finishedNote(r)))
   const write = async (patch: (cur: SymccTask) => Partial<BoardTask>) => {
-    const moved = await writeIfSame(host, t, cur => ({ ...patch(cur), ...ended(cur) }))
+    // T-511: a check that did not run out of time ends any rerun of only the tests (a later time-out counts as the first again)
+    const moved = await writeIfSame(host, t, cur => ({ ...(r.timedOut === undefined ? { test_rerun: undefined } : {}), ...patch(cur), ...ended(cur) }))
     if (moved && moved !== 'gone') await changedMeanwhile(host, t, b, r, line, worktree, agentId)
     return !moved
   }

@@ -51,7 +51,21 @@ export function parseTimedOutAnswer(answer: string): 'again' | 'stop' | null {
 }
 
 /** Whether task `t` waits for its tests to run again (they ran out of time once): "waiting", no question. */
-export const rerunDue = (t: { status?: unknown; test_rerun?: unknown; question?: unknown }): boolean => t.status === 'waiting' && t.test_rerun === 1 && !t.question
+// A task that waits for the owner's files (merge_wait) already passed its tests: retryFileWaits merges it, nothing reruns.
+export const rerunDue = (t: { status?: unknown; test_rerun?: unknown; question?: unknown; merge_wait?: unknown }): boolean => t.status === 'waiting' && t.test_rerun === 1 && !t.question && !t.merge_wait
 
 /** Whether task `t` waits for the owner because its tests ran out of time twice. */
 export const askedTimedOut = (t: { status?: unknown; test_rerun?: unknown; question?: unknown }): boolean => t.status === 'waiting' && t.test_rerun === 2 && !!t.question
+
+/**
+ * The lead's line after the owner answered task `t`'s question with `answer` on a board panel: what happens now.
+ * For the "the tests ran out of time twice" question, which of the two it is (only the tests run again, or it is
+ * paused); for any other question, the task went back to work.
+ */
+export function answeredLeadLine(t: { id: string; status?: unknown; test_rerun?: unknown; question?: unknown }, answer: string, brief: (s: string) => string = s => s): string {
+  const said = `The owner answered ${t.id} ("${brief(answer)}")`
+  const pick = askedTimedOut(t) ? parseTimedOutAnswer(answer) : null
+  if (pick === 'again') return `${said}: only its tests run again (they ran out of time twice), with no worker and no new try.`
+  if (pick === 'stop') return `${said}: it is paused after its tests ran out of time twice; its work is kept.`
+  return `${said}; it went back to work.`
+}

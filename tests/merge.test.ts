@@ -10,7 +10,7 @@ import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, rerunTimedOutTests } from '../hooks/app/workers'
-import { ranOutOfTime } from '../hooks/core/test-timeout'
+import { ranOutOfTime, answeredLeadLine } from '../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
@@ -5419,6 +5419,31 @@ test('T-511: a time-out keeps the work, uses no auto retry and starts no worker;
   expect(leadQueue.join('\n')).toContain('✓ T-1')
 })
 
+test("T-511: a rerun that passes but waits for the owner's files runs the tests once only, then waits only for the files", async () => {
+  let slow = true
+  const c = await timingOut(() => slow)
+  slow = false
+  c.w.git.current = 'main'
+  c.w.git.status = ' M src/a.ts\0'
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  let t = await c.t1()
+  expect(ranTests(c.w)).toEqual(['/bin/sh -c npm test'])
+  expect(t.status).toBe('waiting')
+  expect(t.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+  expect(t.test_rerun).toBe(undefined)
+  // the regular check's rerun part runs nothing more while the files are in the way
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  await rerunTimedOutTests(c.w.$)
+  expect(ranTests(c.w)).toEqual([])
+  t = await c.t1()
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe(null)
+  expect(t.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+  expect(c.spawned()).toBe(0)
+})
+
 test("T-511: the rerun waits while another task's tests run (the test lock is held)", async () => {
   const c = await timingOut(() => true)
   // the lock is fresh only while its task is being checked: T-9 is, on the board
@@ -5486,6 +5511,13 @@ test('T-511: a real test failure on the rerun still starts a new try (an auto re
   expect(t.test_tries).toBe(1)
   expect(t.test_output).toContain('FAIL a.test')
   expect(t.test_rerun).toBe(undefined)
+})
+
+test("T-511: the lead's line after an answer on the panel says which it is", () => {
+  const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'T-1: the tests ran out of time twice; nothing failed. Run them again, or stop it?' }
+  expect(answeredLeadLine(asked, 'Stop it')).toBe('The owner answered T-1 ("Stop it"): it is paused after its tests ran out of time twice; its work is kept.')
+  expect(answeredLeadLine(asked, 'Run the tests again')).toBe('The owner answered T-1 ("Run the tests again"): only its tests run again (they ran out of time twice), with no worker and no new try.')
+  expect(answeredLeadLine({ id: 'T-1', status: 'waiting', question: 'Which one?' }, 'Stop it')).toBe('The owner answered T-1 ("Stop it"); it went back to work.')
 })
 
 test("T-511: a real test failure after a worker's try keeps today's behaviour: a new try", async () => {
