@@ -100,6 +100,21 @@ keeps it waiting, also `dropped` or `failed`; then the lead changes or clears it
 Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
 lower task number).
 
+**Work merged by hand.** Sometimes a task's branch gets merged outside the board, for
+example by you or by the lead on your word after its only failure was the merge tests
+timing out. Don't drop such a task (it would count as dropped) and don't retry it (a new
+worker would redo finished work). Mark it as merged instead: press `h` (Already merged) on
+its page (offered for a failed, waiting, paused or dropped task), or ask the lead, whose
+`merged` tool also takes a task that is to do, running (its worker is stopped first) or in
+review. symcc checks it with git first: every commit on the task's branch must already be
+in the branch it merges into (merged, fast-forwarded, or rebased as the same changes). If
+not, it refuses with the reason ("T-5's branch has 2 commits that aren't in main yet").
+When the check passes, the task becomes `done` with the history line "merged outside the
+board (abc12345); marked done by the owner" (or "by the lead"), its commits are recorded,
+its folder and branch are cleaned up like after a normal merge, and the tasks waiting on it
+can start. Nothing is merged and no test runs: the work is already in. Stats count it under
+"merged outside the board". The lead uses it only on your word or a rule you set.
+
 ---
 
 ### When a worker needs you
