@@ -4,6 +4,7 @@ import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, o
 import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
+import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
@@ -346,6 +347,102 @@ test('checkAndMerge commits the work, runs the tests and moves main to it', asyn
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   // the owner doesn't have main checked out: their files are not touched
   expect(w.calls.some(c => / git read-tree /.test(c))).toBe(false)
+})
+
+// ---------------- T-527: tests skipped for code (a git tree) that already passed them ----------------
+
+const PASSED = `${ROOT}/.symcc/passed-trees.json`
+const [TREE1, TREE2] = ['e1', 'e2'].map(x => x.repeat(20)) as [string, string]
+
+/** A world whose fake git gives `tree.id` as the tree of any commit; `again` puts the worker's branch back to before its commit, as a new try that changed nothing. */
+function treeWorld(tests: Record<string, Res> = {}) {
+  const tree = { id: TREE1 }
+  const w = world({ answer: a => (a[0] === 'rev-parse' && a.at(-1)!.endsWith('^{tree}') ? ok(`${tree.id}\n`) : undefined) }, tests)
+  const again = () => {
+    w.git.main = M1
+    w.git.head = H0
+    w.git.dirty = true
+    w.calls.length = 0
+  }
+  return { w, tree, again }
+}
+
+test('T-527: a second merge of the same tree with the same test commands skips the run and says so', async () => {
+  const { w, again } = treeWorld()
+  const [b, t] = boardWith('auto', ['npm test', 'npm run lint'])
+  const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r1.detail).toBe(`merged into main (${H1.slice(0, 8)}); tests passed`)
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm run lint'])
+  expect(JSON.parse(w.files.get(PASSED)!).passed.map((e: { tree: string; commands: string[] }) => [e.tree, e.commands])).toEqual([[TREE1, ['npm test', 'npm run lint']]])
+  again()
+  const r2 = await checkAndMerge(w.$, { ...t, attempts: 2 }, WT, b, 'finish', [])
+  expect(r2).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests: this exact code already passed (tree ${TREE1.slice(0, 7)}); not run again` })
+  // no test command started, and the test lock was never taken
+  expect(ranTests(w)).toEqual([])
+  expect(w.calls.some(c => c.includes('tests.lock'))).toBe(false)
+  expect(w.git.main).toBe(H1)
+})
+
+test('T-527: the skip line reaches the task history and the lead through the check result', async () => {
+  const { w, again } = treeWorld()
+  const [b, t] = boardWith('review', ['npm test'])
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  again()
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r).toEqual({ ok: true, review: true, detail: `checks passed; tests: this exact code already passed (tree ${TREE1.slice(0, 7)}); not run again; ready for review, nothing merged yet` })
+  expect(ranTests(w)).toEqual([])
+})
+
+test('T-527: a different tree, or changed test commands, runs the tests again', async () => {
+  const { w, tree, again } = treeWorld()
+  const [b, t] = boardWith('auto', ['npm test'])
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  // another tree (the work or the target changed)
+  again()
+  tree.id = TREE2
+  expect((await checkAndMerge(w.$, t, WT, b, 'finish', [])).detail).toContain('; tests passed')
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  // the same tree, but the test commands changed
+  again()
+  tree.id = TREE1
+  const b2 = { ...b, test_commands: ['npm test', 'npm run e2e'] }
+  expect((await checkAndMerge(w.$, t, WT, b2, 'finish', [])).detail).toContain('; tests passed')
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm run e2e'])
+})
+
+test('T-527: a failed run is not recorded as passed, so the same tree is tested again', async () => {
+  const { w, again } = treeWorld({ 'npm test': fail('1 failing') })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r1.ok).toBe(false)
+  expect(w.files.has(PASSED)).toBe(false)
+  again()
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+})
+
+test('T-527: when git cannot give the tree, the tests run and nothing is recorded', async () => {
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test'])
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(w.files.has(PASSED)).toBe(false)
+})
+
+test('T-527: the passed-trees file keeps only the newest entries', () => {
+  let list: ReturnType<typeof addPassedTree> = []
+  for (let i = 0; i < PASSED_TREES_MAX + 50; i++) list = addPassedTree(list, i.toString(16).padStart(40, '0'), ['npm test'], i)
+  expect(list.length).toBe(PASSED_TREES_MAX)
+  expect(list[0]!.at).toBe(50)
+  // the same tree and commands again: one entry, moved to the end
+  list = addPassedTree(list, list[0]!.tree, ['npm test'], 999)
+  expect(list.length).toBe(PASSED_TREES_MAX)
+  expect(list.at(-1)!.at).toBe(999)
+  const back = parsePassedTrees(passedTreesText(list))
+  expect(back).toEqual(list)
+  expect(treePassed(back, list[0]!.tree, ['npm test'])).toBe(true)
+  expect(treePassed(back, list[0]!.tree, ['npm test', 'x'])).toBe(false)
+  expect(parsePassedTrees('not json')).toEqual([])
 })
 
 test('checkAndMerge with no change at all merges nothing', async () => {

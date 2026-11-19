@@ -5,6 +5,7 @@ import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, now, load, path, tryLock, dropIfSame, safeWrite } from './store'
 import { tellLead } from './tell'
+import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
 
 // ---------------- a task's changes, for review ----------------
 
@@ -507,7 +508,12 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
   }
-  const testsRun = mode === 'finish' || candidate !== head || retest
+  let testsRun = mode === 'finish' || candidate !== head || retest
+  // T-527: the code about to be tested (its git tree, the target merged in). When this same tree already passed
+  // these same test commands, the run is skipped. Unknown (git could not tell): the tests run as usual.
+  const tree = testsRun && b.test_commands.length ? await testedTree($, candidate, dir) : ''
+  const skipped = !!tree && treePassed(await readPassedTrees($), tree, b.test_commands)
+  if (skipped) testsRun = false
   if (testsRun && b.test_commands.length) {
     // One task's tests at a time, project-wide (withTestLock); the lock is let go however the tests end.
     const failed = await withTestLock($, t, stopped, turn, async refresh => {
@@ -522,10 +528,13 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
         const s = stopped()
         if (s) return s
       }
+      // all passed: remembered while the lock is still held, so two sessions never write the file at once; a failed, timed-out or stopped run never is
+      if (tree) await recordPassedTree($, tree, b.test_commands)
       return undefined
     })
     if (failed) return res(failed)
   }
+  const passed = skipped ? `; ${testsSkippedText(tree)}` : '; tests passed'
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
@@ -533,8 +542,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // the checker setting: a change that needs a checker stops here, before review or merge (see app/checker.ts)
   const held = !!hold?.(changed)
   const holding = held ? { held: true } : {}
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
-  if (held) return res({ ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; the checker looks at it before it merges` })
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
+  if (held) return res({ ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; the checker looks at it before it merges` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
@@ -546,7 +555,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok && !(await branchExists($, target))) return res(goneResult(target))
   if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }
-  const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
+  const tests = !b.test_commands.length ? '; no test command set' : skipped || testsRun ? passed : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
   if (researchNotes(changed).length) {
@@ -554,6 +563,24 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
   return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
+}
+
+/** T-527: the git tree id of commit `commit` (the code a test run tests), or '' when git can't tell. */
+async function testedTree($: Host, commit: string, dir: string): Promise<string> {
+  const r = await git($, ['rev-parse', '-q', '--verify', `${commit}^{tree}`], dir).catch(() => null)
+  const id = r && r.exitCode === 0 ? r.stdout.trim() : ''
+  return isTreeId(id) ? id : ''
+}
+
+/** T-527: the trees whose test run passed (PASSED_TREES_FILE in the board folder); none when it can't be read. */
+async function readPassedTrees($: Host) {
+  return parsePassedTrees(await $.fs.read(path(`${S.N.dir}/${PASSED_TREES_FILE}`)).catch(() => null))
+}
+
+/** T-527: remembers that tree `tree` passed all of `commands`. A file that can't be written only means the next run is not skipped. */
+async function recordPassedTree($: Host, tree: string, commands: readonly string[]) {
+  const list = addPassedTree(await readPassedTrees($), tree, commands, Date.now())
+  await safeWrite($, path(`${S.N.dir}/${PASSED_TREES_FILE}`), passedTreesText(list), 'the passed trees').catch(() => undefined)
 }
 
 /** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */
