@@ -22,7 +22,7 @@ import { resetStore } from '../../app/store'
 import { stoppedText } from '../../app/ask'
 import { runCommand } from '../../../hosts/node/host'
 import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt, OcSessionContext, OcToolInfo, OcCommandDefinition } from '../ctx'
-import { opencodeAgents, opencodeModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
+import { opencodeAgents, opencodeModel, leadModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
 import { toolTouches } from '../guard'
 import { pump } from '../../app/workers'
 import { load } from '../../app/store'
@@ -141,10 +141,10 @@ function fakeSessions(moveLag = 2) {
       hooks.onSubagent?.(s.info.parentID!)
     }
   }
-  /** A lead session in folder `dir` (as the owner's own chat). */
-  const lead = (dir: string) => {
+  /** A lead session in folder `dir` (as the owner's own chat), on `model` when given (session.get's model). */
+  const lead = (dir: string, model?: OcSessionInfo['model']) => {
     const id = `ses_lead${++n}`
-    sessions.set(id, { info: { id, location: { directory: dir } }, looksLeft: 0, messages: [] })
+    sessions.set(id, { info: { id, location: { directory: dir }, ...(model ? { model } : {}) }, looksLeft: 0, messages: [] })
     return id
   }
   return { api, calls, prompts, subagent, synthetic, end, lead, sessions, hooks }
@@ -505,6 +505,63 @@ test('the model per role (R8): a role\'s Claude name runs on OpenCode\'s Claude 
   expect(opencodeModel('Haiku', 'worker')).toEqual({ providerID: 'claude-agent', id: 'haiku' })
   expect(opencodeModel('openai/gpt-5', 'worker')).toEqual({ providerID: 'openai', id: 'gpt-5' })
   expect(opencodeModel('opencode/deepseek-v4.1-flash-free', 'scout')).toEqual({ providerID: 'opencode', id: 'deepseek-v4.1-flash-free' })
+})
+
+test("no model (none, inherit, default) runs on the lead's current model for a worker, scout and checker; lead unknown or unreadable gives DEFAULT_MODELS; a named model is unchanged (T-504)", async () => {
+  const gpt = { providerID: 'openai', id: 'gpt-5' }
+  for (const kind of ['worker', 'scout', 'checker'] as const) {
+    for (const name of [undefined, '', 'inherit', 'default']) expect(opencodeModel(name, kind, gpt)).toEqual(gpt)
+    expect(opencodeModel('opus', kind, gpt)).toEqual({ providerID: 'claude-agent', id: 'opus' })
+    expect(opencodeModel('opencode/big-pickle', kind, gpt)).toEqual({ providerID: 'opencode', id: 'big-pickle' })
+  }
+  const f = fakeSessions(0)
+  const base = await realpath(await mkdtemp('/tmp/symcc-oc-leadmodel-'))
+  const main = `${base}/proj`
+  const wt = `${main}/.symcc/worktrees/T-1`
+  await mkdir(wt, { recursive: true })
+  try {
+    // the lead's model from session.get, else from its latest assistant (or model-switched) message
+    const lead = f.lead(main, { providerID: 'opencode', id: 'big-pickle', variant: 'high' })
+    expect(await leadModel(f.api, lead)).toEqual({ providerID: 'opencode', id: 'big-pickle', variant: 'high' })
+    const bare = f.lead(main)
+    expect(await leadModel(f.api, bare)).toBe(undefined)
+    f.sessions.get(bare)!.messages.push({ type: 'assistant', model: { providerID: 'openai', id: 'gpt-4' } }, { type: 'model-switched', model: { providerID: 'openai', id: 'gpt-5' } }, { type: 'user' })
+    expect(await leadModel(f.api, bare)).toEqual({ providerID: 'openai', id: 'gpt-5' })
+    // spawn: no model -> the lead's (said in the log); a named one as it is
+    const log: string[] = []
+    const agents = opencodeAgents(f.api, { dir: main, lead: () => lead, onEnd: () => undefined, log: t => void log.push(t), pollMs: 5, waitMs: 500 })
+    await agents.spawn({ kind: 'worker', prompt: 'x', name: 'w', description: 'w', cwd: wt })
+    await agents.spawn({ kind: 'scout', prompt: 'x', name: 's', description: 's', model: 'inherit' })
+    await agents.spawn({ kind: 'checker', prompt: 'x', name: 'c', description: 'c', cwd: wt, model: 'default' })
+    await agents.spawn({ kind: 'worker', prompt: 'x', name: 'w2', description: 'w2', cwd: wt, model: 'sonnet' })
+    expect(f.calls.filter(c => c.startsWith('create')).map(c => c.replace(/^create \S+ parent \S+ /, ''))).toEqual(['model opencode/big-pickle', 'model opencode/big-pickle', 'model opencode/big-pickle', 'model claude-agent/sonnet'])
+    expect(log.filter(t => t.includes(': OpenCode session ')).map(t => t.replace(/session \S+ /, ''))).toEqual([
+      "worker w: OpenCode on opencode/big-pickle (the lead's model)",
+      "scout s: OpenCode on opencode/big-pickle (the lead's model)",
+      "checker c: OpenCode on opencode/big-pickle (the lead's model)",
+      'worker w2: OpenCode on claude-agent/sonnet',
+    ])
+    // no lead session known yet: DEFAULT_MODELS, said once in the log
+    const g = fakeSessions(0)
+    const log2: string[] = []
+    const none = opencodeAgents(g.api, { dir: main, onEnd: () => undefined, log: t => void log2.push(t), pollMs: 5, waitMs: 500 })
+    await none.spawn({ kind: 'worker', prompt: 'x', name: 'w', description: 'w' })
+    await none.spawn({ kind: 'scout', prompt: 'x', name: 's', description: 's' })
+    expect(g.calls.filter(c => c.startsWith('create'))).toEqual(['create ses_1 model claude-agent/sonnet', 'create ses_2 model claude-agent/haiku'])
+    expect(log2.filter(t => t.includes("symcc's default models"))).toEqual([
+      "agents with no model of their own run on symcc's default models (worker claude-agent/sonnet, scout claude-agent/haiku, checker claude-agent/haiku): no lead session known yet",
+    ])
+    // the lead's model can't be read (an API error): DEFAULT_MODELS too
+    const h = fakeSessions(0)
+    const failing: OcSessionApi = { ...h.api, get: async ({ sessionID }) => (sessionID === 'ses_gone' ? Promise.reject(new Error('boom')) : h.api.get({ sessionID })) }
+    const log3: string[] = []
+    const broken = opencodeAgents(failing, { dir: main, lead: () => 'ses_gone', onEnd: () => undefined, log: t => void log3.push(t), pollMs: 5, waitMs: 500 })
+    await broken.spawn({ kind: 'checker', prompt: 'x', name: 'c', description: 'c' })
+    expect(h.calls.filter(c => c.startsWith('create'))).toEqual(['create ses_1 parent ses_gone model claude-agent/haiku'])
+    expect(log3.some(t => t.endsWith("couldn't read the lead session's model: boom"))).toBe(true)
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
 })
 
 test('an OpenCode session agent: create (child of the lead) -> move into its folder, waited for -> prompt once symcc recorded it -> its end reaches onEnd with tokens and the final text; an interrupt ends one as aborted', async () => {
