@@ -102,8 +102,10 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
-/** The notes a doing row's state already says ("▶ 12m", "▶ check"), so the band leaves them out when it shows one. */
-const STATE_NOTES = new Set(['worker on it', 'checking and merging', 'starting at the next turn'])
+/** The notes a doing row's state already says ("▶ 12m", "▶ check"), so the band leaves them out when it shows one:
+ *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
+ *  "worker starting" without it, e.g. on OpenCode). */
+const STATE_NOTES = new Set(['worker on it', 'checking and merging', 'starting at the next turn', 'worker starting'])
 
 /** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>

@@ -35,6 +35,7 @@ import { ASK_TOOL_DEF } from '../../app/ask'
 import { COMMANDS, toolCall, runCommand as symccCommand } from '../../app/symcc'
 import { scoutToolRefusal } from '../../core/scouts'
 import { workerToolRefusal } from '../tools'
+import { parseViewFile } from '../board-view'
 
 /** Puts symcc's memory back to its start values, as a fresh copy of the plugin has (bun shares one copy across tests). */
 function reset() {
@@ -859,7 +860,7 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     const c = fakeCtx(p.main, f.api)
     const end = await plugin.setup(c.ctx)
     await until(() => S.startupDone === true)
-    expect([...c.commands.keys()]).toEqual(COMMANDS().map(x => x.name))
+    expect([...c.commands.keys()]).toEqual([...COMMANDS().map(x => x.name), 'symcc-answer'])
     const lead = f.lead(p.main)
     const run = async (name: string, text = '') => {
       const before = f.synthetic.length + f.prompts.length
@@ -887,6 +888,49 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     const scouts = await run('symcc-scouts')
     expect(scouts.prompts.at(-1)!.sessionID).toBe(lead)
     expect(scouts.prompts.at(-1)!.delivery).toBe('steer')
+    await settle()
+    await end!()
+    await settle()
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 60_000)
+
+test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /symcc-answer answers a waiting task (the change tool, the lead hears of it) and a question on the board', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined, sessionId: 'opencode-view' } })
+    const c = fakeCtx(p.main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    const view = async () => parseViewFile(await readFile(`${p.main}/.symcc/view.json`, 'utf8').catch(() => null))
+    await until(async () => !!(await view()))
+    const v1 = (await view())!
+    expect(v1.root).toBe(p.main)
+    expect(v1.name).toBe('symcc')
+    expect(v1.view.tasks.map(t => t.id)).toEqual(['T-1', 'T-2'])
+    const lead = f.lead(p.main)
+    const tool = (name: string, input: Record<string, unknown>) => c.tools.get(name)!.execute(input, { sessionID: lead, agent: 'build', messageID: 'm', id: 'call' })
+    await tool('symcc_ask', { task: 'T-2', question: 'Which database?' })
+    await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status === 'waiting')
+    const run = async (text: string) => {
+      await c.commands.get('symcc-answer')!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
+      return f.synthetic.at(-1)!
+    }
+    expect((await run('')).text).toContain('/symcc-answer T-5 <answer>')
+    const answered = await run('T-2 postgres')
+    expect(answered.resume).toBe(false)
+    expect(answered.text).toContain('T-2')
+    await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status !== 'waiting')
+    expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.history.some(l => l.includes('postgres'))).toBe(true)
+    // a question for the owner, answered from the board panel
+    await tool('symcc_question', { action: 'add', text: 'Add a scout?', options: ['yes', 'no'] })
+    await until(async () => ((await view())!.view.questions ?? []).length === 1)
+    expect((await run('Q-1 yes')).text).toContain('Q-1 answered: yes')
+    await until(async () => ((await view())!.view.questions ?? []).length === 0)
     await settle()
     await end!()
     await settle()

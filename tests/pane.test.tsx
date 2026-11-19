@@ -207,6 +207,8 @@ test("the band hides only the notes a doing row's state says; other notes stay a
     task('T-50', 'doing', 'Wrap up', { note: 'time is up: the worker was told to hand back', attempts: 1, runs: [{ started: iso(T0 - 62 * 60_000) }] }),
     task('T-51', 'doing', 'Being checked', { note: 'checking and merging', attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'checking', at: fresh } }),
     task('T-52', 'doing', 'Queued', { note: 'starting at the next turn', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
+    // T-470's claim note on a host with no start queue (OpenCode): the time says it, so no stray note (T-466)
+    task('T-53', 'doing', 'Starting', { note: 'worker starting', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
@@ -215,6 +217,8 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   expect(await ui.find({ type: 'Text', text: /^T-50 ▶ 1h 02m$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /checking and merging/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /starting at the next turn/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /worker starting/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^T-53 ▶ 1m/ })).toBeDefined()
   await ui.unmount()
 })
 

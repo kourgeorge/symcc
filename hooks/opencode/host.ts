@@ -4,9 +4,12 @@
 // The agents are OpenCode sessions (agents.ts, T-463) and the lead is the owner's session (lead.ts, T-464: board
 // updates as session.prompt, queue or steer; its tokens from session.get), passed in by plugin.ts as `agents` and
 // `lead`. symcc's tools and slash commands are added by plugin.ts (tools.ts, T-465). Not built yet, and filled by the
-// next OpenCode tasks: the TUI's board panel and band (until then /symcc answers with the text board). With no `agents` given, no agent can start (its start is "not ready", so a task waits); with no
+// next OpenCode tasks. The board panel and the band are drawn by the TUI part (opencode/tui.ts, T-466), which runs
+// apart from the engine: ui.panel (view.ts) writes each published view to .<name>/view.json for it, while the
+// features say no panel and no band, so a /symcc the TUI doesn't take answers with the text board. With no `agents` given, no agent can start (its start is "not ready", so a task waits); with no
 // `lead`, a board update goes nowhere.
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
+import { viewFilePanel } from './view'
 import { nodeFs, runCommand, nodeClock } from '../../hosts/node/host'
 
 /**
@@ -57,7 +60,7 @@ export type OpencodeHostOptions = {
 export function opencodeHost(o: OpencodeHostOptions): Host {
   const say = o.say ?? ((line: string) => void process.stderr.write(`[symcc] ${line}\n`))
   const id = o.sessionId ?? `opencode-${serverId()}`
-  return {
+  const host: Host = {
     features: OPENCODE_FEATURES,
     plugin: { name: 'symcc', root: o.pluginRoot ?? PLUGIN_ROOT },
     session: {
@@ -87,4 +90,7 @@ export function opencodeHost(o: OpencodeHostOptions): Host {
       log: text => void (process.env.SYMCC_DEBUG ? say(`[debug] ${text}`) : undefined),
     },
   }
+  // the board view for the TUI part, which runs apart from the engine: every publish also writes .<name>/view.json (view.ts)
+  host.ui.panel = viewFilePanel(host)
+  return host
 }
