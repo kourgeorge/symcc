@@ -3,7 +3,8 @@
 // (.<name>/view.json, see view.ts), read again every second, and sends the owner's actions back as symcc's slash
 // commands in the TUI's session (approve, reject, answer: board-view.ts's actionCommand). It claims two places of
 // OpenCode's screen (docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, point 4):
-//   - session.panel: the board (opened with ui.panel.open(BOARD_PANEL), from the "/symcc" keymap command): the task
+//   - session.panel: the board (opened with ui.panel.open(BOARD_PANEL), from the "/symcc-board" keymap command or the
+//     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505): the task
 //     list grouped by state, with the terminal list's marks, short states and times, and a task's (or question's)
 //     page when one is opened;
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, then the questions, and
@@ -69,6 +70,19 @@ export async function loadTuiRuntime(load: TuiRuntimeLoaders): Promise<TuiRuntim
   }
 }
 
+/** Says in a toast that the TUI part could not start, in plain words, and gives the error back for opencode/tui.ts to
+ *  throw (OpenCode then lists the plugin as failed in /plugins). Without it a failure here leaves the owner with no
+ *  band, no panel and no word why (T-505). */
+export function setupFailed(ctx: Pick<TuiContext, 'ui'>, e: unknown, name: string = DEFAULT_NAME): Error {
+  const err = e instanceof Error ? e : new Error(String(e))
+  try {
+    ctx.ui.toast.show({ title: name, message: `${name}'s board could not start in OpenCode, so there is no band above the prompt and no board panel: ${err.message}. The lead and its tools still work; /plugins shows the details.`, variant: 'error' })
+  } catch {
+    // no toast (OpenCode's UI isn't there): OpenCode still logs the thrown error
+  }
+  return err
+}
+
 /** The session.panel slot's input (PanelInput): the panel's session, width and focus. */
 export type TuiPanelInput = { readonly name: string; readonly sessionID: string; readonly width: number; readonly focused: boolean; readonly close: () => void }
 
@@ -84,13 +98,18 @@ export type TuiKeyCommand = {
   readonly run: (input?: string) => void | false | Promise<void>
 }
 
+/** One keymap layer (KeymapLayer). `mode` is the input mode it works in: OpenCode 2.3 defaults to "base", and a
+ *  base layer's commands are not in the command palette (it opens in its own mode) nor in the prompt's slash list, so
+ *  the command that opens the board uses "global" (as OpenCode's own plugins do, T-505). */
+export type TuiKeyLayer = { readonly mode?: string; readonly enabled?: boolean | (() => boolean); readonly priority?: number; readonly commands?: readonly TuiKeyCommand[] }
+
 /** The parts of the tui Context (@opencode/plugin/tui's Context) symcc uses. */
 export type TuiContext = {
   readonly location: { readonly directory: string } | undefined
   readonly theme: unknown
   readonly renderer: { readonly width?: number }
   readonly client: { readonly session: { readonly command: (input: { sessionID: string; name: string; text: string }) => Promise<void> } }
-  readonly keymap: { readonly layer: (factory: () => { readonly enabled?: boolean | (() => boolean); readonly priority?: number; readonly commands?: readonly TuiKeyCommand[] }) => void }
+  readonly keymap: { readonly layer: (factory: () => TuiKeyLayer) => void }
   readonly ui: {
     readonly toast: { show: (o: { readonly title?: string; readonly message: string; readonly variant?: 'info' | 'success' | 'warning' | 'error' }) => void }
     readonly dialog: {
@@ -113,30 +132,38 @@ export type TuiDeps = {
   name?: string
 }
 
-/** The OpenCode theme's color for one of core's color names, else a plain fallback (a theme field may be missing). */
+/** Where the OpenCode theme keeps the color for one of core's color names, and a plain fallback. OpenCode 2.3's theme
+ *  (ResolvedTheme) is nested: text.base, text.muted, text.feedback.warning.base, border.base, and hue.<color>.<100..900>
+ *  scales; its leaves are OpenTUI colors (RGBA). Before T-505 symcc read flat names (theme.text, theme.warning...), so
+ *  it got whole groups of colors as a text color, and OpenCode drew neither the band nor the panel. */
 const THEME_KEY: Record<string, [string, string]> = {
-  ide: ['primary', '#5c9cf5'],
-  claude: ['accent', '#d7875f'],
-  text: ['text', '#d0d0d0'],
-  inactive: ['textMuted', '#808080'],
-  subtle: ['borderSubtle', '#555555'],
-  warning: ['warning', '#e5c07b'],
-  yellow: ['warning', '#e5c07b'],
-  error: ['error', '#e06c75'],
-  red: ['error', '#e06c75'],
-  success: ['success', '#98c379'],
-  green: ['success', '#98c379'],
-  cyan: ['info', '#56b6c2'],
-  suggestion: ['secondary', '#c678dd'],
-  permission: ['secondary', '#c678dd'],
-  autoAccept: ['success', '#98c379'],
+  ide: ['hue.blue.200', '#5c9cf5'],
+  claude: ['hue.orange.200', '#d7875f'],
+  text: ['text.base', '#d0d0d0'],
+  inactive: ['text.muted', '#808080'],
+  subtle: ['border.base', '#555555'],
+  warning: ['text.feedback.warning.base', '#e5c07b'],
+  yellow: ['text.feedback.warning.base', '#e5c07b'],
+  error: ['text.feedback.error.base', '#e06c75'],
+  red: ['text.feedback.error.base', '#e06c75'],
+  success: ['text.feedback.success.base', '#98c379'],
+  green: ['text.feedback.success.base', '#98c379'],
+  cyan: ['text.feedback.info.base', '#56b6c2'],
+  suggestion: ['hue.purple.200', '#c678dd'],
+  permission: ['hue.purple.200', '#c678dd'],
+  autoAccept: ['text.feedback.success.base', '#98c379'],
 }
 
-/** The fg color for a core color name in theme `theme`. */
+/** Whether a theme value is one color (a color string, or an OpenTUI RGBA), not a group of colors. */
+const isColor = (v: unknown) => typeof v === 'string' || (!!v && typeof v === 'object' && 'buffer' in v)
+
+/** The fg color for a core color name in theme `theme`: the theme's color at its path, else the plain fallback (a
+ *  theme may lack a field, and anything that isn't one color is never passed on as a text color). */
 export function colorOf(theme: unknown, name: string): unknown {
-  const [key, fallback] = THEME_KEY[name] ?? ['text', '#d0d0d0']
-  const t = theme && typeof theme === 'object' ? (theme as Record<string, unknown>)[key] : undefined
-  return t ?? fallback
+  const [path, fallback] = THEME_KEY[name] ?? THEME_KEY.text!
+  let v: unknown = theme
+  for (const k of path.split('.')) v = v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined
+  return isColor(v) ? v : fallback
 }
 
 /** OpenTUI's bold text attribute (TextAttributes.BOLD). */
@@ -151,10 +178,14 @@ export function drawLines(r: TuiRuntime, theme: unknown, lines: Line[]): TuiNode
     lines.map(line => {
       const row = r.createElement('box')
       r.setProp(row, 'flexDirection', 'row')
+      // a line too long for its place is cut at the edge, not wrapped piece by piece (each piece is its own text)
+      r.setProp(row, 'overflow', 'hidden')
       r.insert(
         row,
         line.map(seg => {
           const text = r.createElement('text')
+          r.setProp(text, 'flexShrink', 0)
+          r.setProp(text, 'wrapMode', 'none')
           r.setProp(text, 'fg', colorOf(theme, seg.color))
           if (seg.bold) r.setProp(text, 'attributes', BOLD)
           r.insert(text, seg.text)
@@ -200,10 +231,10 @@ export type TuiBoard = {
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x'
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close'
 
 /** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x' }
+const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape' }
 
 /** Starts the TUI part: the band and the board panel, the keys, and the timer that reads the view file. */
 export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
@@ -214,7 +245,6 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [now, setNow] = r.createSignal(d.now())
   const [opened, setOpened] = r.createSignal('')
   const [cursor, setCursor] = r.createSignal(0)
-  const [focused, setFocused] = r.createSignal(false)
   let width = 80
   const refresh = async () => {
     const f = await readViewFile(dir, d.readText, name)
@@ -233,6 +263,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   const draw = () => panelLines(file(), { opened: opened(), cursor: cursor() }, now(), width)
   const press = async (key: PanelKey, sessionID: string) => {
+    // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
+    if (key === 'close') return ctx.ui.panel.close()
     const f = file()
     if (opened() && !hasPage(f, opened())) setOpened('')
     const open = opened()
@@ -262,19 +294,42 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (answer) await send(sessionID, { kind: 'answer', id: open, answer })
   }
   let panelSession = ''
+  // a drawing that fails shows nothing in OpenCode: say it once in a toast instead, so the owner isn't left with an
+  // empty place and no word (T-505)
+  const told = new Set<string>()
+  const failed = (where: string, e: unknown) => {
+    const message = `${name}'s ${where} could not be drawn: ${e instanceof Error ? e.message : String(e)}`
+    if (told.has(message)) return
+    told.add(message)
+    say(message, 'error')
+  }
+  const drawn = (where: string, lines: () => Line[]) => {
+    try {
+      return drawLines(r, ctx.theme, lines())
+    } catch (e) {
+      failed(where, e)
+      return null
+    }
+  }
   const disposers: (() => void)[] = []
   disposers.push(
     ctx.ui.slot({
       append: 'session.panel',
       render: input => {
+        // the panel's own keys: made here, inside the panel (as OpenCode's own diff viewer does), so OpenCode turns
+        // them on only while the panel has the keyboard, and takes them away with the panel
+        ctx.keymap.layer(() => ({
+          enabled: () => input.name === BOARD_PANEL && input.focused,
+          priority: 10,
+          commands: (Object.keys(KEY_BINDS) as PanelKey[]).map(key => ({ title: `${name} board: ${key}`, group: name, bind: KEY_BINDS[key], run: () => void press(key, input.sessionID || panelSession) })),
+        }))
         const col = r.createElement('box')
         r.setProp(col, 'flexDirection', 'column')
         r.insert(col, () => {
           if (input.name !== BOARD_PANEL) return null
           width = Math.max(20, (input.width || 80) - 2)
           panelSession = input.sessionID
-          setFocused(input.focused)
-          return drawLines(r, ctx.theme, draw().lines)
+          return drawn('board panel', () => draw().lines)
         })
         return col
       },
@@ -286,23 +341,25 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       render: () => {
         const col = r.createElement('box')
         r.setProp(col, 'flexDirection', 'column')
-        r.insert(col, () => drawLines(r, ctx.theme, bandLines(file(), now(), Math.max(20, (ctx.renderer.width ?? 80) - 4))))
+        r.insert(col, () => drawn('band above the prompt', () => bandLines(file(), now(), Math.max(20, (ctx.renderer.width ?? 80) - 4))))
         return col
       },
     }),
   )
-  // "/symcc" (and the command palette) opens the board panel
+  // "/symcc-board" and the command palette's "symcc board" open the board panel, or close it when it is open. The
+  // layer is "global": a layer in OpenCode's default "base" mode is in neither the palette nor the slash list. The
+  // panel goes next to a session, so with none open (OpenCode's home page) a toast says to open one first.
   ctx.keymap.layer(() => ({
-    commands: [{ id: 'symcc.board.open', title: `${name} board`, description: `Open the ${name} board panel`, group: name, palette: true, slash: { name }, run: () => void ctx.ui.panel.open(BOARD_PANEL) }],
+    mode: 'global',
+    commands: [{ id: 'symcc.board.open', title: `${name} board`, description: `Open the ${name} board panel`, group: name, palette: true, slash: { name: `${name}-board` }, run: () => openBoard() }],
   }))
-  // the panel's own keys, only while it is open and has the keyboard
-  ctx.keymap.layer(() => ({
-    enabled: () => ctx.ui.panel.current()?.name === BOARD_PANEL && focused(),
-    priority: 10,
-    commands: (Object.keys(KEY_BINDS) as PanelKey[]).map(key => ({ title: `${name} board: ${key}`, group: name, bind: KEY_BINDS[key], run: () => void press(key, panelSession || ctx.ui.panel.current()?.sessionID || '') })),
-  }))
-  void refresh()
-  const stopTimer = d.every(REFRESH_MS, () => void refresh())
+  const openBoard = () => {
+    if (ctx.ui.panel.current()?.name === BOARD_PANEL) return ctx.ui.panel.close()
+    if (!ctx.ui.panel.open(BOARD_PANEL)) say(`Open or start a session first: the ${name} board opens next to a session (then /${name}-board, or "${name} board" in the command palette, ctrl+p).`)
+  }
+  const reread = () => void refresh().catch(e => failed('board', e))
+  reread()
+  const stopTimer = d.every(REFRESH_MS, reread)
   return {
     refresh,
     state: () => ({ opened: opened(), cursor: cursor() }),
