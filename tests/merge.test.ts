@@ -4830,7 +4830,7 @@ test('the board list shows an answered investigation as "answer" with [investiga
 })
 
 test('the task keys of an answered investigation are done, keep as a note and ask more; a change task in review keeps approve and reject', () => {
-  expect(taskKeys('review', false, [], [], false, true).map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a done', 'k keep as a note', 'x ask more'])
+  expect(taskKeys('review', false, [], false, false, true).map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a done', 'k keep as a note', 'x ask more'])
   expect(taskKeys('review').map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a approve', 'x reject', 'd show changes'])
 })
 

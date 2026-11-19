@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { rerunDue } from '../../core/test-timeout'
 import { loadRoles } from '../../app/roles'
@@ -475,7 +475,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         </Box>
       )}
 
-      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable ? answerKeys(overtime ? undefined : asked.asked_files, askedOptions) : [], !!fileWait, isInvestigation(t)).filter(h => !merging || !MERGE_KEYS.includes(h.key)), 'task-keys')}
+      {footer(taskKeys(t.status, !!agentId, reports.map(r => r.try), answerable && choices.length > 0, !!fileWait, isInvestigation(t)).filter(h => !merging || !MERGE_KEYS.includes(h.key)), 'task-keys')}
     </Box>
   )
 }
