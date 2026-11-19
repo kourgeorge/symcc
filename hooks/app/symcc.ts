@@ -20,7 +20,7 @@ import { boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, co
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
-import { askCall, checkEdit, guardFailed, stoppedText } from './ask'
+import { askCall, checkEdit, guardFailed, stoppedText, type AgentKindOf } from './ask'
 import { gitReady } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
 import { changedFiles, changesText } from './review'
@@ -340,11 +340,12 @@ export function toolCallFailed(host: Host, tool: string, agentId: string | undef
  * null: none of those, as the host tells it from its own tool names, e.g. claude/tools.ts editTouch): answers why it
  * is refused, or undefined to decide as usual. A worker's edit outside its change task's files is refused, and the
  * path is recorded as a request to the owner; an edit or shell command reaching the owner's copy outside the worker's
- * folder is refused (see checkEdit). `cwd` is the calling agent's own folder, when the host knows it. An error is not
+ * folder is refused (see checkEdit). `cwd` is the calling agent's own folder, when the host knows it. `kindOf` tells
+ * whether an agent symcc has no record of was started as one of symcc's (default: the host's agent list). An error is not
  * swallowed: the host then calls toolCheckFailed.
  */
-export async function toolCheck(host: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string): Promise<string | undefined> {
-  return agentId ? await checkEdit(host, agentId, touch, cwd) : undefined
+export async function toolCheck(host: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string, kindOf?: AgentKindOf): Promise<string | undefined> {
+  return agentId ? await checkEdit(host, agentId, touch, cwd, kindOf) : undefined
 }
 
 /** toolCheck threw or ran out of time: a worker's, checker's or scout's call is refused (the reason), the lead's goes on (undefined). */

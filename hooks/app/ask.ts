@@ -6,7 +6,7 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
-import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents } from './state'
+import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf, agentOnBoard } from './workers'
@@ -163,9 +163,10 @@ function linkFinder($: Host, wts: readonly string[]): (abs: string) => Promise<b
  * in the project outside its own folder is refused too (bashOutsideFolder), and so is one that writes with git
  * (workerGitWrite), as for a checker; files written through the shell inside its folder are only caught by the
  * merge-time scope check. `cwd` is the folder the worker's shell is in (a shell tool may
- * keep it between calls); relative paths start there when it is inside the worker's folder.
+ * keep it between calls); relative paths start there when it is inside the worker's folder. An agent symcc has no record
+ * of that the host (`kindOf`, by default its agent list) says is one of symcc's is refused (unknownAgentCheck, T-555).
  */
-export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string): Promise<string | undefined> {
+export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string, kindOf: AgentKindOf = () => listedKind($, agentId!)): Promise<string | undefined> {
   if (!agentId || !touch) return undefined
   if (stopped.has(agentId)) return stoppedText()
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
@@ -176,13 +177,12 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   if (scoutRuns.has(agentId)) return scoutCheck($, touch)
   // a worker or checker this copy doesn't hold (another session's copy started it, or this copy lost it in a reload)
   // is found from the board (T-471), as for ask_owner; an unreadable board throws, so the call is refused (guardFailed).
-  // An agent not on the board is none of symcc's: nothing is refused
   const mine = workers.get(agentId)
   const on = mine ? undefined : await agentOnBoard($, agentId)
   if (on?.kind === 'ended') return stoppedText()
   if (on?.kind === 'checker') return checkerCheck($, touch, on.worktree, cwd)
   const w = mine ?? (on?.kind === 'worker' ? on.worker : undefined)
-  if (!w) return undefined
+  if (!w) return unknownAgentCheck(agentId, kindOf)
   if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command)
   const real = await realEdit($, touch.path, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
@@ -198,6 +198,39 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
   return blockedEditText(path)
 }
+
+/**
+ * What the host tells of an agent symcc has no record of: 'symcc' when it was started as one of symcc's agents (in
+ * Claude Code its agent type is symcc's worker or scout type; in OpenCode its session's metadata names a symcc kind),
+ * 'other' for any other agent (the lead's own subagents, e.g. Explore or general-purpose), undefined when the host
+ * can't tell (it doesn't list the agent, or the lookup failed).
+ */
+export type AgentKindOf = () => Promise<'symcc' | 'other' | undefined>
+
+/** Agent `agentId`'s kind from the host's agent list (see AgentKindOf); a list that fails or doesn't name it can't tell. */
+export async function listedKind($: Host, agentId: string): Promise<'symcc' | 'other' | undefined> {
+  const list = await Promise.resolve().then(() => $.agents.list()).catch(() => undefined)
+  const a = list?.find(x => x.id === agentId)
+  return a ? (a.kind === 'other' ? 'other' : 'symcc') : undefined
+}
+
+/**
+ * T-555: an agent that is not the lead and that symcc doesn't know now (no worker, scout or checker of this copy's,
+ * and none the board names), the edit or shell command it would run being already known to touch something: when
+ * the host says it was started as one of symcc's agents (an old try's worker past the ids the board keeps, or a scout
+ * this copy lost track of), it is refused every edit and every shell command (`kindOf`); reads stay allowed, as they
+ * touch nothing. It is remembered (boardAgents), so a guard that crashes later still refuses it. Any other agent
+ * (the lead's own subagents) is left alone, as is one the host can't tell: undefined.
+ */
+async function unknownAgentCheck(agentId: string, kindOf: AgentKindOf): Promise<string | undefined> {
+  if ((await kindOf().catch(() => undefined)) !== 'symcc') return undefined
+  rememberOnBoard(agentId)
+  return unknownAgentText()
+}
+
+/** What an agent of symcc's that symcc has no record of any more is told when it tries to edit a file or run a shell command (see unknownAgentCheck). */
+export const unknownAgentText = () =>
+  `Refused: ${S.N.name} has no record of this agent (it is not the lead, nor a worker, scout or checker the board names now), so it may not edit files or run shell commands. Do nothing more; answer "stopped" and end.`
 
 /** What an agent symcc stopped (or whose task no longer runs it) is told when it tries a tool. */
 export const stoppedText = () => `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.`
