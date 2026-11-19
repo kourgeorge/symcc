@@ -21,6 +21,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Renaming the plugin](#renaming-the-plugin)
 - [For developers](#for-developers-where-the-code-is)
 - [Working on symcc](#working-on-symcc)
+- [Using symcc in OpenCode](#using-symcc-in-opencode)
 
 ---
 
@@ -1299,7 +1300,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
 | [`tests/`](../tests/) | The tests: one file per area (the board logic, the panel, merging, scouts, stats, and so on) |
 | [`hosts/node/`](../hosts/node/) | symcc with no Claude Code: a `Host` made of plain Node/Bun calls (`host.ts`), agents as `claude -p` processes (`runner.ts`), and a tiny command line (`main.ts`). See "Running symcc without Claude Code" below |
-| [`hooks/opencode/`](../hooks/opencode/), [`opencode/`](../opencode/) | symcc in OpenCode 2.x (in progress): the plugin's setup and which copy runs the board (`plugin.ts`), its `Host` (`host.ts`), the edit guard (`guard.ts`), workers and scouts as OpenCode sessions (`agents.ts`), the lead (`lead.ts`), symcc's tools and slash commands (`tools.ts`), the view file for the TUI (`view.ts`), what the TUI draws (`board-view.ts`) and how (`tui.ts`), and the plugin entries OpenCode loads (`opencode/server.ts`, `opencode/tui.ts`). See "symcc in OpenCode (in progress)" below |
+| [`hooks/opencode/`](../hooks/opencode/), [`opencode/`](../opencode/) | symcc in OpenCode 2.x: the plugin's setup and which copy runs the board (`plugin.ts`), its `Host` (`host.ts`), the edit guard (`guard.ts`), workers and scouts as OpenCode sessions (`agents.ts`), the lead (`lead.ts`), symcc's tools and slash commands (`tools.ts`), the view file for the TUI (`view.ts`), what the TUI draws (`board-view.ts`) and how (`tui.ts`), and the plugin entries OpenCode loads (`opencode/server.ts`, `opencode/tui.ts`). See [Using symcc in OpenCode](#using-symcc-in-opencode) |
 
 **Where to add a new feature:** pure logic goes in `hooks/core/`; what symcc does goes in `hooks/app/`; Claude Code wiring goes in `hooks/claude/`; panel pages go in `hooks/claude/ui/`. `hooks/app/` and `hooks/core/` must not import `claude-code` or `node:` modules, or name Claude Code's tools: `sh tests/host-free.sh` (run by `sh scripts/typecheck.sh`) checks this.
 
@@ -1333,19 +1334,72 @@ bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash com
 
 What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended.
 
-### symcc in OpenCode (in progress)
+---
 
-`opencode/` is a plugin for OpenCode 2.x (the 2.3 line; the older 1.x line is different and not supported). It has a server part (`server.ts`) and a TUI part (`tui.ts`) that draws the board. To try it, link the folder into OpenCode's plugins folder, for example `ln -s <symcc folder>/opencode ~/.config/opencode/plugins/symcc`.
+## Using symcc in OpenCode
 
-What works so far:
+symcc also runs in [OpenCode](https://opencode.ai) 2.x (2.3 or newer). The older 1.x line has a different plugin system and is not supported (`opencode --version` tells you which one you have). This is a first version: the board, the lead, workers, scouts and the guard work; a few things are missing or differ from Claude Code (see [What differs from Claude Code](#what-differs-from-claude-code)). The Claude Code plugin is not changed by any of this, and both can be used on the same project.
+
+### Install in OpenCode
+
+From a copy of symcc on your machine (a clone, or the folder you already work in), one command:
+
+```bash
+git clone https://github.com/kourgeorge/symcc && sh symcc/scripts/install-opencode.sh
+```
+
+The script links symcc's `opencode/` folder into OpenCode's plugins folder for you, `~/.config/opencode/plugins/symcc` (or `$XDG_CONFIG_HOME/opencode/plugins/symcc`), so OpenCode loads it in every project. Nothing is copied or downloaded and there is no build step: OpenCode runs symcc's TypeScript files as they are, so a `git pull` in that folder updates symcc (restart OpenCode after it).
+
+- **For one project only:** `sh symcc/scripts/install-opencode.sh --project <your project>` puts the link in `<your project>/.opencode/plugins/symcc` instead. Add `.opencode/plugins/` to that project's `.gitignore`, since the link points into your own machine.
+- **Check it:** start OpenCode in your project and run `opencode plugin list`; `symcc` is listed as a `local` plugin.
+- **Remove it:** the same command with `--remove` (and `--project <folder>` if you used it).
+- **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
+
+`opencode plugin add` only takes an npm package or a git address with a `package.json` at its top, which symcc's repository doesn't have yet, so it can't install symcc for now.
+
+### The lead in OpenCode
+
+The lead is the OpenCode session you type in, in your project's folder (or a folder inside it). There is nothing to start: talk to it as you would in Claude Code ("add a dark mode toggle", "what's going on?"). symcc gives it its guide on every request, and its tools as normal OpenCode tools (`symcc_board`, `symcc_add` and so on). Board updates come into its chat as a message: a normal one waits until its turn ends, and an urgent one (a worker needs you, or its time is up) is taken in mid-turn. When one of symcc's agents ends, OpenCode also posts its own "subagent completed" message; the lead is told to act on symcc's update only.
+
+The slash commands are the same as in Claude Code: `/symcc` (the board), `/symcc-drive`, `/symcc-settings`, `/symcc-stats`, `/symcc-off`, `/symcc-help` and the rest.
+
+symcc's board runs in OpenCode's server, not in its window. By default the window uses OpenCode's background server (`opencode --standalone` starts a private one that ends with the window), so the board and its workers can keep running after you close the window. `opencode service stop` stops the background server, and the board with it; the next start picks the board up again.
+
+### How workers run in OpenCode
+
+Workers, scouts and checkers are OpenCode sessions of their own. Each one is a child of the lead's session and works in its task's own folder (a git worktree, as in Claude Code). The same checks guard them: an edit outside the task's files is refused, a shell command that writes into your own copy is refused (judged by the command's text, since OpenCode can't tell which files a command writes), and an agent symcc stopped is refused anything. Stopping a worker interrupts its session.
+
+**The model per role.** Each role picks its model in its `model:` line, as in Claude Code (the built-in roles in `roles/`, your own in `.symcc/roles/<name>.md`; a scout in its scout file; a checker in the `checker` role):
+
+- A Claude name (`sonnet`, `opus`, `haiku`, `claude-opus-4-5` ...) runs on OpenCode's own **Claude Agent** provider (`claude-agent/sonnet` ...). That provider runs the real Claude Code with your Claude Code login (`claude auth login`). Connect it once in OpenCode.
+- **Any other model** OpenCode knows is written as `provider/model`, for example `model: openai/gpt-5`. You can mix them, for example Claude for the general role and a cheaper model for scouts.
+- With no `model:` line, workers run on `claude-agent/sonnet`, and checkers and scouts on `claude-agent/haiku`.
+
+**About the Claude login.** Whether using your Claude subscription login through OpenCode's Claude Agent provider is allowed is **not settled by Anthropic**. The Agent SDK's own docs say other products may not offer a claude.ai login unless Anthropic approved it, while a Claude Code team member later said nothing changed for Agent SDK use with Max plans; nobody has said publicly whether OpenCode's provider is fine. See the notes in the [OpenCode spike](research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md#is-the-claude-login-allowed-not-settled). Other models avoid the question: give your roles and scouts `provider/model` names (with that provider's own key). Or use symcc in Claude Code itself for Claude workers.
+
+### The board panel and the strip
+
+`/symcc` (or "symcc board" in OpenCode's command palette) opens the board in OpenCode's session panel: the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type.
+
+Above the prompt, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code.
+
+The panel reads `.symcc/view.json` once a second; the board writes that file on every change. Where the TUI part doesn't take `/symcc`, `/symcc` and `/symcc-tasks` print the board as text.
+
+### What differs from Claude Code
+
+- **Cost shows 0 on subscription and free models.** OpenCode reports a cost of 0 for them, so the stats show tokens only.
+- **The lead's tokens are only in the all-time stats.** OpenCode gives the lead's tokens as one total for its whole session, with no times, so `/symcc-stats` with no range counts them, and a ranged one (`7d`, `T-100..T-130`) leaves the lead out and says why.
+- **No hooks for some things.** symcc doesn't follow OpenCode's Plan agent (there is no plan mode for it to see), it can't open the panel by itself when OpenCode starts (use `/symcc`), and it judges a shell command only by its text. Workers can't use OpenCode's `question` tool (nobody watches their sessions to answer it); they use `symcc_ask_owner`, as in Claude Code.
+- **Not built yet:** the settings and scouts pages in the panel (use `/symcc-settings` and `/symcc-scout`), and workers as separate `claude -p` or `codex exec` processes.
+- **When OpenCode stops.** OpenCode 2.3 lets symcc clean up when its server is stopped normally (also with Ctrl-C or `kill`), so the next start, in OpenCode or in Claude Code, drives the board at once. If it was killed hard or crashed, `.symcc/lead.json` stays behind; the next start then follows until that file is 3 minutes old, and takes over by itself, as after a Claude Code crash.
+
+### How it works inside
 
 - **One copy runs the board.** OpenCode starts the plugin once for each folder a session works in, workers' folders too. Only the copy for the project's main folder runs symcc's engine: it takes the lead (`.symcc/lead.json`, the same lock as in Claude Code), starts the timers and seeds the scouts. The copies in workers' folders only guard. If two copies point at the same real folder (on macOS, `/tmp/...` and `/private/tmp/...`), the first one runs the board and the other takes over when the first is unloaded.
-- **Edits are guarded.** Every copy checks OpenCode's permission requests with symcc's usual checks. A worker's edit outside its task's files is refused, a shell command that writes into your copy is refused (judged by the command's text), and an agent symcc stopped is refused anything. A tool-call hook stays behind it as a backstop: it reads OpenCode 2.3's own tools that change files (`edit` and `write` with a `path`, `patch` with its patch text, and `shell` with its command and folder), plus a `multiedit` tool if a plugin adds one. So far these refusals are covered by symcc's tests with a stand-in for OpenCode's session API; checking them in a real OpenCode run (a worker's folder copy refusing an edit outside its files, and a real `patch` call) comes in step 6 (T-467).
-- **Workers, scouts and checkers are OpenCode sessions.** Each one is a session of its own. symcc makes it a child of the lead's session (the last session in your project folder you typed in), moves it into its task's folder and waits until OpenCode shows it there (a child session first opens in its parent's folder), and only then gives it its prompt, once the board names it, so the guard in that folder knows it. When it ends, symcc reads its final answer and its tokens. Stopping one interrupts its session. OpenCode reports a cost of 0 for subscription and free models, so the stats show tokens only. These sessions can't use OpenCode's `question` tool (nobody watches them to answer).
-- **The lead hears from symcc.** The lead is the session you type in (in your project folder; never a child session or one of symcc's own). symcc remembers it for the project while OpenCode runs, also across plugin reloads. Board updates go into it as a prompt: a normal one waits until the lead's turn ends (an idle lead wakes up at once), and an urgent one (a worker needs you, or its time is up) is taken in by a busy lead mid-turn. As in Claude Code, reports close together go in one update, your own board actions wait as "Meanwhile" lines, and starting a worker sends nothing. An update sent before you have typed anywhere waits for your first prompt. When one of symcc's agents ends, OpenCode also posts its own "subagent completed" message to the lead; each board update says that this message is not a second report, so the lead acts on the board update only. OpenCode only gives the lead's tokens as one total for its whole session, with no times, so `/symcc-stats` with no range counts them, and a ranged one (`7d`, `T-100..T-130`) leaves the lead out and says why.
-- **The model per role.** A worker runs on the model in its role's `model:` line (the role file's front matter: a built-in in `roles/`, or your own `.symcc/roles/<name>.md`); a checker on the `checker` role's, and a scout on its scout file's `model:` line. A Claude name (`sonnet`, `opus`, `haiku`, `claude-opus-4-5` ...) runs on OpenCode's own "Claude Agent" provider (`claude-agent/sonnet` ...), which is the real Claude Code signed in with your Claude Code login; connect it once in OpenCode. Any other OpenCode model is written as `provider/model`, for example `model: openai/gpt-5`. With no `model:` line, workers run on `claude-agent/sonnet`, and checkers and scouts on `claude-agent/haiku`.
+- **Edits are guarded** through OpenCode's permission check, with symcc's usual checks. A tool-call hook stays behind it as a backstop: it reads OpenCode 2.3's own tools that change files (`edit` and `write` with a `path`, `patch` with its patch text, and `shell` with its command and folder), plus a `multiedit` tool if a plugin adds one. So far these refusals are covered by symcc's tests with a stand-in for OpenCode's session API; a check in a real OpenCode run (a worker's folder copy refusing an edit outside its files, and a real `patch` call) comes with T-484.
+- **Starting a worker.** symcc makes the session a child of the lead's (the last session in your project folder you typed in), moves it into its task's folder and waits until OpenCode shows it there (a child session first opens in its parent's folder), and only then gives it its prompt, once the board names it, so the guard in that folder knows it. When it ends, symcc reads its final answer and its tokens.
+- **The lead** is never a child session or one of symcc's own. symcc remembers it for the project while OpenCode runs, also across plugin reloads. As in Claude Code, reports close together go in one update, your own board actions wait as "Meanwhile" lines, and starting a worker sends nothing. An update sent before you have typed anywhere waits for your first prompt.
+- **Tools per session.** Each session is offered only what it may use: a worker only `symcc_ask_owner`, a scout or a checker only `symcc_board` and `symcc_stats`; a call of anything else is refused. The tools are normal OpenCode tools, not hidden in OpenCode's Code Mode. An answer meant only for you is put in the chat without waking the model. Where the TUI part doesn't take `/symcc`, `/symcc-help` leaves out the Claude panel's keys and lines.
+- **The panel** runs in OpenCode's TUI, apart from the server part, so it draws from `.symcc/view.json`.
 
-- **The lead's tools and the slash commands.** The lead's tools are normal OpenCode tools named `symcc_board`, `symcc_add` and so on (not hidden in OpenCode's Code Mode), with the same list and inputs as in Claude Code; symcc runs them with the same code. Each session is offered only what it may use, as in Claude Code: a worker only `symcc_ask_owner`, a scout or a checker only `symcc_board` and `symcc_stats`; a call of anything else is refused. The slash commands are the same as in Claude Code (`/symcc`, `/symcc-drive`, `/symcc-settings`, `/symcc-stats`, `/symcc-help` ...). An answer meant only for you is put in the chat without waking the model. The lead gets its guide in its system prompt on every request, so `/symcc-off` counts from the next message. Where the TUI part doesn't take `/symcc` (see below), `/symcc` and `/symcc-tasks` show the board as text, and `/symcc-help` leaves out the Claude panel's keys and lines.
-- **The board panel and the band (first version).** OpenCode's TUI part runs apart from the server part, so the board copy writes the board as the panel sees it to `.symcc/view.json` each time it changes, and the TUI reads that file every second. `/symcc` (or "symcc board" in the command palette) opens the board in OpenCode's session panel: the banner, then the task list grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). These are sent as symcc's slash commands in your session: `/symcc-approve`, `/symcc-reject`, and `/symcc-answer T-5 <answer>` (or `Q-3 <answer>`), which you can type too. Above the prompt, the band shows the header line and the questions and tasks that need you or run, as in Claude Code. Settings and scouts pages come later.
-
-Not built yet: the settings and scouts pages in the panel, and workers as outside `claude -p` or `codex exec` processes. The code is in `hooks/opencode/`.
+The code is in `hooks/opencode/` and `opencode/`; `sh scripts/test-opencode-host.sh` runs its tests (with a stand-in for OpenCode; OpenCode itself is not needed).

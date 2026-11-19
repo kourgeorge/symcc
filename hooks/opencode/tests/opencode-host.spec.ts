@@ -11,10 +11,12 @@
 // a worker sends the lead nothing, and OpenCode's own "subagent completed" message doesn't double symcc's update; the
 // lead's tokens come from session.get. The tools and commands (T-465): every lead tool and ask_owner added with
 // codemode false and run through toolCall, a scout's add and a worker's lead tool refused, each session offered only
-// what it may call, the lead's guide in its system prompt, and each slash command run through runCommand. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
+// what it may call, the lead's guide in its system prompt, and each slash command run through runCommand. T-467: a lead.json left by an OpenCode server stopped without its cleanup never blocks the next start, and
+// scripts/install-opencode.sh links opencode/ into OpenCode's plugins folder. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
 import { test, expect } from 'bun:test'
-import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { addTask, emptyBoard, patchTask, blockedEditText } from '../../board'
+import { mkdtemp, mkdir, readFile, lstat, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
+import { claimLead } from '../../app/lead'
 import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile } from '../../app/state'
 import { resetStore } from '../../app/store'
 import { stoppedText } from '../../app/ask'
@@ -358,6 +360,50 @@ test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and star
     await finish(p)
   }
 }, 30_000)
+
+test('a lead.json left by an OpenCode server stopped without its cleanup (T-467) never blocks the next start: a stale one is taken over at once, a fresh one on the first heartbeat after it goes stale (in Claude Code too); a cleanup lets go at once', async () => {
+  reset()
+  const p = await project()
+  const leadFile = `${p.main}/.symcc/lead.json`
+  const lead = async () => parseLead(await readFile(leadFile, 'utf8').catch(() => null))
+  /** A fresh server process: symcc's memory empty, its own id, the main folder's copy set up (its end kept). */
+  const start = async (id: string) => {
+    await settle().catch(() => undefined)
+    reset()
+    let host!: Host
+    const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: id } })
+    const end = await plugin.setup(fakeCtx(p.main).ctx)
+    await until(() => S.startupDone)
+    return { host, end: end! }
+  }
+  try {
+    // the old server drives, then is killed: its cleanup never runs, so its lead.json stays (fresh at first)
+    await start('opencode-gone')
+    expect(S.driving).toBe(true)
+    expect((await lead())?.session).toBe('opencode-gone')
+    // started again right away: the left heartbeat is still fresh, so the new copy follows for now...
+    const next = await start('opencode-next')
+    expect(S.driving).toBe(false)
+    expect((await lead())?.session).toBe('opencode-gone')
+    expect(S.beat !== null).toBe(true)
+    // ...and its own heartbeat (every 30 s) takes over once nobody refreshed lead.json for LEAD_STALE_MS
+    await writeFile(leadFile, symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 1000))
+    expect(await claimLead(next.host)).toBe(true)
+    expect((await lead())?.session).toBe('opencode-next')
+    // a Claude Code session in the same project sees the same file the same way (whoDrives is shared)
+    expect(whoDrives(symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 1000), 'claude-session', Date.now())).toBe('takeover')
+    // a cleanup that ran (OpenCode 2.3 runs it on SIGTERM and SIGINT, T-467's real run) removes lead.json
+    await next.end()
+    expect(await lead()).toBe(null)
+    // killed long ago: the next start drives at once
+    await writeFile(leadFile, symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 60_000))
+    await start('opencode-later')
+    expect(S.driving).toBe(true)
+    expect((await lead())?.session).toBe('opencode-later')
+  } finally {
+    await finish(p)
+  }
+}, 60_000)
 
 test('a copy in a subfolder of the main project runs the engine (as Claude Code\'s sessionStart does); with the main folder\'s copy running, it waits', async () => {
   reset()
@@ -987,3 +1033,33 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     await p.done()
   }
 }, 60_000)
+
+test('scripts/install-opencode.sh (T-467) links opencode/ into OpenCode\'s plugins folder: for the user (XDG_CONFIG_HOME) or one project (--project), never over a real folder, and --remove takes it away', async () => {
+  const base = await realpath(await mkdtemp('/tmp/symcc-oc-install-'))
+  try {
+    const script = `${PLUGIN_ROOT}/scripts/install-opencode.sh`
+    const env = { XDG_CONFIG_HOME: `${base}/config`, HOME: `${base}/home`, PATH: '/usr/bin:/bin' }
+    const sh = (...args: string[]) => runCommand(['sh', script, ...args], { env })
+    const user = `${base}/config/opencode/plugins/symcc`
+    // where the link at `p` leads (only a link counts)
+    const linkTo = async (p: string) => ((await lstat(p)).isSymbolicLink() ? realpath(p) : 'not a link')
+    expect((await sh()).exitCode).toBe(0)
+    expect(await linkTo(user)).toBe(await realpath(`${PLUGIN_ROOT}/opencode`))
+    // again: the link is replaced, not doubled
+    expect((await sh()).exitCode).toBe(0)
+    expect(await linkTo(user)).toBe(await realpath(`${PLUGIN_ROOT}/opencode`))
+    await mkdir(`${base}/proj`, { recursive: true })
+    expect((await sh('--project', `${base}/proj`)).exitCode).toBe(0)
+    expect(await linkTo(`${base}/proj/.opencode/plugins/symcc`)).toBe(await realpath(`${PLUGIN_ROOT}/opencode`))
+    expect((await sh('--remove')).exitCode).toBe(0)
+    expect(await lstat(user).then(() => 'there', () => 'gone')).toBe('gone')
+    // a real folder named symcc there is the owner's: left alone
+    await mkdir(user, { recursive: true })
+    const r = await sh()
+    expect(r.exitCode).toBe(1)
+    expect(r.stderr).toContain('is not a link')
+    expect((await sh('--project', `${base}/nowhere`)).exitCode).toBe(2)
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})

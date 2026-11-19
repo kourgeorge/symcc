@@ -115,6 +115,24 @@ Other ways (try it from a clone, two steps, update, uninstall) and fixes for com
 4. **Optional, a scout:** a new project starts with example scouts, all paused. Try one with `/symcc-scout <name>`. See [scouts](docs/guide.md#scouts).
 5. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
+## Using symcc in OpenCode
+
+symcc also runs in [OpenCode](https://opencode.ai) 2.3 or newer (not the older 1.x line). This is a first version. Install it with one command, from a clone of symcc:
+
+```bash
+git clone https://github.com/kourgeorge/symcc && sh symcc/scripts/install-opencode.sh
+```
+
+This links symcc into `~/.config/opencode/plugins/symcc`, for all your projects (add `--project <folder>` for one project only, `--remove` to take it out). `opencode plugin list` should then show `symcc`. The Claude Code plugin stays as it is.
+
+- **The lead** is the OpenCode session you type in. Talk to it as in Claude Code; the slash commands (`/symcc`, `/symcc-stats` ...) are the same.
+- **Workers, scouts and checkers** are OpenCode sessions, each in its task's own folder, with the same file checks. Each role picks its model in its `model:` line: a Claude name (`sonnet`, `haiku` ...) runs on OpenCode's Claude Agent provider with your Claude Code login, and any other model is written `provider/model` (for example `openai/gpt-5`).
+- **The board:** `/symcc` opens it in OpenCode's session panel, and a strip above the prompt shows what needs you and what runs.
+- **What differs:** the cost shows 0 on subscription models (tokens are still counted); the lead's tokens are only in the all-time stats; and some things have no OpenCode hook yet (no plan mode, the panel doesn't open by itself, no settings or scouts pages in the panel).
+- **The Claude login:** whether Anthropic allows using your Claude login through OpenCode's Claude Agent provider is not settled. Other models avoid that question.
+
+The details are in the [guide](docs/guide.md#using-symcc-in-opencode).
+
 ## All features
 
 | Feature | What it does |
