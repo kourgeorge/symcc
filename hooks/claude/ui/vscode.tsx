@@ -6,7 +6,7 @@
 // answers (`onLinkPress`, see vsLink); real Buttons stay for the actions on a page (Approve, Retry, Save ...).
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusLine, footerRule } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -89,7 +89,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const d = emptyBoard()
   const name = namesFor(S.N.name)
   const folder = folderName(S.root)
-  const off = v.enabled === false ? offStatusLine(S.N.name) : ''
+  const off = v.enabled === false ? offStatusParts(S.N.name) : []
   const driving = v.driving ?? S.driving
   const cmds = v.test_commands ?? []
   const retries = v.auto_retries ?? d.auto_retries
@@ -107,7 +107,11 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           {S.version ? <Text color={C('inactive')}>{versionMark(S.version)}</Text> : null}
           {folder ? <Text color={C('inactive')}>{` · ${folder}`}</Text> : null}
         </Text>
-        {off ? <Text key="vs-off" wrap="wrap" color={C('warning')}>{off}</Text> : null}
+        {off.length ? (
+          <Text key="vs-off" wrap="wrap" color={C('warning')}>
+            {off.map(p => (p.command ? <Text bold color={C('ide')}>{p.text}</Text> : p.text))}
+          </Text>
+        ) : null}
         <Text key="vs-mode" wrap="wrap">
           <Text bold backgroundColor={C(pillColor(mode))} color={C('inverseText')}>{` ${modeLabel(mode)} `}</Text>
           <Text color={C('inactive')}>{` ${MODE_MEANING[mode]}`}</Text>

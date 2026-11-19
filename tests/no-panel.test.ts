@@ -120,6 +120,14 @@ test('no band: the status text goes nowhere; with a band it is shown', async () 
   expect(c.status.length).toBe(1)
 })
 
+test('symcc off: the line under the prompt says how to turn it on, without the name Claude Code already puts in front', async () => {
+  const c = world(ALL_FEATURES)
+  await publish(c.host, { ...oneTask(), enabled: false })
+  expect(c.status).toEqual(['off · /symcc-on to turn it on'])
+  // as Claude Code shows it: "⚠ symcc: off · /symcc-on to turn it on", the name once
+  expect(`⚠ ${S.N.name}: ${c.status[0]}`).not.toMatch(/symcc: symcc/)
+})
+
 test("no lead usage: the stats say the lead's calls can't be read here, without asking the host", async () => {
   const w = world()
   putBoard(w, oneTask())

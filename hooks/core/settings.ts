@@ -201,8 +201,22 @@ export const setEnabled = (b: Board, on: boolean): Board => ({ ...b, enabled: on
 /** What every lead tool answers while the plugin is off. */
 export const offAnswer = (name: string = DEFAULT_NAME) => `${name} is off. The owner can turn it on with /${name}-on.`
 
-/** The status line while the plugin is off. */
-export const offStatusLine = (name: string = DEFAULT_NAME) => `${name} off · /${name}-on`
+/** A piece of the "off" line; `command` marks the part a view draws in its own color (the /<name>-on command). */
+export type OffPart = { text: string; command?: boolean }
+
+/**
+ * The "off" line in pieces, so every view says the same and can color the command:
+ * "symcc is off · /symcc-on to turn it on". `withName` false leaves the name out ("off · /symcc-on to turn it on"),
+ * for the line under the prompt, where Claude Code already puts "⚠ symcc: " in front.
+ */
+export const offStatusParts = (name: string = DEFAULT_NAME, withName = true): OffPart[] => [
+  { text: withName ? `${name} is off · ` : 'off · ' },
+  { text: `/${name}-on`, command: true },
+  { text: ' to turn it on' },
+]
+
+/** The "off" line as plain text (see offStatusParts). */
+export const offStatusLine = (name: string = DEFAULT_NAME, withName = true) => offStatusParts(name, withName).map(p => p.text).join('')
 
 /** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
 export function spokenDone(ids: string[]): string {
