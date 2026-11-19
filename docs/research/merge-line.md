@@ -1,42 +1,43 @@
 # One merge line for the whole project
 
-The plan from investigation T-544 (the owner said "ok do it"). It is done in 6 steps, one task each;
-step 1 is T-546. Later steps read this note to know where the work is going.
+The plan from investigation T-544 (the owner said "ok do it"). It was built in 6 steps (T-546 to
+T-551), all merged. Later work (T-552) reads this note.
 
 ## Why
 
-Before, a task could reach a merge by many paths, each with its own way of waiting:
+Before, a task could reach a merge by many paths, each with its own way of waiting. `tests.lock` made
+only one task's tests run at a time, but it did not cover the catch-up with main or the move of main.
+So main could move between a task's tests and its merge, and the task then raced, clashed, or was
+tested again. Now there is one line, and main can't move during a turn.
 
-- `mergeTurn` (hooks/app/review.ts) kept merges into one branch in turn, but only inside one copy of
-  the plugin (one session), and not across branches.
-- `tests.lock` (T-416, `withTestLock`) made only one task's tests run at a time, project-wide, but
-  it covered the tests only, not the catch-up with main or the move of main. So main could move
-  between a task's tests and its merge, and the task then raced (`MAX_MERGE_RACES`), clashed
-  (`conflict_tries`, `merge_main`), or was tested again.
+## The flow as built
 
-## Target flow
-
-    hand-back / approve / rerun / "your files are clear" / reload
+    hand-back
+      → prep
+      → checker (if on; runs before the line, runs no project tests)
       → [ONE MERGE LINE, whole project, shared by all sessions, oldest first]
       → at its turn, in one go:
-          catch up with main (git merge)
+          catch up with main
           → tests (skipped if this exact tree already passed, T-527)
           → merge
 
-Main can't move during a turn, because only the task at the front merges. Any failure is one
-normal failed try.
+Only the task at the front merges, so main can't move during a turn. Any failure is one normal failed
+try. The failures are: tests fail, tests time out, a clash with main, the turn ran over its time, or
+main was moved by hand during the turn. There is one time limit per turn.
 
-## The line (step 1, T-546)
+Every way into a merge joins the same line: `finishTry`/`finishWork`, approve
+(`mergeFinished`/`mergeWork`), running the tests again by hand, `retryFileWaits` → `mergeWaiting`, and
+`restartCheckers` → `checkHeldAgain`. The checker (`afterChecker`, hooks/app/workers.ts) is done
+before the task joins; there is no second trip through the line after it.
+
+## The line
 
 - Kept in `<board folder>/merge-line.json` (`MERGE_LINE_FILE`): a list of entries, oldest first.
   Each entry has the task id, a key for that one go, the session, when it joined, and `at` (the last
   time its copy of the plugin said it is alive).
 - `inMergeLine` (hooks/app/merge-line.ts) joins the back of the line, waits until it is at the front,
   runs the turn, and leaves however the turn ends. `checkAndMerge` runs its whole turn
-  (`upToDateTestMove`: catch-up, tests, move) through it, so every entry point joins the same line:
-  `finishTry`/`finishWork`, `afterChecker`'s second `checkAndMerge`, approve
-  (`mergeFinished`/`mergeWork`), `rerunTests`, `retryFileWaits` → `mergeWaiting`, and
-  `restartCheckers` → `checkHeldAgain`.
+  (`upToDateTestMove`: catch-up, tests, move) through it.
 - Changes to the file are made under the board lock, so two sessions never lose each other's change.
 - Tasks of one copy wake each other when one leaves (no polling); a task with another session's task
   in front looks again every 2 seconds (`MERGE_LINE_POLL_MS`).
@@ -49,20 +50,15 @@ normal failed try.
   it is now is 1). During its turn the steps show as before (prep / test / merge). The time limit
   stops while it waits and starts from zero when its turn begins.
 - A step given up as stuck (`release`) leaves the line at once, so the ones behind it go on.
-- `mergeLineBusy` replaced `testsRunningNow` for the timed-out-tests rerun (it waits while anyone is
-  in line).
-- For now the outcomes stay the same: the race retry, conflict handling and time-out paths are kept;
-  the later steps cut them.
 
-## The 6 steps
+## History: the 6 steps (all merged)
 
-1. This line (T-546): one merge line for the whole project; every way into a merge joins it.
-2. A test time-out is a normal failure: cut `test_rerun`, `rerun_minutes`, `rerunTimedOutTests`, and
-   the "ran out of time twice" question.
-3. A clash with main is one normal failed try: cut `conflict_tries`, `merge_main`, `MAX_CONFLICT_TRIES`.
-4. One time limit for the turn: cut the `ranOverBefore` / `mergeRanOverBefore` split.
-5. Cut `MAX_MERGE_RACES` and tidy the notes and the guide.
-6. The checker runs before the task joins the line: cut `afterChecker`'s second trip.
+1. T-546: the line itself; every way into a merge joins it.
+2. A test time-out became a normal failure (the timed-out-tests rerun was cut).
+3. A clash with main became one normal failed try (the extra conflict tries were cut).
+4. One time limit for the turn (the "ran over before" split was cut).
+5. The race retry was cut; notes and guide tidied.
+6. The checker runs before the task joins the line; its second trip was cut.
 
 ## Costs
 
