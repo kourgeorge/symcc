@@ -181,7 +181,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   and search to narrow the list, and task to see one task with its latest report.
   Each task merges into the branch you were on when it was made (there is no branch
   setting); change merge_into moves one task to another existing branch.
-  settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
+  settings: test_commands (must pass before a merge), test_minutes (how many minutes each test
+  command may run before merging, 1-120, 10 by default), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer makes symcc ask you for more time), auto_retries (new tries on their own
   after failing tests, 2 by default), archive_days (done and dropped tasks older than this
   many days move to the archive, 14 by default, 0 = never), ${features.panel ? `open_on_start (open the board panel when a

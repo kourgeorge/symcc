@@ -1,5 +1,5 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
+import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, taskTestMinutes, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -978,7 +978,8 @@ async function rerunTests(host: Host, t0: BoardTask) {
     })
     if (!t) return
     beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
-    const limitMs = finishLimitMs(b.test_commands.length, testMinutesOf(b))
+    // the owner may have given only this task more time for this rerun (rerun_minutes, T-510)
+    const limitMs = finishLimitMs(b.test_commands.length, taskTestMinutes(b, t))
     const how = await withLimit(host, limitMs, async (gaveUp, over, turn) => {
       const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(id))
       const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
@@ -1207,9 +1208,10 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
     }
     const question = timedOutTwiceQuestion(t.id)
     const options = [...TIMED_OUT_OPTIONS]
+    const used = taskTestMinutes(b, t as BoardTask)
     if (!(await write(cur => ({ status: 'waiting', question, options, note: 'waiting for you', test_rerun: 2, merge_wait: undefined, merge_main: false, history: [...cur.history, line, 'the tests ran out of time twice; nothing failed; waiting for the owner'] })))) return
     sayNeedsYou(host, b, t, question)
-    tellLead(host, `${question} The tests of ${t.id} "${t.title}" ran out of time (${min} min) twice; nothing failed, and its work is kept on its branch ${taskBranch(t)}. It now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); then ${S.N.name} change ${t.id} with answer: Run the tests again (only the tests run again, no new try), answer: Give them more time (the test_minutes setting goes from ${testMinutesOf(b)} to ${moreTestMinutes(testMinutesOf(b))} min for every task, and only the tests run again), or answer: Stop it (it is paused, its work kept).`, { urgent: true })
+    tellLead(host, `${question} The tests of ${t.id} "${t.title}" ran out of time (${min} min) twice; nothing failed, and its work is kept on its branch ${taskBranch(t)}. It now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); then ${S.N.name} change ${t.id} with answer: Run the tests again (only the tests run again, no new try), answer: Give them more time (only this task's next test run gets ${moreTestMinutes(used)} min per test command instead of ${used}; the test_minutes setting stays ${testMinutesOf(b)} for every other task and afterwards), or answer: Stop it (it is paused, its work kept).`, { urgent: true })
     return
   }
   if (r.ask) {
@@ -1840,7 +1842,8 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
 /**
  * T-511: the owner's `answer` to task `id`'s "the tests ran out of time twice" question (or a retry of a task whose
  * tests wait to run again): "Run the tests again" runs only its tests again (no worker, no new try), now (it still
- * waits for the test lock); "Give them more time" does the same after raising the board's test_minutes (moreTestMinutes);
+ * waits for the test lock); "Give them more time" does the same with twice the task's current limit (moreTestMinutes), for
+ * that one rerun only (rerun_minutes; the board's test_minutes is not changed);
  * "Stop it" pauses it, its work kept. undefined when the task doesn't wait for that, or for
  * any other answer (then the answer goes to a fresh try as usual).
  */
@@ -1853,18 +1856,20 @@ export async function answerTimedOut(host: Host, id: string, answer: string): Pr
   const out = await change(host, x => {
     const cur = find(x, id)
     if (!cur || !(askedTimedOut(cur) || rerunDue(cur))) return [x, null] as [Board, null]
-    minutes = { was: testMinutesOf(x), now: pick === 'more' ? moreTestMinutes(testMinutesOf(x)) : testMinutesOf(x) }
-    const more = pick === 'more' ? `; test_minutes ${minutes.now === minutes.was ? `stays at its most, ${minutes.now}` : `${minutes.was} → ${minutes.now}`} min` : ''
+    // T-510: "Give them more time" is for this one task's next test run only (rerun_minutes); the board's test_minutes stays
+    const was = taskTestMinutes(x, cur)
+    minutes = { was, now: pick === 'more' ? moreTestMinutes(was) : testMinutesOf(x) }
+    const more = pick === 'more' ? `; its next test run may take ${minutes.now} min per test command${minutes.now === was ? ' (the most)' : ` (was ${was})`}` : ''
     const patch: Partial<BoardTask> = pick !== 'stop'
-      ? { status: 'waiting', question: null, test_rerun: 1, note: `the owner asked to run the tests again${pick === 'more' ? ` with more time (${minutes.now} min each)` : ''}; running them again once, no new try`, history: [...cur.history, `${tryLabel(cur)}: the owner asked to run the tests again (no new try)${more}`] }
-      : { status: 'paused', question: null, test_rerun: undefined, note: TIMED_OUT_STOPPED_NOTE, history: [...cur.history, `${tryLabel(cur)}: the owner stopped it after its tests ran out of time twice; its work is kept`] }
-    const y = patchTask(pick === 'more' ? { ...x, test_minutes: minutes.now } : x, id, patch, now())
+      ? { status: 'waiting', question: null, test_rerun: 1, rerun_minutes: pick === 'more' ? minutes.now : undefined, note: `the owner asked to run the tests again${pick === 'more' ? ` with more time (${minutes.now} min each)` : ''}; running them again once, no new try`, history: [...cur.history, `${tryLabel(cur)}: the owner asked to run the tests again (no new try)${more}`] }
+      : { status: 'paused', question: null, test_rerun: undefined, rerun_minutes: undefined, note: TIMED_OUT_STOPPED_NOTE, history: [...cur.history, `${tryLabel(cur)}: the owner stopped it after its tests ran out of time twice; its work is kept`] }
+    const y = patchTask(x, id, patch, now())
     return [y, find(y, id)!] as [Board, BoardTask]
   })
   if (!out) return undefined
   if (pick === 'stop') return `${id} is paused: its tests ran out of time twice and the owner stopped it. Its work is kept in its folder and branch; ${S.N.name} resume ${id} starts a new try from there.`
   void rerunTests(host, out).catch(() => undefined)
-  const more = pick !== 'more' ? '' : minutes.now === minutes.was ? `test_minutes is already at its most (${minutes.now} min); ` : `test_minutes is now ${minutes.now} min (was ${minutes.was}), for every task's test commands; `
+  const more = pick !== 'more' ? '' : `only this run of its tests may take ${minutes.now} min per test command${minutes.now === minutes.was ? ' (already the most)' : ` (was ${minutes.was})`}; the test_minutes setting stays as it is; `
   return `${id}: ${more}only its tests run again now (once other tests are done), with no new worker try; the board says how it ends.`
 }
 

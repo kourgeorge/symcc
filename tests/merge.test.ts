@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS, testsRunningNow } from '../hooks/app/review'
-import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, testLockStaleMs, testMinutesOf, testTimeoutMs, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
+import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, testLockStaleMs, testMinutesOf, testTimeoutMs, taskTestMinutes, putTask, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -5639,7 +5639,7 @@ test("T-510: the test lock goes stale after twice test_minutes: a 25 min old loc
   }
 })
 
-test('T-510: "Give them more time" doubles test_minutes (at most 120) and runs only the tests again', async () => {
+test('T-510: "Give them more time" doubles only that task\'s next test run (at most 120); the board\'s test_minutes and other tasks keep theirs', async () => {
   expect(parseTimedOutAnswer('Give them more time')).toBe('more')
   expect(parseTimedOutAnswer('more time please')).toBe('more')
   expect([moreTestMinutes(10), moreTestMinutes(80), moreTestMinutes(MAX_TEST_MINUTES)]).toEqual([20, 120, 120])
@@ -5647,23 +5647,56 @@ test('T-510: "Give them more time" doubles test_minutes (at most 120) and runs o
   const c = await timingOut(() => slow)
   await rerunTimedOutTests(c.w.$)
   expect((await c.t1()).test_rerun).toBe(2)
-  expect(leadQueue.join('\n')).toContain('answer: Give them more time (the test_minutes setting goes from 10 to 20 min')
+  expect(leadQueue.join('\n')).toContain("answer: Give them more time (only this task's next test run gets 20 min per test command instead of 10; the test_minutes setting stays 10")
   slow = false
   c.w.calls.length = 0
   const limits = testLimits(c.w)
   const out = await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Give them more time' })
-  expect(out).toContain('test_minutes is now 20 min (was 10)')
+  expect(out).toContain('only this run of its tests may take 20 min per test command (was 10); the test_minutes setting stays as it is')
   expect(out).toContain('only its tests run again')
-  expect((await load(c.w.$)).test_minutes).toBe(20)
   for (let i = 0; i < 5000 && (await c.t1()).status !== 'done'; i++) await Promise.resolve()
   const t = await c.t1()
   expect(t.status).toBe('done')
   expect(t.attempts).toBe(1)
+  // the rerun of T-1 had the doubled limit; the board's setting is unchanged and the task's extra time is gone
   expect(limits).toEqual([20 * MIN])
   expect(c.spawned()).toBe(0)
-  expect(t.history.some(l => l.includes('test_minutes 10 → 20 min'))).toBe(true)
+  const b = await load(c.w.$)
+  expect(b.test_minutes).toBe(undefined)
+  expect(testMinutesOf(b)).toBe(10)
+  expect(t.rerun_minutes).toBe(undefined)
+  expect(t.history.some(l => l.includes('its next test run may take 20 min per test command (was 10)'))).toBe(true)
   const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'x' }
-  expect(answeredLeadLine(asked, 'Give them more time')).toContain('the test_minutes setting goes up')
+  expect(answeredLeadLine(asked, 'Give them more time')).toContain('the test_minutes setting is not changed')
+})
+
+test("T-510: while one task has more time for its rerun, another task's tests still use the board's test_minutes", async () => {
+  const w = world()
+  const limits = testLimits(w)
+  const [b0, t] = boardWith('auto', ['npm test'])
+  const b = { ...b0, test_minutes: 15 }
+  const slowOne = { ...t, status: 'doing' as const, test_rerun: 1 as const, rerun_minutes: 30 }
+  expect(taskTestMinutes(b, slowOne)).toBe(30)
+  expect(testTimeoutMs(b, slowOne)).toBe(30 * MIN)
+  expect(taskTestMinutes(b, { ...slowOne, test_rerun: undefined })).toBe(15)
+  expect((await checkAndMerge(w.$, slowOne, WT, b)).ok).toBe(true)
+  expect((await checkAndMerge(w.$, { ...t, id: 'T-2' }, WT, b)).ok).toBe(true)
+  expect(limits).toEqual([30 * MIN, 15 * MIN])
+  // the extra time belongs to a rerun only: a task leaving it loses it
+  const back = find(patchTask(putTask(b, slowOne), 'T-1', { test_rerun: undefined }, ISO), 'T-1')!
+  expect(back.rerun_minutes).toBe(undefined)
+})
+
+test('T-510: "Run the tests again" after a rerun with more time goes back to the board\'s test_minutes', async () => {
+  const c = await timingOut(() => true)
+  await rerunTimedOutTests(c.w.$)
+  await change(c.w.$, x => patchTask(x, 'T-1', { rerun_minutes: 40 }, ISO))
+  expect((await c.t1()).rerun_minutes).toBe(40)
+  await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Run the tests again' })
+  for (let i = 0; i < 50; i++) await Promise.resolve()
+  expect((await load(c.w.$)).test_minutes).toBe(undefined)
+  const t = await c.t1()
+  expect(t.rerun_minutes).toBe(undefined)
 })
 
 test("T-511: a real test failure after a worker's try keeps today's behaviour: a new try", async () => {

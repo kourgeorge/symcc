@@ -262,8 +262,9 @@ happens, never the words in its hand-back:
    If they pass, the task goes on as usual (review, the checker, or the merge); if a test
    really fails, it gets a new try as usual. If they run out of time a second time, the
    task waits for you ("the tests ran out of time twice; nothing failed") with the choices
-   **Run the tests again** (only the tests run again), **Give them more time** (`test_minutes`
-   is doubled, up to 120, for every task, and only the tests run again) and **Stop it** (the
+   **Run the tests again** (only the tests run again), **Give them more time** (only the tests run
+   again, this once with twice the task's limit, up to 120 minutes; `test_minutes` itself and
+   other tasks are not changed, and later runs of this task use `test_minutes` again) and **Stop it** (the
    task is paused, its work kept). "retry T-3" on such a task also runs only its tests again.
    An approve whose tests run out of time stays in review (approve it again).
    **Time limit.** Each test command may run up to `test_minutes` (10 minutes by default; a

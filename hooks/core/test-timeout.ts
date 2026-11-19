@@ -35,13 +35,13 @@ export const RERUN_RUNNING_NOTE = 'running only the tests again (they ran out of
 /** The owner's question after the second time-out. */
 export const timedOutTwiceQuestion = (id: string) => `${id}: the tests ran out of time twice; nothing failed. Run them again, give them more time, or stop it?`
 
-/** The choices for timedOutTwiceQuestion: "Give them more time" raises the test_minutes setting (see moreTestMinutes) and runs them again. */
+/** The choices for timedOutTwiceQuestion: "Give them more time" runs them again with twice the task's limit, for that run only (see moreTestMinutes). */
 export const TIMED_OUT_OPTIONS = ['Run the tests again', 'Give them more time', 'Stop it'] as const
 
 /** The most minutes the test_minutes setting may be. */
 export const MAX_TEST_MINUTES = 120
 
-/** test_minutes after the owner's "Give them more time": twice `min`, at most MAX_TEST_MINUTES. */
+/** A task's test limit for its next rerun after the owner's "Give them more time": twice `min`, at most MAX_TEST_MINUTES. */
 export const moreTestMinutes = (min: number) => Math.min(MAX_TEST_MINUTES, Math.max(1, Math.round(min)) * 2)
 
 /** The note of a task stopped by the owner after its tests ran out of time twice. */
@@ -73,7 +73,7 @@ export function answeredLeadLine(t: { id: string; status?: unknown; test_rerun?:
   const said = `The owner answered ${t.id} ("${brief(answer)}")`
   const pick = askedTimedOut(t) ? parseTimedOutAnswer(answer) : null
   if (pick === 'again') return `${said}: only its tests run again (they ran out of time twice), with no worker and no new try.`
-  if (pick === 'more') return `${said}: the test_minutes setting goes up (to twice what it was, at most ${MAX_TEST_MINUTES} min) and only its tests run again, with no worker and no new try.`
+  if (pick === 'more') return `${said}: only its tests run again, this once with twice the time per test command (at most ${MAX_TEST_MINUTES} min; the test_minutes setting is not changed), with no worker and no new try.`
   if (pick === 'stop') return `${said}: it is paused after its tests ran out of time twice; its work is kept.`
   return `${said}; it went back to work.`
 }

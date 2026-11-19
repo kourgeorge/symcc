@@ -1,5 +1,5 @@
 // Who drives the board, and which session owns a running task.
-import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf, DEFAULT_TEST_MINUTES, testMinutesOf } from './board-file'
+import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf, DEFAULT_TEST_MINUTES, taskTestMinutes } from './board-file'
 import { parseStamp } from './text'
 import { stoppedLine, stopEnd } from './history'
 import { addCommits, shortSha } from './commits'
@@ -153,8 +153,8 @@ export const FINISH_BEAT_MS = 30_000
 export const FINISH_STALE_MS = 3 * 60_000
 /** the longest one test command may run before it is stopped, with the default test_minutes (see testTimeoutMs) */
 export const TEST_TIMEOUT_MS = DEFAULT_TEST_MINUTES * 60_000
-/** The longest one test command of board `b` may run, in ms (its test_minutes, see testMinutesOf). */
-export const testTimeoutMs = (b: { test_minutes?: unknown }): number => testMinutesOf(b) * 60_000
+/** The longest one test command of task `t` on board `b` may run, in ms (the board's test_minutes, or the task's own rerun_minutes: see taskTestMinutes). */
+export const testTimeoutMs = (b: { test_minutes?: unknown }, t?: { test_rerun?: unknown; rerun_minutes?: unknown } | null): number => taskTestMinutes(b, t) * 60_000
 /** the time a checking and merging step gets for git and the board, on top of its test commands */
 export const FINISH_GIT_MS = 5 * 60_000
 
@@ -244,7 +244,7 @@ export const notMergedText = (id: string, n: number, into: string) => `${id}'s b
  * it had are cleared.
  */
 export function mergedOutside(t: BoardTask, sha: string, by: string, commits: readonly string[], now: string): BoardTask {
-  const { session: _s, finishing: _f, checking: _c, test_output: _o, merge_wait: _w, time_ask: _a, wrap_up: _u, test_rerun: _r, options: _p, asked_files: _af, ...rest } = t
+  const { session: _s, finishing: _f, checking: _c, test_output: _o, merge_wait: _w, time_ask: _a, wrap_up: _u, test_rerun: _r, rerun_minutes: _rm, options: _p, asked_files: _af, ...rest } = t
   const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
   return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), mergedOutsideLine(sha, by)], ...(runs ? { runs } : {}) }

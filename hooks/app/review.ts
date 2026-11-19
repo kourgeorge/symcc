@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, TEST_LOCK_FILE, testLockStaleMs, testMinutesOf, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
+import { type Blockers, type BoardTask, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, TEST_LOCK_FILE, testLockStaleMs, taskTestMinutes, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -366,9 +366,9 @@ export function resetTestLine() {
  */
 async function testLockStale($: Host, me: string, held: string, fileMs?: number): Promise<boolean> {
   const b = await load($).catch(() => null)
-  // the board's test_minutes sets how long a test command may run, so how old a lock may get (a board that can't be read: the default)
-  if (isLockStale(held, Date.now(), fileMs, testLockStaleMs(testMinutesOf(b ?? {})))) return true
   const l = parseTestLock(held)
+  // how long the holder's test commands may run (the board's test_minutes, or its task's own more time) sets how old a lock may get (a board that can't be read: the default)
+  if (isLockStale(held, Date.now(), fileMs, testLockStaleMs(taskTestMinutes(b ?? {}, l && b ? find(b, l.task) : undefined)))) return true
   if (!l) return false
   if (l.task === me) return true
   if (!b) return false
@@ -525,10 +525,10 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       for (const cmd of b.test_commands) {
         await refresh()
         let thrown: string | undefined
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b, t as BoardTask) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
         // T-511: stopped by its time limit, not failed: no test output, so no new try is started for it (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
-          const min = limitMinutes(testTimeoutMs(b))
+          const min = limitMinutes(testTimeoutMs(b, t as BoardTask))
           return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min) }
         }
         if (r.exitCode !== 0) {
