@@ -118,6 +118,12 @@ const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warnin
 /** A short date and time from an ISO time: "2026-11-19 14:05". */
 const when = (iso: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '?')
 
+/** Whether the view still has a page for this id (a task or a question); an open task that left the view
+ *  (archived, removed, or the view file gone) falls back to the list. */
+export function hasPage(f: ViewFile | null, id: string): boolean {
+  return !!id && !!f && (f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id))
+}
+
 /** The keys of the list, and of a task's or question's page (the main actions only; settings and scouts come later). */
 export function panelKeys(f: ViewFile | null, opened: string): KeyHint[] {
   if (!opened) return [{ key: '↑↓', word: 'move' }, { key: 'Enter', word: 'open' }, { key: 'Esc', word: 'close' }]

@@ -187,3 +187,39 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   board.stop()
   expect(stopped).toBe(true)
 })
+
+test('startTui: when the open task leaves the view (or the view file goes away), the panel goes back to the list and its keys work again', async () => {
+  const f = viewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  await board.press('open', 's')
+  const first = board.state().opened
+  expect(first).not.toBe('')
+  // the open task is archived: the view file no longer has it
+  files.set('/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => t.id !== first) } }))
+  await board.refresh()
+  expect(board.state().opened).toBe('')
+  await board.press('down', 's')
+  expect(board.state().cursor).toBe(1)
+  await board.press('open', 's')
+  expect(board.state().opened).not.toBe('')
+  // the view file goes away: back to the list too
+  files.clear()
+  await board.refresh()
+  expect(board.state().opened).toBe('')
+  board.stop()
+})

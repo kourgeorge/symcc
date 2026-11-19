@@ -13,7 +13,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, answerOptions, actionCommand, moveCursor, OWN_ANSWER, type ViewFile, type Line, type PanelAction } from './board-view'
+import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, type ViewFile, type Line, type PanelAction } from './board-view'
 
 /** The panel's name for ui.panel.open (OpenCode shows the session.panel claims for the open name). */
 export const BOARD_PANEL = 'symcc.board'
@@ -181,8 +181,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [focused, setFocused] = r.createSignal(false)
   let width = 80
   const refresh = async () => {
-    setFile(await readViewFile(dir, d.readText, name))
+    const f = await readViewFile(dir, d.readText, name)
+    setFile(f)
     setNow(d.now())
+    // the open task left the view: back to the list, so the list's keys work again
+    if (opened() && !hasPage(f, opened())) setOpened('')
   }
   const say = (message: string, variant: 'info' | 'error' = 'info') => ctx.ui.toast.show({ title: name, message, variant })
   const send = async (sessionID: string, a: PanelAction) => {
@@ -195,6 +198,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const draw = () => panelLines(file(), { opened: opened(), cursor: cursor() }, now(), width)
   const press = async (key: PanelKey, sessionID: string) => {
     const f = file()
+    if (opened() && !hasPage(f, opened())) setOpened('')
     const open = opened()
     if (!open) {
       const ids = draw().ids
