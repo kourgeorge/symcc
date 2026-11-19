@@ -1,5 +1,5 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutReport, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { scoutRow, scoutFile, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -77,7 +77,6 @@ export async function scoutsPage($: $, pane: PaneParts) {
   if (sc) {
     const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
-    const report = scoutReport(sc.last_report)
     const host = claudeHost($)
     // its runs, newest first, each with the tasks made from it (the board's tasks from this scout)
     const runs = await loadScoutRunHistory(host, sc.name)
@@ -158,21 +157,16 @@ export async function scoutsPage($: $, pane: PaneParts) {
           {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('inactive')}>(not loaded yet: run /{S.N.name}-scouts)</Text>}
         </Box>
 
-        <Box flexDirection="column">
-          {heading('Last report')}
-          {report === 'nothing found' ? <Text color={C('inactive')}>{sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)'}</Text> : paragraphs(report)}
+        {/* no report text here: a run's report shows on its page (Enter on the run); the newest run is first */}
+        <Box key="scout-runs" flexDirection="column">
+          {heading('Runs')}
+          {shown.length ? <Text color={C('inactive')}>{'  Enter on a run shows its report'}</Text> : <Text color={C('inactive')}>{'  (no runs yet)'}</Text>}
+          {shown.map(x => (
+            <Button key={row(`scout-run:${x.run.ended}`)} plain label={`run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={showRun(x.run.ended)}>
+              <Text color={C(scoutOutcomeTone(x.run.outcome))}>{`  ${scoutRunLine(x.run, x.tasks, nowMs)}`}</Text>
+            </Button>
+          ))}
         </Box>
-
-        {shown.length ? (
-          <Box key="scout-runs" flexDirection="column">
-            {heading('Runs')}
-            {shown.map(x => (
-              <Button key={row(`scout-run:${x.run.ended}`)} plain label={`run ${scoutRunLine(x.run, x.tasks, nowMs)}`} onPress={showRun(x.run.ended)}>
-                <Text color={C(scoutOutcomeTone(x.run.outcome))}>{`  ${scoutRunLine(x.run, x.tasks, nowMs)}`}</Text>
-              </Button>
-            ))}
-          </Box>
-        ) : null}
 
         <Box flexDirection="column">
           {heading('File')}
