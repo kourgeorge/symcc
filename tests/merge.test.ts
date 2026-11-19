@@ -710,6 +710,33 @@ async function finishedWith(changed: string[], flag?: 'off' | 'ask' | 'review') 
   return { w, t: find(await load(w.$), 'T-1')!, told: leadQueue.join('\n') }
 }
 
+// T-492 (T-452 follow-up): this is here, not in turn-complete.test.tsx, because Claude Code's turn.complete carries no
+// dollar cost; a host that knows one (OpenCode) calls workerFinished with it, as this test does.
+test("T-492: a hand-back kept while board.json can't be read keeps the try's dollar cost; once the board is back the check finishes it with that cost on its last run", async () => {
+  const w = world({ changed: ['src/a.ts', 'src/a.test.ts'] })
+  const [b] = boardWith('auto', ['npm test'], { runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  const good = w.files.get(BOARD)!
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  w.put(BOARD, '{ not json')
+  await workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, undefined, 0.42)
+  expect(w.files.get(BOARD)).toBe('{ not json')
+  // the owner puts a valid board back; the regular check finishes the kept hand-back (without waiting for it)
+  w.put(BOARD, good)
+  const status = () => (JSON.parse(w.files.get(BOARD)!) as Board).tasks[0]!.status
+  S.driving = true
+  try {
+    await check(w.$)
+    for (let i = 0; i < 20_000 && (status() !== 'done' || finishingSet.size); i++) await Promise.resolve()
+  } finally {
+    S.driving = false
+  }
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.runs?.at(-1)?.cost).toBe(0.42)
+})
+
 test('tests_with_changes ask (the default): a code change with no test file merges and the lead is told', async () => {
   const { w, t, told } = await finishedWith(['src/a.ts'])
   expect(t.status).toBe('done')
