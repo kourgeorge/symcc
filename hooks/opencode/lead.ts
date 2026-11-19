@@ -7,22 +7,27 @@
 // symcc's agents are children of the lead's session, and OpenCode tells a parent on its own when a child ends (a
 // synthetic "subagent completed" message). symcc's board update about the same agent says what happens next, so each
 // update is labelled: the lead takes the board update as the one to act on, and the automatic message as no news.
-// The lead's usage: its tokens from session.get (cost is 0 for subscription models). OpenCode 2.3 gives them only as
-// the whole session's total, with no time per message (session.context's messages carry no tokens or times), so that
-// total is counted only in the stats for everything; a ranged call ("7d", T-100..T-130) leaves the lead out and says why.
-// See docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, point 3.
+// The lead's usage (T-486): one entry per assistant message of the lead's session (session.context, the one call of
+// OpenCode 2.3's plugin context that lists a session's messages), each with its own tokens and stamped with its own time
+// (completed, else created), so the stats for "7d" and a task range count the lead within the span. Reasoning tokens
+// count as output, as for workers (ocTokens). Cost is 0 for subscription models, so it is not read. If the messages
+// can't be read, the whole session's total from session.get is counted in the stats for everything only, and a ranged
+// call leaves the lead out and says why.
 import type { HostLead, LeadSend, LeadUsage } from '../host'
-import { cleanTokens } from '../core/runs'
 import type { OcSessionApi } from './ctx'
+import { ocTokens } from './agents'
 
 /** Where the lead's tokens come from, for the stats. */
-export const OPENCODE_LEAD_FROM = "OpenCode's session.get on the lead's session (the whole session so far, counted only in the stats with no range)"
+export const OPENCODE_LEAD_FROM = "OpenCode's session.context on the lead's session (each answer's own tokens, at the time it finished)"
+
+/** Where the lead's tokens come from when its messages couldn't be read: the whole session's total. */
+export const OPENCODE_LEAD_TOTAL_FROM = "OpenCode's session.get on the lead's session (the whole session so far, since its messages couldn't be read)"
 
 /** Why the lead's tokens can't be told before any lead session is known. */
 export const NO_LEAD_YET = 'no OpenCode lead session yet (the owner has not typed in one)'
 
-/** Why the lead's tokens are left out of a ranged stats call ("7d", an id range). */
-export const LEAD_WHOLE_SESSION_ONLY = "OpenCode only tells the lead session's whole total, not when each part was used, so it is counted only in the stats with no range"
+/** Why the lead is left out of a ranged stats call ("7d", an id range) when its messages couldn't be read. */
+export const leadMessagesUnread = (why: string) => `couldn't read the OpenCode lead session's messages (${why}), and its whole total can't be split by time`
 
 /** The label at the end of every board update: OpenCode's own "subagent completed" messages are not news of their own. */
 export const SUBAGENT_LABEL =
@@ -86,11 +91,25 @@ export function opencodeLead(api: OcSessionApi, o: OpencodeLeadOptions): Opencod
     async usage(_root, range, nowMs): Promise<LeadUsage> {
       const id = o.lead()
       if (!id) return { leadProblem: NO_LEAD_YET }
-      if (range.kind !== 'all') return { leadProblem: LEAD_WHOLE_SESSION_ONLY }
+      let unread: string
       try {
-        const t = (await api.get({ sessionID: id })).tokens
-        const tokens = t ? cleanTokens({ input: t.input, output: (t.output ?? 0) + (t.reasoning ?? 0), cache_read: t.cache?.read, cache_write: t.cache?.write }) : undefined
-        return { lead: tokens ? [{ id, atMs: nowMs, tokens, from: OPENCODE_LEAD_FROM }] : [], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM }
+        const lead = []
+        for (const m of await api.context({ sessionID: id })) {
+          if (m.type !== 'assistant') continue
+          const tokens = ocTokens(m.tokens)
+          const atMs = m.time?.completed ?? m.time?.created
+          if (tokens && typeof atMs === 'number') lead.push({ id, atMs, tokens, from: OPENCODE_LEAD_FROM })
+        }
+        // the stats count each within the span asked for (leadTotals), so all of them go back
+        return { lead, leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM }
+      } catch (err) {
+        unread = (err as Error)?.message ?? String(err)
+        log(`the lead's messages couldn't be read: ${unread}`)
+      }
+      if (range.kind !== 'all') return { leadProblem: leadMessagesUnread(unread) }
+      try {
+        const tokens = ocTokens((await api.get({ sessionID: id })).tokens)
+        return { lead: tokens ? [{ id, atMs: nowMs, tokens, from: OPENCODE_LEAD_TOTAL_FROM }] : [], leadSessions: 1, leadFrom: OPENCODE_LEAD_TOTAL_FROM }
       } catch (err) {
         return { leadProblem: `couldn't read the OpenCode lead session: ${(err as Error)?.message ?? err}` }
       }

@@ -8,9 +8,10 @@
 // session.interrupt. See docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, points 2 and 7.
 import type { HostAgent, HostAgentKind, HostAgentStart } from '../host'
 import type { AgentRunEnd } from '../app/symcc'
+import type { SymccTokens } from '../../types'
 import { cleanTokens } from '../core/runs'
 import { basePromptFor } from '../core/prompts'
-import type { OcModelRef, OcSessionApi, OcSessionInfo, OcSessionMessage } from './ctx'
+import type { OcModelRef, OcSessionApi, OcSessionInfo, OcSessionMessage, OcTokens } from './ctx'
 import { realPathOf } from './guard'
 
 /** The OpenCode model each kind of agent runs on when its role (or scout file) names none. */
@@ -60,10 +61,14 @@ export function finalText(messages: ReadonlyArray<OcSessionMessage>): string {
   return ''
 }
 
+/** OpenCode's token counts (a session's or one message's) in symcc's words. Reasoning tokens count as output. */
+export function ocTokens(t: OcTokens | undefined): SymccTokens | undefined {
+  return t ? cleanTokens({ input: t.input, output: (t.output ?? 0) + (t.reasoning ?? 0), cache_read: t.cache?.read, cache_write: t.cache?.write }) : undefined
+}
+
 /** How a finished session ended, in symcc's words (AgentRunEnd), from session.get and session.context. Reasoning tokens count as output. */
 export function sessionEnd(info: OcSessionInfo, messages: ReadonlyArray<OcSessionMessage>): AgentRunEnd {
-  const t = info.tokens
-  const tokens = t ? cleanTokens({ input: t.input, output: (t.output ?? 0) + (t.reasoning ?? 0), cache_read: t.cache?.read, cache_write: t.cache?.write }) : undefined
+  const tokens = ocTokens(info.tokens)
   const answer = finalText(messages)
   const last = [...messages].reverse().find(m => m.type === 'assistant')
   const cost = typeof info.cost === 'number' && info.cost > 0 ? { cost: info.cost } : {}

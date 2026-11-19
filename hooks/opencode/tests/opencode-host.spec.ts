@@ -27,7 +27,7 @@ import { toolTouches } from '../guard'
 import { pump } from '../../app/workers'
 import { load } from '../../app/store'
 import { symccServer, owners, leads, SYMCC_ENGINE, type CopyRole, type Engine } from '../plugin'
-import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, NO_LEAD_YET, LEAD_WHOLE_SESSION_ONLY } from '../lead'
+import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, OPENCODE_LEAD_TOTAL_FROM, NO_LEAD_YET, leadMessagesUnread } from '../lead'
 import { leadTotals, rangeSpan, teamLines } from '../../core/stats'
 import { tellLead, noteForLead } from '../../app/tell'
 import { PLUGIN_ROOT, opencodeHost, OPENCODE_FEATURES } from '../host'
@@ -693,9 +693,9 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     expect(toLead[0]!.text).toContain('[symcc] Board update:')
     expect(toLead[0]!.text).toContain('T-3')
     expect(toLead[0]!.text).toContain(SUBAGENT_LABEL)
-    // the lead's tokens for the stats, from session.get
-    f.sessions.get(lead)!.info = { ...f.sessions.get(lead)!.info, tokens: { input: 3, output: 4, reasoning: 1, cache: { read: 9 } }, cost: 0 }
-    expect(await host!.lead.usage(p.main, { kind: 'all' }, 1000)).toEqual({ lead: [{ id: lead, atMs: 1000, tokens: { input: 3, output: 5, cache_read: 9 }, from: OPENCODE_LEAD_FROM }], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
+    // the lead's tokens for the stats, from its answers in session.context (reasoning counts as output)
+    f.sessions.get(lead)!.messages.push({ type: 'assistant', content: [], finish: 'stop', time: { created: 900, completed: 1000 }, tokens: { input: 3, output: 4, reasoning: 1, cache: { read: 9 } } })
+    expect(await host!.lead.usage(p.main, { kind: 'all' }, 5000)).toEqual({ lead: [{ id: lead, atMs: 1000, tokens: { input: 3, output: 5, cache_read: 9 }, from: OPENCODE_LEAD_FROM }], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
     await endCopy!()
   } finally {
     await finish(p)
@@ -756,25 +756,61 @@ test("host.lead on OpenCode: kept updates whose send to the lead fails wait agai
   expect(f.prompts.slice(1)).toEqual([{ sessionID: id, text: leadText('T-8 needs you'), delivery: 'steer' }])
 })
 
-test('the OpenCode lead\'s tokens (a whole-session total, no times): counted in "all", left out of a "7d" and a task-range stats call', async () => {
+test('the OpenCode lead\'s tokens, one entry per answer at its own time (T-486): "7d" and a task range count only the answers inside them, "all" counts them all', async () => {
   const f = fakeSessions()
   const id = f.lead('/p')
-  f.sessions.get(id)!.info = { ...f.sessions.get(id)!.info, tokens: { input: 1000, output: 500 }, cost: 0 }
+  const now = Date.parse('2026-11-19T12:00:00Z')
+  const day = 86_400_000
+  const s = f.sessions.get(id)!
+  // the whole-session total is not what is counted when the answers can be read
+  s.info = { ...s.info, tokens: { input: 99999, output: 99999 }, cost: 0 }
+  s.messages.push(
+    { type: 'user', content: [{ type: 'text', text: 'hi' }], time: { created: now - 10 * day } },
+    // 10 days ago: outside "7d" and outside the task range
+    { type: 'assistant', content: [], time: { created: now - 10 * day, completed: now - 10 * day + 5000 }, tokens: { input: 100, output: 10, reasoning: 5, cache: { read: 1000, write: 50 } } },
+    // 2 hours ago (no completed time yet: created is used): inside "7d", before the task range
+    { type: 'assistant', content: [], time: { created: now - 7_200_000 }, tokens: { input: 200, output: 20, reasoning: 0, cache: { read: 0, write: 0 } } },
+    // 30 minutes ago: inside both
+    { type: 'assistant', content: [], time: { created: now - 1_900_000, completed: now - 1_800_000 }, tokens: { input: 300, output: 30, reasoning: 10, cache: { read: 3000, write: 0 } } },
+    // no tokens: not counted
+    { type: 'assistant', content: [], time: { created: now - 60_000 } },
+  )
   const lead = opencodeLead(f.api, { lead: () => id })
+  const tasks = [{ created_at: new Date(now - 3_600_000).toISOString(), updated_at: new Date(now - 60_000).toISOString() }]
+  const workers = { tokens: {}, tries: 0 }
+  const totals = async (range: Parameters<typeof lead.usage>[1]) => {
+    const u = await lead.usage('/p', range, now)
+    expect(u.leadProblem).toBe(undefined)
+    expect(u.lead!.every(c => c.from === OPENCODE_LEAD_FROM)).toBe(true)
+    return leadTotals(u.lead!, rangeSpan(range, tasks, now))
+  }
+  expect(await totals({ kind: 'all' })).toEqual({ calls: 3, tokens: { input: 600, output: 75, cache_read: 4000, cache_write: 50 } })
+  expect(await totals({ kind: 'days', days: 7 })).toEqual({ calls: 2, tokens: { input: 500, output: 60, cache_read: 3000 } })
+  expect(await totals({ kind: 'ids', from: 100, to: 130 })).toEqual({ calls: 1, tokens: { input: 300, output: 40, cache_read: 3000 } })
+  const u = await lead.usage('/p', { kind: 'days', days: 7 }, now)
+  const lines = teamLines(u, rangeSpan({ kind: 'days', days: 7 }, tasks, now), workers, 0)
+  expect(lines.find(l => l.includes('lead'))).toContain('1 session')
+  expect(lines.find(l => l.trimStart().startsWith('total'))).not.toContain('(without the lead)')
+})
+
+test('the OpenCode lead\'s tokens when its messages can\'t be read: the whole-session total in "all", left out of "7d" and a task range with the reason', async () => {
+  const f = fakeSessions()
+  const id = f.lead('/p')
+  f.sessions.get(id)!.info = { ...f.sessions.get(id)!.info, tokens: { input: 1000, output: 500, reasoning: 20 }, cost: 0 }
+  const api: OcSessionApi = { ...f.api, context: async () => Promise.reject(new Error('server restarting')) }
+  const lead = opencodeLead(api, { lead: () => id })
   const now = Date.parse('2026-11-19T12:00:00Z')
   const tasks = [{ created_at: new Date(now - 3_600_000).toISOString(), updated_at: new Date(now - 60_000).toISOString() }]
   const workers = { tokens: {}, tries: 0 }
-  // all: the whole session counts, and the lead's line says 1 session
   const all = await lead.usage('/p', { kind: 'all' }, now)
-  expect(leadTotals(all.lead!, rangeSpan({ kind: 'all' }, tasks, now))).toEqual({ calls: 1, tokens: { input: 1000, output: 500 } })
+  expect(all).toEqual({ lead: [{ id, atMs: now, tokens: { input: 1000, output: 520 }, from: OPENCODE_LEAD_TOTAL_FROM }], leadSessions: 1, leadFrom: OPENCODE_LEAD_TOTAL_FROM })
   expect(teamLines(all, rangeSpan({ kind: 'all' }, tasks, now), workers, 0).find(l => l.includes('lead'))).toContain('1 session')
-  // a task range and 7d: the lead is left out (not 0 tokens with "1 session", nor the whole session), and the line says why
   for (const range of [{ kind: 'ids', from: 100, to: 130 }, { kind: 'days', days: 7 }] as const) {
     const u = await lead.usage('/p', range, now)
-    expect(u).toEqual({ leadProblem: LEAD_WHOLE_SESSION_ONLY })
+    expect(u).toEqual({ leadProblem: leadMessagesUnread('server restarting') })
     const lines = teamLines(u, rangeSpan(range, tasks, now), workers, 0)
     const line = lines.find(l => l.includes('lead'))!
-    expect(line).toContain(`not counted: ${LEAD_WHOLE_SESSION_ONLY}`)
+    expect(line).toContain(`not counted: ${leadMessagesUnread('server restarting')}`)
     expect(line).not.toContain('1 session')
     expect(lines.find(l => l.trimStart().startsWith('total'))).toContain('(without the lead)')
   }

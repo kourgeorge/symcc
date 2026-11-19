@@ -31,6 +31,9 @@ export type OcToolBefore = {
 /** A model, as OpenCode names one: its provider and its id there (e.g. claude-agent / sonnet). */
 export type OcModelRef = { readonly providerID: string; readonly id: string }
 
+/** Token counts, as OpenCode tells them (TokenUsageInfo): a session's total, or one assistant message's. */
+export type OcTokens = { readonly input?: number; readonly output?: number; readonly reasoning?: number; readonly cache?: { readonly read?: number; readonly write?: number } }
+
 /** A session, as session.get and session.create answer it (the parts symcc reads). */
 export type OcSessionInfo = {
   readonly id: string
@@ -39,18 +42,25 @@ export type OcSessionInfo = {
   readonly metadata?: Readonly<Record<string, unknown>>
   /** set once the session's last run ended */
   readonly outcome?: 'succeeded' | 'failed' | 'interrupted'
-  readonly tokens?: { readonly input?: number; readonly output?: number; readonly reasoning?: number; readonly cache?: { readonly read?: number; readonly write?: number } }
+  readonly tokens?: OcTokens
   /** US dollars; 0 for subscription and free models */
   readonly cost?: number
   readonly location: { readonly directory: string }
 }
 
-/** One message of session.context (the parts symcc reads): an assistant's has text parts, and how it finished. */
+/**
+ * One message of session.context (SessionMessageInfo; the parts symcc reads): an assistant's has text parts, how it
+ * finished, when it was made and finished (ms), and its own tokens and cost (SessionMessageAssistant).
+ */
 export type OcSessionMessage = {
   readonly type: string
   readonly content?: ReadonlyArray<{ readonly type: string; readonly text?: string }>
   readonly finish?: string
   readonly error?: unknown
+  readonly time?: { readonly created?: number; readonly completed?: number }
+  readonly tokens?: OcTokens
+  /** US dollars */
+  readonly cost?: number
 }
 
 /** A prompt a session is about to take ("prompt" session hook). */
