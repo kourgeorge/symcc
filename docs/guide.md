@@ -266,7 +266,8 @@ lead's text board) shows the step in place of its time, with the same short word
    So when several tasks finish together, merges can take longer. The turn is kept with
    the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
    you never need to delete it by hand.
-   **Tests that run out of time.** A test command stopped by its 10-minute limit is not a
+   **Tests that run out of time.** A test command stopped by its time limit (`test_minutes`,
+   10 minutes by default) is not a
    failed test: nothing failed, so no new worker try starts and no automatic retry is used.
    The task keeps its work and waits ("tests ran out of time (10 min); running them again
    once, no new try"); at a later regular check, when no other task's tests run (and
@@ -274,12 +275,16 @@ lead's text board) shows the step in place of its time, with the same short word
    If they pass, the task goes on as usual (review, the checker, or the merge); if a test
    really fails, it gets a new try as usual. If they run out of time a second time, the
    task waits for you ("the tests ran out of time twice; nothing failed") with the choices
-   **Run the tests again** (only the tests run again) and **Stop it** (the task is paused,
-   its work kept). "retry T-3" on such a task also runs only its tests again.
+   **Run the tests again** (only the tests run again), **Give them more time** (only the tests run
+   again, this once with twice the task's limit, up to 120 minutes; `test_minutes` itself and
+   other tasks are not changed, and later runs of this task use `test_minutes` again) and **Stop it** (the
+   task is paused, its work kept). "retry T-3" on such a task also runs only its tests again.
    An approve whose tests run out of time stays in review (approve it again).
-   **Time limit.** Each test command may run up to 10 minutes. The whole checking and
-   merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
-   and the board: 15 minutes with one test command, 35 with three. Only the task's own
+   **Time limit.** Each test command may run up to `test_minutes` (10 minutes by default; a
+   project with a slow test suite can raise it, e.g. "set test_minutes to 20"). The whole
+   checking and merging gets `test_minutes` for each test command (at least one), plus 5
+   minutes for git and the board: with the default, 15 minutes with one test command, 35 with
+   three. The test lock is taken as stale after twice `test_minutes`. Only the task's own
    work counts: the clock stops while it waits in line behind other merges into the same
    branch (each of those has its own limit, so the line keeps moving) and while it waits for
    another task's tests (see below), and starts again
@@ -573,7 +578,9 @@ are about changes; under "How tasks ended" a read investigation shows as
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. The rows are grouped under short headings:
   - **Work**: `mode`, `max_parallel`, `max_minutes`, `auto_retries`, `enabled`
-  - **Checks before merging**: `test_commands`, `tests_with_changes`, `checker`
+  - **Checks before merging**: `test_commands`, `test_minutes` (how many minutes each test
+    command may run before merging, a whole number from 1 to 120, 10 by default; any other value
+    is refused), `tests_with_changes`, `checker`
   - **Workers**: the **Roles** and **Kinds** rows
   - **Scouts**: `scout_findings`
   - **Board and alerts**: `notify`, `open_on_start`, `archive_days`

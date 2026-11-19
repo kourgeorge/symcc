@@ -19,6 +19,8 @@ export type Board = {
   max_minutes: number
   /** how many new tries a task gets on its own after its tests fail, before it is marked failed */
   auto_retries: number
+  /** how many minutes each test command may run before merging (see testMinutesOf); absent: 10 */
+  test_minutes?: number
   /** open the board panel by itself when a session starts (true unless turned off) */
   open_on_start: boolean
   /**
@@ -102,8 +104,10 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * `test_rerun` (T-511): the tests of its finished work ran out of time (they did not fail): 1 = only the tests run
  * again once, with no new try ("waiting" until the rerun starts, "doing" while it runs); 2 = they ran out of time
  * twice and it waits for the owner (see core/test-timeout.ts). Only while "waiting" or "doing".
+ * `rerun_minutes` (T-510): the owner's "Give them more time" for this one task: how many minutes each test command of
+ * its next rerun may run (instead of the board's test_minutes, see taskTestMinutes). Only while test_rerun is set.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string; test_rerun?: TestRerun }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string; test_rerun?: TestRerun; rerun_minutes?: number }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -196,13 +200,31 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
 
+/** How many minutes one test command may run before merging, on a board without test_minutes. */
+export const DEFAULT_TEST_MINUTES = 10
+
+/** The minutes one test command of board `b` may run before merging: its test_minutes (absent or not usable: DEFAULT_TEST_MINUTES). */
+export const testMinutesOf = (b: { test_minutes?: unknown }): number => (typeof b?.test_minutes === 'number' && Number.isFinite(b.test_minutes) && b.test_minutes >= 1 ? Math.round(b.test_minutes) : DEFAULT_TEST_MINUTES)
+
+/** Whether `v` is a usable rerun_minutes (a whole number of minutes, at least 1). */
+const isRerunMinutes = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1
+
+/**
+ * The minutes one test command of task `t` on board `b` may run: the task's own rerun_minutes while it reruns its
+ * tests (the owner gave only this task more time, T-510), else the board's test_minutes.
+ */
+export const taskTestMinutes = (b: { test_minutes?: unknown }, t?: { test_rerun?: unknown; rerun_minutes?: unknown } | null): number =>
+  t?.test_rerun !== undefined && isRerunMinutes(t?.rerun_minutes) ? t.rerun_minutes : testMinutesOf(b)
+
 /**
  * The project-wide test lock (<data folder>/tests.lock): symcc's merge step runs only one task's test commands at a time,
  * across tasks and sessions (see withTestLock in app/review.ts). The holder writes its task, session and time, and
- * dates it again before each test command; older than TEST_LOCK_STALE_MS (more than one command's TEST_TIMEOUT_MS) it is stale.
+ * dates it again before each test command; older than testLockStaleMs (twice one command's time limit, the board's
+ * test_minutes) it is stale. TEST_LOCK_STALE_MS is that with the default 10 minutes.
  */
 export const TEST_LOCK_FILE = 'tests.lock'
-export const TEST_LOCK_STALE_MS = 20 * 60_000
+export const testLockStaleMs = (testMinutes: number) => 2 * testMinutes * 60_000
+export const TEST_LOCK_STALE_MS = testLockStaleMs(DEFAULT_TEST_MINUTES)
 export type TestLock = { task: string; session: string; at: number }
 export const testLockText = (task: string, session: string, at: number) => JSON.stringify({ task, session, at }) + '\n'
 export function parseTestLock(text: string | null): TestLock | null {
@@ -290,6 +312,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   max_parallel: v => isNum(v) && v >= 0,
   max_minutes: v => isNum(v) && v >= 0,
   auto_retries: v => isNum(v) && v >= 0,
+  test_minutes: v => isNum(v) && v >= 1,
   open_on_start: v => typeof v === 'boolean',
   notify: v => isNotify(v),
   enabled: v => typeof v === 'boolean',
@@ -404,6 +427,7 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   }
   if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
   if ('test_rerun' in x && !(asTestRerun(x.test_rerun) && (x.status === 'waiting' || x.status === 'doing'))) delete x.test_rerun
+  if ('rerun_minutes' in x && !(x.test_rerun !== undefined && isRerunMinutes(x.rerun_minutes))) delete x.rerun_minutes
   const { session, finishing, checking: rawChecking, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'
   const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined
