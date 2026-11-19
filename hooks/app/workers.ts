@@ -1595,6 +1595,16 @@ export async function setBoardMode(host: Host, m: SymccMode, who: string): Promi
   return [modeText(m), ...extra].join('; ')
 }
 
+/** Drops every board update waiting for the lead (its queue, "Meanwhile" lines, timer) and the lines waiting to be said. */
+function dropLeadUpdates() {
+  leadQueue.splice(0)
+  meanwhile.splice(0)
+  S.leadTimer?.cancel()
+  S.leadTimer = null
+  S.leadUrgent = false
+  sayQueue.splice(0)
+}
+
 /**
  * Turns the whole plugin on or off (/<name>-on, /<name>-off, the enabled setting). Off: every
  * worker and scout stops (their tasks go back to "todo"), nothing new starts, the lead is not
@@ -1603,9 +1613,20 @@ export async function setBoardMode(host: Host, m: SymccMode, who: string): Promi
  */
 export async function setSymcc(host: Host, on: boolean): Promise<string> {
   const before = symccOn(await load(host))
+  // (T-540) off counts from now: a board update waiting for its moment (tellLead's timer) must not go out while the
+  // board write and the stops below run, or the lead gets it next to the /<name>-off answer
+  // (nor a new one queued meanwhile: tellLead sends nothing once enabledNow is false)
+  const was = S.enabledNow
+  if (!on) {
+    S.enabledNow = false
+    dropLeadUpdates()
+  }
   const b = await change(host, x => {
     const y = setEnabled(x, on)
     return [y, y] as [Board, Board]
+  }).catch(err => {
+    S.enabledNow = was
+    throw err
   })
   S.enabledNow = on
   if (!on) {
@@ -1615,12 +1636,7 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
       await change(host, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was turned off; continues when it is on again`, ...endedBy(find(x, w.task), now(), 'stopped', `${S.N.name} was turned off`) }, now()))
     })
     const checks = stoppedChecksText(await stopChecks(host, `${S.N.name} was turned off`))
-    leadQueue.splice(0)
-    meanwhile.splice(0)
-    S.leadTimer?.cancel()
-    S.leadTimer = null
-    S.leadUrgent = false
-    sayQueue.splice(0)
+    dropLeadUpdates()
     await publish(host, await load(host))
     const stopped = `${ids.length ? ` Stopped ${ids.join(', ')}.` : ''}${checks ? ` ${checks[0]!.toUpperCase()}${checks.slice(1)}.` : ''}`
     return `${S.N.name} is ${before ? 'now ' : ''}off: ${S.W.assistant} works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${S.N.name}-on.`

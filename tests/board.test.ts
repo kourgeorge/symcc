@@ -613,7 +613,7 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
   const asked = { ...base, question: 'Which one?' }
   expect(fileWaitText(asked)).toBe('')
   expect(rowExtra(asked, [asked])).toBe('Which one?')
-  expect(taskKeys('waiting', false, [], [], true).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
+  expect(taskKeys('waiting', false, [], false, true).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
   expect(taskKeys('waiting').map(k => k.key)).not.toContain('r')
 })
 

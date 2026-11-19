@@ -9,7 +9,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowExtra, taskMatches, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, shownStatus, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, shownStatus, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -40,7 +40,7 @@ export function listPageVs($: $, pane: PaneParts) {
   const { nowMs } = pane
   const query = S.search?.text.trim() ?? ''
   const filtering = query !== ''
-  const matching = filtering ? v.tasks.filter(t => taskMatches(t, query)) : v.tasks
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs) : v.tasks
   const parts = panelSections(matching, nowMs, localOffset(nowMs))
   if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
   const redraw = () => $.ui.invalidate('ui.render')
@@ -199,7 +199,7 @@ export function listPageVs($: $, pane: PaneParts) {
         key="search"
         label="Search tasks"
         submitLabel="Search"
-        placeholder="Search tasks"
+        placeholder={`Search tasks: words, or ${SEARCH_WORDS}`}
         value={S.search?.text ?? ''}
         onInput={value => void ((S.search = value.trim() ? { text: value, typing: false } : null), redraw())}
         onSubmit={value => void ((S.search = value.trim() ? { text: value.trim(), typing: false } : null), redraw())}

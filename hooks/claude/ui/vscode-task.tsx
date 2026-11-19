@@ -12,24 +12,12 @@
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, statusWordOf, shownStatus, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
 import { squash } from '../../core/text'
+import { historyEvent, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import { when } from '../../app/tools'
 import type { PaneParts } from './parts'
 import type { $ } from '../panel'
 import { vsBadge, vsCallout, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
-
-/** A history line in parts: its "try 2:" (or ''), what was said, the result after "→", and whether it went badly or well. */
-export function historyParts(line: string): { m: string; said: string; result: string; bad: boolean; good: boolean } {
-  const m = /^(try \S+:)\s*(.*)$/.exec(line)
-  const body = m ? m[2]! : line
-  const [said, result] = body.includes(' → ') ? [body.slice(0, body.lastIndexOf(' → ')), body.slice(body.lastIndexOf(' → ') + 3)] : [body, '']
-  const bad = /not merged|fail|stopped|refused|error|outside|without a result/i.test(result || body)
-  const good = /merged into|^merged/i.test(result)
-  return { m: m ? m[1]! : '', said, result, bad, good }
-}
-
-/** The try a history line is about ("try 2: …", "try 3 (role tester): …" → 2, 3); 0 when it names none. */
-export const historyTry = (line: string): number => Number(/^try (\d+)\b/.exec(line)?.[1] ?? 0)
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
@@ -373,26 +361,27 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
-  // the history as a timeline, newest first: a mark in its tone, the try and when it ran, then the words, wrapped whole
-  const history = t.history.length
-    ? section('history', `History (${t.history.length}, newest first)`, [...t.history].reverse().map((line, i) => {
-        const hp = historyParts(line)
-        const tone = hp.bad ? 'error' : hp.good ? 'success' : 'inactive'
-        const n = historyTry(line)
-        const run = n ? t.runs?.[n - 1] : undefined
-        const stamp = [run ? when(run.ended ?? run.started) : '', hp.m.replace(/:$/, '')].filter(Boolean).join(' · ')
-        return (
+  // the history as a timeline (T-512), newest first: the same events and marks as the terminal page (historyEvent),
+  // each mark in its tone, the try and when it ran, then the words, wrapped whole; a dim connector (│) between events
+  const events = [...t.history].reverse().map(historyEvent)
+  const history = events.length
+    ? section('history', `History (${events.length}, newest first)`, events.flatMap((e, i) => {
+        const run = e.try ? t.runs?.[e.try - 1] : undefined
+        const stamp = [run ? when(run.ended ?? run.started) : '', e.label].filter(Boolean).join(' · ')
+        const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
+        const event = (
           <Box key={`vs-history-${i}`} flexDirection="row" gap={1}>
-            <Text key="mark" bold color={C(tone)}>{hp.bad ? '✗' : hp.good ? '✓' : '•'}</Text>
+            <Text key="mark" bold color={C(HISTORY_COLOR[e.tone])}>{e.mark}</Text>
             <Box key="body" flexDirection="column" flexShrink={1}>
-              {stamp ? <Text key="when" wrap="wrap" size="caption" color={C('inactive')}>{stamp}</Text> : null}
+              {stamp ? <Text key="when" wrap="wrap" size="caption" bold color={C('inactive')}>{stamp}</Text> : null}
               <Text key="text" wrap="wrap">
-                <Text color={C(hp.bad && !hp.result ? 'error' : 'text')}>{hp.said}</Text>
-                {hp.result ? <Text color={C(hp.bad ? 'error' : hp.good ? 'success' : 'text')}>{` → ${hp.result}`}</Text> : null}
+                <Text color={C(e.tone === 'bad' && !e.result ? 'error' : 'text')}>{e.said}</Text>
+                {e.result ? <Text color={C(resultColor)}>{` → ${e.result}`}</Text> : null}
               </Text>
             </Box>
           </Box>
         )
+        return i === events.length - 1 ? [event] : [event, <Text key={`vs-history-${i}-line`} color={C('inactive')}>│</Text>]
       }))
     : null
 

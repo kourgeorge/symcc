@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, shownStatus, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, shownStatus, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -8,7 +8,7 @@ import { row } from './arrows'
 
 /** The Tasks view: the tasks (needs you under its label, then doing and to do as one list,
  *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead.
- *  With a search on (f, see S.search and taskMatches) only the matching tasks are listed, in every group (Backlog,
+ *  With a search on (f, see S.search and searchTasks: plain words and filter words like last:5 or status:done) only the matching tasks are listed, in every group (Backlog,
  *  Done and Dropped too), groups with a match open and groups without one hidden; a line under the header says so.
  *  No way out needs Esc (it doesn't reach the panel from a text box): Enter on an empty box clears the search, and
  *  while a filter is on (not typing) [x] clear search, next to [f] change search, takes it off. */
@@ -20,7 +20,7 @@ export function listPage($: $, pane: PaneParts) {
   const query = search?.text.trim() ?? ''
   const filtering = query !== ''
   const typing = !!search?.typing
-  const matching = filtering ? v.tasks.filter(t => taskMatches(t, query)) : v.tasks
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs) : v.tasks
   const parts = panelSections(matching, nowMs, offset)
   if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
   // while filtering, every group with a match is open (and the backlog shows all its matches)
@@ -103,7 +103,7 @@ export function listPage($: $, pane: PaneParts) {
           key="search"
           label="search"
           submitLabel="keep"
-          placeholder="words to look for"
+          placeholder={`words, or ${SEARCH_WORDS}`}
           value={search!.text}
           autoFocus
           onInput={value => void ((S.search = { text: value, typing: true }), redraw())}
