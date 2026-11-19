@@ -297,6 +297,9 @@ The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by
 - **`off`**: every running worker and scout stops at once and nothing new starts. Tasks
   already in review can still be approved or rejected.
 - **`review`**: work runs; every finished task that passes waits as `review` for you.
+  The lead also asks you before it adds any task (yours, a scout's finding, a worker's
+  report or its own idea): it says what the task would be in a line or two and adds it
+  only after your yes.
 - **`auto`** (the default): work runs; a task that passes steps 1–4 is merged at once.
 
 Going from `off` to `review` or `auto` starts work again. In `auto` you can still mark one
