@@ -87,7 +87,7 @@ export function listPage($: $, pane: PaneParts) {
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
-  // a doing task on a later try: "15m · Σ1h 40m"; narrow, the total is left out
+  // a doing task: the total work time of all tries, "1h40m", "test 9m"; narrow, the time is left out
   const cells = fittedCells(shown, nowMs, since, width - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
