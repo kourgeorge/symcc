@@ -5009,7 +5009,7 @@ test("T-491: a worker start the host refuses fails the task once: note \"couldn'
 })
 
 test("T-491: a worker type not loaded yet puts the task back as it was twice (no try counted); the 3rd miss fails it as \"couldn't start\"", async () => {
-  const c = await cantStartWorld(() => Promise.reject(Object.assign(new Error("Agent type 'symcc:worker' not found"), { notReady: true })), { branch: 'symcc/T-1', note: 'waiting for its turn', runs: [{ started: ISO, ended: ISO }] })
+  const c = await cantStartWorld(() => Promise.reject(Object.assign(new Error("Agent type 'symcc:worker' not found"), { notReady: true })), { note: 'waiting for its turn', runs: [{ started: ISO, ended: ISO }] })
   const runs = (await c.t1()).runs
   expect(runs?.length).toBe(1)
   for (const n of [1, 2]) {
@@ -5018,7 +5018,8 @@ test("T-491: a worker type not loaded yet puts the task back as it was twice (no
     expect(c.spawned()).toBe(n)
     expect(t.status).toBe('todo')
     expect(t.attempts).toBe(0)
-    expect(t.branch).toBe('symcc/T-1')
+    // T-1 had no branch before; the claim gave it 'symcc/T-1', so an empty branch shows the old one was put back.
+    expect(t.branch ?? null).toBeNull()
     expect(t.note).toBe('waiting for its turn')
     expect(t.runs).toEqual(runs)
     expect(cantStartLines()).toEqual([])
