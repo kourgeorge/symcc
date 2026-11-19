@@ -12,7 +12,8 @@ import { noteForLead, brief, tellLead } from '../../app/tell'
 import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
-import { historyParts, taskPageVs } from './vscode-task'
+import { taskPageVs } from './vscode-task'
+import { historyEvent, HISTORY_COLOR, type HistoryEvent } from '../../core/history'
 import { claudeHost } from '../host'
 import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
@@ -203,22 +204,6 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       )
     : null
   const fileWidth = Math.max(4, ...(changes?.files ?? []).map(f => f.file.length))
-  // History lines: the try number, then the result colored by how it went.
-  const historyLine = (line: string) => {
-    const { m, said, result, bad, good } = historyParts(line)
-    return (
-      <Text>
-        <Text color={C(bad ? 'error' : good ? 'success' : 'inactive')}>{bad ? '✗' : good ? '✓' : '•'}</Text>{' '}
-        {m && <Text bold color={C('inactive')}>{m} </Text>}
-        <Text color={C('inactive')}>{said}</Text>
-        {result && (
-          <Text color={C(bad ? 'error' : good ? 'success' : 'text')}>
-            {' '}→ {result}
-          </Text>
-        )}
-      </Text>
-    )
-  }
   // One line of colored pieces (from detailRowLines / wrapSegs).
   const segLine = (segs: Seg[], key: string) => (
     <Text key={key}>
@@ -229,6 +214,22 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
+  // The history as a timeline (T-512), newest first: each event's mark in its tone, its try label in bold, the words
+  // wrapped under the mark with the connector (│) beside them, and a connector line between events.
+  const historyLines = (events: HistoryEvent[]) =>
+    events.flatMap((e, i) => {
+      const last = i === events.length - 1
+      const words: Seg[] = [
+        ...(e.label ? [{ text: `${e.label}: `, color: 'text', bold: true } as Seg] : []),
+        { text: e.said, color: e.tone === 'bad' && !e.result ? 'error' : 'inactive' },
+        ...(e.result ? [{ text: ` → ${e.result}`, color: e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text' } as Seg] : []),
+      ]
+      const wrapped = wrapSegs(words, Math.max(12, width - 2))
+      return [
+        ...wrapped.map((w, j) => segLine([j ? { text: last ? '  ' : '│ ', color: 'inactive' } : { text: `${e.mark} `, color: HISTORY_COLOR[e.tone], bold: true }, ...w], `history-${i}-${j}`)),
+        ...(last ? [] : [segLine([{ text: '│', color: 'inactive' }], `history-${i}-line`)]),
+      ]
+    })
   const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done })
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
@@ -428,7 +429,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {t.history.length > 0 && (
         <Box flexDirection="column">
           {heading(`History (${t.history.length}, newest first)`)}
-          {[...t.history].reverse().map(historyLine)}
+          {historyLines([...t.history].reverse().map(historyEvent))}
         </Box>
       )}
 
