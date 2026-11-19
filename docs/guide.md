@@ -284,21 +284,18 @@ prep · title"), all with the same short words:
    is handled like an approve whose tests fail.
    **Time limit.** Each test command may run up to `test_minutes` (10 minutes by default; a
    project with a slow test suite can raise it, e.g. "set test_minutes to 20"). The whole
-   checking and merging gets `test_minutes` for each test command (at least one), plus 5
-   minutes for git and the board: with the default, 15 minutes with one test command, 35 with
-   three. A merge line entry is taken as stale after twice `test_minutes`. Only the task's own
-   work counts: the clock stops while it waits in the merge line behind other tasks
-   (each of those has its own limit, so the line keeps moving), and starts again
-   from zero when its turn begins, and again each time it is brought up to date and
-   tested again because the branch moved meanwhile. A step still running past the limit
-   is taken as stuck and given up: a finished worker's task goes back to `todo` for a
-   fresh try (its folder and branch are kept); if the try before was given up the same
-   way, the task is marked `failed` instead ("ran over … twice in a row"), so it never
-   loops, and the lead is told. An approve that runs over stays in review (approve it
-   again). A merge waiting for your files that runs over keeps waiting: the regular check
-   tries it again on its own once your files are out of the way (or "retry T-3" at once);
-   if that merge runs over too, twice in a row, the task is marked `failed` instead and is
-   not started again on its own, and the lead is told once. If a given-up step still ends
+   merge turn (catch up, tests, merge) has one time limit: `test_minutes` for each test
+   command (at least one), plus 5 minutes for git and the board: with the default, 15
+   minutes with one test command, 35 with three. A merge line entry is taken as stale after
+   twice `test_minutes`. The limit counts only from the start of the task's own turn: waiting
+   in the merge line behind other tasks doesn't count (each of those has its own limit, so the
+   line keeps moving), and each new turn (after the branch moved meanwhile) starts from zero.
+   A turn still running past the limit is taken as stuck and given up, as one normal failed
+   try: like failing tests it uses one of the `auto_retries`, so the task goes back to `todo`
+   for a new try (its folder and branch are kept), and once they are used up it is marked
+   `failed` ("ran over 15 min and was stopped; nothing was merged"); the lead is told. A merge
+   that waited for your files is handled the same way. An approve that runs over is not a
+   try: the task stays in review with a note (approve it again). If a given-up step still ends
    later and its work did reach the branch after all, the task is marked done with that
    commit (when nothing else happened to it meanwhile), or the lead is told it landed.
 7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
@@ -426,7 +423,7 @@ You can also do it yourself:
   The "next" time is redrawn every minute. With an empty board and no scouts it shows nothing
   in `auto`, so a fresh project stays quiet.
 - symcc's own text never has a `⚠`: what needs you is said in words (`1 failed (T-7)`,
-  `1 waiting for you`, `⏹ off`, `symcc off · /symcc-on`). A `⚠` in front of `symcc:` is drawn
+  `1 waiting for you`, `⏹ off`, `symcc is off · /symcc-on to turn it on`). A `⚠` in front of `symcc:` is drawn
   by Claude Code itself for a plugin's status line, and plugins can't change it.
 
 ### Plan mode
@@ -507,7 +504,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   command, limits, counts) and the task list. The workers and scouts are not in the banner;
   they are in the status line and the band above the prompt. When nothing starts, the
   banner's first line says so in the warning color: `⏹ off: nothing starts` (board mode off)
-  or `symcc off · /symcc-on` (symcc turned off).
+  or `symcc is off · /symcc-on to turn it on` (symcc turned off).
   The clef drawn at the left of the banner moves now and then, about 4 frames a second, each
   move played once before it rests: it sways one column right and left about every 5 minutes
   while the panel is open and nothing else plays; it dissolves into a check mark when a task
@@ -574,7 +571,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
   `never ran`) and its model. On a narrow panel the model column goes first, then the
   `last:` one; the name is never cut. Enter opens a scout: its state, its file, its
-  instructions, its last report, and buttons to run it now, edit it, or pause or resume it.
+  instructions, its recent runs, and buttons to run it now, edit it, or pause or resume it.
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. The rows are grouped under short headings:
@@ -704,7 +701,7 @@ unchanged.
   scouts yet, a short how-to in a box and `+ New scout` as the main button.
 - **A scout's page**: a `← Scouts` button; the name and state; when it runs, its model, the next
   run and the last run; buttons `Run now` (not while it runs), `Pause` or `Resume`, and `Edit`;
-  then its **Instructions** and its whole **Last report**, both as Markdown, and its **File**.
+  then its **Instructions** as Markdown, its **File**, and its **Runs**; open a run to read its report.
 - **Settings**: every group is a heading (Work, Checks before merging, Workers, Scouts, Board
   and alerts) with its settings under it, each on its own row with its value. A setting with
   a fixed set of choices (mode, notify, checker, scout_findings, tests_with_changes,
@@ -792,8 +789,8 @@ The `scout_findings` setting says where the tasks it adds go: `auto` (the defaul
 lead decide, so a finding it adds goes to `todo` and runs; `backlog` puts every task added
 from a scout finding in the backlog, whatever the lead asks, until you (or the lead, on your
 word) move it to `todo`. The lead still tells you what the scout found. Change it with
-`/symcc-settings scout_findings backlog`, in the Settings view, or by telling the lead. The
-last report shows on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
+`/symcc-settings scout_findings backlog`, in the Settings view, or by telling the lead. A
+run's report shows when you open that run on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
 has examples that work in most code projects:
 - [`bugs.md`](../examples/scouts/bugs.md): wrong logic, such as bad conditions and off-by-one errors.
 - [`test-gaps.md`](../examples/scouts/test-gaps.md): risky code no test checks, with test cases to add.
@@ -819,12 +816,12 @@ copy fails, symcc says so once and starts as usual.
 
 A scout's page in the board panel shows a header line (its name, state, how often it runs,
 e.g. "every 7 days", its model and when it last ran), then its summary, then the sections
-**Instructions** (the whole text of its file), **Last report** and **File**. The summary is
+**Instructions** (the whole text of its file) and **File**. The summary is
 the optional `summary:` line in the file's front matter, e.g. `summary: Looks for crashes`.
 Without one, the page shows the first line of the instructions there instead, in a dimmer
 colour.
 
-Under the last report, **Runs** lists the scout's recent runs, newest first, one line each:
+Under those, **Runs** lists the scout's recent runs, newest first, one line each:
 when it ended, how it ended (found, nothing, stopped, API error, refusal or couldn't start),
 how many findings its report numbers, and the tasks made from it (a task the lead adds from
 this scout's finding is saved in the scout's latest run that reported something, so it stays
@@ -1292,7 +1289,7 @@ your next message, no restart needed:
 - the lead instructions are no longer added to Claude's prompt,
 - running workers and scouts are stopped (their tasks go back to `todo`) and nothing new starts,
 - no "[symcc] Board update" messages and no sounds or voice,
-- the panel does not open by itself and the status line just says `symcc off · /symcc-on`,
+- the panel does not open by itself and the status line just says `symcc is off · /symcc-on to turn it on`,
 - the symcc tools answer "symcc is off. The owner can turn it on with /symcc-on." and change nothing.
 
 The board, its tasks, its mode and the scouts are kept. `/symcc-on` turns everything back

@@ -20,7 +20,7 @@ export function failedHow(t: Failed): FailedHow {
   if (/^the model refused/i.test(note)) return 'refused'
   if (/^the worker was stopped/i.test(note)) return 'stopped'
   if (note.toLowerCase().startsWith(ENDED_EARLY_NOTE)) return 'ended early'
-  if (/ran over .* twice in a row/i.test(note)) return 'hung'
+  if (/^its checking and merging ran over \d+ min\b/i.test(note)) return 'hung'
   if (/^stopped: ran over/i.test(note) || last?.ended_by === 'timed out') return 'timed out'
   if (/^the checker found problems/i.test(note) || isCheckerOutput(t.test_output)) return 'checker'
   if (/^tests failed/i.test(note) || (t.test_output !== undefined && t.test_output !== null && t.test_output !== '')) return 'tests'
@@ -283,7 +283,7 @@ export function whyFailed(t: Failed): string {
     case 'ended early':
       return 'The worker ended its turn before its work finished (something it started was still running), so nothing was checked or merged.'
     case 'hung':
-      return `Checking and merging its work hung twice in a row and was given up, so nothing was merged (${note}).`
+      return `Checking and merging its work ran over its time limit and was stopped, with no automatic retries left, so nothing was merged (${note}).`
     default:
       return note ? `It failed: ${end(note)}` : 'It failed, and no reason was saved.'
   }
