@@ -9,7 +9,6 @@ import { kindMark } from './kinds'
 import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
-import { shownStatus, waitsForYou } from './commands'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, FINISH_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
 import { checkStepNow } from './lead'
@@ -91,8 +90,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
   const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
   const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
   const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? ` · ${m}`.length : 0)))
-  // a waiting task whose tests only run again (not waitsForYou) shows the running mark, like the rest of its row (T-541)
-  const rowMark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
+  const rowMark = (t: (typeof tasks)[number]): string => statusMark(t)
   const leadsWith = (form: TotalForm) => {
     // the total work time of all tries, between this try's time and the try: "▶ 15m · Σ1h 40m · try 3"
     const totals = new Map(doing.map(t => [t.id, cells.get(t.id) ? triesTotal(t, nowMs, form) : '']))
@@ -147,7 +145,7 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
   const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   // in plan mode the line says so first (see core/plan.ts)
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
-  const ids = (st: SymccStatus) => b.tasks.filter(t => shownStatus(t) === st).map(t => t.id)
+  const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
   const m = modeOf({ mode })
   const label = modeLabel(m)
@@ -196,9 +194,8 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
-export function statusCounts(tasks: (Pick<SymccTask, 'status'> & { test_rerun?: unknown; question?: unknown; merge_wait?: unknown })[], order: SymccStatus[]): string[] {
-  // a task whose tests run again on their own counts with the running ones, not as waiting for you (T-532: shownStatus)
-  return order.map(st => [tasks.filter(t => shownStatus(t) === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
+  return order.map(st => [tasks.filter(t => t.status === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
 }
 
 const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'backlog', 'done']
@@ -211,7 +208,7 @@ export type BannerCount = { text: string; status?: SymccStatus }
 export function bannerCounts(b: BannerBoard, nowMs?: number): BannerCount[] {
   const gone = archivedOf(b).done
   if (!b.tasks.length && !gone) return []
-  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => shownStatus(t) === st).length] as const)
+  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => t.status === st).length] as const)
     .filter(([, n]) => n > 0)
     .map(([st, n]) => ({ status: st, text: st === 'backlog' ? `${n} in backlog` : st === 'done' ? `${n} done${gone ? ` ${archivedNote(gone)}` : ''}` : `${n} ${STATUS_WORD[st]}` }))
   if (gone && !b.tasks.some(t => t.status === 'done')) counts.push({ status: 'done', text: `${gone} done (archived)` })

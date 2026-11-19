@@ -13,7 +13,7 @@ import {
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
-  waitsForYou, shownStatus, statusWordOf,
+  waitsForYou,
 } from '../board'
 import { restFrame } from '../core/logo'
 import { DEFAULT_NAME } from '../name'
@@ -95,9 +95,8 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
   const leads = bandLeads(shown, nowMs, since, width)
   for (const t of shown) {
     const note = bandNote(t, nowMs, since(t.id))
-    // a waiting task whose tests only run again (not waitsForYou) shows with the running ones: "rerunning its tests" (T-534)
-    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : t.status === 'waiting' ? ` — ${statusWordOf(t)}` : note ? ` — ${note}` : ''
-    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t)] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
+    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : note ? ` — ${note}` : ''
+    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[t.status] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
   }
   if (live.length + questions.length > rows) out.push([{ text: `+${live.length + questions.length - rows} more · /${f.name}`, color: 'inactive' }])
   return out
@@ -190,7 +189,7 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${statusMark({ ...x, status: shownStatus(x) })} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[shownStatus(x)]! },
+      { text: ` ${statusMark(x)} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x) || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]

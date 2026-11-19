@@ -126,7 +126,7 @@ export const HISTORY_KINDS = {
   resumed: 'other',
   /** the branch it merges into changed */
   'merge-into': 'other',
-  /** someone asked something: the worker asked the owner, the lead asked the owner, the owner asked for a rerun */
+  /** someone asked something: the worker asked the owner, the lead asked the owner */
   asked: 'step',
   /** an investigation's worker answered */
   answered: 'step',

@@ -1,12 +1,11 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { FINISH_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, taskTestMinutes, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
+import { FINISH_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
-import { mergeLineBusy } from './merge-line'
-import { rerunDue, askedTimedOut, rerunNote, timedOutTwiceQuestion, TIMED_OUT_OPTIONS, RERUN_RUNNING_NOTE, TIMED_OUT_STOPPED_NOTE, parseTimedOutAnswer, moreTestMinutes } from '../core/test-timeout'
+import { timedOutRetryNote } from '../core/test-timeout'
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
@@ -932,83 +931,6 @@ async function checkHeldAgain(host: Host, t: SymccTask, b: Board, dir: string, g
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, t.agent, gaveUp)
 }
 
-/** T-511: how long a due rerun waits for fewer busy workers before it runs anyway (with all worker slots busy). */
-export const RERUN_WAIT_MS = 15 * 60_000
-
-/**
- * T-511: the regular check's part for tasks whose tests only ran out of time once (rerunDue): their tests run again,
- * once, with no worker and no new try. Only when no task is in the merge line (no task is testing or merging now), and preferably
- * when fewer workers are busy: with every worker slot busy it waits, up to RERUN_WAIT_MS since the time-out.
- * One task at a time (the next one at a later check). Resolves when that rerun has ended. Not in mode off.
- */
-export async function rerunTimedOutTests(host: Host) {
-  const b = await load(host)
-  if (modeOf(b) === 'off' || !symccOn(b)) return
-  const due = b.tasks.filter(t => rerunDue(t) && !checkingNow(t.id)).sort((x, y) => Date.parse(x.updated_at) - Date.parse(y.updated_at))
-  const t = due[0]
-  if (!t) return
-  if (await mergeLineBusy(host)) return
-  const busy = workers.size + starting.size
-  const waited = Date.now() - Date.parse(t.updated_at)
-  if (b.max_parallel > 0 && busy >= b.max_parallel && !(waited >= RERUN_WAIT_MS)) return
-  await rerunTests(host, t)
-}
-
-/**
- * T-511: runs only the tests of task `t0` again (its tests ran out of time once): it goes back to "doing" on the same
- * try (no new try, no retry counted), and its finished work is checked as a worker's hand-back is (finishWork's
- * check: tests, then review, the checker or the merge), with the same finishing mark and time limit.
- */
-async function rerunTests(host: Host, t0: BoardTask) {
-  const id = t0.id
-  const tryNo = t0.attempts
-  if (checkingNow(id)) return
-  finishing.add(id)
-  let beat: { cancel(): void } | null = null
-  try {
-    const b = await load(host)
-    const cur = find(b, id)
-    if (!cur || !rerunDue(cur) || cur.attempts !== tryNo) return
-    const dir = worktreeDir(id)
-    if (!(await host.fs.exists(`${dir}/.git`))) await prepareWorktree(host, cur, intoOf(cur))
-    const t = await change(host, x => {
-      const c = find(x, id)
-      if (!c || !rerunDue(c) || c.attempts !== tryNo) return [x, null] as [Board, null]
-      const y = patchTask(x, id, { status: 'doing', session: S.me, finishing: now(), note: RERUN_RUNNING_NOTE, test_rerun: 1, history: withHistory(c.history, now(), ['step', `${tryLabel(c)}: running only the tests again (no new try)`]) }, now())
-      return [y, find(y, id)!] as [Board, BoardTask]
-    })
-    if (!t) return
-    beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
-    // the owner may have given only this task more time for this rerun (rerun_minutes, T-510)
-    const limitMs = finishLimitMs(b.test_commands.length, taskTestMinutes(b, t))
-    const how = await withLimit(host, limitMs, async (gaveUp, over, turn) => {
-      const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(id))
-      const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
-      const made: string[] = []
-      let r: CheckResult = await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, over, turn, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-      if (r.ok && r.held && !gaveUp() && !stop()) {
-        const c = await afterChecker(host, t, b, r, dir, made, stop, over, turn)
-        if (c.again) return
-        r = c
-      }
-      await finishTail(host, t, b, r, made, 'only the tests ran again', dir, t.agent, gaveUp)
-    })
-    if (how === OVER) {
-      beat?.cancel()
-      beat = null
-      finishing.delete(id)
-      await finishRanOver(host, id, tryNo, limitMs)
-    }
-  } finally {
-    beat?.cancel()
-    await markFinishing(host, id, tryNo, false).catch(() => undefined)
-    finishing.delete(id)
-    await endCheck(host, id)
-  }
-  await checkerAgainNow(host, id)
-  await pump(host)
-}
-
 /** The worker's report of task `t`'s current try, cut short (from its report file), for the history line. */
 async function reportSummary(host: Host, t: SymccTask): Promise<string> {
   const rel = t.runs?.at(-1)?.report
@@ -1138,7 +1060,7 @@ async function holdForFiles(host: Host, t: SymccTask, b: Board, r: CheckResult, 
     if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur]
     const first = !waitsForFiles(cur)
     const status = cur.status === 'review' ? 'review' : 'waiting'
-    const y = patchTask(x, t.id, { status, merge_wait: files, note, test_rerun: undefined, ...(first ? { history: withHistory(cur.history, now(), line) } : {}), ...endedBy(cur, now(), 'finished', 'waiting for your files') }, now())
+    const y = patchTask(x, t.id, { status, merge_wait: files, note, ...(first ? { history: withHistory(cur.history, now(), line) } : {}), ...endedBy(cur, now(), 'finished', 'waiting for your files') }, now())
     return [y, first]
   })
   if (res === 'gone') return
@@ -1177,8 +1099,8 @@ export async function retryFileWaits(host: Host) {
   }
 }
 
-/** The kind of the history entry of a check's result `r`: not finished yet (waits for you, review, files, a rerun), merged, or failed. */
-const resultKind = (r: CheckResult): HistoryKind => (r.blocked || r.timedOut !== undefined || r.ask || r.review ? 'try-result' : r.ok ? 'merged' : 'failed')
+/** The kind of the history entry of a check's result `r`: not finished yet (waits for you, review, files), merged, or failed. */
+const resultKind = (r: CheckResult): HistoryKind => (r.blocked || r.ask || r.review ? 'try-result' : r.ok ? 'merged' : 'failed')
 
 /**
  * What happens to task `t` after its work was checked (`r`): back to "todo" for a new try after
@@ -1191,32 +1113,10 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   const line: HistoryAdd = [resultKind(r), `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`]
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   // A finished worker's try ends with the check's outcome (an approve is not a try: its task is in review, so nothing is set).
-  // T-511: on a rerun of only the tests, the try already ended ("tests ran out of time"): its outcome now is this check's
-  const ended = (cur: SymccTask) => ((cur as BoardTask).test_rerun && cur.status === 'doing' && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', finishedNote(r), true) } : endedBy(cur, now(), 'finished', finishedNote(r)))
   const write = async (patch: (cur: SymccTask) => Partial<BoardTask>) => {
-    // T-511: a check that did not run out of time ends any rerun of only the tests (a later time-out counts as the first again)
-    const moved = await writeIfSame(host, t, cur => ({ ...(r.timedOut === undefined ? { test_rerun: undefined } : {}), ...patch(cur), ...ended(cur) }))
+    const moved = await writeIfSame(host, t, cur => ({ ...patch(cur), ...endedBy(cur, now(), 'finished', finishedNote(r)) }))
     if (moved && moved !== 'gone') await changedMeanwhile(host, t, b, r, line, worktree, agentId)
     return !moved
-  }
-  if (r.timedOut !== undefined) {
-    // T-511: the tests only ran out of time: nothing failed, so no new try and no auto retry. The work stays on its
-    // branch; the first time only the tests run again once, later (rerunTimedOutTests); the second time the owner decides.
-    const twice = (t as BoardTask).test_rerun !== undefined
-    const min = r.timedOut
-    if (!twice) {
-      const note = rerunNote(min)
-      if (!(await write(cur => ({ status: 'waiting', question: null, note, test_rerun: 1, merge_wait: undefined, merge_main: false, history: withHistory(cur.history, now(), line, ['step', note]) })))) return
-      tellLead(host, `${t.id} "${t.title}": its tests ran out of time (${min} min); nothing failed. ${S.N.name} runs only the tests again once, when no other task's tests run, with no new worker try and no auto retry used. Its work is kept on its branch. Nothing to do.`)
-      return
-    }
-    const question = timedOutTwiceQuestion(t.id)
-    const options = [...TIMED_OUT_OPTIONS]
-    const used = taskTestMinutes(b, t as BoardTask)
-    if (!(await write(cur => ({ status: 'waiting', question, options, note: 'waiting for you', test_rerun: 2, merge_wait: undefined, merge_main: false, history: withHistory(cur.history, now(), line, ['step', 'the tests ran out of time twice; nothing failed; waiting for the owner']) })))) return
-    sayNeedsYou(host, b, t, question)
-    tellLead(host, `${question} The tests of ${t.id} "${t.title}" ran out of time (${min} min) twice; nothing failed, and its work is kept on its branch ${taskBranch(t)}. It now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); then ${S.N.name} change ${t.id} with answer: Run the tests again (only the tests run again, no new try), answer: Give them more time (only this task's next test run gets ${moreTestMinutes(used)} min per test command instead of ${used}; the test_minutes setting stays ${testMinutesOf(b)} for every other task and afterwards), or answer: Stop it (it is paused, its work kept).`, { urgent: true })
-    return
   }
   if (r.ask) {
     // The change was only files whose names look like secrets (see checkAndMerge): nothing merged, the task waits for the owner.
@@ -1247,9 +1147,10 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   const testTries = t.test_tries ?? 0
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
     // Don't fail yet: a new worker gets the failing test output (or the checker's report) and fixes it.
-    const note = `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${testTries + 1} of ${retries})`
+    // T-547: tests that ran out of time fail the same way; the note says so (and to raise test_minutes if they are just slow).
+    const note = r.timedOut !== undefined ? timedOutRetryNote(r.timedOut, testTries + 1, retries) : `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${testTries + 1} of ${retries})`
     if (!(await write(cur => ({ status: 'todo', note, test_tries: testTries + 1, test_output: r.testOutput, merge_main: false, history: withHistory(cur.history, now(), line) })))) return
-    tellLead(host, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : 'failed its tests'}; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
+    tellLead(host, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : 'failed its tests'}; retrying on its own (${testTries + 1} of ${retries}). Nothing to do.`)
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)}, still after ${tries} tries to merge it in` : r.detail
@@ -1496,8 +1397,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       // Not the work's fault (e.g. the owner's files could not be updated): it stays in review.
       await change(host, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}`, merge_wait: undefined }, now()) : x))
       // An answer that already says to approve again needs no more advice; anything else gets it here.
-      // T-511: tests that only ran out of time have nothing to fix
-      const next = /approve \S+ again$/.test(r.detail) ? '.' : r.timedOut !== undefined ? '. Approve it again to run the tests again.' : '. Fix that, then approve it again.'
+      const next = /approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'
       return `${t.id} was not merged and stays in review: ${r.detail}${next}`
     }
     await settle(host, cur, b, r, by, dir)
@@ -1843,40 +1743,6 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`
 }
 
-/**
- * T-511: the owner's `answer` to task `id`'s "the tests ran out of time twice" question (or a retry of a task whose
- * tests wait to run again): "Run the tests again" runs only its tests again (no worker, no new try), now (it still
- * waits for its turn in the merge line); "Give them more time" does the same with twice the task's current limit (moreTestMinutes), for
- * that one rerun only (rerun_minutes; the board's test_minutes is not changed);
- * "Stop it" pauses it, its work kept. undefined when the task doesn't wait for that, or for
- * any other answer (then the answer goes to a fresh try as usual).
- */
-export async function answerTimedOut(host: Host, id: string, answer: string): Promise<string | undefined> {
-  const t = find(await load(host), id)
-  if (!t || !(askedTimedOut(t) || rerunDue(t))) return undefined
-  const pick = parseTimedOutAnswer(answer)
-  if (!pick) return undefined
-  let minutes = { was: 0, now: 0 }
-  const out = await change(host, x => {
-    const cur = find(x, id)
-    if (!cur || !(askedTimedOut(cur) || rerunDue(cur))) return [x, null] as [Board, null]
-    // T-510: "Give them more time" is for this one task's next test run only (rerun_minutes); the board's test_minutes stays
-    const was = taskTestMinutes(x, cur)
-    minutes = { was, now: pick === 'more' ? moreTestMinutes(was) : testMinutesOf(x) }
-    const more = pick === 'more' ? `; its next test run may take ${minutes.now} min per test command${minutes.now === was ? ' (the most)' : ` (was ${was})`}` : ''
-    const patch: Partial<BoardTask> = pick !== 'stop'
-      ? { status: 'waiting', question: null, test_rerun: 1, rerun_minutes: pick === 'more' ? minutes.now : undefined, note: `the owner asked to run the tests again${pick === 'more' ? ` with more time (${minutes.now} min each)` : ''}; running them again once, no new try`, history: withHistory(cur.history, now(), ['asked', `${tryLabel(cur)}: the owner asked to run the tests again (no new try)${more}`]) }
-      : { status: 'paused', question: null, test_rerun: undefined, rerun_minutes: undefined, note: TIMED_OUT_STOPPED_NOTE, history: withHistory(cur.history, now(), ['stopped', `${tryLabel(cur)}: the owner stopped it after its tests ran out of time twice; its work is kept`]) }
-    const y = patchTask(x, id, patch, now())
-    return [y, find(y, id)!] as [Board, BoardTask]
-  })
-  if (!out) return undefined
-  if (pick === 'stop') return `${id} is paused: its tests ran out of time twice and the owner stopped it. Its work is kept in its folder and branch; ${S.N.name} resume ${id} starts a new try from there.`
-  void rerunTests(host, out).catch(() => undefined)
-  const more = pick !== 'more' ? '' : `only this run of its tests may take ${minutes.now} min per test command${minutes.now === minutes.was ? ' (already the most)' : ` (was ${minutes.was})`}; the test_minutes setting stays as it is; `
-  return `${id}: ${more}only its tests run again now (once other tests are done), with no new worker try; the board says how it ends.`
-}
-
 /** workers whose agent a check saw ended (or missing from the agent list) without a hand-back: failed a short while later (ENDED_GRACE_MS; a missing one on the next check), or on the next check, if still not handed back */
 export const seenEnded = new Set<string>()
 
@@ -2068,8 +1934,6 @@ export async function check(host: Host) {
   if (late.length) tellLead(host, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
   // Finished work waiting only for the owner's files: merged now (no worker) once they are out of the way.
   await retryFileWaits(host).catch(() => undefined)
-  // T-511: tests that only ran out of time run again once, with no worker (not awaited: the check goes on meanwhile)
-  void rerunTimedOutTests(host).catch(() => undefined)
   if (S.gitState === 'ok') await cleanupMerged(host, await load(host)).catch(() => undefined)
   // old done and dropped tasks move to archive.json (at most once an hour)
   await archiveOld(host).catch(() => undefined)

@@ -1,8 +1,7 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { TOTAL_MARK_NOTE, cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
+import { TOTAL_MARK_NOTE, cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks, answeredLeadLine } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
-import { rerunDue } from '../../core/test-timeout'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { S, workers } from '../../app/state'
@@ -15,7 +14,6 @@ import { answerBox } from './answer-box'
 import { taskPageVs } from './vscode-task'
 import { historyEvent, historyTime, HISTORY_COLOR, type HistoryEvent } from '../../core/history'
 import { claudeHost } from '../host'
-import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
@@ -256,8 +254,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const fileWait = fileWaitText(asked)
   // A running worker over its time limit: "Give it more time?" with +30 min / +60 min / Stop it (see overtimeQuestion).
   const overtime = t.status === 'doing' && !!asked.time_ask
-  // T-511: a task whose tests run again on their own (rerunDue) has nothing to answer either
-  const answerable = (t.status === 'waiting' && !fileWait && !rerunDue(asked)) || overtime
+  const answerable = (t.status === 'waiting' && !fileWait) || overtime
   const askedOptions = overtime ? [...OVERTIME_OPTIONS] : asked.options
   const askedQuestion = overtime ? overtimeQuestion(t.id, (v.max_minutes ?? 45) + (asked.extra_minutes ?? 0)) : t.question
   const choices = answerable ? answerChoices(overtime ? undefined : asked.asked_files, askedOptions) : []

@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou, shownStatus, statusWordOf } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -56,8 +56,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // a note the row's state already says ("worker on it" beside "▶ 12m") is left out; every other note stays (see bandNote)
   const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id))
   const tail = (t: (typeof live)[number]) =>
-    // a waiting task whose tests only run again (not waitsForYou) shows as running: "rerunning its tests" (T-534)
-    fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : t.status === 'waiting' ? ` — ${statusWordOf(t)}` : note(t) ? ` — ${note(t)}` : ''
+    fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : note(t) ? ` — ${note(t)}` : ''
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -76,7 +75,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
       ))}
       {shownTasks.map(t => (
         <Text wrap="truncate">
-          <Text color={color[shownStatus(t)] as never}>
+          <Text color={color[t.status] as never}>
             {leads.get(t.id)}
           </Text>
           <Text> {t.title}</Text>

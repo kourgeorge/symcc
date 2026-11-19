@@ -504,23 +504,6 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   await ui.unmount()
 })
 
-test('T-532: in VS Code a task waiting only to rerun its tests is under Doing as "retest", and its page badge says it reruns its tests', async ($, on) => {
-  const rerun = { ...BOARD_TASKS.find(t => t.id === 'T-404')!, id: 'T-499', title: 'Rerun the tests that ran out of time once', question: null, test_rerun: 1 }
-  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, rerun] } } })
-  on('ui.toast', () => ({ value: undefined }))
-  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  // the waiting task with a question (T-404) is still the only one waiting for you
-  expect((await ui.find({ key: 'vs-head-Waiting for you' }))?.text).toBe('? Waiting for you  1 ')
-  expect((await ui.find({ key: 'vs-head-Doing' }))?.text).toBe('▶ Doing  3 ')
-  const row = await rowText(ui, 'T-499')
-  expect(row.startsWith('T-499')).toBe(true) // no "●": it does not need you
-  expect(row).toMatch(/\n▶ retest/)
-  expect(await rowText(ui, 'T-404')).toMatch(/^● T-404/)
-  await ui.press({ key: 'T-499', link: { href: vsHref('task', 'T-499') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ▶ rerunning its tests /)
-  await ui.unmount()
-})
-
 test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running checker \"checker\"; the page says what each does", async ($, on) => {
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!

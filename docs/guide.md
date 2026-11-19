@@ -261,8 +261,8 @@ prep · title"), all with the same short words:
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
    a new try as usual.
-   **One merge line.** Every way into a merge (a worker's hand-back, your approve, a test
-   rerun, finished work whose files are clear again, a checker's pass) joins one line for
+   **One merge line.** Every way into a merge (a worker's hand-back, your approve,
+   finished work whose files are clear again, a checker's pass) joins one line for
    the whole project, shared by all sessions and target branches, oldest first. Only the
    task at the front has its turn, and does it in one go: it catches up with the branch it
    merges into, runs the tests (skipped when this exact code already passed), and merges.
@@ -275,19 +275,11 @@ prep · title"), all with the same short words:
    and a stale entry (left by a session that died, or older than twice `test_minutes`) is
    cleared by itself, so you never need to edit or delete it by hand.
    **Tests that run out of time.** A test command stopped by its time limit (`test_minutes`,
-   10 minutes by default) is not a
-   failed test: nothing failed, so no new worker try starts and no automatic retry is used.
-   The task keeps its work and waits ("tests ran out of time (10 min); running them again
-   once, no new try"); at a later regular check, when no other task's tests run (and
-   preferably when fewer workers are busy), symcc runs only the test commands again, once.
-   If they pass, the task goes on as usual (review, the checker, or the merge); if a test
-   really fails, it gets a new try as usual. If they run out of time a second time, the
-   task waits for you ("the tests ran out of time twice; nothing failed") with the choices
-   **Run the tests again** (only the tests run again), **Give them more time** (only the tests run
-   again, this once with twice the task's limit, up to 120 minutes; `test_minutes` itself and
-   other tasks are not changed, and later runs of this task use `test_minutes` again) and **Stop it** (the
-   task is paused, its work kept). "retry T-3" on such a task also runs only its tests again.
-   An approve whose tests run out of time stays in review (approve it again).
+   10 minutes by default) fails like a failing test: a new worker try starts with the output
+   (it counts as one of the `auto_retries`), and the task's note says the tests ran out of time
+   after so many minutes and to raise `test_minutes` if the tests are just slow. When no
+   automatic retries are left, the task fails as usual. An approve whose tests run out of time
+   is handled like an approve whose tests fail.
    **Time limit.** Each test command may run up to `test_minutes` (10 minutes by default; a
    project with a slow test suite can raise it, e.g. "set test_minutes to 20"). The whole
    checking and merging gets `test_minutes` for each test command (at least one), plus 5

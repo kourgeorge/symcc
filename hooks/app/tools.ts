@@ -10,8 +10,7 @@ import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
-import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, answerTimedOut, fullAnswer } from './workers'
-import { rerunDue, askedTimedOut, TIMED_OUT_OPTIONS } from '../core/test-timeout'
+import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, fullAnswer } from './workers'
 import { haltChecker } from './checker'
 import { questionTool } from './questions'
 import { markMerged } from './merged'
@@ -529,9 +528,6 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // An answer to a running worker's "give it more time?" question: only that, nothing else changes.
       const overtime = str(a.answer)?.trim() && (t as BoardTask).time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
       if (overtime) return overtime
-      // T-511: an answer to "the tests ran out of time twice": run only the tests again, or stop it (paused, its work kept)
-      const timedOut = str(a.answer)?.trim() ? await answerTimedOut($, t.id, str(a.answer)!) : undefined
-      if (timedOut) return timedOut
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -628,8 +624,6 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
       // Finished work that waited only for the owner's files: just the merge runs again, no worker.
       if (waitsForFiles(t)) return mergeWaiting($, t.id)
-      // T-511: tests that ran out of time: a retry runs only the tests again, no worker
-      if (rerunDue(t) || askedTimedOut(t)) return (await answerTimedOut($, t.id, TIMED_OUT_OPTIONS[0])) ?? `${t.id}: its tests run again`
       // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
       const fromDropped = t.status === 'dropped'

@@ -10,7 +10,7 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { TOTAL_MARK_NOTE, type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, statusWordOf, shownStatus, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
+import { TOTAL_MARK_NOTE, type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
 import { squash } from '../../core/text'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
@@ -187,8 +187,8 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const kind = kindMark(t)
   const total = sumRuns(t.runs, nowMs)
   const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
-  const statusWord = x.answered ? 'answered: read it' : statusWordOf(t)
-  const shown = shownStatus(t)
+  const statusWord = x.answered ? 'answered: read it' : STATUS_WORD[t.status]
+  const shown = t.status
   const head = (
     <Box key="vs-head" flexDirection="column">
       <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>

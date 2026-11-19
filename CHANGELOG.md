@@ -2,6 +2,11 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## Unreleased
+
+### Changed
+- A test command that runs past `test_minutes` now fails like a failing test: a new worker try starts with the output (it uses one automatic retry), and the note says the tests ran out of time after N min and to raise `test_minutes` if they are just slow. symcc no longer reruns only the tests, and no longer asks "the tests ran out of time twice" (with "Run the tests again", "Give them more time", "Stop it"); no task waits for a rerun or shows "retest" any more. A task on your board that was waiting for such a rerun goes back to to do once, with a note.
+
 ## 0.5.4 (2026-11-19)
 
 ### Changed

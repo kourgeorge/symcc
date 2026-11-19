@@ -8,7 +8,6 @@ import { findKind, type KindDef, kindMark } from './kinds'
 import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
-import { shownStatus, statusWordOf } from './commands'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
 export type Seg = { text: string; color: string; bold?: boolean; italic?: boolean }
@@ -61,9 +60,7 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; kinds?: KindDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
-  // a task whose tests run again on their own shows as running, "rerunning its tests" (T-532)
-  const shown = shownStatus(t)
-  R.push({ label: 'Status', segs: [{ text: `${statusMark({ ...t, status: shown })} ${statusWordOf(t)}`, color: STATUS_BADGE[shown], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
+  R.push({ label: 'Status', segs: [{ text: `${statusMark(t)} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)

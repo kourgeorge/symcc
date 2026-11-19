@@ -13,7 +13,6 @@ import { onDemand } from './scouts'
 import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
-import { rerunDue } from './test-timeout'
 
 export * from './failure'
 
@@ -81,9 +80,6 @@ export function withCrew(build: (workers: string, scouts: string) => string, cre
 /** The status column of a task whose worker ran over its time limit while the owner is asked for more time. */
 export const MORE_TIME_CELL = 'more time?'
 
-/** The status column of a task whose tests ran out of time once and run again on their own (T-511: rerunDue). */
-export const RERUN_CELL = 'retest'
-
 /** The short word every board view (terminal list, band, VS Code, OpenCode, text board) shows for each check step:
  *  "prep" for symcc's own pre-merge step, "checker" only while a checker agent runs (the checker setting). */
 export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' }
@@ -111,10 +107,9 @@ export function stepNote(step: CheckStep, note: string | undefined): string | un
  *  worked on ("more time?" while its worker, over its time limit, waits for the owner's answer), "review", "waiting",
  *  "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
-export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'> & { test_rerun?: unknown; question?: unknown; merge_wait?: unknown }, nowMs: number, since?: number | string): string {
+export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string {
   const step = checkStepNow(t, nowMs)
   if (step) return STEP_WORD[step]
-  if (rerunDue(t)) return RERUN_CELL
   if (asksMoreTime(t)) return MORE_TIME_CELL
   if (t.status === 'doing') {
     const last = t.runs?.[t.runs.length - 1]
@@ -607,8 +602,7 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
     .map(([day, ts]) => ({ day, label: dayLabel(day, today), done: ts.length, dropped: 0, tasks: ts }))
   return {
     needsYou: needsYouFirst(s.open.filter(needsYou)),
-    // T-511: a task whose tests run again on their own (rerunDue) shows with the running ones, not under NEEDS YOU
-    doing: s.open.filter(t => (t.status === 'doing' && !asksMoreTime(t)) || rerunDue(t)),
+    doing: s.open.filter(t => t.status === 'doing' && !asksMoreTime(t)),
     todo: waitOrder(s.open.filter(t => t.status === 'todo' || t.status === 'paused'), (x, y) => +(x.status === 'paused') - +(y.status === 'paused') || runOrder(x, y)),
     backlog: s.backlog,
     done,

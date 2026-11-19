@@ -3,10 +3,9 @@ import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '.
 import { dataDir } from '../name'
 import { cleanTokens, keepAgentIds } from './runs'
 import { parseStamp } from './text'
-import { historyEntryOk, migrateHistory } from './history'
+import { historyEntryOk, migrateHistory, withHistory } from './history'
 import type { WorkerQuestion } from './ask'
 import { type OwnerQuestion, cleanQuestions } from './questions'
-import { type TestRerun, asTestRerun } from './test-timeout'
 
 export type Board = {
   version: 1
@@ -102,13 +101,8 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * (the last one wins); `try_refused`: the paths of its edits refused as outside the task's files.
  * `checker`: the agent id of the checker running on this try now (the checker setting), so the guards of any copy
  * of the plugin know it, not only the copy that started it (T-471); its folder is the task's own. Only while "doing" on one try.
- * `test_rerun` (T-511): the tests of its finished work ran out of time (they did not fail): 1 = only the tests run
- * again once, with no new try ("waiting" until the rerun starts, "doing" while it runs); 2 = they ran out of time
- * twice and it waits for the owner (see core/test-timeout.ts). Only while "waiting" or "doing".
- * `rerun_minutes` (T-510): the owner's "Give them more time" for this one task: how many minutes each test command of
- * its next rerun may run (instead of the board's test_minutes, see taskTestMinutes). Only while test_rerun is set.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string; test_rerun?: TestRerun; rerun_minutes?: number }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -207,19 +201,9 @@ export const DEFAULT_TEST_MINUTES = 10
 /** The minutes one test command of board `b` may run before merging: its test_minutes (absent or not usable: DEFAULT_TEST_MINUTES). */
 export const testMinutesOf = (b: { test_minutes?: unknown }): number => (typeof b?.test_minutes === 'number' && Number.isFinite(b.test_minutes) && b.test_minutes >= 1 ? Math.round(b.test_minutes) : DEFAULT_TEST_MINUTES)
 
-/** Whether `v` is a usable rerun_minutes (a whole number of minutes, at least 1). */
-const isRerunMinutes = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1
-
-/**
- * The minutes one test command of task `t` on board `b` may run: the task's own rerun_minutes while it reruns its
- * tests (the owner gave only this task more time, T-510), else the board's test_minutes.
- */
-export const taskTestMinutes = (b: { test_minutes?: unknown }, t?: { test_rerun?: unknown; rerun_minutes?: unknown } | null): number =>
-  t?.test_rerun !== undefined && isRerunMinutes(t?.rerun_minutes) ? t.rerun_minutes : testMinutesOf(b)
-
 /**
  * The project-wide merge line (<data folder>/merge-line.json, T-546): every way into a merge (a hand-back, an approve, a
- * rerun, finished work whose files are clear again, a checker's pass) joins it, across tasks and sessions, and only
+ * finished work whose files are clear again, a checker's pass) joins it, across tasks and sessions, and only
  * the task at its front has its turn: catch up with the target branch, run the tests, move the branch (see inMergeLine
  * in app/merge-line.ts). Entries are kept oldest first: the task, a key for that one go, its session, when it joined,
  * and `at`, the last time its copy of the plugin said it is still alive. An entry dated more than mergeLineStaleMs
@@ -435,8 +419,6 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
     else delete x.merge_wait
   }
   if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
-  if ('test_rerun' in x && !(asTestRerun(x.test_rerun) && (x.status === 'waiting' || x.status === 'doing'))) delete x.test_rerun
-  if ('rerun_minutes' in x && !(x.test_rerun !== undefined && isRerunMinutes(x.rerun_minutes))) delete x.rerun_minutes
   const { session, finishing, checking: rawChecking, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'
   const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined
@@ -459,7 +441,9 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - a try's tokens saved as one number: kept as-is, marked unsplit (see migrateRunTokens);
  * - no merge_into (from before each task kept its own branch): `into`, the board's old target_branch;
  * - stage, stages and backs (from the stage engine, now removed): dropped (see withoutStages);
- * - history lines saved as plain strings (before T-522): records { at, kind, text }, the time and kind guessed (see migrateHistory).
+ * - history lines saved as plain strings (before T-522): records { at, kind, text }, the time and kind guessed (see migrateHistory);
+ * - test_rerun and rerun_minutes (from the tests-only rerun, removed in T-547): dropped; a task that waited for that
+ *   rerun (or for the owner's answer after two time-outs) goes back to "todo" for a new try (see withoutTestRerun).
  */
 export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = withoutStages(t) ?? t
@@ -483,7 +467,25 @@ export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
       }),
     }
   }
+  const rerun = withoutTestRerun(out)
+  if (rerun) out = rerun
   return out === t ? null : out
+}
+
+/** The note of a task that waited to rerun only its tests when that rerun was removed (T-547): it is sent to a new try. */
+export const TEST_RERUN_GONE_NOTE = 'its tests had run out of time; symcc no longer reruns only the tests, so a new try starts (raise test_minutes if the tests are just slow)'
+
+/**
+ * Task `t` without the old test_rerun and rerun_minutes fields (T-547), or null when it has neither. A task that was
+ * "waiting" or "doing" with test_rerun set (waiting for its tests to run again, or for the owner's answer after two
+ * time-outs) goes back to "todo" with TEST_RERUN_GONE_NOTE, its question cleared; any other task just loses the fields.
+ */
+export function withoutTestRerun(t: BoardTask): BoardTask | null {
+  if (!('test_rerun' in t) && !('rerun_minutes' in t)) return null
+  const { test_rerun, rerun_minutes: _m, ...rest } = t as BoardTask & { test_rerun?: unknown; rerun_minutes?: unknown }
+  if (test_rerun === undefined || test_rerun === null || (t.status !== 'waiting' && t.status !== 'doing')) return rest as BoardTask
+  const { session: _s, finishing: _f, checking: _c, options: _o, asked_files: _a, ...todo } = rest as BoardTask
+  return { ...todo, status: 'todo', question: null, note: TEST_RERUN_GONE_NOTE, history: withHistory(t.history, t.updated_at || '', ['step', TEST_RERUN_GONE_NOTE]) } as BoardTask
 }
 
 /**

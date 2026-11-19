@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
-import { MERGE_LINE_FILE, type LineEntry, parseMergeLine, mergeLineText, mergeLineStaleMs, lineEntryStale, taskTestMinutes, find, checkStepNow, inLineNote, patchTask } from '../board'
+import { MERGE_LINE_FILE, type LineEntry, parseMergeLine, mergeLineText, mergeLineStaleMs, lineEntryStale, testMinutesOf, find, checkStepNow, inLineNote, patchTask } from '../board'
 import { S } from './state'
 import { change, load, locked, now, path, safeWrite } from './store'
 
@@ -90,7 +90,7 @@ async function staleOf($: Host, others: readonly LineEntry[]): Promise<Set<strin
   const at = Date.now()
   for (const e of others) {
     const cur = b ? find(b, e.task) : undefined
-    if (mineNow.has(e.task) || lineEntryStale(e, at, mergeLineStaleMs(taskTestMinutes(b ?? {}, cur)))) out.add(e.key)
+    if (mineNow.has(e.task) || lineEntryStale(e, at, mergeLineStaleMs(testMinutesOf(b ?? {})))) out.add(e.key)
     else if (b && (!cur || !checkStepNow(cur, at))) out.add(e.key)
   }
   return out
@@ -150,15 +150,6 @@ async function place($: Host, me: Mine): Promise<{ ahead: number; others: number
   const at = Math.max(0, line.findIndex(e => e.key === me.entry.key))
   const ahead = line.slice(0, at)
   return { ahead: ahead.length, others: ahead.filter(e => !keys.has(e.key)).length }
-}
-
-/** T-511: whether some task is in the merge line now (its turn going on, or waiting for it): one of this copy's, or another session's entry that is not stale. */
-export async function mergeLineBusy($: Host): Promise<boolean> {
-  if (local.some(m => !m.gone)) return true
-  const line = await readMergeLine($)
-  if (!line.length) return false
-  const stale = await staleOf($, line)
-  return line.some(e => !stale.has(e.key))
 }
 
 /** Sets task `t`'s note to what `note` makes of it, while the task is still as it was. Never throws. */

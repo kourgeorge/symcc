@@ -6,7 +6,7 @@ import type { Host } from '../host'
 import { change, now, path, safeWrite } from './store'
 import { inMergeLine } from './merge-line'
 import { tellLead } from './tell'
-import { ranOutOfTime, limitMinutes, timedOutDetail } from '../core/test-timeout'
+import { ranOutOfTime, limitMinutes, timedOutDetail, timedOutHead } from '../core/test-timeout'
 import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
 
 // ---------------- a task's changes, for review ----------------
@@ -99,8 +99,8 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
  * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
  * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
- * `timedOut` (T-511): a test command was stopped by its time limit (these minutes), so nothing failed and nothing merged;
- * there is no `testOutput`, so no new try starts for it: only the tests run again (see settle and rerunTimedOutTests).
+ * `timedOut`: a test command was stopped by its time limit (these minutes); it fails like a failing test, with its
+ * output in `testOutput` (T-547), only its note says so (see settle).
  */
 export type CheckResult = { ok: boolean; detail: string; timedOut?: number; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
 
@@ -390,11 +390,11 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       for (const cmd of b.test_commands) {
         await refresh()
         let thrown: string | undefined
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b, t as BoardTask) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
-        // T-511: stopped by its time limit, not failed: no test output, so no new try is started for it (see settle)
+        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        // T-547: stopped by its time limit: it fails like a failing test, its output goes to a new try (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
-          const min = limitMinutes(testTimeoutMs(b, t as BoardTask))
-          return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min) }
+          const min = limitMinutes(testTimeoutMs(b))
+          return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min), testOutput: testTail(`${timedOutHead(cmd, min)}\n${r.stdout}\n${r.stderr}`) }
         }
         if (r.exitCode !== 0) {
           const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)

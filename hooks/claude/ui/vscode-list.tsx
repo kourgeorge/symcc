@@ -9,7 +9,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, triesTotal, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, shownStatus, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, triesTotal, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -64,8 +64,7 @@ export function listPageVs($: $, pane: PaneParts) {
    *  waited for you ("? waiting for 1m", "◆ review for 5m") or since it failed ("✗ failed 3m ago"). */
   const statusText = (x: SymccTask) => {
     const cell = statusCell(x, nowMs, since(x.id))
-    // a task whose tests run again on their own shows as running: "▶ retest" (T-532: shownStatus)
-    const st = shownStatus(x)
+    const st = x.status
     const waited = waitsForYou(x) || x.status === 'review' || x.status === 'failed' ? ago(x.updated_at) : ''
     // with a time, the short word ("waiting for 1m", not "waiting for you for 1m")
     if (waited) return `${statusMark({ ...x, status: st })} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
@@ -105,7 +104,7 @@ export function listPageVs($: $, pane: PaneParts) {
         </Box>
         {ended ? null : (
           <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
-            <Text color={C(tone[shownStatus(x)]!)}>{statusText(x)}</Text>
+            <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
             {rest ? ` · ${rest}` : ''}
             {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
           </Text>
@@ -115,7 +114,7 @@ export function listPageVs($: $, pane: PaneParts) {
   }
 
   const open = [...parts.needsYou, ...parts.doing, ...parts.todo]
-  const groups = GROUPS.map(g => ({ ...g, tasks: open.filter(t => g.has.includes(shownStatus(t))) })).filter(g => g.tasks.length)
+  const groups = GROUPS.map(g => ({ ...g, tasks: open.filter(t => g.has.includes(t.status)) })).filter(g => g.tasks.length)
   // the lead's open questions for the owner, first of all (not while searching); each row opens its answer page
   const questions = filtering ? [] : (v.questions ?? [])
   const asks = questions.length
