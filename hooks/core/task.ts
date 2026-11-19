@@ -106,6 +106,7 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (!waitsForFiles(next) || (next.status !== t.status && !('merge_wait' in patch))) delete next.merge_wait
   // T-511: a rerun of only the tests (or the owner's question after two time-outs) belongs to waiting or doing.
   if (next.status !== 'waiting' && next.status !== 'doing') delete next.test_rerun
+  if (next.test_rerun === undefined) delete next.rerun_minutes
   return putTask(b, next)
 }
 

@@ -1,8 +1,9 @@
 // Failing tests, turning things on and off, the settings, and branch conflicts.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
+import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { ellipsis, num } from './text'
+import { MAX_TEST_MINUTES } from './test-timeout'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
 const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' => ((tries ?? 0) < max ? 'retry' : 'fail')
@@ -250,11 +251,15 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: off/review/auto; notify: off/sound/voice; findings: auto/backlog; untested: off/ask/review */
 export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
 export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
+
+/** Why test_minutes value `v` is refused ('' when it is a whole number of minutes from 1 to MAX_TEST_MINUTES). */
+export const testMinutesRefusal = (v: unknown): string =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= MAX_TEST_MINUTES ? '' : `test_minutes must be a whole number of minutes from 1 to ${MAX_TEST_MINUTES} (got ${JSON.stringify(v)})`
 
 /** How many test commands a board keeps. */
 export const MAX_TEST_COMMANDS = 5
@@ -267,6 +272,7 @@ export function useAssistantWord(word: string) {
 
 export const SETTINGS: SettingInfo[] = [
   { name: 'test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
+  { name: 'test_minutes', kind: 'number', min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: 'how long each test command may run before merging' },
   { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
   { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer makes symcc ask the owner for more time' },
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
@@ -293,7 +299,7 @@ export type SettingGroup = { title: string; items: readonly (SettingName | Setti
  */
 export const SETTING_GROUPS: readonly SettingGroup[] = [
   { title: 'Work', items: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'] },
-  { title: 'Checks before merging', items: ['test_commands', 'tests_with_changes', 'checker'] },
+  { title: 'Checks before merging', items: ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'] },
   { title: 'Workers', items: ['roles', 'kinds'] },
   { title: 'Scouts', items: ['scout_findings'] },
   { title: 'Board and alerts', items: ['notify', 'open_on_start', 'archive_days'] },
@@ -314,6 +320,8 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
       return `${v} at once`
     case 'max_minutes':
       return `${v} min`
+    case 'test_minutes':
+      return `tests ${v} min`
     case 'auto_retries':
       return `${v} ${v === '1' ? 'retry' : 'retries'}`
     case 'enabled':
@@ -385,6 +393,8 @@ export function settingValue(b: Partial<Board>, name: SettingName): string {
       return testsWithChangesOf(b)
     case 'checker':
       return b.checker === true ? 'on' : 'off'
+    case 'test_minutes':
+      return String(testMinutesOf(b))
     default:
       return String(b[name] ?? d[name])
   }
@@ -398,7 +408,7 @@ export type SettingChange = { name: SettingName; value: string; said: string; cu
 
 /**
  * Applies the settings in `a` to the board, with the same limits for the lead and the owner:
- * max_parallel 1-8, max_minutes 5-600, auto_retries 0-10, up to 5 test commands. A value
+ * max_parallel 1-8, max_minutes 5-600, auto_retries 0-10, test_minutes 1-120, up to 5 test commands. A value
  * outside its limit is cut to it, and the change says so. There is no branch setting: each task
  * merges into the branch it was made on. Mode and enabled are not set here (see setBoardMode and setEnabled).
  */
@@ -411,7 +421,7 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
     y.test_commands = all.slice(0, MAX_TEST_COMMANDS)
     add('test_commands', `tests: ${testCommandsText(y.test_commands)}`, all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept: test_commands holds up to ${MAX_TEST_COMMANDS})` : '')
   }
-  for (const name of ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days'] as const) {
+  for (const name of ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_minutes'] as const) {
     const n = a[name]
     if (typeof n !== 'number' || !Number.isFinite(n)) continue
     const s = settingInfo(name)!
@@ -421,6 +431,7 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
     const said =
       name === 'max_parallel' ? `up to ${v} at once`
       : name === 'max_minutes' ? `a worker may run ${v} min`
+      : name === 'test_minutes' ? `each test command may run ${v} min before merging`
       : name === 'archive_days' ? (v ? `done and dropped tasks older than ${v} ${v === 1 ? 'day' : 'days'} are archived` : 'old tasks are never archived')
       : `${v} automatic ${v === 1 ? 'retry' : 'retries'} after failing tests`
     add(name, said, cut)
