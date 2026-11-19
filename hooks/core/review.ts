@@ -3,6 +3,7 @@ import type { SymccMode, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type BoardTask, type Blockers, blockerFiles, find, isMode, modeOf, STATUS_WORD } from './board-file'
 import { isSecretName } from './git-setup'
+import { withHistory } from './history'
 import { patchTask } from './task'
 import { clean, shownPath } from './text'
 
@@ -130,7 +131,7 @@ export function rejectTask(b: Board, id: string, reason: string, now: string): B
   const t = reviewTask(b, id, 'reject')
   const why = clean(reason, 1000)
   if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
-  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: rejected by the owner: ${why}`] }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`]) }, now)
 }
 
 // ---------------- looking at a task's changes (review) ----------------

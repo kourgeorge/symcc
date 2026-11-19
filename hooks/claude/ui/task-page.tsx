@@ -13,7 +13,7 @@ import { runTool, when, allowAskedFiles, refuseAskedFiles } from '../../app/tool
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { taskPageVs } from './vscode-task'
-import { historyEvent, HISTORY_COLOR, type HistoryEvent } from '../../core/history'
+import { historyEvent, historyTime, HISTORY_COLOR, type HistoryEvent } from '../../core/history'
 import { claudeHost } from '../host'
 import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
@@ -216,12 +216,15 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  // The history as a timeline (T-512), newest first: each event's mark in its tone, its try label in bold, the words
+  // The history as a timeline (T-512), newest first: each event's mark in its tone, when it happened (T-522: "10:42"
+  // today, "Nov 18 22:49" before; nothing for an old entry with no time), its try label in bold, the words
   // wrapped under the mark with the connector (│) beside them, and a connector line between events.
   const historyLines = (events: HistoryEvent[]) =>
     events.flatMap((e, i) => {
       const last = i === events.length - 1
+      const at = historyTime(e.at, pane.nowMs)
       const words: Seg[] = [
+        ...(at ? [{ text: `${at} `, color: 'inactive' } as Seg] : []),
         ...(e.label ? [{ text: `${e.label}: `, color: 'text', bold: true } as Seg] : []),
         { text: e.said, color: e.tone === 'bad' && !e.result ? 'error' : 'inactive' },
         ...(e.result ? [{ text: ` → ${e.result}`, color: e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text' } as Seg] : []),
@@ -282,7 +285,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const failed = t.status === 'failed'
   const latest = reports[reports.length - 1]
   const latestBody = !failed || !latest || latest.try !== t.attempts ? null : latest === shown ? reportBody : await $.fs.read(path(latest.file)).then(x => String(x), () => null)
-  const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1) ?? '') } : null
+  const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1)?.text ?? '') } : null
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
   const goBack = act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))
   const openTask = (id: string) => act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => id)))

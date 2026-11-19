@@ -6,7 +6,7 @@ import { taskBranch } from './git'
 import { S, toolName } from './state'
 
 /** A task's history without the "created by ..." line: what earlier tries did. */
-export const tries = (t: SymccTask) => t.history.filter(line => !line.startsWith('created by '))
+export const tries = (t: SymccTask) => t.history.filter(h => h.kind !== 'created').map(h => h.text)
 
 /** The last tries, as the prompts list them. */
 const triesList = (t: SymccTask) => tries(t).slice(-5).map(line => `- ${line}`).join('\n')

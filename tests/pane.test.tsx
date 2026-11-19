@@ -8,6 +8,7 @@ import type { SymccStatus } from '../types'
 import { sayQueue } from '../hooks/app/state'
 import { inProject } from './project'
 import { ran, readText, entry, slash, print } from './fakes'
+import { hist } from './history-fixture'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -247,7 +248,7 @@ test('with an empty board the band shows nothing of its own', async ($, on) => {
 })
 
 test('the board panel is interactive: open a task, see its details, go back', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'failed', 'Explore the market', { details: 'Research what is new.', note: 'the worker was stopped', history: ['try 1: stopped'] }), task('T-2', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'failed', 'Explore the market', { details: 'Research what is new.', note: 'the worker was stopped', history: hist('try 1: stopped') }), task('T-2', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
@@ -519,7 +520,7 @@ test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on key
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
   expect(saved.length).toBe(1)
   expect(saved[0].tasks[0]).toMatchObject({ status: 'todo', files: ['src/', 'README.md'] })
-  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner allowed files: + README.md')
+  expect(saved[0].tasks[0].history.at(-1)?.text).toBe('the owner allowed files: + README.md')
   await ui.unmount()
 })
 
@@ -539,7 +540,7 @@ test('a question with options shows one button per option plus Answer…; pickin
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
   expect(saved.length).toBe(1)
   expect(saved[0].tasks[0].status).toBe('todo')
-  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “blue”')
+  expect(saved[0].tasks[0].history.at(-1)?.text).toBe('the owner answered: “blue”')
   expect(saved[0].tasks[0]).not.toHaveProperty('options')
   await ui.unmount()
 })
@@ -574,13 +575,13 @@ test('the answer buttons show only the choice (no number key inside); keys 1-5 s
   expect(await ui.find({ type: 'Text', text: 'keys 1-5 pick a choice' })).toBeDefined()
   await ui.press({ key: 'choice-2' })
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
-  expect(saved[0].tasks[0].history.at(-1)).toBe('the owner answered: “Once a day”')
+  expect(saved[0].tasks[0].history.at(-1)?.text).toBe('the owner answered: “Once a day”')
   await ui.unmount()
 })
 
 test('an opened task shows its details in full, in clear sections', async ($, on) => {
   const long = 'First line of the plan.\n\nSecond paragraph that is long. '.repeat(20)
-  stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: ['try 1: old', 'try 2: new'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'todo', 'Build on it', { details: long + 'THE END', files: ['src/a.ts', 'test/'], after: ['T-1'], history: hist('try 1: old', 'try 2: new') })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /What to do/ })).toBeDefined()
   // long "What to do" text and the Details rows are both shown in full
@@ -1725,7 +1726,7 @@ test('archived tasks are only counted on the Done row, and /symcc-task still fin
 const R1 = '.symcc/reports/T-1-try-1.md'
 const R2 = '.symcc/reports/T-1-try-2.md'
 const reportedTask = (extra: Record<string, unknown> = {}) =>
-  task('T-1', 'done', 'Explore the market', { attempts: 2, runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '', report: R2 }], history: ['try 1: first go → tests failed', 'try 2: second go → merged into main'], ...extra })
+  task('T-1', 'done', 'Explore the market', { attempts: 2, runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '', report: R2 }], history: hist('try 1: first go → tests failed', 'try 2: second go → merged into main'), ...extra })
 
 test('the task page shows the latest try\'s full report, and a try\'s number key shows that try\'s report', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-1.md': 'First try report: the tests failed.\n', '/reports/T-1-try-2.md': `Second try report.\n\n${'A long line of words that must wrap. '.repeat(6)}\nLast line.\n` })
@@ -1753,7 +1754,7 @@ test('the task page shows the latest try\'s full report, and a try\'s number key
 })
 
 const answeredTask = (extra: Record<string, unknown> = {}) =>
-  task('T-1', 'review', 'Why is the cache slow', { kind: 'investigation', role: 'researcher', attempts: 1, note: 'answered; waiting for you to read it', answer: 'Saved short answer.', runs: [{ started: '', ended: '', report: R1 }], history: ['try 1: answered: The cache is never cleared.'], ...extra })
+  task('T-1', 'review', 'Why is the cache slow', { kind: 'investigation', role: 'researcher', attempts: 1, note: 'answered; waiting for you to read it', answer: 'Saved short answer.', runs: [{ started: '', ended: '', report: R1 }], history: hist('try 1: answered: The cache is never cleared.'), ...extra })
 
 test('an answered investigation opens with its full answer and Done, Keep as a note and Ask more instead of Approve and Reject', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-1.md': `The cache is never cleared.\n\n${'It grows with every request and is never trimmed. '.repeat(4)}\nChecked in src/cache.ts.\n` })
@@ -1815,7 +1816,7 @@ test('the board list and the task page show ● for a to do task worked on befor
 })
 
 test('an old task without saved reports still opens and says "no saved report"', async ($, on) => {
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Old one', { attempts: 1, runs: [{ started: '', ended: '' }], history: ['try 1: did it → merged into main'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Old one', { attempts: 1, runs: [{ started: '', ended: '' }], history: hist('try 1: did it → merged into main') })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
   expect(L.some(l => /^▍Report$/.test(l))).toBe(true)
@@ -2170,7 +2171,7 @@ test('the Scouts, Settings and Roles rows are plain Buttons like the task rows: 
 
 test('a failed task page starts with "Why it failed": the reason, what the report asks and what to do next, before Details', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-1.md': 'Found the cause: the cache key ignores the user.\nNo code change needed.\nNEED FILES: src/cache.ts\n' })
-  const t = task('T-1', 'failed', 'Fix the cache', { attempts: 1, note: 'the worker made no change', runs: [{ started: '', ended: '', report: R1 }], history: ['try 1: Found the cause: the cache key ignores the user. No code change needed. NEED FILES: src/cache.ts → the worker made no change'] })
+  const t = task('T-1', 'failed', 'Fix the cache', { attempts: 1, note: 'the worker made no change', runs: [{ started: '', ended: '', report: R1 }], history: hist('try 1: Found the cause: the cache key ignores the user. No code change needed. NEED FILES: src/cache.ts → the worker made no change') })
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
@@ -2187,7 +2188,7 @@ test('a failed task page starts with "Why it failed": the reason, what the repor
 
 test('the "Why it failed" block does not show an earlier try\'s file request when the failed try left no report', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-1.md': 'I need one more file.\nNEED FILES: src/cache.ts\n' })
-  const t = task('T-1', 'failed', 'Fix the cache', { attempts: 2, note: 'the worker ended without a result', runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '' }], history: ['try 1: worker asked for more files: src/cache.ts', 'try 2: the worker ended without a result'] })
+  const t = task('T-1', 'failed', 'Fix the cache', { attempts: 2, note: 'the worker ended without a result', runs: [{ started: '', ended: '', report: R1 }, { started: '', ended: '' }], history: hist('try 1: worker asked for more files: src/cache.ts', 'try 2: the worker ended without a result') })
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)

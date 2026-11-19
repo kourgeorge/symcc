@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { leadCalls, projectFolderName } from '../hooks/claude/lead-usage'
+import { hist } from './history-fixture'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
@@ -81,14 +82,14 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(failReason('try 1: rejected by the owner: too long')).toBe('rejected')
   expect(failReason('try 1: tests failed → merged into main (abc)')).toBe(null)
   expect(failReason('moved to the backlog')).toBe(null)
-  expect(mergedHow({ history: ['try 1: x → merged into main (abc)'] })).toBe('own')
-  expect(mergedHow({ history: ['try 1: x → checks passed; ready for review', 'try 1: approved by the owner → merged into main (abc); approved by the owner'] })).toBe('approved')
+  expect(mergedHow({ history: hist('try 1: x → merged into main (abc)') })).toBe('own')
+  expect(mergedHow({ history: hist('try 1: x → checks passed; ready for review', 'try 1: approved by the owner → merged into main (abc); approved by the owner') })).toBe('approved')
   expect(mergedHow({ history: [] })).toBe(null)
   expect(originKey({ origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })).toBe('scout bugs')
   expect(originKey({})).toBe('unknown')
   const tasks = [
-    task('T-1', { history: ['try 1: a → tests failed: x', 'try 2: b → merged into main (1)'], origin: { by: 'owner', why: 'w', at: iso(60) } }, [[10, 100], [10, 100]]),
-    task('T-2', { role: 'docs', history: ['try 1: approved by the owner → merged into main (2); approved by the owner'] }, [[5, 50]]),
+    task('T-1', { history: hist('try 1: a → tests failed: x', 'try 2: b → merged into main (1)'), origin: { by: 'owner', why: 'w', at: iso(60) } }, [[10, 100], [10, 100]]),
+    task('T-2', { role: 'docs', history: hist('try 1: approved by the owner → merged into main (2); approved by the owner') }, [[5, 50]]),
   ]
   const text = statsReport({ tasks, nowMs: NOW })
   expect(text).toMatch(/merged on its own +▇+ +1 +50%/)
@@ -99,7 +100,7 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(text).toMatch(/docs +▇+ +1 +50%  avg +50 tok/)
   expect(text).toMatch(/Today +▇+ +2 +25m/)
   expect(text).toContain('Time waiting for you is not shown')
-  expect(statsReport({ tasks, nowMs: NOW, full: true })).toContain("time waiting for you is not shown: history lines carry no times, so it")
+  expect(statsReport({ tasks, nowMs: NOW, full: true })).toContain("time waiting for you is not shown: history entries from older boards")
 })
 
 test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
@@ -279,12 +280,12 @@ test('stats: a long line is wrapped under its text, within 80 columns', () => {
 /** Five tasks with known origins, roles, outcomes and days, for the bar charts. */
 function knownTasks(): SymccTask[] {
   const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
-  const merged = { history: ['try 1: x → merged into main (1)'] }
+  const merged = { history: hist('try 1: x → merged into main (1)') }
   return [
     task('T-1', { ...merged, origin: { by: 'lead', why: '', at: '' } }, [[10, 1000]]),
     task('T-2', { ...merged, origin: { by: 'lead', why: '', at: '' } }, [[20, 2000]]),
     task('T-3', { ...merged, origin: { by: 'owner', why: '', at: '' }, role: 'docs' }, [[30, 4000]]),
-    task('T-4', { history: ['try 1: x → tests failed: y', 'try 2: approved by the owner → merged into main (2); approved by the owner'], ...scout('gaps-bot') }, [[40, 8000], [5, 0]]),
+    task('T-4', { history: hist('try 1: x → tests failed: y', 'try 2: approved by the owner → merged into main (2); approved by the owner'), ...scout('gaps-bot') }, [[40, 8000], [5, 0]]),
     task('T-5', { status: 'todo', ...scout('test-gaps'), updated_at: iso(60 * 24 * 2) }),
   ]
 }
@@ -367,11 +368,11 @@ test('stats: investigations end "answered", are counted on their own, and stay o
     const t = task(id, { kind: 'investigation', role: 'researcher', ...over } as Partial<SymccTask>, tries)
     return { ...t, runs: t.runs?.map(r => ({ ...r, ended_by: 'finished' as const, ended_note: 'answered' })) }
   }
-  expect(mergedHow({ kind: 'investigation', history: ['try 1: the owner read the answer → done (nothing merged)'] })).toBe('answered')
+  expect(mergedHow({ kind: 'investigation', history: hist('try 1: the owner read the answer → done (nothing merged)') })).toBe('answered')
   const tasks = [
     ...knownTasks(),
-    inv('T-6', { history: ['try 1: answered: x', 'try 1: the owner read the answer → done (nothing merged)'] }, [[10, 3000], [20, 5000]]),
-    inv('T-7', { status: 'review', history: ['try 1: answered: y'] }, [[30, 2000]]),
+    inv('T-6', { history: hist('try 1: answered: x', 'try 1: the owner read the answer → done (nothing merged)') }, [[10, 3000], [20, 5000]]),
+    inv('T-7', { status: 'review', history: hist('try 1: answered: y') }, [[30, 2000]]),
   ]
   for (const full of [false, true]) {
     const text = statsReport({ tasks, nowMs: NOW, full, team: { leadProblem: 'no logs' } })

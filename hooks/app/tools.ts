@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedLine, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -50,7 +50,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
     }
     for (const n of crossBranchNotes(t, all)) L.push(`  note: ${n}`)
   }
-  if (t.history.length) L.push('', `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map(line => `  • ${line}`))
+  if (t.history.length) L.push('', `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map(h => `  • ${historyLineText(h)}`))
   if (t.runs?.length) L.push('', 'Time and cost:', ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`)
   const commits = taskCommits(t)
   if (commits.length) L.push('', 'Commits (newest first):', ...commits.map(c => `  ${commitText(c)}`))
@@ -446,7 +446,7 @@ export async function refuseAskedFiles($: Host, id: string): Promise<string> {
 
 /** The change tool's reply when `answer` comes for a task that is not waiting (any) more: nothing is changed. */
 function alreadyAnsweredText(t: SymccTask, a: In): string {
-  const earlier = [...t.history].reverse().find(l => l.startsWith('the owner answered: '))
+  const earlier = [...t.history].reverse().find(l => l.text.startsWith('the owner answered: '))?.text
   const quoted = earlier ? `, ${earlier}` : ''
   const others = ['title', 'details', 'add_details', 'files', 'after', 'order', 'needs_review', 'backlog', 'role', 'kind', 'merge_into'].filter(k => a[k] !== undefined)
   const also = others.length ? ` The other changes (${others.join(', ')}) were not made either; send them again without answer.` : ''
@@ -558,7 +558,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // A note from the lead added to the details; the old text stays.
       const note = str(a.add_details)?.trim()
       const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
-      const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: [...(find(x, t.id) ?? t).history, noteAddedLine(note)] } : {})
+      const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ['note', noteAddedLine(note)]) } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? t.question : null)
       if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
       const fields = (): Partial<BoardTask> => {
@@ -614,7 +614,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const cur = find(x, t.id) ?? t
         const lines = changeLines(t, patch, wasDoing, answer, note)
         const end = wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
-        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: [...cur.history, ...lines] } : {}) }, now(), S.N.dir)
+        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {}) }, now(), S.N.dir)
       })
       void pump($)
       return `${t.id} ${note ? 'note added' : 'updated'}${wasDoing ? ` (restarting${note ? ' with the note' : ''})` : ''}${t.status === 'paused' ? ` (still paused; ${S.N.name} resume ${t.id} continues it)` : ''}${into ? `; it now merges into ${into}` : ''}`
@@ -634,7 +634,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const fromDropped = t.status === 'dropped'
       await change($, x => {
         const cur = find(x, t.id)
-        const history = fromDropped && cur ? [...cur.history, 'brought back from dropped'] : undefined
+        const history = fromDropped && cur ? withHistory(cur.history, now(), ['retried', 'brought back from dropped']) : undefined
         return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, conflict_tries: 0, merge_main: clashed, ...(history ? { history } : {}) }, now())
       })
       void pump($)
@@ -647,7 +647,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, 'the lead asked the owner a question')] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, 'the lead asked the owner a question')) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
     }
@@ -682,14 +682,14 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, reason ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(wasDoing ? { history: [...(find(x, t.id) ?? t).history, stoppedLine(t, paused)] } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(wasDoing ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, paused)) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
     case 'resume': {
       const t = await taskOrThrow($, id)
       if (t.status !== 'paused') return `${t.id} is not paused (it is ${t.status})`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed', history: [...(find(x, t.id) ?? t).history, 'resumed after a pause'] }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed', history: withHistory((find(x, t.id) ?? t).history, now(), ['resumed', 'resumed after a pause']) }, now()))
       void pump($)
       return `${t.id} resumed`
     }

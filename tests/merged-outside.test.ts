@@ -9,6 +9,7 @@ import { saveBoard, load } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { test } from './reset'
 import { fakeHost, memoryFs } from './fake-host'
+import { hist } from './history-fixture'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -74,7 +75,7 @@ async function seed(w: ReturnType<typeof world>, status: string, extra: Record<s
   const [b1] = addTask({ ...emptyBoard(), test_commands: ['npm test'] }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'], merge_into: 'main' }, ISO)
   const [b2] = addTask(b1, { origin: { why: 'a test' }, title: 'Then this', files: ['src/'], after: ['T-1'], merge_into: 'main' }, ISO)
   const runs = [{ started: ISO, ended: ISO, end: 'failed', commits: [C1] }, { started: ISO, ended: ISO, end: 'failed' }]
-  const b = patchTask(b2, 'T-1', { status: status as never, attempts: 2, runs, history: ['try 2 → failed: the tests ran out of time'], ...extra }, ISO)
+  const b = patchTask(b2, 'T-1', { status: status as never, attempts: 2, runs, history: hist('try 2 → failed: the tests ran out of time'), ...extra }, ISO)
   await saveBoard(w.$, b)
   return b
 }
@@ -92,7 +93,7 @@ test('a failed task whose branch is in main becomes done with the history line, 
   const t = find(b, 'T-1')!
   expect(t.status).toBe('done')
   expect(t.merged).toBe(MERGE)
-  expect(t.history.at(-1)).toBe('merged outside the board (e1e1e1e1); marked done by the lead')
+  expect(t.history.at(-1)?.text).toBe('merged outside the board (e1e1e1e1); marked done by the lead')
   // its commits are recorded on its last try, with the merge commit
   expect((t.runs?.at(-1)?.commits ?? []).filter(isSha)).toEqual([C1, C2, MERGE])
   // tasks waiting on it can start
@@ -131,7 +132,7 @@ test('a dropped task can be marked as merged (from the board: marked done by the
   await runTool(w.$, 'merged', { task: 'T-1', by: 'the owner' })
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.history.at(-1)).toBe('merged outside the board (e1e1e1e1); marked done by the owner')
+  expect(t.history.at(-1)?.text).toBe('merged outside the board (e1e1e1e1); marked done by the owner')
   expect(mergesOrTests(w.calls)).toEqual([])
 })
 

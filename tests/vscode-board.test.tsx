@@ -10,6 +10,7 @@ import { ASK_LEAD, ASK_LEAD_DRAFT } from '../hooks/claude/ui/vscode-list'
 import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING } from '../hooks/board'
+import { hist } from './history-fixture'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -433,7 +434,7 @@ test('mdText keeps a title plain in markdown', () => {
 test('in VS Code a row keeps its kind when its question or reason has the same word, and one option is "1 choice"', async ($, on) => {
   const base = BOARD_TASKS.find(t => t.id === 'T-404')!
   const DOCS = { ...base, id: 'T-501', order: 501, kind: 'docs', question: 'Should the docs page list every setting?' }
-  const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', order: 502, kind: 'bug', note: 'the bug is still there', history: ['try 1: the bug is still there'] }
+  const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', order: 502, kind: 'bug', note: 'the bug is still there', history: hist('try 1: the bug is still there') }
   const ONE = { ...QUESTION, id: 'Q-4', options: ['Yes'] }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, DOCS, BUG], questions: [ONE] } } })
   on('ui.toast', () => ({ value: undefined }))

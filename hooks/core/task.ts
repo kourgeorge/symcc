@@ -2,6 +2,7 @@
 import type { SymccTask } from '../../types'
 import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
+import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun, keepAgentIds, withAgentId } from './runs'
 import { clean, num, shownPath } from './text'
@@ -41,7 +42,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     order: typeof f.order === 'number' ? f.order : Math.max(0, ...b.tasks.map(x => x.order)) + 1,
     after,
     attempts: 0,
-    history: [createdLine(origin)],
+    history: [historyEntry('created', createdLine(origin), now)],
     origin,
     merge_into: intoOf({ merge_into: f.merge_into }),
     branch: null,
@@ -131,7 +132,7 @@ export function stashTask(b: Board, id: string, now: string, reason = ''): Board
   if (t.status === 'backlog') return b
   if (!BACKLOG_FROM.includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
   const why = clean(reason, 280)
-  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', history: [...t.history, `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`] }, now)
+  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', history: withHistory(t.history, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`]) }, now)
 }
 
 /** "Promote": task `id` leaves the backlog for "todo", so a worker may start on it. A history line says so. */
@@ -139,7 +140,7 @@ export function promoteTask(b: Board, id: string, now: string): Board {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
   if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
-  return patchTask(b, t.id, { status: 'todo', note: 'moved from the backlog', history: [...t.history, 'moved from the backlog to todo'] }, now)
+  return patchTask(b, t.id, { status: 'todo', note: 'moved from the backlog', history: withHistory(t.history, now, ['moved-backlog', 'moved from the backlog to todo']) }, now)
 }
 
 /** Changed files outside the task's files (or touching the board / Git). Empty `allowed` = anywhere. */
@@ -195,13 +196,13 @@ function askedFilesOf(b: Board, id: string): [BoardTask, string[]] {
 export function allowFiles(b: Board, id: string, now: string, dir: string = DATA_DIR): Board {
   const [t, asked] = askedFilesOf(b, id)
   const added = asked.filter(f => !t.files.includes(f))
-  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], history: [...t.history, filesAllowedLine(added.length ? added : asked)] }, now, dir)
+  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], history: withHistory(t.history, now, ['files-widened', filesAllowedLine(added.length ? added : asked)]) }, now, dir)
 }
 
 /** The owner does not allow a waiting task's file request: it keeps waiting (for the lead to drop or narrow it). */
 export function refuseFiles(b: Board, id: string, now: string): Board {
   const [t, asked] = askedFilesOf(b, id)
-  return patchTask(b, t.id, { note: 'files not allowed', history: [...t.history, `the owner didn't allow files: ${asked.join(', ')}`] }, now)
+  return patchTask(b, t.id, { note: 'files not allowed', history: withHistory(t.history, now, ['files-refused', `the owner didn't allow files: ${asked.join(', ')}`]) }, now)
 }
 
 /** Why a try failed when files outside the task's list changed. `undone`: they were undone on the task's branch (a worker's try), so the next try starts without them. */
@@ -303,7 +304,7 @@ function answeredTask(b: Board, id: string, what: string): BoardTask {
 export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
   const t = answeredTask(b, id, 'marked done')
   const line = `try ${t.attempts}: the owner read the answer → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
-  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: [...t.history, line] }, now)
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: withHistory(t.history, now, ['done', line]) }, now)
 }
 
 /** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */
@@ -419,5 +420,5 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const body = answer.trim() || t.answer?.trim() || ''
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
-  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: [...t.history, `try ${t.attempts}: the owner asked more: ${q}`] }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, conflict_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`]) }, now)
 }

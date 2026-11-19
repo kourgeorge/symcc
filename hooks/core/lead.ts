@@ -1,7 +1,7 @@
 // Who drives the board, and which session owns a running task.
 import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf } from './board-file'
 import { parseStamp } from './text'
-import { stoppedLine, stopEnd } from './history'
+import { stoppedEntry, stopEnd, withHistory } from './history'
 import { addCommits, shortSha } from './commits'
 import { tryLabel } from './roles'
 import { endedBy, withEnd } from './runs'
@@ -120,7 +120,7 @@ export function handedOff(t: BoardTask, now: string): BoardTask {
   const { session: _s, finishing: _f, checking: _c, runs: _r, ...rest } = t
   const last = t.runs?.at(-1)
   const runs = last && !last.ended ? t.runs!.slice(0, -1) : t.runs
-  return { ...rest, status: 'todo' as const, note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now, history: [...(t.history ?? []), stoppedLine(t, HANDOVER_NOTE)], ...(runs?.length ? { runs } : {}) }
+  return { ...rest, status: 'todo' as const, note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now, history: withHistory(t.history, now, stoppedEntry(t, HANDOVER_NOTE)), ...(runs?.length ? { runs } : {}) }
 }
 
 // ---------------- which session owns a running task ----------------
@@ -216,7 +216,7 @@ export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merg
 export function mergedDone(t: BoardTask, sha: string, when: string, now: string): BoardTask {
   const { session: _s, finishing: _f, checking: _c, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
-  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), alreadyMergedLine(t, sha, when)], ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', alreadyMergedLine(t, sha, when)]), ...(runs ? { runs } : {}) }
 }
 
 // ---------------- merged outside the board (T-514) ----------------
@@ -245,7 +245,7 @@ export function mergedOutside(t: BoardTask, sha: string, by: string, commits: re
   const { session: _s, finishing: _f, checking: _c, test_output: _o, merge_wait: _w, time_ask: _a, wrap_up: _u, test_rerun: _r, options: _p, asked_files: _af, ...rest } = t
   const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
-  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: [...(t.history ?? []), mergedOutsideLine(sha, by)], ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by)]), ...(runs ? { runs } : {}) }
 }
 
 /**
@@ -284,5 +284,5 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
 /** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
 export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
   const { session: _gone, finishing: _f, checking: _c, ...rest } = t
-  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: [...(t.history ?? []), stoppedLine(t, note)], ...endedBy(t, now, ...stopEnd(note)) } : {}) }
+  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...endedBy(t, now, ...stopEnd(note)) } : {}) }
 }
