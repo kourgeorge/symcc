@@ -582,3 +582,183 @@ test('T-558: panelLines gives each list row what a click on it does, and scrolls
   expect(panelLines(f, { opened: '', cursor: 0, scroll: 99, rows }, NOW, 100).scroll).toBe(2)
   expect(panelLines(f, { opened: '', cursor: 0, scroll: 99, rows: 200 }, NOW, 100).scroll).toBe(0)
 })
+
+/** The view file with two scouts (docs-check paused, with two runs; deps waiting) and its runs, as view.ts writes them. */
+function scoutsViewFile(): ViewFile {
+  const f = viewFile()
+  const scouts = [
+    { name: 'docs-check', every_minutes: 60, last_run: '2026-11-19T11:50:00.000Z', running: false, paused: true, prompt: 'Look for stale docs.\nSay NOTHING when all is fine.', last_report: '1. README is stale' },
+    { name: 'deps', every_minutes: 30, last_run: null, running: false, next_run: '2026-11-19T12:10:00.000Z', prompt: 'Check the dependencies.' },
+  ]
+  const scout_runs = {
+    'docs-check': [
+      { run: { started: '2026-11-19T11:45:00.000Z', ended: '2026-11-19T11:50:00.000Z', outcome: 'found' as const, findings: 1, report: '.symcc/reports/scouts/docs-check-2026-11-19T11-50-00-000Z.md' }, tasks: ['T-4'] },
+      { run: { started: '2026-11-19T10:45:00.000Z', ended: '2026-11-19T10:50:00.000Z', outcome: 'nothing' as const, findings: 0 }, tasks: [] },
+    ],
+  }
+  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['off', 'sound'], notify: 'sound' } }
+}
+
+test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page shows its prompt and runs, a run its report; the Settings tab shows every setting in its group with its value and default', () => {
+  const f = scoutsViewFile()
+  expect(parseViewFile(viewFileText(f))).toEqual(f)
+  // the tabs under the banner, on every tab, each a button
+  const tasks = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)
+  const tabs = tasks.lines.find(l => lineText(l).includes('[Tasks]'))!
+  expect(lineText(tabs)).toContain('Scouts')
+  expect(tabs.find(s => s.text.includes('Settings'))?.hit).toEqual({ tab: 'settings' })
+  expect(lineText(tasks.lines.at(-1)!)).toContain('t s c views')
+  // the list: name, how often, paused or the next run, last result; the waiting one first, the paused one after
+  const list = panelLines(f, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 100)
+  const text = list.lines.map(lineText)
+  expect(text.some(l => l.includes('[Scouts]'))).toBe(true)
+  expect(list.ids).toEqual(['deps', 'docs-check'])
+  const deps = text.find(l => l.includes('deps'))!
+  expect(deps).toMatch(/^› /)
+  expect(deps).toContain('every 30 min')
+  expect(deps).toContain('next in 10m')
+  expect(deps).toContain('never ran')
+  const docs = text.find(l => l.includes('docs-check'))!
+  expect(docs).toContain('every hour')
+  expect(docs).toContain('paused')
+  expect(docs).toContain('last: found 1')
+  expect(list.hits[list.lines.findIndex(l => lineText(l).includes('docs-check'))]).toEqual({ scout: 'docs-check' })
+  expect(panelKeys(f, '', 'scouts').map(k => k.word)).toEqual(['move', 'open', 'views', 'close'])
+  // no scouts: how to add one
+  expect(panelLines({ ...f, view: { ...f.view, scouts: [] } }, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.startsWith('No scouts yet'))).toBe(true)
+  // a scout's page: its state, its prompt, its runs (newest first, the cursor on one) and its file
+  const page = panelLines(f, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 100)
+  const p = page.lines.map(lineText)
+  expect(p.some(l => l.startsWith('docs-check') && l.includes('paused') && l.includes('every hour'))).toBe(true)
+  expect(p).toContain('Instructions')
+  expect(p).toContain('  Look for stale docs.')
+  expect(p).toContain('Runs')
+  expect(page.ids).toEqual(['2026-11-19T11:50:00.000Z', '2026-11-19T10:50:00.000Z'])
+  expect(p.find(l => l.includes('found · 1 finding · task T-4'))).toMatch(/^› 10m ago/)
+  expect(p.some(l => l.includes('nothing · 0 findings · no tasks'))).toBe(true)
+  expect(p).toContain('  .symcc/scouts/docs-check.md')
+  expect(panelKeys(f, 'docs-check', 'scouts').map(k => k.word)).toEqual(['run now', 'resume', 'move', 'report', 'back'])
+  // a running scout has no "run now"; a waiting one pauses
+  const running = { ...f, view: { ...f.view, scouts: f.view.scouts.map(s => ({ ...s, running: s.name === 'deps' })) } }
+  expect(panelKeys(running, 'deps', 'scouts').map(k => k.word)).toEqual(['pause', 'back'])
+  // a run's page: its line and its report (read by the TUI from its file)
+  const run = (report?: string | null) => panelLines(f, { tab: 'scouts', opened: 'docs-check', run: '2026-11-19T11:50:00.000Z', report, cursor: 0 }, NOW, 100).lines.map(lineText)
+  expect(run('1. README is stale\n2. no guide')).toContain('  2. no guide')
+  expect(run('x').some(l => l.includes('run that ended 2026-11-19T11:50:00.000Z'))).toBe(true)
+  expect(run(undefined)).toContain('  (reading the report…)')
+  expect(run(null).some(l => l.includes("can't be read"))).toBe(true)
+  expect(panelKeys(f, 'docs-check', 'scouts', '2026-11-19T11:50:00.000Z').map(k => k.word)).toEqual(['back'])
+  // Settings: every group's title, every setting with its value and default
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  const s = settings.lines.map(lineText)
+  for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(g)
+  expect(s.find(l => l.includes('max_parallel'))).toMatch(/max_parallel +2 · default 3 · 1-8/)
+  expect(s.find(l => l.includes('test_commands'))).toContain('bun test')
+  expect(s.find(l => /^› /.test(l))).toContain('mode')
+  expect(settings.ids[0]).toBe('mode')
+  expect(settings.ids).toContain('notify')
+  expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
+  expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['move', 'change', 'views', 'close'])
+  // the actions as slash commands
+  expect(actionCommand({ kind: 'scout', scout: 'deps' })).toEqual({ name: 'symcc-scout', text: 'deps' })
+  expect(actionCommand({ kind: 'scout', scout: 'deps', paused: true })).toEqual({ name: 'symcc-scout', text: 'deps pause' })
+  expect(actionCommand({ kind: 'setting', setting: 'max_parallel', value: ' 5 ' })).toEqual({ name: 'symcc-settings', text: 'max_parallel 5' })
+})
+
+test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout r runs it now and p resumes it, a run opens its report; Enter on a setting changes it with /symcc-settings', async () => {
+  const f = scoutsViewFile()
+  const files = new Map([
+    ['/work/proj/.symcc/view.json', viewFileText(f)],
+    ['/work/proj/.symcc/reports/scouts/docs-check-2026-11-19T11-50-00-000Z.md', '1. README is stale (from the file)'],
+  ])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: '7' as string | undefined, select: 'review' as string | undefined }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => answers.prompt, select: async <V,>() => answers.select as V | undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  expect(board.state().tab).toBe('tasks')
+  await board.press('s', 'ses_1')
+  expect(board.state().tab).toBe('scouts')
+  expect(lines().some(l => l.includes('docs-check') && l.includes('paused'))).toBe(true)
+  // down to docs-check, open it: its page
+  await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('docs-check')
+  expect(lines()).toContain('  Look for stale docs.')
+  await board.press('r', 'ses_1')
+  await board.press('p', 'ses_1')
+  // Enter on its newest run: the run's page with the report read from its file; b goes back to the scout's page
+  await board.press('open', 'ses_1')
+  expect(board.state().run).toBe('2026-11-19T11:50:00.000Z')
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(lines()).toContain('  1. README is stale (from the file)')
+  await board.press('back', 'ses_1')
+  expect(board.state().run).toBe('')
+  expect(board.state().opened).toBe('docs-check')
+  // a click on a run row opens it too
+  const runRow = rowEls(panel).find(r => r.text.includes('nothing · 0 findings'))!
+  ;(runRow.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  expect(board.state().run).toBe('2026-11-19T10:50:00.000Z')
+  expect(lines()).toContain('  (this run reported nothing)')
+  // c: the Settings tab; Enter on mode picks from a list, on max_parallel asks for a number, on checker flips it
+  await board.press('c', 'ses_1')
+  expect([board.state().tab, board.state().opened, board.state().run, board.state().cursor]).toEqual(['settings', '', '', 0])
+  expect(lines().some(l => l.includes('max_parallel') && l.includes('default 3'))).toBe(true)
+  await board.press('open', 'ses_1')
+  await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  const checker = rowEls(panel).find(r => r.text.includes('checker ') && r.text.includes('default off'))!
+  ;(checker.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await new Promise<void>(res => setTimeout(res, 0))
+  // a bad value is not sent
+  answers.prompt = 'lots'
+  const maxMinutes = rowEls(panel).find(r => r.text.includes('max_minutes'))!
+  ;(maxMinutes.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(board.state().cursor).toBe(2)
+  expect(sent).toEqual([
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'docs-check' },
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'docs-check resume' },
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'mode review' },
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'max_parallel 7' },
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'checker on' },
+  ])
+  // a click on the Tasks tab goes back to the task list; t does too
+  const tabSeg = rowEls(panel).find(r => r.text.includes('[Settings]'))!.segs.find(s => s.kids.join('').includes('Tasks'))!
+  ;(tabSeg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  expect(board.state().tab).toBe('tasks')
+  expect(lines().some(l => l.includes('NEEDS YOU'))).toBe(true)
+  await board.press('s', 'ses_1')
+  await board.press('t', 'ses_1')
+  expect(board.state().tab).toBe('tasks')
+  board.stop()
+})
+
+test('T-559: the view file carries each scout\'s recent runs, newest first, with the tasks made from them (scoutRunsOf)', async () => {
+  const { scoutRunsOf } = await import('../view')
+  const runs = { runs: [
+    { started: '2026-11-19T10:45:00.000Z', ended: '2026-11-19T10:50:00.000Z', outcome: 'nothing', findings: 0 },
+    { started: '2026-11-19T11:45:00.000Z', ended: '2026-11-19T11:50:00.000Z', outcome: 'found', findings: 1, tasks: ['T-4'] },
+  ] }
+  const read = async (p: string) => (p === '/work/proj/.symcc/scouts/docs-check.runs.json' ? JSON.stringify(runs) : Promise.reject(new Error('missing')))
+  const v = scoutsViewFile().view
+  const got = await scoutRunsOf({ fs: { read } } as never, '/work/proj', v)
+  expect(Object.keys(got)).toEqual(['docs-check'])
+  expect(got['docs-check']!.map(x => x.run.ended)).toEqual(['2026-11-19T11:50:00.000Z', '2026-11-19T10:50:00.000Z'])
+  expect(got['docs-check']![0]!.tasks).toEqual(['T-4'])
+})

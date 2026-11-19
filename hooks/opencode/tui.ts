@@ -6,7 +6,9 @@
 //   - session.panel: the board (opened with ui.panel.open(BOARD_PANEL), from the "/symcc-board" keymap command or the
 //     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505): the task
 //     list grouped by state, with the terminal list's marks, short states and times, and a task's (or question's)
-//     page when one is opened;
+//     page when one is opened; and, like the Claude Code board, the Scouts and Settings tabs (keys t, s and c, or a
+//     click on a tab, T-559): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and a setting is
+//     changed with /<name>-settings NAME VALUE;
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, then the questions, and
 //     the tasks that need the owner or run).
 // What is drawn comes from board-view.ts (bandLines, panelLines), made with hooks/core's helpers; this file only
@@ -17,9 +19,10 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup } from './board-view'
+import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingChoices, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab } from './board-view'
+import { isScoutRunReport, parseSettingValue, settingInfo, settingValue, type SettingName } from '../board'
 
-export type { PanelKey, PanelHit }
+export type { PanelKey, PanelHit, PanelTab }
 
 /** The panel's name for ui.panel.open (OpenCode shows the session.panel claims for the open name). */
 export const BOARD_PANEL = 'symcc.board'
@@ -243,15 +246,19 @@ export async function readViewFile(dir: string, readText: TuiDeps['readText'], n
 export type TuiBoard = {
   /** reads the view file again now */
   refresh: () => Promise<void>
-  /** the panel's state: the open task ('' = the list), the cursor, the open groups and the scroll */
-  state: () => { opened: string; cursor: number; groups: Record<PanelGroup, boolean>; scroll: number }
+  /** the panel's state: the tab, the open task or scout ('' = the list), the open run of that scout, the cursor, the
+   *  open groups and the scroll */
+  state: () => { tab: PanelTab; opened: string; run: string; cursor: number; groups: Record<PanelGroup, boolean>; scroll: number }
   /** runs one of the panel's keys, as the keymap does */
   press: (key: PanelKey, sessionID: string) => Promise<void>
   stop: () => void
 }
 
 /** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape' }
+const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p' }
+
+/** The tab each tab key goes to. */
+const TAB_OF: Partial<Record<PanelKey, PanelTab>> = Object.fromEntries(PANEL_TABS.map(t => [t.key, t.tab]))
 
 /** Starts the TUI part: the band and the board panel, the keys, and the timer that reads the view file. */
 export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
@@ -264,20 +271,53 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [cursor, setCursor] = r.createSignal(0)
   const [groups, setGroups] = r.createSignal<Record<PanelGroup, boolean>>({ ...GROUPS_OPEN })
   const [scroll, setScroll] = r.createSignal(0)
+  const [tab, setTab] = r.createSignal<PanelTab>('tasks')
+  // the open run of the open scout ('' = the scout's page), the cursor over its page's runs, and the run's report
+  // (undefined while it is read, null when it can't be)
+  const [run, setRun] = r.createSignal('')
+  const [runCursor, setRunCursor] = r.createSignal(0)
+  const [report, setReport] = r.createSignal<string | null | undefined>(undefined)
   let width = 80
   // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
   let rows: number | undefined
+  /** Back to the list when the open task or scout left the view, and to the scout's page when its open run did. */
+  const keepPage = (f: ViewFile | null) => {
+    if (opened() && !hasPage(f, opened(), tab())) openPage('')
+    if (run() && !scoutRunsIn(f, opened()).some(x => x.run.ended === run())) setRun('')
+  }
   const refresh = async () => {
     const f = await readViewFile(dir, d.readText, name)
     setFile(f)
     setNow(d.now())
     // the open task left the view: back to the list, so the list's keys work again
-    if (opened() && !hasPage(f, opened())) openPage('')
+    keepPage(f)
   }
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
     setOpened(id)
+    setRun('')
+    setRunCursor(0)
     setScroll(0)
+  }
+  /** Shows another tab, at its list's top. */
+  const showTab = (t: PanelTab) => {
+    setTab(t)
+    openPage('')
+    setCursor(0)
+  }
+  /** Opens run `ended` of the open scout ('' = back to the scout's page), and reads its report from its file. */
+  const openRun = (ended: string) => {
+    setRun(ended)
+    setScroll(0)
+    setReport(undefined)
+    const f = file()
+    const rel = scoutRunsIn(f, opened()).find(x => x.run.ended === ended)?.run.report
+    if (!ended || !f || !rel) return
+    if (!isScoutRunReport(rel)) return setReport(null)
+    void d.readText(`${f.root}/${rel}`).then(
+      text => run() === ended && setReport(text),
+      () => run() === ended && setReport(null),
+    )
   }
   const toggle = (g: PanelGroup) => setGroups({ ...groups(), [g]: !groups()[g] })
   const say = (message: string, variant: 'info' | 'error' = 'info') => ctx.ui.toast.show({ title: name, message, variant })
@@ -288,12 +328,63 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       (err: Error) => say(`/${c.name} ${c.text} failed: ${err?.message ?? err}`, 'error'),
     )
   }
-  const draw = () => panelLines(file(), { opened: opened(), cursor: cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
+  const draw = () => {
+    const onScout = tab() === 'scouts' && !!opened()
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onScout ? runCursor() : cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
+  }
+  /** Changes setting `setting` (Enter or a click on its row): on/off flips, a setting with choices is picked from a
+   *  list, the rest is typed; then /<name>-settings NAME VALUE sets it. */
+  const changeSetting = async (setting: SettingName, sessionID: string) => {
+    const info = settingInfo(setting)
+    const f = file()
+    if (!info || !f) return
+    const now = settingValue(f.view, setting)
+    const choices = settingChoices(f, setting)
+    let value: string | undefined
+    if (info.kind === 'onoff') value = now === 'on' ? 'off' : 'on'
+    else if (choices.length) value = await ctx.ui.dialog.select({ title: `${setting} (now ${now})`, options: choices.map(c => ({ title: c === now ? `${c} (now)` : c, value: c })) })
+    else value = (await ctx.ui.dialog.prompt({ title: `${setting} (now ${now})`, description: `${info.range} · ${info.meaning}`, placeholder: info.kind === 'commands' ? 'e.g. npm test, or none' : info.range }))?.trim()
+    if (!value || value === now) return
+    const ok = parseSettingValue(setting, value)
+    if (!ok.ok) return say(ok.message, 'error')
+    await send(sessionID, { kind: 'setting', setting, value })
+  }
+  /** The Scouts tab's keys: the list moves and opens; a scout's page moves over its runs, opens one, runs the scout
+   *  now (r) and pauses or resumes it (p); a run's page goes back. */
+  const pressScouts = async (key: PanelKey, sessionID: string) => {
+    const f = file()
+    const open = opened()
+    const ids = draw().ids
+    if (!open) {
+      if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
+      if (key === 'open' && ids.length) openPage(ids[moveCursor(cursor(), 0, ids.length)]!)
+      if (key === 'back') showTab('tasks')
+      return
+    }
+    if (run()) return void (key === 'back' && openRun(''))
+    if (key === 'back') return openPage('')
+    if (key === 'up' || key === 'down') return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, ids.length))
+    if (key === 'open' && ids.length) return openRun(ids[moveCursor(runCursor(), 0, ids.length)]!)
+    const offered = panelKeys(f, open, 'scouts').map(k => k.word)
+    const sc = f?.view.scouts.find(x => x.name === open)
+    if (key === 'r' && offered.includes('run now')) return send(sessionID, { kind: 'scout', scout: open })
+    if (key === 'p' && sc) return send(sessionID, { kind: 'scout', scout: open, paused: !sc.paused })
+  }
   const press = async (key: PanelKey, sessionID: string) => {
     // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
     if (key === 'close') return ctx.ui.panel.close()
+    const to = TAB_OF[key]
+    if (to) return showTab(to)
     const f = file()
-    if (opened() && !hasPage(f, opened())) openPage('')
+    keepPage(f)
+    if (tab() === 'scouts') return pressScouts(key, sessionID)
+    if (tab() === 'settings') {
+      const ids = draw().ids
+      if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
+      if (key === 'open' && ids.length) return changeSetting(ids[moveCursor(cursor(), 0, ids.length)] as SettingName, sessionID)
+      if (key === 'back') showTab('tasks')
+      return
+    }
     const open = opened()
     if (!open) {
       const ids = draw().ids
@@ -326,6 +417,20 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
    *  does what its key does. The cursor goes to the clicked row, so the keys go on from there. */
   const click = (hit: PanelHit, sessionID: string) => {
     if ('key' in hit) return press(hit.key, sessionID)
+    if ('tab' in hit) return showTab(hit.tab)
+    const ids = draw().ids
+    if ('scout' in hit) {
+      if (ids.indexOf(hit.scout) >= 0) setCursor(ids.indexOf(hit.scout))
+      return openPage(hit.scout)
+    }
+    if ('run' in hit) {
+      if (ids.indexOf(hit.run) >= 0) setRunCursor(ids.indexOf(hit.run))
+      return openRun(hit.run)
+    }
+    if ('setting' in hit) {
+      if (ids.indexOf(hit.setting) >= 0) setCursor(ids.indexOf(hit.setting))
+      return changeSetting(hit.setting, sessionID)
+    }
     const id = 'open' in hit ? hit.open : groupId(hit.group)
     const at = draw().ids.indexOf(id)
     if (at >= 0) setCursor(at)
@@ -424,7 +529,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const stopTimer = d.every(REFRESH_MS, reread)
   return {
     refresh,
-    state: () => ({ opened: opened(), cursor: cursor(), groups: groups(), scroll: scroll() }),
+    state: () => ({ tab: tab(), opened: opened(), run: run(), cursor: tab() === 'scouts' && opened() ? runCursor() : cursor(), groups: groups(), scroll: scroll() }),
     press,
     stop: () => {
       stopTimer()

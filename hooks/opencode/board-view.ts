@@ -4,8 +4,10 @@
 // (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, fittedCells,
 // rowExtra, fitRow), the banner (bannerLines) and a task's rows (detailRows). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
-// to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468).
-import type { SymccTask } from '../../types'
+// to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
+// board it has three tabs (T-559): Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
+// Settings (every setting in its group, with its value and default).
+import type { SymccTask, SymccScout } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
@@ -13,7 +15,9 @@ import {
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
-  waitsForYou,
+  waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES,
+  type SettingName, type ScoutRunRecord,
 } from '../board'
 import { restFrame } from '../core/logo'
 import { DEFAULT_NAME } from '../name'
@@ -32,8 +36,27 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
-  view: PaneView
+  view: PaneView & { scout_runs?: ScoutRuns }
 }
+
+/** One scout run as the scout's page lists it, with the ids of the tasks made from it. */
+export type ScoutRun = { run: ScoutRunRecord; tasks: string[] }
+
+/** Each scout's recent runs, newest first (view.ts puts them in the view file; a scout with none is left out). */
+export type ScoutRuns = Record<string, ScoutRun[]>
+
+/** How many runs of each scout the view file keeps. */
+export const VIEW_RUNS_KEPT = 20
+
+/** The panel's three views, as the Claude Code board's tabs: Tasks, Scouts and Settings (keys t, s and c). */
+export type PanelTab = 'tasks' | 'scouts' | 'settings'
+
+/** The tabs in order, with their keys. */
+export const PANEL_TABS: readonly { tab: PanelTab; label: string; key: 't' | 's' | 'c' }[] = [
+  { tab: 'tasks', label: 'Tasks', key: 't' },
+  { tab: 'scouts', label: 'Scouts', key: 's' },
+  { tab: 'settings', label: 'Settings', key: 'c' },
+]
 
 /** The view file's text. */
 export const viewFileText = (f: ViewFile) => JSON.stringify(f) + '\n'
@@ -45,7 +68,9 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const f = JSON.parse(text) as Partial<ViewFile> | null
     if (!f || typeof f !== 'object' || !f.view || !Array.isArray(f.view.tasks)) return null
     const s = (x: unknown) => (typeof x === 'string' ? x : '')
-    const view = { ...f.view, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
+    const { scout_runs, ...rest } = f.view
+    const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
+    const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
   } catch {
     return null
@@ -53,14 +78,15 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close'
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close' | 't' | 's' | 'c' | 'r' | 'p'
 
 /** The list's groups that open and close (▸ Backlog, ▸ Done, ▸ Dropped). */
 export type PanelGroup = 'backlog' | 'done' | 'dropped'
 
 /** What a mouse click on a line or a piece of it does (T-558): open a task or question, open or close a group, or
- *  press one of the panel's keys (a key hint in the footer works as a button). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey }
+ *  press one of the panel's keys (a key hint in the footer works as a button); and (T-559) go to a tab, open a scout
+ *  or one of its runs, or change a setting. */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -120,7 +146,19 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
 /** What the panel has chosen: the task or question open ('' = the list), the row the cursor is on in the list, the
  *  groups opened or closed (GROUPS_OPEN when left out), how many lines the list or page is scrolled down, and the
  *  panel's height in rows when known (it bounds the scroll). */
-export type PanelChoice = { opened: string; cursor: number; groups?: Partial<Record<PanelGroup, boolean>>; scroll?: number; rows?: number }
+export type PanelChoice = {
+  opened: string
+  cursor: number
+  groups?: Partial<Record<PanelGroup, boolean>>
+  scroll?: number
+  rows?: number
+  /** the tab shown (default: tasks); on the Scouts tab `opened` is the open scout's name and `cursor` the row on its page */
+  tab?: PanelTab
+  /** the open run of the open scout (its end time, '' = the scout's page) */
+  run?: string
+  /** that run's report text: undefined while it is read, null when it can't be read */
+  report?: string | null
+}
 
 /** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
  *  goes over (tasks, questions and the groups' rows, see groupId; in order), the one under the cursor, its keys, and
@@ -135,7 +173,7 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
-const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x' }
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p' }
 
 /** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
 export function hintSegs(keys: KeyHint[]): Line {
@@ -156,16 +194,39 @@ const when = (iso: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '?')
 
 /** Whether the view still has a page for this id (a task or a question); an open task that left the view
  *  (archived, removed, or the view file gone) falls back to the list. */
-export function hasPage(f: ViewFile | null, id: string): boolean {
-  return !!id && !!f && (f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id))
+export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks'): boolean {
+  if (!id || !f) return false
+  if (tab === 'scouts') return (f.view.scouts ?? []).some(x => x.name === id)
+  if (tab === 'settings') return false
+  return f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id)
 }
 
-/** The keys of the list, and of a task's or question's page (the main actions only; settings and scouts come later). */
-export function panelKeys(f: ViewFile | null, opened: string): KeyHint[] {
-  if (!opened) return [{ key: '↑↓', word: 'move' }, { key: 'Enter', word: 'open' }, { key: 'Esc', word: 'close' }]
+/** Scout `scout`'s recent runs in the view file, newest first. */
+export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (Array.isArray(f?.view.scout_runs?.[scout]) ? f!.view.scout_runs![scout]! : [])
+
+/** The open scout, when the Scouts tab shows one's page. */
+const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined => (name ? f?.view.scouts?.find(x => x.name === name) : undefined)
+
+/**
+ * The keys of the list, and of a task's or question's page (the main actions only); on the Scouts tab, of the list,
+ * a scout's page (r run now, p pause or resume) and a run's page; on the Settings tab, of the settings list.
+ */
+export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = ''): KeyHint[] {
+  const move = { key: '↑↓', word: 'move' }
+  const views = { key: 't s c', word: 'views' }
+  const close = { key: 'Esc', word: 'close' }
+  const back = { key: 'b', word: 'back' }
+  if (tab === 'settings') return [move, { key: 'Enter', word: 'change' }, views, close]
+  if (tab === 'scouts') {
+    const sc = scoutNamed(f, opened)
+    if (!sc) return [move, { key: 'Enter', word: 'open' }, views, close]
+    if (run && scoutRunsIn(f, sc.name).some(x => x.run.ended === run)) return [back]
+    const runs = scoutRunsIn(f, sc.name).length ? [move, { key: 'Enter', word: 'report' }] : []
+    return [...(sc.running ? [] : [{ key: 'r', word: 'run now' }]), { key: 'p', word: sc.paused ? 'resume' : 'pause' }, ...runs, back]
+  }
+  if (!opened) return [move, { key: 'Enter', word: 'open' }, views, close]
   const t = f?.view.tasks.find(x => x.id === opened)
   const q = f?.view.questions?.find(x => x.id === opened)
-  const back = { key: 'b', word: 'back' }
   if (q) return [{ key: 'a', word: 'answer' }, back]
   if (t?.status === 'review') return [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, back]
   if (t && asksWhat(t, f?.view.max_minutes)) return [{ key: 'a', word: 'answer' }, back]
@@ -185,10 +246,21 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
-  const top = [...banner, [{ text: bannerRule(w), color: 'ide' }]]
-  const page = choice.opened ? openedPage(f, choice.opened, nowMs, w) : null
-  const body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
-  const keys = panelKeys(f, page ? choice.opened : '')
+  const tab = choice.tab ?? 'tasks'
+  const top = [...banner, tabsLine(tab), [{ text: bannerRule(w), color: 'ide' }]]
+  let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string }
+  let keys: KeyHint[]
+  if (tab === 'scouts') {
+    body = scoutsBody(f, choice, nowMs, w)
+    keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
+  } else if (tab === 'settings') {
+    body = settingsBody(f, choice.cursor, w)
+    keys = panelKeys(f, '', 'settings')
+  } else {
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w) : null
+    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
+    keys = panelKeys(f, page ? choice.opened : '')
+  }
   // the mouse wheel scrolls the list or page between the banner and the footer, down to its last screenful (its last
   // line when the panel's height isn't known)
   const room = choice.rows ? choice.rows - top.length - 2 : 1
@@ -202,6 +274,170 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     keys,
     scroll,
   }
+}
+
+/** The tabs under the banner: "[Tasks]  Scouts   Settings", the shown one bright; each one a button for its tab. */
+export function tabsLine(tab: PanelTab): Line {
+  return PANEL_TABS.flatMap((t, i) => [
+    ...(i ? [{ text: ' ', color: 'inactive' }] : []),
+    { text: t.tab === tab ? `[${t.label}]` : ` ${t.label} `, color: t.tab === tab ? 'ide' : 'inactive', ...(t.tab === tab ? { bold: true } : {}), hit: { tab: t.tab } },
+  ])
+}
+
+/** What a body of the panel holds (between the tabs and the footer). */
+type Body = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string }
+
+/** A body being made: lines, each with what a click on it does. */
+function bodyMaker() {
+  const lines: Line[] = []
+  const hits: (PanelHit | null)[] = []
+  const add = (l: Line, hit: PanelHit | null = null) => (lines.push(l), hits.push(hit))
+  const blank = () => lines.length && add([{ text: ' ', color: 'text' }])
+  const head = (text: string) => add([{ text, color: 'text', bold: true }])
+  return { lines, hits, add, blank, head }
+}
+
+/** Text as lines of one color, each of its own lines wrapped to `w` after `indent` spaces. */
+const textLines = (text: string, color: string, w: number, indent = 2): Line[] =>
+  text.split('\n').flatMap(l => (l.trim() ? wrapSegs([{ text: l, color }], w - indent).map(x => [{ text: ' '.repeat(indent), color }, ...x]) : [[{ text: ' ', color }]]))
+
+/** The Scouts tab: the list of scouts (as Claude Code's: icon, name, how often, state, last result, model), a
+ *  scout's page (its header, instructions, recent runs and file) or one run's page (its line and report). */
+function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number): Body {
+  const b = bodyMaker()
+  const sc = scoutNamed(f, choice.opened)
+  if (sc) return scoutPage(f, sc, choice, nowMs, w)
+  const scouts = sortScouts(f.view.scouts ?? [])
+  if (!scouts.length) {
+    // the Claude Code board's "New scout" button has no place here
+    for (const [i, l] of scoutHowTo(f.name).filter(l => !l.includes('New scout')).entries()) b.add([{ text: l, color: i === 0 ? 'text' : 'inactive' }])
+    return { ...b, ids: [], selected: '' }
+  }
+  const ids = scouts.map(x => x.name)
+  const selected = ids[Math.min(Math.max(0, choice.cursor), ids.length - 1)]!
+  const rows = scoutListRows(scouts, nowMs, w)
+  scouts.forEach((x, i) => {
+    const r = rows[i]!
+    b.add(
+      [
+        { text: x.name === selected ? '› ' : '  ', color: 'ide', bold: true },
+        { text: `${r.icon} `, color: r.tone },
+        { text: r.name, color: x.paused ? 'inactive' : 'claude', ...(x.paused ? {} : { bold: true }) },
+        { text: r.every, color: 'inactive' },
+        { text: r.state, color: r.stateTone },
+        { text: r.last, color: r.lastTone },
+        { text: r.model, color: 'inactive' },
+      ],
+      { scout: x.name },
+    )
+  })
+  b.blank()
+  b.add([{ text: `Enter opens a scout · /${f.name}-scout <name> runs one now`, color: 'inactive' }])
+  return { ...b, ids, selected }
+}
+
+/** A scout's page, or the page of its open run (choice.run). The cursor goes over its runs. */
+function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: number, w: number): Body {
+  const b = bodyMaker()
+  const shown = scoutRunsIn(f, sc.name)
+  const opened = choice.run ? shown.find(x => x.run.ended === choice.run) : undefined
+  if (opened) {
+    b.add([{ text: sc.name, color: 'claude', bold: true }, { text: ` · run that ended ${opened.run.ended}`, color: 'inactive' }])
+    b.add([{ text: scoutRunLine(opened.run, opened.tasks, nowMs), color: scoutOutcomeTone(opened.run.outcome) }])
+    if (opened.run.why) b.add([{ text: opened.run.why, color: 'error' }])
+    b.blank()
+    b.head('Report')
+    const report = opened.run.report
+    if (!report) b.add([{ text: '  (this run reported nothing)', color: 'inactive' }])
+    else if (choice.report === undefined) b.add([{ text: '  (reading the report…)', color: 'inactive' }])
+    else if (choice.report === null || !choice.report.trim()) b.add([{ text: `  (its report file ${report} can't be read)`, color: 'inactive' }])
+    else for (const l of textLines(choice.report.trim(), 'text', w)) b.add(l)
+    if (report) {
+      b.blank()
+      b.head('File')
+      b.add([{ text: `  ${report}`, color: 'autoAccept' }])
+    }
+    return { ...b, ids: [], selected: '' }
+  }
+  const r = scoutRow(sc, nowMs)
+  const head = wrapSegs([
+    { text: sc.name, color: 'claude', bold: true },
+    { text: ` ${scoutIcon(sc)} ${r.state || 'waiting'}${sc.running && sc.paused ? ', then paused' : ''}`, color: scoutTone(sc), bold: true },
+    { text: ` · ${r.every}${r.model ? ` · ${r.model}` : ''} · ${r.ran}`, color: 'inactive' },
+  ], w)
+  for (const l of head) b.add(l)
+  const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
+  const title = sc.summary?.trim() || firstLine
+  if (title) b.add([{ text: title, color: sc.summary?.trim() ? 'text' : 'inactive', ...(sc.summary?.trim() ? { bold: true } : {}) }])
+  if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
+  const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))
+  if (problem && !sc.running) b.add([{ text: problem, color: 'error' }])
+  b.blank()
+  b.head('Instructions')
+  if (sc.prompt?.trim()) for (const l of textLines(sc.prompt.trim(), 'text', w)) b.add(l)
+  else b.add([{ text: `  (not loaded yet: run /${f.name}-scouts)`, color: 'inactive' }])
+  b.blank()
+  b.head('Runs')
+  const ids = shown.map(x => x.run.ended)
+  const selected = ids.length ? ids[Math.min(Math.max(0, choice.cursor), ids.length - 1)]! : ''
+  b.add([{ text: shown.length ? '  Enter on a run shows its report' : '  (no runs yet)', color: 'inactive' }])
+  for (const x of shown) b.add([{ text: x.run.ended === selected ? '› ' : '  ', color: 'ide', bold: true }, { text: scoutRunLine(x.run, x.tasks, nowMs), color: scoutOutcomeTone(x.run.outcome) }], { run: x.run.ended })
+  b.blank()
+  b.head('File')
+  b.add([{ text: `  ${scoutFile(sc.name, f.name)}`, color: 'autoAccept' }])
+  return { ...b, ids, selected }
+}
+
+/** The settings the cursor goes over on the Settings tab, in the Claude Code board's groups and order. */
+export const SETTING_ROWS: readonly SettingName[] = SETTING_GROUPS.flatMap(g => g.items.filter((x): x is SettingName => !isSettingPage(x)))
+
+/** The Settings tab: each group (Work, Checks before merging, ...) with its settings: name, value, default and range,
+ *  and what it does on the line under it. The Roles and Kinds pages are only on the Claude Code board. */
+function settingsBody(f: ViewFile, cursor: number, w: number): Body {
+  const b = bodyMaker()
+  const v = f.view
+  const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
+  const selected = SETTING_ROWS[Math.min(Math.max(0, cursor), SETTING_ROWS.length - 1)]!
+  for (const g of SETTING_GROUPS) {
+    b.blank()
+    b.head(g.title)
+    for (const item of g.items) {
+      if (isSettingPage(item)) {
+        const label = item === 'roles' ? 'Roles' : 'Kinds'
+        b.add([{ text: `  ${label.padEnd(nameWidth)}`, color: 'inactive' }, { text: ` its page is on the Claude Code board; here ask the lead`, color: 'inactive' }])
+        continue
+      }
+      const x = settingInfo(item)!
+      const hit = { setting: x.name }
+      const sel = x.name === selected
+      const unplayable = x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify)
+      b.add(
+        [
+          { text: sel ? '› ' : '  ', color: 'ide', bold: true },
+          { text: x.name.padEnd(nameWidth), color: 'claude', bold: true },
+          { text: ` ${settingValue(v, x.name)}`, color: 'text', bold: true },
+          ...(unplayable ? [{ text: " (can't play here: nothing plays)", color: 'warning' }] : []),
+          { text: ` · default ${x.default} · ${x.range}`, color: 'inactive' },
+        ],
+        hit,
+      )
+      for (const l of wrapSegs([{ text: x.meaning, color: 'inactive' }], w - 4)) b.add([{ text: '    ', color: 'inactive' }, ...l], hit)
+    }
+  }
+  b.blank()
+  b.add([{ text: `Enter changes a setting (on/off flips) · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
+  return { ...b, ids: [...SETTING_ROWS], selected }
+}
+
+/** The values setting `name` is picked from ([] when it is typed, or flips as on/off). */
+export function settingChoices(f: ViewFile | null, name: SettingName): string[] {
+  const kind = settingInfo(name)?.kind
+  if (kind === 'mode') return ['off', 'review', 'auto']
+  if (kind === 'findings') return [...SCOUT_FINDINGS_CHOICES]
+  if (kind === 'untested') return [...TESTS_WITH_CHANGES_CHOICES]
+  // only what this machine can play (off always)
+  if (kind === 'notify') return f?.view.notify_choices?.length ? [...f.view.notify_choices] : ['off']
+  return []
 }
 
 /** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, then the groups: the backlog (its
@@ -333,12 +569,20 @@ export function asksWhat(t: BoardTask, maxMinutes: number | undefined): string {
 }
 
 /** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason) or answer. */
-export type PanelAction = { kind: 'approve'; id: string } | { kind: 'reject'; id: string; reason: string } | { kind: 'answer'; id: string; answer: string }
+export type PanelAction =
+  | { kind: 'approve'; id: string }
+  | { kind: 'reject'; id: string; reason: string }
+  | { kind: 'answer'; id: string; answer: string }
+  /** run a scout now, or (with `paused`) pause or resume its timer */
+  | { kind: 'scout'; scout: string; paused?: boolean }
+  | { kind: 'setting'; setting: SettingName; value: string }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }
   if (a.kind === 'reject') return { name: `${name}-reject`, text: `${a.id} ${a.reason.trim()}` }
+  if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
+  if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }
 

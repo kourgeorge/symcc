@@ -2,13 +2,16 @@
 // server part that runs symcc's engine, so it can't read the engine's memory. Each publish (app/lead.ts) hands the
 // view to the Host's ui.panel.updateView; here that keeps it in memory and also writes it, with what the TUI needs
 // to draw the banner and band (folder, home, name, version), to .<name>/view.json in the project's main folder. The
-// TUI reads that file on a timer (board-view.ts parses it). The panel's own values (which task, tab and scout are
+// TUI reads that file on a timer (board-view.ts parses it). Each scout's recent runs ride along (scout_runs, T-559:
+// the TUI's scout page lists them; a run's report stays in its own file, which the TUI reads when the run is opened).
+// The panel's own values (which task, tab and scout are
 // open) stay in the TUI; the server side keeps them in memory only, as their start values for symcc's logic.
 import type { SymccView } from '../../types'
 import type { Host, PanelValues } from '../host'
 import { type PaneView, S } from '../app/state'
 import { safeWrite } from '../app/store'
-import { VIEW_FILE, viewFileText } from './board-view'
+import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks } from '../board'
+import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, type ScoutRuns } from './board-view'
 
 /** The empty view, as a panel starts with. */
 const emptyView = (): SymccView => ({ tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] })
@@ -26,9 +29,16 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui'>): PanelValue
   let writing: Promise<unknown> = Promise.resolve()
   const write = (v: SymccView) => {
     if (!S.root || S.guardOnly) return writing
-    const file = `${S.root}/${S.N.dir}/${VIEW_FILE}`
-    const text = viewFileText({ root: S.root, home: S.home, name: S.N.name, version: S.version, written_at: Date.now(), view: v as PaneView })
-    writing = writing.then(() => safeWrite(host as Host, file, text, 'the board view')).catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))
+    const root = S.root
+    const file = `${root}/${S.N.dir}/${VIEW_FILE}`
+    const at = Date.now()
+    writing = writing
+      .then(async () => {
+        const scout_runs = await scoutRunsOf(host, root, v)
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}) } })
+        await safeWrite(host as Host, file, text, 'the board view')
+      })
+      .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))
     return writing
   }
   return {
@@ -44,4 +54,18 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui'>): PanelValue
       await write(view)
     },
   }
+}
+
+/** Each scout's recent runs (newest first, at most VIEW_RUNS_KEPT), each with the tasks made from it, from its runs
+ *  file; a scout with no runs (or an unreadable file) is left out. */
+export async function scoutRunsOf(host: Pick<Host, 'fs'>, root: string, v: SymccView): Promise<ScoutRuns> {
+  const out: ScoutRuns = {}
+  for (const sc of v.scouts ?? []) {
+    if (safeScoutFile(sc.name, S.N.name) === null) continue
+    const runs = parseScoutRuns(await host.fs.read(`${root}/${scoutRunsFile(sc.name, S.N.name)}`).catch(() => null))
+    if (!runs.length) continue
+    const made = scoutRunTasks(runs, v.tasks ?? [], sc.name)
+    out[sc.name] = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse().slice(0, VIEW_RUNS_KEPT)
+  }
+  return out
 }
