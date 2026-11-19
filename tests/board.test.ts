@@ -3597,6 +3597,11 @@ test('a doing row on a later try shows this try and the work time of all tries, 
   expect(cells(5)).toBe('15m')
   // not doing: no total
   expect(core.triesTotal({ ...third, status: 'paused' }, now)).toBe('')
+  // a later try with no time to show (its last try ended, no fresh step): no total either, so no stray " · "
+  const ended = { id: 'T-9', status: 'doing' as const, attempts: 2, runs: [{ started: at(0), ended: at(50) }, { started: at(900), ended: at(990) }] as SymccTask['runs'] }
+  expect(core.cellWithTotal(ended, now)).toBe('')
+  expect(bandLeads([ended], now).get('T-9')).not.toContain('in all')
+  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ +· try 2$/)
 })
 
 test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {

@@ -130,10 +130,11 @@ export function triesTotal(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number,
 }
 
 /** The status cell of a list row with the total of all tries after it for a doing task on a later try: "15m · 1h 40m
- *  in all" (see statusCell, triesTotal). */
+ *  in all" (see statusCell, triesTotal); just the cell when it is '' (nothing to put the total after). */
 export function cellWithTotal(t: Parameters<typeof statusCell>[0], nowMs: number, since?: number | string, form: TotalForm = 'long'): string {
   const cell = statusCell(t, nowMs, since)
-  const total = triesTotal(t, nowMs, form)
+  // no time to show (e.g. the last try has ended and no step is fresh): no total either, so the cell has no stray " · "
+  const total = cell ? triesTotal(t, nowMs, form) : ''
   return total ? `${cell} · ${total}` : cell
 }
 

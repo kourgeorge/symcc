@@ -94,7 +94,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
   const rowMark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
   const leadsWith = (form: TotalForm) => {
     // the total work time of all tries, between this try's time and the try: "▶ 15m · 1h 40m in all · try 3"
-    const totals = new Map(doing.map(t => [t.id, triesTotal(t, nowMs, form)]))
+    const totals = new Map(doing.map(t => [t.id, cells.get(t.id) ? triesTotal(t, nowMs, form) : '']))
     const totalWidth = Math.max(0, ...[...totals.values()].map(s => (s ? ` · ${s}`.length : 0)))
     const states = new Map(
       tasks.map(t => {
