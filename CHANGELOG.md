@@ -2,9 +2,11 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
-## Unreleased
+## 0.5.7 (2026-11-20)
 
 ### Changed
+- Running rows show one time: the total work time of all tries, with no Σ sign ("▶ 1h40m · try 3", and during a step "▶ test 9m"); on try 1 that is just this try's time. Narrow rows drop it. The task page's "Time and cost" still lists each try.
+- The terminal board list has no left indent: task rows, question rows and the Backlog / Done / Dropped lines start at the first column, so titles get two more columns.
 - With the `checker` setting on, the checker now runs before a task joins the merge line, right after symcc's prep step (commit, scope and secret check), side by side with other tasks. On its OK the task joins the line once (catch up, tests, merge or review); before, its tests ran first and it went through the line a second time after the checker. Problems found are one normal failed try, with no test run. No verdict: the tests run in the line and the task waits for your review. With the checker off nothing changes.
 - The checker no longer runs the project's own test files or test commands (they run once, in the merge line, after it): it reads the task and the diff and checks the change with its own throwaway probes in `.scratch/` or `/tmp`. Its prompt and the built-in `checker` role say so.
 

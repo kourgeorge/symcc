@@ -1469,13 +1469,17 @@ The script links symcc's `opencode/` folder into OpenCode's plugins folder for y
 - **Remove it:** the same command with `--remove` (and `--project <folder>` if you used it).
 - **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
 
-**Or with OpenCode's own command** (not seen working yet, see below):
+**Or with OpenCode's own command,** with no clone:
 
 ```bash
 opencode plugin add github:kourgeorge/symcc
 ```
 
-`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). In T-497's own scratch run with OpenCode 2.3.2, the command still failed with "Could not read package.json", because that `package.json` wasn't on GitHub yet; trying it from a local git copy instead was blocked (a symcc worker may not create git repositories). So use `sh symcc/scripts/install-opencode.sh` until this command has been seen working.
+`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). This works: in a scratch run with OpenCode 2.3.2 (T-560), it printed `Plugin "github:kourgeorge/symcc" installed and added to ~/.config/opencode/opencode.json`, adding `"plugins": ["github:kourgeorge/symcc"]` there, and put symcc's files in OpenCode's cache, `~/.cache/opencode/npm/git-symcc-<hash>/<number>/node_modules/symcc`. OpenCode then loaded `opencode/server.ts` from there with no "Plugin failed", and `opencode plugin list` showed `symcc  932aaf3  github:kourgeorge/symcc` (the version is the commit it fetched).
+
+- **The first `opencode plugin list` can say "No plugins found":** it starts OpenCode's background service, which is still loading plugins then. Run it again.
+- **Updates:** this copy doesn't follow `git pull`; `opencode plugin check` and `opencode plugin update` fetch a newer one. Remove it with `opencode plugin remove github:kourgeorge/symcc`.
+- **Use one way, not both:** with the script's link and this entry both in place, OpenCode can load two copies of symcc (not tried).
 
 ### The lead in OpenCode
 
