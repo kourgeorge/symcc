@@ -4,7 +4,8 @@ import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish } from './lead'
-import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, testsRunningNow } from './review'
+import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
+import { mergeLineBusy } from './merge-line'
 import { rerunDue, askedTimedOut, rerunNote, timedOutTwiceQuestion, TIMED_OUT_OPTIONS, RERUN_RUNNING_NOTE, TIMED_OUT_STOPPED_NOTE, parseTimedOutAnswer, moreTestMinutes } from '../core/test-timeout'
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
@@ -733,7 +734,7 @@ export async function saveReport(host: Host, t: SymccTask, answer: string) {
 
 /**
  * `gaveUp`: whether workerFinished gave this step up as stuck (it ran over its limit, see finishLimitMs): from
- * then on it merges nothing and writes no outcome. `release` settles at that moment (see mergeTurn).
+ * then on it merges nothing and writes no outcome. `release` settles at that moment (see inMergeLine).
  * `turn`: stops and restarts its time limit around the merge turn (see checkAndMerge).
  * What happens is decided from what the try recorded on the board (try_question, try_refused) and why its turn ended, never from the hand-back's text (which
  * stays its report, an investigation's answer; it only adds a warning, see warnEndedEarly), in this order: a question (ask_owner) → waiting with it; edits refused
@@ -936,7 +937,7 @@ export const RERUN_WAIT_MS = 15 * 60_000
 
 /**
  * T-511: the regular check's part for tasks whose tests only ran out of time once (rerunDue): their tests run again,
- * once, with no worker and no new try. Only when no task's tests run now (the test lock is free), and preferably
+ * once, with no worker and no new try. Only when no task is in the merge line (no task is testing or merging now), and preferably
  * when fewer workers are busy: with every worker slot busy it waits, up to RERUN_WAIT_MS since the time-out.
  * One task at a time (the next one at a later check). Resolves when that rerun has ended. Not in mode off.
  */
@@ -946,7 +947,7 @@ export async function rerunTimedOutTests(host: Host) {
   const due = b.tasks.filter(t => rerunDue(t) && !checkingNow(t.id)).sort((x, y) => Date.parse(x.updated_at) - Date.parse(y.updated_at))
   const t = due[0]
   if (!t) return
-  if (await testsRunningNow(host)) return
+  if (await mergeLineBusy(host)) return
   const busy = workers.size + starting.size
   const waited = Date.now() - Date.parse(t.updated_at)
   if (b.max_parallel > 0 && busy >= b.max_parallel && !(waited >= RERUN_WAIT_MS)) return
@@ -1845,7 +1846,7 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
 /**
  * T-511: the owner's `answer` to task `id`'s "the tests ran out of time twice" question (or a retry of a task whose
  * tests wait to run again): "Run the tests again" runs only its tests again (no worker, no new try), now (it still
- * waits for the test lock); "Give them more time" does the same with twice the task's current limit (moreTestMinutes), for
+ * waits for its turn in the merge line); "Give them more time" does the same with twice the task's current limit (moreTestMinutes), for
  * that one rerun only (rerun_minutes; the board's test_minutes is not changed);
  * "Stop it" pauses it, its work kept. undefined when the task doesn't wait for that, or for
  * any other answer (then the answer goes to a fresh try as usual).

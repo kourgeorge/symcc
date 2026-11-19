@@ -1,9 +1,10 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, TEST_LOCK_FILE, testLockStaleMs, taskTestMinutes, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR, stepNote } from '../board'
+import { type Blockers, type BoardTask, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
-import { change, now, load, path, tryLock, dropIfSame, safeWrite } from './store'
+import { change, now, path, safeWrite } from './store'
+import { inMergeLine } from './merge-line'
 import { tellLead } from './tell'
 import { ranOutOfTime, limitMinutes, timedOutDetail } from '../core/test-timeout'
 import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
@@ -118,9 +119,10 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * 'merge' is the same as 'approve', for finished work whose merge waited only for the owner's files.
  * `stop` is asked after each test and just before the merge: when it returns a reason (the task
  * was dropped or paused meanwhile), nothing is merged and that reason is returned.
- * Merges into the same branch take turns (mergeTurn); when the branch still moved before ours
- * could move it, the task is brought up to date, tested and merged again by itself (MAX_MERGE_RACES at most).
- * `release`: settles when the caller gave this check up as stuck, so later merges into the branch stop waiting for it.
+ * Every merge takes its turn in the project-wide merge line (inMergeLine, app/merge-line.ts): at its turn, in one go, it
+ * catches up with the target branch, tests and moves the branch. When the branch still moved before ours could move it
+ * (the owner moved it), the task joins the line again and is brought up to date, tested and merged again (MAX_MERGE_RACES at most).
+ * `release`: settles when the caller gave this check up as stuck, so the tasks behind it in line stop waiting for it.
  * `turn`: the caller's time limit. `turn(false)` when this check has to wait in line for its merge turn (or tries
  * again after the branch moved), `turn(true)` when that turn begins: waiting in line and earlier goes don't count.
  * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
@@ -201,14 +203,21 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     const undo = await undoOutOfScope($, t, dir, base, bad, made)
     return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo })
   }
-  // Merges into the same branch take turns (mergeTurn), from bringing in the latest of it to moving it.
-  // If it still moved under us (the owner, or another copy of the plugin), bring it in again and retry, a few times at most.
+  // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
+  // If the branch still moved under us (the owner), the task joins the line again and retries, a few times at most.
   for (let n = 1; ; n++) {
-    // The time limit stops while this waits behind an earlier merge (that one has its own limit and
-    // `release`, so the line keeps moving) and starts again from zero when its own go begins.
-    const restart = n > 1 || mergeTurns.has(target)
-    if (restart) turn?.(false)
-    const r = await mergeTurn(target, () => (restart && turn?.(true), upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, hold, turn)), release)
+    // The time limit stops while this waits in line (each task in front has its own limit and `release`, so the line
+    // keeps moving) and starts again from zero when its own turn begins.
+    const r = await inMergeLine<{ result: CheckResult; raced?: boolean }>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, hold), {
+      t,
+      stopped: () => {
+        const s = stopped()
+        return s ? { result: s } : undefined
+      },
+      ...(release ? { release } : {}),
+      ...(turn ? { turn } : {}),
+      again: n > 1,
+    })
     if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
   }
 }
@@ -325,155 +334,6 @@ async function commitTry($: Host, t: SymccTask, dir: string, made: string[], sub
 /** How many times checkAndMerge brings a task up to date and tries again when its branch moved during the merge. */
 export const MAX_MERGE_RACES = 5
 
-/** The merge running now (or last) into each branch: the next one into that branch waits for it. */
-const mergeTurns = new Map<string, Promise<unknown>>()
-
-/** Forgets the merges queued per branch (what a reload starts with); for the tests' resetPlugin() only. */
-export function resetMergeTurns() {
-  mergeTurns.clear()
-}
-
-/** Runs `fn` once every earlier merge into branch `target` (through this function) has ended, whether it worked or not, or was let go (`release`). */
-export function mergeTurn<T>(target: string, fn: () => Promise<T>, release?: Promise<unknown>): Promise<T> {
-  const prev = mergeTurns.get(target) ?? Promise.resolve()
-  const mine = prev.then(fn, fn)
-  // `release`: once it settles, the next merge no longer waits for this one (a step given up as stuck).
-  const tail = (release ? Promise.race([mine, release]) : mine).catch(() => undefined)
-  mergeTurns.set(target, tail)
-  void tail.then(() => { if (mergeTurns.get(target) === tail) mergeTurns.delete(target) })
-  return mine
-}
-
-// ---------------- one task's tests at a time ----------------
-
-/** How often a task waiting for the test lock looks again. */
-export const TEST_LOCK_POLL_MS = 2_000
-
-/** The tasks of this copy of the plugin waiting for the test lock, oldest first: only the first one tries to take it. */
-const testLine: { id: string }[] = []
-
-/** Forgets the tasks waiting for the test lock (what a reload starts with); for the tests' resetPlugin() only. */
-export function resetTestLine() {
-  testLine.length = 0
-}
-
-/**
- * Whether test lock text `held` (file time `fileMs`) may be taken over: it is older than testLockStaleMs (from the board's test_minutes), or its
- * task is no longer being checked by any copy of the plugin (gone from the board, or its check mark is no longer
- * refreshed: its check ended or was given up, or its session died), or it is task `me`'s own, left by an earlier
- * go of that task (say one cut short by a reload; this go's fresh check mark would otherwise keep it looking alive).
- * A board that can't be read: not stale.
- */
-async function testLockStale($: Host, me: string, held: string, fileMs?: number): Promise<boolean> {
-  const b = await load($).catch(() => null)
-  const l = parseTestLock(held)
-  // how long the holder's test commands may run (the board's test_minutes, or its task's own more time) sets how old a lock may get (a board that can't be read: the default)
-  if (isLockStale(held, Date.now(), fileMs, testLockStaleMs(taskTestMinutes(b ?? {}, l && b ? find(b, l.task) : undefined)))) return true
-  if (!l) return false
-  if (l.task === me) return true
-  if (!b) return false
-  const cur = find(b, l.task)
-  return !cur || !checkStepNow(cur, Date.now())
-}
-
-/** T-511: whether some task's tests run now: one of this copy waits for or holds the test lock, or a lock file that is not stale is there. */
-export async function testsRunningNow($: Host): Promise<boolean> {
-  if (testLine.length) return true
-  const file = path(`${S.N.dir}/${TEST_LOCK_FILE}`)
-  const held = await $.fs.read(file).catch(() => null)
-  if (held === null) return false
-  const st = await $.fs.stat(file).catch(() => null)
-  return !(await testLockStale($, '', held, st?.mtimeMs))
-}
-
-/**
- * Runs `run` (task `t`'s test commands) while holding the project-wide test lock (TEST_LOCK_FILE in the board folder),
- * so only one task's tests run at a time, across tasks and sessions; symcc's merge step only, not the workers' own runs.
- * Tasks of this copy take turns oldest first (testLine); a lock held elsewhere is waited for, a stale one
- * (testLockStale) taken over. While it waits, the task's note says whose tests it waits for (waitingTestsNote), and
- * the step's time limit is stopped (`turn(false)`, started again from zero by `turn(true)` once the lock is ours), so
- * waiting never counts as running over, nor twice in a row as hung. Asked between looks: when `stopped` gives a
- * reason, it stops waiting and returns it. `run` gets `refresh`, which dates the lock again (before each command,
- * so a long run of several commands is not taken as stale). The lock is let go however `run` ends.
- */
-export async function withTestLock<T>($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, stopped: () => CheckResult | undefined, turn: ((go: boolean) => void) | undefined, run: (refresh: () => Promise<void>) => Promise<T>): Promise<T | CheckResult> {
-  const me = { id: t.id }
-  testLine.push(me)
-  let mine = ''
-  let file = ''
-  let shown = ''
-  let before: string | undefined
-  let waited = false
-  let again = false
-  try {
-    file = path(`${S.N.dir}/${TEST_LOCK_FILE}`)
-    for (;;) {
-      const s = stopped()
-      if (s) return s
-      if (testLine[0] === me) {
-        const text = testLockText(t.id, S.me || 'unknown', Date.now())
-        if (await tryLock($, file, text)) {
-          mine = text
-          break
-        }
-      }
-      const held = await $.fs.read(file).catch(() => null)
-      // let go between our try and our look: try again at once (only once in a row, so a lock that can't be read never spins)
-      if (testLine[0] === me && held === null && !again) {
-        again = true
-        continue
-      }
-      again = false
-      if (testLine[0] === me && held !== null) {
-        const st = await $.fs.stat(file).catch(() => null)
-        if (await testLockStale($, t.id, held, st?.mtimeMs)) {
-          await dropIfSame($, file, held)
-          continue
-        }
-      }
-      const holder = parseTestLock(held)?.task ?? (testLine[0] && testLine[0] !== me ? testLine[0].id : 'another task')
-      if (!waited) {
-        waited = true
-        turn?.(false)
-      }
-      if (holder !== shown) {
-        const was = shown
-        shown = holder
-        await noteTask($, t, stopped, note => {
-          if (!was) before = note
-          return waitingTestsNote(holder)
-        })
-      }
-      await $.clock.sleep(TEST_LOCK_POLL_MS)
-    }
-  } finally {
-    const at = testLine.indexOf(me)
-    if (at >= 0) testLine.splice(at, 1)
-    // the waiting note goes back to what it was, unless something else changed it meanwhile
-    if (shown) await noteTask($, t, () => undefined, note => (note === waitingTestsNote(shown) ? before : note))
-  }
-  if (waited) turn?.(true)
-  try {
-    return await run(async () => {
-      if ((await $.fs.read(file).catch(() => null)) !== mine) return
-      const next = testLockText(t.id, S.me || 'unknown', Date.now())
-      await safeWrite($, file, next, 'the test lock').then(() => void (mine = next), () => undefined)
-    })
-  } finally {
-    await dropIfSame($, file, mine)
-  }
-}
-
-/** Sets task `t`'s note to what `note` makes of it, while the task is still as it was and its check not `stopped`. Never throws. */
-async function noteTask($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, stopped: () => CheckResult | undefined, note: (now: string | undefined) => string | undefined) {
-  await change($, x => {
-    const cur = find(x, t.id)
-    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped()) return x
-    const next = note(cur.note)
-    return next === cur.note ? x : patchTask(x, t.id, { note: next }, now())
-  }).catch(() => undefined)
-}
-
 /**
  * Says on the board which step of checking task `t` is going on now (BoardTask.checking), so the list
  * shows it; only while the task is still as it was when the check began and the check was not
@@ -489,14 +349,18 @@ export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: 
   }).catch(() => undefined)
 }
 
-/** One go at the end of checkAndMerge: bring in the latest `target`, test, move `target` forward. `raced`: it moved meanwhile, so nothing was merged. */
-async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], hold?: (changed: readonly string[]) => boolean, turn?: (go: boolean) => void): Promise<{ result: CheckResult; raced?: boolean }> {
+/**
+ * One go at the end of checkAndMerge, the task's merge turn (it is at the front of the merge line): bring in the latest
+ * `target`, test, move `target` forward. `refresh` dates the task's place in line again (before each test command, so a
+ * long run is never taken as stale). `raced`: it moved meanwhile, so nothing was merged.
+ */
+async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], refresh: () => Promise<void>, hold?: (changed: readonly string[]) => boolean): Promise<{ result: CheckResult; raced?: boolean }> {
   const res = (result: CheckResult) => ({ result })
-  // First, before touching the folder: a step stopped or given up while it waited for its merge
-  // turn does nothing, as the next try may already be using the folder.
+  // First, before touching the folder: a step stopped or given up while it waited in the merge
+  // line does nothing, as the next try may already be using the folder.
   const early = stopped()
   if (early) return res(early)
-  // T-440: checked again here, as the merge turn may have waited long behind other merges
+  // T-440: checked again here, as the task may have waited long in the merge line
   if (!(await branchExists($, target))) return res(goneResult(target))
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
@@ -520,8 +384,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const skipped = !!tree && treePassed(await readPassedTrees($), tree, b.test_commands)
   if (skipped) testsRun = false
   if (testsRun && b.test_commands.length) {
-    // One task's tests at a time, project-wide (withTestLock); the lock is let go however the tests end.
-    const failed = await withTestLock($, t, stopped, turn, async refresh => {
+    // Only this task's tests run now: it holds the front of the merge line.
+    const failed = await (async (): Promise<CheckResult | undefined> => {
       await markStep($, t, 'testing', stopped)
       for (const cmd of b.test_commands) {
         await refresh()
@@ -539,10 +403,10 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
         const s = stopped()
         if (s) return s
       }
-      // all passed: remembered while the lock is still held, so two sessions never write the file at once; a failed, timed-out or stopped run never is
+      // all passed: remembered during the turn, so two sessions never write the file at once; a failed, timed-out or stopped run never is
       if (tree) await recordPassedTree($, tree, b.test_commands)
       return undefined
-    })
+    })()
     if (failed) return res(failed)
   }
   const passed = skipped ? `; ${testsSkippedText(tree)}` : '; tests passed'

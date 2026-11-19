@@ -2091,7 +2091,7 @@ test('leftover temp files: old ones that match are chosen', () => {
 test('leftover temp files: the names tmpName makes for every saved file match; other names do not', () => {
   const now = 1_000_000_000
   const old = now - LOCK_STALE_MS - 1
-  const made = ['board.json', 'scouts.json', 'archive.json', 'lead.json', 'board.lock', 'tests.lock', 'passed-trees.json'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
+  const made = ['board.json', 'scouts.json', 'archive.json', 'lead.json', 'board.lock', 'merge-line.json', 'passed-trees.json'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
   expect(made[0]).toBe('board.json.sess_1_x.7-ab12cd.tmp')
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: old })), now)).toEqual(made)
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: now - 1_000 })), now)).toEqual([])
