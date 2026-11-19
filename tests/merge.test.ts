@@ -3,7 +3,7 @@ import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS } from '../hooks/app/review'
 import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
-import { removeWorktree } from '../hooks/app/git'
+import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
@@ -44,6 +44,8 @@ const ISO = '2026-11-13T00:00:00.000Z'
 // commit ids for the fake git: main (M1, M2), the worker's branch (H0 before its commit, H1 after, H2 after a merge of main,
 // H3 after a commit of the owner's edits on top of H1), an older base (B0)
 const [M1, M2, H0, H1, H2, B0, H3] = ['a1', 'a2', 'b0', 'b1', 'b2', 'c0', 'b3'].map(x => x.repeat(20)) as [string, string, string, string, string, string, string]
+// where the task's branch points when the plugin reads it to delete it (T-493)
+const TIP = 'd1'.repeat(20)
 
 /** A path as git shows it without -z: names with a quote, backslash, control or non-ASCII character are quoted and escaped. */
 function quoted(p: string): string {
@@ -85,6 +87,10 @@ type Git = {
   wtStatus: string
   /** the project has a commit-msg (and pre-merge-commit) hook that always fails: a commit, or a merge that makes a commit, without --no-verify is refused */
   failingHook?: boolean
+  /** where the task's branch (symcc/T-1) points, as `rev-parse --verify -q` shows it (TIP by default) */
+  tip?: string
+  /** whether the task's branch tip is in the branch it is checked against (`merge-base --is-ancestor TIP refs/heads/...`; true by default) */
+  tipMerged?: boolean
   answer?: (args: string[], cwd: string) => Res | undefined
 }
 
@@ -120,6 +126,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     }
     if (s === 'rev-parse -q --verify HEAD' || s === 'rev-parse HEAD') return ok(git.head)
     if (s === `rev-parse refs/heads/main`) return ok(git.main)
+    if (s.startsWith('rev-parse --verify -q refs/heads/symcc/')) return ok(git.tip ?? TIP)
+    if (a[0] === 'merge-base' && a[1] === '--is-ancestor' && a[2] === (git.tip ?? TIP)) return git.tipMerged === false ? fail() : ok()
     if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return git.upToDate ? ok() : fail()
     if (a[0] === 'merge-base') return ok(git.upToDate ? git.main : B0)
     // without -z, git quotes unusual names the way it does by default (core.quotePath): "docs/caf\303\251.md"
@@ -134,6 +142,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
     }
     if (s === 'symbolic-ref --short -q HEAD') return git.current ? ok(git.current) : fail()
     if (a[0] === 'status') return ok(cwd === WT ? git.wtStatus : git.status)
+    // update-ref -d ref old: deletes the task's branch only if it is still at old
+    if (a[0] === 'update-ref' && a[1] === '-d') return a[3] === (git.tip ?? TIP) ? ok() : fail(`cannot lock ref '${a[2]}'`)
     if (a[0] === 'update-ref') {
       // update-ref -m note ref new old: moves only if ref is still at old
       const [, , , ref, to, from] = a
@@ -1067,7 +1077,60 @@ test('approve merges a task in review, without running the tests again when main
   expect(t.merged).toBe(H1)
   // its folder and branch are cleaned up
   expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
-  expect(w.calls).toContain('root: git branch -d symcc/T-1')
+  expect(w.calls).toContain(`root: git update-ref -d refs/heads/symcc/T-1 ${TIP}`)
+})
+
+// T-493: `git branch -d` checked the owner's HEAD, not the branch the task merged into, so a task merged into a branch
+// that isn't checked out (here main, while the owner is on "other") kept its branch.
+test('after a merge into a branch that is not checked out, the task branch is deleted when its work is in that branch', async () => {
+  const w = await inReview({ current: 'other' })
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.calls).toContain(`root: git merge-base --is-ancestor ${TIP} refs/heads/main`)
+  expect(w.calls).toContain(`root: git update-ref -d refs/heads/symcc/T-1 ${TIP}`)
+  expect(w.calls.some(c => c.includes('git branch -d'))).toBe(false)
+})
+
+test('after a merge, a task branch with work not in its target is kept', async () => {
+  const w = await inReview({ tipMerged: false })
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.calls.some(c => c.includes('update-ref -d'))).toBe(false)
+})
+
+/** A world with T-1 done (merged into main) and its branch left over, as the regular check (cleanupMerged) finds it. */
+async function leftOver(g: Partial<Git> = {}) {
+  const w = world({ dirty: false, head: H1, current: 'other', ...g, answer: (args, cwd) => (args[0] === 'branch' && args[1] === '--merged' ? ok('main\nsymcc/T-1\nother') : g.answer?.(args, cwd)) })
+  const [b] = boardWith('auto')
+  const done = patchTask(b, 'T-1', { status: 'done', merged: H1 }, ISO)
+  await saveBoard(w.$, done)
+  return { w, b: done }
+}
+
+test('the regular check deletes a merged task branch whose target is not checked out', async () => {
+  const { w, b } = await leftOver()
+  await cleanupMerged(w.$, b)
+  expect(w.calls).toContain(`root: git merge-base --is-ancestor ${TIP} refs/heads/main`)
+  expect(w.calls).toContain(`root: git update-ref -d refs/heads/symcc/T-1 ${TIP}`)
+  expect(w.calls.some(c => c.includes('git branch -d'))).toBe(false)
+})
+
+test('the regular check keeps a task branch with work not in its target, or one still checked out in a folder', async () => {
+  const notIn = await leftOver({ tipMerged: false })
+  await cleanupMerged(notIn.w.$, notIn.b)
+  expect(notIn.w.calls.some(c => c.includes('update-ref -d'))).toBe(false)
+  const out = await leftOver({ answer: args => (args[0] === 'worktree' && args[1] === 'list' ? ok(`worktree ${WT}\nHEAD ${TIP}\nbranch refs/heads/symcc/T-1\n`) : undefined) })
+  await cleanupMerged(out.w.$, out.b)
+  expect(out.w.calls.some(c => c.includes('update-ref -d'))).toBe(false)
+})
+
+test('a task branch that moved after the check is not deleted', async () => {
+  // the branch is read at TIP and found merged, but by the delete it points elsewhere: update-ref -d with the old tip refuses
+  const w = world({ dirty: false, head: H1 })
+  const moved = { tip: TIP, answer: (args: string[]) => (args[0] === 'update-ref' && args[1] === '-d' ? fail("cannot lock ref 'refs/heads/symcc/T-1'") : undefined) }
+  Object.assign(w.git, moved)
+  expect(await deleteMergedBranch(w.$, 'symcc/T-1', 'main')).toBe(false)
+  expect(w.calls).toContain(`root: git update-ref -d refs/heads/symcc/T-1 ${TIP}`)
 })
 
 test('approve when main moved runs the tests again; failing, nothing merges and the task gets a new try', async () => {

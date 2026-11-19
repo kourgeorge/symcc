@@ -2,7 +2,7 @@ import type { SymccTask, SymccMode, SymccTokens } from '../../types'
 import { type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, onConflict, MAX_CONFLICT_TRIES, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedLine, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, ranOverNote, ranOverBefore, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, type BehindWhy } from './git'
+import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish } from './lead'
 import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import { loadRoles } from './roles'
@@ -448,7 +448,7 @@ async function landedLate(host: Host, t: SymccTask, sha: string, made: readonly 
   if (!r) return
   if (r.done) {
     tellLead(host, `✓ ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}).`)
-    if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) await git(host, ['branch', '-d', taskBranch(t)]).catch(() => undefined)
+    if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), into).catch(() => false)
     void pump(host)
     return
   }
@@ -677,12 +677,12 @@ async function changedMeanwhile(host: Host, t: SymccTask, b: Board, r: CheckResu
   }
   if (off) {
     sayDone(host, b, t.id)
-    if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await git(host, ['branch', '-d', taskBranch(t)])
+    if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), intoOf(t))
     tellLead(host, `✓ ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`)
     return
   }
   sayDone(host, b, t.id)
-  if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await git(host, ['branch', '-d', taskBranch(t)])
+  if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), intoOf(t))
   tellLead(host, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
@@ -1152,8 +1152,8 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
   if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: [...cur.history, done], ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
   if (r.ok) sayDone(host, b, t.id)
-  // Merged: its folder goes, then its branch (-d: git refuses if it isn't merged, so nothing is lost).
-  if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await git(host, ['branch', '-d', taskBranch(t)])
+  // Merged: its folder goes, then its branch, only when all its work is in the branch it merged into (deleteMergedBranch), so nothing is lost.
+  if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await deleteMergedBranch(host, taskBranch(t), intoOf(t))
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${testTries} automatic ${testTries === 1 ? 'retry' : 'retries'}. ${r.checker ? `The checker's report:\n${r.testOutput.replace(/^[^\n]*\n/, '')}` : `The last test run: ${gaveUpTestsText(r.testOutput)}`}` : ''
   if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)

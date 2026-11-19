@@ -1234,8 +1234,10 @@ your-project/
 Add `.symcc/` to your project's `.gitignore` so the board and the copies stay local.
 
 A task's branch (`symcc/T-3`) and its folder are removed once the task is merged, so old
-branches don't pile up; the regular check also tidies up any left from before. Branches are
-deleted with `git branch -d`, so git refuses if anything is not merged. A dropped task loses
+branches don't pile up; the regular check also tidies up any left from before. A branch is
+deleted only when all its work is in the branch the task merged into (even when that branch
+isn't the one you have checked out), and never while a folder still has it checked out, so
+nothing that isn't merged is lost. A dropped task loses
 its folder but keeps its branch, in case you want to look at its work. Branches that don't
 start with `symcc/` are never touched.
 
