@@ -39,6 +39,16 @@ import { scoutToolRefusal } from '../../core/scouts'
 import { workerToolRefusal } from '../tools'
 import { parseViewFile } from '../board-view'
 
+// T-509: limits far above a normal run, for a machine at load 200-500 where one git command or a copy's start can take
+// seconds. Every wait below ends as soon as what it waits for happens, so a larger limit never slows a passing run;
+// it only keeps a busy machine from failing a test that would pass (a real hang still fails, just later).
+/** the most a test of this file may take (most start a copy, git, timers) */
+const TEST_MS = 180_000
+/** the most a test that starts several copies or runs a whole worker may take */
+const LONG_TEST_MS = 300_000
+/** the most until() and settle() wait for one thing, and an agent for its session's move */
+const WAIT_MS = 60_000
+
 /** Puts symcc's memory back to its start values, as a fresh copy of the plugin has (bun shares one copy across tests). */
 function reset() {
   for (const t of [...timers, S.watchdog, S.leadTimer, S.leadRetry, S.beat, S.sayTimer]) t?.cancel()
@@ -179,7 +189,7 @@ function fakeCtx(dir: string, session: OcSessionApi = fakeSessions().api) {
 }
 
 /** Waits until `check` is true (looking every 20 ms, for at most `ms`; a busy machine can take seconds for a copy's start). */
-async function until(check: () => boolean | Promise<boolean>, ms = 15_000) {
+async function until(check: () => boolean | Promise<boolean>, ms = WAIT_MS) {
   for (const end = Date.now() + ms; Date.now() < end; await new Promise<void>(r => setTimeout(() => r(), 20))) if (await check()) return
   throw new Error('timed out waiting')
 }
@@ -189,7 +199,7 @@ async function until(check: () => boolean | Promise<boolean>, ms = 15_000) {
  * makes its folder with git before it writes the board) and no board write is running or starts within 300 ms, so
  * none of a test's follow-ups lands in the next test after reset() (T-489: a late write found no project folder).
  */
-async function settle(ms = 20_000) {
+async function settle(ms = WAIT_MS) {
   for (const end = Date.now() + ms; Date.now() < end; ) {
     const w = S.writing
     await w
@@ -299,7 +309,7 @@ test('one copy runs the engine: the main folder\'s first copy; a second copy for
   } finally {
     await p.done()
   }
-}, 30_000)
+}, TEST_MS)
 
 test('a worktree\'s copy refuses a worker\'s edit outside its files through permission.evaluate, lets an allowed one pass, and refuses a shell write into the owner\'s copy', async () => {
   reset()
@@ -341,7 +351,7 @@ test('a worktree\'s copy refuses a worker\'s edit outside its files through perm
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and starts the timers; cleanup stops them', async () => {
   reset()
@@ -359,7 +369,7 @@ test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and star
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('a lead.json left by an OpenCode server stopped without its cleanup (T-467) never blocks the next start: a stale one is taken over at once, a fresh one on the first heartbeat after it goes stale (in Claude Code too); a cleanup lets go at once', async () => {
   reset()
@@ -403,7 +413,7 @@ test('a lead.json left by an OpenCode server stopped without its cleanup (T-467)
   } finally {
     await finish(p)
   }
-}, 60_000)
+}, LONG_TEST_MS)
 
 test('a copy in a subfolder of the main project runs the engine (as Claude Code\'s sessionStart does); with the main folder\'s copy running, it waits', async () => {
   reset()
@@ -435,7 +445,7 @@ test('a copy in a subfolder of the main project runs the engine (as Claude Code\
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('the scratch project ignores the owner\'s global git config: a global core.hooksPath pre-commit hook that fails never runs, and project() still commits', async () => {
   const fake = await realpath(await mkdtemp('/tmp/symcc-oc-gitcfg-'))
@@ -469,7 +479,7 @@ test('the scratch project ignores the owner\'s global git config: a global core.
     else process.env.GIT_CONFIG_GLOBAL = before
     await rm(fake, { recursive: true, force: true })
   }
-}, 30_000)
+}, TEST_MS)
 
 /** The imports of `text` that bind it to Claude Code (the same check as the Node host's spec): 'claude-code', hooks/claude/, register.tsx. */
 function claudeImports(text: string): string[] {
@@ -491,7 +501,7 @@ test('hooks/opencode/ and opencode/ import nothing from Claude Code or hooks/cla
   const files = [...(await filesUnder(`${PLUGIN_ROOT}/hooks/opencode`)), ...(await filesUnder(`${PLUGIN_ROOT}/opencode`))]
   expect(files.length).toBeGreaterThan(5)
   for (const f of files) expect(`${f}: ${claudeImports(await readFile(f, 'utf8')).join(', ')}`).toBe(`${f}: `)
-}, 30_000)
+}, TEST_MS)
 
 test('the model per role (R8): a role\'s Claude name runs on OpenCode\'s Claude Agent provider, "provider/model" as it is, none gives the default for the kind', () => {
   expect(DEFAULT_MODELS).toEqual({ worker: 'claude-agent/sonnet', scout: 'claude-agent/haiku', checker: 'claude-agent/haiku' })
@@ -574,7 +584,7 @@ test('an OpenCode session agent: create (child of the lead) -> move into its fol
     const lead = f.lead(main)
     const ends: { id: string; end: unknown }[] = []
     const known = new Set<string>()
-    const agents = opencodeAgents(f.api, { dir: main, lead: () => lead, ready: async id => known.has(id), onEnd: (id, end) => void ends.push({ id, end }), pollMs: 5, waitMs: 2000 })
+    const agents = opencodeAgents(f.api, { dir: main, lead: () => lead, ready: async id => known.has(id), onEnd: (id, end) => void ends.push({ id, end }), pollMs: 5, waitMs: WAIT_MS })
     const r = await agents.spawn({ kind: 'worker', prompt: 'do T-1', name: 'symcc-T-1', description: 'a change', cwd: wt, model: 'opus' })
     expect(r.agentId).toBe('ses_2')
     // made a child of the lead (so OpenCode put it in the lead's folder), with the role's model, then moved: spawn
@@ -625,7 +635,7 @@ test('an OpenCode session agent: create (child of the lead) -> move into its fol
   } finally {
     await rm(base, { recursive: true, force: true })
   }
-}, 30_000)
+}, TEST_MS)
 
 test('stopped while its first prompt is still landing: it ends once as aborted, stays killed, and is interrupted again after the prompt lands', async () => {
   const f = fakeSessions(0)
@@ -640,7 +650,7 @@ test('stopped while its first prompt is still landing: it ends once as aborted, 
   const main = await realpath(await mkdtemp('/tmp/symcc-oc-stop-'))
   try {
     const ends: string[] = []
-    const agents = opencodeAgents(api, { dir: main, lead: () => f.lead(main), onEnd: (_id, end) => void ends.push(end.end.reason), pollMs: 5, waitMs: 2000 })
+    const agents = opencodeAgents(api, { dir: main, lead: () => f.lead(main), onEnd: (_id, end) => void ends.push(end.end.reason), pollMs: 5, waitMs: WAIT_MS })
     const { agentId } = await agents.spawn({ kind: 'worker', prompt: 'do it', name: 'w', description: 'w' })
     await until(() => release !== undefined)
     await agents.stop(agentId!, 'stop')
@@ -656,7 +666,7 @@ test('stopped while its first prompt is still landing: it ends once as aborted, 
   } finally {
     await rm(main, { recursive: true, force: true })
   }
-}, 30_000)
+}, TEST_MS)
 
 test('sessionEnd: a failed run is an error with its message, a content filter a refusal', () => {
   const at = { directory: '/x' }
@@ -699,7 +709,7 @@ test('the tool backstop reads OpenCode 2.3\'s real tool inputs: edit and write {
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('the main folder\'s copy starts a worker as an OpenCode session: the role\'s model, a child of the lead, moved into its worktree, prompted once the board names it, with no wake line for the lead; its end reaches agentFinished with its tokens, and the lead gets one queued board update despite OpenCode\'s "subagent completed" message', async () => {
   reset()
@@ -722,7 +732,7 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     await c.hooks.prompt!({ sessionID: lead })
     await until(() => S.startupDone === true)
     await pump(host!)
-    await until(() => f.calls.some(x => x.startsWith('prompt')), 15_000)
+    await until(() => f.calls.some(x => x.startsWith('prompt')))
     const wt = `${p.main}/.symcc/worktrees/T-3`
     expect(f.calls).toEqual([`create ses_2 parent ${lead} model openai/gpt-5`, 'move ses_2', `prompt ses_2 in ${wt} (queue)`])
     // starting the worker woke nobody: no start queue on OpenCode, so no "Starting worker" line for the lead
@@ -738,11 +748,11 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     expect(String(f.sessions.get('ses_2')!.messages[0]!.content![0]!.text)).toContain('Be quick.')
     // it ends: agentFinished takes its tokens onto the try
     f.end('ses_2', 'Nothing to change.')
-    await until(async () => !!(await load(host!)).tasks.find(x => x.id === 'T-3')!.runs?.at(-1)?.tokens, 15_000)
+    await until(async () => !!(await load(host!)).tasks.find(x => x.id === 'T-3')!.runs?.at(-1)?.tokens)
     expect((await load(host!)).tasks.find(x => x.id === 'T-3')!.runs!.at(-1)!.tokens).toEqual({ input: 10, output: 814, cache_read: 154787, cache_write: 2261 })
     expect(f.subagent).toEqual([`ses_2 -> ${lead}`])
     // symcc's board update about T-3 reaches the lead once, queued, labelled so the automatic message isn't a second report
-    await until(() => f.prompts.some(x => x.sessionID === lead), 15_000)
+    await until(() => f.prompts.some(x => x.sessionID === lead))
     await new Promise<void>(r => setTimeout(() => r(), 1700))
     const toLead = f.prompts.filter(x => x.sessionID === lead)
     expect(toLead.length).toBe(1)
@@ -757,7 +767,7 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
   } finally {
     await finish(p)
   }
-}, 60_000)
+}, LONG_TEST_MS)
 
 test('host.lead on OpenCode: a board update is a queued session.prompt into the lead, an urgent one steers; one sent before the lead is known waits for it; usage from session.get', async () => {
   const f = fakeSessions()
@@ -956,7 +966,7 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('two main copies: updates the engine copy kept before the lead was known still reach the lead when the other copy\'s hook records it first', async () => {
   reset()
@@ -995,7 +1005,7 @@ test('two main copies: updates the engine copy kept before the lead was known st
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 // T-465: symcc's tools and slash commands in OpenCode (tools.ts), mapped from the Claude host's lists.
 
@@ -1055,7 +1065,7 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('each session is offered only the symcc tools it may call, and the lead gets its guide in the system prompt', async () => {
   reset()
@@ -1090,7 +1100,7 @@ test('each session is offered only the symcc tools it may call, and the lead get
   } finally {
     await finish(p)
   }
-}, 30_000)
+}, TEST_MS)
 
 test('each slash command is added and runs symcc\'s runCommand: an answer only for the owner is a synthetic message that wakes nobody, /symcc is the text board, and the help has no Claude-panel lines', async () => {
   reset()
@@ -1136,7 +1146,7 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
   } finally {
     await finish(p)
   }
-}, 60_000)
+}, LONG_TEST_MS)
 
 test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /symcc-answer answers a waiting task (the change tool, the lead hears of it) and a question on the board', async () => {
   reset()
@@ -1184,7 +1194,7 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     reset()
     await p.done()
   }
-}, 60_000)
+}, LONG_TEST_MS)
 
 test('scripts/install-opencode.sh (T-467) links opencode/ into OpenCode\'s plugins folder: for the user (XDG_CONFIG_HOME) or one project (--project), never over a real folder, and --remove takes it away', async () => {
   const base = await realpath(await mkdtemp('/tmp/symcc-oc-install-'))
@@ -1214,7 +1224,7 @@ test('scripts/install-opencode.sh (T-467) links opencode/ into OpenCode\'s plugi
   } finally {
     await rm(base, { recursive: true, force: true })
   }
-}, 30_000)
+}, TEST_MS)
 
 test('scripts/install-opencode.sh warns when the opencode on PATH is older than 2.3 (1.x and 2.0-2.2), not for 2.3 or newer, and still links', async () => {
   const base = await realpath(await mkdtemp('/tmp/symcc-oc-install-version-'))
@@ -1245,4 +1255,4 @@ test('scripts/install-opencode.sh warns when the opencode on PATH is older than 
   } finally {
     await rm(base, { recursive: true, force: true })
   }
-}, 30_000)
+}, TEST_MS)

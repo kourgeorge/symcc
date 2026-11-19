@@ -4,6 +4,9 @@
 # prints a stream-json system line and result line the way claude -p does, with tokens and a cost.
 # FAKE_SCRATCH set: it also writes a throwaway script under .scratch/ (T-456), which must never reach a commit (T-477).
 # FAKE_SLEEP (seconds) makes it wait first, like a slow model: a stop while it waits must mean the file never changes.
+# FAKE_PID set: it first writes its process id there (its process group's id too: symcc starts it detached), so a
+# test can check the group is gone instead of waiting out the sleep on the clock (T-509).
+[ -n "${FAKE_PID:-}" ] && echo $$ > "$FAKE_PID"
 prompt=$(cat)
 file=${FAKE_EDIT:-hello.txt}
 [ -n "${FAKE_SLEEP:-}" ] && sleep "$FAKE_SLEEP"
