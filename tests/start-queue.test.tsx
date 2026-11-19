@@ -309,7 +309,7 @@ for (const [what, stop, status] of [
 const lostStart = (b: Board, id: string, session = 's1'): Board =>
   patchTask(b, id, { status: 'doing', session, attempts: 1, branch: `symcc/${id}`, note: QUEUED_NOTE, runs: startRun(undefined, ISO) }, ISO)
 
-const sentBack = (h: string) => h.includes('old worker has ended') || h.includes('restarted')
+const sentBack = ({ text: h }: { text: string }) => h.includes('old worker has ended') || h.includes('restarted')
 
 test('T-428 loaded: after a reload lost the queue, the session start queues the task again on the same try, with no "restarted" line and no word to the lead', async ($, on) => {
   const w = world(on)

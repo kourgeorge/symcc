@@ -691,7 +691,7 @@ unchanged.
   in review), with at most one main button on the page. Then the sections, each under a clear
   heading: **Why / where it came from**; **What to do** (the details, drawn as Markdown); the
   **Changes** of a task in review; **History**, a timeline with the newest first (a mark, when
-  that try ran, then the whole line; merges in green, failures in red); and the latest
+  it happened, then the whole line; merges in green, failures in red); and the latest
   **Report** as Markdown: its first lines, with `Show all` for the rest and a button for each
   try. Last come three folds, closed until you click them, each with a count:
   `▸ Files it may change (3)`, `▸ Waits for (2)` (each task ID a button that opens it) and
@@ -730,7 +730,8 @@ before this was kept show `from: unknown`.
   trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
   with `git log --grep "T-3"`.
 - **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
-  line per try (what the worker said, cut at a word end with "…", and how it went),
+  line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), for
+  example what the worker said in a try (cut at a word end with "…") and how it went,
   **Commits** lists the commits each try made and the one that was merged, and **Report**
   shows the worker's full final report for the latest try. When more than one try has a
   report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
@@ -1277,7 +1278,7 @@ its read-only `stats` tool.
   average tokens and time; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
-  lines have no times. The worker time is the same as the total on the board's banner.
+  entries from older boards have no times. The worker time is the same as the total on the board's banner.
 
 ---
 

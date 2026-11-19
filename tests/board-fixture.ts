@@ -3,6 +3,7 @@
 import { mock, type MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { inProject } from './project'
+import { hist } from './history-fixture'
 
 /** The clock the board is seen at. */
 export const T0 = Date.UTC(2026, 10, 18, 12, 0, 0)
@@ -15,7 +16,7 @@ export const BOARD_TASKS = [
   task('T-402', 'doing', 'Keep the search box open while typing several words in a row', { attempts: 1 }),
   task('T-403', 'review', 'Make the settings page show every group with its own short summary line'),
   task('T-404', 'waiting', 'Pick the colors for the review mark on light themes', { question: 'Yellow or blue for review?' }),
-  task('T-405', 'failed', 'Rename the scouts page heading and move its buttons under the list', { note: 'tests failed', history: ['try 1: tests failed'] }),
+  task('T-405', 'failed', 'Rename the scouts page heading and move its buttons under the list', { note: 'tests failed', history: hist('try 1: tests failed') }),
   task('T-406', 'todo', 'Write the guide section about adding a new scout from the board panel'),
   task('T-407', 'todo', 'Let the lead read the archived tasks when the owner asks about old work', { after: ['T-406'] }),
   task('T-408', 'todo', 'Add a short CHANGELOG line for every merged task automatically'),

@@ -77,7 +77,7 @@ export function endedEarlyNote(id: string, sentence: string): string {
 
 /** What the worker said in its last try that ended with `detail` (from the history line "try N: <said> → <detail>"); '' if none. */
 function saidBefore(t: Failed, detail: RegExp): string {
-  for (const line of [...(t.history ?? [])].reverse()) {
+  for (const { text: line } of [...(t.history ?? [])].reverse()) {
     const at = line.lastIndexOf(' → ')
     if (at < 0 || !detail.test(line.slice(at + 3))) continue
     const said = line.slice(0, at).replace(/^try \S+(?: \(role [^)]*\))?:\s*/, '').trim()

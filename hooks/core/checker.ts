@@ -4,6 +4,7 @@
 // with that report, like a failed test run). Investigations and docs-only changes skip it. Everything here is pure.
 import CHECKER_PROMPT from '../../prompts/checker'
 import type { Board } from './board-file'
+import type { HistoryAdd } from './history'
 import { DOC_NAMES, MEDIA_EXTS } from './review'
 import { CHECKER_ROLE } from './roles'
 import { DEFAULT_NAME, namesFor } from '../name'
@@ -135,6 +136,9 @@ export const checkerPrompt = (v: CheckerValues): string => fillPlaceholders(CHEC
 /** The history line of a checker's verdict. */
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>
   !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${oneLine(v.report, 300)}` : `${tryLabel}: checker: OK`
+
+/** checkerLine as a history entry to add: "checker-ok", "checker-problems", or "checker" with no verdict. */
+export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = ''): HistoryAdd => [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why)]
 
 const oneLine = (s: string, max: number) => {
   const t = s.replace(/\s+/g, ' ').trim()

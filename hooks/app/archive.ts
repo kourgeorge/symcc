@@ -33,11 +33,19 @@ export async function saveArchive(host: Host, a: Archive) {
   await safeWrite(host, path(S.N.archiveFile), archiveText(a), 'the archive')
 }
 
-/** Saves archive.json once in the current shape when reading it brought old tasks up to date (see readArchive's `migrated`). */
+/**
+ * Saves archive.json once in the current shape when reading it brought old tasks up to date (see readArchive's `migrated`),
+ * keeping a copy of the file as it was beside it (archive.json.before-migrate-<time>); when that copy can't be written,
+ * nothing is saved (it is tried again the next time).
+ */
 export async function saveArchiveMigrated(host: Host): Promise<void> {
   await locked(host, async () => {
     const r = await readArchiveFile(host)
     if (r.broken || !r.migrated) return
+    if (r.text !== null) {
+      const copy = `${S.N.archiveFile}.before-migrate-${now().replace(/[:.]/g, '-')}`
+      if (!(await host.fs.write(path(copy), r.text).then(() => true, () => false))) return
+    }
     await saveArchive(host, r.archive)
   })
 }

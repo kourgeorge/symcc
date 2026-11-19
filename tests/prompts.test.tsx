@@ -12,6 +12,7 @@ import { TOOLS } from '../hooks/app/tools'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, entry } from './fakes'
+import { hist } from './history-fixture'
 
 const ROOT = '/proj'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -34,7 +35,7 @@ function setup() {
 
 test('the built-in prompts are filled in for the task: no placeholder is left, and the change prompt has the test rule', () => {
   setup()
-  const b = boardWith(['npm test'], { history: ['created by the lead', 'try 1 failed its tests'] })
+  const b = boardWith(['npm test'], { history: hist('created by the lead', 'try 1 failed its tests') })
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
   expect(p).not.toContain('{{')
   expect(p).toContain('You are a symcc worker. Do exactly this one task, then stop.')

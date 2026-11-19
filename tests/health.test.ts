@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { type Board, type BoardTask, emptyBoard, boardHealth, newFindings, healthText, shareFiles, afterChanges, afterChangedLine, changeLines, OWNER_IDLE_MS } from '../hooks/board'
+import { hist } from './history-fixture'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
@@ -34,7 +35,7 @@ test('health: a dependency loop is found once', () => {
 })
 
 test('health: starving after 3 changes of its after list, or 2+ hours while newer tasks started', () => {
-  const h = ['waits on changed: nothing → T-2', 'waits on changed: T-2 → T-3', 'waits on changed: T-3 → T-4']
+  const h = hist('waits on changed: nothing → T-2', 'waits on changed: T-2 → T-3', 'waits on changed: T-3 → T-4')
   expect(afterChanges({ history: h })).toBe(3)
   // its after list changed 3 times, and it waits only on a newer task
   expect(reasons(board([task('T-1', { history: h, after: ['T-4'], files: ['a/'] }), task('T-4', { status: 'doing', files: ['a/'] })]))).toEqual(['starving:T-1'])
@@ -131,5 +132,5 @@ test('the after list changing writes a "waits on changed" history line', () => {
   expect(afterChangedLine(['T-1'], ['T-1'])).toBe(null)
   expect(afterChangedLine(['T-1'], undefined)).toBe(null)
   expect(afterChangedLine(['T-1'], ['T-2', 'T-3'])).toBe('waits on changed: T-1 → T-2, T-3')
-  expect(changeLines({ attempts: 0, files: [], after: ['T-1'] }, { after: [] }, false)).toEqual(['waits on changed: T-1 → nothing'])
+  expect(changeLines({ attempts: 0, files: [], after: ['T-1'] }, { after: [] }, false)).toEqual([['waits-changed', 'waits on changed: T-1 → nothing']])
 })

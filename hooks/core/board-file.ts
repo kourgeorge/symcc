@@ -3,6 +3,7 @@ import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '.
 import { dataDir } from '../name'
 import { cleanTokens, keepAgentIds } from './runs'
 import { parseStamp } from './text'
+import { historyEntryOk, migrateHistory } from './history'
 import type { WorkerQuestion } from './ask'
 import { type OwnerQuestion, cleanQuestions } from './questions'
 import { type TestRerun, asTestRerun } from './test-timeout'
@@ -371,7 +372,8 @@ export function withoutStages<T extends object>(t: T): T | null {
 const LIST_OK: Record<'files' | 'after' | 'history', (v: unknown) => boolean> = {
   files: v => typeof v === 'string' && !!v.trim(),
   after: v => typeof v === 'string' && /^T-\d+$/.test(normId(v)),
-  history: v => typeof v === 'string',
+  // an old string line is let through here and made a record by migrateTask (T-522)
+  history: historyEntryOk,
 }
 
 /**
@@ -449,7 +451,8 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  *   last change; the last try of a task that is "doing" is running now and stays open;
  * - a try's tokens saved as one number: kept as-is, marked unsplit (see migrateRunTokens);
  * - no merge_into (from before each task kept its own branch): `into`, the board's old target_branch;
- * - stage, stages and backs (from the stage engine, now removed): dropped (see withoutStages).
+ * - stage, stages and backs (from the stage engine, now removed): dropped (see withoutStages);
+ * - history lines saved as plain strings (before T-522): records { at, kind, text }, the time and kind guessed (see migrateHistory).
  */
 export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = withoutStages(t) ?? t
@@ -459,6 +462,8 @@ export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
   const role = typeof t.role === 'string' ? OLD_ROLES[t.role.trim().toLowerCase()] : undefined
   if (role) out = { ...out, role }
+  const history = migrateHistory(out)
+  if (history) out = { ...out, history }
   const rs = Array.isArray(out.runs) ? out.runs : []
   const open = (r: SymccRun, i: number) => typeof r.started === 'string' && !r.ended && !(i === rs.length - 1 && t.status === 'doing')
   if (rs.some(open)) {

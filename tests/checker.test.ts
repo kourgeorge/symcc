@@ -200,7 +200,7 @@ test('with the checker off nothing changes: a passing change merges at once and 
   expect(w.spawns).toEqual([])
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
-  expect(t.history.some(h => h.includes('checker'))).toBe(false)
+  expect(t.history.some(h => h.text.includes('checker'))).toBe(false)
 })
 
 test('with the checker on, a passing change waits for a checker (shown as checking); OK merges it, with the verdict and its tokens on the try', async () => {
@@ -223,7 +223,7 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(w.spawns.length).toBe(1)
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
-  expect(t.history).toContain('try 1: checker: OK')
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
   expect(t.runs!.at(-1)!.tokens).toEqual({ output: 500 })
 })
 
@@ -236,7 +236,7 @@ test('T-440: the target branch deleted while the checker runs: after its OK the 
   })
   expect(t.status).toBe('waiting')
   expect(t.question).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
-  expect(t.history.at(-1)).toMatch(/^not merged: branch main is gone; asked the owner/)
+  expect(t.history.at(-1)?.text).toMatch(/^not merged: branch main is gone; asked the owner/)
   expect(t.test_tries ?? 0).toBe(0)
   expect(w.git.main).toBe(M1)
   expect(leadQueue.join('\n')).not.toMatch(/checking failed/)
@@ -342,7 +342,7 @@ test('a checker that finds problems sends the task back to its worker with the r
   expect(t.status).toBe('todo')
   expect(t.test_tries).toBe(1)
   expect(t.note).toBe('the checker found problems; a new try will fix them (1 of 2)')
-  expect(t.history.some(h => h.startsWith('try 1: checker found problems: src/a.ts:12'))).toBe(true)
+  expect(t.history.some(h => h.text.startsWith('try 1: checker found problems: src/a.ts:12'))).toBe(true)
   expect(t.runs!.at(-1)!.ended_note).toBe('checker found problems')
   expect(leadQueue.join('\n')).toContain('was sent back by the checker; retrying on its own (1 of 2)')
   const prompt = WORKER_PROMPT(t, await load(w.$), WT)
@@ -379,7 +379,7 @@ test('in review mode an OK from the checker sends the task to review, not merged
   expect(w.spawns.length).toBe(1)
   expect(t.status).toBe('review')
   expect(w.git.main).toBe(M1)
-  expect(t.history).toContain('try 1: checker: OK')
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
 })
 
 test('a checker stopped before its verdict merges nothing: the task waits for the owner\'s review', async () => {
@@ -405,7 +405,7 @@ test('T-402: through agentFinished (turn.complete), a checker whose turn ended o
     expect(t.note).toBe(`ready for review: the tests passed, but the checker gave no verdict (${why}), nothing merged yet`)
     expect(t.attempts).toBe(before.attempts)
     expect(t.test_tries ?? 0).toBe(0)
-    expect(t.history.some(h => h.includes('checker found problems'))).toBe(false)
+    expect(t.history.some(h => h.text.includes('checker found problems'))).toBe(false)
     expect(w.git.main).toBe(M1)
   }
 })
@@ -586,8 +586,8 @@ for (const [what, move] of [
     expect(w.git.head).toBe(H1)
     expect(w.git.main).toBe(H1)
     expect(t.status).toBe('done')
-    expect(t.history).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
-    expect(t.history).toContain('try 1: checker: OK')
+    expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
+    expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
   })
 }
 
@@ -596,7 +596,7 @@ test('a checker that leaves the branch alone: nothing is put back and nothing ex
   await saveBoard(w.$, boardWith(true))
   const t = await finish(w, async id => checkerFinished(id, 'OK'))
   expect(w.calls.some(c => c.includes('checkout'))).toBe(false)
-  expect(t.history.some(h => h.includes('moved the branch'))).toBe(false)
+  expect(t.history.some(h => h.text.includes('moved the branch'))).toBe(false)
   expect(w.git.main).toBe(H1)
 })
 
@@ -610,7 +610,7 @@ test("a checker that moved the branch when it can't be put back gives no verdict
   })
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('review')
-  expect(t.history).toContain("try 1: checker gave no verdict (it moved the task's branch symcc/T-1 and it could not be put back)")
+  expect(t.history.map(h => h.text)).toContain("try 1: checker gave no verdict (it moved the task's branch symcc/T-1 and it could not be put back)")
 })
 
 test("a checker's Bash aimed at the owner's project folder is refused as a worker's is; inside the task's folder it is allowed", async () => {
@@ -771,7 +771,7 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   expect(t.status).toBe('done')
   expect(t.attempts).toBe(1)
   expect(t.test_tries ?? 0).toBe(0)
-  expect(t.history).toContain('try 1: checker: OK')
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
   expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
 })
 
@@ -858,7 +858,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
   expect(mid.note).toBe('a checker agent is trying to break it before it merges')
-  expect(mid.history.some(l => l.includes('no verdict'))).toBe(false)
+  expect(mid.history.some(l => l.text.includes('no verdict'))).toBe(false)
   await check(w.$)
   await until(() => checkerRuns.size > 0)
   expect(w.spawns.length).toBe(2)
@@ -908,8 +908,8 @@ for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is
     expect(t.status).toBe('doing')
     expect(t.attempts).toBe(1)
     expect(t.test_tries ?? 0).toBe(0)
-    expect(t.history.some(h => h.includes('checker found problems'))).toBe(false)
-    expect(t.history).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
+    expect(t.history.some(h => h.text.includes('checker found problems'))).toBe(false)
+    expect(t.history.map(h => h.text)).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
     expect(leadQueue.join('\n')).not.toContain('sent back by the checker')
     // a new checker starts on the same work, without waiting for a regular check
     await until(() => w.spawns.length === 2 && checkerRuns.size > 0)

@@ -17,9 +17,9 @@ import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { SYMCC_WORDS } from '../hooks/host'
-import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
+import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../hooks/app/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
-import { archiveOld } from '../hooks/app/archive'
+import { archiveOld, saveArchiveMigrated } from '../hooks/app/archive'
 import { commandsOf } from './fakes'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
@@ -27,6 +27,7 @@ import { fakeDisk } from './fake-disk'
 import { fakeHost, memoryFs } from './fake-host'
 import { drainStarts, queuedStarts, QUEUED_NOTE } from '../hooks/app/starts'
 import { withStarts } from './starts'
+import { hist } from './history-fixture'
 
 /** Whether `call` is `mv -f <file>.<session>.<n>.tmp <file>`: a save of `file` through its own temp file. */
 const tmpMove = (call: string, file: string) => {
@@ -922,7 +923,7 @@ test('a change with src/a.ts and tests/.env merges src/a.ts only; the history an
   expect(w.calls.some(c => c.includes('restore') && c.includes('--worktree'))).toBe(false)
   expect(w.git.changed).toEqual(['src/a.ts'])
   expect(w.git.main).toBe(H1)
-  expect(t.history.at(-1)).toContain('left out tests/.env: the name looks like a secret')
+  expect(t.history.at(-1)?.text).toContain('left out tests/.env: the name looks like a secret')
   expect(told).toContain('left out tests/.env: the name looks like a secret, so it was not committed or merged')
   // the merge removes the task's folder (worktree remove --force deletes untracked files), so the file is moved out first, and the text says where
   expect(w.calls).toContain(`mkdir -p -m 700 ${ROOT}/.symcc/left-out`)
@@ -930,7 +931,7 @@ test('a change with src/a.ts and tests/.env merges src/a.ts only; the history an
   expect(w.files.has(`${WT}/tests/.env`)).toBe(false)
   expect(w.files.get(`${ROOT}/.symcc/left-out/.gitignore`)).toBe('*\n')
   expect(told).toContain("(moved to .symcc/left-out/T-1/, since the task's folder is removed after the merge)")
-  expect(t.history.at(-1)).not.toContain("still in the task's folder")
+  expect(t.history.at(-1)?.text).not.toContain("still in the task's folder")
 })
 
 test('*.pem, *.key and id_rsa files are left out the same way; id_rsa.pub is not', async () => {
@@ -940,7 +941,7 @@ test('*.pem, *.key and id_rsa files are left out the same way; id_rsa.pub is not
   expect(w.git.changed).toEqual(['src/a.ts', 'tests/id_rsa.pub'])
   expect(w.git.main).toBe(H1)
   expect(told).toContain('left out tests/cert.pem, tests/id_rsa, tests/server.key')
-  expect(t.history.at(-1)).toContain('left out tests/cert.pem, tests/id_rsa, tests/server.key: the name looks like a secret')
+  expect(t.history.at(-1)?.text).toContain('left out tests/cert.pem, tests/id_rsa, tests/server.key: the name looks like a secret')
 })
 
 test('a change to a tracked .env.example (a template, not a secret) merges like any file', async () => {
@@ -950,7 +951,7 @@ test('a change to a tracked .env.example (a template, not a secret) merges like 
   expect(w.git.changed).toEqual(['src/a.ts', 'tests/.env.example', 'tests/config/.env.defaults'])
   expect(w.git.main).toBe(H1)
   expect(told).not.toContain('left out')
-  expect(t.history.at(-1)).not.toContain('left out')
+  expect(t.history.at(-1)?.text).not.toContain('left out')
 })
 
 test('a secret-looking file the worker already committed is taken out of the branch before it merges', async () => {
@@ -972,7 +973,7 @@ test('a change with only .env.local does not merge: the task waits for the owner
   expect(ranTests(w)).toEqual([])
   expect(t.status).toBe('waiting')
   expect(t.question).toContain('changed only files whose names look like secrets (tests/.env.local)')
-  expect(t.history.at(-1)).toContain('left out tests/.env.local')
+  expect(t.history.at(-1)?.text).toContain('left out tests/.env.local')
   expect(told).toContain('tests/.env.local')
   // nothing merged, so the folder stays and the file stays in it
   expect(w.files.get(`${WT}/tests/.env.local`)).toBe('contents of tests/.env.local')
@@ -1006,7 +1007,7 @@ test('deleting a tracked secret-looking file is allowed: the deletion is committ
   expect(movedMain(w)).toBe(true)
   expect(w.git.main).toBe(H1)
   expect(told).not.toContain('left out')
-  expect(t.history.at(-1)).not.toContain('left out')
+  expect(t.history.at(-1)?.text).not.toContain('left out')
 })
 
 test('a deletion of a secret-looking file the worker committed is not put back by taking secrets out of the branch', async () => {
@@ -1061,7 +1062,7 @@ test('T-507: a committed secret that cannot be recommitted without it (signing f
   expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
   expect(w.files.get(`${WT}/tests/.env`)).toBe('contents of tests/.env')
   const why = `symcc could not take files that look like secrets out of the task's branch (tests/.env): ${GPG}`
-  expect(t.history.join('\n')).toContain(why)
+  expect(t.history.map(h => h.text).join('\n')).toContain(why)
   expect(told).toContain(why)
 })
 
@@ -1143,8 +1144,8 @@ test('a branch whose commits never held a secret-looking file is not rewritten',
 test('only secret-looking files: one question to the lead, and no "not used" line in the history', async () => {
   const { t } = await finishedWithSecrets(['tests/.env.local'])
   expect(t.status).toBe('waiting')
-  expect(t.history.some(l => l.includes('not used'))).toBe(false)
-  expect(t.history.filter(l => l.includes('left out tests/.env.local'))).toHaveLength(1)
+  expect(t.history.some(l => l.text.includes('not used'))).toBe(false)
+  expect(t.history.filter(l => l.text.includes('left out tests/.env.local'))).toHaveLength(1)
   expect(leadQueue.filter(m => m.includes('tests/.env.local'))).toHaveLength(1)
   expect(leadQueue.join('\n')).toContain('waits for the owner')
 })
@@ -1153,7 +1154,7 @@ test('review mode: a left-out secret in the folder is not the owner\'s edit, not
   const { w, restored, t, told } = await finishedWithSecrets(['src/a.ts', 'tests/.env.local'], false, { mode: 'review' })
   expect(t.status).toBe('review')
   expect(restored).toEqual(['tests/.env.local'])
-  expect(t.history.at(-1)).toContain("left out tests/.env.local: the name looks like a secret, so it was not committed or merged (still in the task's folder)")
+  expect(t.history.at(-1)?.text).toContain("left out tests/.env.local: the name looks like a secret, so it was not committed or merged (still in the task's folder)")
   expect(told).toContain('left out tests/.env.local')
   // the file is still in the folder, untracked, as real git shows it
   expect(w.files.get(`${WT}/tests/.env.local`)).toBe('contents of tests/.env.local')
@@ -1168,7 +1169,7 @@ test('review mode: a left-out secret in the folder is not the owner\'s edit, not
   await runTool(w.$, 'approve', { task: 'T-1' })
   const done = find(await load(w.$), 'T-1')!
   expect(done.status).toBe('done')
-  expect(done.history.some(l => l.includes('owner edited'))).toBe(false)
+  expect(done.history.some(l => l.text.includes('owner edited'))).toBe(false)
   // no edits, and main did not move: no retest
   expect(ranTests(w).length).toBe(before)
 })
@@ -1371,7 +1372,7 @@ test('approve with no edits since review adds no "owner edited" line', async () 
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(ranTests(w)).toEqual([])
-  expect(t.history.some(l => l.includes('owner edited'))).toBe(false)
+  expect(t.history.some(l => l.text.includes('owner edited'))).toBe(false)
 })
 
 test('approve after the owner edited files in the folder runs the tests again and commits the edits with the task', async () => {
@@ -1386,7 +1387,7 @@ test('approve after the owner edited files in the folder runs the tests again an
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.merged).toBe(H3)
-  expect(t.history).toContain('owner edited files before approving: src/a.ts, src/b.md')
+  expect(t.history.map(h => h.text)).toContain('owner edited files before approving: src/a.ts, src/b.md')
 })
 
 test('a typed "cd web && npm test" is one test command, run as one shell line in the task\'s folder', async () => {
@@ -1409,7 +1410,7 @@ test('a commit of the owner newer than the reviewed one also makes approve run t
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.history).toContain('owner edited files before approving: src/c.ts')
+  expect(t.history.map(h => h.text)).toContain('owner edited files before approving: src/c.ts')
 })
 
 test('approve whose edits fail the tests keeps the task in review with the output; approving again tests again', async () => {
@@ -1504,7 +1505,7 @@ test('reject sends a task in review back to "todo" with the reason, and merges n
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('todo')
   expect(t.note).toBe('rejected: the name is wrong')
-  expect(t.history.at(-1)).toBe('try 1: rejected by the owner: the name is wrong')
+  expect(t.history.at(-1)?.text).toBe('try 1: rejected by the owner: the name is wrong')
   // only looking: nothing committed, merged or moved
   expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q refs/remotes/origin/HEAD', 'root: git symbolic-ref --short -q HEAD', 'root: git for-each-ref --format=%(refname:short) refs/heads'])
   expect(w.git.main).toBe(M1)
@@ -1575,7 +1576,7 @@ test('a merged approve always ends done with its merge commit, even when the tas
   expect(out).toBe(`T-1 was merged into main (${H1.slice(0, 8)}) before it was paused; it is done`)
   expect(t.status).toBe('done')
   expect(t.merged).toBe(H1)
-  expect(t.history.at(-1)).toBe('try 1: it was paused while being merged, too late: the work was already merged, so it stays done')
+  expect(t.history.at(-1)?.text).toBe('try 1: it was paused while being merged, too late: the work was already merged, so it stays done')
 })
 
 // ---------------- a task dropped, paused or changed while its work is checked ----------------
@@ -1586,7 +1587,7 @@ test('a merged approve always ends done with its merge commit, even when the tas
  */
 async function finishing(during: (w: ReturnType<typeof world>) => Promise<unknown>, tests: Record<string, Res> = {}, when: RegExp = /^\/bin\/sh -c /) {
   const w = world({}, tests)
-  const [b] = boardWith('auto', ['npm test'], { history: ['created by the lead', 'try 1: an earlier line'] })
+  const [b] = boardWith('auto', ['npm test'], { history: hist('created by the lead', 'try 1: an earlier line') })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   let done = false
@@ -1614,8 +1615,8 @@ test('a task dropped while its tests run is not merged, stays dropped, and its f
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('dropped')
   expect(t.note).toBe('not needed')
-  expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
-  expect(t.history.at(-1)).toMatch(/\(not used: the task was dropped meanwhile\)$/)
+  expect(t.history.slice(0, 2).map(h => h.text)).toEqual(['created by the lead', 'try 1: an earlier line'])
+  expect(t.history.at(-1)?.text).toMatch(/\(not used: the task was dropped meanwhile\)$/)
   expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
 })
 
@@ -1633,7 +1634,7 @@ test('a task paused while its tests run is not merged and stays paused, its fold
   expect(t.status).toBe('paused')
   expect(w.git.main).toBe(M1)
   expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
-  expect(t.history.at(-1)).toMatch(/\(not used: the task was paused meanwhile\)$/)
+  expect(t.history.at(-1)?.text).toMatch(/\(not used: the task was paused meanwhile\)$/)
 })
 
 test('a change while the task is being checked is refused, and the check goes on', async () => {
@@ -1642,7 +1643,7 @@ test('a change while the task is being checked is refused, and the check goes on
   expect(t.title).toBe('Do it')
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
-  expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
+  expect(t.history.slice(0, 2).map(h => h.text)).toEqual(['created by the lead', 'try 1: an earlier line'])
 })
 
 /** T-440: from now on the fake git has no branch main (deleted by the owner): rev-parse of it fails as git does. */
@@ -1659,7 +1660,7 @@ const deleteMain = (w: ReturnType<typeof world>) => {
 const waitsForGoneMain = (w: ReturnType<typeof world>, t: BoardTask) => {
   expect(t.status).toBe('waiting')
   expect(t.question).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
-  expect(t.history.at(-1)).toMatch(/^not merged: branch main is gone; asked the owner/)
+  expect(t.history.at(-1)?.text).toMatch(/^not merged: branch main is gone; asked the owner/)
   expect(t.test_tries ?? 0).toBe(0)
   expect(movedMain(w)).toBe(false)
   expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
@@ -1704,8 +1705,8 @@ test('a drop seen only after the merge keeps the task done, with a line saying t
   const { w, t } = await finishing(w => runTool(w.$, 'drop', { task: 'T-1' }), {}, /git update-ref/)
   expect(w.git.main).toBe(H1)
   expect(t.status).toBe('done')
-  expect(t.history.slice(0, 2)).toEqual(['created by the lead', 'try 1: an earlier line'])
-  expect(t.history.at(-1)).toBe('try 1: it was dropped while being merged, too late: the work was already merged, so it stays done')
+  expect(t.history.slice(0, 2).map(h => h.text)).toEqual(['created by the lead', 'try 1: an earlier line'])
+  expect(t.history.at(-1)?.text).toBe('try 1: it was dropped while being merged, too late: the work was already merged, so it stays done')
 })
 
 // ---------------- symcc or the board turned off while a task is being checked ----------------
@@ -1726,8 +1727,8 @@ test('symcc turned off while a finished task\'s tests run: not merged, back to t
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('todo')
   expect(t.note).toMatch(/symcc was turned off/)
-  expect(t.history).toContain('try 1: stopped: symcc was turned off while its work was being checked; nothing merged, its files are kept')
-  expect(t.history.at(-1)).toMatch(/\(not used: symcc was turned off\)$/)
+  expect(t.history.map(h => h.text)).toContain('try 1: stopped: symcc was turned off while its work was being checked; nothing merged, its files are kept')
+  expect(t.history.at(-1)?.text).toMatch(/\(not used: symcc was turned off\)$/)
   expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
 })
 
@@ -1736,7 +1737,7 @@ test('the board turned off while a finished task\'s tests run: not merged, back 
   expect(String(said[0])).toMatch(/T-1 was being tested and merged and went back to todo/)
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('todo')
-  expect(t.history).toContain('try 1: stopped: the board was turned off while its work was being checked; nothing merged, its files are kept')
+  expect(t.history.map(h => h.text)).toContain('try 1: stopped: the board was turned off while its work was being checked; nothing merged, its files are kept')
 })
 
 test('symcc turned off during an approve: not merged, stays in review', async () => {
@@ -1746,7 +1747,7 @@ test('symcc turned off during an approve: not merged, stays in review', async ()
   expect(w.git.main).toBe(M1)
   expect(out).toBe('T-1 was not merged and stays in review: symcc was turned off while it was being merged. Approve it again.')
   expect(t.status).toBe('review')
-  expect(t.history.at(-1)).toBe('try 1: approved by the owner → not merged: symcc was turned off while it was being merged; it stays in review')
+  expect(t.history.at(-1)?.text).toBe('try 1: approved by the owner → not merged: symcc was turned off while it was being merged; it stays in review')
 })
 
 test('the board turned off during an approve: not merged, stays in review', async () => {
@@ -1760,7 +1761,7 @@ test('symcc turned off only after the merge keeps the task done, with a line say
   const { w, t } = await finishing(turnOff, {}, /git update-ref/)
   expect(w.git.main).toBe(H1)
   expect(t.status).toBe('done')
-  expect(t.history.at(-1)).toBe('try 1: symcc was turned off while it was being merged, too late: the work was already merged, so it stays done')
+  expect(t.history.at(-1)?.text).toBe('try 1: symcc was turned off while it was being merged, too late: the work was already merged, so it stays done')
 })
 
 test('the board turned off only after an approve\'s merge keeps the task done, with a "too late" line', async () => {
@@ -1768,7 +1769,7 @@ test('the board turned off only after an approve\'s merge keeps the task done, w
   expect(w.git.main).toBe(H1)
   expect(out).toBe(`T-1 was merged into main (${H1.slice(0, 8)}) before the board was turned off; it is done`)
   expect(t.status).toBe('done')
-  expect(t.history.at(-1)).toBe('try 1: the board was turned off while it was being merged, too late: the work was already merged, so it stays done')
+  expect(t.history.at(-1)?.text).toBe('try 1: the board was turned off while it was being merged, too late: the work was already merged, so it stays done')
 })
 
 // ---------------- symcc or the board turned back on (T-213) ----------------
@@ -1896,13 +1897,13 @@ test('a new worker gets the built-in change prompt even when a .symcc/prompts/ch
 
 test('retry brings a dropped task back to "todo" on purpose, with a history line', async () => {
   const w = world()
-  const [b] = boardWith('auto', [], { status: 'dropped', note: 'not needed', history: ['created by the lead'] })
+  const [b] = boardWith('auto', [], { status: 'dropped', note: 'not needed', history: hist('created by the lead') })
   await saveBoard(w.$, b)
   const out = await runTool(w.$, 'retry', { task: 'T-1' })
   expect(out).toBe('T-1 brought back from dropped and queued')
   const t = find(await load(w.$), 'T-1')!
   expect(['todo', 'doing']).toContain(t.status)
-  expect(t.history).toContain('brought back from dropped')
+  expect(t.history.map(h => h.text)).toContain('brought back from dropped')
 })
 
 test('retry refuses a done task', async () => {
@@ -2032,6 +2033,29 @@ test('when archive.json cannot be written, nothing leaves the board', async () =
   expect(w.toasts.some(t => /not archived: disk full/.test(t))).toBe(true)
 })
 
+test('T-522: an old board.json and archive.json with string history are converted once, each with a copy kept first', async () => {
+  const w = world()
+  const task = (id: string, status: string, history: string[]) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: 1, branch: null, merge_into: 'main', created_at: LONG_AGO, updated_at: LONG_AGO, origin: { by: 'lead', why: 'x', at: LONG_AGO }, runs: [{ started: LONG_AGO, ended: '2026-01-01T00:10:00.000Z' }], history })
+  const boardOld = JSON.stringify({ version: 1, next_id: 3, tasks: [task('T-1', 'failed', ['created by the lead because x', 'try 1: did it → tests failed: y'])] })
+  const archiveOldText = JSON.stringify({ version: 1, tasks: [task('T-2', 'done', ['created by the lead because x', 'try 1: did it → merged into main (abc1234)'])] })
+  w.put(BOARD, boardOld)
+  w.put(ARCHIVE, archiveOldText)
+  // it loads before it is saved: the entries are records already
+  expect((await load(w.$)).tasks[0]!.history).toEqual([{ at: LONG_AGO, kind: 'created', text: 'created by the lead because x' }, { at: '2026-01-01T00:10:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: y' }])
+  await saveMigrated(w.$)
+  await saveArchiveMigrated(w.$)
+  const copies = (file: string) => [...w.files.entries()].filter(([p]) => p.startsWith(`${file}.before-migrate-`)).map(([, t]) => t)
+  expect(copies(BOARD)).toEqual([boardOld])
+  expect(copies(ARCHIVE)).toEqual([archiveOldText])
+  expect(JSON.parse(w.files.get(BOARD)!).tasks[0].history[1]).toEqual({ at: '2026-01-01T00:10:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: y' })
+  expect(JSON.parse(w.files.get(ARCHIVE)!).tasks[0].history[1]).toEqual({ at: '2026-01-01T00:10:00.000Z', kind: 'merged', text: 'try 1: did it → merged into main (abc1234)' })
+  // once only: the next start finds nothing to convert and keeps no new copy
+  await saveMigrated(w.$)
+  await saveArchiveMigrated(w.$)
+  expect(copies(BOARD).length).toBe(1)
+  expect(copies(ARCHIVE).length).toBe(1)
+})
+
 test('a broken archive.json is never written over: a copy is kept, the owner is told, nothing is archived', async () => {
   const { w } = await archiveWorld()
   w.put(ARCHIVE, '{"tasks": [')
@@ -2059,7 +2083,7 @@ test('an archived task can still be looked up, is read-only, and an archived dro
   expect(await runTool(w.$, 'retry', { task: 'T-2' })).toBe('T-2 brought back from the archive and queued')
   const b = await load(w.$)
   expect(find(b, 'T-2')!.status).toBe('todo')
-  expect(find(b, 'T-2')!.history.at(-1)).toBe('brought back from the archive (was dropped)')
+  expect(find(b, 'T-2')!.history.at(-1)?.text).toBe('brought back from the archive (was dropped)')
   expect(b.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 600_000, tokens: { output: 500 } })
   expect(JSON.parse(w.files.get(ARCHIVE)!).tasks.map((t: SymccTask) => t.id)).toEqual(['T-1'])
   await expect(runTool(w.$, 'board', { task: 'T-9' })).rejects.toThrow(/not on the board or in the archive/)
@@ -2074,7 +2098,7 @@ test('an archived task can still be looked up, is read-only, and an archived dro
  */
 async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git>; ask?: WorkerQuestion; requested?: string[]; end?: TurnEnd } = {}) {
   const w = world(o.git)
-  const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'] })
+  const [b0] = boardWith('auto', ['npm test'], { history: hist('created by the lead') })
   await saveBoard(w.$, recorded({ ...b0, notify: o.notify ?? 'voice' }, { question: o.ask, requested: o.requested }))
   w.put(`${WT}/.git`, 'gitdir: x')
   S.driving = o.driving ?? true
@@ -2091,7 +2115,7 @@ test("a worker's ask_owner question makes the task wait for the owner with the q
   expect(t.status).toBe('waiting')
   expect(t.question).toBe('Should the button be red or blue?')
   expect(t.note).toBe('waiting for you')
-  expect(t.history.at(-1)).toBe('try 1: worker asked: Should the button be red or blue?')
+  expect(t.history.at(-1)?.text).toBe('try 1: worker asked: Should the button be red or blue?')
   // it needs the owner now: the update is urgent (OpenCode steers it into a busy lead, T-464)
   expect(S.leadUrgent).toBe(true)
   expect(leadQueue.join('\n')).toContain('T-1 is waiting for the owner: Should the button be red or blue? Answer it yourself only if the owner already clearly said the answer: then symcc change T-1 with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short, and say they can also answer on the board; put their answer into the task with symcc change T-1 and answer: their words. If they answer on the board first (a "Meanwhile" line), don\'t ask again.')
@@ -2118,7 +2142,7 @@ test('a change worker whose edits outside its files were refused waits for those
   expect(t.status).toBe('waiting')
   expect(t.question).toBe('T-1 needs to change files outside its list: README.md, docs/a.md. Allow them?')
   expect(t.note).toBe('waiting for you')
-  expect(t.history.at(-1)).toBe('try 1: worker asked for more files: README.md, docs/a.md')
+  expect(t.history.at(-1)?.text).toBe('try 1: worker asked for more files: README.md, docs/a.md')
   expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'docs/a.md'])
   expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
   expect(S.leadUrgent).toBe(true)
@@ -2150,7 +2174,7 @@ test("a turn that ended on an API error or a refusal fails the task with the rea
   const err = await workerAnswers('half done', { notify: 'off', end: { reason: 'error' } })
   expect(err.t.status).toBe('failed')
   expect(err.t.note).toBe("the worker's turn ended on an error (retries used up or the context limit)")
-  expect(err.t.history.at(-1)).toBe("try 1: the worker's turn ended on an error (retries used up or the context limit); nothing was checked or merged")
+  expect(err.t.history.at(-1)?.text).toBe("try 1: the worker's turn ended on an error (retries used up or the context limit); nothing was checked or merged")
   expect(movedMain(err.w)).toBe(false)
   expect(ranTests(err.w)).toEqual([])
   expect(leadQueue.join('\n')).toContain('so nothing was checked or merged and the task failed')
@@ -2256,7 +2280,7 @@ test('Allow on a file request widens the files and sends the task back to work i
   expect(saves()).toBe(1)
   expect(t.status).toBe('todo')
   expect(t.files).toEqual(['src/', 'README.md', 'docs/a.md'])
-  expect(t.history.at(-1)).toBe('the owner allowed files: + README.md, + docs/a.md')
+  expect(t.history.at(-1)?.text).toBe('the owner allowed files: + README.md, + docs/a.md')
   expect(t.question).toBeNull()
   expect(t).not.toHaveProperty('asked_files')
   expect(leadQueue).toEqual([])
@@ -2311,8 +2335,8 @@ test('change on a running task adds a restart line naming the fields that change
   await saveBoard(w.$, b)
   await runTool(w.$, 'change', { task: 'T-1', details: 'new plan', files: ['src/', 'docs/a.md', 'tests/'] })
   const t = find(await load(w.$), 'T-1')!
-  expect(t.history).toContain('try 1: restarted: the task was changed (details, files)')
-  expect(t.history).toContain('files widened: + docs/a.md, + tests/')
+  expect(t.history.map(h => h.text)).toContain('try 1: restarted: the task was changed (details, files)')
+  expect(t.history.map(h => h.text)).toContain('files widened: + docs/a.md, + tests/')
 })
 
 test("the owner's answer to a waiting task goes into its details and its history", async () => {
@@ -2321,14 +2345,14 @@ test("the owner's answer to a waiting task goes into its details and its history
   await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'Which docs?', note: 'waiting for you' }, ISO))
   await runTool(w.$, 'change', { task: 'T-1', answer: 'ok' })
   const t = find(await load(w.$), 'T-1')!
-  expect(t.history.at(-1)).toBe('the owner answered: “ok”')
+  expect(t.history.at(-1)?.text).toBe('the owner answered: “ok”')
   expect(t.details).toContain('Owner\'s answer to "Which docs?": ok')
-  expect(t.history.some(l => l.includes('restarted'))).toBe(false)
+  expect(t.history.some(l => l.text.includes('restarted'))).toBe(false)
 })
 
 test('an answer to a task that is doing again (answered on the board first) changes nothing and keeps its worker', async () => {
   const w = world()
-  const [b] = boardWith('review', [], { history: ['the owner answered: “blue”'] })
+  const [b] = boardWith('review', [], { history: hist('the owner answered: “blue”') })
   await saveBoard(w.$, b)
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'red', order: 3 })
@@ -2365,7 +2389,7 @@ test('change add_details adds a note to the details, keeps the old text and writ
   const t = find(await load(w.$), 'T-1')!
   expect(t.details.startsWith(before.details.trimEnd())).toBe(true)
   expect(t.details).toMatch(/\n\nNote \(lead, \d{4}-\d\d-\d\d\): also update the README$/)
-  expect(t.history).toContain('the lead added a note: “also update the README”')
+  expect(t.history.map(h => h.text)).toContain('the lead added a note: “also update the README”')
   if (before.status === 'doing') expect(String(said)).toMatch(/restarting/)
 })
 
@@ -2384,7 +2408,7 @@ test('pause of a running task and resume both leave a history line', async () =>
   await runTool(w.$, 'pause', { task: 'T-1' })
   await runTool(w.$, 'resume', { task: 'T-1' })
   const t = find(await load(w.$), 'T-1')!
-  expect(t.history.slice(-2)).toEqual(['try 1: stopped: paused', 'resumed after a pause'])
+  expect(t.history.slice(-2).map(h => h.text)).toEqual(['try 1: stopped: paused', 'resumed after a pause'])
 })
 
 test('change on a paused task keeps it paused with the change saved, and resume still starts it', async () => {
@@ -2419,7 +2443,7 @@ const REPORT1 = `${ROOT}/.symcc/reports/T-1-try-1.md`
 /** T-1 is "doing" (try 1, one run) with worker ag1, which then answers `answer`; the fake git and the task as given. */
 async function finishes(answer: string, g: Partial<Git> = {}, extra: Partial<BoardTask> = {}, rec: Rec = {}) {
   const w = world(g)
-  const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...extra })
+  const [b0] = boardWith('auto', ['npm test'], { history: hist('created by the lead'), runs: [{ started: ISO }], ...extra })
   await saveBoard(w.$, recorded(b0, rec))
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -2437,7 +2461,7 @@ test("a try's full report is saved to .symcc/reports through a temp file, with i
   expect([...w.files.keys()].filter(p => p.startsWith(`${REPORT1}.`) && p.endsWith('.tmp'))).toEqual([])
   expect(w.calls.some(c => tmpMove(c, REPORT1))).toBe(true)
   // the history line stays short and ends cleanly, never inside a word
-  const line = t.history.find(l => l.startsWith('try 1: '))!
+  const line = t.history.find(l => l.text.startsWith('try 1: '))!.text
   const said = line.slice('try 1: '.length, line.indexOf(' → '))
   expect(said.length).toBeLessThanOrEqual(300)
   expect(said.endsWith('…')).toBe(true)
@@ -2685,7 +2709,7 @@ test("notify can't be set to a choice this machine can't play: the owner and the
 /** T-1 is "doing" (try 1, one open run) with worker ag1; `then` ends it. Gives back the run as saved. */
 async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, o: { g?: Partial<Git>; tests?: Record<string, Res>; extra?: Partial<BoardTask> } = {}) {
   const w = world(o.g, o.tests)
-  const [b0] = boardWith('auto', ['npm test'], { history: ['created by the lead'], runs: [{ started: ISO }], ...o.extra })
+  const [b0] = boardWith('auto', ['npm test'], { history: hist('created by the lead'), runs: [{ started: ISO }], ...o.extra })
   await saveBoard(w.$, b0)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -2723,14 +2747,14 @@ test('T-411: only the host seeing a background command still running fails a try
   const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'] }))
   expect([ran.t.status, ran.t.note]).toEqual(['failed', 'the worker ended its turn before its work finished'])
   expect(ran.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
-  expect(ran.t.history.at(-1)).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
+  expect(ran.t.history.at(-1)?.text).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
   expect(leadQueue.some(x => x.includes('T-1') && x.includes('ended its turn before its work finished'))).toBe(true)
   // T-399's try 1: the text alone only warns (history and the lead's update); the try still goes to the tests and merge
   leadQueue.length = 0
   const early = await tryEnds(answers("Started the full test run in the background.\n\nThe background runs are still going; I'll continue when they finish."))
   expect(early.end).toEqual(['finished', 'merged'])
   const warning = `T-1's answer may have ended before its work finished: "The background runs are still going; I'll continue when they finish."`
-  expect(early.t.history.some(h => h.includes(`warning: ${warning}`))).toBe(true)
+  expect(early.t.history.some(h => h.text.includes(`warning: ${warning}`))).toBe(true)
   expect(leadQueue.some(x => x.includes(warning))).toBe(true)
   // the same with the host saying nothing ran: still only a warning
   expect((await tryEnds(answers("The background runs are still going; I'll continue when they finish.", { reason: 'answer', background: [] }))).end).toEqual(['finished', 'merged'])
@@ -2738,7 +2762,7 @@ test('T-411: only the host seeing a background command still running fails a try
   leadQueue.length = 0
   const normal = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.'))
   expect(normal.end).toEqual(['finished', 'merged'])
-  expect(normal.t.history.some(h => h.includes('warning:'))).toBe(false)
+  expect(normal.t.history.some(h => h.text.includes('warning:'))).toBe(false)
   expect(leadQueue.some(x => x.includes('may have ended before'))).toBe(false)
 })
 
@@ -2809,7 +2833,7 @@ test('at the time limit the worker is not stopped: the task stays doing and the 
   expect((r.t as BoardTask).time_ask).toBeDefined()
   expect(r.r.ended).toBeUndefined()
   expect(sent).toEqual([])
-  expect(r.t.history.filter(h => h.includes('asked the owner for more time'))).toEqual(['try 1: ran 45 min, over its time limit; asked the owner for more time'])
+  expect(r.t.history.filter(h => h.text.includes('asked the owner for more time')).map(h => h.text)).toEqual(['try 1: ran 45 min, over its time limit; asked the owner for more time'])
   const told = leadQueue.filter(x => x.includes('T-1 has run 45 min. Give it more time?'))
   expect(told.length).toBe(1)
   expect(told[0]).toContain('+30 min | +60 min | Stop it')
@@ -2832,7 +2856,7 @@ test('"+30 min" moves the limit later: the worker goes on, is not asked again be
     await workerFinished(w.$, 'ag1', 'made the change')
   })
   expect(said).toBe('T-1 has 30 more minutes: its limit is now 75 min, and its worker goes on.')
-  expect(r.t.history).toContain('try 1: the owner gave it 30 more min (limit now 75 min)')
+  expect(r.t.history.map(h => h.text)).toContain('try 1: the owner gave it 30 more min (limit now 75 min)')
   expect(r.t.status).toBe('done')
   expect(r.end).toEqual(['finished', 'merged'])
   expect((r.t as BoardTask).extra_minutes).toBeUndefined()
@@ -2886,7 +2910,7 @@ test('no answer by the hard cap (twice the limit) does the same: wrap-up message
   expect(r.t.status).toBe('failed')
   expect(r.t.note).toBe('stopped: ran over 45 min; the work so far is in its folder and report, and a retry continues from there')
   expect(r.end).toEqual(['timed out', 'ran over 45 min'])
-  expect(r.t.history.some(h => /^try 1: time is up \(no answer from the owner after \d+ min\)/.test(h))).toBe(true)
+  expect(r.t.history.some(h => /^try 1: time is up \(no answer from the owner after \d+ min\)/.test(h.text))).toBe(true)
 })
 
 test('a worker that finishes before the limit is unchanged: never asked, merged as usual', async () => {
@@ -3040,7 +3064,7 @@ test('a worker may write and run a throwaway script under .scratch/ with no file
   expect(restore).toBeGreaterThan(add)
   expect(w.calls.findIndex(c => c.startsWith('wt: git') && c.includes(' commit '))).toBeGreaterThan(restore)
   expect(w.calls.some(c => c.includes('restore --staged') && c.includes('src/a.ts'))).toBe(false)
-  expect(t.history.join('\n')).not.toContain('outside the task')
+  expect(t.history.map(h => h.text).join('\n')).not.toContain('outside the task')
   const rm = w.calls.indexOf(`rm -rf ${WT}/.scratch`)
   expect(rm).toBeGreaterThan(add)
   expect(w.calls[rm - 1]).toBe(`wt: git check-ignore -q -- .scratch/x`)
@@ -3323,7 +3347,7 @@ test('after a reload (no worker in memory), an edit outside the files is still r
 test('a try sent back to todo after a reload ends as restarted, worded like its history line', () => {
   const [, t] = boardWith('auto', [], { history: [], runs: [{ started: ISO }] })
   const back = backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', '2026-11-13T00:05:00.000Z')
-  expect(back.history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(back.history.at(-1)?.text).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
   expect(back.runs![0]).toEqual({ started: ISO, ended: '2026-11-13T00:05:00.000Z', ended_by: 'restarted', ended_note: 'the plugin reloaded and the old worker was gone' })
   expect(backToTodo({ ...t, status: 'todo' }, 'restarted: x', ISO).runs).toEqual([{ started: ISO }])
 })
@@ -3432,7 +3456,7 @@ test('a reload while a task is being tested and merged leaves it "doing"; it mer
   expect(t.status).toBe('done')
   expect(t.finishing).toBeUndefined()
   expect(w.calls.filter(c => / git update-ref .*refs\/heads\/main/.test(c)).length).toBe(1)
-  expect(t.history.join('\n')).not.toMatch(/restarted|too late/)
+  expect(t.history.map(h => h.text).join('\n')).not.toMatch(/restarted|too late/)
   expect(t.attempts).toBe(1)
 })
 
@@ -3445,7 +3469,7 @@ test('a reload with the old worker really gone and no merge going on sends the t
   await claimLead(w.$, true)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('todo')
-  expect(t.history.at(-1)).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(t.history.at(-1)?.text).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
 })
 
 test('resetDoing keeps a task with a fresh finishing mark, sends back one with a stale mark, and marks a try that merged done', () => {
@@ -3457,7 +3481,7 @@ test('resetDoing keeps a task with a fresh finishing mark, sends back one with a
   b = patchTask(b0, 'T-1', { merged: H1, runs: [{ started: ISO, commits: [H1] }] }, ISO)
   const done = resetDoing(b, 'me', null, nowMs, 'restarted: x', ISO).tasks[0]!
   expect(done.status).toBe('done')
-  expect(done.history.at(-1)).toBe(`try 1: its work was already merged into main (${H1.slice(0, 8)}) when it was about to be sent back to todo, so it is done`)
+  expect(done.history.at(-1)?.text).toBe(`try 1: its work was already merged into main (${H1.slice(0, 8)}) when it was about to be sent back to todo, so it is done`)
   expect(done.runs![0]!.ended_note).toBe('merged')
 })
 
@@ -3479,7 +3503,7 @@ test('the regular check: a finishing mark no longer refreshed (its copy is gone)
     expect(t.status).toBe(merged ? 'done' : 'todo')
     expect(t.finishing).toBeUndefined()
     if (merged) expect(t.merged).toBe(H1)
-    else expect(t.history.at(-1)).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
+    else expect(t.history.at(-1)?.text).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
   }
   S.driving = false
 })
@@ -3564,7 +3588,7 @@ test('T-228: a try that merged but was left "doing" (its copy of the plugin stop
       a.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
       a.agents.send = a.agents.stop = async (_to, text) => void sent.push(text)
       // started long ago (far over max_minutes), handed back, merged and recorded; but never marked done
-      const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], merged: H1, runs: [{ started: ISO, ended: ISO, commits: [H1] }], ...(mark === 'stale' ? { finishing: new Date(Date.now() - 10 * 60_000).toISOString() } : {}) })
+      const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), merged: H1, runs: [{ started: ISO, ended: ISO, commits: [H1] }], ...(mark === 'stale' ? { finishing: new Date(Date.now() - 10 * 60_000).toISOString() } : {}) })
       await saveBoard(w.$, b)
       S.driving = true
       if (via === 'reload') {
@@ -3579,7 +3603,7 @@ test('T-228: a try that merged but was left "doing" (its copy of the plugin stop
       expect(t.status).toBe('done')
       expect(t.merged).toBe(H1)
       expect(t.attempts).toBe(1)
-      expect(t.history.join('\n')).not.toMatch(/over the limit/)
+      expect(t.history.map(h => h.text).join('\n')).not.toMatch(/over the limit/)
       expect(t.runs!.at(-1)!.ended_by).toBe('finished')
       expect(t.runs!.at(-1)!.ended_note).toBe('merged')
       expect(spawned).toBe(0)
@@ -3617,7 +3641,7 @@ test('T-237: a worker hands back, the merge takes a while and the clock passes m
   expect(r.t.status).toBe('done')
   expect(r.t.merged).toBe(H1)
   expect(r.end).toEqual(['finished', 'merged'])
-  expect(r.t.history.join('\n')).not.toMatch(/over the limit|too late|restarted/)
+  expect(r.t.history.map(h => h.text).join('\n')).not.toMatch(/over the limit|too late|restarted/)
   expect(r.t.attempts).toBe(1)
   expect(sent.some(m => /ran longer than/.test(m))).toBe(false)
 })
@@ -3630,14 +3654,14 @@ test('T-237: a task changed while its work is being merged (sent back or asked m
         if (once || !/ git update-ref .*refs\/heads\/main/.test(cmd)) return
         once = true
         // right as main moves: the owner's Allow (or the lead's change) writes the task
-        await change(w.$, x => patchTask(x, 'T-1', { status: to, files: ['src/', 'tests/'], history: [...find(x, 'T-1')!.history, 'files widened: + tests/'] }, ISO))
+        await change(w.$, x => patchTask(x, 'T-1', { status: to, files: ['src/', 'tests/'], history: [...find(x, 'T-1')!.history, ...hist('files widened: + tests/')] }, ISO))
       })
       await workerFinished(w.$, 'ag1', 'made the change')
     })
     expect(r.t.status).toBe('done')
     expect(r.t.merged).toBe(H1)
     expect(r.end).toEqual(['finished', 'merged'])
-    expect(r.t.history.at(-1)).toMatch(/the work was already merged, so it stays done$/)
+    expect(r.t.history.at(-1)?.text).toMatch(/the work was already merged, so it stays done$/)
   }
 })
 
@@ -3667,7 +3691,7 @@ test('T-237: retrying a task whose last try is already on its branch marks it do
   let spawned = 0
   ;w.$.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
   // failed by the timeout although its try had merged (as T-228 was); no merge recorded on the board
-  const [b] = boardWith('auto', [], { status: 'failed', note: 'stopped: ran over 45 min', branch: 'symcc/T-1', history: ['created by the lead', 'try 1: stopped after 47 min (over the limit)'], runs: [{ started: ISO, ended: ISO, ended_by: 'timed out', ended_note: 'ran over 45 min' }] })
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'stopped: ran over 45 min', branch: 'symcc/T-1', history: hist('created by the lead', 'try 1: stopped after 47 min (over the limit)'), runs: [{ started: ISO, ended: ISO, ended_by: 'timed out', ended_note: 'ran over 45 min' }] })
   await saveBoard(w.$, b)
   await runTool(w.$, 'retry', { task: 'T-1' })
   await startWorker(w.$, 'T-1')
@@ -3714,7 +3738,7 @@ async function turns(w: ReturnType<typeof world>, done: () => boolean) {
 test('a checking and merging step that never ends is sent back to todo after the limit; the lead is told once; its late end writes nothing', async () => {
   S.me = 'me'
   const { w, free, limit, hungNow } = stuckFinish()
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -3734,7 +3758,7 @@ test('a checking and merging step that never ends is sent back to todo after the
   expect(t.finishing).toBeUndefined()
   expect(t.checking).toBeUndefined()
   expect(t.session).toBeUndefined()
-  expect(t.history.at(-1)).toBe('try 1: restarted: its checking and merging ran over 15 min and was stopped')
+  expect(t.history.at(-1)?.text).toBe('try 1: restarted: its checking and merging ran over 15 min and was stopped')
   expect(t.runs!.at(-1)!.ended_by).toBe('restarted')
   expect(finishingSet.has('T-1')).toBe(false)
   const told = leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes'))
@@ -3846,7 +3870,7 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   expect(t.checking).toBeUndefined()
   expect(statusCell(t, Date.now())).toBe('review')
   expect(t.note).toBe('approved, but the merge ran over 15 min and was given up; approve it again')
-  expect(t.history.at(-1)).toBe('try 1: approved by the owner → its checking and merging ran over 15 min and was given up; nothing written, it stays in review')
+  expect(t.history.at(-1)?.text).toBe('try 1: approved by the owner → its checking and merging ran over 15 min and was given up; nothing written, it stays in review')
   expect(leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes')).length).toBe(1)
   expect(w.git.main).toBe(M1)
   // approving again works, and its merge into main goes on while the old one still hangs
@@ -3910,7 +3934,7 @@ async function finishedOnDirtyMain(status: string, test_commands = ['npm test'])
   x.agents.spawn = async e => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
   x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
-  const [b0] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
+  const [b0] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
   await saveBoard(w.$, b0)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.clear()
@@ -4101,7 +4125,7 @@ test("a merge waiting for the owner's files that runs over keeps waiting for the
     expect(x.question).toBeNull()
     expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
     expect(x.note).toBe('the merge ran over 15 min and was given up; symcc retry T-1')
-    expect(x.history.at(-1)).toBe('try 1: merging once your files were out of the way → its checking and merging ran over 15 min and was given up; nothing written, it stays waiting')
+    expect(x.history.at(-1)?.text).toBe('try 1: merging once your files were out of the way → its checking and merging ran over 15 min and was given up; nothing written, it stays waiting')
     expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(1)
     expect(leadQueue.some(m => m.includes('ran over 15 minutes') && m.includes('merges on its own'))).toBe(true)
     expect(w.git.main).toBe(M2)
@@ -4165,7 +4189,7 @@ test("a merge waiting for the owner's files that runs over twice in a row is fai
     expect(x.status).toBe('failed')
     expect(x.merge_wait).toBeUndefined()
     expect(x.note).toBe('its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
-    expect(x.history.at(-1)).toBe('try 1: merging once your files were out of the way → its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
+    expect(x.history.at(-1)?.text).toBe('try 1: merging once your files were out of the way → its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
     expect(leadQueue.filter(m => m.includes('T-1') && m.includes('twice in a row')).length).toBe(1)
     expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(2)
     // a third regular check starts nothing: no merge, no worker, the lead is not told again
@@ -4197,7 +4221,7 @@ function catchLimits(w: ReturnType<typeof world>) {
 
 /** T-1 "doing" in auto mode with `test_commands`, its worker ag1 just about to finish. */
 async function aboutToFinish(w: ReturnType<typeof world>, test_commands = ['npm test']) {
-  const [b] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: ['created by the lead'], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -4274,7 +4298,7 @@ test('a task whose checking and merging is given up twice in a row ends failed w
     t = find(await load(w.$), 'T-1')!
     expect(t.status).toBe('failed')
     expect(t.note).toBe('its checking and merging ran over 15 min twice in a row and was given up both times; nothing was merged')
-    expect(t.history.at(-1)).toBe(`try 2: ${t.note}`)
+    expect(t.history.at(-1)?.text).toBe(`try 2: ${t.note}`)
     expect(t.session).toBeUndefined()
     expect(t.finishing).toBeUndefined()
     expect(t.runs!.at(-1)!.ended_by).toBe('stopped')
@@ -4326,7 +4350,7 @@ test('an approve given up while it moves main, which then lands, ends with the t
   expect(t.merged).toBe(H2)
   expect(t.runs!.at(-1)!.commits).toContain(H2)
   expect(t.runs!.at(-1)!.ended_note).toBe('merged')
-  expect(t.history.at(-1)).toBe(`try 1: its checking and merging was given up as stuck, but it ended late and its work was merged into main (${H2.slice(0, 8)}), so it is done`)
+  expect(t.history.at(-1)?.text).toBe(`try 1: its checking and merging was given up as stuck, but it ended late and its work was merged into main (${H2.slice(0, 8)}), so it is done`)
   expect(leadQueue.filter(m => m.includes('T-1') && m.includes('done after all')).length).toBe(1)
 })
 
@@ -4539,7 +4563,7 @@ test('an approve waiting in line behind two slow merges, then main moving under 
 /** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
 async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Rec = {}) {
   const w = world()
-  const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: ['created by the lead'] } as Partial<BoardTask>)
+  const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: hist('created by the lead') } as Partial<BoardTask>)
   // set after the try started: a new try (attempts changing) clears the time fields
   const b = Object.keys(extra).length ? patchTask(b0, 'T-1', extra, ISO) : b0
   await saveBoard(w.$, recorded(b, rec))
@@ -4555,7 +4579,7 @@ for (const mode of ['auto', 'review'] as const)
     expect(t.status).toBe('review')
     expect(t.note).toBe('answered; waiting for you to read it')
     expect(t.answer).toBe('The cache is never cleared: src/cache.ts has no expiry.\nI checked by reading it.')
-    expect(t.history.at(-1)).toMatch(/^try 1: answered: The cache is never cleared/)
+    expect(t.history.at(-1)?.text).toMatch(/^try 1: answered: The cache is never cleared/)
     // the full hand-back is the report, as for any task
     expect(w.files.get(REPORT1)).toContain('The cache is never cleared')
     expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
@@ -4583,7 +4607,7 @@ for (const mode of ['auto', 'review'] as const)
     expect(t.answer).toBe('So far: the cache is never cleared.')
     expect(t.wrap_up).toBeUndefined()
     expect(t.time_ask).toBeUndefined()
-    expect(t.history.at(-1)).toMatch(/^try 1: answered \(time ran out after \d+ min\): So far/)
+    expect(t.history.at(-1)?.text).toMatch(/^try 1: answered \(time ran out after \d+ min\): So far/)
     expect(w.files.get(REPORT1)).toContain('So far: the cache is never cleared.')
     expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
     expect(ranTests(w)).toEqual([])
@@ -4629,7 +4653,7 @@ test('Done (approve) on an answered investigation ends it done with nothing merg
   expect(t.status).toBe('done')
   expect(t.note).toBe('answered')
   expect(t.merged).toBeUndefined()
-  expect(t.history.at(-1)).toBe('try 1: the owner read the answer → done (nothing merged)')
+  expect(t.history.at(-1)?.text).toBe('try 1: the owner read the answer → done (nothing merged)')
   expect(movedMain(w)).toBe(false)
   expect(ranTests(w)).toEqual([])
   expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
@@ -4673,7 +4697,7 @@ test('Ask more (reject) on an answered investigation sends it back to todo with 
   expect(t.details).toContain('The earlier answer (try 1)')
   expect(t.details).toContain('The cache is never cleared.')
   expect(t.details).toContain('.symcc/reports/T-1-try-1.md')
-  expect(t.history.at(-1)).toBe('try 1: the owner asked more: And how big does it get?')
+  expect(t.history.at(-1)?.text).toBe('try 1: the owner asked more: And how big does it get?')
   expect(movedMain(w)).toBe(false)
   await expect(runTool(w.$, 'reject', { task: 'T-1', reason: 'again' })).rejects.toThrow(/not ready for review/)
 })
@@ -4725,7 +4749,7 @@ test('Keep as a note after two tries lists both reports, oldest first, and asks 
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
   ]
-  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<BoardTask>)
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: hist('created by the lead') } as Partial<BoardTask>)
   await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
   w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
   w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
@@ -4746,7 +4770,7 @@ test('a keep-note task after two tries reads both answers inside its own folder,
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-1.md' },
     { ...startRun([], ISO)[0]!, report: '.symcc/reports/T-1-try-2.md' },
   ]
-  const [b0] = boardWith('auto', [], { kind: 'investigation', history: ['created by the lead'] } as Partial<BoardTask>)
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: hist('created by the lead') } as Partial<BoardTask>)
   await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'review', attempts: 2, runs, answer: 'changes only' }, ISO))
   w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'The full first draft.')
   w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'Change point 2. Everything else is the same as try 1.')
@@ -4917,7 +4941,7 @@ test('an off kind is refused by add (and by change), naming the kinds that are o
 
 test('a kind bug task is committed, tested and merged like a change', async () => {
   const w = world()
-  const [b] = boardWith('auto', ['npm test'], { kind: 'bug', history: ['created by the lead'] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { kind: 'bug', history: hist('created by the lead') } as Partial<BoardTask>)
   expect(b.tasks[0]!.kind).toBe('bug')
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -5060,7 +5084,7 @@ test('a refused switch of an investigation to a change leaves its scratch edits 
 
 test('a researcher task of kind change is committed, tested and merged as today', async () => {
   const w = world()
-  const [b] = boardWith('auto', ['npm test'], { role: 'researcher', history: ['created by the lead'] })
+  const [b] = boardWith('auto', ['npm test'], { role: 'researcher', history: hist('created by the lead') })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -5424,7 +5448,7 @@ test('T-511: a time-out keeps the work, uses no auto retry and starts no worker;
   expect(t.test_tries ?? 0).toBe(0)
   expect(t.test_output).toBe(undefined)
   expect(t.note).toBe('tests ran out of time (10 min); running them again once, no new try')
-  expect(t.history).toContain('tests ran out of time (10 min); running them again once, no new try')
+  expect(t.history.map(h => h.text)).toContain('tests ran out of time (10 min); running them again once, no new try')
   expect(t.attempts).toBe(1)
   expect(t.runs?.at(-1)?.ended_note).toBe('tests ran out of time')
   expect(c.w.git.main).toBe(M1)
@@ -5544,7 +5568,7 @@ test('T-511: a second time-out leaves the task waiting for the owner with the op
   expect(t.test_tries ?? 0).toBe(0)
   expect(t.attempts).toBe(1)
   expect(c.w.git.main).toBe(M1)
-  expect(t.history).toContain('the tests ran out of time twice; nothing failed; waiting for the owner')
+  expect(t.history.map(h => h.text)).toContain('the tests ran out of time twice; nothing failed; waiting for the owner')
   expect(leadQueue.join('\n')).toContain('the tests ran out of time twice; nothing failed')
   // nothing more runs on its own
   c.w.calls.length = 0
@@ -5688,7 +5712,7 @@ test('T-510: "Give them more time" doubles only that task\'s next test run (at m
   expect(b.test_minutes).toBe(undefined)
   expect(testMinutesOf(b)).toBe(10)
   expect(t.rerun_minutes).toBe(undefined)
-  expect(t.history.some(l => l.includes('its next test run may take 20 min per test command (was 10)'))).toBe(true)
+  expect(t.history.some(l => l.text.includes('its next test run may take 20 min per test command (was 10)'))).toBe(true)
   const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'x' }
   expect(answeredLeadLine(asked, 'Give them more time')).toContain('the test_minutes setting is not changed')
 })

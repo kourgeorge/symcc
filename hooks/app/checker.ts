@@ -2,7 +2,7 @@
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
 // verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
+import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, type HistoryAdd } from '../board'
 import { isTreeId, treePassed } from '../core/passed-trees'
 import { git, taskBranch } from './git'
 import { markStep, readPassedTrees, testedTree } from './review'
@@ -141,7 +141,7 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
     const runs = cur.runs?.length && tokens ? [...cur.runs.slice(0, -1), { ...cur.runs.at(-1)!, tokens: addTokens(cur.runs.at(-1)!.tokens, tokens) }] : undefined
-    return patchTask(x, t.id, { history: [...cur.history, ...(before ? [before] : []), checkerLine(tryLabel(cur), v, why)], ...(runs ? { runs } : {}) }, now())
+    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why)), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }
 
