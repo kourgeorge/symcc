@@ -1,11 +1,10 @@
 // The checker setting (see core/checker.ts): a fresh agent tries to break a finished change before it merges.
-// finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
-// verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
+// finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
+// for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, type HistoryAdd } from '../board'
-import { isTreeId, treePassed } from '../core/passed-trees'
+import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
-import { markStep, readPassedTrees, testedTree } from './review'
+import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
 import { S, type CheckerEnd, checkerRuns, halt } from './state'
@@ -27,7 +26,7 @@ export { CHECKER_NOTE } from '../board'
  * Runs a checker on task `t`'s finished work in its folder `dir` (everything is committed there) and waits for its
  * verdict. The board shows the task's step as "checker" meanwhile. The checker runs as the read-only scout type
  * (no Edit or Write), and whatever it still changed in the folder is thrown away after; if it moved the task's branch
- * (a commit, a reset), the branch is put back where it was tested (putBack). Its time limit is the board's
+ * (a commit, a reset), the branch is put back where it was (putBack). Its time limit is the board's
  * max_minutes: past it, it is stopped and there is no verdict. Its verdict goes into the task's history and its
  * tokens are added to the task's current try. Never throws: a checker that can't start gives no verdict.
  * `stop`: why the task was stopped (dropped, paused, sent to the owner), if it was; looked at once the checker
@@ -44,8 +43,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
   const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
   const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
-  // T-526: the full test commands ran once, before this (the pre-merge run); the passed-trees record (T-527) says whether this exact code passed them
-  const tests = checkerTestsText(S.N.name, b.test_commands, await passedRun($, b, dir))
+  // T-551: the project's tests run once, in the merge line, after the checker: it is told not to run them
+  const tests = checkerTestsText(S.N.name, b.test_commands)
   // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
   const facts = { ...changeValues(t, b, dir), test_command: tests }
   const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests })
@@ -55,7 +54,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     await record($, t, null, why)
     return { verdict: null, why }
   }
-  // where the task's branch is now (the work that was tested): put back after the checker if it moved it
+  // where the task's branch is now (the committed work): put back after the checker if it moved it
   const saved = await gitPlace($, dir, taskBranch(t))
   let agentId: string
   try {
@@ -103,22 +102,12 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   let verdict = end.answer === null ? null : checkerVerdict(end.answer)
   let why = end.answer === null ? end.why : verdict ? undefined : 'it handed back nothing'
   if (back === 'failed') {
-    // the branch is not where it was tested: no verdict, so nothing merges on the checker's word
+    // the branch is not where it was: no verdict, so nothing merges on the checker's word
     verdict = null
     why = `it moved the task's branch ${taskBranch(t)} and it could not be put back`
   }
   await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined)
   return { verdict, ...(why ? { why } : {}) }
-}
-
-/** T-526: the commit and tree of folder `dir`'s HEAD when that tree passed the board's test commands (the passed-trees record), else null (no test commands, git can't tell, or not on record). */
-async function passedRun($: Host, b: Board, dir: string): Promise<CheckerTestRun | null> {
-  if (!b.test_commands.length) return null
-  const h = await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
-  const sha = h && h.exitCode === 0 ? h.stdout.trim() : ''
-  if (!isTreeId(sha)) return null
-  const tree = await testedTree($, sha, dir).catch(() => '')
-  return tree && treePassed(await readPassedTrees($), tree, b.test_commands) ? { sha, tree } : null
 }
 
 /**
@@ -146,7 +135,7 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
 }
 
 /** Throws away anything the checker changed in folder `dir` (symcc committed the work before it ran, so nothing of the task's is lost). */
-async function cleanFolder($: Host, dir: string) {
+export async function cleanFolder($: Host, dir: string) {
   const st = await git($, ['status', '--porcelain', '-z', '--untracked-files=all'], dir).catch(() => null)
   if (!st || st.exitCode !== 0 || !st.stdout) return
   await git($, ['reset', '-q', '--hard', 'HEAD'], dir).catch(() => undefined)
@@ -169,7 +158,7 @@ async function gitPlace($: Host, dir: string, branch: string): Promise<Place | n
 /**
  * The checker may have run git in folder `dir` (a commit, a reset, a checkout...): when HEAD, the branch it is on or
  * the task's branch moved from `saved`, the task's branch is put back at the saved commit and checked out again, so
- * only the tested work can merge. 'same': nothing moved; 'moved': it moved and was put back; 'failed': it couldn't be.
+ * only the committed work can merge. 'same': nothing moved; 'moved': it moved and was put back; 'failed': it couldn't be.
  */
 async function putBack($: Host, dir: string, saved: Place | null): Promise<'same' | 'moved' | 'failed'> {
   if (!saved) return 'same'

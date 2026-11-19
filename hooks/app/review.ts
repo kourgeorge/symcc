@@ -95,17 +95,26 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * What checking (and maybe merging) a task's work came to; `untested`: the note "T-3 changed code but no test" when
  * the setting tests_with_changes flagged it (see untestedChange); `review`: the checks passed and it now waits for the owner;
  * `blocked`: everything passed, only the owner's files on the target branch are in the way of the merge (nothing moved).
- * The checker setting (see app/checker.ts): `held`: the checks passed and nothing merged, for a checker to look at first;
- * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
+ * The checker setting (see app/checker.ts): `checker`: the checker found problems (its report is `testOutput`);
+ * `noVerdict`: why the checker gave none (then it waits for review after the tests); `again`: the checker was stopped before
+ * its verdict or couldn't start yet, so nothing joined the merge line and the task stays in its checker step for a new checker.
  * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
  * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
  * `timedOut`: a test command was stopped by its time limit (these minutes); it fails like a failing test, with its
  * output in `testOutput` (T-547), only its note says so (see settle).
  */
-export type CheckResult = { ok: boolean; detail: string; timedOut?: number; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
+export type CheckResult = { ok: boolean; detail: string; timedOut?: number; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
 
 /** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
 export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
+
+/**
+ * The checker setting (T-551): what the checker, run after the prep step and before the task joins the merge line
+ * (checkAndMerge's `first`), came to. undefined: the task joins the line as usual (the checker said OK, or this change
+ * skips it); `noVerdict`: it joins the line, but stops for review after the tests (the checker gave no verdict, and why);
+ * `result`: the check ends here with it, and the task never joins the line (problems found, stopped, or a new checker starts).
+ */
+export type BeforeLine = { result: CheckResult } | { noVerdict: string } | undefined
 
 /** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
 export type CheckMode = 'finish' | 'approve' | 'merge'
@@ -124,10 +133,10 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * (the owner committed to it by hand), nothing is merged and the turn fails as one normal try.
  * `release`: settles when the caller gave this check up as stuck, so the tasks behind it in line stop waiting for it.
  * `limit`: the caller's time limit, run only during the task's turn in the line (see TurnLimit): waiting in line doesn't count.
- * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
- * is `held` (with `review` too when the task waits for review): the checker runs next (see app/checker.ts).
+ * `first`: the checker step (see BeforeLine and app/checker.ts), run with the changed files once the prep step passed
+ * (commit, secrets, scope) and before the task joins the merge line, outside it, so checkers of several tasks run side by side.
  */
-export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, limit?: TurnLimit, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
+export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, limit?: TurnLimit, first?: (changed: readonly string[]) => Promise<BeforeLine>): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -202,10 +211,14 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     const undo = await undoOutOfScope($, t, dir, base, bad, made)
     return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo })
   }
+  // The checker setting: the checker looks at the change before it joins the line; the line's tests run once, after it
+  const pre = first ? await first(changed) : undefined
+  if (pre && 'result' in pre) return withSecrets(pre.result)
+  const noVerdict = pre?.noVerdict
   // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
   // So the branch can only move under it by hand (the owner committed to it meanwhile): that fails this turn as one normal try.
   // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).
-  const r = await inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, hold), {
+  const r = await inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, noVerdict), {
     t,
     stopped,
     ...(release ? { release } : {}),
@@ -341,9 +354,9 @@ export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: 
 /**
  * One go at the end of checkAndMerge, the task's merge turn (it is at the front of the merge line): bring in the latest
  * `target`, test, move `target` forward. `refresh` dates the task's place in line again (before each test command, so a
- * long run is never taken as stale).
+ * long run is never taken as stale). `noVerdict`: the checker gave no verdict (why), so after the tests it stops for review.
  */
-async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], refresh: () => Promise<void>, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
+async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], refresh: () => Promise<void>, noVerdict?: string): Promise<CheckResult> {
   // First, before touching the folder: a step stopped or given up while it waited in the merge
   // line does nothing, as the next try may already be using the folder.
   const early = stopped()
@@ -402,11 +415,9 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
-  // the checker setting: a change that needs a checker stops here, before review or merge (see app/checker.ts)
-  const held = !!hold?.(changed)
-  const holding = held ? { held: true } : {}
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
-  if (held) return { ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; the checker looks at it before it merges` }
+  // the checker gave no verdict (it ran before the line): the task waits for the owner's review, nothing merged
+  if (noVerdict) return { ok: true, review: true, noVerdict, ...flagged, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()

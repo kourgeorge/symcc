@@ -266,50 +266,78 @@ test('T-542: after the checker says OK, the prep and merge steps no longer say a
   expect(during).toBe(`checker | ${CHECKER_NOTE}`)
   expect(seen.some(s => s.startsWith('update-ref: merge'))).toBe(true)
   for (const s of seen) expect(s).not.toContain(CHECKER_NOTE)
-  expect(seen.filter(s => s.startsWith('add:'))).toEqual([`add: prep | ${PREP_NOTE}`, `add: prep | ${PREP_NOTE}`])
+  // one prep step, before the checker: the line after it does not go through prep again (T-551)
+  expect(seen.filter(s => s.startsWith('add:'))).toEqual([`add: prep | ${PREP_NOTE}`])
 })
 
-// ---------------- tests run once per try (T-526) ----------------
+// ---------------- the checker runs before the merge line; the tests run once, in it (T-551) ----------------
 
-const TREE = 'c3'.repeat(20)
-const NO_RERUN = "Don't run them in full again. Run only the tests for the changed files and your own new probe cases; run a full command only if your probe needs it, and say why in your answer."
+const NO_PROJECT_TESTS = "Tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge line, after you. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it."
 
-test('T-526: the checker is told symcc already ran these exact test commands on the commit and tree it checks, with the changed files, and not to run them in full again', async () => {
+/** The test commands the fake host ran, in order. */
+const testRuns = (w: ReturnType<typeof world>) => w.calls.filter(c => c.startsWith('/bin/sh -c '))
+
+test('T-551: with the checker on, the checker runs before the task joins the merge line, the tests run once after its OK, and then it merges', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { test_commands: ['npm test', 'npm run lint'] }))
+  let during: string[] = []
+  let line = ''
+  const t = await finish(w, async id => {
+    // the prep step passed (the work is committed), but no test ran yet and the task is not in the merge line
+    expect(w.git.head).toBe(H1)
+    during = testRuns(w)
+    line = (await w.$.fs.read(`${ROOT}/.symcc/merge-line.json`).catch(() => null)) ?? ''
+    checkerFinished(id, 'OK')
+  })
+  expect(during).toEqual([])
+  expect(line).not.toContain('T-1')
+  expect(testRuns(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm run lint'])
+  expect(t.status).toBe('done')
+  expect(w.git.main).toBe(H1)
+  const texts = t.history.map(h => h.text)
+  expect(texts).toContain('try 1: checker: OK')
+})
+
+test('T-551: a checker that finds problems is one normal failed try: the task never joins the merge line and no test runs', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, 'src/a.ts:1 breaks on ""'))
+  expect(testRuns(w)).toEqual([])
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(w.git.main).toBe(M1)
+})
+
+test('T-551: with the checker off, the tests run once and the change merges, as before', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false))
+  const t = await finish(w)
+  expect(testRuns(w)).toEqual(['/bin/sh -c npm test'])
+  expect(t.status).toBe('done')
+})
+
+test('T-551: the checker prompt names no test command to run and says the tests run in the merge line after it', async () => {
   const w = world(['src/a.ts', 'src/a.test.ts'])
-  w.git.tree = TREE
   await saveBoard(w.$, boardWith(true, {}, { test_commands: ['npm test', 'npm run lint'] }))
   await finish(w, async id => checkerFinished(id, 'OK'))
   const p = w.spawns[0]!.prompt
-  // the pre-merge run passed on this tree and recorded it; the checker's prompt names that run
-  expect(p).toContain(`Tests: symcc already ran these exact test commands on commit ${H1}, tree ${TREE} (the code you are checking), and all passed:\n  npm test\n  npm run lint\n${NO_RERUN}`)
+  expect(p).toContain(NO_PROJECT_TESTS)
+  expect(p).not.toContain('npm test')
+  expect(p).not.toContain('npm run lint')
+  expect(p).not.toMatch(/run the tests for the changed files/i)
   expect(p).toContain('Files it changed:\n  src/a.ts\n  src/a.test.ts\n')
   expect(p).toContain('there is no need to look at the board or the main project folder')
-  expect(p).not.toContain('its tests passed')
   expect(p).not.toContain('{{')
   // the verdict format is kept
   expect(p).toContain('the single word OK on its own last line')
-  // the full commands ran once, by symcc before merging
-  expect(w.calls.filter(c => c.startsWith('/bin/sh -c ')).length).toBe(2)
 })
 
-test('T-526: when this code\'s tree is not in the passed-trees record, the checker is told so and runs them itself', async () => {
-  // the tree can't be told, so nothing is on record
+test('T-551: with no test commands set, the checker is still told not to look for the project\'s tests', async () => {
   const w = world()
-  await saveBoard(w.$, boardWith(true))
-  await finish(w, async id => checkerFinished(id, 'OK'))
-  const p = w.spawns[0]!.prompt
-  expect(p).toContain("Tests: symcc's test run on this exact code is not on record, so run these test commands yourself, each one on its own, from the folder:\n  npm test\n")
-  expect(p).not.toContain(NO_RERUN)
-})
-
-test('T-526: with no test commands set, the checker is told nothing ran the tests and runs them itself', async () => {
-  const w = world()
-  w.git.tree = TREE
   await saveBoard(w.$, boardWith(true, {}, { test_commands: [] }))
   await finish(w, async id => checkerFinished(id, 'OK'))
   const q = w.spawns[0]!.prompt
-  expect(q).toContain('Tests: No test commands are set for this project, so nothing has run its tests yet: find how the project runs its tests (in this folder) and run them.')
-  expect(q).not.toContain(NO_RERUN)
+  expect(q).toContain("Tests: Don't run the project's own tests (its test files or test commands): no test commands are set for this project, so nothing runs its tests in the merge line after you; still, don't look for them.")
 })
 
 test("a checker role's checklist gets its placeholders filled in, as a worker's role does ({{files}}, {{test_command}}, {{kind}}, ...)", async () => {
@@ -325,7 +353,7 @@ test("a checker role's checklist gets its placeholders filled in, as a worker's 
   await finish(w, async id => checkerFinished(id, 'OK'))
   const p = w.spawns[0]!.prompt
   expect(p).toContain('files: Files you may change: src/.')
-  expect(p).toContain("tests: symcc's test run on this exact code is not on record, so run these test commands yourself, each one on its own, from the folder:\n  npm test")
+  expect(p).toContain("tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge line, after you.")
   expect(p).toContain('id T-1 \nKind of task: change.')
   expect(p).toContain('{{nope}}')
   expect(p).not.toContain('{{files}}')

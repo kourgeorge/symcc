@@ -187,11 +187,12 @@ happens, never the words in its hand-back:
   review with its answer instead):
 
 **The merge line.** Every way into a merge (a worker's hand-back, your approve, finished work
-whose files are clear again, a checker's pass, a reload) joins one line for the whole project,
+whose files are clear again, a checker's OK, a reload) joins one line for the whole project,
 shared by all sessions and target branches, oldest first. Only the task at the front of the line
 has its turn, and does it all in one go:
 
     hand-back / approve / "your files are clear" / reload
+      → (with the checker on: prep, then the checker, outside the line)
       → the merge line (whole project, all sessions, oldest first)
       → at its turn, in one go:
           catch up with the branch it merges into
@@ -215,8 +216,8 @@ time (the lead's text board shows it after the status: "doing prep · title"):
   agent runs in this step.
 - `test`: the test commands run. Its note says "running the tests".
 - `checker`: a checker agent is trying to break the change (only with the `checker` setting
-  on; with it off no task ever shows this word). Its note says "a checker agent is trying to
-  break it before it merges".
+  on; with it off no task ever shows this word). It comes right after `prep`, before the task
+  joins the merge line. Its note says "a checker agent is trying to break it before it merges".
 - `merge`: the task is brought up to date with the target branch and merged. Its note says
   "merging".
 
@@ -271,7 +272,8 @@ reason (tests failed, a clash, out of time, ...), waiting for your files, or in 
    automatic retries kick in: the task goes back to `todo` and the next worker is shown the end of the failing output and
    told to fix it (2 times by itself; then it is marked `failed` for the lead).
    **Checker (optional).** With the `checker` setting on, a fresh checker reads the task and
-   its changes and tries to break them before anything merges (see [The checker](#the-checker)).
+   its changes and tries to break them before the task joins the merge line, so the tests here
+   run only after its OK, and only once (see [The checker](#the-checker)).
 5. **Approval (optional).** In review mode (see below), the task stops here as
    `review` ("ready for review") and nothing is merged until you say so.
 6. **Merge.** Only now does your branch move forward. If you have that branch checked
@@ -330,12 +332,11 @@ try never needs a second test run because another merge came first.
 The worker is told the commands, but while it works it runs only the tests for the
 files it changed (one test file, say) and a cheap type check if the project has one; it does
 not run the full commands at the end, as symcc does that and sends it the output if any
-fail. The checker is told that symcc already ran these exact commands on this commit and
-tree and that they passed, and gets the list of changed files: it runs only the tests for
-those files and its own new probe cases, and a full command only when a probe needs it (and
-says why). When symcc's run did not happen (no test commands set, or the code is not in the
-record), the checker runs the tests itself. A worker that skips the full run may now and
-then hand back work that fails symcc's run; that costs one new try, with the failing output.
+fail. The checker never runs the project's own test files or test commands: it runs before
+the task joins the merge line, and is told the tests run there, once, after it. It reads the
+task and the diff and checks the change with its own throwaway probe tests (in `.scratch/` or
+`/tmp`). A worker that skips the full run may now and then hand back work that fails symcc's
+run; that costs one new try, with the failing output.
 
 A narrow test command is one that runs only some test files. On symcc itself that is
 `sh scripts/test-files.sh tests/checker.test.ts tests/merge.test.ts`: it runs just those files
@@ -900,9 +901,12 @@ changed. Only you can pause or resume a scout; the lead is told a paused scout d
 ### The checker
 
 The `checker` setting is `off` by default. Turn it on with `/symcc-settings checker on` (or tell
-the lead "turn on the checker"). Then, when a change passes its tests, a fresh checker (the
-built-in `checker` role) starts in the task's folder. It cannot edit files. It reads the task and
-the diff and tries to break the change, for example by running it with odd input.
+the lead "turn on the checker"). Then, when a worker hands back and symcc's prep step passes
+(commit, scope and secret check), a fresh checker (the built-in `checker` role) starts in the
+task's folder, before the task joins the merge line. Checkers of several tasks run side by side.
+It cannot edit files. It reads the task and the diff and tries to break the change with its own
+throwaway probes, for example by running it with odd input. It never runs the project's own
+tests: they run once, in the merge line, after it.
 
 The checker may only read with git. Any git command that changes something (commit, checkout,
 switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is refused, and so are
@@ -911,11 +915,13 @@ read-only commands with options or settings that write files or run programs (su
 is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
 get through. The real fix is the worker sandbox (T-365).
 
-- **OK:** the task goes on as usual, to review or to merge.
+- **OK:** the task joins the merge line: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
-  as one of the `auto_retries`.
+  as one of the `auto_retries`. The task never joins the merge line, so no tests run for that try.
 - **No answer** (the checker was stopped, ran longer than `max_minutes`, or could not start): the
-  task waits for your review.
+  task joins the merge line for its tests, and then waits for your review instead of merging.
+- After a reload while a checker ran, the task gets a new checker on the same work (no retry
+  counted), and then joins the line as above.
 - **Skipped** for investigations and for changes that touch only prose or media. Only these count:
   `README`, `CHANGELOG`, `LICENSE`-style names (no extension, `.txt` or `.rst`), `.md` files that are not
   instructions for agents, and images, video, audio, subtitles and fonts. A `.md` file is instructions

@@ -1,14 +1,14 @@
 import type { SymccTask, SymccMode, SymccTokens } from '../../types'
-import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, needsReview, testsWithChangesOf, untestedChange, untestedText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
+import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, orphanMove, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, setMode, modeText, setEnabled, liveDriver, emptyBoard, leftoverTmpFiles, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish } from './lead'
-import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
+import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
 import { loadRoles } from './roles'
-import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
+import { runChecker, haltCheckers, checkerName, cleanFolder, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, scoutRuns, checkerRuns, scoutState, leadQueue, meanwhile, sayQueue, tmpWarned, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
@@ -814,15 +814,11 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
     await change(host, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: PREP_NOTE }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    // The checker setting: a change that is not docs only is held before it merges (or goes to review), and a checker tries to break it first.
-    const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
-    let r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, limit, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-    if (r.ok && r.held && !gaveUp() && !stop()) {
-      const c = await afterChecker(host, t, b, r, w.worktree, made, stop, release, limit)
-      // T-428: the checker was stopped before its verdict: the task stays "doing" in its checker step, and a new checker starts (restartCheckers)
-      if (c.again) return false
-      r = c
-    }
+    // The checker setting: a change that is not docs only gets a checker after its prep step, before it joins the merge line (checkerFirst).
+    const first = checkerOn(b) ? checkerFirst(host, t, b, w.worktree, made, stop) : undefined
+    const r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, limit, first).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    // T-428: the checker was stopped before its verdict: the task stays "doing" in its checker step, and a new checker starts (restartCheckers)
+    if (r.again) return false
     await finishTail(host, t, b, r, made, summary, w.worktree, agentId, gaveUp)
   }
   return true
@@ -852,7 +848,7 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
  * orphan (stopOrphans), and its answer never reaches the step that waited for it, so the task would stay
  * "doing" in its checker step with nobody on it. Such a task (this session's, its worker handed back, its
  * note the checker's, and no checker of this copy and no live, not stopped checker agent on it, see
- * `agents`) gets a new checker on the same branch commit: its work is committed and its tests passed already.
+ * `agents`) gets a new checker on the same branch commit (its work is committed), and then joins the merge line.
  * This is not a new try (no retry is counted). The lead is told once per restart.
  */
 export async function restartCheckers(host: Host, agents: HostAgent[]) {
@@ -906,9 +902,9 @@ async function checkAgain(host: Host, t0: BoardTask) {
     await markFinishing(host, id, tryNo).catch(() => undefined)
     beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
-    if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work (its tests had passed). This is not counted as a retry; nothing to do.`)
+    if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
     const limitMs = finishLimitMs(b.test_commands.length, testMinutesOf(b))
-    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => checkHeldAgain(host, t, b, dir, gaveUp, over, limit))
+    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, gaveUp, over, limit))
     if (how === OVER) {
       beat?.cancel()
       beat = null
@@ -925,18 +921,19 @@ async function checkAgain(host: Host, t0: BoardTask) {
   await pump(host)
 }
 
-/** The checker step of task `t` (in folder `dir`) run again: its work was held for a checker after its checks passed (see afterChecker). */
-async function checkHeldAgain(host: Host, t: SymccTask, b: Board, dir: string, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit) {
+/**
+ * The checker step of task `t` (in folder `dir`) run again (see restartCheckers): its prep step passed before, so its
+ * work is committed. Anything the old checker left in the folder is thrown away first (so the prep step commits none of
+ * it); then the check runs as after a hand-back: prep, a new checker, and on its OK the merge line.
+ */
+async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit) {
   const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-  // what checkAndMerge said when it held the work: to review or not, and the tests_with_changes flag
-  const names = await git(host, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${intoOf(t)}...HEAD`], dir).catch(() => null)
-  const changed = names && names.exitCode === 0 ? names.stdout.split('\0').filter(Boolean) : []
-  const flag = testsWithChangesOf(b)
-  const untested = flag !== 'off' && untestedChange(changed) ? untestedText(t.id) : ''
-  const tests = b.test_commands.length ? '; tests passed' : '; no test command set'
-  const held: CheckResult = { ok: true, held: true, ...(needsReview(b, t) || (untested && flag === 'review') ? { review: true } : {}), ...(untested ? { untested } : {}), detail: `checks passed${tests}; the checker looks at it before it merges` }
   const made: string[] = []
-  const r = stop() ? { ok: false, detail: `not merged: the task was ${stop()} while it was being checked` } : await afterChecker(host, t, b, held, dir, made, stop, release, limit, true)
+  const why = stop()
+  if (!why) await cleanFolder(host, dir)
+  const r: CheckResult = why
+    ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
+    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checkerFirst(host, t, b, dir, made, stop, true)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
   // the checker's agent type isn't loaded yet (just after a reload): the task stays "doing" in its checker step, and the next check starts it again (restartCheckers)
   if (r.again) return
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, t.agent, gaveUp)
@@ -950,14 +947,28 @@ async function reportSummary(host: Host, t: SymccTask): Promise<string> {
 }
 
 /**
- * Task `t`'s finished work passed its checks and was held for the checker (`r.held`): a checker tries to break it
- * (runChecker; it has its own time limit, the step's limit runs only during merge turns). OK: it goes on as without the checker,
- * to review (`r.review`) or merged now (its tests run again only if its branch moved). Problems: a result like
- * failing tests, with the checker's report, so settle sends it back to its worker (counting a retry) or fails it.
- * No verdict (the checker was stopped, ran over its time or didn't start): it waits for the owner's review.
+ * T-551: the checker step of task `t` (checkAndMerge's `first`), run once its prep step passed and before it joins
+ * the merge line, on its own change in folder `dir`, so checkers of several tasks run side by side. A docs-only change
+ * skips it (see docsOnly). Otherwise a checker tries to break it (afterChecker).
+ * `restarted`: a checker started again after a reload (see afterChecker).
  */
-async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, dir: string, made: string[], stop: () => string | undefined, release?: Promise<unknown>, limit?: TurnLimit, restarted = false): Promise<CheckResult & { again?: boolean }> {
-  // the try's commits are saved now, before the checker runs: a reload meanwhile loses `made`, and the checker step started again (checkHeldAgain) only knows the board
+const checkerFirst = (host: Host, t: SymccTask, b: Board, dir: string, made: string[], stop: () => string | undefined, restarted = false) => async (changed: readonly string[]): Promise<BeforeLine> => {
+  if (docsOnly(changed)) return undefined
+  const why = stop()
+  if (why) return { result: { ok: false, detail: `not merged: the task was ${why} while it was being checked` } }
+  return afterChecker(host, t, b, dir, made, stop, restarted)
+}
+
+/**
+ * Task `t`'s finished work passed its prep step: a checker tries to break it (runChecker; it has its own time limit, and
+ * runs outside the merge line, so the step's limit doesn't count it). OK: undefined, the task joins the merge line
+ * (catch up, tests, then review or merge: its tests run once, there). Problems: a result like failing tests, with the
+ * checker's report, so settle sends it back to its worker (counting a retry) or fails it; it never joins the line.
+ * No verdict (the checker was stopped, ran over its time or didn't start): it joins the line and waits for the owner's
+ * review after the tests (`noVerdict`).
+ */
+async function afterChecker(host: Host, t: SymccTask, b: Board, dir: string, made: string[], stop: () => string | undefined, restarted = false): Promise<BeforeLine> {
+  // the try's commits are saved now, before the checker runs: a reload meanwhile loses `made`, and the checker step started again (checkerStepAgain) only knows the board
   await recordCommits(host, t.id, made)
   // `restarted` (a checker started again after a reload): a start that fails only because the agent type isn't
   // loaded yet is tried again at the next check, up to MAX_NOT_READY starts; after that it goes to review as below
@@ -970,27 +981,23 @@ async function afterChecker(host: Host, t: SymccTask, b: Board, r: CheckResult, 
   // the checkers symcc had stopped before this one ran: one it stops meanwhile (a reload's orphan stop, a halt) is told apart below
   const stoppedBefore = new Set(stopped)
   const c = await runChecker(host, t, b, dir, stop, restarted ? tryLater : undefined)
+  const stoppedResult = (why: string): BeforeLine => ({ result: { ok: false, detail: `not merged: the task was ${why} while it was being checked` } })
   // T-428: a checker that only answered "stopped", or that symcc itself stopped, gives no verdict: it found nothing.
   // Its step starts again as after a reload (T-386, restartCheckers), with no retry counted.
   if (c.verdict && 'report' in c.verdict && (stoppedAnswer(c.verdict.report) || (await checkerStopped(host, t.id, stoppedBefore)))) {
     await unsayProblems(host, t, c.verdict.report)
     const why = stop()
-    if (why) return { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
+    if (why) return stoppedResult(why)
     checkerAgain.add(t.id)
-    return { ok: false, again: true, detail: 'the checker was stopped before its verdict; a new checker starts' }
+    return { result: { ok: false, again: true, detail: 'the checker was stopped before its verdict; a new checker starts' } }
   }
-  if (c.again) return { ok: false, again: true, detail: `the checker couldn't start yet (${c.why}); tried again at the next check` }
+  if (c.again) return { result: { ok: false, again: true, detail: `the checker couldn't start yet (${c.why}); tried again at the next check` } }
   checkerNotReady.delete(t.id)
-  const { held: _held, ...passed } = r
-  if (c.verdict?.ok) {
-    if (passed.review) return passed
-    return checkAndMerge(host, t, dir, b, 'merge', made, stop, false, release, limit).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-  }
-  if (c.verdict && 'report' in c.verdict) return { ok: false, checker: true, detail: `the checker found problems: ${cutLine(c.verdict.report, 300)}`, testOutput: checkerOutput(c.verdict.report) }
+  if (c.verdict?.ok) return undefined
+  if (c.verdict && 'report' in c.verdict) return { result: { ok: false, checker: true, detail: `the checker found problems: ${cutLine(c.verdict.report, 300)}`, testOutput: checkerOutput(c.verdict.report) } }
   const why = stop()
-  if (why) return { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
-  const noVerdict = `the checker gave no verdict (${c.why ?? 'no answer'})`
-  return { ...passed, review: true, noVerdict, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
+  if (why) return stoppedResult(why)
+  return { noVerdict: `the checker gave no verdict (${c.why ?? 'no answer'})` }
 }
 
 /** T-428: whether a checker's answer is only "stopped" (what symcc tells an agent it stops to answer), not a problems report. */

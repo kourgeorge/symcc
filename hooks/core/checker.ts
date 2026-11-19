@@ -1,7 +1,8 @@
-// The checker setting: when it is on, a change whose worker finished and whose tests passed does not merge yet.
-// A fresh agent with the built-in role "checker" gets the task and the diff and tries to break it; its answer
-// is either OK (the task goes on to merge, or to review) or a list of problems (the task goes back to its worker
-// with that report, like a failed test run). Investigations and docs-only changes skip it. Everything here is pure.
+// The checker setting: when it is on, a change whose worker finished and whose prep step passed (commit, scope and
+// secret check) does not join the merge line yet. A fresh agent with the built-in role "checker" gets the task and the
+// diff and tries to break it, side by side with other tasks; its answer is either OK (the task joins the merge line:
+// catch up, tests, merge or review) or a list of problems (the task goes back to its worker with that report, like a
+// failed test run). Investigations and docs-only changes skip it. Everything here is pure.
 import CHECKER_PROMPT from '../../prompts/checker'
 import type { Board } from './board-file'
 import type { HistoryAdd } from './history'
@@ -113,21 +114,16 @@ export const checkerChangedFiles = (changed: readonly string[]): string => {
   return [...shown, ...(changed.length > CHECKER_FILES_MAX ? [`  … and ${changed.length - CHECKER_FILES_MAX} more (run git diff --name-only for all)`] : [])].join('\n')
 }
 
-/** The pre-merge test run of the code a checker checks: its commit and tree id, when the passed-trees record (T-527) has that tree passed with the board's test commands. */
-export type CheckerTestRun = { sha: string; tree: string }
-
 /**
- * T-526: {{tests}} of a checker's prompt. The full test commands run once per try, by the pre-merge run: when that
- * run passed on this exact code (`run`), the checker is told so and runs only the tests for the changed files and its
- * own probes. With no test commands set, or no passed run on record for this tree, it runs the tests itself, as before.
+ * {{tests}} of a checker's prompt (T-551). The checker runs before the task joins the merge line, and the project's
+ * own tests (its test files and test commands) run once, in that line, after it: so it never runs them, and no
+ * command is named for it to run. It checks the change with its own throwaway probes instead.
  */
-export function checkerTestsText(name: string, commands: readonly string[], run: CheckerTestRun | null): string {
-  const list = commands.map(c => `  ${c}`).join('\n')
-  if (!commands.length) return "No test commands are set for this project, so nothing has run its tests yet: find how the project runs its tests (in this folder) and run them."
-  if (!run) return `${name}'s test run on this exact code is not on record, so run these test commands yourself, each one on its own, from the folder:\n${list}`
-  return `${name} already ran these exact test commands on commit ${run.sha}, tree ${run.tree} (the code you are checking), and all passed:
-${list}
-Don't run them in full again. Run only the tests for the changed files and your own new probe cases; run a full command only if your probe needs it, and say why in your answer.`
+export function checkerTestsText(name: string, commands: readonly string[]): string {
+  const where = commands.length
+    ? `${name} runs the project's test commands once, in the merge line, after you`
+    : `no test commands are set for this project, so nothing runs its tests in the merge line after you; still, don't look for them`
+  return `Don't run the project's own tests (its test files or test commands): ${where}. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it.`
 }
 
 /** A checker's prompt (prompts/checker.ts) with `v` filled in. */
