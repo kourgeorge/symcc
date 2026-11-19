@@ -7,21 +7,37 @@
 // symcc's agents are children of the lead's session, and OpenCode tells a parent on its own when a child ends (a
 // synthetic "subagent completed" message). symcc's board update about the same agent says what happens next, so each
 // update is labelled: the lead takes the board update as the one to act on, and the automatic message as no news.
-// The lead's usage (T-486): one entry per assistant message of the lead's session (session.context, the one call of
-// OpenCode 2.3's plugin context that lists a session's messages), each with its own tokens and stamped with its own time
-// (completed, else created), so the stats for "7d" and a task range count the lead within the span. Reasoning tokens
-// count as output, as for workers (ocTokens). Cost is 0 for subscription models, so it is not read. If the messages
-// can't be read, the whole session's total from session.get is counted in the stats for everything only, and a ranged
-// call leaves the lead out and says why.
+// The lead's usage (T-486): the stats with no range count the whole session's total from session.get, as before. A
+// ranged call ("7d", a task range) counts one entry per assistant message of session.context (the one call of OpenCode
+// 2.3's plugin context that lists a session's messages), each with its own tokens and stamped with its own time
+// (completed, else created). session.context lists only the messages after the last compaction, so when the
+// session.get total is bigger than their sum, the difference is said to be from before the last compaction, not dated,
+// and left out of the range. Reasoning tokens count as output, as for workers (ocTokens). Cost is 0 for subscription
+// models, so it is not read. If the messages can't be read, a ranged call leaves the lead out and says why.
 import type { HostLead, LeadSend, LeadUsage } from '../host'
+import type { SymccTokens } from '../../types'
 import type { OcSessionApi } from './ctx'
 import { ocTokens } from './agents'
+import { fmtTokens, sumTokens, tokenCount, TOKEN_KINDS } from '../core/runs'
 
-/** Where the lead's tokens come from, for the stats. */
-export const OPENCODE_LEAD_FROM = "OpenCode's session.context on the lead's session (each answer's own tokens, at the time it finished)"
+/** Where the lead's tokens come from in the stats with no range: the whole session's total. */
+export const OPENCODE_LEAD_FROM = "OpenCode's session.get on the lead's session (the whole session so far)"
 
-/** Where the lead's tokens come from when its messages couldn't be read: the whole session's total. */
-export const OPENCODE_LEAD_TOTAL_FROM = "OpenCode's session.get on the lead's session (the whole session so far, since its messages couldn't be read)"
+/** Where the lead's tokens come from in a ranged stats call: each answer since the last compaction. */
+export const OPENCODE_LEAD_MESSAGES_FROM = "OpenCode's session.context on the lead's session (each answer since the last compaction, at the time it finished)"
+
+/** What a ranged stats call adds when `tokens` of the lead's whole total are in no listed answer (a compaction happened). */
+export const leadUndated = (tokens: number) => `${fmtTokens(tokens)} tokens from before the last compaction, not dated, are left out of this range`
+
+/** What of `total` is in none of `listed`, per kind (never below 0). */
+function missing(total: SymccTokens, listed: SymccTokens): SymccTokens {
+  const out: SymccTokens = {}
+  for (const k of TOKEN_KINDS) {
+    const d = (total[k] ?? 0) - (listed[k] ?? 0)
+    if (d > 0) out[k] = d
+  }
+  return out
+}
 
 /** Why the lead's tokens can't be told before any lead session is known. */
 export const NO_LEAD_YET = 'no OpenCode lead session yet (the owner has not typed in one)'
@@ -91,28 +107,34 @@ export function opencodeLead(api: OcSessionApi, o: OpencodeLeadOptions): Opencod
     async usage(_root, range, nowMs): Promise<LeadUsage> {
       const id = o.lead()
       if (!id) return { leadProblem: NO_LEAD_YET }
-      let unread: string
+      const whole = async () => ocTokens((await api.get({ sessionID: id })).tokens)
+      if (range.kind === 'all') {
+        // the whole session, also what a compaction took out of session.context
+        try {
+          const tokens = await whole()
+          return { lead: tokens ? [{ id, atMs: nowMs, tokens, from: OPENCODE_LEAD_FROM }] : [], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM }
+        } catch (err) {
+          return { leadProblem: `couldn't read the OpenCode lead session: ${(err as Error)?.message ?? err}` }
+        }
+      }
+      const lead = []
       try {
-        const lead = []
         for (const m of await api.context({ sessionID: id })) {
           if (m.type !== 'assistant') continue
           const tokens = ocTokens(m.tokens)
           const atMs = m.time?.completed ?? m.time?.created
-          if (tokens && typeof atMs === 'number') lead.push({ id, atMs, tokens, from: OPENCODE_LEAD_FROM })
+          if (tokens && typeof atMs === 'number') lead.push({ id, atMs, tokens, from: OPENCODE_LEAD_MESSAGES_FROM })
         }
-        // the stats count each within the span asked for (leadTotals), so all of them go back
-        return { lead, leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM }
       } catch (err) {
-        unread = (err as Error)?.message ?? String(err)
-        log(`the lead's messages couldn't be read: ${unread}`)
+        const why = (err as Error)?.message ?? String(err)
+        log(`the lead's messages couldn't be read: ${why}`)
+        return { leadProblem: leadMessagesUnread(why) }
       }
-      if (range.kind !== 'all') return { leadProblem: leadMessagesUnread(unread) }
-      try {
-        const tokens = ocTokens((await api.get({ sessionID: id })).tokens)
-        return { lead: tokens ? [{ id, atMs: nowMs, tokens, from: OPENCODE_LEAD_TOTAL_FROM }] : [], leadSessions: 1, leadFrom: OPENCODE_LEAD_TOTAL_FROM }
-      } catch (err) {
-        return { leadProblem: `couldn't read the OpenCode lead session: ${(err as Error)?.message ?? err}` }
-      }
+      // the stats count each within the span asked for (leadTotals); what the whole total has beyond them is not dated
+      const total = await whole().catch(() => undefined)
+      const undated = total ? tokenCount(missing(total, sumTokens(lead.map(c => c.tokens)))) : 0
+      const leadFrom = undated > 0 ? `${OPENCODE_LEAD_MESSAGES_FROM}; ${leadUndated(undated)}` : OPENCODE_LEAD_MESSAGES_FROM
+      return { lead, leadSessions: 1, leadFrom }
     },
   }
 }
