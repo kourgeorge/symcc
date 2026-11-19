@@ -490,3 +490,32 @@ test('in VS Code the logo is one still glyph: no move plays there; the terminal 
   expect(mayMove({ shown: true, mode: 'auto', width: logoWidthFor(false, 40) })).toBe(false)
   expect(mayMove({ shown: true, mode: 'auto', width: logoWidthFor(false, 80) })).toBe(true)
 })
+
+test('in VS Code a to do task worked on before shows ● in the list and on its page; a fresh one keeps ○ (T-528)', async ($, on) => {
+  const tried = BOARD_TASKS.map(t => (t.id === 'T-408' ? { ...t, attempts: 1 } : t))
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: tried } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect((await rowText(ui, 'T-408')).split('\n')[1]).toMatch(/^● /)
+  expect((await rowText(ui, 'T-406')).split('\n')[1]).toMatch(/^○ /)
+  await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ● to do /)
+  await ui.unmount()
+})
+
+test('T-532: in VS Code a task waiting only to rerun its tests is under Doing as "retest", and its page badge says it reruns its tests', async ($, on) => {
+  const rerun = { ...BOARD_TASKS.find(t => t.id === 'T-404')!, id: 'T-499', title: 'Rerun the tests that ran out of time once', question: null, test_rerun: 1 }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, rerun] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  // the waiting task with a question (T-404) is still the only one waiting for you
+  expect((await ui.find({ key: 'vs-head-Waiting for you' }))?.text).toBe('? Waiting for you  1 ')
+  expect((await ui.find({ key: 'vs-head-Doing' }))?.text).toBe('▶ Doing  3 ')
+  const row = await rowText(ui, 'T-499')
+  expect(row.startsWith('T-499')).toBe(true) // no "●": it does not need you
+  expect(row).toMatch(/\n▶ retest/)
+  expect(await rowText(ui, 'T-404')).toMatch(/^● T-404/)
+  await ui.press({ key: 'T-499', link: { href: vsHref('task', 'T-499') } })
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ▶ rerunning its tests /)
+  await ui.unmount()
+})

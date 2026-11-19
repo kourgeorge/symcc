@@ -10,9 +10,11 @@ import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable } from './voice'
-import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, fullAnswer } from './workers'
+import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, answerOvertime, answerTimedOut, fullAnswer } from './workers'
+import { rerunDue, askedTimedOut, TIMED_OUT_OPTIONS } from '../core/test-timeout'
 import { haltChecker } from './checker'
 import { questionTool } from './questions'
+import { markMerged } from './merged'
 
 // ---------------- the lead's tools ----------------
 
@@ -113,7 +115,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        per task and per try, the biggest tasks, how tasks ended, by role,
                        origin and day (all tasks, the last N days, or an id range);
                        "full" adds the long explanations
-  /${S.N.name}-off                 turn ${S.N.name} off for this project: Claude works as normal (no lead
+  /${S.N.name}-off                 turn ${S.N.name} off for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-on                  turn it back on, in the mode the board had
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
@@ -129,6 +131,7 @@ In the panel nothing needs Esc: Enter on an empty text box cancels it (on the se
 In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
   · y copy the task's content · k stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
+  · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
 In a backlog task: o move to todo · x drop · l role.
 On the board list a task's role shows at the right end of its row, with the try number ("tester · try 2"); general shows nothing. A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
@@ -307,6 +310,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - The board has one mode (${S.N.name} settings mode): "off" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
+- Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
 - Investigation or change (kind in ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
 - An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
 - A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you only hear of it in a "Meanwhile" line) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
@@ -359,6 +363,7 @@ export const TOOLS = () => [
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['add', 'list', 'answer', 'drop'], description: 'What to do; list when left out.' }, text: { type: 'string', description: 'For add: the question, plain and short.' }, options: { type: 'array', items: { type: 'string' }, description: 'For add: 2 to 6 short choices (buttons on the board).' }, id: { type: 'string', description: 'For answer / drop: the question, e.g. Q-3.' }, answer: { type: 'string', description: "For answer: the owner's answer from the chat, their words or the option they picked." } } },
   },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
+  { name: 'merged', description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   {
@@ -455,7 +460,7 @@ async function kindIn($: Host, a: In): Promise<string | undefined> {
 }
 
 /** The lead's tools that act on one task. */
-const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'pause', 'resume']
+const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume']
 
 export async function runTool($: Host, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
@@ -523,6 +528,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // An answer to a running worker's "give it more time?" question: only that, nothing else changes.
       const overtime = str(a.answer)?.trim() && (t as BoardTask).time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
       if (overtime) return overtime
+      // T-511: an answer to "the tests ran out of time twice": run only the tests again, or stop it (paused, its work kept)
+      const timedOut = str(a.answer)?.trim() ? await answerTimedOut($, t.id, str(a.answer)!) : undefined
+      if (timedOut) return timedOut
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -619,6 +627,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; retry it again when that ends`
       // Finished work that waited only for the owner's files: just the merge runs again, no worker.
       if (waitsForFiles(t)) return mergeWaiting($, t.id)
+      // T-511: tests that ran out of time: a retry runs only the tests again, no worker
+      if (rerunDue(t) || askedTimedOut(t)) return (await answerTimedOut($, t.id, TIMED_OUT_OPTIONS[0])) ?? `${t.id}: its tests run again`
       // Its tries to merge main start over; if it last failed on a clash, the new worker merges main first.
       const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
       const fromDropped = t.status === 'dropped'
@@ -655,6 +665,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       void pump($)
       return checking ? `${t.id} dropped; ${CHECKING_TEXT(t.id)}, so that stops before the merge (if the merge already happened, it stays done)` : `${t.id} dropped`
     }
+    case 'merged':
+      // the board's button says it is the owner; the lead's tool call is the lead
+      return markMerged($, id, a.by === 'the owner' ? 'the owner' : 'the lead')
     case 'pause': {
       const t = await taskOrThrow($, id)
       if (t.status === 'done' || t.status === 'dropped') return `${t.id} is already ${t.status}`

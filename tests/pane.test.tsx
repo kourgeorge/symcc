@@ -1420,7 +1420,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
 })
 
 const OFF_CASES = [
-  ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
+  ['symcc is turned off', { enabled: false }, /^symcc is off · $/],
   ['the board is in mode off', { mode: 'off' }, /^⏹ off: nothing starts$/],
 ] as const
 for (const [when, extra, want] of OFF_CASES)
@@ -1431,6 +1431,19 @@ for (const [when, extra, want] of OFF_CASES)
     expect(t).toBeDefined()
     expect(t?.props.color).toBe('warning')
     expect(await ui.find({ type: 'Text', text: /workers · \d+ scouts?/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+for (const surface of ['terminal', 'vscode'] as const)
+  test(`symcc turned off (${surface}): the header says "symcc is off · /symcc-on to turn it on", the command in the accent color`, async ($, on) => {
+    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [], enabled: false } } })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface })
+    const all = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    expect(all.some(t => /symcc is off · \/symcc-on to turn it on/.test(t))).toBe(true)
+    expect(all.some(t => /symcc off|symcc: symcc/.test(t))).toBe(false)
+    const cmd = await ui.find({ type: 'Text', text: /^\/symcc-on$/ })
+    expect(cmd?.props.color).toBe('ide')
+    expect(cmd?.props.bold).toBe(true)
     await ui.unmount()
   })
 
@@ -1751,6 +1764,18 @@ test('the board list shows an answered investigation with ◆ "answer" and [inve
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ key: 'T-1' }))!.text).toMatch(/^  T-1\s+◆ answer\s+Cache slow\?\s+\[investigation\]$/)
   expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^  T-2\s+◆ review\s+Blue button\s+Enter to review$/)
+  await ui.unmount()
+})
+
+test('the board list and the task page show ● for a to do task worked on before, ○ for a fresh one (T-528)', async ($, on) => {
+  const tasks = [task('T-1', 'todo', 'Fresh one'), task('T-2', 'todo', 'Tried one', { attempts: 1 }), task('T-3', 'review', 'Blue button', { attempts: 1 })]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'T-1' }))!.text).toMatch(/^  T-1\s+○ /)
+  expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^  T-2\s+● /)
+  expect((await ui.find({ key: 'T-3' }))!.text).toMatch(/^  T-3\s+◆ review/)
+  await ui.press({ key: 'T-2' })
+  expect((await lines(ui)).some(l => l.includes('[● '))).toBe(true)
   await ui.unmount()
 })
 

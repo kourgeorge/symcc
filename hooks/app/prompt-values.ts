@@ -32,6 +32,19 @@ export const investigationValues = (t: BoardTask, dir: string): Record<string, s
   ask_more: askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : '',
 })
 
+/**
+ * T-526: {{test_command}} of a change's prompt. The full test commands run once per try, by symcc before merging
+ * (hooks/app/review.ts); the worker runs only the tests for what it changed (plus a cheap type check), not the full
+ * commands at the end. With no test commands set: keep the change small and correct.
+ */
+export function workerTestText(name: string, commands: readonly string[]): string {
+  if (!commands.length) return 'There is no test command; keep the change small and correct.'
+  const list = commands.map(c => `  ${c}`).join('\n')
+  return `These test commands must pass. ${name} runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:
+${list}
+While you work, run only what checks your change: the tests for the files you changed (find the narrowest way the project offers, e.g. one test file), plus the type check if the project has a cheap one. Don't run the full commands at the end "to be sure"; ${name} does that.`
+}
+
 /** The placeholders of a change's prompt: change the files, which are then committed, tested and merged. */
 export const changeValues = (t: SymccTask, b: Board, dir: string): Record<string, string> => ({
   ...sharedValues(t, dir),
@@ -39,8 +52,7 @@ export const changeValues = (t: SymccTask, b: Board, dir: string): Record<string
   file_tools: S.W.fileTools,
   files: `Files you may change: ${t.files.length ? `${t.files.join(', ')}. This is the full list; if you change files anywhere else, those changes are undone and the try fails.
 An edit outside this list is refused and asks the owner for that file; then stop and hand back (what you already changed in your folder is kept for the next try).` : 'whatever the task needs.'}`,
-  test_command: b.test_commands.length === 1 ? `After you finish, these must pass (run them in that folder to check): ${b.test_commands[0]}`
-    : b.test_commands.length ? `After you finish, these must pass; run each one on its own, from your folder:\n${b.test_commands.map(c => `  ${c}`).join('\n')}` : 'There is no test command; keep the change small and correct.',
+  test_command: workerTestText(S.N.name, b.test_commands),
   merge_main: t.merge_main ? `\nFirst, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.\n` : '',
   test_output: isCheckerOutput(t.test_output) ? checkerRetryText(t.test_output!) : t.test_output ? `\nYour last try failed these tests; fix it. ${testOutputHeading(t.test_output)}\n\`\`\`\n${t.test_output}\n\`\`\`\n` : '',
   earlier_tries: tries(t).length ? `\nEarlier tries:\n${triesList(t)}\nDon't repeat those mistakes.\n` : '',

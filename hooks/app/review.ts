@@ -5,6 +5,8 @@ import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, now, load, path, tryLock, dropIfSame, safeWrite } from './store'
 import { tellLead } from './tell'
+import { ranOutOfTime, limitMinutes, timedOutDetail } from '../core/test-timeout'
+import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
 
 // ---------------- a task's changes, for review ----------------
 
@@ -96,8 +98,10 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
  * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
  * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
+ * `timedOut` (T-511): a test command was stopped by its time limit (these minutes), so nothing failed and nothing merged;
+ * there is no `testOutput`, so no new try starts for it: only the tests run again (see settle and rerunTimedOutTests).
  */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
+export type CheckResult = { ok: boolean; detail: string; timedOut?: number; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
 
 /** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
 export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
@@ -381,6 +385,16 @@ async function testLockStale($: Host, me: string, held: string, fileMs?: number)
   return !cur || !checkStepNow(cur, Date.now())
 }
 
+/** T-511: whether some task's tests run now: one of this copy waits for or holds the test lock, or a lock file that is not stale is there. */
+export async function testsRunningNow($: Host): Promise<boolean> {
+  if (testLine.length) return true
+  const file = path(`${S.N.dir}/${TEST_LOCK_FILE}`)
+  const held = await $.fs.read(file).catch(() => null)
+  if (held === null) return false
+  const st = await $.fs.stat(file).catch(() => null)
+  return !(await testLockStale($, '', held, st?.mtimeMs))
+}
+
 /**
  * Runs `run` (task `t`'s test commands) while holding the project-wide test lock (TEST_LOCK_FILE in the board folder),
  * so only one task's tests run at a time, across tasks and sessions; symcc's merge step only, not the workers' own runs.
@@ -507,14 +521,25 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
   }
-  const testsRun = mode === 'finish' || candidate !== head || retest
+  let testsRun = mode === 'finish' || candidate !== head || retest
+  // T-527: the code about to be tested (its git tree, the target merged in). When this same tree already passed
+  // these same test commands, the run is skipped. Unknown (git could not tell): the tests run as usual.
+  const tree = testsRun && b.test_commands.length ? await testedTree($, candidate, dir) : ''
+  const skipped = !!tree && treePassed(await readPassedTrees($), tree, b.test_commands)
+  if (skipped) testsRun = false
   if (testsRun && b.test_commands.length) {
     // One task's tests at a time, project-wide (withTestLock); the lock is let go however the tests end.
     const failed = await withTestLock($, t, stopped, turn, async refresh => {
       await markStep($, t, 'testing', stopped)
       for (const cmd of b.test_commands) {
         await refresh()
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
+        let thrown: string | undefined
+        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        // T-511: stopped by its time limit, not failed: no test output, so no new try is started for it (see settle)
+        if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
+          const min = limitMinutes(TEST_TIMEOUT_MS)
+          return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min) }
+        }
         if (r.exitCode !== 0) {
           const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
           return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
@@ -522,10 +547,13 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
         const s = stopped()
         if (s) return s
       }
+      // all passed: remembered while the lock is still held, so two sessions never write the file at once; a failed, timed-out or stopped run never is
+      if (tree) await recordPassedTree($, tree, b.test_commands)
       return undefined
     })
     if (failed) return res(failed)
   }
+  const passed = skipped ? `; ${testsSkippedText(tree)}` : '; tests passed'
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
@@ -533,8 +561,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // the checker setting: a change that needs a checker stops here, before review or merge (see app/checker.ts)
   const held = !!hold?.(changed)
   const holding = held ? { held: true } : {}
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
-  if (held) return res({ ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? '; tests passed' : '; no test command set'}; the checker looks at it before it merges` })
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
+  if (held) return res({ ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; the checker looks at it before it merges` })
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
@@ -546,7 +574,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok && !(await branchExists($, target))) return res(goneResult(target))
   if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }
-  const tests = !b.test_commands.length ? '; no test command set' : testsRun ? '; tests passed' : ''
+  const tests = !b.test_commands.length ? '; no test command set' : skipped || testsRun ? passed : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
   if (researchNotes(changed).length) {
@@ -554,6 +582,24 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
   return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
+}
+
+/** T-527: the git tree id of commit `commit` (the code a test run tests), or '' when git can't tell. */
+export async function testedTree($: Host, commit: string, dir: string): Promise<string> {
+  const r = await git($, ['rev-parse', '-q', '--verify', `${commit}^{tree}`], dir).catch(() => null)
+  const id = r && r.exitCode === 0 ? r.stdout.trim() : ''
+  return isTreeId(id) ? id : ''
+}
+
+/** T-527: the trees whose test run passed (PASSED_TREES_FILE in the board folder); none when it can't be read. */
+export async function readPassedTrees($: Host) {
+  return parsePassedTrees(await $.fs.read(path(`${S.N.dir}/${PASSED_TREES_FILE}`)).catch(() => null))
+}
+
+/** T-527: remembers that tree `tree` passed all of `commands`. A file that can't be written only means the next run is not skipped. */
+async function recordPassedTree($: Host, tree: string, commands: readonly string[]) {
+  const list = addPassedTree(await readPassedTrees($), tree, commands, Date.now())
+  await safeWrite($, path(`${S.N.dir}/${PASSED_TREES_FILE}`), passedTreesText(list), 'the passed trees').catch(() => undefined)
 }
 
 /** Whether commit `sha` is one of task `id`'s commits (of try `tryNo`, when given) and already on branch `target`. */

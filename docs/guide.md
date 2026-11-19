@@ -100,6 +100,21 @@ keeps it waiting, also `dropped` or `failed`; then the lead changes or clears it
 Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
 lower task number).
 
+**Work merged by hand.** Sometimes a task's branch gets merged outside the board, for
+example by you or by the lead on your word after its only failure was the merge tests
+timing out. Don't drop such a task (it would count as dropped) and don't retry it (a new
+worker would redo finished work). Mark it as merged instead: press `h` (Already merged) on
+its page (offered for a failed, waiting, paused or dropped task), or ask the lead, whose
+`merged` tool also takes a task that is to do, running (its worker is stopped first) or in
+review. symcc checks it with git first: every commit on the task's branch must already be
+in the branch it merges into (merged, fast-forwarded, or rebased as the same changes). If
+not, it refuses with the reason ("T-5's branch has 2 commits that aren't in main yet").
+When the check passes, the task becomes `done` with the history line "merged outside the
+board (abc12345); marked done by the owner" (or "by the lead"), its commits are recorded,
+its folder and branch are cleaned up like after a normal merge, and the tasks waiting on it
+can start. Nothing is merged and no test runs: the work is already in. Stats count it under
+"merged outside the board". The lead uses it only on your word or a rule you set.
+
 ---
 
 ### When a worker needs you
@@ -238,6 +253,17 @@ happens, never the words in its hand-back:
    So when several tasks finish together, merges can take longer. The turn is kept with
    the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
    you never need to delete it by hand.
+   **Tests that run out of time.** A test command stopped by its 10-minute limit is not a
+   failed test: nothing failed, so no new worker try starts and no automatic retry is used.
+   The task keeps its work and waits ("tests ran out of time (10 min); running them again
+   once, no new try"); at a later regular check, when no other task's tests run (and
+   preferably when fewer workers are busy), symcc runs only the test commands again, once.
+   If they pass, the task goes on as usual (review, the checker, or the merge); if a test
+   really fails, it gets a new try as usual. If they run out of time a second time, the
+   task waits for you ("the tests ran out of time twice; nothing failed") with the choices
+   **Run the tests again** (only the tests run again) and **Stop it** (the task is paused,
+   its work kept). "retry T-3" on such a task also runs only its tests again.
+   An approve whose tests run out of time stays in review (approve it again).
    **Time limit.** Each test command may run up to 10 minutes. The whole checking and
    merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
    and the board: 15 minutes with one test command, 35 with three. Only the task's own
@@ -262,6 +288,26 @@ happens, never the words in its hand-back:
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
+
+### Tests run once per try
+
+The full test commands run once per try, by symcc, in step 4 (and not even then when the
+same code, with the same commands, already passed: see `passed-trees.json` in the board
+folder). The worker is told the commands, but while it works it runs only the tests for the
+files it changed (one test file, say) and a cheap type check if the project has one; it does
+not run the full commands at the end, as symcc does that and sends it the output if any
+fail. The checker is told that symcc already ran these exact commands on this commit and
+tree and that they passed, and gets the list of changed files: it runs only the tests for
+those files and its own new probe cases, and a full command only when a probe needs it (and
+says why). When symcc's run did not happen (no test commands set, or the code is not in the
+record), the checker runs the tests itself. A worker that skips the full run may now and
+then hand back work that fails symcc's run; that costs one new try, with the failing output.
+
+A narrow test command is one that runs only some test files. On symcc itself that is
+`sh scripts/test-files.sh tests/checker.test.ts tests/merge.test.ts`: it runs just those files
+through `claude plugin test` (from a temporary copy of the plugin) and exits non-zero when one
+fails. The repo's `CLAUDE.md` tells workers and checkers about it. In your own project, say how
+to run one test file in its `CLAUDE.md` (or `AGENTS.md`) the same way.
 
 ### A code change with no test
 
@@ -1358,12 +1404,18 @@ git clone https://github.com/kourgeorge/symcc && sh symcc/scripts/install-openco
 The script links symcc's `opencode/` folder into OpenCode's plugins folder for you, `~/.config/opencode/plugins/symcc` (or `$XDG_CONFIG_HOME/opencode/plugins/symcc`), so OpenCode loads it in every project. Nothing is copied or downloaded and there is no build step: OpenCode runs symcc's TypeScript files as they are, so a `git pull` in that folder updates symcc (restart OpenCode after it).
 
 - **For one project only:** `sh symcc/scripts/install-opencode.sh --project <your project>` puts the link in `<your project>/.opencode/plugins/symcc` instead. Add `.opencode/plugins/` to that project's `.gitignore`, since the link points into your own machine.
-- **Check it:** start OpenCode in your project and run `opencode plugin list`; `symcc` is listed as a `local` plugin.
+- **Check it:** start OpenCode in your project and run `opencode plugin list`. OpenCode 2.3 lists the linked folder with no ID of its own (`ID: -   VERSION: local   SOURCE: <config>/opencode/plugins/symcc`), so `symcc` shows only in the folder path.
 - **If OpenCode says "Plugin failed"** for symcc's folder: check `opencode --version` first (symcc needs 2.3 or newer). The board screen's error names the package it couldn't get from OpenCode (`solid-js` or `@opentui/solid`); OpenCode's log has it (`~/.local/share/opencode/log/`). Only the board screen stops then: the lead, its tools and the workers run in OpenCode's server part, which loads on its own.
 - **Remove it:** the same command with `--remove` (and `--project <folder>` if you used it).
 - **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
 
-`opencode plugin add` only takes an npm package or a git address with a `package.json` at its top, which symcc's repository doesn't have yet, so it can't install symcc for now.
+**Or with OpenCode's own command** (not seen working yet, see below):
+
+```bash
+opencode plugin add github:kourgeorge/symcc
+```
+
+`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). In T-497's own scratch run with OpenCode 2.3.2, the command still failed with "Could not read package.json", because that `package.json` wasn't on GitHub yet; trying it from a local git copy instead was blocked (a symcc worker may not create git repositories). So use `sh symcc/scripts/install-opencode.sh` until this command has been seen working.
 
 ### The lead in OpenCode
 
@@ -1387,17 +1439,19 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 ### The board panel and the strip
 
-`/symcc` (or "symcc board" in OpenCode's command palette) opens the board in OpenCode's session panel: the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type.
+`/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type.
 
-Above the prompt, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code.
+Above the prompt of an open session, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code. It is there by itself; there is nothing to turn on.
 
-The panel reads `.symcc/view.json` once a second; the board writes that file on every change. Where the TUI part doesn't take `/symcc`, `/symcc` and `/symcc-tasks` print the board as text.
+The panel reads `.symcc/view.json` once a second; the board writes that file on every change. Plain `/symcc` (and `/symcc-tasks`) prints the board as text in the chat, as in a window without the panel.
+
+**If you see no strip and no panel:** open a session first (the strip and the panel belong to a session, not to OpenCode's home page), and restart OpenCode's window after updating symcc. If the board screen can't start or draw, a red message from symcc says why, and `/plugins` lists symcc as failed with the error; the lead, its tools and the workers keep running either way.
 
 ### What differs from Claude Code
 
 - **Cost shows 0 on subscription and free models.** OpenCode reports a cost of 0 for them, so the stats show tokens only.
 - **The lead's tokens.** `/symcc-stats` with no range counts the lead session's whole total, as OpenCode tells it. A ranged one (`7d`, `T-100..T-130`) counts each answer of the lead's session with its own tokens, at the time it finished, if it falls inside the range. OpenCode lists only the answers since the session's last compaction, so after a compaction the tokens from before it have no dates: a ranged call leaves them out and says how many there are ("from before the last compaction, not dated"), next to where the lead's tokens come from. If OpenCode can't list the answers, a ranged call leaves the lead out and says why.
-- **No hooks for some things.** symcc doesn't follow OpenCode's Plan agent (there is no plan mode for it to see), it can't open the panel by itself when OpenCode starts (use `/symcc`), and it judges a shell command only by its text. Workers can't use OpenCode's `question` tool (nobody watches their sessions to answer it); they use `symcc_ask_owner`, as in Claude Code.
+- **No hooks for some things.** symcc doesn't follow OpenCode's Plan agent (there is no plan mode for it to see), it can't open the panel by itself when OpenCode starts (use `/symcc-board`), and it judges a shell command only by its text. Workers can't use OpenCode's `question` tool (nobody watches their sessions to answer it); they use `symcc_ask_owner`, as in Claude Code.
 - **Not built yet:** the settings and scouts pages in the panel (use `/symcc-settings` and `/symcc-scout`), and workers as separate `claude -p` or `codex exec` processes.
 - **When OpenCode stops.** OpenCode 2.3 lets symcc clean up when its server is stopped normally (also with Ctrl-C or `kill`), so the next start, in OpenCode or in Claude Code, drives the board at once. If it was killed hard or crashed, `.symcc/lead.json` stays behind; the next start then follows until that file is 3 minutes old, and takes over by itself, as after a Claude Code crash.
 

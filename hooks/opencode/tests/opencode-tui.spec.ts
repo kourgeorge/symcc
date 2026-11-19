@@ -8,12 +8,12 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { addTask, emptyBoard, patchTask, bandNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
-import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyCommand } from '../tui'
+import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
 const AT = '2026-11-19T11:00:00.000Z'
@@ -36,6 +36,15 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   expect(parseViewFile(viewFileText(f))).toEqual(f)
   for (const bad of [null, '', '{', '{"view":{}}', '[]']) expect(parseViewFile(bad)).toBe(null)
   expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toContain('/work/proj/.symcc/view.json')
+})
+
+test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
+  const f = viewFile()
+  for (const git_state of ['no-repo', 'no-commits'] as const) {
+    const lines = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')
+    expect(lines).toContain('set up git (ask the lead)')
+    expect(lines).not.toContain('(g)')
+  }
 })
 
 test('the band: the header, then the tasks that need you or run with the list\'s marks and short states; a "worker starting" row shows its time and no stray note', () => {
@@ -133,12 +142,13 @@ function shown(node: unknown): string[] {
   return rows(node)
 }
 
-test('startTui on a fake OpenCode TUI: reads the view file above its folder, draws the panel and the band, opens from /symcc, and sends approve, reject and answer as slash commands', async () => {
+test('startTui on a fake OpenCode TUI: reads the view file above its folder, draws the panel and the band, opens from /symcc-board, and sends approve, reject and answer as slash commands', async () => {
   const f = viewFile()
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
   const slots: { append: string; render: (input: never) => unknown }[] = []
-  const layers: { enabled?: boolean | (() => boolean); commands?: readonly TuiKeyCommand[] }[] = []
+  const layers: TuiKeyLayer[] = []
+  const toasts: string[] = []
   let current: { name: string; sessionID: string } | undefined
   const answers = { prompt: 'too big', select: 'postgres' as string | undefined }
   const ctx: TuiContext = {
@@ -148,7 +158,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: factory => void layers.push(factory()) },
     ui: {
-      toast: { show: () => undefined },
+      toast: { show: o => void toasts.push(o.message) },
       dialog: { prompt: async () => answers.prompt, select: async <V,>() => answers.select as V | undefined },
       panel: { open: name => ((current = { name, sessionID: 'ses_1' }), true), close: () => (current = undefined), current: () => current },
       slot: claim => (slots.push(claim as never), () => undefined),
@@ -157,11 +167,27 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   let stopped = false
   const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => void (stopped = true), now: () => NOW })
   await board.refresh()
-  // the /symcc keymap command opens the board panel
-  const open = layers.flatMap(l => l.commands ?? []).find(c => c.slash?.name === 'symcc')!
+  // "/symcc-board" and the palette's "symcc board" open the board panel. The layer is "global": OpenCode 2.3 lists a
+  // layer of its default "base" mode in neither the palette nor the slash list (T-505). Plain "/symcc" is left to
+  // the server's command (the text board), so the slash list has no two "/symcc" rows.
+  const openLayer = layers.find(l => l.commands?.some(c => c.id === 'symcc.board.open'))!
+  expect(openLayer.mode).toBe('global')
+  const open = openLayer.commands!.find(c => c.id === 'symcc.board.open')!
+  expect(open.slash?.name).toBe('symcc-board')
+  expect(open.palette).toBe(true)
+  expect(open.title).toBe('symcc board')
   await open.run()
   expect(current?.name).toBe(BOARD_PANEL)
-  const input: TuiPanelInput = { name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: true, close: () => undefined }
+  // run again while it is open: it closes
+  await open.run()
+  expect(current).toBe(undefined)
+  await open.run()
+  expect(current?.name).toBe(BOARD_PANEL)
+  expect(toasts).toEqual([])
+  // no layer of the panel's keys before the panel is drawn: they are made inside it
+  expect(layers.length).toBe(1)
+  let focused = true
+  const input = { name: BOARD_PANEL, sessionID: 'ses_1', width: 100, get focused() { return focused }, close: () => undefined } as TuiPanelInput
   const panel = slots.find(s => s.append === 'session.panel')!.render(input as never)
   expect(shown(panel).some(l => l.includes('NEEDS YOU'))).toBe(true)
   expect(shown(panel).some(l => l.includes('T-2') && l.includes(`${STATUS_MARK.review} review`))).toBe(true)
@@ -170,9 +196,18 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   const band = slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 'ses_1' } as never)
   expect(shown(band)[0]).toContain('symcc')
   expect(shown(band).find(l => l.startsWith('T-1'))).not.toContain('worker starting')
-  // the panel's keys work only while it is open and has the keyboard
-  const keys = layers.find(l => l.enabled !== undefined)!
-  expect(typeof keys.enabled === 'function' && keys.enabled()).toBe(true)
+  // the panel's keys: made inside the panel's drawing, and on only while it shows the board and has the keyboard
+  const keys = layers.find(l => l.commands?.some(c => c.bind === 'escape'))!
+  expect(keys.mode).toBe(undefined)
+  const on = () => typeof keys.enabled === 'function' && keys.enabled()
+  expect(on()).toBe(true)
+  focused = false
+  expect(on()).toBe(false)
+  focused = true
+  // Esc closes the panel
+  await keys.commands!.find(c => c.bind === 'escape')!.run()
+  expect(current).toBe(undefined)
+  await open.run()
   const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 98).ids
   const goTo = async (id: string) => {
     await board.press('back', 'ses_1')
@@ -283,4 +318,121 @@ test('opencode/tui.ts imports solid-js and @opentui/solid by their written-out n
   const server = await readFile(`${PLUGIN_ROOT}/opencode/server.ts`, 'utf8')
   expect(server).not.toContain('solid')
   expect(server).not.toContain('/tui')
+})
+
+/** A fake tui context for the T-505 tests: records toasts, layers and slot claims; ui.panel.open answers `opens`. */
+function fakeCtx(theme: unknown, opens = true) {
+  const toasts: { message: string; variant?: string }[] = []
+  const layers: TuiKeyLayer[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  let current: { name: string; sessionID: string } | undefined
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme,
+    renderer: { width: 120 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: factory => void layers.push(factory()) },
+    ui: {
+      toast: { show: o => void toasts.push({ message: o.message, variant: o.variant }) },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: name => (opens ? ((current = { name, sessionID: 's' }), true) : false), close: () => (current = undefined), current: () => current },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  return { ctx, toasts, layers, slots, current: () => current }
+}
+
+/** An OpenTUI color as OpenCode 2.3's theme holds it (an RGBA: a buffer of four numbers). */
+const rgba = (...n: number[]) => ({ buffer: new Float32Array(n) })
+
+test("colorOf reads OpenCode 2.3's nested theme (text.base, text.feedback.warning.base, hue.blue.200 ...), and never gives a group of colors as a text color", () => {
+  const theme = {
+    text: { base: rgba(1, 1, 1, 1), muted: rgba(2, 2, 2, 1), feedback: { warning: { base: rgba(3, 3, 3, 1) }, error: { base: rgba(4, 4, 4, 1) }, success: { base: rgba(5, 5, 5, 1) }, info: { base: rgba(6, 6, 6, 1) } } },
+    border: { base: rgba(7, 7, 7, 1) },
+    hue: { blue: { 200: rgba(8, 8, 8, 1) }, orange: { 200: rgba(9, 9, 9, 1) }, purple: { 200: rgba(10, 10, 10, 1) } },
+  }
+  expect(colorOf(theme, 'text')).toBe(theme.text.base)
+  expect(colorOf(theme, 'inactive')).toBe(theme.text.muted)
+  expect(colorOf(theme, 'warning')).toBe(theme.text.feedback.warning.base)
+  expect(colorOf(theme, 'error')).toBe(theme.text.feedback.error.base)
+  expect(colorOf(theme, 'success')).toBe(theme.text.feedback.success.base)
+  expect(colorOf(theme, 'cyan')).toBe(theme.text.feedback.info.base)
+  expect(colorOf(theme, 'subtle')).toBe(theme.border.base)
+  expect(colorOf(theme, 'ide')).toBe(theme.hue.blue[200])
+  expect(colorOf(theme, 'claude')).toBe(theme.hue.orange[200])
+  expect(colorOf(theme, 'permission')).toBe(theme.hue.purple[200])
+  expect(colorOf(theme, 'no such name')).toBe(theme.text.base)
+  // a theme that lacks a field, or has a group where a color should be (OpenCode 2.3's theme.text, read the old
+  // flat way): the plain fallback, never the object
+  expect(colorOf({}, 'warning')).toBe('#e5c07b')
+  expect(colorOf({ text: { base: { action: {} } } }, 'text')).toBe('#d0d0d0')
+  expect(colorOf(undefined, 'ide')).toBe('#5c9cf5')
+  // every color of a drawing is one color: a string or an RGBA
+  const fgs: unknown[] = []
+  const r = { ...fakeRuntime() }
+  const set = r.setProp
+  r.setProp = (n, k, v) => (k === 'fg' && fgs.push(v), set(n, k, v))
+  drawLines(r, theme, bandLines(viewFile(), NOW, 120))
+  expect(fgs.length).toBeGreaterThan(0)
+  for (const v of fgs) expect(typeof v === 'string' || (typeof v === 'object' && v !== null && 'buffer' in v)).toBe(true)
+})
+
+test('drawLines: a line too long for its place is cut, not wrapped piece by piece (each colored piece is its own text)', () => {
+  const node = drawLines(fakeRuntime(), {}, [[{ text: 'symcc v0.4.1', color: 'ide' }, { text: ' · proj', color: 'inactive' }]]) as El
+  const row = (node.kids[0] as El[])[0]!
+  expect(row.props.overflow).toBe('hidden')
+  for (const t of row.kids[0] as El[]) {
+    expect(t.props.wrapMode).toBe('none')
+    expect(t.props.flexShrink).toBe(0)
+  }
+})
+
+test("/symcc-board with no session open (OpenCode's home page, where ui.panel.open says no): a toast says to open a session first", async () => {
+  const f = fakeCtx({}, false)
+  const board = startTui(f.ctx, { runtime: fakeRuntime(), readText: async () => viewFileText(viewFile()), every: () => () => undefined, now: () => NOW })
+  await f.layers.find(l => l.mode === 'global')!.commands![0]!.run()
+  expect(f.current()).toBe(undefined)
+  expect(f.toasts.length).toBe(1)
+  expect(f.toasts[0]!.message).toContain('Open or start a session first')
+  expect(f.toasts[0]!.message).toContain('/symcc-board')
+  board.stop()
+})
+
+test('a band that fails to draw says so once in a toast (not an empty place with no word); a setup that fails says so too', async () => {
+  const f = fakeCtx({})
+  const r = fakeRuntime()
+  const broken: TuiRuntime = { ...r, createElement: tag => (tag === 'text' ? (() => { throw new Error('bad element') })() : r.createElement(tag)) }
+  const board = startTui(f.ctx, { runtime: broken, readText: async () => viewFileText(viewFile()), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const band = f.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)
+  expect(shown(band)).toEqual([])
+  shown(band)
+  expect(f.toasts.map(t => t.message)).toEqual(["symcc's band above the prompt could not be drawn: bad element"])
+  expect(f.toasts[0]!.variant).toBe('error')
+  board.stop()
+  // setup: the toast names what is missing and what still works; the error is given back to be thrown
+  const g = fakeCtx({})
+  const err = setupFailed(g.ctx, new Error("symcc's OpenCode board can't load 'solid-js'"))
+  expect(err.message).toContain('solid-js')
+  expect(g.toasts[0]!.message).toContain('no band above the prompt and no board panel')
+  expect(g.toasts[0]!.message).toContain('/plugins')
+  expect(g.toasts[0]!.variant).toBe('error')
+  // no UI to toast in: still gives the error back
+  expect(setupFailed({ ui: { toast: { show: () => { throw new Error('gone') } } } } as never, 'x').message).toBe('x')
+})
+
+test('opencode/tui.ts says a failed setup in a toast and throws it on (setupFailed), so /plugins lists it', async () => {
+  const src = await readFile(`${PLUGIN_ROOT}/opencode/tui.ts`, 'utf8')
+  expect(src).toContain('throw setupFailed(ctx, e)')
+})
+
+test('a to do task worked on before shows ● in the panel list and on its page; a fresh one keeps ○ (T-528)', () => {
+  const f = viewFile()
+  f.view.tasks = f.view.tasks.map(t => (t.id === 'T-4' ? { ...t, attempts: 1 } : t))
+  const fresh = viewFile()
+  const row = (v: ViewFile) => panelLines(v, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).find(l => l.includes('T-4 '))!
+  expect(row(fresh)).toContain(`${STATUS_MARK.todo} `)
+  expect(row(f)).toContain('● ')
+  expect(row(f)).not.toContain(STATUS_MARK.todo)
+  expect(panelLines(f, { opened: 'T-4', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('● to do'))).toBe(true)
 })

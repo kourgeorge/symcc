@@ -1,7 +1,8 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
+import { rerunDue } from '../../core/test-timeout'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { S, workers } from '../../app/state'
@@ -13,9 +14,12 @@ import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../host'
+import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
+/** The statuses whose page offers "Already merged (h)": work that stopped short of the board's merge (the lead's tool takes more). */
+export const MARK_MERGED_FROM: readonly SymccTask['status'][] = ['failed', 'waiting', 'paused', 'dropped']
 export const MERGING_LINE = 'Merging… (tests running)'
 /** The keys of the review and merge buttons (approve or done, reject or ask more, keep as a note, merge now): not offered while it merges. */
 const MERGE_KEYS = ['a', 'x', 'k', 'r']
@@ -248,7 +252,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const fileWait = fileWaitText(asked)
   // A running worker over its time limit: "Give it more time?" with +30 min / +60 min / Stop it (see overtimeQuestion).
   const overtime = t.status === 'doing' && !!asked.time_ask
-  const answerable = (t.status === 'waiting' && !fileWait) || overtime
+  // T-511: a task whose tests run again on their own (rerunDue) has nothing to answer either
+  const answerable = (t.status === 'waiting' && !fileWait && !rerunDue(asked)) || overtime
   const askedOptions = overtime ? [...OVERTIME_OPTIONS] : asked.options
   const askedQuestion = overtime ? overtimeQuestion(t.id, (v.max_minutes ?? 45) + (asked.extra_minutes ?? 0)) : t.question
   const choices = answerable ? answerChoices(overtime ? undefined : asked.asked_files, askedOptions) : []
@@ -263,7 +268,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool(claudeHost($), 'change', { task: t.id, answer: text.trim() })
-      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : `The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
+      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : answeredLeadLine(t, text.trim(), brief))
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
@@ -287,6 +292,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const toTodo = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))
   const stashIt = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))
   const dropIt = act(async () => (await runTool(claudeHost($), 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))
+  // Already merged (h, T-514): the owner merged its branch by hand; symcc checks it with git and marks it done (nothing is merged or tested)
+  const canMarkMerged = MARK_MERGED_FROM.includes(t.status) && !isInvestigation(t) && t.attempts > 0
+  const markMergedIt = act(async () => {
+    const r = await runTool(claudeHost($), 'merged', { task: t.id, by: 'the owner' })
+    $.ui.toast(S.N.toast(r))
+    noteForLead(`The owner marked ${t.id} done: its work was already merged outside the board.`)
+  })
   const watchIt = act(async () => (agentId ? $.ui.view({ agentId }) : undefined))
   const toggleReview = act(async () => {
     const r = await runTool(claudeHost($), 'change', { task: t.id, needs_review: !t.needs_review })
@@ -303,16 +315,16 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, nowRole,
+      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
-      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
+      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
         {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
         <Text>
-          <Text bold color={C(STATUS_BADGE[t.status])}>{`[${STATUS_MARK[t.status]} ${answered ? 'answered: read it' : word[t.status]}]`}</Text>
+          <Text bold color={C(STATUS_BADGE[t.status])}>{`[${statusMark(t)} ${answered ? 'answered: read it' : word[t.status]}]`}</Text>
           {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
         </Text>
         {mergeStatus}
@@ -351,6 +363,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           <Button key="stash" label="Stash to backlog (k)" hotkey="k" onPress={stashIt} />
         ),
         canPickRole && <Button key="role" label="Role (l)" hotkey="l" onPress={openRolePick} />,
+        canMarkMerged && <Button key="already-merged" label="Already merged (h)" hotkey="h" onPress={markMergedIt} />,
         t.status !== 'done' && t.status !== 'dropped' && (
           <Button key="drop" label="Drop" hotkey={inReview ? undefined : 'x'} onPress={dropIt} />
         ),

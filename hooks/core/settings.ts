@@ -201,8 +201,22 @@ export const setEnabled = (b: Board, on: boolean): Board => ({ ...b, enabled: on
 /** What every lead tool answers while the plugin is off. */
 export const offAnswer = (name: string = DEFAULT_NAME) => `${name} is off. The owner can turn it on with /${name}-on.`
 
-/** The status line while the plugin is off. */
-export const offStatusLine = (name: string = DEFAULT_NAME) => `${name} off · /${name}-on`
+/** A piece of the "off" line; `command` marks the part a view draws in its own color (the /<name>-on command). */
+export type OffPart = { text: string; command?: boolean }
+
+/**
+ * The "off" line in pieces, so every view says the same and can color the command:
+ * "symcc is off · /symcc-on to turn it on". `withName` false leaves the name out ("off · /symcc-on to turn it on"),
+ * for the line under the prompt, where Claude Code already puts "⚠ symcc: " in front.
+ */
+export const offStatusParts = (name: string = DEFAULT_NAME, withName = true): OffPart[] => [
+  { text: withName ? `${name} is off · ` : 'off · ' },
+  { text: `/${name}-on`, command: true },
+  { text: ' to turn it on' },
+]
+
+/** The "off" line as plain text (see offStatusParts). */
+export const offStatusLine = (name: string = DEFAULT_NAME, withName = true) => offStatusParts(name, withName).map(p => p.text).join('')
 
 /** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
 export function spokenDone(ids: string[]): string {
@@ -245,6 +259,12 @@ export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; 
 /** How many test commands a board keeps. */
 export const MAX_TEST_COMMANDS = 5
 
+/** Who answers in the chat, in the host's words (HostWords.assistant), for the enabled setting's meaning; set once by useName. */
+let assistantWord = 'the assistant'
+export function useAssistantWord(word: string) {
+  assistantWord = word
+}
+
 export const SETTINGS: SettingInfo[] = [
   { name: 'test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
   { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
@@ -257,7 +277,9 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
   { name: 'checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: before a change whose tests passed merges (or goes to review), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
   { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
-  { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'off: the whole plugin rests and Claude works as normal' },
+  { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', get meaning() {
+    return `off: the whole plugin rests and ${assistantWord} works as normal`
+  } },
 ]
 
 /** Rows on the Settings page that open a page of their own instead of holding a value. */

@@ -481,7 +481,15 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
   expect(more[0]!.parts.at(-1)).toEqual({ text: '⏹ off: nothing starts', tone: 'warning' })
-  expect(bannerLines({ ...b, enabled: false }, '', '', true, 80)[0]!.parts.at(-1)).toEqual({ text: 'symcc off · /symcc-on', tone: 'warning' })
+  // turned off: the header says how to turn it on in words, the command in the accent color (as the name), the rest a warning
+  const offLine = bannerLines({ ...b, enabled: false }, '', '', true, 80, undefined, 'symcc', undefined, '0.4.1')[0]!
+  expect(offLine.parts.slice(-3)).toEqual([
+    { text: 'symcc is off · ', tone: 'warning' },
+    { text: '/symcc-on', tone: 'accent', bold: true },
+    { text: ' to turn it on', tone: 'warning' },
+  ])
+  expect(bannerText(offLine)).toMatch(/symcc is off · \/symcc-on to turn it on$/)
+  expect(bannerText(offLine)).not.toMatch(/symcc off/)
   expect(more.some(l => /workers|scouts?\b/.test(bannerText(l)))).toBe(false)
   expect(more[4]!.parts.some(p => p.bold)).toBe(false)
   expect(more[4]!.parts.some(p => p.tone === 'dim' && p.text !== ' · ')).toBe(false)
@@ -1060,7 +1068,7 @@ test('the status line lists tasks to review by ID, cut after 3', () => {
 test('the board text names a task in review', () => {
   let [b, t] = addTask(emptyBoard(), { origin: W, title: 'Blue button' }, T)
   b = patchTask(b, t.id, { status: 'review' }, T)
-  expect(boardText(b)).toMatch(/T-1\s+review\s+Blue button — ready for review/)
+  expect(boardText(b)).toMatch(/T-1\s+◆ review\s+Blue button — ready for review/)
   expect(boardText(b)).toContain(modeText('auto'))
   b = patchTask(setMode(b, 'review'), t.id, { note: 'ready for review: the checks passed' }, T)
   expect(boardText(b)).toContain('⏸ review merge: work runs; finished tasks wait for your approve or reject')
@@ -1645,7 +1653,7 @@ test('the board text lists open tasks first, then the backlog (done ones only as
     expect(at(open.id)).toBeLessThan(at(idea.id))
     if (shown) expect(at(idea.id)).toBeLessThan(at(done.id))
     else expect(at(done.id)).toBe(-1)
-    expect(lines[at(idea.id)]).toBe(`${idea.id}   backlog Idea: requests and triage`)
+    expect(lines[at(idea.id)]).toBe(`${idea.id}   ◇ backlog Idea: requests and triage`)
   }
   const s = boardSections(b.tasks, Date.parse('2026-11-12T12:00:00.000Z'), 0)
   expect(s.backlog.map(t => t.id)).toEqual([idea.id])
@@ -1671,6 +1679,9 @@ test('a folder without git: the state, the notes and the question asked first', 
   expect(gitNote('ok')).toBe('')
   expect(gitNote('no-git')).toBe('git is not installed')
   expect(gitNote('no-repo')).toContain('(g)')
+  // T-517: a panel with no g key says how instead, or nothing
+  expect(gitNote('no-repo', 'ask the lead')).toBe('no git repo here; set up git (ask the lead)')
+  expect(gitNote('no-commits', '')).toBe('no commits yet; set up git')
   expect(noGitText()).toContain('xcode-select --install')
   expect(noGitText()).toContain('https://git-scm.com')
   const ask = setupAskText('no-repo')
@@ -2079,7 +2090,7 @@ test('leftover temp files: old ones that match are chosen', () => {
 test('leftover temp files: the names tmpName makes for every saved file match; other names do not', () => {
   const now = 1_000_000_000
   const old = now - LOCK_STALE_MS - 1
-  const made = ['board.json', 'scouts.json', 'archive.json', 'lead.json', 'board.lock'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
+  const made = ['board.json', 'scouts.json', 'archive.json', 'lead.json', 'board.lock', 'tests.lock', 'passed-trees.json'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
   expect(made[0]).toBe('board.json.sess_1_x.7-ab12cd.tmp')
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: old })), now)).toEqual(made)
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: now - 1_000 })), now)).toEqual([])
@@ -2349,7 +2360,7 @@ test('the "from:" line starts with a one-width mark for each kind of origin', ()
   const [b2] = addTask(b, { title: 'small', origin: { by: 'scout', scout: 'bugs', why: 'w' } }, T)
   const lines = boardText(b2).split('\n')
   const under = lines[lines.findIndex(l => l.startsWith('T-2 ')) + 1]!
-  expect(under).toBe(`${' '.repeat(14)}⌕ from: scout bugs`)
+  expect(under).toBe(`${' '.repeat(16)}⌕ from: scout bugs`)
 })
 
 test('the task page\'s From row starts with the same mark as the board\'s "from:" line', () => {
@@ -2563,7 +2574,7 @@ test('a task found already merged names its commit by the short sha', () => {
   expect(done.history!.at(-1)).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
 })
 
-import { symccOn, setEnabled, offAnswer, offStatusLine } from '../hooks/board'
+import { symccOn, setEnabled, offAnswer, offStatusLine, offStatusParts } from '../hooks/board'
 
 test('symcc is on for a board without the setting and new ones, and off only when the board says so', () => {
   expect(symccOn(parseBoard(JSON.stringify({ tasks: [] })))).toBe(true)
@@ -2578,7 +2589,10 @@ test('symcc is on for a board without the setting and new ones, and off only whe
   expect(settingValue(off, 'enabled')).toBe('off')
   expect(settingValue(b, 'enabled')).toBe('on')
   expect(offAnswer()).toBe('symcc is off. The owner can turn it on with /symcc-on.')
-  expect(offStatusLine()).toBe('symcc off · /symcc-on')
+  expect(offStatusLine()).toBe('symcc is off · /symcc-on to turn it on')
+  // under the prompt Claude Code already puts "⚠ symcc: " in front, so the name is left out there
+  expect(offStatusLine('symcc', false)).toBe('off · /symcc-on to turn it on')
+  expect(offStatusParts().filter(p => p.command)).toEqual([{ text: '/symcc-on', command: true }])
 })
 
 test('/symcc-off and /symcc-on parse, and take no words', () => {
@@ -3547,7 +3561,38 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   b = patchTask(b, 'T-1', { status: 'doing', attempts: 1 }, at)
   b = patchTask(b, 'T-2', { status: 'doing', attempts: 2, test_tries: 1 }, at)
   const text = boardText({ ...b, auto_retries: 2 })
-  expect(text).toMatch(/T-2 +doing +· try 2\/3 Second/)
-  expect(text).toMatch(/T-1 +doing +First/)
+  expect(text).toMatch(/T-2 +▶ doing +· try 2\/3 Second/)
+  expect(text).toMatch(/T-1 +▶ doing +First/)
   expect(text.split('\n').find(l => l.includes('First'))).not.toContain('try')
+})
+
+test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {
+  const run = { start: T, end: T, ms: 1 } as unknown as NonNullable<SymccTask['runs']>[number]
+  // the helper: ○ with no try, ● after a try (a run, or attempts counted), every other state its usual mark
+  expect(core.statusMark({ status: 'todo' })).toBe('○')
+  expect(core.statusMark({ status: 'todo', attempts: 0, runs: [] })).toBe('○')
+  expect(core.statusMark({ status: 'todo', attempts: 1 })).toBe('●')
+  expect(core.statusMark({ status: 'todo', attempts: 0, runs: [run] })).toBe('●')
+  for (const s of ['backlog', 'doing', 'review', 'waiting', 'paused', 'failed', 'done', 'dropped'] as const) {
+    expect(core.statusMark({ status: s, attempts: 2, runs: [run] })).toBe(core.STATUS_MARK[s])
+  }
+  expect(core.STATUS_MARK.todo).toBe('○')
+  // the band above the prompt
+  expect(bandLeads([{ id: 'T-1', status: 'todo', attempts: 0 }], 0).get('T-1')).toMatch(/^T-1 +○ /)
+  expect(bandLeads([{ id: 'T-2', status: 'todo', attempts: 1 }], 0).get('T-2')).toMatch(/^T-2 +● /)
+  // the lead's text board: the mark before the word, which stays "todo"
+  let [b] = addTask(emptyBoard(), { origin: W, title: 'Fresh' }, T)
+  ;[b] = addTask(b, { origin: W, title: 'Tried' }, T)
+  b = patchTask(b, 'T-2', { attempts: 1 }, T)
+  const text = boardText(b)
+  expect(text).toMatch(/T-1 +○ todo +Fresh/)
+  expect(text).toMatch(/T-2 +● todo +Tried/)
+  // the task page's Status line, and the After list for a task waiting on it
+  ;[b] = addTask(b, { origin: W, title: 'Later', after: ['T-1', 'T-2'] }, T)
+  const status = (id: string) => detailRows(b.tasks.find(t => t.id === id)!, { roles: [], all: b.tasks, when: s => s, nowMs: 0 }).find(r => r.label === 'Status')!.segs[0]!.text
+  expect(status('T-1')).toBe(`○ ${STATUS_WORD.todo}`)
+  expect(status('T-2')).toBe(`● ${STATUS_WORD.todo}`)
+  const after = detailRows(b.tasks.find(t => t.id === 'T-3')!, { roles: [], all: b.tasks, when: s => s, nowMs: 0 }).filter(r => r.segs[0]?.text === 'T-1' || r.segs[0]?.text === 'T-2').map(r => r.segs.map(g => g.text).join(''))
+  expect(after[0]).toContain(`T-1 ○ ${STATUS_WORD.todo}`)
+  expect(after[1]).toContain(`T-2 ● ${STATUS_WORD.todo}`)
 })

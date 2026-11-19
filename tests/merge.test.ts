@@ -4,15 +4,19 @@ import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, o
 import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
+import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
-import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
+import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, rerunTimedOutTests } from '../hooks/app/workers'
+import { panelSections, needsYou, RERUN_CELL, boardHealth, waitsForYou, shownStatus, statusCounts, statusLine, statusWordOf, RERUN_WORD, detailRows } from '../hooks/board'
+import { ranOutOfTime, answeredLeadLine } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
+import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld } from '../hooks/app/archive'
@@ -346,6 +350,102 @@ test('checkAndMerge commits the work, runs the tests and moves main to it', asyn
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   // the owner doesn't have main checked out: their files are not touched
   expect(w.calls.some(c => / git read-tree /.test(c))).toBe(false)
+})
+
+// ---------------- T-527: tests skipped for code (a git tree) that already passed them ----------------
+
+const PASSED = `${ROOT}/.symcc/passed-trees.json`
+const [TREE1, TREE2] = ['e1', 'e2'].map(x => x.repeat(20)) as [string, string]
+
+/** A world whose fake git gives `tree.id` as the tree of any commit; `again` puts the worker's branch back to before its commit, as a new try that changed nothing. */
+function treeWorld(tests: Record<string, Res> = {}) {
+  const tree = { id: TREE1 }
+  const w = world({ answer: a => (a[0] === 'rev-parse' && a.at(-1)!.endsWith('^{tree}') ? ok(`${tree.id}\n`) : undefined) }, tests)
+  const again = () => {
+    w.git.main = M1
+    w.git.head = H0
+    w.git.dirty = true
+    w.calls.length = 0
+  }
+  return { w, tree, again }
+}
+
+test('T-527: a second merge of the same tree with the same test commands skips the run and says so', async () => {
+  const { w, again } = treeWorld()
+  const [b, t] = boardWith('auto', ['npm test', 'npm run lint'])
+  const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r1.detail).toBe(`merged into main (${H1.slice(0, 8)}); tests passed`)
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm run lint'])
+  expect(JSON.parse(w.files.get(PASSED)!).passed.map((e: { tree: string; commands: string[] }) => [e.tree, e.commands])).toEqual([[TREE1, ['npm test', 'npm run lint']]])
+  again()
+  const r2 = await checkAndMerge(w.$, { ...t, attempts: 2 }, WT, b, 'finish', [])
+  expect(r2).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests: this exact code already passed (tree ${TREE1.slice(0, 7)}); not run again` })
+  // no test command started, and the test lock was never taken
+  expect(ranTests(w)).toEqual([])
+  expect(w.calls.some(c => c.includes('tests.lock'))).toBe(false)
+  expect(w.git.main).toBe(H1)
+})
+
+test('T-527: the skip line reaches the task history and the lead through the check result', async () => {
+  const { w, again } = treeWorld()
+  const [b, t] = boardWith('review', ['npm test'])
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  again()
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r).toEqual({ ok: true, review: true, detail: `checks passed; tests: this exact code already passed (tree ${TREE1.slice(0, 7)}); not run again; ready for review, nothing merged yet` })
+  expect(ranTests(w)).toEqual([])
+})
+
+test('T-527: a different tree, or changed test commands, runs the tests again', async () => {
+  const { w, tree, again } = treeWorld()
+  const [b, t] = boardWith('auto', ['npm test'])
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  // another tree (the work or the target changed)
+  again()
+  tree.id = TREE2
+  expect((await checkAndMerge(w.$, t, WT, b, 'finish', [])).detail).toContain('; tests passed')
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  // the same tree, but the test commands changed
+  again()
+  tree.id = TREE1
+  const b2 = { ...b, test_commands: ['npm test', 'npm run e2e'] }
+  expect((await checkAndMerge(w.$, t, WT, b2, 'finish', [])).detail).toContain('; tests passed')
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm run e2e'])
+})
+
+test('T-527: a failed run is not recorded as passed, so the same tree is tested again', async () => {
+  const { w, again } = treeWorld({ 'npm test': fail('1 failing') })
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r1.ok).toBe(false)
+  expect(w.files.has(PASSED)).toBe(false)
+  again()
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+})
+
+test('T-527: when git cannot give the tree, the tests run and nothing is recorded', async () => {
+  const w = world()
+  const [b, t] = boardWith('auto', ['npm test'])
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(w.files.has(PASSED)).toBe(false)
+})
+
+test('T-527: the passed-trees file keeps only the newest entries', () => {
+  let list: ReturnType<typeof addPassedTree> = []
+  for (let i = 0; i < PASSED_TREES_MAX + 50; i++) list = addPassedTree(list, i.toString(16).padStart(40, '0'), ['npm test'], i)
+  expect(list.length).toBe(PASSED_TREES_MAX)
+  expect(list[0]!.at).toBe(50)
+  // the same tree and commands again: one entry, moved to the end
+  list = addPassedTree(list, list[0]!.tree, ['npm test'], 999)
+  expect(list.length).toBe(PASSED_TREES_MAX)
+  expect(list.at(-1)!.at).toBe(999)
+  const back = parsePassedTrees(passedTreesText(list))
+  expect(back).toEqual(list)
+  expect(treePassed(back, list[0]!.tree, ['npm test'])).toBe(true)
+  expect(treePassed(back, list[0]!.tree, ['npm test', 'x'])).toBe(false)
+  expect(parsePassedTrees('not json')).toEqual([])
 })
 
 test('checkAndMerge with no change at all merges nothing', async () => {
@@ -2610,7 +2710,11 @@ test('a finished try ends with the outcome of its check', async () => {
 test('a try that asks ends as asked (a question, or files outside its list); one stopped from Claude Code as stopped; an error as stopped with the reason', async () => {
   expect((await tryEnds(answers('', undefined, { question: { question: 'red or blue?' } }))).end).toEqual(['asked', 'question'])
   expect((await tryEnds(answers('', undefined, { requested: ['README.md'] }))).end).toEqual(['asked', 'files outside its list'])
+  expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from the app'])
+  // Claude Code's words name it (T-475)
+  S.W = CLAUDE_WORDS
   expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from Claude Code'])
+  S.W = SYMCC_WORDS
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
@@ -5248,4 +5352,233 @@ test("T-491: when git can't make the task's folder (worktree add fails), the tas
   expect(t.note).toContain(fatal)
   expect(cantStartLines().length).toBe(1)
   cleanUp()
+})
+
+// ---------------- T-511: tests that only ran out of time run again, with no new try ----------------
+
+const STILL_RUNNING = 'symcc: $.process.run(/bin/sh) aborted: still running after 600000ms'
+
+/**
+ * T-1's worker (agent ag1) finished on a board with test command `npm test`, which runs out of time while `slow()`
+ * says so; `tests` answers the test commands otherwise (it may be changed later). `spawned`: workers asked for.
+ */
+async function timingOut(slow: () => boolean, tests: Record<string, Res> = {}) {
+  const w = world({}, tests)
+  w.onRun(async cmd => {
+    if (cmd === '/bin/sh -c npm test' && slow()) throw new Error(STILL_RUNNING)
+  })
+  const [b] = boardWith('auto', ['npm test'], { runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  let spawned = 0
+  ;(w.$.agents as { spawn: unknown }).spawn = async () => ((spawned += 1), Promise.reject(new Error('no agents in this world')))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  return { w, t1: async () => find(await load(w.$), 'T-1')!, spawned: () => spawned }
+}
+
+test('T-511: a test run stopped by its limit is a time-out, not a failure; a finished command with a non-zero exit is a failure', async () => {
+  expect(ranOutOfTime({ exitCode: 1, stderr: STILL_RUNNING }, STILL_RUNNING)).toBe(true)
+  expect(ranOutOfTime({ exitCode: 124, stderr: 'some output\ntimed out after 600000 ms' })).toBe(true)
+  expect(ranOutOfTime({ exitCode: 124, stderr: 'my own timeout fired' })).toBe(false)
+  expect(ranOutOfTime({ exitCode: 1, stderr: 'FAIL a.test' })).toBe(false)
+  expect(ranOutOfTime({ exitCode: 1, stderr: 'spawn failed' }, 'spawn failed')).toBe(false)
+  const w = world({}, { 'npm test': { exitCode: 124, stdout: '', stderr: 'timed out after 600000 ms' } })
+  const [b, t] = boardWith('auto', ['npm test', 'npm run e2e'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, timedOut: 10, detail: 'tests ran out of time: `npm test` was still running after 10 min; nothing failed' })
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(w.git.main).toBe(M1)
+})
+
+test('T-511: a time-out keeps the work, uses no auto retry and starts no worker; only the tests run again, and a pass merges as usual', async () => {
+  let slow = true
+  const c = await timingOut(() => slow)
+  let t = await c.t1()
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe(null)
+  expect(t.test_rerun).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.test_output).toBe(undefined)
+  expect(t.note).toBe('tests ran out of time (10 min); running them again once, no new try')
+  expect(t.history).toContain('tests ran out of time (10 min); running them again once, no new try')
+  expect(t.attempts).toBe(1)
+  expect(t.runs?.at(-1)?.ended_note).toBe('tests ran out of time')
+  expect(c.w.git.main).toBe(M1)
+  expect(leadQueue.join('\n')).toContain('its tests ran out of time (10 min); nothing failed')
+  expect(leadQueue.join('\n')).toContain('no new worker try and no auto retry used')
+  // the regular check's part: only the tests run again, with no worker
+  slow = false
+  c.w.calls.length = 0
+  leadQueue.splice(0)
+  await rerunTimedOutTests(c.w.$)
+  t = await c.t1()
+  expect(ranTests(c.w)).toEqual(['/bin/sh -c npm test'])
+  expect(c.spawned()).toBe(0)
+  expect(workers.size).toBe(0)
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(c.w.git.main).toBe(H1)
+  expect(t.test_rerun).toBe(undefined)
+  expect(t.runs?.length).toBe(1)
+  expect(t.runs?.at(-1)?.ended_note).toBe('merged')
+  expect(leadQueue.join('\n')).toContain('✓ T-1')
+})
+
+test('T-511: after a first time-out the task shows with the running ones, not under NEEDS YOU, and the board health check does not ask the owner', async () => {
+  const c = await timingOut(() => true)
+  const b = await load(c.w.$)
+  const t = find(b, 'T-1')!
+  expect(needsYou(t)).toBe(false)
+  const s = panelSections(b.tasks, Date.now(), 0)
+  expect(s.needsYou.map(x => x.id)).toEqual([])
+  expect(s.doing.map(x => x.id)).toEqual(['T-1'])
+  expect(statusCell(t, Date.now())).toBe(RERUN_CELL)
+  const later = Date.parse(t.updated_at) + 3 * 3_600_000
+  expect(boardHealth(b, later).filter(f => f.tasks.includes('T-1') && f.reason === 'owner')).toEqual([])
+  // a second time-out asks the owner: then it does need them
+  await rerunTimedOutTests(c.w.$)
+  const b2 = await load(c.w.$)
+  expect(needsYou(find(b2, 'T-1')!)).toBe(true)
+  expect(panelSections(b2.tasks, Date.now(), 0).needsYou.map(x => x.id)).toEqual(['T-1'])
+})
+
+test('T-532: a task waiting only to rerun its tests is not "waiting for you" in the counts, the band or the page badge; one with a question is', () => {
+  const base = { title: 't', details: '', files: [], note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: '2026-11-19T00:00:00Z', updated_at: '2026-11-19T00:00:00Z' }
+  const rerun = { ...base, id: 'T-1', status: 'waiting' as const, question: null, test_rerun: 1 as const }
+  const asks = { ...base, id: 'T-2', status: 'waiting' as const, question: 'Yellow or blue?' }
+  expect([waitsForYou(rerun), waitsForYou(asks)]).toEqual([false, true])
+  expect([shownStatus(rerun), shownStatus(asks)]).toEqual(['doing', 'waiting'])
+  expect(statusCounts([rerun], ['doing', 'waiting'])).toEqual(['1 doing'])
+  expect(statusCounts([rerun, asks], ['doing', 'waiting'])).toEqual(['1 doing', '1 waiting for you'])
+  const band = statusLine({ tasks: [rerun] }, true)!
+  expect(band).not.toContain('waiting for you')
+  expect(band).toContain('T-1 doing')
+  expect(statusLine({ tasks: [asks] }, true)).toContain('1 waiting for you')
+  expect(statusWordOf(rerun)).toBe(RERUN_WORD)
+  expect(statusWordOf(asks)).toBe('waiting for you')
+  const badge = (t: SymccTask) => detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 })[0]!.segs[0]!
+  expect([badge(rerun as SymccTask).text, badge(rerun as SymccTask).color]).toEqual([`▶ ${RERUN_WORD}`, 'ide'])
+  expect([badge(asks as SymccTask).text, badge(asks as SymccTask).color]).toEqual(['? waiting for you', 'warning'])
+})
+
+test('T-511: an approve whose tests run out of time stays in review and is not told to fix anything', async () => {
+  const w = await inReview({ upToDate: false })
+  w.onRun(async cmd => {
+    if (cmd === '/bin/sh -c npm test') throw new Error(STILL_RUNNING)
+  })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe('T-1 was not merged and stays in review: tests ran out of time: `npm test` was still running after 10 min; nothing failed. Approve it again to run the tests again.')
+  expect(out).not.toContain('Fix that')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+})
+
+test("T-511: a rerun that passes but waits for the owner's files runs the tests once only, then waits only for the files", async () => {
+  let slow = true
+  const c = await timingOut(() => slow)
+  slow = false
+  c.w.git.current = 'main'
+  c.w.git.status = ' M src/a.ts\0'
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  let t = await c.t1()
+  expect(ranTests(c.w)).toEqual(['/bin/sh -c npm test'])
+  expect(t.status).toBe('waiting')
+  expect(t.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+  expect(t.test_rerun).toBe(undefined)
+  // the regular check's rerun part runs nothing more while the files are in the way
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  await rerunTimedOutTests(c.w.$)
+  expect(ranTests(c.w)).toEqual([])
+  t = await c.t1()
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe(null)
+  expect(t.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+  expect(c.spawned()).toBe(0)
+})
+
+test("T-511: the rerun waits while another task's tests run (the test lock is held)", async () => {
+  const c = await timingOut(() => true)
+  // the lock is fresh only while its task is being checked: T-9 is, on the board
+  await change(c.w.$, x => ({ ...x, tasks: [...x.tasks, { ...x.tasks[0]!, id: 'T-9', status: 'doing' as const, test_rerun: undefined, checking: { step: 'testing' as const, at: new Date().toISOString() } }] }))
+  c.w.put(`${ROOT}/.symcc/tests.lock`, testLockText('T-9', 'other', Date.now()))
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  expect(ranTests(c.w)).toEqual([])
+  expect((await c.t1()).status).toBe('waiting')
+})
+
+test('T-511: a second time-out leaves the task waiting for the owner with the options, its work kept; Stop it pauses it', async () => {
+  const c = await timingOut(() => true)
+  await rerunTimedOutTests(c.w.$)
+  let t = await c.t1()
+  expect(c.spawned()).toBe(0)
+  expect(t.status).toBe('waiting')
+  expect(t.test_rerun).toBe(2)
+  expect(t.question).toBe('T-1: the tests ran out of time twice; nothing failed. Run them again, or stop it?')
+  expect(t.options).toEqual(['Run the tests again', 'Stop it'])
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.attempts).toBe(1)
+  expect(c.w.git.main).toBe(M1)
+  expect(t.history).toContain('the tests ran out of time twice; nothing failed; waiting for the owner')
+  expect(leadQueue.join('\n')).toContain('the tests ran out of time twice; nothing failed')
+  // nothing more runs on its own
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  expect(ranTests(c.w)).toEqual([])
+  const out = await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Stop it' })
+  expect(out).toContain('T-1 is paused')
+  t = await c.t1()
+  expect(t.status).toBe('paused')
+  expect(t.test_rerun).toBe(undefined)
+  expect(t.question).toBe(null)
+})
+
+test('T-511: "Run the tests again" runs only the tests again, with no new try', async () => {
+  let slow = true
+  const c = await timingOut(() => slow)
+  await rerunTimedOutTests(c.w.$)
+  expect((await c.t1()).test_rerun).toBe(2)
+  slow = false
+  c.w.calls.length = 0
+  const out = await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Run the tests again' })
+  expect(out).toContain('only its tests run again')
+  // the rerun was started in the background: wait for it to end
+  for (let i = 0; i < 5000 && (await c.t1()).status !== 'done'; i++) await Promise.resolve()
+  const t = await c.t1()
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(ranTests(c.w)).toEqual(['/bin/sh -c npm test'])
+  expect(c.spawned()).toBe(0)
+})
+
+test('T-511: a real test failure on the rerun still starts a new try (an auto retry is used)', async () => {
+  let slow = true
+  const tests: Record<string, Res> = {}
+  const c = await timingOut(() => slow, tests)
+  slow = false
+  tests['npm test'] = { exitCode: 1, stdout: 'FAIL a.test', stderr: '' }
+  await rerunTimedOutTests(c.w.$)
+  const t = await c.t1()
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(t.test_output).toContain('FAIL a.test')
+  expect(t.test_rerun).toBe(undefined)
+})
+
+test("T-511: the lead's line after an answer on the panel says which it is", () => {
+  const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'T-1: the tests ran out of time twice; nothing failed. Run them again, or stop it?' }
+  expect(answeredLeadLine(asked, 'Stop it')).toBe('The owner answered T-1 ("Stop it"): it is paused after its tests ran out of time twice; its work is kept.')
+  expect(answeredLeadLine(asked, 'Run the tests again')).toBe('The owner answered T-1 ("Run the tests again"): only its tests run again (they ran out of time twice), with no worker and no new try.')
+  expect(answeredLeadLine({ id: 'T-1', status: 'waiting', question: 'Which one?' }, 'Stop it')).toBe('The owner answered T-1 ("Stop it"); it went back to work.')
+})
+
+test("T-511: a real test failure after a worker's try keeps today's behaviour: a new try", async () => {
+  const c = await timingOut(() => false, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  const t = await c.t1()
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(t.test_rerun).toBe(undefined)
+  expect(c.spawned()).toBe(0)
 })

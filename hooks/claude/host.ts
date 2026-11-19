@@ -6,7 +6,7 @@
 // `ui.refresh` is $.ui.invalidate('ui.render'), `ui.panel` carries the board panel's values, which only Claude Code's
 // `$` holds (claude/panel.ts), `words` gives symcc's tools their "mcp__<name>__<tool>" names, and `features` are all on.
 import type { EngineInterface } from 'claude-code'
-import { type Host, type HostAgentStart, type HostWords, ALL_FEATURES } from '../host'
+import { type Host, type HostAgentStart, type HostWords, ALL_FEATURES, manifestVersion } from '../host'
 import { S } from '../app/state'
 import { claudeNames, workerTypeFor } from './agent-types'
 import { hostAgent, isNotReady, scoutNotReady } from './agents'
@@ -24,13 +24,16 @@ export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: st
 /**
  * Claude Code's words: symcc's tools are MCP tools, "mcp__<name>__<tool>"; a role's `tools: web` gives a worker WebSearch and WebFetch (claude/agent-types.ts); a
  * worker's file tools are Read, Edit and Write; plan mode is turned on with Shift+Tab; its question dialog is
- * AskUserQuestion.
+ * AskUserQuestion; the chat is Claude, the program Claude Code, and ctrl+x tab goes back to the board panel.
  */
-export const CLAUDE_WORDS: HostWords = {
+export const CLAUDE_WORDS: Required<HostWords> = {
   tool: (name, tool) => claudeNames(name).tool(tool),
   fileTools: 'Read, Edit and Write',
   planMode: "Claude Code's own planning mode, Shift+Tab",
   askPopup: 'AskUserQuestion',
+  assistant: 'Claude',
+  app: 'Claude Code',
+  backToBoard: 'ctrl+x tab',
 }
 
 /** An error from a start, marked when it only means the agent type isn't there yet (see notReadyYet in host.ts). */
@@ -91,6 +94,7 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       get root() {
         return $.plugin.root
       },
+      version: () => manifestVersion(host.fs, $.plugin.root),
     },
     session: { id: () => $.session.id(), repo: () => $.session.repo(), root: () => $.session.root(), usage: () => $.session.usage() },
     lead: { send: text => $.prompt.submit({ text }), usage: (root, range, nowMs) => leadUsage(host, root, range, nowMs) },

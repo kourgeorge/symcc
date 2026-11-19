@@ -1,7 +1,7 @@
 // What OpenCode's TUI part (opencode/tui.ts, T-466) draws, as plain data: the band above the prompt
 // (session.composer.top) and the board panel (session.panel), each as lines of colored text (core's Seg), made from
 // the view file the engine writes (view.ts) with hooks/core's own helpers: the band's row fronts and notes
-// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, STATUS_MARK, statusCell,
+// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, statusCell,
 // rowExtra, fitRow), the banner (bannerLines) and a task's rows (detailRows). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468).
@@ -11,8 +11,8 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, STATUS_MARK, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
-  type KeyHint, type Seg, type BoardTask, asksMoreTime, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
+  statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
+  type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
 } from '../board'
 import { restFrame } from '../core/logo'
 import { DEFAULT_NAME } from '../name'
@@ -143,7 +143,8 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
     return { lines, ids: [], selected: '', keys: [] }
   }
-  const v = f.view
+  // the shared note's "(g)" names the Claude Code panel's key; this panel has none, so it says to ask the lead (setup_git)
+  const v = { ...f.view, ...(f.view.git_state && f.view.branch_note ? { branch_note: gitNote(f.view.git_state, 'ask the lead') } : {}) }
   const banner: Line[] = bannerLines({ ...v, max_parallel: v.max_parallel ?? 0, max_minutes: v.max_minutes ?? 0, auto_retries: v.auto_retries ?? 0, mode: v.mode }, f.root, f.home, v.driving ?? false, w, nowMs, f.name, restFrame(), f.version).map(l => [
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
@@ -186,7 +187,7 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${STATUS_MARK[x.status]} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
+      { text: ` ${statusMark(x)} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || x.status === 'waiting' || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
