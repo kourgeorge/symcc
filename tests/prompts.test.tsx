@@ -54,9 +54,12 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(q.endsWith(ASK)).toBe(true)
   // T-411: every built-in prompt (and the scout prompt) says to wait for background commands before answering
   const BG = "Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later."
-  expect(p).toContain(BG)
-  expect(q).toContain(BG)
-  for (const k of Object.keys(ROLE_PROMPTS) as (keyof typeof ROLE_PROMPTS)[]) expect([k, ROLE_PROMPTS[k].includes(BG)]).toEqual([k, true])
+  // T-487: the change, investigation and checker prompts also say to run test commands with the longest Bash timeout,
+  // since Claude Code moves a command past its 2-minute default into the background on its own
+  const BG_TIMEOUT = "Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later."
+  expect(p).toContain(BG_TIMEOUT)
+  expect(q).toContain(BG_TIMEOUT)
+  for (const k of Object.keys(ROLE_PROMPTS) as (keyof typeof ROLE_PROMPTS)[]) expect([k, ROLE_PROMPTS[k].includes(BG_TIMEOUT)]).toEqual([k, true])
   expect(Object.keys(ROLE_PROMPTS)).toContain('checker')
   expect(scoutPrompt({ scout: 's', root: ROOT, instructions: 'Go.', open: [] })).toContain(BG)
   // T-456: workers are told to edit with the Edit tool and keep throwaway scripts and notes under .scratch/ (or /tmp); so is the checker
