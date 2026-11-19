@@ -2,6 +2,7 @@
 import type { SymccTask } from '../../../types'
 import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, STATUS_MARK, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
+import { rerunDue } from '../../core/test-timeout'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { S, workers } from '../../app/state'
@@ -249,7 +250,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const fileWait = fileWaitText(asked)
   // A running worker over its time limit: "Give it more time?" with +30 min / +60 min / Stop it (see overtimeQuestion).
   const overtime = t.status === 'doing' && !!asked.time_ask
-  const answerable = (t.status === 'waiting' && !fileWait) || overtime
+  // T-511: a task whose tests run again on their own (rerunDue) has nothing to answer either
+  const answerable = (t.status === 'waiting' && !fileWait && !rerunDue(asked)) || overtime
   const askedOptions = overtime ? [...OVERTIME_OPTIONS] : asked.options
   const askedQuestion = overtime ? overtimeQuestion(t.id, (v.max_minutes ?? 45) + (asked.extra_minutes ?? 0)) : t.question
   const choices = answerable ? answerChoices(overtime ? undefined : asked.asked_files, askedOptions) : []

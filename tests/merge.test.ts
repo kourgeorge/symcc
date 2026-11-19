@@ -10,7 +10,8 @@ import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, rerunTimedOutTests } from '../hooks/app/workers'
-import { ranOutOfTime, answeredLeadLine } from '../hooks/core/test-timeout'
+import { panelSections, needsYou, RERUN_CELL, boardHealth } from '../hooks/board'
+import { ranOutOfTime, answeredLeadLine } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
@@ -5417,6 +5418,35 @@ test('T-511: a time-out keeps the work, uses no auto retry and starts no worker;
   expect(t.runs?.length).toBe(1)
   expect(t.runs?.at(-1)?.ended_note).toBe('merged')
   expect(leadQueue.join('\n')).toContain('✓ T-1')
+})
+
+test('T-511: after a first time-out the task shows with the running ones, not under NEEDS YOU, and the board health check does not ask the owner', async () => {
+  const c = await timingOut(() => true)
+  const b = await load(c.w.$)
+  const t = find(b, 'T-1')!
+  expect(needsYou(t)).toBe(false)
+  const s = panelSections(b.tasks, Date.now(), 0)
+  expect(s.needsYou.map(x => x.id)).toEqual([])
+  expect(s.doing.map(x => x.id)).toEqual(['T-1'])
+  expect(statusCell(t, Date.now())).toBe(RERUN_CELL)
+  const later = Date.parse(t.updated_at) + 3 * 3_600_000
+  expect(boardHealth(b, later).filter(f => f.tasks.includes('T-1') && f.reason === 'owner')).toEqual([])
+  // a second time-out asks the owner: then it does need them
+  await rerunTimedOutTests(c.w.$)
+  const b2 = await load(c.w.$)
+  expect(needsYou(find(b2, 'T-1')!)).toBe(true)
+  expect(panelSections(b2.tasks, Date.now(), 0).needsYou.map(x => x.id)).toEqual(['T-1'])
+})
+
+test('T-511: an approve whose tests run out of time stays in review and is not told to fix anything', async () => {
+  const w = await inReview({ upToDate: false })
+  w.onRun(async cmd => {
+    if (cmd === '/bin/sh -c npm test') throw new Error(STILL_RUNNING)
+  })
+  const out = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(out).toBe('T-1 was not merged and stays in review: tests ran out of time: `npm test` was still running after 10 min; nothing failed. Approve it again to run the tests again.')
+  expect(out).not.toContain('Fix that')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
 })
 
 test("T-511: a rerun that passes but waits for the owner's files runs the tests once only, then waits only for the files", async () => {

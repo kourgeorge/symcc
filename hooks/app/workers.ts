@@ -1490,7 +1490,9 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       // Not the work's fault (e.g. the owner's files could not be updated): it stays in review.
       await change(host, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { note: `approved, but not merged: ${r.detail.slice(0, 250)}`, merge_wait: undefined }, now()) : x))
       // An answer that already says to approve again needs no more advice; anything else gets it here.
-      return `${t.id} was not merged and stays in review: ${r.detail}${/approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'}`
+      // T-511: tests that only ran out of time have nothing to fix
+      const next = /approve \S+ again$/.test(r.detail) ? '.' : r.timedOut !== undefined ? '. Approve it again to run the tests again.' : '. Fix that, then approve it again.'
+      return `${t.id} was not merged and stays in review: ${r.detail}${next}`
     }
     await settle(host, cur, b, r, by, dir)
     if (r.ok) outcomes.set(t.id, 'merged')
