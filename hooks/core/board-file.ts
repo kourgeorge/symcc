@@ -5,6 +5,7 @@ import { cleanTokens, keepAgentIds } from './runs'
 import { parseStamp } from './text'
 import type { WorkerQuestion } from './ask'
 import { type OwnerQuestion, cleanQuestions } from './questions'
+import { type TestRerun, asTestRerun } from './test-timeout'
 
 export type Board = {
   version: 1
@@ -98,8 +99,11 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * (the last one wins); `try_refused`: the paths of its edits refused as outside the task's files.
  * `checker`: the agent id of the checker running on this try now (the checker setting), so the guards of any copy
  * of the plugin know it, not only the copy that started it (T-471); its folder is the task's own. Only while "doing" on one try.
+ * `test_rerun` (T-511): the tests of its finished work ran out of time (they did not fail): 1 = only the tests run
+ * again once, with no new try ("waiting" until the rerun starts, "doing" while it runs); 2 = they ran out of time
+ * twice and it waits for the owner (see core/test-timeout.ts). Only while "waiting" or "doing".
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; kind?: TaskKind; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string; test_rerun?: TestRerun }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -394,6 +398,7 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
     else delete x.merge_wait
   }
   if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
+  if ('test_rerun' in x && !(asTestRerun(x.test_rerun) && (x.status === 'waiting' || x.status === 'doing'))) delete x.test_rerun
   const { session, finishing, checking: rawChecking, ...rest } = cleanCommitFields(x) as BoardTask
   const doing = x.status === 'doing'
   const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined

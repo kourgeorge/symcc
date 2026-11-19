@@ -84,8 +84,9 @@ export const ANSWERED = 'answered'
 export const isAnsweredRun = (r: Pick<SymccRun, 'ended_note'>): boolean => /^answered\b/.test(r.ended_note ?? '')
 
 /** The short outcome of a finished try's check: "answered" (an investigation), "merged", "ready for review", "tests failed", "clash with main", "out of scope", ... */
-export function finishedNote(r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; answered?: boolean; checker?: boolean }): string {
+export function finishedNote(r: { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; answered?: boolean; checker?: boolean; timedOut?: number }): string {
   if (r.answered) return ANSWERED
+  if (r.timedOut !== undefined) return 'tests ran out of time'
   if (r.review) return 'ready for review'
   if (r.ok) return 'merged'
   if (r.conflict) return 'clash with main'

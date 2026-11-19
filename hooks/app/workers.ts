@@ -4,7 +4,8 @@ import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish } from './lead'
-import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
+import { type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, testsRunningNow } from './review'
+import { rerunDue, askedTimedOut, rerunNote, timedOutTwiceQuestion, TIMED_OUT_OPTIONS, RERUN_RUNNING_NOTE, TIMED_OUT_STOPPED_NOTE, parseTimedOutAnswer } from '../core/test-timeout'
 import { loadRoles } from './roles'
 import { runChecker, haltCheckers, checkerName, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
@@ -930,6 +931,82 @@ async function checkHeldAgain(host: Host, t: SymccTask, b: Board, dir: string, g
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, t.agent, gaveUp)
 }
 
+/** T-511: how long a due rerun waits for fewer busy workers before it runs anyway (with all worker slots busy). */
+export const RERUN_WAIT_MS = 15 * 60_000
+
+/**
+ * T-511: the regular check's part for tasks whose tests only ran out of time once (rerunDue): their tests run again,
+ * once, with no worker and no new try. Only when no task's tests run now (the test lock is free), and preferably
+ * when fewer workers are busy: with every worker slot busy it waits, up to RERUN_WAIT_MS since the time-out.
+ * One task at a time (the next one at a later check). Resolves when that rerun has ended. Not in mode off.
+ */
+export async function rerunTimedOutTests(host: Host) {
+  const b = await load(host)
+  if (modeOf(b) === 'off' || !symccOn(b)) return
+  const due = b.tasks.filter(t => rerunDue(t) && !checkingNow(t.id)).sort((x, y) => Date.parse(x.updated_at) - Date.parse(y.updated_at))
+  const t = due[0]
+  if (!t) return
+  if (await testsRunningNow(host)) return
+  const busy = workers.size + starting.size
+  const waited = Date.now() - Date.parse(t.updated_at)
+  if (b.max_parallel > 0 && busy >= b.max_parallel && !(waited >= RERUN_WAIT_MS)) return
+  await rerunTests(host, t)
+}
+
+/**
+ * T-511: runs only the tests of task `t0` again (its tests ran out of time once): it goes back to "doing" on the same
+ * try (no new try, no retry counted), and its finished work is checked as a worker's hand-back is (finishWork's
+ * check: tests, then review, the checker or the merge), with the same finishing mark and time limit.
+ */
+async function rerunTests(host: Host, t0: BoardTask) {
+  const id = t0.id
+  const tryNo = t0.attempts
+  if (checkingNow(id)) return
+  finishing.add(id)
+  let beat: { cancel(): void } | null = null
+  try {
+    const b = await load(host)
+    const cur = find(b, id)
+    if (!cur || !rerunDue(cur) || cur.attempts !== tryNo) return
+    const dir = worktreeDir(id)
+    if (!(await host.fs.exists(`${dir}/.git`))) await prepareWorktree(host, cur, intoOf(cur))
+    const t = await change(host, x => {
+      const c = find(x, id)
+      if (!c || !rerunDue(c) || c.attempts !== tryNo) return [x, null] as [Board, null]
+      const y = patchTask(x, id, { status: 'doing', session: S.me, finishing: now(), note: RERUN_RUNNING_NOTE, test_rerun: 1, history: [...c.history, `${tryLabel(c)}: running only the tests again (no new try)`] }, now())
+      return [y, find(y, id)!] as [Board, BoardTask]
+    })
+    if (!t) return
+    beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
+    const limitMs = finishLimitMs(b.test_commands.length)
+    const how = await withLimit(host, limitMs, async (gaveUp, over, turn) => {
+      const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(id))
+      const hold = checkerOn(b) ? (changed: readonly string[]) => !docsOnly(changed) : undefined
+      const made: string[] = []
+      let r: CheckResult = await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, over, turn, hold).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+      if (r.ok && r.held && !gaveUp() && !stop()) {
+        const c = await afterChecker(host, t, b, r, dir, made, stop, over, turn)
+        if (c.again) return
+        r = c
+      }
+      await finishTail(host, t, b, r, made, 'only the tests ran again', dir, t.agent, gaveUp)
+    })
+    if (how === OVER) {
+      beat?.cancel()
+      beat = null
+      finishing.delete(id)
+      await finishRanOver(host, id, tryNo, limitMs)
+    }
+  } finally {
+    beat?.cancel()
+    await markFinishing(host, id, tryNo, false).catch(() => undefined)
+    finishing.delete(id)
+    await endCheck(host, id)
+  }
+  await checkerAgainNow(host, id)
+  await pump(host)
+}
+
 /** The worker's report of task `t`'s current try, cut short (from its report file), for the history line. */
 async function reportSummary(host: Host, t: SymccTask): Promise<string> {
   const rel = t.runs?.at(-1)?.report
@@ -1109,10 +1186,30 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   const line = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   // A finished worker's try ends with the check's outcome (an approve is not a try: its task is in review, so nothing is set).
-  const write = async (patch: (cur: SymccTask) => Partial<SymccTask>) => {
-    const moved = await writeIfSame(host, t, cur => ({ ...patch(cur), ...endedBy(cur, now(), 'finished', finishedNote(r)) }))
+  // T-511: on a rerun of only the tests, the try already ended ("tests ran out of time"): its outcome now is this check's
+  const ended = (cur: SymccTask) => ((cur as BoardTask).test_rerun && cur.status === 'doing' && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', finishedNote(r), true) } : endedBy(cur, now(), 'finished', finishedNote(r)))
+  const write = async (patch: (cur: SymccTask) => Partial<BoardTask>) => {
+    const moved = await writeIfSame(host, t, cur => ({ ...patch(cur), ...ended(cur) }))
     if (moved && moved !== 'gone') await changedMeanwhile(host, t, b, r, line, worktree, agentId)
     return !moved
+  }
+  if (r.timedOut !== undefined) {
+    // T-511: the tests only ran out of time: nothing failed, so no new try and no auto retry. The work stays on its
+    // branch; the first time only the tests run again once, later (rerunTimedOutTests); the second time the owner decides.
+    const twice = (t as BoardTask).test_rerun !== undefined
+    const min = r.timedOut
+    if (!twice) {
+      const note = rerunNote(min)
+      if (!(await write(cur => ({ status: 'waiting', question: null, note, test_rerun: 1, merge_wait: undefined, merge_main: false, history: [...cur.history, line, note] })))) return
+      tellLead(host, `${t.id} "${t.title}": its tests ran out of time (${min} min); nothing failed. ${S.N.name} runs only the tests again once, when no other task's tests run, with no new worker try and no auto retry used. Its work is kept on its branch. Nothing to do.`)
+      return
+    }
+    const question = timedOutTwiceQuestion(t.id)
+    const options = [...TIMED_OUT_OPTIONS]
+    if (!(await write(cur => ({ status: 'waiting', question, options, note: 'waiting for you', test_rerun: 2, merge_wait: undefined, merge_main: false, history: [...cur.history, line, 'the tests ran out of time twice; nothing failed; waiting for the owner'] })))) return
+    sayNeedsYou(host, b, t, question)
+    tellLead(host, `${question} The tests of ${t.id} "${t.title}" ran out of time (${min} min) twice; nothing failed, and its work is kept on its branch ${taskBranch(t)}. It now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); then ${S.N.name} change ${t.id} with answer: Run the tests again (only the tests run again, no new try), or answer: Stop it (it is paused, its work kept).`, { urgent: true })
+    return
   }
   if (r.ask) {
     // The change was only files whose names look like secrets (see checkAndMerge): nothing merged, the task waits for the owner.
@@ -1721,6 +1818,32 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`
 }
 
+/**
+ * T-511: the owner's `answer` to task `id`'s "the tests ran out of time twice" question (or a retry of a task whose
+ * tests wait to run again): "Run the tests again" runs only its tests again (no worker, no new try), now (it still
+ * waits for the test lock); "Stop it" pauses it, its work kept. undefined when the task doesn't wait for that, or for
+ * any other answer (then the answer goes to a fresh try as usual).
+ */
+export async function answerTimedOut(host: Host, id: string, answer: string): Promise<string | undefined> {
+  const t = find(await load(host), id)
+  if (!t || !(askedTimedOut(t) || rerunDue(t))) return undefined
+  const pick = parseTimedOutAnswer(answer)
+  if (!pick) return undefined
+  const out = await change(host, x => {
+    const cur = find(x, id)
+    if (!cur || !(askedTimedOut(cur) || rerunDue(cur))) return [x, null] as [Board, null]
+    const patch: Partial<BoardTask> = pick === 'again'
+      ? { status: 'waiting', question: null, test_rerun: 1, note: 'the owner asked to run the tests again; running them again once, no new try', history: [...cur.history, `${tryLabel(cur)}: the owner asked to run the tests again (no new try)`] }
+      : { status: 'paused', question: null, test_rerun: undefined, note: TIMED_OUT_STOPPED_NOTE, history: [...cur.history, `${tryLabel(cur)}: the owner stopped it after its tests ran out of time twice; its work is kept`] }
+    const y = patchTask(x, id, patch, now())
+    return [y, find(y, id)!] as [Board, BoardTask]
+  })
+  if (!out) return undefined
+  if (pick === 'stop') return `${id} is paused: its tests ran out of time twice and the owner stopped it. Its work is kept in its folder and branch; ${S.N.name} resume ${id} starts a new try from there.`
+  void rerunTests(host, out).catch(() => undefined)
+  return `${id}: only its tests run again now (once other tests are done), with no new worker try; the board says how it ends.`
+}
+
 /** workers whose agent a check saw ended (or missing from the agent list) without a hand-back: failed a short while later (ENDED_GRACE_MS; a missing one on the next check), or on the next check, if still not handed back */
 export const seenEnded = new Set<string>()
 
@@ -1912,6 +2035,8 @@ export async function check(host: Host) {
   if (late.length) tellLead(host, `Reminder: ${late.map(t => `${t.id} "${t.title}"`).join(', ')} ${late.length > 1 ? 'have' : 'has'} failed and nothing was done about ${late.length > 1 ? 'them' : 'it'}. Retry, change, ask the owner or drop each one.`)
   // Finished work waiting only for the owner's files: merged now (no worker) once they are out of the way.
   await retryFileWaits(host).catch(() => undefined)
+  // T-511: tests that only ran out of time run again once, with no worker (not awaited: the check goes on meanwhile)
+  void rerunTimedOutTests(host).catch(() => undefined)
   if (S.gitState === 'ok') await cleanupMerged(host, await load(host)).catch(() => undefined)
   // old done and dropped tasks move to archive.json (at most once an hour)
   await archiveOld(host).catch(() => undefined)

@@ -9,7 +9,8 @@ import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
-import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
+import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, rerunTimedOutTests } from '../hooks/app/workers'
+import { ranOutOfTime } from '../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
@@ -5345,4 +5346,153 @@ test("T-491: when git can't make the task's folder (worktree add fails), the tas
   expect(t.note).toContain(fatal)
   expect(cantStartLines().length).toBe(1)
   cleanUp()
+})
+
+// ---------------- T-511: tests that only ran out of time run again, with no new try ----------------
+
+const STILL_RUNNING = 'symcc: $.process.run(/bin/sh) aborted: still running after 600000ms'
+
+/**
+ * T-1's worker (agent ag1) finished on a board with test command `npm test`, which runs out of time while `slow()`
+ * says so; `tests` answers the test commands otherwise (it may be changed later). `spawned`: workers asked for.
+ */
+async function timingOut(slow: () => boolean, tests: Record<string, Res> = {}) {
+  const w = world({}, tests)
+  w.onRun(async cmd => {
+    if (cmd === '/bin/sh -c npm test' && slow()) throw new Error(STILL_RUNNING)
+  })
+  const [b] = boardWith('auto', ['npm test'], { runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  let spawned = 0
+  ;(w.$.agents as { spawn: unknown }).spawn = async () => ((spawned += 1), Promise.reject(new Error('no agents in this world')))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  return { w, t1: async () => find(await load(w.$), 'T-1')!, spawned: () => spawned }
+}
+
+test('T-511: a test run stopped by its limit is a time-out, not a failure; a finished command with a non-zero exit is a failure', async () => {
+  expect(ranOutOfTime({ exitCode: 1, stderr: STILL_RUNNING }, STILL_RUNNING)).toBe(true)
+  expect(ranOutOfTime({ exitCode: 124, stderr: 'some output\ntimed out after 600000 ms' })).toBe(true)
+  expect(ranOutOfTime({ exitCode: 124, stderr: 'my own timeout fired' })).toBe(false)
+  expect(ranOutOfTime({ exitCode: 1, stderr: 'FAIL a.test' })).toBe(false)
+  expect(ranOutOfTime({ exitCode: 1, stderr: 'spawn failed' }, 'spawn failed')).toBe(false)
+  const w = world({}, { 'npm test': { exitCode: 124, stdout: '', stderr: 'timed out after 600000 ms' } })
+  const [b, t] = boardWith('auto', ['npm test', 'npm run e2e'])
+  const r = await checkAndMerge(w.$, t, WT, b)
+  expect(r).toEqual({ ok: false, timedOut: 10, detail: 'tests ran out of time: `npm test` was still running after 10 min; nothing failed' })
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+  expect(w.git.main).toBe(M1)
+})
+
+test('T-511: a time-out keeps the work, uses no auto retry and starts no worker; only the tests run again, and a pass merges as usual', async () => {
+  let slow = true
+  const c = await timingOut(() => slow)
+  let t = await c.t1()
+  expect(t.status).toBe('waiting')
+  expect(t.question).toBe(null)
+  expect(t.test_rerun).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.test_output).toBe(undefined)
+  expect(t.note).toBe('tests ran out of time (10 min); running them again once, no new try')
+  expect(t.history).toContain('tests ran out of time (10 min); running them again once, no new try')
+  expect(t.attempts).toBe(1)
+  expect(t.runs?.at(-1)?.ended_note).toBe('tests ran out of time')
+  expect(c.w.git.main).toBe(M1)
+  expect(leadQueue.join('\n')).toContain('its tests ran out of time (10 min); nothing failed')
+  expect(leadQueue.join('\n')).toContain('no new worker try and no auto retry used')
+  // the regular check's part: only the tests run again, with no worker
+  slow = false
+  c.w.calls.length = 0
+  leadQueue.splice(0)
+  await rerunTimedOutTests(c.w.$)
+  t = await c.t1()
+  expect(ranTests(c.w)).toEqual(['/bin/sh -c npm test'])
+  expect(c.spawned()).toBe(0)
+  expect(workers.size).toBe(0)
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(c.w.git.main).toBe(H1)
+  expect(t.test_rerun).toBe(undefined)
+  expect(t.runs?.length).toBe(1)
+  expect(t.runs?.at(-1)?.ended_note).toBe('merged')
+  expect(leadQueue.join('\n')).toContain('✓ T-1')
+})
+
+test("T-511: the rerun waits while another task's tests run (the test lock is held)", async () => {
+  const c = await timingOut(() => true)
+  // the lock is fresh only while its task is being checked: T-9 is, on the board
+  await change(c.w.$, x => ({ ...x, tasks: [...x.tasks, { ...x.tasks[0]!, id: 'T-9', status: 'doing' as const, test_rerun: undefined, checking: { step: 'testing' as const, at: new Date().toISOString() } }] }))
+  c.w.put(`${ROOT}/.symcc/tests.lock`, testLockText('T-9', 'other', Date.now()))
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  expect(ranTests(c.w)).toEqual([])
+  expect((await c.t1()).status).toBe('waiting')
+})
+
+test('T-511: a second time-out leaves the task waiting for the owner with the options, its work kept; Stop it pauses it', async () => {
+  const c = await timingOut(() => true)
+  await rerunTimedOutTests(c.w.$)
+  let t = await c.t1()
+  expect(c.spawned()).toBe(0)
+  expect(t.status).toBe('waiting')
+  expect(t.test_rerun).toBe(2)
+  expect(t.question).toBe('T-1: the tests ran out of time twice; nothing failed. Run them again, or stop it?')
+  expect(t.options).toEqual(['Run the tests again', 'Stop it'])
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.attempts).toBe(1)
+  expect(c.w.git.main).toBe(M1)
+  expect(t.history).toContain('the tests ran out of time twice; nothing failed; waiting for the owner')
+  expect(leadQueue.join('\n')).toContain('the tests ran out of time twice; nothing failed')
+  // nothing more runs on its own
+  c.w.calls.length = 0
+  await rerunTimedOutTests(c.w.$)
+  expect(ranTests(c.w)).toEqual([])
+  const out = await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Stop it' })
+  expect(out).toContain('T-1 is paused')
+  t = await c.t1()
+  expect(t.status).toBe('paused')
+  expect(t.test_rerun).toBe(undefined)
+  expect(t.question).toBe(null)
+})
+
+test('T-511: "Run the tests again" runs only the tests again, with no new try', async () => {
+  let slow = true
+  const c = await timingOut(() => slow)
+  await rerunTimedOutTests(c.w.$)
+  expect((await c.t1()).test_rerun).toBe(2)
+  slow = false
+  c.w.calls.length = 0
+  const out = await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Run the tests again' })
+  expect(out).toContain('only its tests run again')
+  // the rerun was started in the background: wait for it to end
+  for (let i = 0; i < 5000 && (await c.t1()).status !== 'done'; i++) await Promise.resolve()
+  const t = await c.t1()
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(ranTests(c.w)).toEqual(['/bin/sh -c npm test'])
+  expect(c.spawned()).toBe(0)
+})
+
+test('T-511: a real test failure on the rerun still starts a new try (an auto retry is used)', async () => {
+  let slow = true
+  const tests: Record<string, Res> = {}
+  const c = await timingOut(() => slow, tests)
+  slow = false
+  tests['npm test'] = { exitCode: 1, stdout: 'FAIL a.test', stderr: '' }
+  await rerunTimedOutTests(c.w.$)
+  const t = await c.t1()
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(t.test_output).toContain('FAIL a.test')
+  expect(t.test_rerun).toBe(undefined)
+})
+
+test("T-511: a real test failure after a worker's try keeps today's behaviour: a new try", async () => {
+  const c = await timingOut(() => false, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  const t = await c.t1()
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(t.test_rerun).toBe(undefined)
+  expect(c.spawned()).toBe(0)
 })

@@ -5,6 +5,7 @@ import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, now, load, path, tryLock, dropIfSame, safeWrite } from './store'
 import { tellLead } from './tell'
+import { ranOutOfTime, limitMinutes, timedOutDetail } from '../core/test-timeout'
 import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
 
 // ---------------- a task's changes, for review ----------------
@@ -97,8 +98,10 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `checker`: the checker found problems (its report is `testOutput`); `noVerdict`: why the checker gave none (then it waits for review).
  * `secrets`: changed files whose names look like secrets (see secretFiles), left out of the commit and merge but kept in the task's folder;
  * `ask`: the change was only such files, so nothing merged and the task waits for the owner with this question.
+ * `timedOut` (T-511): a test command was stopped by its time limit (these minutes), so nothing failed and nothing merged;
+ * there is no `testOutput`, so no new try starts for it: only the tests run again (see settle and rerunTimedOutTests).
  */
-export type CheckResult = { ok: boolean; detail: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
+export type CheckResult = { ok: boolean; detail: string; timedOut?: number; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; held?: boolean; checker?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
 
 /** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
 export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
@@ -382,6 +385,16 @@ async function testLockStale($: Host, me: string, held: string, fileMs?: number)
   return !cur || !checkStepNow(cur, Date.now())
 }
 
+/** T-511: whether some task's tests run now: one of this copy waits for or holds the test lock, or a lock file that is not stale is there. */
+export async function testsRunningNow($: Host): Promise<boolean> {
+  if (testLine.length) return true
+  const file = path(`${S.N.dir}/${TEST_LOCK_FILE}`)
+  const held = await $.fs.read(file).catch(() => null)
+  if (held === null) return false
+  const st = await $.fs.stat(file).catch(() => null)
+  return !(await testLockStale($, '', held, st?.mtimeMs))
+}
+
 /**
  * Runs `run` (task `t`'s test commands) while holding the project-wide test lock (TEST_LOCK_FILE in the board folder),
  * so only one task's tests run at a time, across tasks and sessions; symcc's merge step only, not the workers' own runs.
@@ -520,7 +533,13 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       await markStep($, t, 'testing', stopped)
       for (const cmd of b.test_commands) {
         await refresh()
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ({ exitCode: 1, stdout: '', stderr: e.message }))
+        let thrown: string | undefined
+        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        // T-511: stopped by its time limit, not failed: no test output, so no new try is started for it (see settle)
+        if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
+          const min = limitMinutes(TEST_TIMEOUT_MS)
+          return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min) }
+        }
         if (r.exitCode !== 0) {
           const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
           return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
