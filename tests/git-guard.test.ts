@@ -7,7 +7,7 @@ import { checkEdit } from '../hooks/app/ask'
 import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
-import { bestMsOf, growsSlowly } from './timing'
+import { bestPairMsOf, growsSlowly } from './timing'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -324,7 +324,7 @@ test('long odd brace words stay cheap for the git check, and a long word with gi
   // the work grows slowly with the word length, with a generous cap (T-478): doubling per brace would make 2^50 steps
   // for the big case and 2^25 for the small one. A long run of "{" costs about the square of its length (twice as long,
   // about 4 times the time), so twice the length may take up to 10 times as long
-  const small = bestMsOf(words(25)), big = bestMsOf(words(50))
+  const { small, big } = bestPairMsOf(words(25), words(50))
   expect({ small, big, slow: growsSlowly(small, big, 10) }).toMatchObject({ slow: true })
   expect(gitWriteIn('echo ' + '{a,'.repeat(60) + '}'.repeat(60))).toBeUndefined()
   // past the work cap a word is judged by its letters: these could make git
