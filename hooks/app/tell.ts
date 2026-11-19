@@ -30,12 +30,41 @@ export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
   leadQueue.push(text)
   if (how?.urgent) S.leadUrgent = true
   if (host.features.wakeLead !== 'now') return
+  // an update that failed to send goes out with this one, in a moment, not after the retry wait
+  S.leadRetry?.cancel()
+  S.leadRetry = null
   if (S.leadTimer) return
   S.leadTimer = host.clock.after(1500, () => {
     S.leadTimer = null
-    const urgent = S.leadUrgent
-    const update = takeBoardUpdate()
-    if (update) void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).catch(() => undefined)
+    sendBoardUpdate(host)
+  })
+}
+
+/** How long a board update whose send failed waits before it is tried again (unless a new update comes first). */
+export const LEAD_RETRY_MS = 2 * 60_000
+
+/**
+ * Sends the waiting board update to the lead. If the send fails (the lead's session is gone, the host is busy or
+ * restarting), its lines go back to the front of the queue (still urgent if they were) and go out with the next
+ * update, or after LEAD_RETRY_MS.
+ */
+function sendBoardUpdate(host: Host) {
+  const urgent = S.leadUrgent
+  const lines = leadQueue.slice()
+  const before = meanwhile.slice()
+  const update = takeBoardUpdate()
+  if (!update) return
+  void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).catch(err => {
+    if (!S.enabledNow) return
+    leadQueue.unshift(...lines)
+    meanwhile.unshift(...before)
+    if (urgent) S.leadUrgent = true
+    host.ui.log(`${S.N.name}: a board update didn't reach the lead (${(err as Error)?.message ?? err}); it goes with the next one`, { to: 'debug' })
+    if (S.leadTimer || S.leadRetry) return
+    S.leadRetry = host.clock.after(LEAD_RETRY_MS, () => {
+      S.leadRetry = null
+      sendBoardUpdate(host)
+    })
   })
 }
 
