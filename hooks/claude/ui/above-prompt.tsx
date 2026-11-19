@@ -52,7 +52,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // each row's front, lined up like the board list's: "T-434 ▶ prep · try 2", "T-440 ▶ 12m" (see bandLeads)
   const shownTasks = live.slice(0, taskRows)
   const since = (id: string) => v?.working?.find(w => w.task === id)?.since
-  const leads = bandLeads(shownTasks, nowMs, since)
+  const leads = bandLeads(shownTasks, nowMs, since, e.props.bodyColumns ?? 80)
   // a note the row's state already says ("worker on it" beside "▶ 12m") is left out; every other note stays (see bandNote)
   const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id))
   const tail = (t: (typeof live)[number]) =>

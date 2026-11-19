@@ -3603,6 +3603,44 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(text.split('\n').find(l => l.includes('First'))).not.toContain('try')
 })
 
+test('a doing row on a later try shows this try and the work time of all tries, without the gaps; narrow rows drop it (T-523)', () => {
+  const at = (min: number) => new Date(Date.parse(T) + min * 60_000).toISOString()
+  const now = Date.parse(T) + 1000 * 60_000
+  // try 1 alone: just this try's time
+  const first = { id: 'T-1', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
+  expect(core.triesTotal(first, now)).toBe('')
+  expect(bandLeads([first], now).get('T-1')).toBe('T-1  ▶ 15m')
+  expect(core.cellWithTotal(first, now)).toBe('15m')
+  // try 3: 50m and 35m before, long gaps (paused, waiting, todo) between them that do not count, 15m now
+  const third = { id: 'T-2', status: 'doing' as const, attempts: 3, runs: [{ started: at(0), ended: at(50) }, { started: at(400), ended: at(435) }, { started: at(985) }] as SymccTask['runs'] }
+  expect(core.triesTotal(third, now)).toBe('1h 40m in all')
+  expect(core.triesTotal(third, now, 'short')).toBe('1h 40m')
+  expect(core.cellWithTotal(third, now)).toBe('15m · 1h 40m in all')
+  // the same total as the task page's "Time and cost"
+  expect(fmtDuration(sumRuns(third.runs, now).ms)).toBe('1h 40m')
+  // the band: lined up, the total between this try's time and the try
+  const leads = bandLeads([first, third], now)
+  expect(leads.get('T-2')).toBe('T-2  ▶ 15m · 1h 40m in all · try 3')
+  expect(leads.get('T-1')!.length).toBe(leads.get('T-2')!.length)
+  // narrow: "in all" goes first, then the total; the try stays
+  const lead = (w: number) => bandLeads([first, third], now, () => undefined, w).get('T-2')
+  expect(lead(60)).toBe('T-2  ▶ 15m · 1h 40m in all · try 3')
+  expect(lead(50)).toBe('T-2  ▶ 15m · 1h 40m · try 3')
+  expect(lead(40)).toBe('T-2  ▶ 15m · try 3')
+  // the lists' cells the same way
+  const cells = (room: number) => core.fittedCells([first, third], now, () => undefined, room).get('T-2')
+  expect(cells(30)).toBe('15m · 1h 40m in all')
+  expect(cells(15)).toBe('15m · 1h 40m')
+  expect(cells(5)).toBe('15m')
+  // not doing: no total
+  expect(core.triesTotal({ ...third, status: 'paused' }, now)).toBe('')
+  // a later try with no time to show (its last try ended, no fresh step): no total either, so no stray " · "
+  const ended = { id: 'T-9', status: 'doing' as const, attempts: 2, runs: [{ started: at(0), ended: at(50) }, { started: at(900), ended: at(990) }] as SymccTask['runs'] }
+  expect(core.cellWithTotal(ended, now)).toBe('')
+  expect(bandLeads([ended], now).get('T-9')).not.toContain('in all')
+  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ +· try 2$/)
+})
+
 test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {
   const run = { start: T, end: T, ms: 1 } as unknown as NonNullable<SymccTask['runs']>[number]
   // the helper: ○ with no try, ● after a try (a run, or attempts counted), every other state its usual mark

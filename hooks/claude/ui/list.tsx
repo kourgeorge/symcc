@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, shownStatus, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, fittedCells, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, shownStatus, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -86,8 +86,9 @@ export function listPage($: $, pane: PaneParts) {
   const firstButton = typing ? -1 : list.findIndex(r => 'task' in r || 'day' in r || 'question' in r)
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
-  const cells = new Map(shown.map(x => [x.id, statusCell(x, nowMs, since(x.id))]))
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
+  // a doing task on a later try: "15m · 1h 40m in all"; narrow, "in all" goes first, then the total
+  const cells = fittedCells(shown, nowMs, since, width - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
   const tone: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }

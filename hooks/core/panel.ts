@@ -10,7 +10,7 @@ import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
 import { roleMark, roleOf, tryMark } from './roles'
 import { onDemand } from './scouts'
-import { fmtDuration, runMs } from './runs'
+import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
 import { rerunDue } from './test-timeout'
@@ -118,6 +118,50 @@ export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTas
   if (t.status === 'review' && isInvestigation(t)) return ANSWER_CELL
   return ({ review: 'review', waiting: 'waiting', failed: 'failed', paused: 'paused' } as Partial<Record<SymccStatus, string>>)[t.status] ?? ''
 }
+
+/** How much of the "1h 40m in all" a doing row shows (see triesTotal): all of it, just the time, or nothing (narrow rows). */
+export type TotalForm = 'long' | 'short' | 'none'
+/** The forms in the order a too narrow row tries them: "in all" goes first, then the total. */
+export const TOTAL_FORMS: readonly TotalForm[] = ['long', 'short', 'none']
+
+/** Whether a doing task has tries before this one: more than one try on record (the last is this one, ended too
+ *  while it is tested, checked or merged). */
+const hasEarlierTries = (runs: SymccTask['runs']): boolean => (runs ?? []).length > 1
+
+/**
+ * The total work time of all of a doing task's tries, for its row: "1h 40m in all" ('short': "1h 40m"); '' on the first
+ * try, for a task not doing, or with `form` 'none'. Work time is each try's started→ended added up (the one running
+ * now up to `nowMs`), the same number as the task page's "Time and cost" total (sumRuns), so time paused, waiting
+ * for the owner or other tasks, or in todo between tries is not counted.
+ */
+export function triesTotal(t: Pick<SymccTask, 'status' | 'runs'>, nowMs: number, form: TotalForm = 'long'): string {
+  if (t.status !== 'doing' || form === 'none' || !hasEarlierTries(t.runs)) return ''
+  const time = fmtDuration(sumRuns(t.runs, nowMs).ms)
+  return form === 'long' ? `${time} in all` : time
+}
+
+/** The status cell of a list row with the total of all tries after it for a doing task on a later try: "15m · 1h 40m
+ *  in all" (see statusCell, triesTotal); just the cell when it is '' (nothing to put the total after). */
+export function cellWithTotal(t: Parameters<typeof statusCell>[0], nowMs: number, since?: number | string, form: TotalForm = 'long'): string {
+  const cell = statusCell(t, nowMs, since)
+  // no time to show (e.g. the last try has ended and no step is fresh): no total either, so the cell has no stray " · "
+  const total = cell ? triesTotal(t, nowMs, form) : ''
+  return total ? `${cell} · ${total}` : cell
+}
+
+/** The status cells of a list's rows (cellWithTotal), in the longest form whose widest cell still fits in `room`
+ *  characters: "in all" is dropped first, then the total. */
+export function fittedCells<T extends Parameters<typeof statusCell>[0] & { id: string }>(tasks: T[], nowMs: number, since: (id: string) => number | string | undefined, room: number): Map<string, string> {
+  let cells = new Map<string, string>()
+  for (const form of TOTAL_FORMS) {
+    cells = new Map(tasks.map(x => [x.id, cellWithTotal(x, nowMs, since(x.id), form)]))
+    if (Math.max(0, ...[...cells.values()].map(c => c.length)) <= room) break
+  }
+  return cells
+}
+
+/** Room for a list row's title that a status cell must leave (see fittedCells). */
+export const TITLE_ROOM = 20
 
 /** The status column of an answered investigation in review (see statusCell). */
 export const ANSWER_CELL = 'answer'
