@@ -34,7 +34,7 @@ test("a failed task's board row and the lead's text board use the same sentence 
   for (const [, t] of CASES) {
     const why = whyFailed(t)
     expect(rowExtra(t, [t])).toBe(why)
-    expect(boardText({ ...emptyBoard(), tasks: [t] }, Date.parse(T))).toContain(`T-9   failed  Fix it — ${why}`)
+    expect(boardText({ ...emptyBoard(), tasks: [t] }, Date.parse(T))).toContain(`T-9   ✗ failed  Fix it — ${why}`)
   }
   // a narrow row cuts the reason to fit instead of leaving it out
   const fit = fitRow(20, 'Fix it', whyFailed(CASES[3]![1]), 60, true)

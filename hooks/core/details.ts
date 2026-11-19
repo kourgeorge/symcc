@@ -23,6 +23,13 @@ export const stateLabelLower = () => STATE_LABEL.toLowerCase()
 /** The status badge colors on the task page: doing blue, review and waiting yellow, done green, failed red, the rest dim. */
 export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'inactive', todo: 'inactive', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'inactive' }
 export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }
+/** A to do task that was worked on before (at least one try: failed tests, sent back, stopped, retried) shows this
+ *  filled circle instead of ○; the word stays "to do". */
+export const TRIED_TODO_MARK = '●'
+/** A task's own mark on every view: STATUS_MARK for its state, but ● for a to do task that already had a try. Keep
+ *  STATUS_MARK for places that mean the state itself (a legend, a group heading). */
+export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unknown[]; attempts?: number }): string =>
+  t.status === 'todo' && ((t.runs?.length ?? 0) > 0 || (t.attempts ?? 0) > 0) ? TRIED_TODO_MARK : STATUS_MARK[t.status]
 
 /**
  * Who a task came from, with its own color, after its one-width mark (ORIGIN_MARK) and a space: ♟ owner, ⌕ scout NAME,
@@ -53,7 +60,7 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
  */
 export function detailRows(t: SymccTask, o: { roles: RoleDef[]; kinds?: KindDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
-  R.push({ label: 'Status', segs: [{ text: `${STATUS_MARK[t.status]} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
+  R.push({ label: 'Status', segs: [{ text: `${statusMark(t)} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
@@ -74,7 +81,7 @@ export function detailRows(t: SymccTask, o: { roles: RoleDef[]; kinds?: KindDef[
     const dep = o.all.find(x => x.id === id)
     // a done task moved to archive.json counts as done
     const gone = !dep && (o.archivedDone ?? []).includes(id)
-    const state: Seg = dep ? { text: `${STATUS_MARK[dep.status]} ${STATUS_WORD[dep.status]}`, color: STATUS_BADGE[dep.status] } : gone ? { text: `${STATUS_MARK.done} ${STATUS_WORD.done} (archived)`, color: STATUS_BADGE.done } : { text: 'missing', color: 'error' }
+    const state: Seg = dep ? { text: `${statusMark(dep)} ${STATUS_WORD[dep.status]}`, color: STATUS_BADGE[dep.status] } : gone ? { text: `${STATUS_MARK.done} ${STATUS_WORD.done} (archived)`, color: STATUS_BADGE.done } : { text: 'missing', color: 'error' }
     R.push({
       label: i ? '' : 'After',
       segs: [{ text: id, color: 'claude', bold: true }, { text: ' ', color: 'text' }, state, ...(dep ? [{ text: ` · ${dep.title}`, color: 'inactive' }] : [])],

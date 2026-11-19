@@ -1,7 +1,7 @@
 // What OpenCode's TUI part (opencode/tui.ts, T-466) draws, as plain data: the band above the prompt
 // (session.composer.top) and the board panel (session.panel), each as lines of colored text (core's Seg), made from
 // the view file the engine writes (view.ts) with hooks/core's own helpers: the band's row fronts and notes
-// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, STATUS_MARK, statusCell,
+// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, statusCell,
 // rowExtra, fitRow), the banner (bannerLines) and a task's rows (detailRows). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468).
@@ -11,7 +11,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, STATUS_MARK, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
+  statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
 } from '../board'
 import { restFrame } from '../core/logo'
@@ -186,7 +186,7 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${STATUS_MARK[x.status]} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
+      { text: ` ${statusMark(x)} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || x.status === 'waiting' || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]

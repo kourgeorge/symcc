@@ -9,7 +9,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowExtra, taskMatches, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowExtra, taskMatches, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -66,8 +66,8 @@ export function listPageVs($: $, pane: PaneParts) {
     const cell = statusCell(x, nowMs, since(x.id))
     const waited = x.status === 'waiting' || x.status === 'review' || x.status === 'failed' ? ago(x.updated_at) : ''
     // with a time, the short word ("waiting for 1m", not "waiting for you for 1m")
-    if (waited) return `${mark[x.status]} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
-    return `${mark[x.status]} ${cell && cell !== x.status ? cell : word[x.status]}`
+    if (waited) return `${statusMark(x)} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
+    return `${statusMark(x)} ${cell && cell !== x.status ? cell : word[x.status]}`
   }
 
   /** One task: a line of text, its ID a link that opens it, then the title (up to two lines; bold when it needs you,
@@ -93,7 +93,7 @@ export function listPageVs($: $, pane: PaneParts) {
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
         <Box key={`vs-task-${x.id}-top`} flexDirection="row">
           {needs ? <Text key="needs" bold color={C(tone[x.status] ?? 'warning')}>● </Text> : null}
-          {ended ? <Text key="ended" color={C(tone[x.status]!)}>{`${mark[x.status]} `}</Text> : null}
+          {ended ? <Text key="ended" color={C(tone[x.status]!)}>{`${statusMark(x)} `}</Text> : null}
           <Box key="title" flexDirection="column" flexGrow={words ? 1 : 0} flexShrink={1}>
             {vsLink(vs, row(x.id), words ? `${mdLink(x.id, href)} \u00a0${needs ? `**${words}**` : words}` : mdLink(x.id, href), [[href, act(() => panelValues($).updateOpened(() => x.id))]], closed)}
           </Box>

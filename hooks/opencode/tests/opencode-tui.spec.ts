@@ -416,3 +416,14 @@ test('opencode/tui.ts says a failed setup in a toast and throws it on (setupFail
   const src = await readFile(`${PLUGIN_ROOT}/opencode/tui.ts`, 'utf8')
   expect(src).toContain('throw setupFailed(ctx, e)')
 })
+
+test('a to do task worked on before shows ● in the panel list and on its page; a fresh one keeps ○ (T-528)', () => {
+  const f = viewFile()
+  f.view.tasks = f.view.tasks.map(t => (t.id === 'T-4' ? { ...t, attempts: 1 } : t))
+  const fresh = viewFile()
+  const row = (v: ViewFile) => panelLines(v, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).find(l => l.includes('T-4 '))!
+  expect(row(fresh)).toContain(`${STATUS_MARK.todo} `)
+  expect(row(f)).toContain('● ')
+  expect(row(f)).not.toContain(STATUS_MARK.todo)
+  expect(panelLines(f, { opened: 'T-4', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('● to do'))).toBe(true)
+})

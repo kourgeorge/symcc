@@ -10,7 +10,7 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
 import { squash } from '../../core/text'
 import { S } from '../../app/state'
 import { when } from '../../app/tools'
@@ -201,7 +201,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
       <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
       <Box key="vs-status" flexDirection="row" flexWrap="wrap" columnGap={1}>
-        {vsBadge(vs, 'vs-badge', `${STATUS_MARK[t.status]} ${statusWord}`, x.answered ? 'success' : STATUS_BADGE[t.status])}
+        {vsBadge(vs, 'vs-badge', `${statusMark(t)} ${statusWord}`, x.answered ? 'success' : STATUS_BADGE[t.status])}
         {tags.length ? vsTags(vs, 'vs-tags', tags) : null}
       </Box>
     </Box>
@@ -330,7 +330,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
         ...t.after.map(id => {
           const dep = v.tasks.find(d => d.id === id)
           const gone = !dep && (v.archived_done ?? []).includes(id)
-          const state = dep ? `${STATUS_MARK[dep.status]} ${STATUS_WORD[dep.status]}` : gone ? `${STATUS_MARK.done} done (archived)` : 'missing'
+          const state = dep ? `${statusMark(dep)} ${STATUS_WORD[dep.status]}` : gone ? `${STATUS_MARK.done} done (archived)` : 'missing'
           return (
             <Box key={`vs-after-${id}`} flexDirection="column">
               <Box key={`vs-after-${id}-top`} flexDirection="row" gap={1}>

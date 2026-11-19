@@ -11,7 +11,7 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches, statusCell } from './panel'
-import { STATUS_MARK } from './details'
+import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
@@ -96,7 +96,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
     }),
   )
   const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
-  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${STATUS_MARK[t.status]} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${statusMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
@@ -315,9 +315,10 @@ function boardRow(t: SymccTask, autoRetries?: number): string[] {
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
   const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')
   const role = tag ? ` [${tag}]` : ''
-  // a later try: "T-5   doing   · try 2/3 <title>" (see tryMark)
+  // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)
-  return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
+  // the task's own mark first (● a to do task worked on before, see statusMark): "T-5   ● todo    title"
+  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
 }
 
 /** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */
