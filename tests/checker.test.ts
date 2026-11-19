@@ -265,7 +265,7 @@ test('T-526: the checker is told symcc already ran these exact test commands on 
   expect(w.calls.filter(c => c.startsWith('/bin/sh -c ')).length).toBe(2)
 })
 
-test('T-526: when this code's tree is not in the passed-trees record, the checker is told so and runs them itself', async () => {
+test('T-526: when this code\'s tree is not in the passed-trees record, the checker is told so and runs them itself', async () => {
   // the tree can't be told, so nothing is on record
   const w = world()
   await saveBoard(w.$, boardWith(true))
