@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion } from '../../board'
+import { archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, statusCell, bannerRule, fitRow, rowExtra, listKeys, taskMatches, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, shownStatus, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -170,8 +170,8 @@ export function listPage($: $, pane: PaneParts) {
             <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
               {x.id.padEnd(idWidth)}
             </Text>
-            <Text color={C(tone[x.status]!)}>{` ${mark[x.status]} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
-            <Text bold={x.status === 'waiting' || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
+            <Text color={C(tone[shownStatus(x)]!)}>{` ${mark[shownStatus(x)]} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
+            <Text bold={waitsForYou(x) || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>
             {fit.extra && tried && fit.extra.endsWith(tried)
