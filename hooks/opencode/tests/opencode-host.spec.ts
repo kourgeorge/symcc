@@ -1246,6 +1246,7 @@ test('scripts/install-opencode.sh warns when the opencode on PATH is older than 
     expect(await run('2.2.9')).toContain(warning)
     expect(await run('v2.0')).toContain(warning)
     expect(await run('v2.3.0')).not.toContain(warning)
+    expect(await run('2.3.0')).not.toContain(warning)
     expect(await run('2.3.2')).not.toContain(warning)
     expect(await run('2.10.0')).not.toContain(warning)
     expect(await run('3.0.1')).not.toContain(warning)
@@ -1256,3 +1257,14 @@ test('scripts/install-opencode.sh warns when the opencode on PATH is older than 
     await rm(base, { recursive: true, force: true })
   }
 }, TEST_MS)
+
+test('the repo-root package.json (T-497) lets `opencode plugin add github:kourgeorge/symcc` find the plugin: its exports point at opencode/server.ts and opencode/tui.ts, both there, and it installs nothing', async () => {
+  const pkg = JSON.parse(await readFile(`${PLUGIN_ROOT}/package.json`, 'utf8')) as Record<string, unknown>
+  expect(pkg.name).toBe('symcc')
+  expect(pkg.private).toBe(true)
+  expect(pkg.type).toBe('module')
+  expect(pkg.exports).toEqual({ './server': './opencode/server.ts', './tui': './opencode/tui.ts' })
+  for (const file of ['opencode/server.ts', 'opencode/tui.ts']) expect((await lstat(`${PLUGIN_ROOT}/${file}`)).isFile()).toBe(true)
+  // no packages and no install scripts: adding it never downloads or runs anything
+  for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies', 'scripts']) expect(key in pkg).toBe(false)
+})

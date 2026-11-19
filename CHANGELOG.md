@@ -4,6 +4,9 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+### Added
+- symcc's repository has a `package.json` at its top (private, no packages, no scripts) that points OpenCode at `opencode/server.ts` and `opencode/tui.ts`, so `opencode plugin add github:kourgeorge/symcc` can install it once that file is on GitHub. Not seen working yet; `sh scripts/install-opencode.sh` stays the way to install. The guide now says what `opencode plugin list` really shows for the linked folder (no ID; symcc only in the folder path).
+
 ## 0.5.2 (2026-11-19)
 
 ### Changed
