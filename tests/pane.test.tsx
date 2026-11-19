@@ -1417,7 +1417,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
 })
 
 const OFF_CASES = [
-  ['symcc is turned off', { enabled: false }, /^symcc off · \/symcc-on$/],
+  ['symcc is turned off', { enabled: false }, /^symcc is off · $/],
   ['the board is in mode off', { mode: 'off' }, /^⏹ off: nothing starts$/],
 ] as const
 for (const [when, extra, want] of OFF_CASES)
@@ -1428,6 +1428,19 @@ for (const [when, extra, want] of OFF_CASES)
     expect(t).toBeDefined()
     expect(t?.props.color).toBe('warning')
     expect(await ui.find({ type: 'Text', text: /workers · \d+ scouts?/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+for (const surface of ['terminal', 'vscode'] as const)
+  test(`symcc turned off (${surface}): the header says "symcc is off · /symcc-on to turn it on", the command in the accent color`, async ($, on) => {
+    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [], enabled: false } } })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface })
+    const all = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    expect(all.some(t => /symcc is off · \/symcc-on to turn it on/.test(t))).toBe(true)
+    expect(all.some(t => /symcc off|symcc: symcc/.test(t))).toBe(false)
+    const cmd = await ui.find({ type: 'Text', text: /^\/symcc-on$/ })
+    expect(cmd?.props.color).toBe('ide')
+    expect(cmd?.props.bold).toBe(true)
     await ui.unmount()
   })
 
