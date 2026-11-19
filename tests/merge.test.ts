@@ -5321,6 +5321,42 @@ test('a fresh merge line entry whose task is no longer being checked is stale: c
   expect(w.files.has(LINE)).toBe(false)
 })
 
+test('a merge line file that is not JSON counts as an empty line: the task goes at once and the file is gone afterwards', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1] = await twoChecking(w)
+  w.put(LINE, '{not json')
+  expect(await inMergeLine(w.$, 'T-1', async () => 'ran', { t: t1 })).toBe('ran')
+  expect(w.sleeps).toEqual([])
+  expect(w.files.has(LINE)).toBe(false)
+})
+
+test('when the merge line file cannot be written, this copy\'s tasks still take turns in the order they joined', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1, t2] = await twoChecking(w)
+  const fs = (w.$ as unknown as { fs: { write: (p: string, t: string) => Promise<unknown> } }).fs
+  const write = fs.write
+  fs.write = async (p, t) => {
+    if (p.includes('merge-line.json')) throw new Error('disk full')
+    return write(p, t)
+  }
+  const log: string[] = []
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const one = inMergeLine(w.$, 'T-1', async () => (log.push('T-1 start'), await gate, log.push('T-1 end'), 'one'), { t: t1 })
+  const two = inMergeLine(w.$, 'T-2', async () => (log.push('T-2 start'), 'two'), { t: t2 })
+  // T-2 waits second in line (its note says so) while T-1's turn goes on
+  await turns(w, () => log.length > 0 && noteOf(w, 'T-2') === inLineNote(2))
+  expect(log).toEqual(['T-1 start'])
+  expect(w.files.has(LINE)).toBe(false)
+  open()
+  expect(await one).toBe('one')
+  expect(await two).toBe('two')
+  expect(log).toEqual(['T-1 start', 'T-1 end', 'T-2 start'])
+  expect(w.sleeps).toEqual([])
+})
+
 test('the merge line file survives a reload; a task that was in line joins again (its old entry goes), behind the ones still in front', async () => {
   S.me = 'me'
   const w = world()
