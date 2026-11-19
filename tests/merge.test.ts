@@ -10,12 +10,13 @@ import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, rerunTimedOutTests } from '../hooks/app/workers'
-import { panelSections, needsYou, RERUN_CELL, boardHealth } from '../hooks/board'
+import { panelSections, needsYou, RERUN_CELL, boardHealth, waitsForYou, shownStatus, statusCounts, statusLine, statusWordOf, RERUN_WORD, detailRows } from '../hooks/board'
 import { ranOutOfTime, answeredLeadLine } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
+import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, takeLock, dropLock } from '../hooks/app/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld } from '../hooks/app/archive'
@@ -2709,7 +2710,11 @@ test('a finished try ends with the outcome of its check', async () => {
 test('a try that asks ends as asked (a question, or files outside its list); one stopped from Claude Code as stopped; an error as stopped with the reason', async () => {
   expect((await tryEnds(answers('', undefined, { question: { question: 'red or blue?' } }))).end).toEqual(['asked', 'question'])
   expect((await tryEnds(answers('', undefined, { requested: ['README.md'] }))).end).toEqual(['asked', 'files outside its list'])
+  expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from the app'])
+  // Claude Code's words name it (T-475)
+  S.W = CLAUDE_WORDS
   expect((await tryEnds(answers('', { reason: 'aborted' }))).end).toEqual(['stopped', 'stopped from Claude Code'])
+  S.W = SYMCC_WORDS
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
@@ -5436,6 +5441,25 @@ test('T-511: after a first time-out the task shows with the running ones, not un
   const b2 = await load(c.w.$)
   expect(needsYou(find(b2, 'T-1')!)).toBe(true)
   expect(panelSections(b2.tasks, Date.now(), 0).needsYou.map(x => x.id)).toEqual(['T-1'])
+})
+
+test('T-532: a task waiting only to rerun its tests is not "waiting for you" in the counts, the band or the page badge; one with a question is', () => {
+  const base = { title: 't', details: '', files: [], note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: '2026-11-19T00:00:00Z', updated_at: '2026-11-19T00:00:00Z' }
+  const rerun = { ...base, id: 'T-1', status: 'waiting' as const, question: null, test_rerun: 1 as const }
+  const asks = { ...base, id: 'T-2', status: 'waiting' as const, question: 'Yellow or blue?' }
+  expect([waitsForYou(rerun), waitsForYou(asks)]).toEqual([false, true])
+  expect([shownStatus(rerun), shownStatus(asks)]).toEqual(['doing', 'waiting'])
+  expect(statusCounts([rerun], ['doing', 'waiting'])).toEqual(['1 doing'])
+  expect(statusCounts([rerun, asks], ['doing', 'waiting'])).toEqual(['1 doing', '1 waiting for you'])
+  const band = statusLine({ tasks: [rerun] }, true)!
+  expect(band).not.toContain('waiting for you')
+  expect(band).toContain('T-1 doing')
+  expect(statusLine({ tasks: [asks] }, true)).toContain('1 waiting for you')
+  expect(statusWordOf(rerun)).toBe(RERUN_WORD)
+  expect(statusWordOf(asks)).toBe('waiting for you')
+  const badge = (t: SymccTask) => detailRows(t, { roles: [], all: [t], when: s => s, nowMs: 0 })[0]!.segs[0]!
+  expect([badge(rerun as SymccTask).text, badge(rerun as SymccTask).color]).toEqual([`▶ ${RERUN_WORD}`, 'ide'])
+  expect([badge(asks as SymccTask).text, badge(asks as SymccTask).color]).toEqual(['? waiting for you', 'warning'])
 })
 
 test('T-511: an approve whose tests run out of time stays in review and is not told to fix anything', async () => {

@@ -100,11 +100,13 @@ export function failReason(line: string): FailReason | null {
 }
 
 /**
- * How a done task ended: merged on its own, approved by the owner, "answered" for an investigation
- * (nothing is merged), or null when its history doesn't say.
+ * How a done task ended: merged on its own, approved by the owner, merged outside the board (by hand, then
+ * marked done), "answered" for an investigation (nothing is merged), or null when its history doesn't say.
  */
-export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | null {
+export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'outside' | null {
   if (isInvestigation(t as { kind?: unknown })) return 'answered'
+  // T-514: merged by hand, then marked done on the board
+  if (t.history.some(l => /^merged outside the board\b/.test(l))) return 'outside'
   const merged = t.history.filter(l => / → merged into /.test(l))
   if (!merged.length) return null
   return merged.some(l => /approved by the owner/.test(l)) ? 'approved' : 'own'
@@ -355,13 +357,14 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const own = how.filter(h => h === 'own').length
   const approved = how.filter(h => h === 'approved').length
   const answeredDone = how.filter(h => h === 'answered').length
-  const unclear = finished.length - own - approved - answeredDone
+  const outside = how.filter(h => h === 'outside').length
+  const unclear = finished.length - own - approved - answeredDone - outside
   const reasons: Record<FailReason, number> = { tests: 0, clash: 0, scope: 0, stopped: 0, rejected: 0 }
   for (const t of all) for (const l of t.history) {
     const r = failReason(l)
     if (r) reasons[r]++
   }
-  const ended: [string, number][] = [['merged on its own', own], ['approved by you', approved], ...(answeredDone ? [['answered (investigation)', answeredDone] as [string, number]] : []), ...(unclear ? [['not clear from history', unclear] as [string, number]] : [])]
+  const ended: [string, number][] = [['merged on its own', own], ['approved by you', approved], ...(outside ? [['merged outside the board', outside] as [string, number]] : []), ...(answeredDone ? [['answered (investigation)', answeredDone] as [string, number]] : []), ...(unclear ? [['not clear from history', unclear] as [string, number]] : [])]
   out.push('', `How tasks ended (${plural(finished.length, 'done task')})`)
   const maxEnd = Math.max(...ended.map(([, n]) => n))
   for (const [k, n] of ended) out.push(barRow(k, 24, n, maxEnd, finished.length))

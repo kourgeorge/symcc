@@ -18,7 +18,7 @@ import { mkdtemp, mkdir, readFile, lstat, readdir, realpath, rm, writeFile } fro
 import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
 import { claimLead } from '../../app/lead'
 import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile } from '../../app/state'
-import { resetStore } from '../../app/store'
+import { resetStore, change } from '../../app/store'
 import { stoppedText } from '../../app/ask'
 import { runCommand } from '../../../hosts/node/host'
 import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt, OcSessionContext, OcToolInfo, OcCommandDefinition } from '../ctx'
@@ -1013,6 +1013,12 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
   reset()
   const p = await project()
   try {
+    // (T-515) ses_old's ended try is kept on T-2's runs, as the engine keeps every ended try's agent (T-479): the
+    // board names it as T-2's agent only until the engine starts T-2's new worker on its own, which on a busy machine
+    // came before the stopped-agent check below (the call was then let through as the lead's)
+    const at = '2026-11-18T00:00:00.000Z'
+    const b0 = JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8'))
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(b0, 'T-2', { runs: [{ started: at, ended: at, agent: 'ses_old' }] }, at)))
     const f = fakeSessions()
     let host: Host | undefined
     const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-tools' } })
@@ -1048,8 +1054,10 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     expect('ok' in (await call('symcc_stats', 'ses_scout'))).toBe(true)
     // a worker (ses_w2 runs T-1; the engine stopped the board's old ses_worker at its start) has only ask_owner:
     // a lead tool is refused, its question is taken
-    const b = await load(host!)
-    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(b, 'T-1', { status: 'doing', agent: 'ses_w2', session: S.me }, '2026-11-18T00:00:00.000Z')))
+    // (T-515) through the engine's own one-at-a-time board write (change), not a plain file write: the add above makes
+    // the engine start T-2's and T-3's workers, and on a busy machine their board write could land between a load
+    // and a writeFile here and undo this patch (the question was then refused: the board no longer named ses_w2)
+    await change(host!, b => patchTask(b, 'T-1', { status: 'doing', agent: 'ses_w2', session: S.me }, at))
     workers.set('ses_w2', { task: 'T-1', worktree: p.wt, branch: 'symcc/T-1', since: Date.now() })
     expect(await call('symcc_add', 'ses_w2', { title: 'x', details: 'y', why: 'z', origin_by: 'owner' })).toEqual({ refused: workerToolRefusal('add') })
     const asked = await call('symcc_ask_owner', 'ses_w2', { question: 'Which one?' })
@@ -1114,10 +1122,15 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     await until(() => S.startupDone === true)
     expect([...c.commands.keys()]).toEqual([...COMMANDS().map(x => x.name), 'symcc-answer'])
     const lead = f.lead(p.main)
+    // (T-515) only the lead's chat counts: the engine starts T-2's worker on its own (at its start, or again after
+    // /symcc-on), and on a busy machine that worker's first prompt (into its own session) landed while a command ran
+    const toLead = <T extends { sessionID: string }>(xs: T[]) => xs.filter(x => x.sessionID === lead)
     const run = async (name: string, text = '') => {
-      const before = f.synthetic.length + f.prompts.length
+      const before = toLead(f.synthetic).length + toLead(f.prompts).length
       await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
-      return { synthetic: f.synthetic.slice(), prompts: f.prompts.slice(), added: f.synthetic.length + f.prompts.length - before }
+      const synthetic = toLead(f.synthetic)
+      const prompts = toLead(f.prompts)
+      return { synthetic, prompts, added: synthetic.length + prompts.length - before }
     }
     // every command answers in the lead's chat
     for (const name of c.commands.keys()) expect([name, (await run(name)).added]).toEqual([name, 1])
@@ -1137,8 +1150,10 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     expect(board.text).toContain('T-1')
     expect(board.resume).toBe(false)
     // a command that isn't only for the owner (the scouts list when no panel opens) is a prompt the lead answers
+    const synthBefore = toLead(f.synthetic).length
     const scouts = await run('symcc-scouts')
-    expect(scouts.prompts.at(-1)!.sessionID).toBe(lead)
+    expect(scouts.added).toBe(1)
+    expect(scouts.synthetic.length).toBe(synthBefore)
     expect(scouts.prompts.at(-1)!.delivery).toBe('steer')
     await settle()
     await end!()
@@ -1246,6 +1261,7 @@ test('scripts/install-opencode.sh warns when the opencode on PATH is older than 
     expect(await run('2.2.9')).toContain(warning)
     expect(await run('v2.0')).toContain(warning)
     expect(await run('v2.3.0')).not.toContain(warning)
+    expect(await run('2.3.0')).not.toContain(warning)
     expect(await run('2.3.2')).not.toContain(warning)
     expect(await run('2.10.0')).not.toContain(warning)
     expect(await run('3.0.1')).not.toContain(warning)
@@ -1256,3 +1272,14 @@ test('scripts/install-opencode.sh warns when the opencode on PATH is older than 
     await rm(base, { recursive: true, force: true })
   }
 }, TEST_MS)
+
+test('the repo-root package.json (T-497) lets `opencode plugin add github:kourgeorge/symcc` find the plugin: its exports point at opencode/server.ts and opencode/tui.ts, both there, and it installs nothing', async () => {
+  const pkg = JSON.parse(await readFile(`${PLUGIN_ROOT}/package.json`, 'utf8')) as Record<string, unknown>
+  expect(pkg.name).toBe('symcc')
+  expect(pkg.private).toBe(true)
+  expect(pkg.type).toBe('module')
+  expect(pkg.exports).toEqual({ './server': './opencode/server.ts', './tui': './opencode/tui.ts' })
+  for (const file of ['opencode/server.ts', 'opencode/tui.ts']) expect((await lstat(`${PLUGIN_ROOT}/${file}`)).isFile()).toBe(true)
+  // no packages and no install scripts: adding it never downloads or runs anything
+  for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies', 'scripts']) expect(key in pkg).toBe(false)
+})

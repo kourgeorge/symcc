@@ -100,6 +100,21 @@ keeps it waiting, also `dropped` or `failed`; then the lead changes or clears it
 Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
 lower task number).
 
+**Work merged by hand.** Sometimes a task's branch gets merged outside the board, for
+example by you or by the lead on your word after its only failure was the merge tests
+timing out. Don't drop such a task (it would count as dropped) and don't retry it (a new
+worker would redo finished work). Mark it as merged instead: press `h` (Already merged) on
+its page (offered for a failed, waiting, paused or dropped task), or ask the lead, whose
+`merged` tool also takes a task that is to do, running (its worker is stopped first) or in
+review. symcc checks it with git first: every commit on the task's branch must already be
+in the branch it merges into (merged, fast-forwarded, or rebased as the same changes). If
+not, it refuses with the reason ("T-5's branch has 2 commits that aren't in main yet").
+When the check passes, the task becomes `done` with the history line "merged outside the
+board (abc12345); marked done by the owner" (or "by the lead"), its commits are recorded,
+its folder and branch are cleaned up like after a normal merge, and the tasks waiting on it
+can start. Nothing is merged and no test runs: the work is already in. Stats count it under
+"merged outside the board". The lead uses it only on your word or a rule you set.
+
 ---
 
 ### When a worker needs you
@@ -1386,12 +1401,18 @@ git clone https://github.com/kourgeorge/symcc && sh symcc/scripts/install-openco
 The script links symcc's `opencode/` folder into OpenCode's plugins folder for you, `~/.config/opencode/plugins/symcc` (or `$XDG_CONFIG_HOME/opencode/plugins/symcc`), so OpenCode loads it in every project. Nothing is copied or downloaded and there is no build step: OpenCode runs symcc's TypeScript files as they are, so a `git pull` in that folder updates symcc (restart OpenCode after it).
 
 - **For one project only:** `sh symcc/scripts/install-opencode.sh --project <your project>` puts the link in `<your project>/.opencode/plugins/symcc` instead. Add `.opencode/plugins/` to that project's `.gitignore`, since the link points into your own machine.
-- **Check it:** start OpenCode in your project and run `opencode plugin list`; `symcc` is listed as a `local` plugin.
+- **Check it:** start OpenCode in your project and run `opencode plugin list`. OpenCode 2.3 lists the linked folder with no ID of its own (`ID: -   VERSION: local   SOURCE: <config>/opencode/plugins/symcc`), so `symcc` shows only in the folder path.
 - **If OpenCode says "Plugin failed"** for symcc's folder: check `opencode --version` first (symcc needs 2.3 or newer). The board screen's error names the package it couldn't get from OpenCode (`solid-js` or `@opentui/solid`); OpenCode's log has it (`~/.local/share/opencode/log/`). Only the board screen stops then: the lead, its tools and the workers run in OpenCode's server part, which loads on its own.
 - **Remove it:** the same command with `--remove` (and `--project <folder>` if you used it).
 - **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
 
-`opencode plugin add` only takes an npm package or a git address with a `package.json` at its top, which symcc's repository doesn't have yet, so it can't install symcc for now.
+**Or with OpenCode's own command** (not seen working yet, see below):
+
+```bash
+opencode plugin add github:kourgeorge/symcc
+```
+
+`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). In T-497's own scratch run with OpenCode 2.3.2, the command still failed with "Could not read package.json", because that `package.json` wasn't on GitHub yet; trying it from a local git copy instead was blocked (a symcc worker may not create git repositories). So use `sh symcc/scripts/install-opencode.sh` until this command has been seen working.
 
 ### The lead in OpenCode
 

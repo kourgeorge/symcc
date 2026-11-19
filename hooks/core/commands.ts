@@ -1,7 +1,7 @@
 // The slash commands.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { isMode, modeOf, normId } from './board-file'
+import { isMode, modeOf, normId, STATUS_WORD } from './board-file'
 import { type DiffFile, statCount, YOUR_EDITS } from './review'
 import { parseSettingsCommand, type SettingName, type SettingsInput } from './settings'
 import { rerunDue } from './test-timeout'
@@ -121,6 +121,19 @@ export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string 
 /** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time.
  *  Not one whose tests ran out of time once (T-511: rerunDue): symcc runs them again on its own, nothing to answer. */
 export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string; test_rerun?: unknown; question?: unknown; merge_wait?: unknown }): boolean => (NEEDS_YOU.includes(t.status) && !rerunDue(t)) || asksMoreTime(t)
+
+/** Whether a task waits for the owner's answer: waiting, but not one whose tests only run again (T-511: rerunDue).
+ *  Every view uses this, not status === 'waiting', for "waiting for you". */
+export const waitsForYou = (t: { status?: unknown; test_rerun?: unknown; question?: unknown; merge_wait?: unknown }): boolean => t.status === 'waiting' && !rerunDue(t)
+
+/** The status a view groups and counts a task under: a task whose tests run again on their own (rerunDue) is with the running ones. */
+export const shownStatus = <T extends Pick<SymccTask, 'status'> & { test_rerun?: unknown; question?: unknown; merge_wait?: unknown }>(t: T): SymccStatus => (rerunDue(t) ? 'doing' : t.status)
+
+/** The status word of a task whose tests run again on their own (rerunDue), on its page badge. */
+export const RERUN_WORD = 'rerunning its tests'
+
+/** The word the owner sees for a task's status (STATUS_WORD), or RERUN_WORD while its tests run again on their own. */
+export const statusWordOf = (t: Pick<SymccTask, 'status'> & { test_rerun?: unknown; question?: unknown; merge_wait?: unknown }): string => (rerunDue(t) ? RERUN_WORD : STATUS_WORD[t.status])
 
 /** For the panel: tasks that need the owner (see needsYou) first, the rest keep their order. A task asking for
  *  more time sorts with the waiting ones (both wait for an answer). */

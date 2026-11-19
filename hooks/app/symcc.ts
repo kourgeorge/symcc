@@ -37,7 +37,9 @@ import { openPane } from './open'
 import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, setSymcc, setBoardMode, type TurnEnd } from './workers'
 
 /** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
-export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings. (ctrl+x tab goes back to it.)'
+export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings.'
+/** BOARD_OPENED with the host's keys that go back to the board panel (HostWords.backToBoard), when it has them. */
+export const boardOpened = (): string => (S.W.backToBoard ? `${BOARD_OPENED} (${S.W.backToBoard} goes back to it.)` : BOARD_OPENED)
 
 /** symcc's slash commands, for the host to register: name, description and the hint for its arguments. */
 export function COMMANDS(): { name: string; description: string; argumentHint?: string }[] {
@@ -53,7 +55,7 @@ export function COMMANDS(): { name: string; description: string; argumentHint?: 
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts: /${S.N.name}-stats [full] [7d|T-100..T-130]`, argumentHint: '[full] [7d|T-1..T-9]' },
-    { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: Claude works as normal, nothing runs; the board is kept` },
+    { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
     { name: `${S.N.name}-on`, description: `Turn ${S.N.name} back on for this project, in the mode the board had` },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
@@ -395,7 +397,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
       if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, undefined, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
-      return say(BOARD_OPENED)
+      return say(boardOpened())
     case 'scouts': {
       const defs = await scheduleScouts(host)
       await publish(host, await load(host))

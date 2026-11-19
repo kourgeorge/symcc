@@ -9,9 +9,10 @@ import { kindMark } from './kinds'
 import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
+import { shownStatus } from './commands'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, taskMatches, statusCell } from './panel'
-import { STATUS_MARK } from './details'
+import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
@@ -96,7 +97,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
     }),
   )
   const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
-  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${STATUS_MARK[t.status]} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${statusMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
@@ -129,7 +130,7 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
   const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   // in plan mode the line says so first (see core/plan.ts)
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
-  const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
+  const ids = (st: SymccStatus) => b.tasks.filter(t => shownStatus(t) === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
   const m = modeOf({ mode })
   const label = modeLabel(m)
@@ -178,8 +179,9 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
-export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
-  return order.map(st => [tasks.filter(t => t.status === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+export function statusCounts(tasks: (Pick<SymccTask, 'status'> & { test_rerun?: unknown; question?: unknown; merge_wait?: unknown })[], order: SymccStatus[]): string[] {
+  // a task whose tests run again on their own counts with the running ones, not as waiting for you (T-532: shownStatus)
+  return order.map(st => [tasks.filter(t => shownStatus(t) === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
 }
 
 const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'backlog', 'done']
@@ -192,7 +194,7 @@ export type BannerCount = { text: string; status?: SymccStatus }
 export function bannerCounts(b: BannerBoard, nowMs?: number): BannerCount[] {
   const gone = archivedOf(b).done
   if (!b.tasks.length && !gone) return []
-  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => t.status === st).length] as const)
+  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => shownStatus(t) === st).length] as const)
     .filter(([, n]) => n > 0)
     .map(([st, n]) => ({ status: st, text: st === 'backlog' ? `${n} in backlog` : st === 'done' ? `${n} done${gone ? ` ${archivedNote(gone)}` : ''}` : `${n} ${STATUS_WORD[st]}` }))
   if (gone && !b.tasks.some(t => t.status === 'done')) counts.push({ status: 'done', text: `${gone} done (archived)` })
@@ -315,9 +317,10 @@ function boardRow(t: SymccTask, autoRetries?: number): string[] {
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
   const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')
   const role = tag ? ` [${tag}]` : ''
-  // a later try: "T-5   doing   · try 2/3 <title>" (see tryMark)
+  // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)
-  return [`${t.id.padEnd(5)} ${t.status.padEnd(7)} ${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(14)}${fromText(t)}`]
+  // the task's own mark first (● a to do task worked on before, see statusMark): "T-5   ● todo    title"
+  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${mark ? `· ${mark} ` : ''}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
 }
 
 /** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */

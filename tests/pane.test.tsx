@@ -1767,6 +1767,18 @@ test('the board list shows an answered investigation with ◆ "answer" and [inve
   await ui.unmount()
 })
 
+test('the board list and the task page show ● for a to do task worked on before, ○ for a fresh one (T-528)', async ($, on) => {
+  const tasks = [task('T-1', 'todo', 'Fresh one'), task('T-2', 'todo', 'Tried one', { attempts: 1 }), task('T-3', 'review', 'Blue button', { attempts: 1 })]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'T-1' }))!.text).toMatch(/^  T-1\s+○ /)
+  expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^  T-2\s+● /)
+  expect((await ui.find({ key: 'T-3' }))!.text).toMatch(/^  T-3\s+◆ review/)
+  await ui.press({ key: 'T-2' })
+  expect((await lines(ui)).some(l => l.includes('[● '))).toBe(true)
+  await ui.unmount()
+})
+
 test('an old task without saved reports still opens and says "no saved report"', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Old one', { attempts: 1, runs: [{ started: '', ended: '' }], history: ['try 1: did it → merged into main'] })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
