@@ -17,10 +17,10 @@ import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, lstat, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
 import { claimLead } from '../../app/lead'
-import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile } from '../../app/state'
+import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile, leadQueue } from '../../app/state'
 import { resetStore, change } from '../../app/store'
 import { stoppedText } from '../../app/ask'
-import { runCommand } from '../../../hosts/node/host'
+import { runCommand, nodeClock } from '../../../hosts/node/host'
 import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt, OcSessionContext, OcToolInfo, OcCommandDefinition } from '../ctx'
 import { opencodeAgents, opencodeModel, leadModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
 import { toolTouches } from '../guard'
@@ -1156,6 +1156,82 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     expect(scouts.synthetic.length).toBe(synthBefore)
     expect(scouts.prompts.at(-1)!.delivery).toBe('steer')
     await settle()
+    await end!()
+    await settle()
+  } finally {
+    await finish(p)
+  }
+}, LONG_TEST_MS)
+
+test('/symcc-off posts only its answer into the lead\'s chat (T-540): a board update whose moment comes while the off is being saved is never sent', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    let host: Host | undefined
+    // every timer of the host can also be run by the test (fire), at most once; a cancelled one never runs
+    const fires = new Map<{ cancel(): void }, () => void>()
+    // told when the board write that turns symcc off starts (the moment the off is being saved)
+    let onOffWrite: (() => void) | undefined
+    const plugin = symccServer({
+      engine: SYMCC_ENGINE,
+      host: o => {
+        const h = opencodeHost(o)
+        h.clock = {
+          ...nodeClock,
+          after(ms, fn) {
+            let done = false
+            const run = () => {
+              if (done) return
+              done = true
+              fn()
+            }
+            const t = nodeClock.after(ms, run)
+            const handle = {
+              cancel: () => {
+                done = true
+                t.cancel()
+              },
+            }
+            fires.set(handle, run)
+            return handle
+          },
+        }
+        const fs = h.fs
+        h.fs = {
+          ...fs,
+          write: async (file, text) => {
+            if (onOffWrite && text.includes('"enabled":false')) onOffWrite()
+            return fs.write(file, text)
+          },
+        }
+        return (host = h)
+      },
+      hostOptions: { say: () => undefined, sessionId: 'opencode-off' },
+    })
+    const c = fakeCtx(p.main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    const lead = f.lead(p.main)
+    await c.hooks.prompt!({ sessionID: lead })
+    expect([...leads().values()]).toEqual([lead])
+    await settle()
+    const toLead = () => [...f.synthetic, ...f.prompts].filter(x => x.sessionID === lead)
+    // a report waits for its moment (tellLead's timer), and that moment comes while the off is being saved
+    tellLead(host!, 'T-1 "a change in src" is ready for review.')
+    const fire = fires.get(S.leadTimer!)
+    expect(typeof fire).toBe('function')
+    onOffWrite = fire
+    const before = toLead().length
+    await c.commands.get('symcc-off')!.execute({ sessionID: lead, prompt: { text: '' }, delivery: 'steer' })
+    onOffWrite = undefined
+    expect(toLead().slice(before).map(x => x.text.split(':')[0])).toEqual(['symcc is now off'])
+    // and nothing is left to go later
+    expect(S.leadTimer).toBe(null)
+    expect(leadQueue).toEqual([])
+    fire!()
+    await settle()
+    expect(toLead().length).toBe(before + 1)
     await end!()
     await settle()
   } finally {
