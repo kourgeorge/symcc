@@ -4,6 +4,7 @@
 // decides on its own. An agent is known by its OpenCode session id (the agent id symcc gets when it starts one).
 import type { FileTouch, Host } from '../host'
 import { toolCall, toolCheck, toolCheckFailed } from '../app/symcc'
+import { listedKind } from '../app/ask'
 import { useName } from '../app/state'
 import { normalPath, isAbsolute } from '../app/store'
 import { realpath } from 'node:fs/promises'
@@ -73,15 +74,23 @@ export async function toolTouches(dir: string, tool: string, input: unknown): Pr
  * Why session `sessionID`'s call is refused, or undefined to let OpenCode decide as usual: an agent symcc stopped is
  * refused anything (toolCall answers that for any tool that isn't symcc's, here "opencode:<what>"), and a worker's or
  * checker's edits and shell commands go through toolCheck from this copy's folder `dir`. An error refuses the call
- * of symcc's own agents only (toolCheckFailed); the owner's own sessions go on.
+ * of symcc's own agents only (toolCheckFailed); the owner's own sessions go on. `kind` tells a session's symcc metadata
+ * (the kind of symcc agent OpenCode made it for, see agents.ts; nothing for the lead and OpenCode's own subagents): a
+ * session symcc has no record of whose metadata names a kind is refused every edit and shell command (T-555, see
+ * checkEdit). When the metadata can't be read, the host's agent list decides.
  */
-export async function refusal(host: Host, dir: string, sessionID: string, what: string, touches: () => Promise<FileTouch[]>): Promise<string | undefined> {
+export async function refusal(host: Host, dir: string, sessionID: string, what: string, touches: () => Promise<FileTouch[]>, kind?: SessionKind): Promise<string | undefined> {
   useName(host)
+  const kindOf = async () => {
+    if (!kind) return listedKind(host, sessionID)
+    const k = await Promise.resolve().then(() => kind(sessionID)).then(v => ({ v }), () => undefined)
+    return k ? (k.v ? 'symcc' : 'other') : listedKind(host, sessionID)
+  }
   try {
     const call = await toolCall(host, `opencode:${what}`, sessionID, {})
     if (call && 'deny' in call) return call.deny
     for (const touch of await touches()) {
-      const why = await toolCheck(host, sessionID, touch, dir)
+      const why = await toolCheck(host, sessionID, touch, dir, kindOf)
       if (why) return why
     }
     return undefined
@@ -90,11 +99,14 @@ export async function refusal(host: Host, dir: string, sessionID: string, what: 
   }
 }
 
+/** A session's symcc metadata (see refusal); it rejects when the session can't be read. */
+export type SessionKind = (sessionID: string) => Promise<unknown>
+
 /** The permission.evaluate hook: a refused check becomes "deny" with symcc's reason. A check already denied is left alone. */
-export function onEvaluate(host: Host, dir: string) {
+export function onEvaluate(host: Host, dir: string, kind?: SessionKind) {
   return async (e: OcPermissionEvaluation) => {
     if (e.effect === 'deny') return
-    const why = await refusal(host, dir, e.sessionID, e.action, () => permissionTouches(dir, e.action, e.resources))
+    const why = await refusal(host, dir, e.sessionID, e.action, () => permissionTouches(dir, e.action, e.resources), kind)
     if (why) {
       e.effect = 'deny'
       e.message = why
@@ -103,9 +115,9 @@ export function onEvaluate(host: Host, dir: string) {
 }
 
 /** The tool.execute.before hook, the backstop for a call no permission check covers: a refused call throws symcc's reason. */
-export function onToolBefore(host: Host, dir: string) {
+export function onToolBefore(host: Host, dir: string, kind?: SessionKind) {
   return async (e: OcToolBefore) => {
-    const why = await refusal(host, dir, e.sessionID, e.tool, () => toolTouches(dir, e.tool, e.input))
+    const why = await refusal(host, dir, e.sessionID, e.tool, () => toolTouches(dir, e.tool, e.input), kind)
     if (why) throw new Error(why)
   }
 }

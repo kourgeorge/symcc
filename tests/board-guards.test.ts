@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, find, ASK_TOOL, ASK_SENT, blockedEditText, gitWriteIn, gitWriteText, readBoard, withAgentId, AGENT_TRIES_KEPT, CHECKERS_KEPT } from '../hooks/board'
 import { S, toolName, workers, boardAgents, starting, queuedWorkers } from '../hooks/app/state'
-import { checkEdit, askCall, guardFailed, stoppedText } from '../hooks/app/ask'
+import { checkEdit, askCall, guardFailed, stoppedText, unknownAgentText } from '../hooks/app/ask'
 import { toolCall, notLeadText } from '../hooks/app/symcc'
 import { TOOLS } from '../hooks/app/tools'
 import { SCOUT_BOARD_TOOLS, scoutToolRefusal } from '../hooks/core/scouts'
@@ -165,6 +165,41 @@ test("T-525: an agent the board no longer has on record (an old try past the kep
   // the lead (no agent id) still gets its tools
   const board = await toolCall(host, toolName('board'), undefined, { task: 'T-1' })
   expect(board && 'result' in board ? board.result : 'refused').toContain('T-1')
+})
+
+test("T-555: an agent of symcc's type the board no longer names is refused every edit and shell command (in the owner's copy too), reads stay allowed; the lead's own subagents, the lead and a current worker go on", async () => {
+  const runs: SymccRun[] = [{ started: ISO, ended: ISO }, ...[2, 3, 4, 5].map(n => ({ started: ISO, ended: ISO, agent: `w-${n}` })), { started: ISO }]
+  const { host } = await world({ attempts: 6, agent: 'w9', runs })
+  // Claude Code's agent list: w-1 is an old try's worker (symcc's worker type), explore the lead's own Explore subagent
+  host.agents.list = async () => [
+    { id: 'w-1', kind: 'worker', status: 'running' },
+    { id: 'old-scout', kind: 'scout', status: 'running' },
+    { id: 'explore', kind: 'other', status: 'running' },
+  ]
+  expect(await agentOnBoard(host, 'w-1')).toBeUndefined()
+  for (const id of ['w-1', 'old-scout']) {
+    expect(await checkEdit(host, id, { path: `${ROOT}/README.md` })).toBe(unknownAgentText())
+    expect(await checkEdit(host, id, { path: `${WT}/src/a.ts` })).toBe(unknownAgentText())
+    expect(await checkEdit(host, id, { command: `echo x > ${ROOT}/README.md` })).toBe(unknownAgentText())
+    expect(await checkEdit(host, id, { command: 'git commit -am x' })).toBe(unknownAgentText())
+    // a read (no file written, no command) is not refused
+    expect(await checkEdit(host, id, null)).toBeUndefined()
+    // remembered, so a crashed guard still refuses it
+    expect(guardFailed(quiet, 'tool.check', id, { kind: 'throw' })).toMatch(/refused/)
+  }
+  // the lead's own subagent, and an agent the host doesn't list (it can't be told), go on as before
+  expect(await checkEdit(host, 'explore', { path: `${ROOT}/README.md` })).toBeUndefined()
+  expect(await checkEdit(host, 'explore', { command: `echo x > ${ROOT}/README.md` })).toBeUndefined()
+  expect(await checkEdit(host, 'unlisted', { path: `${ROOT}/README.md` })).toBeUndefined()
+  // a host whose agent list fails can't tell either
+  host.agents.list = async () => Promise.reject(new Error('no list'))
+  expect(await checkEdit(host, 'w-0', { path: `${ROOT}/README.md` })).toBeUndefined()
+  // a kind the caller passes in (OpenCode's session metadata) decides over the list
+  expect(await checkEdit(host, 'w-0', { path: `${ROOT}/README.md` }, undefined, async () => 'symcc')).toBe(unknownAgentText())
+  // the lead (no agent id) and the current worker are judged as before
+  expect(await checkEdit(host, undefined, { path: `${ROOT}/README.md` })).toBeUndefined()
+  expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` }, undefined, async () => 'symcc')).toBeUndefined()
+  expect(await checkEdit(host, 'w9', { path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
 })
 
 test('an unreadable board makes the guard throw (so guardFailed decides) instead of letting an edit through', async () => {

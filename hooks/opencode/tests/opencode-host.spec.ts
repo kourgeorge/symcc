@@ -19,7 +19,7 @@ import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, 
 import { claimLead } from '../../app/lead'
 import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile, leadQueue } from '../../app/state'
 import { resetStore, change } from '../../app/store'
-import { stoppedText } from '../../app/ask'
+import { stoppedText, unknownAgentText } from '../../app/ask'
 import { runCommand, nodeClock } from '../../../hosts/node/host'
 import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt, OcSessionContext, OcToolInfo, OcCommandDefinition } from '../ctx'
 import { opencodeAgents, opencodeModel, leadModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
@@ -347,6 +347,43 @@ test('a worktree\'s copy refuses a worker\'s edit outside its files through perm
     await w.hooks.before!({ tool: 'edit', sessionID: 'ses_worker', agent: 'build', messageID: 'm1', id: 'c2', input: { filePath: 'src/a.ts', oldString: '1', newString: '2' } })
     // the guard copy never claimed the lead
     expect(await readFile(`${p.main}/.symcc/lead.json`, 'utf8').catch(() => 'none')).toBe('none')
+    await end!()
+  } finally {
+    await finish(p)
+  }
+}, TEST_MS)
+
+test('T-555: a session made for one of symcc\'s agents that the board no longer names is refused edits and shell commands in the owner\'s copy; reads, the worker, the lead and OpenCode\'s own subagents go on', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    // an old try's worker session (symcc metadata), not on the board; the owner's chat; a subagent of the owner's chat
+    f.sessions.set('ses_lost', { info: { id: 'ses_lost', location: { directory: p.wt }, metadata: { symcc: 'worker' } }, looksLeft: 0, messages: [] })
+    const owner = f.lead(p.main)
+    f.sessions.set('ses_explore', { info: { id: 'ses_explore', parentID: owner, location: { directory: p.main } }, looksLeft: 0, messages: [] })
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined } })
+    // the worktree's copy guards every session working there (the engine's copy would stop the fixture's worker)
+    const m = fakeCtx(p.wt, f.api)
+    const end = await plugin.setup(m.ctx)
+    const edit = await evaluate(m, 'ses_lost', 'edit', [`${p.main}/README.md`])
+    expect(edit.effect).toBe('deny')
+    expect(edit.message).toBe(unknownAgentText())
+    const sh = await evaluate(m, 'ses_lost', 'shell', [`echo x > ${p.main}/README.md`])
+    expect(sh.effect).toBe('deny')
+    expect(sh.message).toBe(unknownAgentText())
+    // the tool backstop refuses its write too
+    let thrown = ''
+    await Promise.resolve(m.hooks.before!({ tool: 'write', sessionID: 'ses_lost', agent: 'build', messageID: 'm1', id: 'c1', input: { filePath: 'README.md', content: 'x' } })).catch((e: Error) => (thrown = e.message))
+    expect(thrown).toBe(unknownAgentText())
+    // reading touches nothing: allowed
+    expect((await evaluate(m, 'ses_lost', 'read', [`${p.main}/README.md`])).effect).toBe('allow')
+    // the owner's chat and its own subagents are never refused
+    expect((await evaluate(m, owner, 'edit', [`${p.main}/README.md`])).effect).toBe('allow')
+    expect((await evaluate(m, 'ses_explore', 'shell', [`echo x > ${p.main}/README.md`])).effect).toBe('allow')
+    // the current worker (named on the board) is judged as usual
+    expect((await evaluate(m, 'ses_worker', 'edit', ['src/b.ts'])).effect).toBe('allow')
+    expect((await evaluate(m, 'ses_worker', 'edit', ['README.md'])).message).toBe(blockedEditText('README.md'))
     await end!()
   } finally {
     await finish(p)

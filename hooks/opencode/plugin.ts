@@ -174,12 +174,14 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
           await leadApi?.known()
         }),
       )
-      // the guard first, so a session's edits are judged from the start (an unknown project refuses nothing)
-      regs.push(await ctx.permission.hook('evaluate', onEvaluate(host, dir)))
-      regs.push(await ctx.tool.hook('execute.before', onToolBefore(host, dir)))
+      // a session's symcc metadata: the kind of symcc agent it was made for (agents.ts), nothing for any other
+      const kindOf = (sessionID: string) => ctx.session.get({ sessionID }).then(i => i.metadata?.symcc)
+      // the guard first, so a session's edits are judged from the start (an unknown project refuses nothing); a
+      // session made for one of symcc's agents that symcc has no record of now is refused edits and shell (T-555)
+      regs.push(await ctx.permission.hook('evaluate', onEvaluate(host, dir, kindOf)))
+      regs.push(await ctx.tool.hook('execute.before', onToolBefore(host, dir, kindOf)))
       // symcc's tools and slash commands (tools.ts), before the engine starts, as Claude Code registers them first;
       // a guard-only copy answers its lead tools and commands that the board runs from the main folder
-      const kindOf = (sessionID: string) => ctx.session.get({ sessionID }).then(i => i.metadata?.symcc)
       const tools = opencodeTools(host, lead, kindOf)
       regs.push(await ctx.tool.transform(t => tools.forEach(x => t.add(x))))
       const commands = opencodeCommands(host, ctx.session)
