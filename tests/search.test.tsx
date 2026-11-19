@@ -95,7 +95,7 @@ test('f opens the search; typing shows only matching tasks in every group, with 
   for (const id of ['T-1', 'T-3', 'T-4']) expect(await ui.find({ key: id })).toBeDefined()
   for (const id of ['T-2', 'T-5']) expect(await ui.find({ key: id })).toBeUndefined()
   expect(await ui.find({ key: 'day:dropped' })).toBeUndefined()
-  expect((await ui.find({ key: 'day:backlog' }))?.text).toMatch(/^  ▾ Backlog/)
+  expect((await ui.find({ key: 'day:backlog' }))?.text).toMatch(/^▾ Backlog/)
   // archived tasks are not searched, so the Done row has no "(+50 archived)"
   expect((await ui.find({ key: 'day:done' }))?.text).not.toMatch(/archived/)
   expect(await ui.find({ type: 'Text', text: /^3 of 5 tasks · Enter on empty clears$/ })).toBeDefined()
