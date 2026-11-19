@@ -10,7 +10,7 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, statusWordOf, shownStatus, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
 import { squash } from '../../core/text'
 import { S } from '../../app/state'
 import { when } from '../../app/tools'
@@ -195,13 +195,14 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const kind = kindMark(t)
   const total = sumRuns(t.runs, nowMs)
   const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
-  const statusWord = x.answered ? 'answered: read it' : STATUS_WORD[t.status]
+  const statusWord = x.answered ? 'answered: read it' : statusWordOf(t)
+  const shown = shownStatus(t)
   const head = (
     <Box key="vs-head" flexDirection="column">
       <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
       <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
       <Box key="vs-status" flexDirection="row" flexWrap="wrap" columnGap={1}>
-        {vsBadge(vs, 'vs-badge', `${statusMark(t)} ${statusWord}`, x.answered ? 'success' : STATUS_BADGE[t.status])}
+        {vsBadge(vs, 'vs-badge', `${statusMark({ ...t, status: shown })} ${statusWord}`, x.answered ? 'success' : STATUS_BADGE[shown])}
         {tags.length ? vsTags(vs, 'vs-tags', tags) : null}
       </Box>
     </Box>
