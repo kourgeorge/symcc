@@ -28,6 +28,7 @@ import { AFTER_CHANGED } from './history'
 import { fixWays } from './review'
 import { num } from './text'
 import { ready } from './task'
+import { rerunDue } from './test-timeout'
 
 export const STARVE_AFTER_CHANGES = 3
 export const STARVE_MS = 2 * 60 * 60_000
@@ -190,7 +191,8 @@ function serial(b: Board): HealthFinding[] {
 
 function owner(b: Board, nowMs: number): HealthFinding[] {
   return b.tasks
-    .filter(t => (t.status === 'waiting' || t.status === 'review') && nowMs - Date.parse(t.updated_at || '') > OWNER_IDLE_MS)
+    // T-511: a task whose tests run again on their own (rerunDue) waits for symcc, not for the owner
+    .filter(t => (t.status === 'waiting' || t.status === 'review') && !rerunDue(t) && nowMs - Date.parse(t.updated_at || '') > OWNER_IDLE_MS)
     .sort(byId)
     .map(t => {
       const h = Math.floor((nowMs - Date.parse(t.updated_at)) / 3_600_000)

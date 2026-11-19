@@ -2,6 +2,7 @@
 import type { SymccTask } from '../../../types'
 import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, answerChoices, answerKeys, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, OVERTIME_OPTIONS, overtimeQuestion, isAnswered, showsAnswer, answerText, isInvestigation, whyFailed, failNext, failAsks } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
+import { rerunDue } from '../../core/test-timeout'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { S, workers } from '../../app/state'
@@ -13,6 +14,7 @@ import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { historyParts, taskPageVs } from './vscode-task'
 import { claudeHost } from '../host'
+import { answeredLeadLine } from '../../core/test-timeout'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
@@ -248,7 +250,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const fileWait = fileWaitText(asked)
   // A running worker over its time limit: "Give it more time?" with +30 min / +60 min / Stop it (see overtimeQuestion).
   const overtime = t.status === 'doing' && !!asked.time_ask
-  const answerable = (t.status === 'waiting' && !fileWait) || overtime
+  // T-511: a task whose tests run again on their own (rerunDue) has nothing to answer either
+  const answerable = (t.status === 'waiting' && !fileWait && !rerunDue(asked)) || overtime
   const askedOptions = overtime ? [...OVERTIME_OPTIONS] : asked.options
   const askedQuestion = overtime ? overtimeQuestion(t.id, (v.max_minutes ?? 45) + (asked.extra_minutes ?? 0)) : t.question
   const choices = answerable ? answerChoices(overtime ? undefined : asked.asked_files, askedOptions) : []
@@ -263,7 +266,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool(claudeHost($), 'change', { task: t.id, answer: text.trim() })
-      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : `The owner answered ${t.id} ("${brief(text.trim())}"); it went back to work.`)
+      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : answeredLeadLine(t, text.trim(), brief))
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))

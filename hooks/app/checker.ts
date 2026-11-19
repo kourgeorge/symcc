@@ -2,9 +2,10 @@
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
 // verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, addTokens, agentSafeName, checkerDiff, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
+import { type Board, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
+import { isTreeId, treePassed } from '../core/passed-trees'
 import { git, taskBranch } from './git'
-import { markStep } from './review'
+import { markStep, readPassedTrees, testedTree } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
 import { S, type CheckerEnd, checkerRuns, halt } from './state'
@@ -41,9 +42,13 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const roles = await loadRoles($).catch(() => S.roles)
   const role = findRole(roles, CHECKER_ROLE)
   const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, test command, kind, ...)
-  const facts = changeValues(t, b, dir)
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : '') })
+  const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
+  const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
+  // T-526: the full test commands ran once, before this (the pre-merge run); the passed-trees record (T-527) says whether this exact code passed them
+  const tests = checkerTestsText(S.N.name, b.test_commands, await passedRun($, b, dir))
+  // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
+  const facts = { ...changeValues(t, b, dir), test_command: tests }
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`
@@ -104,6 +109,16 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   }
   await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined)
   return { verdict, ...(why ? { why } : {}) }
+}
+
+/** T-526: the commit and tree of folder `dir`'s HEAD when that tree passed the board's test commands (the passed-trees record), else null (no test commands, git can't tell, or not on record). */
+async function passedRun($: Host, b: Board, dir: string): Promise<CheckerTestRun | null> {
+  if (!b.test_commands.length) return null
+  const h = await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
+  const sha = h && h.exitCode === 0 ? h.stdout.trim() : ''
+  if (!isTreeId(sha)) return null
+  const tree = await testedTree($, sha, dir).catch(() => '')
+  return tree && treePassed(await readPassedTrees($), tree, b.test_commands) ? { sha, tree } : null
 }
 
 /**

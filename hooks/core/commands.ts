@@ -4,6 +4,7 @@ import { DEFAULT_NAME } from '../name'
 import { isMode, modeOf, normId } from './board-file'
 import { type DiffFile, statCount, YOUR_EDITS } from './review'
 import { parseSettingsCommand, type SettingName, type SettingsInput } from './settings'
+import { rerunDue } from './test-timeout'
 
 // ---------------- the slash commands ----------------
 
@@ -117,8 +118,9 @@ export const NEEDS_YOU: SymccStatus[] = ['review', 'waiting', 'failed']
 /** A task being worked on whose worker ran over its time limit while the owner is asked "give it more time?" (time_ask set). */
 export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => t.status === 'doing' && !!t.time_ask
 
-/** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time. */
-export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => NEEDS_YOU.includes(t.status) || asksMoreTime(t)
+/** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time.
+ *  Not one whose tests ran out of time once (T-511: rerunDue): symcc runs them again on its own, nothing to answer. */
+export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string; test_rerun?: unknown; question?: unknown; merge_wait?: unknown }): boolean => (NEEDS_YOU.includes(t.status) && !rerunDue(t)) || asksMoreTime(t)
 
 /** For the panel: tasks that need the owner (see needsYou) first, the rest keep their order. A task asking for
  *  more time sorts with the waiting ones (both wait for an answer). */

@@ -238,6 +238,17 @@ happens, never the words in its hand-back:
    So when several tasks finish together, merges can take longer. The turn is kept with
    the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
    you never need to delete it by hand.
+   **Tests that run out of time.** A test command stopped by its 10-minute limit is not a
+   failed test: nothing failed, so no new worker try starts and no automatic retry is used.
+   The task keeps its work and waits ("tests ran out of time (10 min); running them again
+   once, no new try"); at a later regular check, when no other task's tests run (and
+   preferably when fewer workers are busy), symcc runs only the test commands again, once.
+   If they pass, the task goes on as usual (review, the checker, or the merge); if a test
+   really fails, it gets a new try as usual. If they run out of time a second time, the
+   task waits for you ("the tests ran out of time twice; nothing failed") with the choices
+   **Run the tests again** (only the tests run again) and **Stop it** (the task is paused,
+   its work kept). "retry T-3" on such a task also runs only its tests again.
+   An approve whose tests run out of time stays in review (approve it again).
    **Time limit.** Each test command may run up to 10 minutes. The whole checking and
    merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
    and the board: 15 minutes with one test command, 35 with three. Only the task's own
@@ -262,6 +273,26 @@ happens, never the words in its hand-back:
 
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
+
+### Tests run once per try
+
+The full test commands run once per try, by symcc, in step 4 (and not even then when the
+same code, with the same commands, already passed: see `passed-trees.json` in the board
+folder). The worker is told the commands, but while it works it runs only the tests for the
+files it changed (one test file, say) and a cheap type check if the project has one; it does
+not run the full commands at the end, as symcc does that and sends it the output if any
+fail. The checker is told that symcc already ran these exact commands on this commit and
+tree and that they passed, and gets the list of changed files: it runs only the tests for
+those files and its own new probe cases, and a full command only when a probe needs it (and
+says why). When symcc's run did not happen (no test commands set, or the code is not in the
+record), the checker runs the tests itself. A worker that skips the full run may now and
+then hand back work that fails symcc's run; that costs one new try, with the failing output.
+
+A narrow test command is one that runs only some test files. On symcc itself that is
+`sh scripts/test-files.sh tests/checker.test.ts tests/merge.test.ts`: it runs just those files
+through `claude plugin test` (from a temporary copy of the plugin) and exits non-zero when one
+fails. The repo's `CLAUDE.md` tells workers and checkers about it. In your own project, say how
+to run one test file in its `CLAUDE.md` (or `AGENTS.md`) the same way.
 
 ### A code change with no test
 

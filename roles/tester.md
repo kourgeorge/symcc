@@ -6,4 +6,4 @@ description: writing or fixing tests - edge cases, error paths, no flaky tests
 - One clear reason to fail per test, with a name that says what it checks.
 - Follow the project's test style and helpers; don't add a new test framework.
 - Don't change the code under test unless the task says so; if a test finds a bug, say so.
-- Run the tests before finishing and say what ran and what passed.
+- Run the tests you wrote or changed before finishing and say what ran and what passed.

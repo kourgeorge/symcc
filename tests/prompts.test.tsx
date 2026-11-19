@@ -41,7 +41,7 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(p).toContain(`own copy of the project on branch symcc/T-1:\n  ${WT}\n`)
   expect(p).toContain('Task T-1: Do it\nMake it work.')
   expect(p).toContain('Files you may change: src/. This is the full list')
-  expect(p).toContain('these must pass (run them in that folder to check): npm test')
+  expect(p).toContain('These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')
   expect(p).toContain(TEST_RULE)
   expect(p).toContain("Earlier tries:\n- try 1 failed its tests\nDon't repeat those mistakes.")
   expect(p.endsWith(`what you changed.\n${ASK}`)).toBe(true)
@@ -75,8 +75,22 @@ test('several test commands are shown to the worker one per line, each run on it
   setup()
   const b = boardWith(['cd web && npm test', 'npm run lint'])
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
-  expect(p).toContain('these must pass; run each one on its own, from your folder:\n  cd web && npm test\n  npm run lint')
+  expect(p).toContain('before merging, and sends you the output if any fail:\n  cd web && npm test\n  npm run lint\n')
   expect(p).not.toContain('npm test && npm run lint')
+})
+
+test('T-526: the worker is told the test commands run once, by symcc before merging: it runs only the tests for what it changed, not the full commands at the end', () => {
+  setup()
+  const p = WORKER_PROMPT(boardWith(['npm test']).tasks[0]!, boardWith(['npm test']), WT)
+  expect(p).toContain('While you work, run only what checks your change: the tests for the files you changed (find the narrowest way the project offers, e.g. one test file), plus the type check if the project has a cheap one.')
+  expect(p).toContain(`Don't run the full commands at the end "to be sure"; symcc does that.`)
+  expect(p).not.toContain('After you finish, these must pass')
+  // with no test commands set, today's wording stays
+  const none = boardWith([])
+  const q = WORKER_PROMPT(none.tasks[0]!, none, WT)
+  expect(q).toContain('There is no test command; keep the change small and correct.')
+  expect(q).not.toContain('symcc runs them all')
+  expect(q).not.toContain('to be sure')
 })
 
 test('placeholders are filled in one pass: "{{files}}" in the task\'s details stays as written', () => {
@@ -94,7 +108,7 @@ test("a role's checklist may use the prompt's placeholders: {{files}} and {{test
   const b = boardWith(['npm test'])
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT, role)
   expect(p).toContain('Your role: tester\n- only touch Files you may change: src/. This is the full list')
-  expect(p).toContain('- run: After you finish, these must pass (run them in that folder to check): npm test')
+  expect(p).toContain('- run: These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')
   expect(p).toContain(`- T-1 on symcc/T-1 in ${WT}`)
   // an unknown {{word}}, and the prompt's own bigger parts, are left as written
   expect(p).toContain('- left: {{nope}} {{role}} {{ask}}')
