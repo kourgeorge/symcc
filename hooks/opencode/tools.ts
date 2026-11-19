@@ -23,6 +23,7 @@ import { findRoot, load } from '../app/store'
 import { normId } from '../core/board-file'
 import { normQid } from '../core/questions'
 import { answerChoices } from '../core/panel'
+import { answeredLeadLine, askedTimedOut } from '../core/test-timeout'
 import type { OcCommandDefinition, OcSessionApi, OcToolInfo } from './ctx'
 
 /** Who calls a tool: the lead (or any session that is none of symcc's agents), a worker, or a scout or checker. */
@@ -152,7 +153,8 @@ export async function answerCommand(host: Host, _command: string, args: string):
   // the lead hears of it only when the call really answered something: the task was waiting (or had a "more time?"
   // question) and isn't any more; the change tool's plain "already answered … nothing changed" texts change nothing
   const after = (await load(host)).tasks.find(x => x.id === id) as typeof t | undefined
-  const answered = (t.status === 'waiting' && after?.status !== 'waiting') || (!!t.time_ask && !after?.time_ask)
-  if (answered && !r.result.startsWith('error')) noteForLead(t.time_ask ? `The owner answered ${id}'s "more time?" question: "${brief(text)}".` : `The owner answered ${id} ("${brief(text)}"); it went back to work.`)
+  // T-511: "Run the tests again" keeps it waiting (only its tests run again), with its question gone
+  const answered = (t.status === 'waiting' && after?.status !== 'waiting') || (!!t.time_ask && !after?.time_ask) || (askedTimedOut(t) && !!after && !after.question)
+  if (answered && !r.result.startsWith('error')) noteForLead(t.time_ask ? `The owner answered ${id}'s "more time?" question: "${brief(text)}".` : answeredLeadLine(t, text, brief))
   return say(r.result)
 }

@@ -238,6 +238,17 @@ happens, never the words in its hand-back:
    So when several tasks finish together, merges can take longer. The turn is kept with
    the file `.symcc/tests.lock`; a stale lock (left by a run that died) is taken over, so
    you never need to delete it by hand.
+   **Tests that run out of time.** A test command stopped by its 10-minute limit is not a
+   failed test: nothing failed, so no new worker try starts and no automatic retry is used.
+   The task keeps its work and waits ("tests ran out of time (10 min); running them again
+   once, no new try"); at a later regular check, when no other task's tests run (and
+   preferably when fewer workers are busy), symcc runs only the test commands again, once.
+   If they pass, the task goes on as usual (review, the checker, or the merge); if a test
+   really fails, it gets a new try as usual. If they run out of time a second time, the
+   task waits for you ("the tests ran out of time twice; nothing failed") with the choices
+   **Run the tests again** (only the tests run again) and **Stop it** (the task is paused,
+   its work kept). "retry T-3" on such a task also runs only its tests again.
+   An approve whose tests run out of time stays in review (approve it again).
    **Time limit.** Each test command may run up to 10 minutes. The whole checking and
    merging gets 10 minutes for each test command (at least one), plus 5 minutes for git
    and the board: 15 minutes with one test command, 35 with three. Only the task's own
