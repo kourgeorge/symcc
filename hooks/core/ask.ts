@@ -271,7 +271,7 @@ const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')
  * A piece of a shell command as bashOutsideFolder walks it: a simple command's text (`doc`: a here-document's text), or
  * the operator between two. An opening "(" is a subshell (`sub`) for "(", "$(" and "`", and not for "{".
  */
-type ShellPiece = { text: string; doc?: boolean } | { op: '&&' | '||' | ';' | '|' | '&' | ')' } | { op: '('; sub: boolean }
+type ShellPiece = { text: string; doc?: boolean; by?: number; lit?: boolean } | { op: '&&' | '||' | ';' | '|' | '&' | ')' } | { op: '('; sub: boolean }
 
 /** Where a here-document starts (`<<EOF`, `<<-'EOF'`, `<< "EOF"`, `<<\EOF`): its end word and whether tabs before it are dropped. */
 const HEREDOC = /^<<(-?)[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|\\?([^\s;&|<>()'"`]+))/
@@ -288,7 +288,9 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
   let text = ''
   let quote = ''
   let tick = false
-  const docs: { end: string; tabs: boolean }[] = []
+  // `by`: where in `out` the command that started the here-document goes; `lit`: its end word is quoted, so its text is
+  // taken as it is (no `$(...)` or "`" runs in it)
+  const docs: { end: string; tabs: boolean; by: number; lit: boolean }[] = []
   const op = (o: '&&' | '||' | ';' | '|' | '&' | ')' | '(', sub = true) => {
     out.push(doc ? { text, doc } : { text }, o === '(' ? { op: o, sub } : { op: o })
     text = ''
@@ -309,7 +311,7 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
     } else if (c === '\\') text += c + (n ?? ''), i++
     else if (!doc && (c === "'" || c === '"')) (quote = c), (text += c)
     else if (here) {
-      docs.push({ end: here[2] ?? here[3] ?? here[4]!, tabs: here[1] === '-' })
+      docs.push({ end: here[2] ?? here[3] ?? here[4]!, tabs: here[1] === '-', by: out.length, lit: here[4] === undefined || here[0].includes('\\') })
       text += here[0]
       i += here[0].length - 1
     } else if ((c === '&' || c === '|') && n === c) op(c === '&' ? '&&' : '||'), i++
@@ -328,7 +330,9 @@ function shellPieces(command: string, doc = false): ShellPiece[] {
           if ((d.tabs ? line.replace(/^\t+/, '') : line) === d.end) break
           lines.push(line)
         }
-        out.push(...shellPieces(lines.join('\n'), true), { op: ';' })
+        const body = lines.join('\n')
+        const lit = d.lit || !/\$\(|`/.test(body)
+        out.push(...shellPieces(body, true).map(x => ('op' in x ? x : { ...x, by: d.by, lit })), { op: ';' })
       }
       i = j - 1
     } else if (c === ';' || c === '\n') op(';')
@@ -414,6 +418,167 @@ const globFolder = (w: string) => {
 }
 
 /**
+ * A word of a simple command as written (`raw`, quotes kept), what it is without quotes (`w`), whether the shell would
+ * expand anything in it (`$` or "`" outside single quotes), and whether it holds a shell sign outside quotes (`sign`:
+ * `<`, `>`, `|`, `&`, `;`, `(`, `)`, `{` or `}`), so that `a.ts>../../x` counts as a redirect stuck to a word and
+ * `{a,../../x}` as a brace expansion, not only text (T-481).
+ */
+type RawWord = { raw: string; w: string; expands: boolean; sign?: boolean }
+
+/** The words of simple command `text` as written, split at spaces outside quotes (see RawWord). A best effort, not a shell parser. */
+function rawWords(text: string): RawWord[] {
+  const out: RawWord[] = []
+  let cur: RawWord | undefined
+  let quote = ''
+  const add = (raw: string, w: string, expands = false) => {
+    cur ??= { raw: '', w: '', expands: false }
+    cur.raw += raw
+    cur.w += w
+    cur.expands ||= expands
+  }
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (quote === "'") c === "'" ? ((quote = ''), add(c, '')) : add(c, c)
+    else if (c === '\\') add(c + (text[i + 1] ?? ''), text[i + 1] ?? ''), i++
+    else if (quote === '"') c === '"' ? ((quote = ''), add(c, '')) : add(c, c, c === '$' || c === '`')
+    else if (c === "'" || c === '"') (quote = c), add(c, '')
+    else if (/\s/.test(c)) {
+      if (cur) out.push(cur)
+      cur = undefined
+    } else {
+      add(c, c, c === '$' || c === '`')
+      // `{` and `}` too: `grep x {a,../../f}` expands to the path ../../f, which grep opens
+      if (/[<>|&;(){}]/.test(c)) cur!.sign = true
+    }
+  }
+  if (cur) out.push(cur)
+  return out
+}
+
+/**
+ * Text in a command that may make a plain command name run something else: a function or alias of that name, `hash`,
+ * `enable`, a changed PATH, a file read into the shell (`source`, "."), `eval`. When it shows up, no word of the
+ * command is taken as only text (T-481).
+ */
+const SHADOWS = /\b(alias|function|hash|enable|eval|source|PATH|BASH_ENV|ENV|exec)\b|(^|[\s;&|(){}])\.\s/
+
+/** A function defined with the name of a command whose words may be taken as only text (`cat() { bash; }`), looked for in the whole command (SHADOWS). */
+const SHADOW_FUNCTION = /\b(cat|tee|echo|printf|sed|gsed|grep|egrep|fgrep)\s*\(\s*\)/
+
+/** A word that redirects (`>`, `2>&1`, `<`, `<<'EOF'`, `>f`): its operator part, and the target in the same word ('' when it is the next word). */
+const REDIRECT = /^(\d*|&)(>>?|>\||<<<|<<-?|<>|<)(&?)(.*)$/
+
+/**
+ * Whether simple command `words` sends what it prints (its standard output) only to files: at least one `>`, `>>` or
+ * `1>` redirect, each to a plain path that is not `/dev/...` (but /dev/null) or `/proc/...`, and no `>&` or `&>` that could send it on to a pipe.
+ */
+function printsToFile(words: RawWord[]): boolean {
+  let file = false
+  for (let i = 0; i < words.length; i++) {
+    const m = REDIRECT.exec(words[i]!.raw)
+    // a redirect stuck after other text (`b>&2`, `b>x`) is not judged here: then it is not only to files
+    if (!m && words[i]!.sign) return false
+    if (!m) continue
+    const [, fd, op, amp, rest] = m
+    if (amp || fd === '&') return false
+    if (!op!.startsWith('>')) continue
+    if (fd && fd !== '1') continue
+    const target = rest ? { ...words[i]!, w: rest, raw: rest } : words[i + 1]
+    if (!target || target.expands || !target.w || /^[&<>]/.test(target.raw)) return false
+    if (/^\/(dev|proc)\//i.test(target.w) && target.w !== '/dev/null') return false
+    file = true
+  }
+  return file
+}
+
+/** Command `words` with any leading `NAME=value` settings dropped, and its command name (undefined when there is none). */
+function commandOf(words: RawWord[]): { name: string | undefined; args: RawWord[] } {
+  let i = 0
+  while (i < words.length && /^[A-Za-z_]\w*=/.test(words[i]!.raw)) i++
+  return { name: words[i]?.raw, args: words.slice(i + 1) }
+}
+
+/** Whether a here-document's text, sent to simple command `text`, is only written to a file and never run: `cat` or `tee` that print only to files (printsToFile, T-481). */
+function docOnlyWritten(text: string): boolean {
+  const words = rawWords(text)
+  const { name } = commandOf(words)
+  return (name === 'cat' || name === 'tee') && printsToFile(words)
+}
+
+/** Whether `s` is a sed script of `s`, `y` and plain one-letter commands only (with line or /regex/ addresses): nothing in it reads, writes or runs a file (no `r`, `R`, `w`, `W`, `e` command or flag). */
+export function sedScriptSafe(s: string): boolean {
+  let i = 0
+  // a part ending at delimiter `d` (a backslash keeps the next character); false when it never ends
+  const part = (d: string) => {
+    for (; i < s.length; i++) {
+      if (s[i] === '\\') i++
+      else if (s[i] === d) return ++i, true
+    }
+    return false
+  }
+  const addr = () => {
+    if (/\d/.test(s[i] ?? '')) while (/\d/.test(s[i] ?? '')) i++
+    else if (s[i] === '$') i++
+    else if (s[i] === '/' || s[i] === '\\') {
+      const d = s[i] === '\\' ? s[++i] : '/'
+      i++
+      if (!d || d === '\n' || !part(d)) return false
+      while (s[i] === 'I' || s[i] === 'M') i++
+    }
+    return true
+  }
+  while (i < s.length) {
+    if (/[\s;]/.test(s[i]!)) {
+      i++
+      continue
+    }
+    if (!addr()) return false
+    if (s[i] === ',') {
+      i++
+      if (!addr()) return false
+    }
+    while (s[i] === ' ' || s[i] === '!') i++
+    const c = s[i++]
+    if (c === 's' || c === 'y') {
+      const d = s[i++]
+      if (!d || d === '\\' || d === '\n' || !part(d) || !part(d)) return false
+      if (c === 's') while (/[gpiImM\d]/.test(s[i] ?? '')) i++
+    } else if (!c || !'dDpPgGhHxnNz={}'.includes(c)) return false
+    if (i < s.length && !/[\s;}]/.test(s[i]!)) return false
+  }
+  return true
+}
+
+/**
+ * Simple command `text` with the words that are only text to it taken out (T-481), and those words (`whole`), to be
+ * checked each as one path, whole, the way a program that opens it would read it. That is what sed, grep, echo and
+ * printf do with a word they are given: none of them finds a path inside its text and opens that (a sed script only
+ * counts when sedScriptSafe passes it: no `r`, `w` or `e`), so `sed -i '' "s|'../../x'|'./x'|" f` is checked as
+ * the one path `s|'..`/`..`/`x'|'.`/... inside the worker's folder, not as `../../x`. echo and printf only count when
+ * they print to files (printsToFile), not to a shell (`echo 'cat ../../x' | sh`). Only words with nothing for the shell
+ * to expand (`$`, "`") and not options or redirects count; the rest of `text`, and all of it for any other command,
+ * stays as it is (perl, bun and node code may open any path written in it).
+ */
+function dropTextWords(text: string): { text: string; whole: string[] } {
+  const words = rawWords(text)
+  const { name, args } = commandOf(words)
+  const sed = name === 'sed' || name === 'gsed'
+  const grep = name === 'grep' || name === 'egrep' || name === 'fgrep'
+  const print = (name === 'echo' || name === 'printf') && printsToFile(words)
+  if (!sed && !grep && !print) return { text, whole: [] }
+  const skip = new Set<RawWord>()
+  args.forEach((a, j) => {
+    const after = j > 0 && REDIRECT.exec(args[j - 1]!.raw)?.[4] === ''
+    // a word with a shell sign outside quotes (`a.ts>../../x`, `x<../../f`) may hold a redirect: it stays as it is
+    if (a.expands || a.sign || after || REDIRECT.test(a.raw) || a.w.startsWith('-') || !a.w) return
+    if (sed && !sedScriptSafe(a.w)) return
+    skip.add(a)
+  })
+  if (!skip.size) return { text, whole: [] }
+  return { text: words.map(w => (skip.has(w) ? "''" : w.raw)).join(' '), whole: [...skip].map(w => w.w) }
+}
+
+/**
  * Walks shell `command` of a worker whose own folder is `wts` (the main name first) and calls `visit` with each clean
  * absolute path a word of it may name, stopping at (and answering) the first answer that is not undefined. A word
  * counts as a path when it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part, and with
@@ -454,6 +619,8 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
   let seen = start
   const groups: { here: string[] }[] = []
   const pieces = shellPieces(command)
+  // shell text that may make `cat`, `sed`... run something else: then no word is taken as only text (T-481)
+  const shadowed = SHADOW_FUNCTION.test(command) || pieces.some(p => 'text' in p && !p.doc && SHADOWS.test(p.text))
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i]!
     if ('op' in p) {
@@ -467,8 +634,17 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
       else if (p.op === '||') here = join(here, seen)
       continue
     }
-    const plain = opts.plain ? plainPathWords(p) : new Set<string>()
-    for (const w of new Set([...pieceWords(p).keys(), ...plain])) {
+    // a here-document only written to a file (`cat > .scratch/p.ts <<'EOF'`) is text, not shell: its words and any cd
+    // in it are skipped, as with the Write tool (T-481)
+    if (p.doc && p.lit && p.by !== undefined && !shadowed) {
+      const by = pieces[p.by]
+      if (by && 'text' in by && docOnlyWritten(by.text)) continue
+    }
+    // the words that are only text to the command (a sed script, a grep pattern) are checked each as one path (T-481)
+    const { text, whole } = p.doc || shadowed ? { text: p.text, whole: [] } : dropTextWords(p.text)
+    const q = { text, doc: p.doc }
+    const plain = opts.plain ? new Set([...plainPathWords(q), ...whole]) : new Set<string>()
+    for (const w of new Set([...pieceWords(q).keys(), ...whole, ...plain])) {
       const climbs = w.split('/').includes('..')
       const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
       if (!w.startsWith('/') && !homeWord && !climbs && !plain.has(w)) continue

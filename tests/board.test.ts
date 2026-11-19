@@ -1505,7 +1505,8 @@ test("a worker's shell command: plain relative paths are looked up for links, th
   const checks = () => {
     expect(no(`${cds}\ncat ../../../../README.md`)).toBe(BASH_TOO_MANY)
     expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`)).toBeUndefined()
-    expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\ncat ../x\nEOF`)).toBe(BASH_TOO_MANY)
+    // a here-document run by a shell (one only written to a file is text, T-481)
+    expect(no(`bash <<'EOF'\n${cds}\ncat ../x\nEOF`)).toBe(BASH_TOO_MANY)
     expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF\ncat /repo/README.md`)).toBe('README.md')
     expect(paths(`${cds}\ncat x`).tooMany).toBe(true)
     expect(paths(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`).tooMany).toBe(false)
@@ -1522,7 +1523,7 @@ test("a worker's shell command: plain relative paths are looked up for links, th
   const cdWork = (n: number) => () => {
     const c = Array.from({ length: n }, (_, i) => `cd d${i}`).join('\n')
     no(`${c}\ncat ../../../../README.md`)
-    no(`cat > /tmp/s.sh <<'EOF'\n${c}\ncat ../x\nEOF`)
+    no(`bash <<'EOF'\n${c}\ncat ../x\nEOF`)
     paths(`${c}\ncat x`)
     paths(`cat > /tmp/s.sh <<'EOF'\n${c}\nEOF`)
   }
