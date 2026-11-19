@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, testLockStaleMs, testMinutesOf, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -368,18 +368,19 @@ export function resetTestLine() {
 }
 
 /**
- * Whether test lock text `held` (file time `fileMs`) may be taken over: it is older than TEST_LOCK_STALE_MS, or its
+ * Whether test lock text `held` (file time `fileMs`) may be taken over: it is older than testLockStaleMs (from the board's test_minutes), or its
  * task is no longer being checked by any copy of the plugin (gone from the board, or its check mark is no longer
  * refreshed: its check ended or was given up, or its session died), or it is task `me`'s own, left by an earlier
  * go of that task (say one cut short by a reload; this go's fresh check mark would otherwise keep it looking alive).
  * A board that can't be read: not stale.
  */
 async function testLockStale($: Host, me: string, held: string, fileMs?: number): Promise<boolean> {
-  if (isLockStale(held, Date.now(), fileMs, TEST_LOCK_STALE_MS)) return true
+  const b = await load($).catch(() => null)
+  // the board's test_minutes sets how long a test command may run, so how old a lock may get (a board that can't be read: the default)
+  if (isLockStale(held, Date.now(), fileMs, testLockStaleMs(testMinutesOf(b ?? {})))) return true
   const l = parseTestLock(held)
   if (!l) return false
   if (l.task === me) return true
-  const b = await load($).catch(() => null)
   if (!b) return false
   const cur = find(b, l.task)
   return !cur || !checkStepNow(cur, Date.now())
@@ -534,10 +535,10 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       for (const cmd of b.test_commands) {
         await refresh()
         let thrown: string | undefined
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: TEST_TIMEOUT_MS }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
         // T-511: stopped by its time limit, not failed: no test output, so no new try is started for it (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
-          const min = limitMinutes(TEST_TIMEOUT_MS)
+          const min = limitMinutes(testTimeoutMs(b))
           return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min) }
         }
         if (r.exitCode !== 0) {

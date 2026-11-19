@@ -1,5 +1,5 @@
 // Who drives the board, and which session owns a running task.
-import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf } from './board-file'
+import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf, DEFAULT_TEST_MINUTES, testMinutesOf } from './board-file'
 import { parseStamp } from './text'
 import { stoppedLine, stopEnd } from './history'
 import { addCommits, shortSha } from './commits'
@@ -151,18 +151,20 @@ export function ownedHere(t: BoardTask, me: string, live: string | null): boolea
 export const FINISH_BEAT_MS = 30_000
 /** a finishing mark older than this was left by a copy of the plugin that is gone */
 export const FINISH_STALE_MS = 3 * 60_000
-/** the longest one test command may run before it is stopped */
-export const TEST_TIMEOUT_MS = 10 * 60_000
+/** the longest one test command may run before it is stopped, with the default test_minutes (see testTimeoutMs) */
+export const TEST_TIMEOUT_MS = DEFAULT_TEST_MINUTES * 60_000
+/** The longest one test command of board `b` may run, in ms (its test_minutes, see testMinutesOf). */
+export const testTimeoutMs = (b: { test_minutes?: unknown }): number => testMinutesOf(b) * 60_000
 /** the time a checking and merging step gets for git and the board, on top of its test commands */
 export const FINISH_GIT_MS = 5 * 60_000
 
 /**
  * The longest a finished task's checking and merging may take in a live copy of the plugin: each
- * of its `tests` test commands may run TEST_TIMEOUT_MS (counted at least once), plus FINISH_GIT_MS
+ * of its `tests` test commands may run `testMinutes` (the board's test_minutes, see testMinutesOf; counted at least once), plus FINISH_GIT_MS
  * for git and the board. A step still running then is taken as stuck: its task goes back to "todo"
  * (or is done, when its work already reached its branch; or failed, the second time in a row).
  */
-export const finishLimitMs = (tests: number) => Math.max(1, tests) * TEST_TIMEOUT_MS + FINISH_GIT_MS
+export const finishLimitMs = (tests: number, testMinutes: number = DEFAULT_TEST_MINUTES) => Math.max(1, tests) * testMinutes * 60_000 + FINISH_GIT_MS
 
 /** The note a try's run ends with when its checking and merging ran over `min` minutes and was given up. */
 export const ranOverNote = (min: number) => `its checking and merging ran over ${min} min and was stopped`

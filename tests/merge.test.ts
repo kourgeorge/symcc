@@ -1,7 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS } from '../hooks/app/review'
-import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
+import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, mergeTurn, ownerEdits, withTestLock, TEST_LOCK_POLL_MS, testsRunningNow } from '../hooks/app/review'
+import { testLockText, parseTestLock, waitingTestsNote, TEST_LOCK_STALE_MS, testLockStaleMs, testMinutesOf, testTimeoutMs, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, onConflict, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -11,7 +11,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, rerunTimedOutTests } from '../hooks/app/workers'
 import { panelSections, needsYou, RERUN_CELL, boardHealth, waitsForYou, shownStatus, statusCounts, statusLine, statusWordOf, RERUN_WORD, detailRows } from '../hooks/board'
-import { ranOutOfTime, answeredLeadLine } from'../hooks/core/test-timeout'
+import { ranOutOfTime, answeredLeadLine, parseTimedOutAnswer, moreTestMinutes, MAX_TEST_MINUTES } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
@@ -5516,8 +5516,8 @@ test('T-511: a second time-out leaves the task waiting for the owner with the op
   expect(c.spawned()).toBe(0)
   expect(t.status).toBe('waiting')
   expect(t.test_rerun).toBe(2)
-  expect(t.question).toBe('T-1: the tests ran out of time twice; nothing failed. Run them again, or stop it?')
-  expect(t.options).toEqual(['Run the tests again', 'Stop it'])
+  expect(t.question).toBe('T-1: the tests ran out of time twice; nothing failed. Run them again, give them more time, or stop it?')
+  expect(t.options).toEqual(['Run the tests again', 'Give them more time', 'Stop it'])
   expect(t.test_tries ?? 0).toBe(0)
   expect(t.attempts).toBe(1)
   expect(c.w.git.main).toBe(M1)
@@ -5568,10 +5568,102 @@ test('T-511: a real test failure on the rerun still starts a new try (an auto re
 })
 
 test("T-511: the lead's line after an answer on the panel says which it is", () => {
-  const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'T-1: the tests ran out of time twice; nothing failed. Run them again, or stop it?' }
+  const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'T-1: the tests ran out of time twice; nothing failed. Run them again, give them more time, or stop it?' }
   expect(answeredLeadLine(asked, 'Stop it')).toBe('The owner answered T-1 ("Stop it"): it is paused after its tests ran out of time twice; its work is kept.')
   expect(answeredLeadLine(asked, 'Run the tests again')).toBe('The owner answered T-1 ("Run the tests again"): only its tests run again (they ran out of time twice), with no worker and no new try.')
   expect(answeredLeadLine({ id: 'T-1', status: 'waiting', question: 'Which one?' }, 'Stop it')).toBe('The owner answered T-1 ("Stop it"); it went back to work.')
+})
+
+/** Records the timeoutMs of every test command `w` runs. */
+function testLimits(w: ReturnType<typeof world>): (number | undefined)[] {
+  const seen: (number | undefined)[] = []
+  const run = w.$.run.bind(w.$)
+  ;(w.$ as { run: unknown }).run = (argv: readonly string[], o?: { timeoutMs?: number }) => {
+    if (argv[0] === '/bin/sh') seen.push(o?.timeoutMs)
+    return run(argv as string[], o as never)
+  }
+  return seen
+}
+
+test('T-510: with no test_minutes each test command may run 10 min; the check, its limit and the lock follow that', async () => {
+  expect(DEFAULT_TEST_MINUTES).toBe(10)
+  expect(testMinutesOf(emptyBoard())).toBe(10)
+  expect(testTimeoutMs(emptyBoard())).toBe(10 * MIN)
+  expect(TEST_TIMEOUT_MS).toBe(10 * MIN)
+  expect(finishLimitMs(1)).toBe(15 * MIN)
+  expect(TEST_LOCK_STALE_MS).toBe(20 * MIN)
+  const w = world()
+  const limits = testLimits(w)
+  const [b, t] = boardWith('auto', ['npm test'])
+  expect((await checkAndMerge(w.$, t, WT, b)).ok).toBe(true)
+  expect(limits).toEqual([10 * MIN])
+})
+
+test('T-510: a board with test_minutes 20 runs each test command with a 20 min limit, and says 20 min when one runs out of time', async () => {
+  const w = world()
+  const limits = testLimits(w)
+  const [b0, t] = boardWith('auto', ['npm test', 'npm run e2e'])
+  const b = { ...b0, test_minutes: 20 }
+  expect((await checkAndMerge(w.$, t, WT, b)).ok).toBe(true)
+  expect(limits).toEqual([20 * MIN, 20 * MIN])
+  const w2 = world({}, { 'npm test': { exitCode: 124, stdout: '', stderr: 'timed out after 1200000 ms' } })
+  expect(await checkAndMerge(w2.$, t, WT, b)).toEqual({ ok: false, timedOut: 20, detail: 'tests ran out of time: `npm test` was still running after 20 min; nothing failed' })
+})
+
+test("T-510: a finished worker's checking and merging gets its limit from test_minutes", async () => {
+  S.me = 'me'
+  expect(finishLimitMs(2, 20)).toBe(2 * 20 * MIN + 5 * MIN)
+  expect(finishLimitMs(0, 20)).toBe(finishLimitMs(1, 20))
+  const w = world()
+  const timers: number[] = []
+  ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number) => (timers.push(ms), { cancel() {} })
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', runs: [{ started: ISO }] })
+  await saveBoard(w.$, { ...b, test_minutes: 20 })
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  expect(timers).toContain(finishLimitMs(1, 20))
+  expect(timers).not.toContain(finishLimitMs(1))
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+})
+
+test("T-510: the test lock goes stale after twice test_minutes: a 25 min old lock of a task still being checked is stale at 10, not at 30", async () => {
+  expect(testLockStaleMs(30)).toBe(60 * MIN)
+  for (const [minutes, running] of [[undefined, false], [30, true]] as const) {
+    const w = world()
+    const [b0] = boardWith('auto', ['npm test'])
+    const b = patchTask(b0, 'T-1', { checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
+    await saveBoard(w.$, minutes ? { ...b, test_minutes: minutes } : b)
+    w.put(TLOCK, testLockText('T-1', 'other', Date.now() - 25 * MIN))
+    expect(await testsRunningNow(w.$)).toBe(running)
+  }
+})
+
+test('T-510: "Give them more time" doubles test_minutes (at most 120) and runs only the tests again', async () => {
+  expect(parseTimedOutAnswer('Give them more time')).toBe('more')
+  expect(parseTimedOutAnswer('more time please')).toBe('more')
+  expect([moreTestMinutes(10), moreTestMinutes(80), moreTestMinutes(MAX_TEST_MINUTES)]).toEqual([20, 120, 120])
+  let slow = true
+  const c = await timingOut(() => slow)
+  await rerunTimedOutTests(c.w.$)
+  expect((await c.t1()).test_rerun).toBe(2)
+  expect(leadQueue.join('\n')).toContain('answer: Give them more time (the test_minutes setting goes from 10 to 20 min')
+  slow = false
+  c.w.calls.length = 0
+  const limits = testLimits(c.w)
+  const out = await runTool(c.w.$, 'change', { task: 'T-1', answer: 'Give them more time' })
+  expect(out).toContain('test_minutes is now 20 min (was 10)')
+  expect(out).toContain('only its tests run again')
+  expect((await load(c.w.$)).test_minutes).toBe(20)
+  for (let i = 0; i < 5000 && (await c.t1()).status !== 'done'; i++) await Promise.resolve()
+  const t = await c.t1()
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(limits).toEqual([20 * MIN])
+  expect(c.spawned()).toBe(0)
+  expect(t.history.some(l => l.includes('test_minutes 10 → 20 min'))).toBe(true)
+  const asked = { id: 'T-1', status: 'waiting', test_rerun: 2, question: 'x' }
+  expect(answeredLeadLine(asked, 'Give them more time')).toContain('the test_minutes setting goes up')
 })
 
 test("T-511: a real test failure after a worker's try keeps today's behaviour: a new try", async () => {

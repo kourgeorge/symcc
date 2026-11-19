@@ -33,18 +33,25 @@ export const rerunNote = (min: number) => `tests ran out of time (${min} min); r
 export const RERUN_RUNNING_NOTE = 'running only the tests again (they ran out of time once)'
 
 /** The owner's question after the second time-out. */
-export const timedOutTwiceQuestion = (id: string) => `${id}: the tests ran out of time twice; nothing failed. Run them again, or stop it?`
+export const timedOutTwiceQuestion = (id: string) => `${id}: the tests ran out of time twice; nothing failed. Run them again, give them more time, or stop it?`
 
-/** The choices for timedOutTwiceQuestion (T-510 will add one that gives the tests more time). */
-export const TIMED_OUT_OPTIONS = ['Run the tests again', 'Stop it'] as const
+/** The choices for timedOutTwiceQuestion: "Give them more time" raises the test_minutes setting (see moreTestMinutes) and runs them again. */
+export const TIMED_OUT_OPTIONS = ['Run the tests again', 'Give them more time', 'Stop it'] as const
+
+/** The most minutes the test_minutes setting may be. */
+export const MAX_TEST_MINUTES = 120
+
+/** test_minutes after the owner's "Give them more time": twice `min`, at most MAX_TEST_MINUTES. */
+export const moreTestMinutes = (min: number) => Math.min(MAX_TEST_MINUTES, Math.max(1, Math.round(min)) * 2)
 
 /** The note of a task stopped by the owner after its tests ran out of time twice. */
 export const TIMED_OUT_STOPPED_NOTE = 'stopped by the owner: the tests ran out of time twice; its work is kept in its folder and branch'
 
-/** What the owner's answer to timedOutTwiceQuestion picks: run the tests again, stop it, or null (any other answer). */
-export function parseTimedOutAnswer(answer: string): 'again' | 'stop' | null {
+/** What the owner's answer to timedOutTwiceQuestion picks: run the tests again, give them more time, stop it, or null (any other answer). */
+export function parseTimedOutAnswer(answer: string): 'again' | 'more' | 'stop' | null {
   const a = String(answer ?? '').trim().toLowerCase()
   if (!a) return null
+  if (/^(give (them |it |the tests )?more time|more time)\b/.test(a)) return 'more'
   if (/^(run (the tests |them )?again|again|rerun|retest|run the tests)\b/.test(a)) return 'again'
   if (/^stop( it)?\b/.test(a)) return 'stop'
   return null
@@ -66,6 +73,7 @@ export function answeredLeadLine(t: { id: string; status?: unknown; test_rerun?:
   const said = `The owner answered ${t.id} ("${brief(answer)}")`
   const pick = askedTimedOut(t) ? parseTimedOutAnswer(answer) : null
   if (pick === 'again') return `${said}: only its tests run again (they ran out of time twice), with no worker and no new try.`
+  if (pick === 'more') return `${said}: the test_minutes setting goes up (to twice what it was, at most ${MAX_TEST_MINUTES} min) and only its tests run again, with no worker and no new try.`
   if (pick === 'stop') return `${said}: it is paused after its tests ran out of time twice; its work is kept.`
   return `${said}; it went back to work.`
 }

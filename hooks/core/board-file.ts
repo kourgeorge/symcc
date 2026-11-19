@@ -19,6 +19,8 @@ export type Board = {
   max_minutes: number
   /** how many new tries a task gets on its own after its tests fail, before it is marked failed */
   auto_retries: number
+  /** how many minutes each test command may run before merging (see testMinutesOf); absent: 10 */
+  test_minutes?: number
   /** open the board panel by itself when a session starts (true unless turned off) */
   open_on_start: boolean
   /**
@@ -191,13 +193,21 @@ export function isLockStale(text: string | null, nowMs: number, fileMs?: number,
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs
 }
 
+/** How many minutes one test command may run before merging, on a board without test_minutes. */
+export const DEFAULT_TEST_MINUTES = 10
+
+/** The minutes one test command of board `b` may run before merging: its test_minutes (absent or not usable: DEFAULT_TEST_MINUTES). */
+export const testMinutesOf = (b: { test_minutes?: unknown }): number => (typeof b?.test_minutes === 'number' && Number.isFinite(b.test_minutes) && b.test_minutes >= 1 ? Math.round(b.test_minutes) : DEFAULT_TEST_MINUTES)
+
 /**
  * The project-wide test lock (<data folder>/tests.lock): symcc's merge step runs only one task's test commands at a time,
  * across tasks and sessions (see withTestLock in app/review.ts). The holder writes its task, session and time, and
- * dates it again before each test command; older than TEST_LOCK_STALE_MS (more than one command's TEST_TIMEOUT_MS) it is stale.
+ * dates it again before each test command; older than testLockStaleMs (twice one command's time limit, the board's
+ * test_minutes) it is stale. TEST_LOCK_STALE_MS is that with the default 10 minutes.
  */
 export const TEST_LOCK_FILE = 'tests.lock'
-export const TEST_LOCK_STALE_MS = 20 * 60_000
+export const testLockStaleMs = (testMinutes: number) => 2 * testMinutes * 60_000
+export const TEST_LOCK_STALE_MS = testLockStaleMs(DEFAULT_TEST_MINUTES)
 export type TestLock = { task: string; session: string; at: number }
 export const testLockText = (task: string, session: string, at: number) => JSON.stringify({ task, session, at }) + '\n'
 export function parseTestLock(text: string | null): TestLock | null {
@@ -285,6 +295,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   max_parallel: v => isNum(v) && v >= 0,
   max_minutes: v => isNum(v) && v >= 0,
   auto_retries: v => isNum(v) && v >= 0,
+  test_minutes: v => isNum(v) && v >= 1,
   open_on_start: v => typeof v === 'boolean',
   notify: v => isNotify(v),
   enabled: v => typeof v === 'boolean',
