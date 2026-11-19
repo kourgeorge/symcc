@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
+import { type Blockers, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, TEST_TIMEOUT_MS, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, TEST_LOCK_FILE, TEST_LOCK_STALE_MS, testLockText, parseTestLock, waitingTestsNote, isLockStale, checkStepNow, SCRATCH_DIR } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -152,7 +152,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     if (why) return { ok: false, detail: `symcc could not leave out the worker's ${SCRATCH_DIR}/ folder: ${why}` }
   }
   const unstaged = await unstage($, dir, left)
-  if (unstaged) return { ok: false, detail: `symcc could not leave out files that look like secrets (${secretNames(left)}): ${unstaged}` }
+  if (unstaged) return { ok: false, detail: `symcc could not leave out files that look like secrets (${nameList(left)}): ${unstaged}` }
   const committed = await commitTry($, t, dir, made)
   if (committed) return { ok: false, detail: `symcc could not commit the work: ${committed}` }
   if (!(await branchExists($, target))) return goneResult(target)
@@ -169,7 +169,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   const inBranch = secretFiles(await changedSince($, base, head, true))
   if (inHistory.length || inBranch.length) {
     const why = await dropFromBranch($, t, dir, base, inBranch, made)
-    if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${secretNames([...new Set([...inHistory, ...inBranch])].sort())}): ${why}` }
+    if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${nameList([...new Set([...inHistory, ...inBranch])].sort())}): ${why}` }
     head = await gitOk($, ['rev-parse', 'HEAD'], dir)
     changed = await changedSince($, base, head)
     left.push(...inBranch)
@@ -293,16 +293,6 @@ async function undoOutOfScope($: Host, t: SymccTask, dir: string, base: string, 
   }
   const c = await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
   return c ? `. Could not undo them on the task's branch: ${c}` : ''
-}
-
-/**
- * The secret-looking `files` named in a failure ("tests/.env, id_rsa"): just the names (at most 10), with control characters shown as "?".
- * Not secretsLeftText: that says the files were left out, which a failed step did not finish (T-507).
- */
-function secretNames(files: readonly string[]): string {
-  // eslint-disable-next-line no-control-regex
-  const shown = files.slice(0, 10).map(f => f.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?'))
-  return `${shown.join(', ')}${files.length > 10 ? `, and ${files.length - 10} more` : ''}`
 }
 
 /** Git's error in a few words: the first lines of its error output, plus a hint when it is about commit signing. */

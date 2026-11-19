@@ -4,23 +4,21 @@ import { DEFAULT_NAME } from '../name'
 import { type Board, type BoardTask, type Blockers, blockerFiles, find, isMode, modeOf, STATUS_WORD } from './board-file'
 import { isSecretName } from './git-setup'
 import { patchTask } from './task'
-import { clean } from './text'
+import { clean, shownPath } from './text'
 
 // ---------------- secret-looking files in a task's change ----------------
 
 /** The files in `files` whose names look like secrets (isSecretName, the same list first-time git setup leaves out): never committed or merged from a task's change. */
 export const secretFiles = (files: readonly string[]): string[] => files.filter(isSecretName)
 
-// A name may hold any character but NUL: control characters (newlines, terminal escapes) are shown as "?".
-// eslint-disable-next-line no-control-regex
-const shownName = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
-const nameList = (files: readonly string[]) => `${files.slice(0, 10).map(shownName).join(', ')}${files.length > 10 ? `, and ${files.length - 10} more` : ''}`
+/** The names of `files` ("tests/.env, id_rsa"): at most 10, then "and N more"; control characters shown as "?" (shownPath). */
+export const nameList = (files: readonly string[]) => `${files.slice(0, 10).map(shownPath).join(', ')}${files.length > 10 ? `, and ${files.length - 10} more` : ''}`
 
 /**
  * What a check says about the secret-looking files (`files`, see secretFiles) it left out of a task's commit.
  * `where`: where they are now (by default still in the task's folder; after a merge that folder is removed, so they are moved first).
  */
-export const secretsLeftText = (files: readonly string[], where = "still in the task's folder") => `left out ${nameList(files)}: the name looks like a secret, so it was not committed or merged (${shownName(where)})`
+export const secretsLeftText = (files: readonly string[], where = "still in the task's folder") => `left out ${nameList(files)}: the name looks like a secret, so it was not committed or merged (${shownPath(where)})`
 
 /** Whether `file` (a path git listed in a task's change) is a plain relative path that is safe to move: not absolute, no "." or ".." parts, no NUL or backslash. */
 export const isPlainRelPath = (file: string) => !!file && !file.startsWith('/') && !file.includes('\0') && !file.includes('\\') && file.split('/').every(p => p !== '' && p !== '.' && p !== '..')
@@ -264,12 +262,9 @@ export function mergeBlockers(statusZ: string, incoming: readonly string[], skip
   return out
 }
 
-/** A path made safe to show: control characters (newlines, terminal escapes) become "?". */
-const shown = (p: string) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?')
-
 /** A short list of files: "a, b, c and 4 more". */
 const fileList = (files: readonly string[], n = 5) => {
-  const f = files.map(shown)
+  const f = files.map(shownPath)
   return f.length > n ? `${f.slice(0, n).join(', ')} and ${f.length - n} more` : f.join(', ')
 }
 

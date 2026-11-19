@@ -107,7 +107,7 @@ export function commandArgs(name: string, text: string): string {
  * other as a prompt the model answers (as Claude Code does with a command's text).
  */
 export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt' | 'synthetic'>): OcCommandDefinition[] {
-  return [...COMMANDS(), ANSWER_COMMAND()].map(c => ({
+  return [...COMMANDS(host.features), ANSWER_COMMAND()].map(c => ({
     name: c.name,
     description: c.description,
     async execute(inv) {

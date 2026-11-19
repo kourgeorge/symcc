@@ -12,7 +12,8 @@ import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   statusCell, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
-  type KeyHint, type Seg, type BoardTask, asksMoreTime, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
+  type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
+  waitsForYou, shownStatus, statusWordOf,
 } from '../board'
 import { restFrame } from '../core/logo'
 import { DEFAULT_NAME } from '../name'
@@ -94,8 +95,9 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
   const leads = bandLeads(shown, nowMs, since)
   for (const t of shown) {
     const note = bandNote(t, nowMs, since(t.id))
-    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : t.status === 'waiting' ? ` — ${t.question ?? t.note}` : note ? ` — ${note}` : ''
-    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[t.status] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
+    // a waiting task whose tests only run again (not waitsForYou) shows with the running ones: "rerunning its tests" (T-534)
+    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : t.status === 'waiting' ? ` — ${statusWordOf(t)}` : note ? ` — ${note}` : ''
+    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t)] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
   }
   if (live.length + questions.length > rows) out.push([{ text: `+${live.length + questions.length - rows} more · /${f.name}`, color: 'inactive' }])
   return out
@@ -143,7 +145,8 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
     return { lines, ids: [], selected: '', keys: [] }
   }
-  const v = f.view
+  // the shared note's "(g)" names the Claude Code panel's key; this panel has none, so it says to ask the lead (setup_git)
+  const v = { ...f.view, ...(f.view.git_state && f.view.branch_note ? { branch_note: gitNote(f.view.git_state, 'ask the lead') } : {}) }
   const banner: Line[] = bannerLines({ ...v, max_parallel: v.max_parallel ?? 0, max_minutes: v.max_minutes ?? 0, auto_retries: v.auto_retries ?? 0, mode: v.mode }, f.root, f.home, v.driving ?? false, w, nowMs, f.name, restFrame(), f.version).map(l => [
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
@@ -186,8 +189,8 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${statusMark(x)} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
-      { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || x.status === 'waiting' || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
+      { text: ` ${statusMark({ ...x, status: shownStatus(x) })} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[shownStatus(x)]! },
+      { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x) || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
   }
@@ -272,7 +275,7 @@ export function answerOptions(f: ViewFile | null, id: string): string[] {
  *  merges on its own once they are committed or stashed, so there is nothing to answer). */
 export function asksWhat(t: BoardTask, maxMinutes: number | undefined): string {
   if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t))
-  if (t.status !== 'waiting' || fileWaitText(t)) return ''
+  if (!waitsForYou(t) || fileWaitText(t)) return ''
   return t.question || t.note || 'it waits for your answer'
 }
 

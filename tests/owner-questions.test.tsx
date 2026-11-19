@@ -210,6 +210,9 @@ test('the panel lists the open questions above the tasks; a button answers one a
   expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('No')
   expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('Answer…')
   expect(await ui.find({ type: 'Text', text: 'keys 1-3 pick a choice' })).toBeDefined()
+  // told once: the bottom key list has only b back (T-513)
+  expect(JSON.stringify(await ui.drawn()).match(/pick/g)?.length).toBe(1)
+  expect(await ui.find({ type: 'Text', text: ' answer' })).toBeUndefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
@@ -248,4 +251,20 @@ test('the act-on-it block adds a full stop only when the answer has no end mark 
   expect(boardAnswerLine({ ...q, answer: 'Yes, raise it to 0.5.' })).toBe(`${start}Yes, raise it to 0.5.${end}`)
   expect(boardAnswerLine({ ...q, answer: 'Why?' })).toBe(`${start}Why?${end}`)
   expect(boardAnswerLine({ ...q, answer: 'Do it now!' })).toBe(`${start}Do it now!${end}`)
+})
+
+test("a question's page tells the answer keys once: the dim line under the buttons, not the bottom key list (terminal, desktop, mobile)", async ($, on) => {
+  const [b] = addQuestion({ ...emptyBoard(), tasks: [] as never }, 'Raise the version?', ['Yes', 'No'], ISO)
+  const view = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions: b.questions }
+  stateOf(on, { opened: b.questions![0]!.id, view: { shape: 'view-1', value: view } })
+  fakeFiles(on, { '/board.json': JSON.stringify(b), '/board.lock': null })
+  for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    const tree = JSON.stringify(await ui.drawn())
+    expect(tree, surface).toContain('Question for you')
+    expect(tree.match(/pick/g)?.length, surface).toBe(1)
+    expect(tree, surface).toContain('keys 1-3 pick a choice')
+    expect(tree, surface).not.toContain('" answer"')
+    await ui.unmount()
+  }
 })

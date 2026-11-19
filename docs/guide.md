@@ -343,6 +343,9 @@ The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by
 - **`off`**: every running worker and scout stops at once and nothing new starts. Tasks
   already in review can still be approved or rejected.
 - **`review`**: work runs; every finished task that passes waits as `review` for you.
+  The lead also asks you before it adds any task (yours, a scout's finding, a worker's
+  report or its own idea): it says what the task would be in a line or two and adds it
+  only after your yes.
 - **`auto`** (the default): work runs; a task that passes steps 1–4 is merged at once.
 
 Going from `off` to `review` or `auto` starts work again. In `auto` you can still mark one
@@ -534,6 +537,17 @@ are about changes; under "How tasks ended" a read investigation shows as
   `x` clears the search and shows everything. Enter on an empty search box clears it too.
   (Claude Code only lets panel keys be a letter or a digit, so
   the key is `f`, not `/`.)
+  Besides plain words, the search takes filter words (the same in the terminal panel, the
+  VS Code panel and the lead's board tool), and they mix with plain words
+  (`last:5 status:done notify`):
+  - `last:N`: the N tasks changed most recently, newest first.
+  - `top:N`: the next N to run (the to-do tasks in run order; with `status:` those instead).
+  - `since:30m`, `since:2h`, `since:2d`, `since:1w` or `since:2026-11-18`: changed since then.
+  - `status:done` (or `status:open`, or several: `status:done,dropped`), `kind:bug`,
+    `role:tester`.
+  A word like `foo:bar` that is not one of these is looked for as a plain word. The lead's
+  board tool also takes `limit` and `sort` (`newest` or `order`), the same as `last:` and
+  `top:`, and says how many matched in all (`10 of 37 matching shown`).
 - The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner:
   `[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings`, the open one bold, blue and
   underlined. Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one

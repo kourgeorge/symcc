@@ -1,7 +1,7 @@
 // Board titles, the status line, the banner at the top of the panel, and the board as text.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME, ICON, ICON_ART, namesFor } from '../name'
-import { type Board, type BoardTask, modeOf, OPEN, STATUS_WORD } from './board-file'
+import { type Board, type BoardTask, kindOf, modeOf, OPEN, STATUS_WORD } from './board-file'
 import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
@@ -11,7 +11,7 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { shownStatus } from './commands'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, taskMatches, statusCell } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell } from './panel'
 import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
@@ -290,11 +290,10 @@ export const footerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor
 /** A banner line as plain text (for tests and plain output). */
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
 
-/** The status words the lead's board tool takes; "open" stands for every OPEN status (not done, dropped or backlog). */
-export const BOARD_STATUSES: SymccStatus[] = ['todo', 'doing', 'review', 'waiting', 'failed', 'paused', 'done', 'dropped', 'backlog']
-
-/** What the lead's board tool lists: tasks with one of `status` and matching `search` (see taskMatches). */
-export type BoardFilter = { status?: SymccStatus[]; search?: string }
+/** What the lead's board tool lists: tasks with one of `status` and matching `search` (see parseSearch: plain words and
+ *  filter words like last:5 or kind:bug); `limit` and `sort` are the same as last:N ("newest", the default) and
+ *  top:N ("order"). `kinds`: the known kinds, so an unknown kind: word gives an error. */
+export type BoardFilter = { status?: SymccStatus[]; search?: string; limit?: number; sort?: 'newest' | 'order'; kinds?: readonly string[] }
 
 /** The board tool's status words (a list, or one string like "todo, doing") as statuses; "open" adds every OPEN one.
  *  Undefined when none were given; throws on an unknown word. */
@@ -349,10 +348,22 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const total = totalLine(b, nowMs)
   const search = filter.search?.trim() ?? ''
   let body: string[]
-  if (filter.status?.length || search) {
-    const rows = all.filter(t => (!filter.status?.length || filter.status.includes(t.status)) && taskMatches(t, search))
-    const asked = [filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
-    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries)), `${rows.length} of ${b.tasks.length} tasks (${asked})`] : [`No tasks match (${asked}).`]
+  if (filter.status?.length || search || filter.limit !== undefined || filter.sort) {
+    const kinds = filter.kinds ? [...new Set([...filter.kinds, ...b.tasks.map(kindOf)])] : undefined
+    const q = parseSearch(search, nowMs ?? Date.now(), offsetMin, kinds)
+    if (q.errors.length) throw new Error(q.errors[0])
+    if (filter.status?.length) q.status = q.status ? q.status.filter(x => filter.status!.includes(x)) : filter.status
+    if (filter.limit !== undefined || filter.sort) {
+      const n = filter.limit !== undefined && Number.isFinite(filter.limit) && filter.limit > 0 ? Math.floor(filter.limit) : undefined
+      q.pick = { by: filter.sort ?? q.pick?.by ?? 'newest', n: n ?? q.pick?.n }
+    }
+    const matched = searchTasks(all, { ...q, pick: undefined }, nowMs ?? Date.now())
+    const rows = q.pick ? searchTasks(all, q, nowMs ?? Date.now()) : matched
+    const picked = q.pick ? `${q.pick.by === 'newest' ? 'last' : 'top'}${q.pick.n ? `: ${q.pick.n}` : ''}` : ''
+    const asked = [picked, filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
+    // with last / top the line says how many matched in all: "10 of 37 matching shown (484 tasks on the board; ...)"
+    const count = q.pick ? `${rows.length} of ${q.pick.by === 'order' && !q.status ? matched.filter(t => t.status === 'todo').length : matched.length} matching shown (${b.tasks.length} tasks on the board; ${asked})` : `${rows.length} of ${b.tasks.length} tasks (${asked})`
+    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries)), count] : [`No tasks match (${asked}).`]
   } else {
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
     body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries)), ...(hidden ? [hidden] : [])]

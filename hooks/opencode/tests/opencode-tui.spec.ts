@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { addTask, emptyBoard, patchTask, bandNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
@@ -38,6 +38,15 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toContain('/work/proj/.symcc/view.json')
 })
 
+test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
+  const f = viewFile()
+  for (const git_state of ['no-repo', 'no-commits'] as const) {
+    const lines = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')
+    expect(lines).toContain('set up git (ask the lead)')
+    expect(lines).not.toContain('(g)')
+  }
+})
+
 test('the band: the header, then the tasks that need you or run with the list\'s marks and short states; a "worker starting" row shows its time and no stray note', () => {
   const f = viewFile()
   const lines = bandLines(f, NOW, 120).map(lineText)
@@ -59,6 +68,35 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   expect(bandLines({ ...f, view: { ...f.view, tasks: [] } }, NOW, 120)).toEqual([])
   expect(bandLines({ ...f, view: { ...f.view, enabled: false } }, NOW, 120)).toEqual([])
   expect(bandLines(null, NOW, 120)).toEqual([])
+})
+
+test('a waiting task that only reruns its tests shows with the running ones as "retest", not as waiting for you; a waiting task with a question is unchanged (T-534)', () => {
+  const f0 = viewFile()
+  const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-4' ? { ...t, status: 'waiting' as const, test_rerun: 1, note: 'tests ran out of time' } : t)) } }
+  // the band: the rerun row is green (running) and says "rerunning its tests", not its note
+  const band = bandLines(f, NOW, 120)
+  const rerun = band.find(l => lineText(l).startsWith('T-4'))!
+  expect(rerun[0]!.color).toBe('green')
+  expect(lineText(rerun)).toContain('retest')
+  expect(lineText(rerun)).toContain('— rerunning its tests')
+  expect(lineText(rerun)).not.toContain('tests ran out of time')
+  const asked = band.find(l => lineText(l).startsWith('T-3'))!
+  expect(asked[0]!.color).toBe('yellow')
+  expect(lineText(asked)).toContain('— Which database?')
+  // the list: not under NEEDS YOU, not bold, the running mark and color; the question task stays bold under NEEDS YOU
+  const list = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)
+  expect(list.ids.slice(0, 2).sort()).toEqual(['T-2', 'T-3'])
+  const row = list.lines.find(l => lineText(l).includes('T-4 '))!
+  expect(lineText(row)).toContain(`${STATUS_MARK.doing} retest`)
+  expect(row[2]!.color).toBe('ide')
+  expect(!!row[3]!.bold).toBe(false)
+  const q = list.lines.find(l => lineText(l).includes('T-3 '))!
+  expect(lineText(q)).toContain(STATUS_MARK.waiting)
+  expect(q[3]!.bold).toBe(true)
+  // its page asks nothing and has no answer key
+  expect(panelKeys(f, 'T-4').map(k => k.word)).toEqual(['back'])
+  expect(panelLines(f, { opened: 'T-4', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks:'))).toBe(false)
+  expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'back'])
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {
