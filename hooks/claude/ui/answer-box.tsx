@@ -1,5 +1,5 @@
 // The answer box shared by a waiting task's page and a question's page: the question, one button per choice
-// (with number keys), and the "Your answer" box once Answer… is pressed (or when there are no choices).
+// (number keys 1-9 pick one; the keys are told in a dim line under the buttons, not inside them), and the "Your answer" box once Answer… is pressed (or when there are no choices).
 import { boxHint } from '../../board'
 import type { PaneParts } from './parts'
 
@@ -18,6 +18,12 @@ export type AnswerBox = {
   onCancel: () => void
 }
 
+/** The dim line under the choice buttons: "keys 1-5 pick a choice" (only 1-9 have keys). */
+export const choiceKeysHint = (n: number): string => {
+  const last = Math.min(n, 9)
+  return last > 1 ? `keys 1-${last} pick a choice` : 'key 1 picks it'
+}
+
 /** The answer box: the question, its choice buttons and the "Your answer" box. */
 export function answerBox(pane: PaneParts, a: AnswerBox) {
   const { Box, Text, Button, Input, C, buttonRows } = pane
@@ -29,9 +35,10 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
       </Text>
       {a.choices.length > 0 &&
         buttonRows(
-          a.choices.map((c, i) => <Button key={`choice-${i + 1}`} label={`${i + 1} ${c}`} hotkey={i < 9 ? String(i + 1) : undefined} autoFocus={i === 0 && !a.typing ? true : undefined} onPress={a.onChoice(i)} />),
+          a.choices.map((c, i) => <Button key={`choice-${i + 1}`} label={c} hotkey={i < 9 ? String(i + 1) : undefined} autoFocus={i === 0 && !a.typing ? true : undefined} onPress={a.onChoice(i)} />),
           'answer-buttons',
         )}
+      {a.choices.length > 0 && !a.typing && <Text key="answer-keys" color={C('inactive')}>{choiceKeysHint(a.choices.length)}</Text>}
       {a.typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => a.onSubmit(value)} />}
       {a.typing && a.choices.length > 0 && <Button key="answer-cancel" label="Cancel (c)" hotkey="c" onPress={a.onCancel} />}
       {a.typing && <Text color={C('inactive')}>{boxHint('Enter sends', a.choices.length ? 'cancels' : 'goes back')}</Text>}
