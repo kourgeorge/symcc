@@ -1342,6 +1342,10 @@ symcc also runs in [OpenCode](https://opencode.ai) 2.x (2.3 or newer). The older
 
 ### Install in OpenCode
 
+**What you need:** OpenCode 2.3 or newer, git, and a copy of symcc. Nothing else is installed: symcc's `opencode/` folder has no packages of its own. Its board screen (the panel and the strip above the prompt) is drawn with Solid and OpenTUI, and OpenCode's window gives those to its plugins itself, so the board uses the very same copies as OpenCode's window (two copies of Solid would not work together).
+
+**Getting OpenCode 2.x:** install it from npm, `npm install -g @opencode/cli` (the command is still `opencode`). Homebrew's `opencode` is the old 1.x line, which has a different plugin system and can't load symcc. Run `opencode --version` to see which one is on your PATH: it should say 2.3 or higher. The install script warns when it finds an older one.
+
 From a copy of symcc on your machine (a clone, or the folder you already work in), one command:
 
 ```bash
@@ -1352,6 +1356,7 @@ The script links symcc's `opencode/` folder into OpenCode's plugins folder for y
 
 - **For one project only:** `sh symcc/scripts/install-opencode.sh --project <your project>` puts the link in `<your project>/.opencode/plugins/symcc` instead. Add `.opencode/plugins/` to that project's `.gitignore`, since the link points into your own machine.
 - **Check it:** start OpenCode in your project and run `opencode plugin list`; `symcc` is listed as a `local` plugin.
+- **If OpenCode says "Plugin failed"** for symcc's folder: check `opencode --version` first (symcc needs 2.3 or newer). The board screen's error names the package it couldn't get from OpenCode (`solid-js` or `@opentui/solid`); OpenCode's log has it (`~/.local/share/opencode/log/`). Only the board screen stops then: the lead, its tools and the workers run in OpenCode's server part, which loads on its own.
 - **Remove it:** the same command with `--remove` (and `--project <folder>` if you used it).
 - **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
 
@@ -1400,6 +1405,6 @@ The panel reads `.symcc/view.json` once a second; the board writes that file on 
 - **Starting a worker.** symcc makes the session a child of the lead's (the last session in your project folder you typed in), moves it into its task's folder and waits until OpenCode shows it there (a child session first opens in its parent's folder), and only then gives it its prompt, once the board names it, so the guard in that folder knows it. When it ends, symcc reads its final answer and its tokens.
 - **The lead** is never a child session or one of symcc's own. symcc remembers it for the project while OpenCode runs, also across plugin reloads. As in Claude Code, reports close together go in one update, your own board actions wait as "Meanwhile" lines, and starting a worker sends nothing. An update sent before you have typed anywhere waits for your first prompt.
 - **Tools per session.** Each session is offered only what it may use: a worker only `symcc_ask_owner`, a scout or a checker only `symcc_board` and `symcc_stats`; a call of anything else is refused. The tools are normal OpenCode tools, not hidden in OpenCode's Code Mode. An answer meant only for you is put in the chat without waking the model. Where the TUI part doesn't take `/symcc`, `/symcc-help` leaves out the Claude panel's keys and lines.
-- **The panel** runs in OpenCode's TUI, apart from the server part, so it draws from `.symcc/view.json`.
+- **The panel** runs in OpenCode's TUI, apart from the server part, so it draws from `.symcc/view.json`. It takes Solid and OpenTUI from OpenCode: OpenCode 2.3 swaps the plain names `solid-js` and `@opentui/solid` in a plugin's files for its own copies, so `opencode/tui.ts` writes them out in its `import()` calls (a name kept in a variable isn't swapped and fails with "Cannot find package 'solid-js'"), and `loadTuiRuntime` in `hooks/opencode/tui.ts` gives an error naming the package when one is missing.
 
 The code is in `hooks/opencode/` and `opencode/`; `sh scripts/test-opencode-host.sh` runs its tests (with a stand-in for OpenCode; OpenCode itself is not needed).

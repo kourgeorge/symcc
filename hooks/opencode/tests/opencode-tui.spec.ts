@@ -4,12 +4,16 @@
 // with the terminal list's marks and short states, a task's page, and its keys. Then startTui runs on a fake tui
 // context and a fake Solid runtime (no OpenCode needed): it reads .symcc/view.json from a folder above its own, draws
 // the panel and the band from it, opens the panel from the "/symcc" keymap command, and sends the panel's approve,
-// reject and answer as symcc's slash commands in the panel's session.
+// reject and answer as symcc's slash commands in the panel's session. And how the TUI part gets OpenCode's Solid and
+// OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
+// and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
 import { addTask, emptyBoard, patchTask, bandNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, type ViewFile } from '../board-view'
-import { startTui, viewPaths, BOARD_PANEL, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyCommand } from '../tui'
+import { readFile } from 'node:fs/promises'
+import { PLUGIN_ROOT } from '../host'
+import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyCommand } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
 const AT = '2026-11-19T11:00:00.000Z'
@@ -232,4 +236,51 @@ test('startTui: when the open task leaves the view (or the view file goes away),
   await board.refresh()
   expect(board.state().opened).toBe('')
   board.stop()
+})
+
+test('loadTuiRuntime: takes createSignal from solid-js and createElement, setProp, insert from @opentui/solid', async () => {
+  const fake = fakeRuntime()
+  const r = await loadTuiRuntime({
+    solid: async () => ({ createSignal: fake.createSignal, createMemo: () => 0 }),
+    opentui: async () => ({ createElement: fake.createElement, setProp: fake.setProp, insert: fake.insert }),
+  })
+  expect(r.createSignal).toBe(fake.createSignal)
+  expect(r.createElement).toBe(fake.createElement)
+  expect(r.setProp).toBe(fake.setProp)
+  expect(r.insert).toBe(fake.insert)
+})
+
+test("loadTuiRuntime: a package that can't load, or lacks a function, fails with an error naming it (not a bare import error)", async () => {
+  const fake = fakeRuntime()
+  const opentui = async () => ({ createElement: fake.createElement, setProp: fake.setProp, insert: fake.insert })
+  const notFound = async () => {
+    throw new Error("Cannot find package 'solid-js' imported from /x/opencode/tui.ts")
+  }
+  const err = (p: Promise<unknown>) => p.then(() => '', (e: unknown) => (e instanceof Error ? e.message : String(e)))
+  const a = await err(loadTuiRuntime({ solid: notFound, opentui }))
+  expect(a).toContain("can't load 'solid-js'")
+  expect(a).toContain('OpenCode 2.3 or newer')
+  expect(a).toContain('Cannot find package')
+  const b = await err(loadTuiRuntime({ solid: async () => ({ createSignal: fake.createSignal }), opentui: async () => ({ createElement: fake.createElement, insert: fake.insert }) }))
+  expect(b).toContain("'@opentui/solid'")
+  expect(b).toContain('setProp')
+  const c = await err(loadTuiRuntime({ solid: async () => null, opentui }))
+  expect(c).toContain("'solid-js'")
+  expect(c).toContain('createSignal')
+})
+
+test('opencode/tui.ts imports solid-js and @opentui/solid by their written-out names (OpenCode swaps only those for its own copies), never through a variable', async () => {
+  const src = await readFile(`${PLUGIN_ROOT}/opencode/tui.ts`, 'utf8')
+  const code = src.split('\n').filter((l: string) => !l.trim().startsWith('//')).join('\n')
+  expect(code).toContain("import('solid-js')")
+  expect(code).toContain("import('@opentui/solid')")
+  expect(code).toContain('loadTuiRuntime(')
+  // every import() takes a plain string, so none can miss OpenCode's swap
+  const dynamic = code.match(/import\(([^)]*)\)/g) ?? []
+  expect(dynamic.length).toBe(2)
+  for (const d of dynamic) expect(d).toMatch(/^import\('[^']+'\)$/)
+  // the server entry doesn't load the TUI's modules, so a TUI failure can't stop the server part
+  const server = await readFile(`${PLUGIN_ROOT}/opencode/server.ts`, 'utf8')
+  expect(server).not.toContain('solid')
+  expect(server).not.toContain('/tui')
 })

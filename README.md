@@ -125,6 +125,8 @@ git clone https://github.com/kourgeorge/symcc && sh symcc/scripts/install-openco
 
 This links symcc into `~/.config/opencode/plugins/symcc`, for all your projects (add `--project <folder>` for one project only, `--remove` to take it out). `opencode plugin list` should then show `symcc`. The Claude Code plugin stays as it is.
 
+What you need: OpenCode 2.3 or newer, and nothing else (no `npm install` in symcc: the board's screen uses OpenCode's own Solid and OpenTUI). To get OpenCode 2.x, install it from npm with `npm install -g @opencode/cli`. Homebrew's `opencode` is the old 1.x line, which symcc doesn't support. Check which one runs with `opencode --version`; it should say 2.3 or higher.
+
 - **The lead** is the OpenCode session you type in. Talk to it as in Claude Code; the slash commands (`/symcc`, `/symcc-stats` ...) are the same.
 - **Workers, scouts and checkers** are OpenCode sessions, each in its task's own folder, with the same file checks. Each role picks its model in its `model:` line: a Claude name (`sonnet`, `haiku` ...) runs on OpenCode's Claude Agent provider with your Claude Code login, and any other model is written `provider/model` (for example `openai/gpt-5`).
 - **The board:** `/symcc` opens it in OpenCode's session panel, and a strip above the prompt shows what needs you and what runs.
