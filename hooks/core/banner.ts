@@ -11,7 +11,7 @@ import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { shownStatus, waitsForYou } from './commands'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
 import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
@@ -78,28 +78,42 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
  * state columns). Every row shows the list's own mark and short status cell (statusCell): a doing task "▶ 12m"
- * (time on this try), "▶ test", "▶ check", "▶ merge", with its try after it from try 2 on ("T-434 ▶ check · try 2");
+ * (time on this try), "▶ test", "▶ check", "▶ merge", with the total work time of all tries (triesTotal) and its try
+ * after it from try 2 on ("T-434 ▶ 15m · 1h 40m in all · try 2"); in a row narrower than `width` "in all" goes first, then the total;
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or
  * the longest other cell), so every title starts in one column. `since(id)` is when this session's worker started.
  */
-export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined): Map<string, string> {
+export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
   const idWidth = Math.max(4, ...tasks.map(t => t.id.length))
   const cells = new Map(tasks.map(t => [t.id, statusCell(t, nowMs, since(t.id))]))
   const doing = tasks.filter(t => t.status === 'doing')
   const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
   const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
   const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? ` · ${m}`.length : 0)))
-  const states = new Map(
-    tasks.map(t => {
-      if (t.status !== 'doing') return [t.id, cells.get(t.id)!]
-      const mark = tries.get(t.id)
-      return [t.id, `${cells.get(t.id)!.padEnd(cellWidth)}${(mark ? ` · ${mark}` : '').padEnd(tryWidth)}`]
-    }),
-  )
-  const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
   // a waiting task whose tests only run again (not waitsForYou) shows the running mark, like the rest of its row (T-541)
-  const mark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
-  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${mark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+  const rowMark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
+  const leadsWith = (form: TotalForm) => {
+    // the total work time of all tries, between this try's time and the try: "▶ 15m · 1h 40m in all · try 3"
+    const totals = new Map(doing.map(t => [t.id, cells.get(t.id) ? triesTotal(t, nowMs, form) : '']))
+    const totalWidth = Math.max(0, ...[...totals.values()].map(s => (s ? ` · ${s}`.length : 0)))
+    const states = new Map(
+      tasks.map(t => {
+        if (t.status !== 'doing') return [t.id, cells.get(t.id)!]
+        const mark = tries.get(t.id)
+        const total = totals.get(t.id)
+        return [t.id, `${cells.get(t.id)!.padEnd(cellWidth)}${(total ? ` · ${total}` : '').padEnd(totalWidth)}${(mark ? ` · ${mark}` : '').padEnd(tryWidth)}`]
+      }),
+    )
+    const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
+    return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+  }
+  // too narrow: "in all" goes first, then the total, so the titles keep TITLE_ROOM
+  let leads = new Map<string, string>()
+  for (const form of TOTAL_FORMS) {
+    leads = leadsWith(form)
+    if (Math.max(0, ...[...leads.values()].map(l => l.length)) + 1 + TITLE_ROOM <= width) break
+  }
+  return leads
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */

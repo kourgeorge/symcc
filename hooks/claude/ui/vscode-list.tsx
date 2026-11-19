@@ -9,7 +9,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, shownStatus, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, triesTotal, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, shownStatus, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -69,7 +69,9 @@ export function listPageVs($: $, pane: PaneParts) {
     const waited = waitsForYou(x) || x.status === 'review' || x.status === 'failed' ? ago(x.updated_at) : ''
     // with a time, the short word ("waiting for 1m", not "waiting for you for 1m")
     if (waited) return `${statusMark({ ...x, status: st })} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
-    return `${statusMark({ ...x, status: st })} ${cell && cell !== x.status ? cell : word[x.status]}`
+    // a doing task on a later try also shows the work time of all its tries: "▶ 15m · 1h 40m in all"
+    const total = triesTotal(x, nowMs)
+    return `${statusMark({ ...x, status: st })} ${cell && cell !== x.status ? cell : word[x.status]}${total ? ` · ${total}` : ''}`
   }
 
   /** One task: a line of text, its ID a link that opens it, then the title (up to two lines; bold when it needs you,
