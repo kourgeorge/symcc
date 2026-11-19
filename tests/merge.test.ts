@@ -8,7 +8,7 @@ import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
-import { workerFinished, setSymcc, setBoardMode, check, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
+import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
@@ -709,6 +709,33 @@ async function finishedWith(changed: string[], flag?: 'off' | 'ask' | 'review') 
   await workerFinished(w.$, 'ag1', 'made the change')
   return { w, t: find(await load(w.$), 'T-1')!, told: leadQueue.join('\n') }
 }
+
+// T-492 (T-452 follow-up): this is here, not in turn-complete.test.tsx, because Claude Code's turn.complete carries no
+// dollar cost; a host that knows one (OpenCode) calls workerFinished with it, as this test does.
+test("T-492: a hand-back kept while board.json can't be read keeps the try's dollar cost; once the board is back the check finishes it with that cost on its last run", async () => {
+  const w = world({ changed: ['src/a.ts', 'src/a.test.ts'] })
+  const [b] = boardWith('auto', ['npm test'], { runs: [{ started: ISO }] })
+  await saveBoard(w.$, b)
+  const good = w.files.get(BOARD)!
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  w.put(BOARD, '{ not json')
+  await workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, undefined, 0.42)
+  expect(w.files.get(BOARD)).toBe('{ not json')
+  // the owner puts a valid board back; the regular check finishes the kept hand-back (without waiting for it)
+  w.put(BOARD, good)
+  const status = () => (JSON.parse(w.files.get(BOARD)!) as Board).tasks[0]!.status
+  S.driving = true
+  try {
+    await check(w.$)
+    for (let i = 0; i < 20_000 && (status() !== 'done' || finishingSet.size); i++) await Promise.resolve()
+  } finally {
+    S.driving = false
+  }
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.runs?.at(-1)?.cost).toBe(0.42)
+})
 
 test('tests_with_changes ask (the default): a code change with no test file merges and the lead is told', async () => {
   const { w, t, told } = await finishedWith(['src/a.ts'])
@@ -4969,4 +4996,90 @@ test('a finished task waiting a long time for another task\'s tests still merges
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
   expect(w.files.has(TLOCK)).toBe(false)
+})
+
+// ---------------- T-491: a worker that can't start ----------------
+
+/**
+ * A world in auto mode with T-1 to do (the extra fields in `extra`), driven by this session, on a host with no start
+ * queue (so pump starts the worker itself); `spawn` answers the worker's start. `spawned` counts the starts asked for.
+ */
+async function cantStartWorld(spawn: () => Promise<{ agentId?: string }>, extra: Partial<BoardTask> = {}, g: Partial<Git> = {}) {
+  const w = world({ current: 'main', ...g })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 0, ...extra }, ISO))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  let spawned = 0
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async () => (spawned++, spawn())
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  return { w, spawned: () => spawned, t1: async () => find(await load(w.$), 'T-1')! }
+}
+
+const cantStartLines = () => leadQueue.filter(l => l.startsWith("T-1 couldn't start"))
+
+test("T-491: a worker start the host refuses fails the task once: note \"couldn't start: <why>\", one try counted, one line to the lead", async () => {
+  const c = await cantStartWorld(() => Promise.reject(new Error('no agents allowed here')))
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(c.spawned()).toBe(1)
+  expect(t.status).toBe('failed')
+  expect(t.note!.startsWith("couldn't start: no agents allowed here")).toBe(true)
+  expect(t.attempts).toBe(1)
+  expect(cantStartLines()).toEqual(["T-1 couldn't start: no agents allowed here"])
+  cleanUp()
+})
+
+test("T-491: a worker type not loaded yet puts the task back as it was twice (no try counted); the 3rd miss fails it as \"couldn't start\"", async () => {
+  const c = await cantStartWorld(() => Promise.reject(Object.assign(new Error("Agent type 'symcc:worker' not found"), { notReady: true })), { note: 'waiting for its turn', runs: [{ started: ISO, ended: ISO }] })
+  const runs = (await c.t1()).runs
+  expect(runs?.length).toBe(1)
+  for (const n of [1, 2]) {
+    await pump(c.w.$)
+    const t = await c.t1()
+    expect(c.spawned()).toBe(n)
+    expect(t.status).toBe('todo')
+    expect(t.attempts).toBe(0)
+    // T-1 had no branch before; the claim gave it 'symcc/T-1', so an empty branch shows the old one was put back.
+    expect(t.branch ?? null).toBeNull()
+    expect(t.note).toBe('waiting for its turn')
+    expect(t.runs).toEqual(runs)
+    expect(cantStartLines()).toEqual([])
+  }
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(c.spawned()).toBe(3)
+  expect(t.status).toBe('failed')
+  expect(t.note!.startsWith("couldn't start: Agent type 'symcc:worker' not found")).toBe(true)
+  expect(cantStartLines().length).toBe(1)
+  cleanUp()
+})
+
+test('T-491: a worker start that answers no agent id fails the task with "couldn\'t start: the worker did not start"', async () => {
+  const c = await cantStartWorld(async () => ({ agentId: '' }))
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(t.status).toBe('failed')
+  expect(t.note).toBe("couldn't start: the worker did not start")
+  expect(workers.size).toBe(0)
+  expect(cantStartLines()).toEqual(["T-1 couldn't start: the worker did not start"])
+  cleanUp()
+})
+
+test("T-491: when git can't make the task's folder (worktree add fails), the task fails with git's words and no worker is asked for", async () => {
+  const fatal = `fatal: '${WT}' already exists`
+  const c = await cantStartWorld(async () => ({ agentId: 'ag1' }), {}, { answer: args => (args[0] === 'worktree' && args[1] === 'add' ? fail(fatal, 128) : undefined) })
+  await pump(c.w.$)
+  const t = await c.t1()
+  expect(c.spawned()).toBe(0)
+  expect(t.status).toBe('failed')
+  expect(t.note!.startsWith("couldn't start: git worktree add")).toBe(true)
+  expect(t.note).toContain(fatal)
+  expect(cantStartLines().length).toBe(1)
+  cleanUp()
 })

@@ -287,7 +287,7 @@ export async function workerFinished(host: Host, agentId: string, answer: string
     // T-452: board.json can't be read (load already told the owner, once). The report is kept here and
     // finished as usual by the regular check once the board can be read again (resumeKept); board.json is
     // left as it is, and the task is not sent back to "todo" meanwhile (see sendBackIdle).
-    keptHandBacks.set(agentId, { w, answer, end, tokens })
+    keptHandBacks.set(agentId, { w, answer, end, tokens, cost })
     finishing.delete(w.task)
     return
   }
@@ -314,7 +314,7 @@ export async function workerFinished(host: Host, agentId: string, answer: string
 }
 
 /** T-452: hand-backs of workers whose task couldn't be marked finished (board.json couldn't be read), by agent id; resumeKept finishes them. */
-const keptHandBacks = new Map<string, { w: Worker; answer: string; end: TurnEnd; tokens?: SymccTokens }>()
+const keptHandBacks = new Map<string, { w: Worker; answer: string; end: TurnEnd; tokens?: SymccTokens; cost?: number }>()
 
 /** Whether task `id` has a worker's hand-back kept until board.json can be read again (see keptHandBacks). */
 const keptFor = (id: string) => [...keptHandBacks.values()].some(k => k.w.task === id)
@@ -325,7 +325,7 @@ function resumeKept(host: Host) {
     keptHandBacks.delete(agentId)
     workers.set(agentId, k.w)
     // workerFinished marks the task as finishing before its first wait, so the rest of the check leaves it alone
-    void workerFinished(host, agentId, k.answer, k.end, k.tokens).catch(() => undefined)
+    void workerFinished(host, agentId, k.answer, k.end, k.tokens, k.cost).catch(() => undefined)
   }
 }
 
