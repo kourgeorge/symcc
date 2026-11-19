@@ -100,7 +100,34 @@ export const checkerDiff = (diff: string): string => {
 }
 
 /** The values of a checker's prompt. */
-export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string }
+export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string; changed_files: string; tests: string }
+
+/** The most changed files a checker's prompt lists; the rest it reads with git diff --name-only. */
+export const CHECKER_FILES_MAX = 200
+
+/** {{changed_files}} of a checker's prompt: the changed files, one per line. */
+export const checkerChangedFiles = (changed: readonly string[]): string => {
+  if (!changed.length) return '  (none found: run git diff --name-only for them)'
+  const shown = changed.slice(0, CHECKER_FILES_MAX).map(f => `  ${f}`)
+  return [...shown, ...(changed.length > CHECKER_FILES_MAX ? [`  … and ${changed.length - CHECKER_FILES_MAX} more (run git diff --name-only for all)`] : [])].join('\n')
+}
+
+/** The pre-merge test run of the code a checker checks: its commit and tree id, when the passed-trees record (T-527) has that tree passed with the board's test commands. */
+export type CheckerTestRun = { sha: string; tree: string }
+
+/**
+ * T-526: {{tests}} of a checker's prompt. The full test commands run once per try, by the pre-merge run: when that
+ * run passed on this exact code (`run`), the checker is told so and runs only the tests for the changed files and its
+ * own probes. With no test commands set, or no passed run on record for this tree, it runs the tests itself, as before.
+ */
+export function checkerTestsText(name: string, commands: readonly string[], run: CheckerTestRun | null): string {
+  const list = commands.map(c => `  ${c}`).join('\n')
+  if (!commands.length) return "No test commands are set for this project, so nothing has run its tests yet: find how the project runs its tests (in this folder) and run them."
+  if (!run) return `${name}'s test run on this exact code is not on record, so run these test commands yourself, each one on its own, from the folder:\n${list}`
+  return `${name} already ran these exact test commands on commit ${run.sha}, tree ${run.tree} (the code you are checking), and all passed:
+${list}
+Don't run them in full again. Run only the tests for the changed files and your own new probe cases; run a full command only if your probe needs it, and say why in your answer.`
+}
 
 /** A checker's prompt (prompts/checker.ts) with `v` filled in. */
 export const checkerPrompt = (v: CheckerValues): string => fillPlaceholders(CHECKER_PROMPT, v, v).trimEnd()

@@ -28,7 +28,8 @@ const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 /** In-memory files, a small fake git (main, the worker's HEAD, the changed files) and a fake agent spawn that records each checker started. */
 function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   // gone: branch main was deleted (T-440)
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false }
+  // tree: what `rev-parse <commit>^{tree}` gives (T-526); empty: git can't tell, so no passed tree is recorded
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '' }
   const files = new Map<string, string>()
   const calls: string[] = []
   function runGit(a0: string[]): Res {
@@ -41,6 +42,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       return ok()
     }
     if (s === 'rev-parse -q --verify HEAD' || s === 'rev-parse HEAD') return ok(git.head)
+    if (a[0] === 'rev-parse' && a.at(-1)!.endsWith('^{tree}')) return git.tree ? ok(git.tree) : fail()
     if (git.gone && s === 'rev-parse --verify -q refs/heads/main') return fail()
     if (git.gone && s === 'rev-parse refs/heads/main') return { exitCode: 128, stdout: '', stderr: "fatal: ambiguous argument 'refs/heads/main'" }
     if (s === 'rev-parse refs/heads/main') return ok(git.main)
@@ -240,6 +242,49 @@ test('T-440: the target branch deleted while the checker runs: after its OK the 
   expect(leadQueue.join('\n')).not.toMatch(/checking failed/)
 })
 
+// ---------------- tests run once per try (T-526) ----------------
+
+const TREE = 'c3'.repeat(20)
+const NO_RERUN = "Don't run them in full again. Run only the tests for the changed files and your own new probe cases; run a full command only if your probe needs it, and say why in your answer."
+
+test('T-526: the checker is told symcc already ran these exact test commands on the commit and tree it checks, with the changed files, and not to run them in full again', async () => {
+  const w = world(['src/a.ts', 'src/a.test.ts'])
+  w.git.tree = TREE
+  await saveBoard(w.$, boardWith(true, {}, { test_commands: ['npm test', 'npm run lint'] }))
+  await finish(w, async id => checkerFinished(id, 'OK'))
+  const p = w.spawns[0]!.prompt
+  // the pre-merge run passed on this tree and recorded it; the checker's prompt names that run
+  expect(p).toContain(`Tests: symcc already ran these exact test commands on commit ${H1}, tree ${TREE} (the code you are checking), and all passed:\n  npm test\n  npm run lint\n${NO_RERUN}`)
+  expect(p).toContain('Files it changed:\n  src/a.ts\n  src/a.test.ts\n')
+  expect(p).toContain('there is no need to look at the board or the main project folder')
+  expect(p).not.toContain('its tests passed')
+  expect(p).not.toContain('{{')
+  // the verdict format is kept
+  expect(p).toContain('the single word OK on its own last line')
+  // the full commands ran once, by symcc before merging
+  expect(w.calls.filter(c => c.startsWith('/bin/sh -c ')).length).toBe(2)
+})
+
+test('T-526: when this code's tree is not in the passed-trees record, the checker is told so and runs them itself', async () => {
+  // the tree can't be told, so nothing is on record
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  await finish(w, async id => checkerFinished(id, 'OK'))
+  const p = w.spawns[0]!.prompt
+  expect(p).toContain("Tests: symcc's test run on this exact code is not on record, so run these test commands yourself, each one on its own, from the folder:\n  npm test\n")
+  expect(p).not.toContain(NO_RERUN)
+})
+
+test('T-526: with no test commands set, the checker is told nothing ran the tests and runs them itself', async () => {
+  const w = world()
+  w.git.tree = TREE
+  await saveBoard(w.$, boardWith(true, {}, { test_commands: [] }))
+  await finish(w, async id => checkerFinished(id, 'OK'))
+  const q = w.spawns[0]!.prompt
+  expect(q).toContain('Tests: No test commands are set for this project, so nothing has run its tests yet: find how the project runs its tests (in this folder) and run them.')
+  expect(q).not.toContain(NO_RERUN)
+})
+
 test("a checker role's checklist gets its placeholders filled in, as a worker's role does ({{files}}, {{test_command}}, {{kind}}, ...)", async () => {
   const w = world()
   const fs = (w.$ as unknown as { fs: Record<string, unknown> }).fs
@@ -253,7 +298,7 @@ test("a checker role's checklist gets its placeholders filled in, as a worker's 
   await finish(w, async id => checkerFinished(id, 'OK'))
   const p = w.spawns[0]!.prompt
   expect(p).toContain('files: Files you may change: src/.')
-  expect(p).toContain('tests: After you finish, these must pass (run them in that folder to check): npm test')
+  expect(p).toContain("tests: symcc's test run on this exact code is not on record, so run these test commands yourself, each one on its own, from the folder:\n  npm test")
   expect(p).toContain('id T-1 \nKind of task: change.')
   expect(p).toContain('{{nope}}')
   expect(p).not.toContain('{{files}}')

@@ -585,14 +585,14 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
 }
 
 /** T-527: the git tree id of commit `commit` (the code a test run tests), or '' when git can't tell. */
-async function testedTree($: Host, commit: string, dir: string): Promise<string> {
+export async function testedTree($: Host, commit: string, dir: string): Promise<string> {
   const r = await git($, ['rev-parse', '-q', '--verify', `${commit}^{tree}`], dir).catch(() => null)
   const id = r && r.exitCode === 0 ? r.stdout.trim() : ''
   return isTreeId(id) ? id : ''
 }
 
 /** T-527: the trees whose test run passed (PASSED_TREES_FILE in the board folder); none when it can't be read. */
-async function readPassedTrees($: Host) {
+export async function readPassedTrees($: Host) {
   return parsePassedTrees(await $.fs.read(path(`${S.N.dir}/${PASSED_TREES_FILE}`)).catch(() => null))
 }
 
