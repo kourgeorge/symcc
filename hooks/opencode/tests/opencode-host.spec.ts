@@ -1121,6 +1121,8 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     const end = await plugin.setup(c.ctx)
     await until(() => S.startupDone === true)
     expect([...c.commands.keys()]).toEqual([...COMMANDS().map(x => x.name), 'symcc-answer'])
+    // T-517: here /symcc prints the text board; the panel is /symcc-board
+    expect(c.commands.get('symcc')!.description).toBe('Show the symcc board as text (the panel: /symcc-board)')
     const lead = f.lead(p.main)
     // (T-515) only the lead's chat counts: the engine starts T-2's worker on its own (at its start, or again after
     // /symcc-on), and on a busy machine that worker's first prompt (into its own session) landed while a command ran

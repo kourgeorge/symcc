@@ -17,7 +17,7 @@
 //
 // Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
 import { boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal } from '../board'
-import type { FileTouch, Host } from '../host'
+import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
 import { askCall, checkEdit, guardFailed, stoppedText } from './ask'
@@ -41,10 +41,11 @@ export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to s
 /** BOARD_OPENED with the host's keys that go back to the board panel (HostWords.backToBoard), when it has them. */
 export const boardOpened = (): string => (S.W.backToBoard ? `${BOARD_OPENED} (${S.W.backToBoard} goes back to it.)` : BOARD_OPENED)
 
-/** symcc's slash commands, for the host to register: name, description and the hint for its arguments. */
-export function COMMANDS(): { name: string; description: string; argumentHint?: string }[] {
+/** symcc's slash commands, for the host to register: name, description and the hint for its arguments. `features`: the
+ * host's (every one on unless given); without a panel, /symcc shows the board as text (OpenCode's panel is /symcc-board). */
+export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string; description: string; argumentHint?: string }[] {
   return [
-    { name: S.N.name, description: `Open the ${S.N.name} board panel: tasks and scouts` },
+    { name: S.N.name, description: features.panel ? `Open the ${S.N.name} board panel: tasks and scouts` : `Show the ${S.N.name} board as text (the panel: /${S.N.name}-board)` },
     { name: `${S.N.name}-tasks`, description: `Open the ${S.N.name} board panel on the tasks view` },
     { name: `${S.N.name}-scouts`, description: `Open the ${S.N.name} board panel on the scouts view and reload the scout files` },
     { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task: /${S.N.name}-task T-3`, argumentHint: '<T-id>' },

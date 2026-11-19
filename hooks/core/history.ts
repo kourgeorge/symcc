@@ -94,3 +94,92 @@ export function detailsBothRefusal(a: { details?: unknown; add_details?: unknown
   const given = (v: unknown) => typeof v === 'string' && v.trim() !== ''
   return given(a.details) && given(a.add_details) ? 'Nothing changed: give either details (rewrites the whole text) or add_details (adds a note to it), not both. To rewrite and add a note, put the note at the end of the new details.' : null
 }
+
+/** What kind of event a history line is (see historyEvent). */
+export type HistoryKind = 'created' | 'note' | 'answer' | 'waits' | 'files' | 'backlog' | 'checker' | 'result' | 'stopped' | 'step' | 'other'
+
+/** How a history event went: well (✓), badly (✗), a step of a try (●), or anything else (○). */
+export type HistoryTone = 'good' | 'bad' | 'step' | 'other'
+
+/** The mark drawn for each tone, the same in every view. */
+export const HISTORY_MARK: Record<HistoryTone, string> = { good: '✓', bad: '✗', step: '●', other: '○' }
+
+/** The theme color of each tone's mark (a try's good or bad result is drawn in it too), the same in every view. */
+export const HISTORY_COLOR: Record<HistoryTone, string> = { good: 'success', bad: 'error', step: 'text', other: 'inactive' }
+
+/** A history line in parts (T-512). */
+export type HistoryEvent = {
+  kind: HistoryKind
+  tone: HistoryTone
+  mark: string
+  /** the try it is about (0 when it names none) */
+  try: number
+  /** its "try 2" or "try 3 (role tester)" label ('' when it names none) */
+  label: string
+  /** the line without its label */
+  text: string
+  /** what was said before the " → " of a try's result line (else the whole text) */
+  said: string
+  /** a try's result, after its " → " ('' when there is none) */
+  result: string
+}
+
+/** Lines that are not about a try, by how they start: [kind, start]. */
+const PLAIN_KINDS: [HistoryKind, RegExp][] = [
+  ['created', /^created by /],
+  ['note', /^the lead added a note:/],
+  ['answer', /^the owner answered:/],
+  ['waits', new RegExp(`^${AFTER_CHANGED}`)],
+  ['files', /^(files widened:|the owner allowed files:|the owner didn't allow files:|owner edited files)/],
+  ['backlog', /^(moved to the backlog|moved from the backlog|brought back from the archive)/],
+  ['stopped', /^(not merged|not started):/],
+]
+
+/** How a try's own line (no result) starts when it went badly. */
+const TRY_BAD = /^(stopped|out of time|rejected|the worker ended without a result|ran \d+ min, over|time is up|approved, but)|; nothing was checked or merged$/
+
+/** How a try's line starts when it is a step that is not a result, whatever words follow (a question, an answer, a rerun). */
+const TRY_STEP = /^(worker asked|answered\b|the owner asked)/
+
+/**
+ * How symcc starts a try's result, the words it puts right after " → " (hooks/app/review.ts, workers.ts): good results,
+ * then bad ones. Any other result is a step (checks passed and waiting, a new checker starts, the owner's files in the way …).
+ */
+const RESULT_GOOD = /^(merged into|already merged into|done\b)/
+const RESULT_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
+const RESULT_KNOWN = new RegExp(`${RESULT_GOOD.source}|${RESULT_BAD.source}|^(checks passed|the checker (was stopped|couldn't start|gave no verdict)|you have )`)
+
+/**
+ * A history line as an event: its kind, how it went (and so its mark), its try and its words. The kind and the tone come
+ * from what symcc wrote the line for (a try's result, a checker verdict, created, a note, waits changed …), read from
+ * how the line starts and, for a try's result, from the words symcc put after its " → ". Words inside quoted text,
+ * a reason or a worker's summary never make a line bad or good.
+ */
+export function historyEvent(line: string): HistoryEvent {
+  const m = /^(try (\d+)(?: \([^)]*\))?):\s*(.*)$/s.exec(line)
+  const ev = (kind: HistoryKind, tone: HistoryTone, said: string, result = ''): HistoryEvent => ({
+    kind, tone, mark: HISTORY_MARK[tone], try: m ? Number(m[2]) : 0, label: m ? m[1]! : '', text: m ? m[3]! : line, said, result,
+  })
+  if (!m) {
+    const kind = PLAIN_KINDS.find(([, re]) => re.test(line))?.[0] ?? 'other'
+    return ev(kind, kind === 'stopped' ? 'bad' : 'other', line)
+  }
+  const body = m[3]!
+  if (/^checker: OK\b/.test(body)) return ev('checker', 'good', body)
+  if (/^checker found problems\b/.test(body)) return ev('checker', 'bad', body)
+  if (/^checker\b/.test(body)) return ev('checker', 'step', body)
+  if (TRY_STEP.test(body)) return ev('step', 'step', body)
+  if (TRY_BAD.test(body)) return ev('stopped', 'bad', body)
+  // The result starts after the first " → " followed by words symcc writes there, so a "→" in the worker's summary
+  // or in the test output inside the result never moves it.
+  const arrows = [...body.matchAll(/ → /g)].map(a => a.index!)
+  const arrow = arrows.find(i => RESULT_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
+  if (arrow !== undefined) {
+    const said = body.slice(0, arrow)
+    const result = body.slice(arrow + 3)
+    const tone: HistoryTone = RESULT_GOOD.test(result) ? 'good' : RESULT_BAD.test(result) ? 'bad' : 'step'
+    return ev('result', tone, said, result)
+  }
+  if (/, so it is done$/.test(body)) return ev('result', 'good', body)
+  return ev('step', 'step', body)
+}

@@ -97,11 +97,13 @@ export function gitStateOf(p: { hasGit: boolean; inside: boolean; hasHead: boole
   return p.hasHead ? 'ok' : 'no-commits'
 }
 
-/** The short note on the banner and status line; '' when git is fine. */
-export function gitNote(s: GitState): string {
+/** The short note on the banner and status line; '' when git is fine. `how`: how to set git up, in brackets after it
+ * ('g', the board panel's key, by default; '' for none, where the panel has no such key). */
+export function gitNote(s: GitState, how = 'g'): string {
+  const setup = `set up git${how ? ` (${how})` : ''}`
   if (s === 'no-git') return 'git is not installed'
-  if (s === 'no-repo') return 'no git repo here; set up git (g)'
-  if (s === 'no-commits') return 'no commits yet; set up git (g)'
+  if (s === 'no-repo') return `no git repo here; ${setup}`
+  if (s === 'no-commits') return `no commits yet; ${setup}`
   return ''
 }
 
