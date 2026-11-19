@@ -1679,6 +1679,9 @@ test('a folder without git: the state, the notes and the question asked first', 
   expect(gitNote('ok')).toBe('')
   expect(gitNote('no-git')).toBe('git is not installed')
   expect(gitNote('no-repo')).toContain('(g)')
+  // T-517: a panel with no g key says how instead, or nothing
+  expect(gitNote('no-repo', 'ask the lead')).toBe('no git repo here; set up git (ask the lead)')
+  expect(gitNote('no-commits', '')).toBe('no commits yet; set up git')
   expect(noGitText()).toContain('xcode-select --install')
   expect(noGitText()).toContain('https://git-scm.com')
   const ask = setupAskText('no-repo')
