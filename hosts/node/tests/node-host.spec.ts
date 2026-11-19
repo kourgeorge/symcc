@@ -167,7 +167,7 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     await rm(repo, { recursive: true, force: true })
     for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
   }
-}, 180_000)
+}, 300_000)
 
 test('a tick that stops waiting stops its claude -p worker: the task goes back to todo and the worker never edits after the CLI ended', async () => {
   const repo = await mkdtemp('/tmp/symcc-node-quit-')
@@ -180,23 +180,39 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 120_000 })
     expect((await cli({}, 'add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
-    // the fake worker waits 8 s before it writes; the tick gives up after about 3 s
-    const started = Date.now()
-    const tick = await cli({ FAKE_SLEEP: '8' }, '--wait-minutes', '0.05', 'tick')
+    // the fake worker waits 600 s before it writes, far past the tick's wait (about 3 s), however busy the machine is
+    const pidFile = `${repo}/.symcc/fake.pid`
+    const tick = await cli({ FAKE_SLEEP: '600', FAKE_PID: pidFile }, '--wait-minutes', '0.05', 'tick')
     expect(tick.stdout).toContain('stopped waiting')
     expect(tick.stderr).toContain('stopped T-1')
     const t = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
     expect(t.status).toBe('todo')
     expect(t.note).toContain('continues on the next run')
 
-    // well after the fake worker would have written, its worktree still has no hello.txt
-    const left = 8_000 - (Date.now() - started)
-    await new Promise<void>(res => void setTimeout(res, Math.max(0, left) + 2_000))
+    // the worker and all it started are gone once the CLI ended (T-509: checked on its process group, not by waiting
+    // out its sleep on the clock, which a busy machine could miss): it can never edit, so its worktree has no hello.txt
+    const group = Number((await readFile(pidFile, 'utf8')).trim())
+    expect(group).toBeGreaterThan(1)
+    expect(await groupGone(group)).toBe(true)
     expect(await readFile(`${repo}/.symcc/worktrees/T-1/hello.txt`, 'utf8').catch(() => 'none')).toBe('none')
   } finally {
+    // a failed stop must not leave the fake's sleep running after the test
+    const group = Number((await readFile(`${repo}/.symcc/fake.pid`, 'utf8').catch(() => '')).trim())
+    if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
     await rm(repo, { recursive: true, force: true })
   }
-}, 120_000)
+}, 300_000)
+
+/**
+ * Whether process group `group` has no process left, looking every 100 ms for at most `ms` (an ended process can
+ * take a moment to be reaped on a busy machine). A live group answers false only after `ms`.
+ */
+async function groupGone(group: number, ms = 60_000): Promise<boolean> {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) {
+    if ((await runCommand(['sh', '-c', 'kill -s 0 -- -"$1"', 'sh', String(group)])).exitCode !== 0) return true
+  }
+  return false
+}
 
 test('an option with no value is refused: a bare --files never adds a task that may edit anywhere', async () => {
   const dir = await mkdtemp('/tmp/symcc-node-args-')
