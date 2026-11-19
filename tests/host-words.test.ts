@@ -5,7 +5,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { fakeHost } from './fake-host'
-import { SYMCC_WORDS, wordsOf } from '../hooks/host'
+import { SYMCC_WORDS, wordsOf, ALL_FEATURES } from '../hooks/host'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { S, useName, loadVersion } from '../hooks/app/state'
 import { COMMANDS } from '../hooks/app/symcc'
@@ -33,6 +33,13 @@ test('a host with no such words gets symcc\'s own, which name no host', () => {
     expect(text).not.toContain('Claude')
     expect(text).not.toContain('ctrl+x')
   }
+})
+
+test("T-517: /symcc's description says what it does on each host: Claude Code's panel, or the text board and /symcc-board", () => {
+  useName(fakeHost({ words: CLAUDE_WORDS }).host)
+  const main = (features?: Parameters<typeof COMMANDS>[0]) => COMMANDS(features).find(c => c.name === S.N.name)!.description
+  expect(main()).toBe(`Open the ${S.N.name} board panel: tasks and scouts`)
+  expect(main({ ...ALL_FEATURES, panel: false })).toBe(`Show the ${S.N.name} board as text (the panel: /${S.N.name}-board)`)
 })
 
 test('wordsOf fills in only the words a host leaves out', () => {
