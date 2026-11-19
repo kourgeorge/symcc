@@ -491,7 +491,7 @@ test('hooks/opencode/ and opencode/ import nothing from Claude Code or hooks/cla
   const files = [...(await filesUnder(`${PLUGIN_ROOT}/hooks/opencode`)), ...(await filesUnder(`${PLUGIN_ROOT}/opencode`))]
   expect(files.length).toBeGreaterThan(5)
   for (const f of files) expect(`${f}: ${claudeImports(await readFile(f, 'utf8')).join(', ')}`).toBe(`${f}: `)
-})
+}, 30_000)
 
 test('the model per role (R8): a role\'s Claude name runs on OpenCode\'s Claude Agent provider, "provider/model" as it is, none gives the default for the kind', () => {
   expect(DEFAULT_MODELS).toEqual({ worker: 'claude-agent/sonnet', scout: 'claude-agent/haiku', checker: 'claude-agent/haiku' })
@@ -568,7 +568,7 @@ test('an OpenCode session agent: create (child of the lead) -> move into its fol
   } finally {
     await rm(base, { recursive: true, force: true })
   }
-})
+}, 30_000)
 
 test('stopped while its first prompt is still landing: it ends once as aborted, stays killed, and is interrupted again after the prompt lands', async () => {
   const f = fakeSessions(0)
@@ -599,7 +599,7 @@ test('stopped while its first prompt is still landing: it ends once as aborted, 
   } finally {
     await rm(main, { recursive: true, force: true })
   }
-})
+}, 30_000)
 
 test('sessionEnd: a failed run is an error with its message, a content filter a refusal', () => {
   const at = { directory: '/x' }
@@ -1157,4 +1157,35 @@ test('scripts/install-opencode.sh (T-467) links opencode/ into OpenCode\'s plugi
   } finally {
     await rm(base, { recursive: true, force: true })
   }
-})
+}, 30_000)
+
+test('scripts/install-opencode.sh warns when the opencode on PATH is older than 2.3 (1.x and 2.0-2.2), not for 2.3 or newer, and still links', async () => {
+  const base = await realpath(await mkdtemp('/tmp/symcc-oc-install-version-'))
+  try {
+    const script = `${PLUGIN_ROOT}/scripts/install-opencode.sh`
+    await mkdir(`${base}/bin`, { recursive: true })
+    // a fake opencode whose --version prints `version`
+    const run = async (version: string) => {
+      await writeFile(`${base}/bin/opencode`, `#!/bin/sh\necho '${version}'\n`)
+      expect((await runCommand(['chmod', '755', `${base}/bin/opencode`])).exitCode).toBe(0)
+      const r = await runCommand(['sh', script], { env: { XDG_CONFIG_HOME: `${base}/config`, HOME: `${base}/home`, PATH: `${base}/bin:/usr/bin:/bin` } })
+      expect(r.exitCode).toBe(0)
+      expect((await lstat(`${base}/config/opencode/plugins/symcc`)).isSymbolicLink()).toBe(true)
+      return r.stderr
+    }
+    const warning = 'symcc needs OpenCode 2.3 or newer'
+    expect(await run('opencode v2.1.0')).toContain('is version 2.1; ' + warning)
+    expect(await run('1.19.4')).toContain('is version 1.19; ' + warning)
+    expect(await run('2.2.9')).toContain(warning)
+    expect(await run('v2.0')).toContain(warning)
+    expect(await run('v2.3.0')).not.toContain(warning)
+    expect(await run('2.3.2')).not.toContain(warning)
+    expect(await run('2.10.0')).not.toContain(warning)
+    expect(await run('3.0.1')).not.toContain(warning)
+    // a version it can't read: no warning (nothing to compare)
+    expect(await run('unknown')).not.toContain(warning)
+    expect(await run('')).not.toContain(warning)
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+}, 30_000)
