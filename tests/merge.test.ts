@@ -114,6 +114,8 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   let afterRun: (cmd: string) => Promise<void> = async () => {}
   const state = new Map<string, unknown>()
   const put = (p: string, text: string) => (files.set(p, text), mtime.set(p, clock))
+  // a save to a path this says yes to throws (a full disk, no rights), set by failSaves
+  let saveFails = (_p: string) => false
 
   function runGit(args: string[], cwd: string): Res {
     const own = git.answer?.(args, cwd)
@@ -200,7 +202,11 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
       await afterRun(calls.at(-1)!)
       return r
     },
-    fs: memoryFs(files, p => mtime.get(p)!),
+    fs: (() => {
+      const fs = memoryFs(files, p => mtime.get(p)!)
+      const write = fs.write
+      return { ...fs, write: async (p: string, text: string) => (saveFails(p) ? Promise.reject(new Error('disk full')) : write(p, text)) }
+    })(),
     // no agent starts in this world unless a test gives one (spawn = ...)
     agents: { spawn: async () => Promise.reject(new Error('no agents in this world')) },
     ui: { toast: (t: unknown) => void toasts.push(JSON.stringify(t)) },
@@ -224,7 +230,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
   S.leadUrgent = false
   leadQueue.splice(0)
   meanwhile.splice(0)
-  return { $: host, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f) }
+  return { $: host, git, files, calls, toasts, put, sleeps, onSleep: (f: () => void) => void (afterSleep = f), onRun: (f: (cmd: string) => Promise<void>) => void (afterRun = f), failSaves: (f: (p: string) => boolean) => void (saveFails = f) }
 }
 
 /** A board with one task T-1 (files src/), in `mode`, with `test_commands`. */
@@ -433,6 +439,40 @@ test('T-527: when git cannot give the tree, the tests run and nothing is recorde
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
   expect(w.files.has(PASSED)).toBe(false)
 })
+
+test('T-530: a passed-trees.json that cannot be saved does not stop a merge whose tests passed, and the next run tests again', async () => {
+  const { w, again } = treeWorld()
+  // the save goes through a temporary file next to it (PASSED + suffix); every write there throws
+  w.failSaves(p => p.startsWith(PASSED))
+  const [b, t] = boardWith('auto', ['npm test'])
+  const r1 = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r1).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests passed` })
+  expect(w.git.main).toBe(H1)
+  expect(w.files.has(PASSED)).toBe(false)
+  // nothing was remembered, so the same tree is tested again
+  again()
+  const r2 = await checkAndMerge(w.$, { ...t, attempts: 2 }, WT, b, 'finish', [])
+  expect(r2).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests passed` })
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+})
+
+for (const [what, text] of [
+  ['not json', 'not json'],
+  ['an entry whose commands is a string', JSON.stringify({ passed: [{ tree: TREE1, commands: 'npm test', at: 1 }] })],
+] as const) {
+  test(`T-530: a passed-trees.json holding ${what} runs the tests, merges, and is replaced by one good entry`, async () => {
+    const { w } = treeWorld()
+    w.put(PASSED, text)
+    const [b, t] = boardWith('auto', ['npm test'])
+    const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+    expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests passed` })
+    expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+    expect(w.git.main).toBe(H1)
+    const saved = JSON.parse(w.files.get(PASSED)!).passed as { tree: string; commands: unknown; at: unknown }[]
+    expect(saved.map(e => [e.tree, e.commands])).toEqual([[TREE1, ['npm test']]])
+    expect(typeof saved[0]!.at).toBe('number')
+  })
+}
 
 test('T-527: the passed-trees file keeps only the newest entries', () => {
   let list: ReturnType<typeof addPassedTree> = []
