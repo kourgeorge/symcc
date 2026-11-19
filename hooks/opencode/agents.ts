@@ -1,5 +1,6 @@
 // host.agents as OpenCode sessions (T-463): each worker, scout or checker of symcc's is an OpenCode session of its own.
-// Start: session.create (a child of the lead's session when it is known, with the model its role asks for), then
+// Start: session.create (a child of the lead's session when it is known, with the model its role asks for, or the lead's own
+// current model when it names none, T-504), then
 // session.move into its folder, because a child made with parentID ignores `location` (and the move takes effect a
 // moment later, so it is waited for with session.get), then session.prompt with its base prompt and task prompt.
 // The prompt waits until symcc has recorded the agent (`ready`): a worker's tool calls are judged by the copy of the
@@ -14,7 +15,10 @@ import { basePromptFor } from '../core/prompts'
 import type { OcModelRef, OcSessionApi, OcSessionInfo, OcSessionMessage, OcTokens } from './ctx'
 import { realPathOf } from './guard'
 
-/** The OpenCode model each kind of agent runs on when its role (or scout file) names none. */
+/**
+ * The OpenCode model each kind of agent runs on when its role (or scout file) names none and the lead's own model
+ * can't be found (no lead session known yet, or OpenCode couldn't say).
+ */
 export const DEFAULT_MODELS: Record<HostAgentKind, string> = { worker: 'claude-agent/sonnet', scout: 'claude-agent/haiku', checker: 'claude-agent/haiku' }
 
 /** OpenCode's own "Claude Agent" provider: the real Claude Code, signed in with the owner's Claude Code login. */
@@ -23,19 +27,49 @@ export const CLAUDE_AGENT = 'claude-agent'
 /** Claude's model families, as the Claude Agent provider names its models. */
 const CLAUDE_FAMILIES = ['opus', 'sonnet', 'haiku', 'fable']
 
+/** Whether a role's or scout's `model:` names no model: none, "inherit" or "default". */
+export function namesNoModel(name: string | undefined): boolean {
+  const m = (name ?? '').trim()
+  return !m || m === 'inherit' || m === 'default'
+}
+
 /**
  * The OpenCode model for `name` (a role's or scout's `model:`), for an agent of kind `kind` (R8): "provider/model"
  * as it is (e.g. "openai/gpt-5", "claude-agent/opus"); a Claude name as Claude Code says it ("sonnet",
  * "claude-opus-4-5", "opus[1m]") becomes that family on the Claude Agent provider; any other bare name is taken as a
- * Claude Agent model id. None (or "inherit", "default"): DEFAULT_MODELS for the kind.
+ * Claude Agent model id. None (or "inherit", "default"): the lead's current model `lead` when known (T-504), else
+ * DEFAULT_MODELS for the kind.
  */
-export function opencodeModel(name: string | undefined, kind: HostAgentKind): OcModelRef {
-  const m = (name ?? '').trim()
-  if (!m || m === 'inherit' || m === 'default') return opencodeModel(DEFAULT_MODELS[kind], kind)
+export function opencodeModel(name: string | undefined, kind: HostAgentKind, lead?: OcModelRef): OcModelRef {
+  if (namesNoModel(name)) return (lead && modelRef(lead)) || opencodeModel(DEFAULT_MODELS[kind], kind)
+  const m = name!.trim()
   const at = m.indexOf('/')
   if (at > 0 && at < m.length - 1) return { providerID: m.slice(0, at), id: m.slice(at + 1) }
   const family = CLAUDE_FAMILIES.find(f => new RegExp(`(^|[^a-z])${f}([^a-z]|$)`, 'i').test(m))
   return { providerID: CLAUDE_AGENT, id: family ?? m }
+}
+
+/** `m` as a model for session.create, if it is one: provider, id and (when set) variant. */
+function modelRef(m: unknown): OcModelRef | undefined {
+  const o = m && typeof m === 'object' ? (m as Record<string, unknown>) : {}
+  if (typeof o.providerID !== 'string' || !o.providerID || typeof o.id !== 'string' || !o.id) return undefined
+  return { providerID: o.providerID, id: o.id, ...(typeof o.variant === 'string' && o.variant ? { variant: o.variant } : {}) }
+}
+
+/**
+ * The model lead session `sessionID` is using now (T-504): session.get's `model`, else the model of its latest
+ * assistant or "model-switched" message (session.context). Undefined when neither says one; throws when OpenCode fails.
+ */
+export async function leadModel(api: OcSessionApi, sessionID: string): Promise<OcModelRef | undefined> {
+  const now = modelRef((await api.get({ sessionID })).model)
+  if (now) return now
+  const messages = await api.context({ sessionID })
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    const ref = m.type === 'assistant' || m.type === 'model-switched' ? modelRef(m.model) : undefined
+    if (ref) return ref
+  }
+  return undefined
 }
 
 /**
@@ -122,6 +156,30 @@ export function opencodeAgents(api: OcSessionApi, o: OpencodeAgentsOptions): Ope
   const sleep = o.sleep ?? ((ms: number) => new Promise<void>(res => setTimeout(res, ms)))
   const log = o.log ?? (() => undefined)
   const name = o.name ?? 'symcc'
+  let saidNoLeadModel = false
+
+  /**
+   * The model agent `a` runs on, and whether it is the lead's: a named one as opencodeModel says; none, the lead's
+   * current model, else DEFAULT_MODELS (said once in the log).
+   */
+  const modelFor = async (a: HostAgentStart, parentID: string | undefined): Promise<{ model: OcModelRef; fromLead: boolean }> => {
+    if (!namesNoModel(a.model)) return { model: opencodeModel(a.model, a.kind), fromLead: false }
+    let why = 'no lead session known yet'
+    if (parentID) {
+      try {
+        const lead = await leadModel(api, parentID)
+        if (lead) return { model: opencodeModel(a.model, a.kind, lead), fromLead: true }
+        why = "OpenCode didn't say the lead session's model"
+      } catch (err) {
+        why = `couldn't read the lead session's model: ${(err as Error)?.message ?? err}`
+      }
+    }
+    if (!saidNoLeadModel) {
+      saidNoLeadModel = true
+      log(`agents with no model of their own run on symcc's default models (${Object.entries(DEFAULT_MODELS).map(([k, v]) => `${k} ${v}`).join(', ')}): ${why}`)
+    }
+    return { model: opencodeModel(a.model, a.kind), fromLead: false }
+  }
 
   /** Waits until `check` says yes, looking every pollMs for at most waitMs; answers whether it did. */
   const until = async (check: () => Promise<boolean>) => {
@@ -187,11 +245,11 @@ export function opencodeAgents(api: OcSessionApi, o: OpencodeAgentsOptions): Ope
   return {
     async spawn(a) {
       const parentID = o.lead?.()
-      const model = opencodeModel(a.model, a.kind)
+      const { model, fromLead } = await modelFor(a, parentID)
       const s = await api.create({ ...(parentID ? { parentID } : {}), title: a.description || a.name, model, location: { directory: a.cwd ?? o.dir }, metadata: { symcc: a.kind }, permissions: AGENT_PERMISSIONS })
       const id = s.id
       runs.set(id, { id, kind: a.kind === 'worker' ? 'worker' : 'scout', status: 'pending', name: a.name, description: a.description })
-      log(`${a.kind} ${a.name}: OpenCode session ${id} on ${model.providerID}/${model.id}`)
+      log(`${a.kind} ${a.name}: OpenCode session ${id} on ${model.providerID}/${model.id}${fromLead ? " (the lead's model)" : ''}`)
       try {
         if (a.cwd) await moveTo(id, a.cwd)
       } catch (err) {
