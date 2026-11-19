@@ -2,7 +2,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, CHECKER_NOTE } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, setBoardMode, checkingNow, stopAsked, check, stopOrphans, stoppedHandBack } from '../hooks/app/workers'
 import { checkerFinished } from '../hooks/app/checker'
@@ -240,6 +240,33 @@ test('T-440: the target branch deleted while the checker runs: after its OK the 
   expect(t.test_tries ?? 0).toBe(0)
   expect(w.git.main).toBe(M1)
   expect(leadQueue.join('\n')).not.toMatch(/checking failed/)
+})
+
+test('T-542: after the checker says OK, the prep and merge steps no longer say a checker is running', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const seen: string[] = []
+  const run = w.$.run.bind(w.$)
+  w.$.run = (async (argv: string[], o?: unknown) => {
+    const sub = argv[0] === 'git' ? argv.slice(1).filter((x, i, a) => x !== '-c' && a[i - 1] !== '-c')[0] : ''
+    if (sub === 'add' || sub === 'update-ref') {
+      const t = find(await load(w.$), 'T-1')!
+      seen.push(`${sub}: ${statusCell(t, Date.now())} | ${t.note}`)
+    }
+    return run(argv as never, o as never)
+  }) as typeof w.$.run
+  let during = ''
+  const t = await finish(w, async id => {
+    const c = find(await load(w.$), 'T-1')!
+    during = `${statusCell(c, Date.now())} | ${c.note}`
+    checkerFinished(id, 'OK')
+  })
+  expect(t.status).toBe('done')
+  // while the checker really runs, its note is there (a reloaded copy finds a lost checker by it)
+  expect(during).toBe(`checker | ${CHECKER_NOTE}`)
+  expect(seen.some(s => s.startsWith('update-ref: merge'))).toBe(true)
+  for (const s of seen) expect(s).not.toContain(CHECKER_NOTE)
+  expect(seen.filter(s => s.startsWith('add:'))).toEqual([`add: prep | ${PREP_NOTE}`, `add: prep | ${PREP_NOTE}`])
 })
 
 // ---------------- tests run once per try (T-526) ----------------

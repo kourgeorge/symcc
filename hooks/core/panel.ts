@@ -94,9 +94,17 @@ export const PREP_NOTE = 'preparing to merge: committing and checking files'
 /** The note a finished task gets while symcc checks and merges it (it replaces PREP_NOTE once the prep step is over). */
 export const FINISH_NOTE = 'checking and merging'
 
-/** The note task `note` gets when check step `step` begins: PREP_NOTE in the prep step of a plain finish, back to FINISH_NOTE after it; any other note stays. */
-export const stepNote = (step: CheckStep, note: string | undefined): string | undefined =>
-  step === 'prep' ? (note === FINISH_NOTE ? PREP_NOTE : note) : note === PREP_NOTE ? FINISH_NOTE : note
+/** The note of a task while its checker runs; a reloaded copy finds a task whose checker it lost by it (see restartCheckers in workers.ts). */
+export const CHECKER_NOTE = 'a checker agent is trying to break it before it merges'
+
+/** The note task `note` gets when check step `step` begins: PREP_NOTE in the prep step of a plain finish (also after
+ *  the checker's verdict, so the checker note doesn't stay once no checker runs), back to FINISH_NOTE in the test and
+ *  merge steps; the checker step keeps it (runChecker then sets CHECKER_NOTE), and any other note stays. */
+export function stepNote(step: CheckStep, note: string | undefined): string | undefined {
+  if (step === 'checker') return note
+  if (step === 'prep') return note === FINISH_NOTE || note === CHECKER_NOTE ? PREP_NOTE : note
+  return note === PREP_NOTE || note === CHECKER_NOTE ? FINISH_NOTE : note
+}
 
 /** The short status column of a task row in the board list: the step while symcc checks its finished work
  *  ("prep", "test", "checker", "merge", the short words for checkStepNow's steps), else the time of the running try ("4m") for a task being

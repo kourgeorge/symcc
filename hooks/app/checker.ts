@@ -2,7 +2,7 @@
 // finishWork (workers.ts) holds the change before its merge (or review), runs a checker here and waits for its
 // verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
+import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, type CheckerTestRun, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerLine, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel } from '../board'
 import { isTreeId, treePassed } from '../core/passed-trees'
 import { git, taskBranch } from './git'
 import { markStep, readPassedTrees, testedTree } from './review'
@@ -20,8 +20,8 @@ export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; aga
 /** The agent name of task `id`'s checker: "symcc-T-3-checker". */
 export const checkerName = (name: string, id: string) => agentSafeName(`${name}-${id}-checker`)
 
-/** The note of a task while its checker runs; a reloaded copy finds a task whose checker it lost by it (see restartCheckers in workers.ts). */
-export const CHECKER_NOTE = 'a checker agent is trying to break it before it merges'
+/** The note of a task while its checker runs (kept in core/panel.ts, as stepNote swaps it back once the verdict is in). */
+export { CHECKER_NOTE } from '../board'
 
 /**
  * Runs a checker on task `t`'s finished work in its folder `dir` (everything is committed there) and waits for its
