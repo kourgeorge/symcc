@@ -2,14 +2,18 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
-## Unreleased
+## 0.5.5 (2026-11-20)
 
 ### Changed
+- One merge line for the whole project, shared by every session: a finished task (or an approve, or a "your files are clear" merge) joins it, and at its turn does catch up with your branch → tests → merge in one go, so your branch can't move under it. While it waits it shows "in line (n)", and the wait doesn't count against its time limit. It replaces the test lock (`.symcc/tests.lock`); the line is kept in `.symcc/merge-line.json` and survives a reload.
 - A test command that runs past `test_minutes` now fails like a failing test: a new worker try starts with the output (it uses one automatic retry), and the note says the tests ran out of time after N min and to raise `test_minutes` if they are just slow. symcc no longer reruns only the tests, and no longer asks "the tests ran out of time twice" (with "Run the tests again", "Give them more time", "Stop it"); no task waits for a rerun or shows "retest" any more. A task on your board that was waiting for such a rerun goes back to to do once, with a note.
 - A clash with your branch is now one normal failed try: it uses one of the `auto_retries` (shared with failing tests), and the next worker is told to merge your branch in first. It no longer has its own two tries to merge it in; when the retries are used up the task fails with "conflicts with the latest main (after N automatic retries)". The old `conflict_tries` count is removed from your board once.
 - A merge turn has one time limit (`test_minutes` for each test command, plus 5 minutes), counted only from the start of its turn (waiting in the merge line doesn't count). A turn that runs past it is one normal failed try: it uses one of the `auto_retries` and a new try starts, or the task fails when they are used up. The separate "ran over twice in a row" rule is gone, and a merge waiting for your files that runs over no longer just keeps waiting. An approve that runs over still stays in review with a note.
 - With one merge line, your branch only moves at the front of the line, so symcc no longer catches up and tests again (up to 5 times) when the branch moved during a merge. If it still moved (you committed to it by hand meanwhile), nothing is merged and that turn fails as one normal try ("main moved during the merge (someone committed to it by hand), so nothing was merged").
 - One small set of notes between a hand-back and its merge, the same in every view: "in line (n)", then the step's note ("preparing to merge: committing and checking files", "running the tests", "merging", and the checker's note), then how it went (merged, failed with the reason, waiting for your files, or in review). The notes "checking and merging", "approved; checking and merging" and "your files are out of the way; merging" are gone. The guide's merge section now describes the line, with a small diagram.
+
+### Fixed
+- An agent symcc no longer has on record (an old try's worker or checker) is no longer treated as the lead: only the lead (the caller with no agent id; in OpenCode the lead's own session) gets the lead tools. Your own helper agents (e.g. an Explore search) can no longer call symcc's tools either.
 
 ## 0.5.4 (2026-11-19)
 

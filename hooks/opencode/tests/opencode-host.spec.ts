@@ -34,7 +34,7 @@ import { PLUGIN_ROOT, opencodeHost, OPENCODE_FEATURES } from '../host'
 import type { Host } from '../../host'
 import { TOOLS, leadGuide, manual } from '../../app/tools'
 import { ASK_TOOL_DEF } from '../../app/ask'
-import { COMMANDS, toolCall, runCommand as symccCommand } from '../../app/symcc'
+import { COMMANDS, toolCall, notLeadText, runCommand as symccCommand } from '../../app/symcc'
 import { scoutToolRefusal } from '../../core/scouts'
 import { workerToolRefusal } from '../tools'
 import { parseViewFile } from '../board-view'
@@ -1039,10 +1039,11 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
         r => ({ ok: String(r.content) }),
         (e: Error) => ({ refused: e.message }),
       )
-    // the lead's call runs the same handler as Claude Code's (toolCall -> runTool)
+    // the lead's call (the session the owner prompted) runs the same handler as Claude Code's (toolCall -> runTool, as the lead: no agent id)
     const lead = f.lead(p.main)
+    await c.hooks.prompt!({ sessionID: lead })
     const board = await call('symcc_board', lead, { task: 'T-1' })
-    expect(board).toEqual({ ok: ((await toolCall(host!, 'symcc_board', lead, { task: 'T-1' })) as { result: string }).result })
+    expect(board).toEqual({ ok: ((await toolCall(host!, 'symcc_board', undefined, { task: 'T-1' })) as { result: string }).result })
     expect(String((board as { ok: string }).ok)).toContain('T-1')
     const added = await call('symcc_add', lead, { title: 'From OpenCode', details: 'Done when: a test shows it.', why: 'a test', origin_by: 'owner' })
     expect(String((added as { ok: string }).ok)).toContain('T-3')
@@ -1064,6 +1065,11 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     expect('ok' in asked && !String(asked.ok).startsWith('Refused')).toBe(true)
     // a stopped agent is refused anything, as in Claude Code
     expect(await call('symcc_board', 'ses_old')).toEqual({ refused: stoppedText() })
+    // T-525: a session that is none of the above (an agent of an old try the board no longer names, OpenCode's own
+    // subagent, the owner's other chat) is refused every lead tool, never taken for the lead
+    f.sessions.set('ses_gone', { info: { id: 'ses_gone', location: { directory: p.main } }, looksLeft: 0, messages: [] })
+    for (const t of TOOLS()) expect(await call(`symcc_${t.name}`, 'ses_gone', { task: 'T-1', title: 'x', details: 'y', why: 'z', origin_by: 'owner' })).toEqual({ refused: notLeadText(t.name) })
+    expect('ok' in (await call('symcc_board', lead))).toBe(true)
     expect((await load(host!)).tasks.length).toBe(3)
     // the question's own follow-ups (the board published, the lead told) settle before the copy ends
     await settle()
@@ -1102,6 +1108,9 @@ test('each session is offered only the symcc tools it may call, and the lead get
     // a session OpenCode made for one of symcc's agents is known by its metadata too
     f.sessions.set('ses_meta', { info: { id: 'ses_meta', metadata: { symcc: 'checker' }, location: { directory: p.main } }, looksLeft: 0, messages: [] })
     expect(Object.keys((await ask('ses_meta')).tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    // T-525: a session nothing knows (not the lead, none of symcc's agents on record) is offered none of symcc's tools
+    f.sessions.set('ses_gone', { info: { id: 'ses_gone', location: { directory: p.main } }, looksLeft: 0, messages: [] })
+    expect(Object.keys((await ask('ses_gone')).tools)).toEqual(['edit'])
     await settle()
     await end!()
     await settle()
@@ -1257,6 +1266,8 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     expect(v1.name).toBe('symcc')
     expect(v1.view.tasks.map(t => t.id)).toEqual(['T-1', 'T-2'])
     const lead = f.lead(p.main)
+    // the owner's prompt makes it the lead (T-525: only the known lead session gets the lead's tools)
+    await c.hooks.prompt!({ sessionID: lead })
     const tool = (name: string, input: Record<string, unknown>) => c.tools.get(name)!.execute(input, { sessionID: lead, agent: 'build', messageID: 'm', id: 'call' })
     await tool('symcc_ask', { task: 'T-2', question: 'Which database?' })
     await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status === 'waiting')

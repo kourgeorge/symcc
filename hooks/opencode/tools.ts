@@ -26,16 +26,21 @@ import { answerChoices } from '../core/panel'
 import { answeredLeadLine } from '../core/commands'
 import type { OcCommandDefinition, OcSessionApi, OcToolInfo } from './ctx'
 
-/** Who calls a tool: the lead (or any session that is none of symcc's agents), a worker, or a scout or checker. */
-export type Caller = 'lead' | 'worker' | 'scout'
+/**
+ * Who calls a tool: the lead (the session plugin.ts knows as the owner's chat), a worker, a scout or checker, or any
+ * other session ('other': OpenCode's own subagents, the owner's other chats, or an agent of symcc's that the board no
+ * longer names, T-525), which gets none of symcc's tools.
+ */
+export type Caller = 'lead' | 'worker' | 'scout' | 'other'
 
 /** symcc's tools in its plain names, with their JSON schemas: the lead's, then the workers' question tool. */
 export function symccTools(): { name: string; description: string; inputSchema: Readonly<Record<string, unknown>> }[] {
   return [...TOOLS(), ASK_TOOL_DEF()]
 }
 
-/** Whether a `caller` may call symcc tool `tool` (plain name): a worker only ask_owner, a scout or checker board and stats, the lead the rest. */
+/** Whether a `caller` may call symcc tool `tool` (plain name): a worker only ask_owner, a scout or checker board and stats, the lead the rest, any other session none. */
 export function mayCall(caller: Caller, tool: string): boolean {
+  if (caller === 'other') return false
   if (caller === 'worker') return tool === ASK_TOOL
   if (caller === 'scout') return SCOUT_BOARD_TOOLS.includes(tool)
   return tool !== ASK_TOOL
@@ -48,7 +53,8 @@ export const workerToolRefusal = (tool: string) =>
 /**
  * Who session `id` is: a worker, scout or checker this copy runs, or one the board names (another copy's, see
  * agentOnBoard), or a session OpenCode made for one of symcc's agents (its metadata `symcc` says the kind, `kind()`);
- * else the lead.
+ * else 'other'. The lead is never found here: the caller checks it first (plugin.ts's lead(), T-525), so a session
+ * nothing knows is never taken for it.
  */
 export async function callerOf(host: Host, id: string, kind: () => Promise<unknown> = async () => undefined): Promise<Caller> {
   if (workers.has(id)) return 'worker'
@@ -59,7 +65,7 @@ export async function callerOf(host: Host, id: string, kind: () => Promise<unkno
   const k = await kind().catch(() => undefined)
   if (k === 'worker') return 'worker'
   if (k === 'scout' || k === 'checker') return 'scout'
-  return 'lead'
+  return 'other'
 }
 
 /** The names (the host's, e.g. "symcc_add") of symcc's tools a `caller` may not call, to take out of what its session is offered. */
@@ -73,9 +79,11 @@ export function hiddenTools(caller: Caller): string[] {
  * The tools to add with ctx.tool.transform: every one of symcc's, a normal tool (codemode false), whose execute runs
  * symcc's toolCall with the calling session as the agent (so a stopped agent, a scout's or checker's call of a tool
  * that changes the board, and a worker's question are judged as in Claude Code). A refusal fails the call with its
- * reason. `kind` tells the kind metadata of a session (see callerOf).
+ * reason. `lead` tells the lead's session (plugin.ts's lead()): its calls run as the lead's (toolCall with no agent
+ * id); any other session's go to toolCall with its id, which refuses it the lead's tools (T-525). `kind` tells the
+ * kind metadata of a session (see callerOf).
  */
-export function opencodeTools(host: Host, kind: (sessionID: string) => Promise<unknown> = async () => undefined): OcToolInfo[] {
+export function opencodeTools(host: Host, lead: () => string | undefined, kind: (sessionID: string) => Promise<unknown> = async () => undefined): OcToolInfo[] {
   return symccTools().map(t => ({
     name: toolName(t.name),
     description: t.description,
@@ -85,8 +93,10 @@ export function opencodeTools(host: Host, kind: (sessionID: string) => Promise<u
       useName(host)
       const name = toolName(t.name)
       const args = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
-      if (t.name !== ASK_TOOL && (await callerOf(host, context.sessionID, () => kind(context.sessionID))) === 'worker') throw new Error(workerToolRefusal(t.name))
-      const r = await toolCall(host, name, context.sessionID, args).catch((err: Error) => toolCallFailed(host, name, context.sessionID, { kind: 'error', message: err?.message ?? String(err) }))
+      const isLead = !!context.sessionID && context.sessionID === lead()
+      if (!isLead && t.name !== ASK_TOOL && (await callerOf(host, context.sessionID, () => kind(context.sessionID))) === 'worker') throw new Error(workerToolRefusal(t.name))
+      const agentId = isLead ? undefined : context.sessionID
+      const r = await toolCall(host, name, agentId, args).catch((err: Error) => toolCallFailed(host, name, agentId, { kind: 'error', message: err?.message ?? String(err) }))
       if (!r) throw new Error(`${S.N.name} has no tool ${name}`)
       if ('deny' in r) throw new Error(r.deny)
       return { content: r.result }

@@ -76,12 +76,12 @@ test("a scout's or checker's call of a tool that changes things is refused with 
   expect(await app.toolCall(host, 'Read', 'scout-1', {})).toBe(null)
 })
 
-test("the lead's and a worker's calls are not refused by the scouts' rule", async () => {
+test("the lead's calls are not refused by the scouts' rule; any other agent's lead tool is refused (T-525)", async () => {
   const { host } = withBoard()
   const lead = await app.toolCall(host, 'settings', undefined, {})
   expect(lead && 'result' in lead).toBe(true)
-  const worker = await app.toolCall(host, 'board', 'worker-1', {})
-  expect(resultOf(worker)).toContain('Fix login')
+  expect(resultOf(await app.toolCall(host, 'board', undefined, {}))).toContain('Fix login')
+  expect(await app.toolCall(host, 'board', 'worker-1', {})).toEqual({ deny: app.notLeadText('board') })
 })
 
 test('the scout agent type gets board and stats as mcp__ tools; the workers\' tools are unchanged', () => {

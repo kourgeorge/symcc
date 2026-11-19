@@ -6,7 +6,11 @@
 import { test, expect } from 'bun:test'
 import { readFile, readdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { runCommand, PLUGIN_ROOT } from '../host'
-import { claudePermissions, claudeResult, editRule, withBasePrompt } from '../runner'
+import { claudePermissions, claudeResult, editRule, withBasePrompt, type AgentRunner } from '../runner'
+import { openSession, leadTool, closeSession } from '../session'
+import { toolCall, notLeadText } from '../../../hooks/app/symcc'
+import { TOOLS } from '../../../hooks/app/tools'
+import { toolName } from '../../../hooks/app/state'
 import { WORKER_BASE, SCOUT_BASE } from '../../../hooks/core/prompts'
 import { SYMCC_WORDS } from '../../../hooks/host'
 
@@ -224,6 +228,27 @@ async function groupGone(group: number, ms = 60_000): Promise<boolean> {
   }
   return false
 }
+
+test('T-525: on the Node host the lead (no agent id) gets its tools, and an agent id the board has no record of is refused every one of them', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-lead-')
+  try {
+    await runCommand(['git', 'init', '-q', '-b', 'main'], { cwd: repo })
+    const runner: AgentRunner = { name: 'none', command: () => ({ argv: ['true'] }), result: () => ({ answer: '' }) as never }
+    const s = await openSession({ root: repo, runner, say: () => undefined, sessionId: 'node-t525' })
+    try {
+      expect(await leadTool(s, 'add', { title: 'Lead task', details: 'Done when: a test shows it.', why: 'a test', origin_by: 'owner' })).toContain('T-1')
+      for (const t of TOOLS()) {
+        const r = await toolCall(s.host, toolName(t.name), 'agent-of-an-old-try', { task: 'T-1', title: 'x', details: 'y', why: 'z', origin_by: 'owner' })
+        expect(r).toEqual({ deny: notLeadText(t.name) })
+      }
+      expect(await leadTool(s, 'board', { task: 'T-1' })).toContain('Lead task')
+    } finally {
+      await closeSession(s)
+    }
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 60_000)
 
 test('an option with no value is refused: a bare --files never adds a task that may edit anywhere', async () => {
   const dir = await mkdtemp('/tmp/symcc-node-args-')

@@ -6,7 +6,9 @@ import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, find, ASK_TOOL, ASK_SENT, blockedEditText, gitWriteIn, gitWriteText, readBoard, withAgentId, AGENT_TRIES_KEPT, CHECKERS_KEPT } from '../hooks/board'
 import { S, toolName, workers, boardAgents, starting, queuedWorkers } from '../hooks/app/state'
 import { checkEdit, askCall, guardFailed, stoppedText } from '../hooks/app/ask'
-import { toolCall } from '../hooks/app/symcc'
+import { toolCall, notLeadText } from '../hooks/app/symcc'
+import { TOOLS } from '../hooks/app/tools'
+import { SCOUT_BOARD_TOOLS, scoutToolRefusal } from '../hooks/core/scouts'
 import { agentOnBoard, lateHandBack } from '../hooks/app/workers'
 import { load } from '../hooks/app/store'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -137,6 +139,32 @@ test("an agent not on the board is none of symcc's: nothing is refused, and a cr
   expect(guardFailed(quiet, 'tool.check', 'someone', { kind: 'throw' })).toBeUndefined()
   // the lead (no agent id) is never looked up
   expect(await checkEdit(host, undefined, { path: `${ROOT}/README.md` })).toBeUndefined()
+})
+
+test("T-525: an agent the board no longer has on record (an old try past the kept ids) is refused every lead tool; the lead still gets them; a worker and a checker keep their refusals", async () => {
+  // tries 2..5 keep their agent ids; try 1's agent (w-1) is in no task's runs any more
+  const runs: SymccRun[] = [{ started: ISO, ended: ISO }, ...[2, 3, 4, 5].map(n => ({ started: ISO, ended: ISO, agent: `w-${n}` })), { started: ISO }]
+  const { host, files } = await world({ attempts: 6, agent: 'w9', runs })
+  // the checker of this try (a patch that starts a try drops the checker, so it is named on the try after it)
+  files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(patchTask(await load(host), 'T-1', { checker: 'c9' }, ISO)))
+  expect(await agentOnBoard(host, 'w-1')).toBeUndefined()
+  expect((await agentOnBoard(host, 'c9'))?.kind).toBe('checker')
+  const before = files.get(`${ROOT}/${S.N.boardFile}`)
+  const input = { task: 'T-1', title: 'x', details: 'y', why: 'z', origin_by: 'owner', mode: 'off', status: 'review' }
+  for (const tool of TOOLS().map(t => t.name)) {
+    for (const id of ['w-1', 'someone', 'w9']) {
+      const r = await toolCall(host, toolName(tool), id, input)
+      expect(r && 'deny' in r ? r.deny : `${id} not refused: ${tool}`).toBe(notLeadText(tool))
+    }
+    // a checker keeps today's rule: board and stats run, the rest is refused as read-only
+    const c = await toolCall(host, toolName(tool), 'c9', input)
+    if (SCOUT_BOARD_TOOLS.includes(tool)) expect(c && 'result' in c ? 'ran' : JSON.stringify(c)).toBe('ran')
+    else expect(c && 'deny' in c ? c.deny : `c9 not refused: ${tool}`).toBe(scoutToolRefusal(tool, S.N.name)!)
+  }
+  expect(files.get(`${ROOT}/${S.N.boardFile}`)).toBe(before)
+  // the lead (no agent id) still gets its tools
+  const board = await toolCall(host, toolName('board'), undefined, { task: 'T-1' })
+  expect(board && 'result' in board ? board.result : 'refused').toContain('T-1')
 })
 
 test('an unreadable board makes the guard throw (so guardFailed decides) instead of letting an edit through', async () => {

@@ -180,7 +180,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       // symcc's tools and slash commands (tools.ts), before the engine starts, as Claude Code registers them first;
       // a guard-only copy answers its lead tools and commands that the board runs from the main folder
       const kindOf = (sessionID: string) => ctx.session.get({ sessionID }).then(i => i.metadata?.symcc)
-      const tools = opencodeTools(host, kindOf)
+      const tools = opencodeTools(host, lead, kindOf)
       regs.push(await ctx.tool.transform(t => tools.forEach(x => t.add(x))))
       const commands = opencodeCommands(host, ctx.session)
       regs.push(await ctx.command.transform(c => commands.forEach(x => c.add(x))))
