@@ -121,10 +121,9 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * was dropped or paused meanwhile), nothing is merged and that reason is returned.
  * Every merge takes its turn in the project-wide merge line (inMergeLine, app/merge-line.ts): at its turn, in one go, it
  * catches up with the target branch, tests and moves the branch. When the branch still moved before ours could move it
- * (the owner moved it), the task joins the line again and is brought up to date, tested and merged again (MAX_MERGE_RACES at most).
+ * (the owner committed to it by hand), nothing is merged and the turn fails as one normal try.
  * `release`: settles when the caller gave this check up as stuck, so the tasks behind it in line stop waiting for it.
- * `limit`: the caller's time limit, run only during each turn in the line (see TurnLimit): waiting in line doesn't count,
- * and a later go (after the branch moved) starts it from zero.
+ * `limit`: the caller's time limit, run only during the task's turn in the line (see TurnLimit): waiting in line doesn't count.
  * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
  * is `held` (with `review` too when the task waits for review): the checker runs next (see app/checker.ts).
  */
@@ -204,20 +203,15 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo })
   }
   // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
-  // If the branch still moved under us (the owner), the task joins the line again and retries, a few times at most.
-  for (let n = 1; ; n++) {
-    // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).
-    const r = await inMergeLine<{ result: CheckResult; raced?: boolean }>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, hold), {
-      t,
-      stopped: () => {
-        const s = stopped()
-        return s ? { result: s } : undefined
-      },
-      ...(release ? { release } : {}),
-      ...(limit ? { limit } : {}),
-    })
-    if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
-  }
+  // So the branch can only move under it by hand (the owner committed to it meanwhile): that fails this turn as one normal try.
+  // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).
+  const r = await inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, hold), {
+    t,
+    stopped,
+    ...(release ? { release } : {}),
+    ...(limit ? { limit } : {}),
+  })
+  return withSecrets(r)
 }
 
 /**
@@ -329,9 +323,6 @@ async function commitTry($: Host, t: SymccTask, dir: string, made: string[], sub
   return gitFailText(c)
 }
 
-/** How many times checkAndMerge brings a task up to date and tries again when its branch moved during the merge. */
-export const MAX_MERGE_RACES = 5
-
 /**
  * Says on the board which step of checking task `t` is going on now (BoardTask.checking), so the list
  * shows it; only while the task is still as it was when the check began and the check was not
@@ -350,16 +341,15 @@ export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: 
 /**
  * One go at the end of checkAndMerge, the task's merge turn (it is at the front of the merge line): bring in the latest
  * `target`, test, move `target` forward. `refresh` dates the task's place in line again (before each test command, so a
- * long run is never taken as stale). `raced`: it moved meanwhile, so nothing was merged.
+ * long run is never taken as stale).
  */
-async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], refresh: () => Promise<void>, hold?: (changed: readonly string[]) => boolean): Promise<{ result: CheckResult; raced?: boolean }> {
-  const res = (result: CheckResult) => ({ result })
+async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode, made: string[], stopped: () => CheckResult | undefined, retest: boolean, target: string, head: string, changed: string[], refresh: () => Promise<void>, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
   // First, before touching the folder: a step stopped or given up while it waited in the merge
   // line does nothing, as the next try may already be using the folder.
   const early = stopped()
-  if (early) return res(early)
+  if (early) return early
   // T-440: checked again here, as the task may have waited long in the merge line
-  if (!(await branchExists($, target))) return res(goneResult(target))
+  if (!(await branchExists($, target))) return goneResult(target)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
   let candidate = tip
@@ -369,8 +359,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       // Only a real conflict is one: any other failure (e.g. signing the merge commit) is git's error, and retrying on conflicts can't help it.
-      if (/^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`)) return res({ ok: false, detail: `conflicts with the latest ${target}`, conflict: true })
-      return res({ ok: false, detail: `symcc could not bring the work up to date with ${target} (git merge): ${gitFailText(m)}` })
+      if (/^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`)) return { ok: false, detail: `conflicts with the latest ${target}`, conflict: true }
+      return { ok: false, detail: `symcc could not bring the work up to date with ${target} (git merge): ${gitFailText(m)}` }
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
@@ -405,7 +395,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       if (tree) await recordPassedTree($, tree, b.test_commands)
       return undefined
     })()
-    if (failed) return res(failed)
+    if (failed) return failed
   }
   const passed = skipped ? `; ${testsSkippedText(tree)}` : '; tests passed'
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
@@ -415,19 +405,19 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // the checker setting: a change that needs a checker stops here, before review or merge (see app/checker.ts)
   const held = !!hold?.(changed)
   const holding = held ? { held: true } : {}
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return res({ ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` })
-  if (held) return res({ ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; the checker looks at it before it merges` })
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...holding, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
+  if (held) return { ok: true, held: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; the checker looks at it before it merges` }
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
-  if (s) return res(s)
+  if (s) return s
   // T-440: the tests can take many minutes; the branch may have been deleted meanwhile
-  if (!(await branchExists($, target))) return res(goneResult(target))
+  if (!(await branchExists($, target))) return goneResult(target)
   await markStep($, t, 'merging', stopped)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
-  if (!moved.ok && !(await branchExists($, target))) return res(goneResult(target))
-  if (!moved.ok) return { result: { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }, ...(moved.raced ? { raced: true } : {}) }
+  if (!moved.ok && !(await branchExists($, target))) return goneResult(target)
+  if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }
   const tests = !b.test_commands.length ? '; no test command set' : skipped || testsRun ? passed : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
@@ -435,7 +425,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     const n = await git($, ['diff', '--name-only', '--no-renames', '-z', '--diff-filter=AM', main, candidate])
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
-  return res({ ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` })
+  return { ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
 }
 
 /** T-527: the git tree id of commit `commit` (the code a test run tests), or '' when git can't tell. */

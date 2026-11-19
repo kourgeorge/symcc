@@ -1,9 +1,9 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { checkAndMerge, changedFiles, changesText, MAX_MERGE_RACES, ownerEdits } from '../hooks/app/review'
+import { checkAndMerge, changedFiles, changesText, ownerEdits } from '../hooks/app/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
-import { PREP_NOTE, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -596,13 +596,13 @@ test('checkAndMerge on a conflict with main aborts the merge and says it conflic
   expect(w.git.main).toBe(M1)
 })
 
-test('checkAndMerge when main moved during the merge brings it in, tests again and merges by itself', async () => {
-  let raced = false
+test('checkAndMerge when main moved by hand during the turn fails that turn as one try: no catch-up and no second test run', async () => {
+  let moves = 0
   const w = world({
-    // another merge lands on main just before ours first tries to move it
+    // the owner commits to main just before ours tries to move it
     answer: a => {
-      if (a[0] === 'update-ref' && !raced) {
-        raced = true
+      if (a[0] === 'update-ref') {
+        moves++
         w.git.main = M2
         w.git.upToDate = false
       }
@@ -612,47 +612,11 @@ test('checkAndMerge when main moved during the merge brings it in, tests again a
   const [b, t] = boardWith('auto', ['npm test'])
   const made: string[] = []
   const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
-  expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
-  expect(made).toEqual([H1, H2])
-  // the other change was brought in (M2), then the tests ran again on top of it
-  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M2}`))).toBe(true)
-  expect(ranTests(w).length).toBe(2)
-  expect(w.git.main).toBe(H2)
-})
-
-test('checkAndMerge when main keeps moving during every merge gives up after a few tries and says so', async () => {
-  let n = 0
-  const w = world({
-    // main moves again just before each of our moves
-    answer: a => {
-      if (a[0] === 'update-ref') {
-        w.git.main = `d${++n}`.padEnd(40, '0')
-        w.git.upToDate = false
-      }
-      return undefined
-    },
-  })
-  const [b, t] = boardWith('auto')
-  const r = await checkAndMerge(w.$, t, WT, b)
-  expect(r).toEqual({ ok: false, detail: 'main moved during the merge; try again' })
-  expect(n).toBe(MAX_MERGE_RACES)
-  expect(w.git.main).toBe(`d${n}`.padEnd(40, '0'))
-})
-
-test('checkAndMerge that loses the race and then conflicts with the new main still fails as a conflict', async () => {
-  const w = world({
-    answer: a => {
-      if (a[0] === 'update-ref' && !w.git.conflict) {
-        w.git.main = M2
-        w.git.upToDate = false
-        w.git.conflict = true
-      }
-      return undefined
-    },
-  })
-  const [b, t] = boardWith('auto')
-  const r = await checkAndMerge(w.$, t, WT, b)
-  expect(r).toEqual({ ok: false, conflict: true, detail: 'conflicts with the latest main' })
+  expect(r).toEqual({ ok: false, detail: 'main moved during the merge (someone committed to it by hand), so nothing was merged' })
+  expect(moves).toBe(1)
+  expect(made).toEqual([H1])
+  expect(ranTests(w).length).toBe(1)
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m T-1: bring up to date with main/.test(c))).toBe(false)
   expect(w.git.main).toBe(M2)
 })
 
@@ -3978,7 +3942,7 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   let out: string | undefined
   void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
   await turns(w, () => hung)
-  expect(find(await load(w.$), 'T-1')!.note).toBe('approved; checking and merging')
+  expect(find(await load(w.$), 'T-1')!.note).toBe(STEP_NOTE.testing)
   // the list row says which step the approve is in
   expect(statusCell(find(await load(w.$), 'T-1')!, Date.now())).toBe('test')
   expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe('T-1 is already being merged')
@@ -4511,32 +4475,85 @@ for (const [ahead, mins] of [[1, 8], [2, 6]] as const) {
   })
 }
 
-test('a task whose merge races with main moving, and is tested again, still merges when each go is under the limit', async () => {
+test('a worker\'s try whose main was moved by hand during its turn fails as one normal try: tested once, no second go', async () => {
   S.me = 'me'
-  let races = 0
+  let moves = 0
   const w = world({
-    // another merge lands on main just before ours tries to move it, twice
+    // the owner commits to main just before ours tries to move it, every time
     answer: a => {
-      if (a[0] === 'update-ref' && races < 2) {
-        races++
-        w.git.main = races === 1 ? M2 : `d${races}`.padEnd(40, '0')
+      if (a[0] === 'update-ref') {
+        moves++
+        w.git.main = `d${moves}`.padEnd(40, '0')
         w.git.upToDate = false
       }
       return undefined
     },
   })
   const { pass } = limitClock(w)
-  // 10 min per go: 30 min in all, twice the 15 min limit
   slowTests(w, pass, 10 * MIN)
   await aboutToFinish(w)
   await workerFinished(w.$, 'ag1', 'made the change')
-  expect(races).toBe(2)
-  expect(ranTests(w).length).toBe(3)
+  expect(moves).toBe(1)
+  expect(ranTests(w).length).toBe(1)
+  const t = find(await load(w.$), 'T-1')!
+  // its one try failed (the test task allows one try)
+  expect(t.status).toBe('failed')
+  expect(t.merged).toBeUndefined()
+  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+})
+
+/** Records the notes task T-1 has on the board, each time `look` is called (after every command, and at each step of `turns`). */
+function notesOf(w: ReturnType<typeof world>) {
+  const seen: string[] = []
+  const look = () => {
+    const text = w.files.get(BOARD)
+    const n = text ? find(parseBoard(text), 'T-1')?.note : undefined
+    if (n !== undefined && seen.at(-1) !== n) seen.push(n)
+  }
+  w.onRun(async () => look())
+  return { seen, look }
+}
+
+/** The one small set of notes a task shows between its hand-back and its merge: "in line (n)" and the steps' notes. */
+const SMALL_SET = [inLineNote(2), STEP_NOTE.prep, STEP_NOTE.testing, STEP_NOTE.merging]
+
+test('T-550: every note symcc sets between a hand-back and its merge is in the one small set: in line (n), prep, test, merge', async () => {
+  S.me = 'me'
+  const w = world()
+  await aboutToFinish(w)
+  const { seen, look } = notesOf(w)
+  // one merge in front of it, so it waits in line first
+  const { free, ran, all } = earlierMerges(w, 1)
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
+  await turns(w, () => (look(), ran.length === 1 && seen.includes(inLineNote(2))))
+  free[0]!()
+  await all[0]
+  await turns(w, () => (look(), ended))
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.merged).toBe(H2)
-  expect(w.git.main).toBe(H2)
-  expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
+  // the first note is the one the worker had before it handed back
+  const before = seen.slice(1, -1)
+  expect(before).toEqual([STEP_NOTE.prep, inLineNote(2), STEP_NOTE.prep, STEP_NOTE.merging, STEP_NOTE.testing, STEP_NOTE.merging])
+  expect(before.filter(n => !SMALL_SET.includes(n))).toEqual([])
+  expect(before.every(isMergeNote)).toBe(true)
+  // the outcome note is not one of them
+  expect(seen.at(-1)).toBe(t.note)
+  expect(isMergeNote(t.note)).toBe(false)
+})
+
+test('T-550: an approve shows the same small set of notes as a worker\'s hand-back, then its outcome', async () => {
+  const w = await inReview({ upToDate: false })
+  const { seen, look } = notesOf(w)
+  let out: string | undefined
+  void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
+  await turns(w, () => (look(), out !== undefined))
+  expect(out).toBe(`T-1 approved and merged: merged into main (${H2.slice(0, 8)}); approved by the owner; tests passed`)
+  // the first note is the review note it had
+  const before = seen.slice(1, -1)
+  expect(before).toContain(STEP_NOTE.prep)
+  expect(before).toContain(STEP_NOTE.testing)
+  expect(before.filter(n => !SMALL_SET.includes(n))).toEqual([])
 })
 
 test('a step really stuck in its own merge turn is still given up after the limit, and the next one in line then goes on', async () => {
@@ -4582,7 +4599,7 @@ test('a step really stuck in its own merge turn is still given up after the limi
   expect(w.git.main).toBe(M1)
 })
 
-test('an approve waiting in line behind two slow merges, then main moving under it, still merges: neither the wait nor the first go counts', async () => {
+test('an approve waiting in line behind two slow merges, then main moved by hand under it, fails its one go: the wait does not count and the tests run once', async () => {
   let raced = false
   const w = await inReview({ upToDate: false })
   // main moves just before the approve's first move
@@ -4607,11 +4624,12 @@ test('an approve waiting in line behind two slow merges, then main moving under 
     await all[i]
   }
   await turns(w, () => out !== undefined)
-  // 12 min in line, then two goes of 10 min each
+  // 12 min in line, then one go of 10 min: main moved by hand, so that go fails (no catch-up and no second go)
   expect(raced).toBe(true)
-  expect(ranTests(w).length).toBe(2)
-  expect(out).toBe(`T-1 approved and merged: merged into main (${H2.slice(0, 8)}); approved by the owner; tests passed`)
-  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(ranTests(w).length).toBe(1)
+  expect(out).toBe('T-1 was not merged and stays in review: main moved during the merge (someone committed to it by hand), so nothing was merged. Fix that, then approve it again.')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+  expect(w.git.main).toBe(M2)
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
 })
 
@@ -5169,9 +5187,9 @@ test('the worker prompt of an investigation asks for the answer in full and says
 // ---------------- one merge line for the whole project (T-546; it grew out of T-416's test lock) ----------------
 
 const LINE = `${ROOT}/.symcc/merge-line.json`
-const CHECKING_NOTE = 'checking and merging'
+const CHECKING_NOTE = STEP_NOTE.merging
 
-/** A board with T-1 and T-2 both "doing", their work being checked right now (a fresh check mark), each noted "checking and merging". */
+/** A board with T-1 and T-2 both "doing", their work being checked right now (a fresh check mark), each noted "merging". */
 async function twoChecking(w: ReturnType<typeof world>, t2: Partial<BoardTask> = {}): Promise<[SymccTask, SymccTask]> {
   const [b0] = boardWith('auto', ['npm test'])
   let [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)

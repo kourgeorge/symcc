@@ -10,7 +10,7 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, FINISH_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, triesTotal } from './panel'
 import { checkStepNow } from './lead'
 import { statusMark } from './details'
 import { whyFailed } from './failure'
@@ -118,10 +118,10 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
-/** The notes a doing row's state already says ("▶ 12m", "▶ prep"), so the band leaves them out when it shows one:
+/** The notes a doing row's state already says ("▶ 12m", "▶ test", "▶ merge"), so the band leaves them out when it shows one:
  *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
  *  "worker starting" without it, e.g. on OpenCode). */
-const STATE_NOTES = new Set(['worker on it', FINISH_NOTE, 'starting at the next turn', 'worker starting'])
+const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.merging, 'starting at the next turn', 'worker starting'])
 
 /** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>
