@@ -274,6 +274,20 @@ happens, never the words in its hand-back:
 > **Set a test command.** With no test command, step 4 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
 
+### Tests run once per try
+
+The full test commands run once per try, by symcc, in step 4 (and not even then when the
+same code, with the same commands, already passed: see `passed-trees.json` in the board
+folder). The worker is told the commands, but while it works it runs only the tests for the
+files it changed (one test file, say) and a cheap type check if the project has one; it does
+not run the full commands at the end, as symcc does that and sends it the output if any
+fail. The checker is told that symcc already ran these exact commands on this commit and
+tree and that they passed, and gets the list of changed files: it runs only the tests for
+those files and its own new probe cases, and a full command only when a probe needs it (and
+says why). When symcc's run did not happen (no test commands set, or the code is not in the
+record), the checker runs the tests itself. A worker that skips the full run may now and
+then hand back work that fails symcc's run; that costs one new try, with the failing output.
+
 ### A code change with no test
 
 Before a change task is merged, symcc looks at the files its
