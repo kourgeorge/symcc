@@ -4,6 +4,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ## Unreleased
 
+## 0.5.0 (2026-11-19)
+
 ### Added
 - Each worker's folder has a `.scratch/` folder for throwaway scripts and notes. A worker (or checker) may write there without a refusal or a file request; it is kept out of git by a `/.scratch/` line in git's local ignore list (never your `.gitignore`); worker folders share that list with your own project folder (it is your repository's `.git/info/exclude`), so `.scratch/` is ignored there as well, and removing that line undoes it; so it is never committed or scope checked, and symcc empties it when a try ends or the folder is used again. The worker and checker prompts say to use it (or /tmp), and to make code changes with the Edit tool.
 - symcc runs outside Claude Code too, as a first test: `bun hosts/node/main.ts add | tick | board` drives the same board from a plain command line, with each worker as its own `claude -p` process in its worktree (a task's files become `claude -p` permission rules). A try's tokens and dollar cost are kept. There is no panel there: the board is the text board.
