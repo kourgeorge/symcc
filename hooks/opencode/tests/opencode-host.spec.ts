@@ -175,21 +175,36 @@ function fakeCtx(dir: string, session: OcSessionApi = fakeSessions().api) {
   return { ctx, hooks, tools, commands, disposed: () => disposed }
 }
 
-/** Waits until `check` is true (looking every 20 ms, for at most `ms`). */
-async function until(check: () => boolean | Promise<boolean>, ms = 5000) {
+/** Waits until `check` is true (looking every 20 ms, for at most `ms`; a busy machine can take seconds for a copy's start). */
+async function until(check: () => boolean | Promise<boolean>, ms = 15_000) {
   for (const end = Date.now() + ms; Date.now() < end; await new Promise<void>(r => setTimeout(() => r(), 20))) if (await check()) return
   throw new Error('timed out waiting')
 }
 
-/** Waits until no board write is running or starts within 300 ms, so none of a test's follow-ups lands in the next test. */
-async function settle(ms = 10_000) {
+/**
+ * Waits until no worker start is under way (`starting`: a task the engine's pump picked up, e.g. one a test added,
+ * makes its folder with git before it writes the board) and no board write is running or starts within 300 ms, so
+ * none of a test's follow-ups lands in the next test after reset() (T-489: a late write found no project folder).
+ */
+async function settle(ms = 20_000) {
   for (const end = Date.now() + ms; Date.now() < end; ) {
     const w = S.writing
     await w
     await new Promise<void>(r => setTimeout(() => r(), 300))
-    if (S.writing === w) return
+    if (S.writing === w && starting.size === 0) return
   }
-  throw new Error('board writes never settled')
+  throw new Error(`board writes never settled (still starting: ${[...starting].join(', ') || 'none'})`)
+}
+
+/**
+ * A project() test's cleanup: lets the engine's follow-ups (a worker start the pump picked up, board writes) finish
+ * (see settle; a failed test's copy may never settle, so its error stays the one shown), then reset() and the scratch
+ * folder goes.
+ */
+async function finish(p: { done: () => Promise<void> }) {
+  await settle().catch(() => undefined)
+  reset()
+  await p.done()
 }
 
 /** Asks the copy's permission hook about `action` on `resources` for session `sessionID`; answers the check as it ended. */
@@ -321,8 +336,7 @@ test('a worktree\'s copy refuses a worker\'s edit outside its files through perm
     expect(await readFile(`${p.main}/.symcc/lead.json`, 'utf8').catch(() => 'none')).toBe('none')
     await end!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -340,8 +354,7 @@ test('the main folder\'s copy runs symcc\'s engine: it claims lead.json and star
     expect(S.beat).toBe(null)
     expect(S.watchdog).toBe(null)
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -361,6 +374,7 @@ test('a copy in a subfolder of the main project runs the engine (as Claude Code\
     await end!()
     expect(S.beat).toBe(null)
     // one engine per project: the main folder's copy and a subfolder's share one owner
+    await settle()
     reset()
     const { engine } = recordingEngine()
     const roles2: string[] = []
@@ -372,8 +386,7 @@ test('a copy in a subfolder of the main project runs the engine (as Claude Code\
     await endMain!()
     expect(owners().size).toBe(0)
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -580,8 +593,7 @@ test('the tool backstop reads OpenCode 2.3\'s real tool inputs: edit and write {
     expect(await before('shell', { command: 'ls src', workdir: p.wt })).toBe('')
     await end!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -639,8 +651,7 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     expect(await host!.lead.usage(p.main, { kind: 'all' }, 1000)).toEqual({ lead: [{ id: lead, atMs: 1000, tokens: { input: 3, output: 5, cache_read: 9 }, from: OPENCODE_LEAD_FROM }], leadSessions: 1, leadFrom: OPENCODE_LEAD_FROM })
     await endCopy!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 60_000)
 
@@ -744,8 +755,7 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
     // the lead is kept for the board owner when the copy goes: a copy loaded again knows it at once
     expect([...leads().values()]).toEqual([owner])
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -784,8 +794,7 @@ test('two main copies: updates the engine copy kept before the lead was known st
     await endA!()
     await endB!()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -845,8 +854,7 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     await end!()
     await settle()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -881,8 +889,7 @@ test('each session is offered only the symcc tools it may call, and the lead get
     await end!()
     await settle()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 30_000)
 
@@ -928,7 +935,6 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     await end!()
     await settle()
   } finally {
-    reset()
-    await p.done()
+    await finish(p)
   }
 }, 60_000)
