@@ -9,7 +9,7 @@ import { kindMark } from './kinds'
 import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
-import { shownStatus } from './commands'
+import { shownStatus, waitsForYou } from './commands'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell } from './panel'
 import { statusMark } from './details'
@@ -97,7 +97,9 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
     }),
   )
   const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
-  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${statusMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+  // a waiting task whose tests only run again (not waitsForYou) shows the running mark, like the rest of its row (T-541)
+  const mark = (t: (typeof tasks)[number]): string => statusMark(t.status === 'waiting' && !waitsForYou(t) ? { ...t, status: 'doing' } : t)
+  return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${mark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */

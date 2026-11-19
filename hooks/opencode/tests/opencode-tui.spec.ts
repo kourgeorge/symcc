@@ -78,10 +78,13 @@ test('a waiting task that only reruns its tests shows with the running ones as "
   const rerun = band.find(l => lineText(l).startsWith('T-4'))!
   expect(rerun[0]!.color).toBe('green')
   expect(lineText(rerun)).toContain('retest')
+  // its front shows the running mark, not the waiting one (T-541); the question row keeps the waiting mark
+  expect(lineText(rerun)).toMatch(new RegExp(`^T-4 +${STATUS_MARK.doing} retest`))
   expect(lineText(rerun)).toContain('— rerunning its tests')
   expect(lineText(rerun)).not.toContain('tests ran out of time')
   const asked = band.find(l => lineText(l).startsWith('T-3'))!
   expect(asked[0]!.color).toBe('yellow')
+  expect(lineText(asked)).toMatch(new RegExp(`^T-3 +\\${STATUS_MARK.waiting} waiting`))
   expect(lineText(asked)).toContain('— Which database?')
   // the list: not under NEEDS YOU, not bold, the running mark and color; the question task stays bold under NEEDS YOU
   const list = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)
