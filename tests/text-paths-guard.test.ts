@@ -55,6 +55,9 @@ const REFUSED: [string, string][] = [
   ['echo hi > .scratch/a b>../../x', '.symcc/x'],
   ['printf hi > .scratch/a b>>../../x', '.symcc/x'],
   ["sed -n p a.ts>../../x", '.symcc/x'],
+  // a brace expansion makes a path out of a word grep opens
+  ['grep x {a,../../board.json}', '.symcc/board.json'],
+  ['grep x tests/a.ts {b,../../board.json}', '.symcc/board.json'],
   // a sed script or grep pattern that is itself the path
   ["grep -n '../../board.json' tests/a.ts", '.symcc/board.json'],
   // a here-document run by a shell or a program, piped on, or printed to the screen

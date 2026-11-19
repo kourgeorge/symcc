@@ -420,7 +420,8 @@ const globFolder = (w: string) => {
 /**
  * A word of a simple command as written (`raw`, quotes kept), what it is without quotes (`w`), whether the shell would
  * expand anything in it (`$` or "`" outside single quotes), and whether it holds a shell sign outside quotes (`sign`:
- * `<`, `>`, `|`, `&`, `;`, `(` or `)`), so that `a.ts>../../x` counts as a redirect stuck to a word, not only text (T-481).
+ * `<`, `>`, `|`, `&`, `;`, `(`, `)`, `{` or `}`), so that `a.ts>../../x` counts as a redirect stuck to a word and
+ * `{a,../../x}` as a brace expansion, not only text (T-481).
  */
 type RawWord = { raw: string; w: string; expands: boolean; sign?: boolean }
 
@@ -446,7 +447,8 @@ function rawWords(text: string): RawWord[] {
       cur = undefined
     } else {
       add(c, c, c === '$' || c === '`')
-      if (/[<>|&;()]/.test(c)) cur!.sign = true
+      // `{` and `}` too: `grep x {a,../../f}` expands to the path ../../f, which grep opens
+      if (/[<>|&;(){}]/.test(c)) cur!.sign = true
     }
   }
   if (cur) out.push(cur)
