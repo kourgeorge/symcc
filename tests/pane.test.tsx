@@ -712,12 +712,14 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     expect(await ui.find({ key: 'tab-tasks' })).toBeUndefined()
     expect(await ui.find({ key: 'tab-scouts' })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /^▍Instructions$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Last report/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Last report/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^▍File$/ })).toBeDefined()
     expect(await ui.find({ key: 'scout-back' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /\.symcc\/scouts\/bugs\.md/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Look for crashes/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /crash in parser/ })).toBeDefined()
+    // T-516: the last report shows only on a run's page, not here
+    expect(await ui.find({ type: 'Text', text: /crash in parser/ })).toBeUndefined()
     expect(await ui.find({ key: 'scout-run' })).toBeDefined()
     expect(await ui.find({ key: 'scout-edit' })).toBeDefined()
     await ui.press({ key: 'scout-back' })
@@ -737,7 +739,7 @@ test('a scout\'s page shows its summary as the subheader, else the first line of
   // Instructions is always the whole text
   expect(await ui.find({ type: 'Text', text: /Look for crashes/ })).toBeDefined()
   const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
-  expect(heads).toEqual(['▍Instructions', '▍Last report', '▍File'])
+  expect(heads).toEqual(['▍Instructions', '▍Runs', '▍File'])
   await ui.press({ key: 'scout-edit' })
   expect((await ui.find({ key: 'scout-summary' }))?.props.value).toBe('Crash hunter')
   await ui.unmount()
@@ -751,10 +753,11 @@ test('with no summary, a scout\'s page shows the first line of its instructions 
   await ui.unmount()
 })
 
-test('a scout that found nothing says so', async ($, on) => {
+test('a scout with no runs kept says so under Runs, and shows no report text', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { last_run: new Date().toISOString(), last_report: 'NOTHING' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^nothing found$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^  \(no runs yet\)$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /nothing found|NOTHING/ })).toBeUndefined()
   await ui.unmount()
 })
 

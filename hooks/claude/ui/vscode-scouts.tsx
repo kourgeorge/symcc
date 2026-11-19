@@ -7,8 +7,8 @@
 //   last report: found 5: The package left-pad has a security advisory   (the start of the last report, whole, dim)
 // With no scouts, a short how-to in a box and "+ New scout" as the one primary button.
 // One scout's page: a "← Scouts" button, the name and state, its facts, Run now / Pause / Edit as buttons, then the
-// instructions, the whole last report as Markdown, and its Runs (newest first; a press opens that run's full report,
-// with a "← <scout>" button back). It says when its last run ended on an API error or a refusal. No key hints.
+// instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
+// the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
 import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
 import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
@@ -181,7 +181,6 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
       </Box>
     )
   }
-  const report = String(sc.last_report ?? '').trim()
   return (
     <Box key="vs-scout-page" flexDirection="column" gap={1}>
       <Box key="vs-scout-top" flexDirection="column">
@@ -210,30 +209,29 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
         <Button key="scout-edit" label="Edit" variant="secondary" onPress={act(() => editScout(claudeHost($), sc))} />
       </Box>
       {section('instructions', 'Instructions', [sc.prompt?.trim() ? <Markdown key="vs-scout-prompt" text={sc.prompt.trim()} /> : plain('vs-scout-prompt-none', `(not loaded yet: run /${S.N.name}-scouts)`)])}
-      {section('report', 'Last report', [
-        !report ? plain('vs-report-none', sc.last_run ? 'nothing found' : 'nothing found (it has not run yet)') : isNothing(report) ? plain('vs-report-nothing', 'nothing found') : null,
-        report && isNothing(report) && report.split('\n').length > 1 ? <Markdown key="vs-report-md" text={report} /> : null,
-        report && !isNothing(report) ? <Markdown key="vs-report-md" text={report} /> : null,
-      ])}
-      {shown.length
-        ? section(
-            'runs',
-            'Runs',
-            // each run: its time a link that opens its report (text, not a Button: VS Code draws a Button as a blue box),
-            // and under it what it found, in its outcome's color
-            shown.map(x => {
-              const line = scoutRunLine(x.run, x.tasks, nowMs)
-              const cut = line.indexOf(' · ')
-              const href = vsHref('run', x.run.ended)
-              return (
-                <Box key={`vs-run-${x.run.ended}`} flexDirection="column">
-                  {vsLink(vs, row(`scout-run:${x.run.ended}`), `run ${mdLink(cut < 0 ? line : line.slice(0, cut), href)}`, [[href, showRun(x.run.ended)]])}
-                  {cut < 0 ? null : <Text key={`vs-run-${x.run.ended}-info`} wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{line.slice(cut + 3)}</Text>}
-                </Box>
-              )
-            }),
-          )
-        : null}
+      {/* no report text here: a run's report shows on its page (a press on the run); the newest run is first */}
+      {section(
+        'runs',
+        'Runs',
+        shown.length
+          ? [
+              plain('vs-runs-hint', 'Click a run to see its report'),
+              // each run: its time a link that opens its report (text, not a Button: VS Code draws a Button as a blue box),
+              // and under it what it found, in its outcome's color
+              ...shown.map(x => {
+                const line = scoutRunLine(x.run, x.tasks, nowMs)
+                const cut = line.indexOf(' · ')
+                const href = vsHref('run', x.run.ended)
+                return (
+                  <Box key={`vs-run-${x.run.ended}`} flexDirection="column">
+                    {vsLink(vs, row(`scout-run:${x.run.ended}`), `run ${mdLink(cut < 0 ? line : line.slice(0, cut), href)}`, [[href, showRun(x.run.ended)]])}
+                    {cut < 0 ? null : <Text key={`vs-run-${x.run.ended}-info`} wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{line.slice(cut + 3)}</Text>}
+                  </Box>
+                )
+              }),
+            ]
+          : [plain('vs-runs-none', '(no runs yet)')],
+      )}
       {section('file', 'File', [plain('vs-scout-file', file, 'autoAccept')])}
       {vsFooter(vs, 'scout-keys')}
     </Box>
