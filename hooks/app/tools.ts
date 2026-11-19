@@ -170,9 +170,10 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   removes or turns off / on worker roles; kinds does the same for the task kinds (roles are how you shape what a worker
   does: a role fills the {{role}} slot of the fixed, built-in worker prompt); stats shows time and token use;
   setup_git sets up git in a folder without it (only after you say yes).
-  question puts a question for you that is not about one task on the board ("Questions for you" at the
-  top of the task list, and "1 question for you" in the band); answer it there with a button or your own
-  words, or in the chat (the lead closes it then).
+  question puts a question for you that is not about one task on the board${features.panel ? ` ("Questions for you" at the
+  top of the task list${features.band ? ', and "1 question for you" in the band' : ''}); answer it there with a button or your own
+  words, or in the chat (the lead closes it then).` : `, where it waits until it is
+  answered${features.band ? ' ("1 question for you" in the band)' : ''}; the lead lists the open ones; answer it in the chat (the lead closes it then).`}
   board lists the open tasks and the backlog (done / dropped only as counts); it takes status
   and search to narrow the list, and task to see one task with its latest report.
   Each task merges into the branch you were on when it was made (there is no branch
@@ -180,8 +181,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   settings: test_commands (must pass before a merge), max_parallel (workers at once, 1-8),
   max_minutes (a worker running longer makes symcc ask you for more time), auto_retries (new tries on their own
   after failing tests, 2 by default), archive_days (done and dropped tasks older than this
-  many days move to the archive, 14 by default, 0 = never), open_on_start (open the board panel when a
-  session starts, on by default), notify (off, sound or voice: when a task is merged or a worker
+  many days move to the archive, 14 by default, 0 = never), ${features.panel ? `open_on_start (open the board panel when a
+  session starts, on by default), ` : ''}notify (off, sound or voice: when a task is merged or a worker
   asks you something, play a chime, or say "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project's name first); only the
   session driving the board plays; voice by default where this machine can speak, else sound,
   else off; a choice this machine can't play is refused), scout_findings (auto, the default:

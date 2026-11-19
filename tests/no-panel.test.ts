@@ -215,11 +215,16 @@ test('no panel: /symcc-help says /symcc shows the board, not that it opens the p
   expect(manual('', BARE)).not.toContain('open the board panel (')
   expect(manual('commands')).toContain(`/${S.N.name}                     open the board panel (`)
   // T-465: no panel-only lines (the panel's keys, "opens everything", Esc) without a panel; the panel's help keeps them
-  const panelLines = [`/${S.N.name} opens everything`, 'the whole panel', 'On the board: t tasks', 'In the settings view', 'In the panel nothing needs Esc', 'In an open task: b back', 'p on its page', 'answer it in the board panel', 'the c tab in the', 'on its page press Allow', 'press g in the board']
+  const panelLines = [`/${S.N.name} opens everything`, 'the whole panel', 'On the board: t tasks', 'In the settings view', 'In the panel nothing needs Esc', 'In an open task: b back', 'p on its page', 'answer it in the board panel', 'the c tab in the', 'on its page press Allow', 'press g in the board', 'in the band', 'with a button', 'open_on_start']
   for (const line of panelLines) {
     expect(manual('', BARE)).not.toContain(line)
     expect(manual('')).toContain(line)
   }
+  // the lead topic too: no band line, no panel button, no open_on_start; the question tool is still named
+  const lead = manual('lead', BARE)
+  expect(lead).toContain('question puts a question for you')
+  expect(lead).toContain('answer it in the chat (the lead closes it then)')
+  expect(lead).toContain('notify (off, sound or voice')
   expect(bare).toContain(`/${S.N.name} shows the board as text`)
   expect(bare).toContain(`/${S.N.name}-settings [NAME VALUE]  show the settings, or set one setting`)
   expect(bare).toContain('Everything else, just say to the lead')
