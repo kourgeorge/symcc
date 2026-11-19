@@ -5281,6 +5281,40 @@ test('the merge line file survives a reload; a task that was in line joins again
   expect(w.files.has(LINE)).toBe(false)
 })
 
+test("the place in line comes from the file's order alone: when it differs from this copy's join order, all tasks still run, in the file's order", async () => {
+  S.me = 'me'
+  const w = world()
+  // T-2 is another session's task, being checked now (so its entry is not stale)
+  await twoChecking(w)
+  const log: string[] = []
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  const five = inMergeLine(w.$, 'T-5', async () => (await gate, log.push('T-5')))
+  await turns(w, () => lineTasks(w).length === 1)
+  const one = inMergeLine(w.$, 'T-1', async () => void log.push('T-1'))
+  const four = inMergeLine(w.$, 'T-4', async () => void log.push('T-4'))
+  await turns(w, () => lineTasks(w).length === 3)
+  expect(lineTasks(w)).toEqual(['T-5', 'T-1', 'T-4'])
+  // the file's order no longer matches this copy's join order (say another session took an entry out and it joined again)
+  const mine = new Map(parseMergeLine(w.files.get(LINE)!).map(e => [e.task, e]))
+  w.put(LINE, mergeLineText([mine.get('T-5')!, mine.get('T-4')!, lineEntry('T-2'), mine.get('T-1')!]))
+  let polls = 0
+  let fourDone = false
+  void four.then(() => (fourDone = true))
+  w.onSleep(() => {
+    if (w.sleeps.at(-1) !== MERGE_LINE_POLL_MS || !fourDone) return
+    // T-2's turn (in the other session) ends after a few looks, once T-4 is through (this write skips the board lock)
+    if (++polls === 3) w.put(LINE, mergeLineText(parseMergeLine(w.files.get(LINE)!).filter(e => e.task !== 'T-2')))
+  })
+  open()
+  await five
+  await four
+  await one
+  expect(log).toEqual(['T-5', 'T-4', 'T-1'])
+  expect(polls).toBe(3)
+  expect(w.files.has(LINE)).toBe(false)
+})
+
 test('the merge line is held for the whole turn: the task is at its front while it tests, and leaves after a failing test', async () => {
   S.me = 'me'
   const w = world({}, { 'npm test': { exitCode: 2, stdout: '1 test failed', stderr: '' } })

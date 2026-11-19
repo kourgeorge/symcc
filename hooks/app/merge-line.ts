@@ -15,7 +15,7 @@ const REDATE_MS = 60_000
 /** One go of a task in the line, from this copy of the plugin. */
 type Mine = { entry: LineEntry; gone: boolean }
 
-/** This copy's entries in the line, in the order they joined (the same order the file has them). */
+/** This copy's entries in the line, in the order they joined (the place in line comes from the file's order, see place). */
 const local: Mine[] = []
 let count = 0
 
@@ -131,23 +131,25 @@ async function redate($: Host) {
 }
 
 /**
- * How many tasks are in front of go `me`: this copy's tasks that joined before it, plus the other sessions' tasks the
- * file has before it. Stale entries of others are taken out of the file on the way; an entry of ours that is no longer
- * in the file (taken out by another session, or the file was removed) joins again at the back.
+ * How many tasks are in front of go `me`, taken from the file's order alone (so every session sees the same order and
+ * no two tasks wait for each other), and how many of those are other sessions' tasks. Stale entries of others are taken
+ * out of the file on the way; an entry of ours that is no longer in the file (taken out by another session, or the file
+ * was removed) joins again at the back. When the file can't be written, this copy's missing entries count as at the
+ * back in the order they joined, so its own tasks still keep one order among them.
  */
 async function place($: Host, me: Mine): Promise<{ ahead: number; others: number }> {
-  const mineAhead = local.indexOf(me)
   const keys = liveKeys()
   let line = await readMergeLine($)
   const stale = await staleOf($, line.filter(e => !keys.has(e.key)))
   if (stale.size) line = (await editLine($, l => l.filter(e => !stale.has(e.key)))) ?? line.filter(e => !stale.has(e.key))
-  let at = line.findIndex(e => e.key === me.entry.key)
-  if (at < 0) {
+  if (!line.some(e => e.key === me.entry.key)) {
+    const missing = (l: LineEntry[]) => local.filter(m => !m.gone && !l.some(e => e.key === m.entry.key)).map(m => m.entry)
     line = (await editLine($, l => (l.some(e => e.key === me.entry.key) ? l : [...l, me.entry]))) ?? line
-    at = line.findIndex(e => e.key === me.entry.key)
+    if (!line.some(e => e.key === me.entry.key)) line = [...line, ...missing(line)]
   }
-  const others = at < 0 ? 0 : line.slice(0, at).filter(e => !keys.has(e.key)).length
-  return { ahead: Math.max(0, mineAhead) + others, others }
+  const at = Math.max(0, line.findIndex(e => e.key === me.entry.key))
+  const ahead = line.slice(0, at)
+  return { ahead: ahead.length, others: ahead.filter(e => !keys.has(e.key)).length }
 }
 
 /** T-511: whether some task is in the merge line now (its turn going on, or waiting for it): one of this copy's, or another session's entry that is not stale. */
