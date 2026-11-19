@@ -665,7 +665,7 @@ before this was kept show `from: unknown`.
   when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
   Tasks from before this was kept say "no saved report".
 - **The research note.** When a task's merged work adds or changes a file under
-  `docs/research/`, the task page shows it in Details as `Note: docs/research/<file>.md`.
+  `docs/research/`, the task page shows it in Details as `Research: docs/research/<file>.md`.
 - **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
   while: it is not kept. The report file and the commit are what stay.
 
@@ -1332,7 +1332,7 @@ bun hosts/node/main.ts --root <project> board
 bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash command
 ```
 
-What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended.
+What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). There is no symcc hook guard there, so those rules are the only check on git, and they are stricter than in Claude Code: a worker or checker may not change git at all, not even in a scratch repository under `.scratch/` or `/tmp`. Claude Code's rules match the start of a command, not the folder it acts on, so every git call that starts with an option (`git -C <dir> ...`, `git --git-dir=...`, `git -c ...`) is refused, as are `commit`, `merge`, `init`, `reset`, `checkout`, `branch`, `push`, `stash`, `add`, `config` and the other writing subcommands, and `env git`, `xargs git` and the like. Reading with git (`status`, `diff`, `log`, `show`, `blame`, `grep`) still works. A command that hides git inside another program (`sh -c "git commit"`, a script) is not caught by these rules. The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended.
 
 ---
 

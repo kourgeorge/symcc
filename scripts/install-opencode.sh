@@ -56,11 +56,15 @@ rm -f "$link"
 ln -s "$here/opencode" "$link"
 echo "install-opencode: linked $link -> $here/opencode"
 
-# Only the 2.x line has this plugin API (the 1.x line is different): warn when the opencode on PATH is older.
+# symcc needs OpenCode 2.3 or newer (the 1.x line has a different plugin API): warn when the opencode on PATH is older.
 if command -v opencode >/dev/null 2>&1; then
-  v=$(opencode --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
-  if [ -n "$v" ] && [ "$v" -lt 2 ]; then
-    echo "install-opencode: the opencode on your PATH is version $v.x; symcc needs OpenCode 2.3 or newer (npm install -g @opencode/cli; Homebrew's opencode is the old 1.x line)." >&2
+  ver=$(opencode --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p' | head -n 1)
+  if [ -n "$ver" ]; then
+    major=${ver% *}
+    minor=${ver#* }
+    if [ "$major" -lt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -lt 3 ]; }; then
+      echo "install-opencode: the opencode on your PATH is version $major.$minor; symcc needs OpenCode 2.3 or newer (npm install -g @opencode/cli; Homebrew's opencode is the old 1.x line)." >&2
+    fi
   fi
 fi
 echo "install-opencode: start OpenCode in your project; check with: opencode plugin list"
