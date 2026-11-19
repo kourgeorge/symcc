@@ -284,21 +284,18 @@ prep · title"), all with the same short words:
    is handled like an approve whose tests fail.
    **Time limit.** Each test command may run up to `test_minutes` (10 minutes by default; a
    project with a slow test suite can raise it, e.g. "set test_minutes to 20"). The whole
-   checking and merging gets `test_minutes` for each test command (at least one), plus 5
-   minutes for git and the board: with the default, 15 minutes with one test command, 35 with
-   three. A merge line entry is taken as stale after twice `test_minutes`. Only the task's own
-   work counts: the clock stops while it waits in the merge line behind other tasks
-   (each of those has its own limit, so the line keeps moving), and starts again
-   from zero when its turn begins, and again each time it is brought up to date and
-   tested again because the branch moved meanwhile. A step still running past the limit
-   is taken as stuck and given up: a finished worker's task goes back to `todo` for a
-   fresh try (its folder and branch are kept); if the try before was given up the same
-   way, the task is marked `failed` instead ("ran over … twice in a row"), so it never
-   loops, and the lead is told. An approve that runs over stays in review (approve it
-   again). A merge waiting for your files that runs over keeps waiting: the regular check
-   tries it again on its own once your files are out of the way (or "retry T-3" at once);
-   if that merge runs over too, twice in a row, the task is marked `failed` instead and is
-   not started again on its own, and the lead is told once. If a given-up step still ends
+   merge turn (catch up, tests, merge) has one time limit: `test_minutes` for each test
+   command (at least one), plus 5 minutes for git and the board: with the default, 15
+   minutes with one test command, 35 with three. A merge line entry is taken as stale after
+   twice `test_minutes`. The limit counts only from the start of the task's own turn: waiting
+   in the merge line behind other tasks doesn't count (each of those has its own limit, so the
+   line keeps moving), and each new turn (after the branch moved meanwhile) starts from zero.
+   A turn still running past the limit is taken as stuck and given up, as one normal failed
+   try: like failing tests it uses one of the `auto_retries`, so the task goes back to `todo`
+   for a new try (its folder and branch are kept), and once they are used up it is marked
+   `failed` ("ran over 15 min and was stopped; nothing was merged"); the lead is told. A merge
+   that waited for your files is handled the same way. An approve that runs over is not a
+   try: the task stays in review with a note (approve it again). If a given-up step still ends
    later and its work did reach the branch after all, the task is marked done with that
    commit (when nothing else happened to it meanwhile), or the lead is told it landed.
 7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear

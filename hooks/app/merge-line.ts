@@ -78,7 +78,7 @@ const liveKeys = () => new Set(local.filter(m => !m.gone).map(m => m.entry.key))
 
 /**
  * The keys of the entries in `others` (not this copy's) that are stale: dated longer ago than mergeLineStaleMs (from the
- * board's test_minutes, or the task's own more time), or their task is no longer being checked by any copy of the plugin
+ * board's test_minutes), or their task is no longer being checked by any copy of the plugin
  * (gone from the board, or its check mark is no longer refreshed: its check ended or was given up, or its session died),
  * or their task is one this copy checks now (an earlier go of it, say one cut short by a reload). A board that can't be read: only the age counts.
  */
@@ -169,11 +169,15 @@ export type LineOptions<T> = {
   stopped?: () => T | undefined
   /** settles when the caller gave this go up as stuck: it leaves the line then, even if `run` is still going, so the ones behind it go on */
   release?: Promise<unknown>
-  /** the caller's time limit: `turn(false)` once this go has to wait (or `again` is set), `turn(true)` when its turn begins */
-  turn?: (go: boolean) => void
-  /** a later go of the same check (its branch moved under it): its time limit starts again from zero */
-  again?: boolean
+  /** the turn's time limit (see TurnLimit): started when the turn begins, stopped when it ends, so waiting in line never counts */
+  limit?: TurnLimit
 }
+
+/**
+ * The time limit of a merge turn (finishLimitMs, core/lead.ts): `start` starts it from zero when a turn begins (each
+ * go of a check is a turn of its own), `stop` stops it when the turn ends. Nothing runs it while the task waits in line.
+ */
+export type TurnLimit = { start(): void; stop(): void }
 
 /**
  * Runs `run` (task `task`'s turn: catch up with its target branch, test, move the branch) once it is at the front of
@@ -184,15 +188,10 @@ export type LineOptions<T> = {
 export async function inMergeLine<T>($: Host, task: string, run: (refresh: () => Promise<void>) => Promise<T>, o: LineOptions<T> = {}): Promise<T> {
   const { me, joined } = join($, task)
   void o.release?.then(() => leave($, me), () => leave($, me))
-  let off = false
   let shown = 0
   let before: string | undefined
   try {
     await joined
-    if (o.again) {
-      o.turn?.(false)
-      off = true
-    }
     // a go given up as stuck (`release`) is out of the line: the ones behind it no longer wait, and it waits for no one
     while (!me.gone) {
       const s = o.stopped?.()
@@ -203,10 +202,6 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
       const next = woken
       const { ahead, others } = await place($, me)
       if (ahead === 0) break
-      if (!off) {
-        o.turn?.(false)
-        off = true
-      }
       const n = ahead + 1
       if (o.t && n !== shown) {
         const first = !shown
@@ -228,10 +223,11 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
     // the waiting note goes back to what it was, unless something else changed it meanwhile
     if (o.t && shown) await noteTask($, o.t, note => (note === inLineNote(shown) ? before : note))
   }
-  if (off) o.turn?.(true)
+  o.limit?.start()
   try {
     return await run(() => redate($))
   } finally {
+    o.limit?.stop()
     await leave($, me)
   }
 }

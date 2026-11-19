@@ -159,21 +159,16 @@ export const testTimeoutMs = (b: { test_minutes?: unknown }): number => testMinu
 export const FINISH_GIT_MS = 5 * 60_000
 
 /**
- * The longest a finished task's checking and merging may take in a live copy of the plugin: each
+ * The one time limit of a task's merge turn (catch-up, tests and merge) in a live copy of the plugin: each
  * of its `tests` test commands may run `testMinutes` (the board's test_minutes, see testMinutesOf; counted at least once), plus FINISH_GIT_MS
- * for git and the board. A step still running then is taken as stuck: its task goes back to "todo"
- * (or is done, when its work already reached its branch; or failed, the second time in a row).
+ * for git and the board. It counts only from the start of the turn (waiting in the merge line doesn't count). A turn
+ * still running then is taken as stuck and fails as one normal failed try (an approve stays in review with a note;
+ * a task whose work already reached its branch is done).
  */
 export const finishLimitMs = (tests: number, testMinutes: number = DEFAULT_TEST_MINUTES) => Math.max(1, tests) * testMinutes * 60_000 + FINISH_GIT_MS
 
 /** The note a try's run ends with when its checking and merging ran over `min` minutes and was given up. */
 export const ranOverNote = (min: number) => `its checking and merging ran over ${min} min and was stopped`
-
-/** Whether task `t`'s try before the current one also ended because its checking and merging was given up. */
-export function ranOverBefore(t: Pick<BoardTask, 'runs'>): boolean {
-  const prev = t.runs?.[t.runs.length - 2]
-  return prev?.ended_by === 'restarted' && /^its checking and merging ran over \d+ min\b/.test(prev.ended_note ?? '')
-}
 
 /** Whether task `t`'s work is being tested and merged right now by some copy of the plugin (its mark is fresh). */
 export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: number, staleMs = FINISH_STALE_MS): boolean {

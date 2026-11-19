@@ -3812,7 +3812,7 @@ async function turns(w: ReturnType<typeof world>, done: () => boolean) {
   expect(done()).toBe(true)
 }
 
-test('a checking and merging step that never ends is sent back to todo after the limit; the lead is told once; its late end writes nothing', async () => {
+test('a merge turn that never ends fails as one normal try after the limit: back to todo with one automatic retry used; the lead is told once; its late end writes nothing', async () => {
   S.me = 'me'
   const { w, free, limit, hungNow } = stuckFinish()
   const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
@@ -3835,12 +3835,15 @@ test('a checking and merging step that never ends is sent back to todo after the
   expect(t.finishing).toBeUndefined()
   expect(t.checking).toBeUndefined()
   expect(t.session).toBeUndefined()
-  expect(t.history.at(-1)?.text).toBe('try 1: restarted: its checking and merging ran over 15 min and was stopped')
-  expect(t.runs!.at(-1)!.ended_by).toBe('restarted')
+  expect(t.note).toBe('its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)')
+  expect(t.test_tries).toBe(1)
+  expect(t.history.at(-1)?.text).toBe(`try 1: ${t.note}`)
+  expect(t.runs!.at(-1)!.ended_by).toBe('stopped')
+  expect(t.runs!.at(-1)!.ended_note).toBe('its checking and merging ran over 15 min and was stopped')
   expect(finishingSet.has('T-1')).toBe(false)
   const told = leadQueue.filter(x => x.includes('T-1') && x.includes('ran over 15 minutes'))
   expect(told.length).toBe(1)
-  expect(told[0]).toContain('sent it back to todo for a fresh try')
+  expect(told[0]).toContain('counts as a failed try; retrying on its own (1 of 2)')
   // its folder is kept
   expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
   // the old step wakes up late, its tests passing: it merges nothing and writes nothing over the task
@@ -3969,9 +3972,10 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   expect(leadQueue.length).toBe(queued)
 })
 
-test('a finish step given up while it waits for its merge turn runs no git command and no test in its folder when its turn comes', async () => {
+test('T-549: a finish step waiting for its merge turn has no time limit running; its one limit starts when its turn begins', async () => {
   S.me = 'me'
-  const { w, limit } = stuckFinish()
+  const { w, free, limit } = stuckFinish()
+  free()
   const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -3981,21 +3985,17 @@ test('a finish step given up while it waits for its merge turn runs no git comma
   const earlier = inMergeLine(w.$, 'T-9', () => new Promise<void>(r => (letGo = r)))
   let ended = false
   void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
-  await turns(w, () => w.calls.some(c => c.includes('git diff --name-only')))
+  await turns(w, () => lineTasks(w).includes('T-1'))
   for (let i = 0; i < 200; i++) await Promise.resolve()
-  // queued behind the earlier merge: no test has run
+  // queued behind the earlier merge: no test has run, and no limit was started
   expect(w.calls.some(c => c.startsWith('/bin/sh'))).toBe(false)
-  limit.fire!()
-  await turns(w, () => ended)
-  expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
-  const seen = w.calls.length
+  expect(limit.ms).toBeUndefined()
   letGo()
   await earlier
-  for (let i = 0; i < 5000; i++) await Promise.resolve()
-  const late = w.calls.slice(seen)
-  expect(late.filter(c => c.startsWith('wt:') || c.startsWith('/bin/sh'))).toEqual([])
-  expect(late.some(c => c.includes('git update-ref'))).toBe(false)
-  expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
+  await turns(w, () => ended)
+  expect(limit.ms).toBe(finishLimitMs(1))
+  expect(limit.cancelled).toBe(true)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
 })
 
 // ---------------- finished work waiting only for the owner's files (T-223) ----------------
@@ -4170,70 +4170,11 @@ test('merge_wait is kept only while the task stays waiting or in review', () => 
   expect((find(parseBoard(JSON.stringify(bad)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
 })
 
-test("a merge waiting for the owner's files that runs over keeps waiting for them: it merges on its own once they are clear, and a retry only merges", async () => {
+test("a merge waiting for the owner's files whose turn runs over is one normal failed try: a new try with one automatic retry used, then failed when none are left", async () => {
   try {
-    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
+    const { w, t } = await finishedOnDirtyMain(' M src/a.ts\0')
     expect((await t()).status).toBe('waiting')
-    // the owner commits their change (main moves), so the merge tests again; that test hangs until free()
-    w.git.status = ''
-    w.git.main = M2
-    w.git.upToDate = false
-    let free = () => {}
-    const gate = new Promise<void>(r => (free = r))
-    let hung = false
-    w.onRun(async cmd => {
-      if (hung || !/^\/bin\/sh -c /.test(cmd)) return
-      hung = true
-      await gate
-    })
-    const limits: (() => void)[] = []
-    ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number, f: () => void) => {
-      if (ms === finishLimitMs(1)) limits.push(f)
-      return { cancel() {} }
-    }
-    let out: string | undefined
-    void runTool(w.$, 'retry', { task: 'T-1' }).then(x => (out = String(x)))
-    await turns(w, () => hung)
-    expect(limits.length).toBe(1)
-    limits[0]!()
-    await turns(w, () => out !== undefined)
-    expect(out).toBe('T-1 was not merged and keeps waiting: its checking and merging ran over 15 minutes and was given up. Retry it.')
-    let x = await t()
-    expect(x.status).toBe('waiting')
-    expect(x.question).toBeNull()
-    expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
-    expect(x.note).toBe('the merge ran over 15 min and was given up; symcc retry T-1')
-    expect(x.history.at(-1)?.text).toBe('try 1: merging once your files were out of the way → its checking and merging ran over 15 min and was given up; nothing written, it stays waiting')
-    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(1)
-    expect(leadQueue.some(m => m.includes('ran over 15 minutes') && m.includes('merges on its own'))).toBe(true)
-    expect(w.git.main).toBe(M2)
-    // the owner changed src/a.ts again: a retry only tries the merge (no worker) and it keeps waiting
-    w.git.status = ' M src/a.ts\0'
-    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toContain('T-1 was not merged and keeps waiting: you have uncommitted changes on main')
-    expect((await t()).status).toBe('waiting')
-    await check(w.$)
-    expect((await t()).status).toBe('waiting')
-    expect(spawned).toEqual([])
-    // once the file is clear, the regular check merges it on its own, with no worker
-    w.git.status = ''
-    await check(w.$)
-    x = await t()
-    expect(x.status).toBe('done')
-    expect(x.merge_wait).toBeUndefined()
-    expect(x.attempts).toBe(1)
-    expect(spawned).toEqual([])
-    free()
-    for (let i = 0; i < 5000; i++) await Promise.resolve()
-  } finally {
-    cleanUp()
-  }
-})
-
-test("a merge waiting for the owner's files that runs over twice in a row is failed, not started again on its own; one give-up is retried", async () => {
-  try {
-    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
-    expect((await t()).status).toBe('waiting')
-    // the files are clear and main moved, so each merge tests again; every test hangs
+    // the files are clear and main moved, so the merge tests again; every test hangs
     w.git.status = ''
     w.git.main = M2
     w.git.upToDate = false
@@ -4248,36 +4189,21 @@ test("a merge waiting for the owner's files that runs over twice in a row is fai
       if (ms === finishLimitMs(1)) limits.push(f)
       return { cancel() {} }
     }
-    // the regular check merges it on its own; that merge runs over and is given up once
-    void check(w.$)
+    let out: string | undefined
+    void runTool(w.$, 'retry', { task: 'T-1' }).then(x => (out = String(x)))
     await turns(w, () => hangs === 1)
     expect(limits.length).toBe(1)
     limits[0]!()
-    await turns(w, () => leadQueue.some(m => m.includes('T-1') && m.includes('ran over 15 minutes')))
-    let x = await t()
-    expect(x.status).toBe('waiting')
-    expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
-    // one give-up: the next regular check still tries the merge again on its own
-    void check(w.$)
-    await turns(w, () => hangs === 2)
-    expect(limits.length).toBe(2)
-    limits[1]!()
-    await turns(w, () => leadQueue.some(m => m.includes('T-1') && m.includes('twice in a row')))
-    x = await t()
-    expect(x.status).toBe('failed')
+    await turns(w, () => out !== undefined)
+    expect(out).toBe('T-1 was not merged: its checking and merging ran over 15 minutes and was stopped, so it counts as a failed try; a new try starts on its own.')
+    const x = await t()
+    expect(x.status).toBe('todo')
     expect(x.merge_wait).toBeUndefined()
-    expect(x.note).toBe('its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
-    expect(x.history.at(-1)?.text).toBe('try 1: merging once your files were out of the way → its merge ran over 15 min twice in a row and was given up both times; nothing was merged')
-    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('twice in a row')).length).toBe(1)
-    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(2)
-    // a third regular check starts nothing: no merge, no worker, the lead is not told again
-    await check(w.$)
-    for (let i = 0; i < 2000; i++) await Promise.resolve()
-    expect(hangs).toBe(2)
-    expect(limits.length).toBe(2)
-    expect((await t()).status).toBe('failed')
-    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(2)
-    expect(spawned).toEqual([])
+    expect(x.test_tries).toBe(1)
+    expect(x.note).toBe('its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)')
+    expect(x.history.at(-1)?.text).toBe(`try 1: ${x.note}`)
+    expect(leadQueue.filter(m => m.includes('T-1') && m.includes('ran over 15 minutes')).length).toBe(1)
+    expect(w.git.main).toBe(M2)
   } finally {
     cleanUp()
   }
@@ -4336,7 +4262,7 @@ test('a finish step with three slow but finishing test commands (8 min each) is 
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
 })
 
-test('a task whose checking and merging is given up twice in a row ends failed with a note; no third worker starts; the lead is told', async () => {
+test('a task whose merge turns run over fails like failing tests once its automatic retries are used up; no further worker starts; the lead is told', async () => {
   try {
     const w = world()
     S.me = 'me'
@@ -4367,26 +4293,36 @@ test('a task whose checking and merging is given up twice in a row ends failed w
     expect(t.status).toBe('doing')
     expect(t.attempts).toBe(2)
     expect(workers.get('ag2')?.task).toBe('T-1')
-    // try 2: given up again, so it fails instead of looping
+    // try 2: given up again, the second and last automatic retry
     ended = false
     void workerFinished(w.$, 'ag2', 'made the change again').then(() => (ended = true))
     await turns(w, () => hung === 2 && timers.length === 2)
     timers[1]!.f()
+    await turns(w, () => ended && spawned.length === 2)
+    for (let i = 0; i < 500; i++) await Promise.resolve()
+    t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('doing')
+    expect(t.test_tries).toBe(2)
+    // try 3: given up again, no retries left: it fails instead of looping
+    ended = false
+    void workerFinished(w.$, 'ag3', 'made the change once more').then(() => (ended = true))
+    await turns(w, () => hung === 3 && timers.length === 3)
+    timers[2]!.f()
     await turns(w, () => ended)
     t = find(await load(w.$), 'T-1')!
     expect(t.status).toBe('failed')
-    expect(t.note).toBe('its checking and merging ran over 15 min twice in a row and was given up both times; nothing was merged')
-    expect(t.history.at(-1)?.text).toBe(`try 2: ${t.note}`)
+    expect(t.note).toBe('its checking and merging ran over 15 min and was stopped; nothing was merged (after 2 automatic retries)')
+    expect(t.history.at(-1)?.text).toBe(`try 3: ${t.note}`)
     expect(t.session).toBeUndefined()
     expect(t.finishing).toBeUndefined()
     expect(t.runs!.at(-1)!.ended_by).toBe('stopped')
-    const told = leadQueue.filter(m => m.startsWith('✗ T-1') && m.includes('twice in a row'))
+    const told = leadQueue.filter(m => m.startsWith('✗ T-1') && m.includes('ran over 15 minutes'))
     expect(told.length).toBe(1)
-    expect(told[0]).toContain('no new try starts')
-    // no third worker, not even at the regular check
+    expect(told[0]).toContain('no automatic retries left')
+    // no further worker, not even at the regular check
     await check(w.$)
     for (let i = 0; i < 500; i++) await Promise.resolve()
-    expect(spawned.length).toBe(1)
+    expect(spawned.length).toBe(2)
     expect(find(await load(w.$), 'T-1')!.status).toBe('failed')
     expect(w.git.main).toBe(M1)
   } finally {
@@ -4486,8 +4422,11 @@ function slowTests(w: ReturnType<typeof world>, pass: (ms: number) => void, ms: 
   w.onRun(async cmd => void (cmd.startsWith('/bin/sh -c ') && pass(ms)))
 }
 
-/** Promise turns until the step waits in line for its merge turn: its limit was started, then stopped. */
-const inLine = (w: ReturnType<typeof world>, c: ReturnType<typeof limitClock>) => turns(w, () => c.timers.length > 0 && !c.live().length)
+/** Promise turns until T-1 waits in line for its merge turn (behind the others); its limit is not started meanwhile. */
+const inLine = async (w: ReturnType<typeof world>, c: ReturnType<typeof limitClock>) => {
+  await turns(w, () => lineTasks(w).includes('T-1'))
+  expect(c.timers.length).toBe(0)
+}
 
 /** `n` earlier merges (other tasks finishing at the same time), in the merge line one after another, each holding its turn until let go. */
 function earlierMerges(w: ReturnType<typeof world>, n: number) {
@@ -5210,30 +5149,32 @@ const lineTasks = (w: ReturnType<typeof world>) => parseMergeLine(w.files.get(LI
 /** A merge line entry of task `task` from session `session` (by default another one), dated `at`. */
 const lineEntry = (task: string, session = 'other-session', at = Date.now()): LineEntry => ({ task, key: `${session}:${task}`, session, joined: new Date(at).toISOString(), at })
 
-test('two tasks in the merge line take turns; the second waits noted "in line (2)", its time limit stopped, with no polling between tasks of one copy', async () => {
+test('two tasks in the merge line take turns; the second waits noted "in line (2)", its time limit not started, with no polling between tasks of one copy', async () => {
   S.me = 'me'
   const w = world()
   const [t1, t2] = await twoChecking(w)
   const log: string[] = []
   let open = () => {}
   const gate = new Promise<void>(r => (open = r))
-  const turn1: boolean[] = []
-  const turn2: boolean[] = []
-  const one = inMergeLine(w.$, 'T-1', async () => (log.push(`T-1 start (line ${lineTasks(w).join(' ')})`), await gate, log.push('T-1 end'), 'one'), { t: t1, turn: go => turn1.push(go) })
-  const two = inMergeLine(w.$, 'T-2', async () => (log.push(`T-2 start (line ${lineTasks(w).join(' ')})`), 'two'), { t: t2, turn: go => turn2.push(go) })
+  const turn1: string[] = []
+  const turn2: string[] = []
+  const limitOf = (l: string[]) => ({ start: () => void l.push('start'), stop: () => void l.push('stop') })
+  const one = inMergeLine(w.$, 'T-1', async () => (log.push(`T-1 start (line ${lineTasks(w).join(' ')})`), await gate, log.push('T-1 end'), 'one'), { t: t1, limit: limitOf(turn1) })
+  const two = inMergeLine(w.$, 'T-2', async () => (log.push(`T-2 start (line ${lineTasks(w).join(' ')})`), 'two'), { t: t2, limit: limitOf(turn2) })
   await turns(w, () => noteOf(w, 'T-2') === inLineNote(2))
   expect(log).toEqual(['T-1 start (line T-1)'])
   expect(lineTasks(w)).toEqual(['T-1', 'T-2'])
-  expect(turn2).toEqual([false])
+  expect(turn1).toEqual(['start'])
+  expect(turn2).toEqual([])
   expect(inLineNote(3)).toBe('in line (3)')
   open()
   expect(await one).toBe('one')
   expect(await two).toBe('two')
   expect(log).toEqual(['T-1 start (line T-1)', 'T-1 end', 'T-2 start (line T-2)'])
   expect(w.sleeps).toEqual([])
-  // the waiting one's time limit stops while it waits and starts again once its turn begins; the first never waited
-  expect(turn1).toEqual([])
-  expect(turn2).toEqual([false, true])
+  // each time limit runs only during its own turn: the waiting one's starts once its turn begins
+  expect(turn1).toEqual(['start', 'stop'])
+  expect(turn2).toEqual(['start', 'stop'])
   expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
   expect(w.files.has(LINE)).toBe(false)
 })

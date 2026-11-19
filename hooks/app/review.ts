@@ -4,7 +4,7 @@ import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn }
 import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, now, path, safeWrite } from './store'
-import { inMergeLine } from './merge-line'
+import { inMergeLine, type TurnLimit } from './merge-line'
 import { tellLead } from './tell'
 import { ranOutOfTime, limitMinutes, timedOutDetail, timedOutHead } from '../core/test-timeout'
 import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
@@ -123,12 +123,12 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * catches up with the target branch, tests and moves the branch. When the branch still moved before ours could move it
  * (the owner moved it), the task joins the line again and is brought up to date, tested and merged again (MAX_MERGE_RACES at most).
  * `release`: settles when the caller gave this check up as stuck, so the tasks behind it in line stop waiting for it.
- * `turn`: the caller's time limit. `turn(false)` when this check has to wait in line for its merge turn (or tries
- * again after the branch moved), `turn(true)` when that turn begins: waiting in line and earlier goes don't count.
+ * `limit`: the caller's time limit, run only during each turn in the line (see TurnLimit): waiting in line doesn't count,
+ * and a later go (after the branch moved) starts it from zero.
  * `hold`: asked with the changed files once the tests passed; when it says yes, nothing is merged and the result
  * is `held` (with `review` too when the task waits for review): the checker runs next (see app/checker.ts).
  */
-export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, turn?: (go: boolean) => void, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
+export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, limit?: TurnLimit, hold?: (changed: readonly string[]) => boolean): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
     return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
@@ -206,8 +206,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
   // If the branch still moved under us (the owner), the task joins the line again and retries, a few times at most.
   for (let n = 1; ; n++) {
-    // The time limit stops while this waits in line (each task in front has its own limit and `release`, so the line
-    // keeps moving) and starts again from zero when its own turn begins.
+    // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).
     const r = await inMergeLine<{ result: CheckResult; raced?: boolean }>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, hold), {
       t,
       stopped: () => {
@@ -215,8 +214,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
         return s ? { result: s } : undefined
       },
       ...(release ? { release } : {}),
-      ...(turn ? { turn } : {}),
-      again: n > 1,
+      ...(limit ? { limit } : {}),
     })
     if (!r.raced || n >= MAX_MERGE_RACES) return withSecrets(r.result)
   }

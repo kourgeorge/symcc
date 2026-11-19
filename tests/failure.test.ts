@@ -20,6 +20,7 @@ const CASES: [string, BoardTask, RegExp][] = [
   ['merge conflict', failed({ note: 'conflicts with the latest main, still after 2 tries to merge it in' }), /^Its work clashes with the latest main/],
   ['stopped', failed({ note: 'the worker was stopped' }), /^The worker was stopped before it finished\.$/],
   ['ended early', failed({ note: ENDED_EARLY_NOTE }), /^The worker ended its turn before its work finished/],
+  ['merge turn ran over (T-549)', failed({ note: 'its checking and merging ran over 15 min and was stopped; nothing was merged (after 2 automatic retries)', runs: [{ started: T, ended: T, ended_by: 'stopped', ended_note: 'its checking and merging ran over 15 min and was stopped' }] }), /^Checking and merging its work ran over its time limit and was stopped, with no automatic retries left/],
 ]
 
 test('a failed task: one plain sentence says why, for every way a task can fail', () => {
