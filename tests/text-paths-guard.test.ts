@@ -48,6 +48,13 @@ const REFUSED: [string, string][] = [
   ["grep x ../../board.json", '.symcc/board.json'],
   ["grep -f ../../board.json tests/a.ts", '.symcc/board.json'],
   ["grep --file=../../board.json tests/a.ts", '.symcc/board.json'],
+  // a redirect stuck to a word with no space is still a redirect, not text
+  ['grep x a.ts>../../x', '.symcc/x'],
+  ['grep -c x tests/a.ts>../../board.json', '.symcc/board.json'],
+  ['grep x<../../board.json', '.symcc/board.json'],
+  ['echo hi > .scratch/a b>../../x', '.symcc/x'],
+  ['printf hi > .scratch/a b>>../../x', '.symcc/x'],
+  ["sed -n p a.ts>../../x", '.symcc/x'],
   // a sed script or grep pattern that is itself the path
   ["grep -n '../../board.json' tests/a.ts", '.symcc/board.json'],
   // a here-document run by a shell or a program, piped on, or printed to the screen
@@ -104,5 +111,7 @@ test("a worker's and a checker's probe commands in their own folder pass the gua
     for (const command of ALLOWED.filter(c => !c.startsWith('sed -i') || agent === 'w1')) expect([agent, command, await checkEdit($, agent, { command }, WT)]).toEqual([agent, command, undefined])
     expect(await checkEdit($, agent, { command: 'cat ../../board.json' }, WT)).toBe(bashOutsideText('.symcc/board.json', WT))
     expect(await checkEdit($, agent, { command: 'echo x > ../../x' }, WT)).toBe(bashOutsideText('.symcc/x', WT))
+    expect(await checkEdit($, agent, { command: 'grep x tests/a.ts>../../board.json' }, WT)).toBe(bashOutsideText('.symcc/board.json', WT))
+    expect(await checkEdit($, agent, { command: 'grep x<../../board.json' }, WT)).toBe(bashOutsideText('.symcc/board.json', WT))
   }
 })

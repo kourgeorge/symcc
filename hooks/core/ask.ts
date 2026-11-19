@@ -417,8 +417,12 @@ const globFolder = (w: string) => {
   return parts.slice(0, at).join('/')
 }
 
-/** A word of a simple command as written (`raw`, quotes kept), what it is without quotes (`w`), and whether the shell would expand anything in it (`$` or "`" outside single quotes). */
-type RawWord = { raw: string; w: string; expands: boolean }
+/**
+ * A word of a simple command as written (`raw`, quotes kept), what it is without quotes (`w`), whether the shell would
+ * expand anything in it (`$` or "`" outside single quotes), and whether it holds a shell sign outside quotes (`sign`:
+ * `<`, `>`, `|`, `&`, `;`, `(` or `)`), so that `a.ts>../../x` counts as a redirect stuck to a word, not only text (T-481).
+ */
+type RawWord = { raw: string; w: string; expands: boolean; sign?: boolean }
 
 /** The words of simple command `text` as written, split at spaces outside quotes (see RawWord). A best effort, not a shell parser. */
 function rawWords(text: string): RawWord[] {
@@ -440,7 +444,10 @@ function rawWords(text: string): RawWord[] {
     else if (/\s/.test(c)) {
       if (cur) out.push(cur)
       cur = undefined
-    } else add(c, c, c === '$' || c === '`')
+    } else {
+      add(c, c, c === '$' || c === '`')
+      if (/[<>|&;()]/.test(c)) cur!.sign = true
+    }
   }
   if (cur) out.push(cur)
   return out
@@ -467,6 +474,8 @@ function printsToFile(words: RawWord[]): boolean {
   let file = false
   for (let i = 0; i < words.length; i++) {
     const m = REDIRECT.exec(words[i]!.raw)
+    // a redirect stuck after other text (`b>&2`, `b>x`) is not judged here: then it is not only to files
+    if (!m && words[i]!.sign) return false
     if (!m) continue
     const [, fd, op, amp, rest] = m
     if (amp || fd === '&') return false
@@ -558,7 +567,8 @@ function dropTextWords(text: string): { text: string; whole: string[] } {
   const skip = new Set<RawWord>()
   args.forEach((a, j) => {
     const after = j > 0 && REDIRECT.exec(args[j - 1]!.raw)?.[4] === ''
-    if (a.expands || after || REDIRECT.test(a.raw) || a.w.startsWith('-') || !a.w) return
+    // a word with a shell sign outside quotes (`a.ts>../../x`, `x<../../f`) may hold a redirect: it stays as it is
+    if (a.expands || a.sign || after || REDIRECT.test(a.raw) || a.w.startsWith('-') || !a.w) return
     if (sed && !sedScriptSafe(a.w)) return
     skip.add(a)
   })
