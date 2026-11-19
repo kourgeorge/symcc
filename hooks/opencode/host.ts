@@ -3,8 +3,8 @@
 // shared with the Node host (hosts/node/host.ts: nodeFs, runCommand, nodeClock); the session is the copy's folder.
 // The agents are OpenCode sessions (agents.ts, T-463) and the lead is the owner's session (lead.ts, T-464: board
 // updates as session.prompt, queue or steer; its tokens from session.get), passed in by plugin.ts as `agents` and
-// `lead`. Not built yet, and filled by the next OpenCode tasks: symcc's tools and slash commands, and the TUI's board
-// panel and band. With no `agents` given, no agent can start (its start is "not ready", so a task waits); with no
+// `lead`. symcc's tools and slash commands are added by plugin.ts (tools.ts, T-465). Not built yet, and filled by the
+// next OpenCode tasks: the TUI's board panel and band (until then /symcc answers with the text board). With no `agents` given, no agent can start (its start is "not ready", so a task waits); with no
 // `lead`, a board update goes nowhere.
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import { nodeFs, runCommand, nodeClock } from '../../hosts/node/host'

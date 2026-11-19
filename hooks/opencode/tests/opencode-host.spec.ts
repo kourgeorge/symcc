@@ -9,7 +9,9 @@
 // from the board through to agentFinished. The lead (T-464): a finished task's board update reaches the owner's session
 // with delivery "queue", a "needs you" one with "steer", an update sent before the lead is known waits for it, starting
 // a worker sends the lead nothing, and OpenCode's own "subagent completed" message doesn't double symcc's update; the
-// lead's tokens come from session.get. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
+// lead's tokens come from session.get. The tools and commands (T-465): every lead tool and ask_owner added with
+// codemode false and run through toolCall, a scout's add and a worker's lead tool refused, each session offered only
+// what it may call, the lead's guide in its system prompt, and each slash command run through runCommand. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../../board'
@@ -17,7 +19,7 @@ import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorke
 import { resetStore } from '../../app/store'
 import { stoppedText } from '../../app/ask'
 import { runCommand } from '../../../hosts/node/host'
-import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt } from '../ctx'
+import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt, OcSessionContext, OcToolInfo, OcCommandDefinition } from '../ctx'
 import { opencodeAgents, opencodeModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
 import { toolTouches } from '../guard'
 import { pump } from '../../app/workers'
@@ -26,8 +28,13 @@ import { symccServer, owners, leads, SYMCC_ENGINE, type CopyRole, type Engine } 
 import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, NO_LEAD_YET, LEAD_WHOLE_SESSION_ONLY } from '../lead'
 import { leadTotals, rangeSpan, teamLines } from '../../core/stats'
 import { tellLead, noteForLead } from '../../app/tell'
-import { PLUGIN_ROOT, opencodeHost } from '../host'
+import { PLUGIN_ROOT, opencodeHost, OPENCODE_FEATURES } from '../host'
 import type { Host } from '../../host'
+import { TOOLS, leadGuide, manual } from '../../app/tools'
+import { ASK_TOOL_DEF } from '../../app/ask'
+import { COMMANDS, toolCall, runCommand as symccCommand } from '../../app/symcc'
+import { scoutToolRefusal } from '../../core/scouts'
+import { workerToolRefusal } from '../tools'
 
 /** Puts symcc's memory back to its start values, as a fresh copy of the plugin has (bun shares one copy across tests). */
 function reset() {
@@ -58,6 +65,8 @@ function fakeSessions(moveLag = 2) {
   const prompts: { sessionID: string; text: string; delivery?: string }[] = []
   /** the "subagent completed" messages children posted into their parents ("child -> parent") */
   const subagent: string[] = []
+  /** every session.synthetic (a message that is not the owner's, e.g. a slash command's answer) */
+  const synthetic: { sessionID: string; text: string; delivery?: string; resume?: boolean }[] = []
   /** told when a child posts OpenCode's own "subagent completed" message into its parent */
   const hooks: { onSubagent?: (parentID: string) => void } = {}
   let n = 0
@@ -107,6 +116,10 @@ function fakeSessions(moveLag = 2) {
       calls.push(`remove ${sessionID}`)
       sessions.delete(sessionID)
     },
+    async synthetic({ sessionID, text, delivery, resume }) {
+      synthetic.push({ sessionID, text, delivery, resume })
+      return {}
+    },
     hook: async () => ({ dispose: async () => undefined }),
   }
   /**
@@ -131,27 +144,52 @@ function fakeSessions(moveLag = 2) {
     sessions.set(id, { info: { id, location: { directory: dir } }, looksLeft: 0, messages: [] })
     return id
   }
-  return { api, calls, prompts, subagent, end, lead, sessions, hooks }
+  return { api, calls, prompts, subagent, synthetic, end, lead, sessions, hooks }
 }
 
-/** A fake OpenCode ctx for folder `dir`: it keeps the hooks the plugin registers, and counts their disposals. */
+/**
+ * A fake OpenCode ctx for folder `dir`: it keeps the hooks the plugin registers, the tools and slash commands it adds
+ * (by name), and counts their disposals.
+ */
 function fakeCtx(dir: string, session: OcSessionApi = fakeSessions().api) {
-  const hooks: { evaluate?: (e: OcPermissionEvaluation) => Promise<void> | void; before?: (e: OcToolBefore) => Promise<void> | void; prompt?: (e: OcSessionPrompt) => Promise<void> | void } = {}
+  const hooks: {
+    evaluate?: (e: OcPermissionEvaluation) => Promise<void> | void
+    before?: (e: OcToolBefore) => Promise<void> | void
+    prompt?: (e: OcSessionPrompt) => Promise<void> | void
+    context?: (e: OcSessionContext) => Promise<void> | void
+  } = {}
+  const tools = new Map<string, OcToolInfo>()
+  const commands = new Map<string, OcCommandDefinition>()
   let disposed = 0
   const reg = { dispose: async () => void disposed++ }
   const ctx: OcContext = {
     location: { directory: dir },
     permission: { hook: async (_name, fn) => ((hooks.evaluate = fn), reg) },
-    tool: { hook: async (_name, fn) => ((hooks.before = fn), reg) },
-    session: { ...session, hook: async (_name, fn) => ((hooks.prompt = fn), reg) },
+    tool: {
+      hook: async (_name, fn) => ((hooks.before = fn), reg),
+      transform: async fn => (fn({ add: t => void tools.set(t.name, t) }), reg),
+    },
+    command: { transform: async fn => (fn({ add: c => void commands.set(c.name, c) }), reg) },
+    session: { ...session, hook: async (name, fn) => ((hooks[name] = fn as never), reg) },
   }
-  return { ctx, hooks, disposed: () => disposed }
+  return { ctx, hooks, tools, commands, disposed: () => disposed }
 }
 
 /** Waits until `check` is true (looking every 20 ms, for at most `ms`). */
 async function until(check: () => boolean | Promise<boolean>, ms = 5000) {
   for (const end = Date.now() + ms; Date.now() < end; await new Promise<void>(r => setTimeout(() => r(), 20))) if (await check()) return
   throw new Error('timed out waiting')
+}
+
+/** Waits until no board write is running or starts within 300 ms, so none of a test's follow-ups lands in the next test. */
+async function settle(ms = 10_000) {
+  for (const end = Date.now() + ms; Date.now() < end; ) {
+    const w = S.writing
+    await w
+    await new Promise<void>(r => setTimeout(() => r(), 300))
+    if (S.writing === w) return
+  }
+  throw new Error('board writes never settled')
 }
 
 /** Asks the copy's permission hook about `action` on `resources` for session `sessionID`; answers the check as it ended. */
@@ -228,7 +266,7 @@ test('one copy runs the engine: the main folder\'s first copy; a second copy for
     // the engine copy is unloaded: its engine ends and the waiting copy takes over; nothing else starts one
     await endA!()
     expect(calls.slice(3)).toEqual([`end ${p.main}`, `start ${p.link}`])
-    expect(a.disposed()).toBe(3)
+    expect(a.disposed()).toBe(6)
     await endW!()
     await endB!()
     expect(calls.slice(5)).toEqual([`end ${p.link}`])
@@ -713,3 +751,147 @@ test('two main copies: updates the engine copy kept before the lead was known st
     await p.done()
   }
 }, 30_000)
+
+// T-465: symcc's tools and slash commands in OpenCode (tools.ts), mapped from the Claude host's lists.
+
+test('every lead tool and ask_owner is added as a normal tool (codemode false) with its schema, and runs symcc\'s toolCall; a scout\'s add and a worker\'s lead tool are refused', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    let host: Host | undefined
+    const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-tools' } })
+    const c = fakeCtx(p.main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    // the same list and schemas as the Claude host registers (TOOLS, then ASK_TOOL_DEF), by OpenCode's names
+    const want = [...TOOLS(), ASK_TOOL_DEF()]
+    expect([...c.tools.keys()]).toEqual(want.map(t => `symcc_${t.name}`))
+    for (const t of want) {
+      const added = c.tools.get(`symcc_${t.name}`)!
+      expect(added.options).toEqual({ codemode: false })
+      expect(added.input).toEqual(t.inputSchema)
+      expect(added.description).toBe(t.description)
+    }
+    const call = (tool: string, sessionID: string, input: unknown = {}) =>
+      c.tools.get(tool)!.execute(input, { sessionID, agent: 'build', messageID: 'm1', id: 'c1' }).then(
+        r => ({ ok: String(r.content) }),
+        (e: Error) => ({ refused: e.message }),
+      )
+    // the lead's call runs the same handler as Claude Code's (toolCall -> runTool)
+    const lead = f.lead(p.main)
+    const board = await call('symcc_board', lead, { task: 'T-1' })
+    expect(board).toEqual({ ok: ((await toolCall(host!, 'symcc_board', lead, { task: 'T-1' })) as { result: string }).result })
+    expect(String((board as { ok: string }).ok)).toContain('T-1')
+    const added = await call('symcc_add', lead, { title: 'From OpenCode', details: 'Done when: a test shows it.', why: 'a test', origin_by: 'owner' })
+    expect(String((added as { ok: string }).ok)).toContain('T-3')
+    expect((await load(host!)).tasks.map(t => t.title)).toContain('From OpenCode')
+    // a scout may only read the board: add is refused with symcc's reason; board and stats run
+    scoutRuns.set('ses_scout', 'tests')
+    expect(await call('symcc_add', 'ses_scout', { title: 'x', details: 'y', why: 'z', origin_by: 'scout' })).toEqual({ refused: scoutToolRefusal('add', 'symcc') })
+    expect('ok' in (await call('symcc_board', 'ses_scout'))).toBe(true)
+    expect('ok' in (await call('symcc_stats', 'ses_scout'))).toBe(true)
+    // a worker (ses_w2 runs T-1; the engine stopped the board's old ses_worker at its start) has only ask_owner:
+    // a lead tool is refused, its question is taken
+    const b = await load(host!)
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(b, 'T-1', { status: 'doing', agent: 'ses_w2', session: S.me }, '2026-11-18T00:00:00.000Z')))
+    workers.set('ses_w2', { task: 'T-1', worktree: p.wt, branch: 'symcc/T-1', since: Date.now() })
+    expect(await call('symcc_add', 'ses_w2', { title: 'x', details: 'y', why: 'z', origin_by: 'owner' })).toEqual({ refused: workerToolRefusal('add') })
+    const asked = await call('symcc_ask_owner', 'ses_w2', { question: 'Which one?' })
+    expect('ok' in asked && !String(asked.ok).startsWith('Refused')).toBe(true)
+    // a stopped agent is refused anything, as in Claude Code
+    expect(await call('symcc_board', 'ses_old')).toEqual({ refused: stoppedText() })
+    expect((await load(host!)).tasks.length).toBe(3)
+    // the question's own follow-ups (the board published, the lead told) settle before the copy ends
+    await settle()
+    workers.clear()
+    await end!()
+    await settle()
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 30_000)
+
+test('each session is offered only the symcc tools it may call, and the lead gets its guide in the system prompt', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined, sessionId: 'opencode-ctx' } })
+    const c = fakeCtx(p.main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    const lead = f.lead(p.main)
+    await c.hooks.prompt!({ sessionID: lead })
+    const ask = (sessionID: string) => {
+      const e: OcSessionContext = { sessionID, agent: 'build', system: [], tools: Object.fromEntries([...c.tools.keys(), 'edit'].map(n => [n, { description: n, input: {} }])) }
+      return Promise.resolve(c.hooks.context!(e)).then(() => e)
+    }
+    const toLead = await ask(lead)
+    expect(Object.keys(toLead.tools)).toEqual([...TOOLS().map(t => `symcc_${t.name}`), 'edit'])
+    expect(toLead.system.map(x => x.text)).toEqual([leadGuide(OPENCODE_FEATURES)])
+    scoutRuns.set('ses_scout', 'tests')
+    const toScout = await ask('ses_scout')
+    expect(Object.keys(toScout.tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    expect(toScout.system).toEqual([])
+    workers.set('ses_w2', { task: 'T-1', worktree: p.wt, branch: 'symcc/T-1', since: Date.now() })
+    expect(Object.keys((await ask('ses_w2')).tools)).toEqual(['symcc_ask_owner', 'edit'])
+    // a session OpenCode made for one of symcc's agents is known by its metadata too
+    f.sessions.set('ses_meta', { info: { id: 'ses_meta', metadata: { symcc: 'checker' }, location: { directory: p.main } }, looksLeft: 0, messages: [] })
+    expect(Object.keys((await ask('ses_meta')).tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    await settle()
+    await end!()
+    await settle()
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 30_000)
+
+test('each slash command is added and runs symcc\'s runCommand: an answer only for the owner is a synthetic message that wakes nobody, /symcc is the text board, and the help has no Claude-panel lines', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    let host: Host | undefined
+    const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-cmd' } })
+    const c = fakeCtx(p.main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    expect([...c.commands.keys()]).toEqual(COMMANDS().map(x => x.name))
+    const lead = f.lead(p.main)
+    const run = async (name: string, text = '') => {
+      const before = f.synthetic.length + f.prompts.length
+      await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
+      return { synthetic: f.synthetic.slice(), prompts: f.prompts.slice(), added: f.synthetic.length + f.prompts.length - before }
+    }
+    // every command answers in the lead's chat
+    for (const name of c.commands.keys()) expect([name, (await run(name)).added]).toEqual([name, 1])
+    // its args are the text after the command, with or without the command in front
+    const help = await run('symcc-help', 'commands')
+    const shown = help.synthetic.at(-1)!
+    expect(shown).toEqual({ sessionID: lead, text: (await symccCommand(host!, 'symcc-help', 'commands'))!.text, delivery: 'steer', resume: false })
+    expect((await run('symcc-help', '/symcc-help commands')).synthetic.at(-1)!.text).toBe(shown.text)
+    for (const line of ['/symcc opens everything', 'the whole panel', 'On the board: t tasks', 'In the panel nothing needs Esc', 'open the board panel', 'In the settings view']) expect(shown.text).not.toContain(line)
+    expect(shown.text).toContain('/symcc shows the board as text')
+    // the Claude host's help (every feature on) keeps its panel lines
+    expect(manual('commands')).toContain('/symcc opens everything')
+    expect(manual('commands')).toContain('In the panel nothing needs Esc')
+    expect(manual('commands', OPENCODE_FEATURES)).toBe(shown.text)
+    // /symcc: no panel yet, so the text board
+    const board = (await run('symcc')).synthetic.at(-1)!
+    expect(board.text).toContain('T-1')
+    expect(board.resume).toBe(false)
+    // a command that isn't only for the owner (the scouts list when no panel opens) is a prompt the lead answers
+    const scouts = await run('symcc-scouts')
+    expect(scouts.prompts.at(-1)!.sessionID).toBe(lead)
+    expect(scouts.prompts.at(-1)!.delivery).toBe('steer')
+    await settle()
+    await end!()
+    await settle()
+  } finally {
+    reset()
+    await p.done()
+  }
+}, 60_000)

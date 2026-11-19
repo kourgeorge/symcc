@@ -79,28 +79,30 @@ export const MANUAL = (features: HostFeatures = ALL_FEATURES): Record<string, st
     web) and reports to the lead, which decides what goes on the board.
   Topics: /${S.N.help} commands · tasks · lead · workers · scouts · safety`,
   commands: `Commands
-  /${S.N.name} opens everything; /${S.N.name}-WORD does one thing: a plural noun opens a view
+${features.panel ? `  /${S.N.name} opens everything; /${S.N.name}-WORD does one thing: a plural noun opens a view
   (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
   (approve, reject, diff), and mode and settings change how the board works. The "board" is
-  the whole panel: tasks, scouts and settings.
+  the whole panel: tasks, scouts and settings.` : `  /${S.N.name} shows the board as text; /${S.N.name}-WORD does one thing: a plural noun shows a list
+  (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
+  (approve, reject, diff), and mode and settings change how the board works.`}
 ${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / s / c switch views)
   /${S.N.name}-tasks               open the panel on the tasks view
   /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
   /${S.N.name}-tasks               show the tasks
   /${S.N.name}-scouts              show the scouts and reload the scout files`}
-  /${S.N.name}-task T-3            open one task
+  /${S.N.name}-task T-3            ${features.panel ? 'open' : 'show'} one task
   /${S.N.name}-approve T-5         merge a task that is ready for review
   /${S.N.name}-reject T-5 REASON   send it back to "todo" with the reason
   /${S.N.name}-diff T-5 [FILE]     the files it changed (+/- lines), or one file's diff
   /${S.N.name}-scout NAME          run a scout now
   /${S.N.name}-scout NAME pause    pause a scout's timer (run now still runs it)
-  /${S.N.name}-scout NAME resume   resume a paused scout (p on its page does both)
+  /${S.N.name}-scout NAME resume   resume a paused scout${features.panel ? ' (p on its page does both)' : ''}
   /${S.N.name}-mode [off|review|auto]  set the board mode; no word switches review and auto
                        (from off, no word goes to review)
                        off: stop every worker and scout now, start nothing new
                        review: work runs; finished tasks wait for your approve or reject
                        auto: work runs; finished tasks that pass merge on their own
-  /${S.N.name}-settings [NAME VALUE]  open the settings view, or set one setting, e.g.
+  /${S.N.name}-settings [NAME VALUE]  ${features.panel ? 'open the settings view' : 'show the settings'}, or set one setting, e.g.
                        /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings notify sound
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
@@ -118,7 +120,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        a session that drives now hands over within 30 s, its running workers
                        restart here without using up a try
   /${S.N.help} [TOPIC]           this manual
-On the board: t tasks · s scouts · c settings · m switch review / auto.
+${features.panel ? `On the board: t tasks · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and
   tests_with_changes open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
@@ -133,7 +135,8 @@ The board list goes top to bottom: NEEDS YOU (with its title); then the tasks do
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 In an answered investigation: a done · k keep as a note (adds a docs task) · x ask more (asks for a follow-up question).
-On the board list: m switches the mode between review and auto (never to off).
+On the board list: m switches the mode between review and auto (never to off).` : `There is no board panel here: the commands above answer as text, and the lead
+  can show the board too ("show the board", "show T-3").`}
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
 "set the test command to npm test", "give workers 90 minutes".`,
   tasks: `Tasks
@@ -146,7 +149,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     to do            waiting for a free worker (and for its "after" tasks)
     doing            a worker is on it
     paused           stopped on purpose; resume to continue
-    waiting for you  a question for you; answer it in the board panel or tell the lead
+    waiting for you  a question for you; ${features.panel ? 'answer it in the board panel or tell the lead' : 'tell the lead your answer'}
                      (asked by the lead, or by a worker: a question, or files outside its
                      list); with notify on you hear "symcc: T-5 needs you" (or a chime)
     ready for review the worker is done and the checks passed; nothing is merged until you
@@ -193,8 +196,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   worker and scout and starts nothing new; review makes every finished task wait for
   your approve or reject; auto, the default, merges a finished task that passes at once),
   enabled (off makes the whole plugin rest; only you can change it, with /${S.N.name}-off and /${S.N.name}-on).
-  You can also change every setting yourself with /${S.N.name}-settings (or the c tab in the
-  board). A value over its limit is cut to it, and the answer says so.
+  You can also change every setting yourself with /${S.N.name}-settings${features.panel ? ` (or the c tab in the
+  board)` : ''}. A value over its limit is cut to it, and the answer says so.
   add and change also take needs_review: that one task waits for review even in mode auto.
   Going from review to auto does not merge tasks already in review; approve or reject them.
   Tasks in review can be approved or rejected in every mode, also off.
@@ -206,8 +209,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     It can't see the board or this chat, and must not commit, push or merge.
   • A resumed or retried task starts over with a fresh worker.
   • A worker's edit of a file outside its list is refused and recorded as a request;
-    the worker then stops. The task waits for you: on its page press Allow (the files
-    are added and it goes back to work) or Don't allow (the lead drops or narrows it).
+    the worker then stops. The task waits for you: ${features.panel ? `on its page press Allow (the files
+    are added and it goes back to work) or Don't allow (the lead drops or narrows it).` : `tell the lead to allow them (the
+    files are added and it goes back to work) or not (the lead drops or narrows it).`}
     A worker that changes such files another way (e.g. a shell command) fails its try.
   • A worker that needs you to decide something asks with its ask_owner tool (maybe
     with choices) and stops; the task waits for your answer.
@@ -233,7 +237,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   every_minutes: 0 means only on demand: it never runs on the timer, only with run now
   or /${S.N.name}-scout NAME. A value that is not a whole number (like -5) also means only
   on demand, and the scout shows a warning until the file is fixed.
-  Pause one with p on its page or /${S.N.name}-scout NAME pause: it doesn't run on its timer
+  Pause one with ${features.panel ? 'p on its page or ' : ''}/${S.N.name}-scout NAME pause: it doesn't run on its timer
   until you resume it, but run now still runs it once (it stays paused). A run going on finishes first. The pause
   is kept in ${S.N.dir}/scouts.json, so its file is not changed.
   Examples: examples/scouts/ in the plugin.`,
@@ -265,7 +269,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   • Test commands are run by ${S.N.name} itself, without a permission prompt.
   • Add ${S.N.dir}/ to the project's .gitignore.
   • A folder with no git repo (or no commits yet): nothing starts. ${S.N.name} asks first, then
-    (press g in the board, or the lead's setup_git) runs git init on main, writes a .gitignore
+    (${features.panel ? 'press g in the board, or ' : ''}the lead's setup_git) runs git init on main, writes a .gitignore
     and makes a first commit of your files, leaving out secrets (.env, *.pem, id_rsa; templates like .env.example are kept) and files
     over 50 MB. It never pushes or adds a remote. With git not installed nothing starts at all.`,
 })

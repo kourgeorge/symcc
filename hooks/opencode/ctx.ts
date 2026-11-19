@@ -73,14 +73,62 @@ export type OcSessionApi = {
   readonly interrupt: (input: { sessionID: string }) => Promise<{ interrupted: boolean }>
   readonly context: (input: { sessionID: string }) => Promise<ReadonlyArray<OcSessionMessage>>
   readonly remove?: (input: { sessionID: string }) => Promise<void>
-  readonly hook: (name: 'prompt', fn: (e: OcSessionPrompt) => Promise<void> | void) => Promise<OcRegistration>
+  /** a message in the session's chat that is not the owner's (resume false: it doesn't wake the model; it reads it on its next turn) */
+  readonly synthetic: (input: { sessionID: string; text: string; description?: string; delivery?: 'queue' | 'steer'; resume?: boolean }) => Promise<unknown>
+  readonly hook: <N extends keyof OcSessionHooks>(name: N, fn: (e: OcSessionHooks[N]) => Promise<void> | void) => Promise<OcRegistration>
 }
+
+/** One part of a request's system prompt (OpenCode's SystemPart). */
+export type OcSystemPart = { type: 'text'; text: string; metadata?: Record<string, unknown> }
+
+/** A model request about to be built for a session ("context" session hook): its system prompt and the tools it offers can be changed. */
+export type OcSessionContext = {
+  readonly sessionID: string
+  readonly agent: string
+  system: OcSystemPart[]
+  /** the tools offered, by the name the model calls them */
+  tools: Record<string, { description: string; input: unknown }>
+}
+
+/** The session hooks symcc uses, by name. */
+export type OcSessionHooks = { prompt: OcSessionPrompt; context: OcSessionContext }
+
+/** What a plugin tool's execute is given besides its input: who calls it. */
+export type OcToolContext = { readonly sessionID: string; readonly agent: string; readonly messageID: string; readonly id: string }
+
+/** What a plugin tool's execute answers: the text the model sees (`content`). */
+export type OcToolResult = { readonly content?: string; readonly metadata?: Readonly<Record<string, unknown>> }
+
+/**
+ * A plugin tool, as ctx.tool.transform's editor adds it. `input` is a JSON schema; `options.codemode: false` makes it
+ * a normal tool (by default a plugin tool is only reachable from inside Code Mode's execute). Throwing fails the call
+ * with the error's message.
+ */
+export type OcToolInfo = {
+  readonly name: string
+  readonly description: string
+  readonly input: Readonly<Record<string, unknown>>
+  readonly options?: { readonly codemode?: boolean; readonly namespace?: string; readonly permission?: string }
+  readonly execute: (input: unknown, context: OcToolContext) => Promise<OcToolResult>
+}
+
+/** A slash command being run: the session it was typed in, the text after it, and how it is delivered. */
+export type OcCommandInvocation = { readonly sessionID: string; readonly prompt: { readonly text: string }; readonly delivery: 'steer' | 'queue' }
+
+/** A slash command, as ctx.command.transform's editor adds it. */
+export type OcCommandDefinition = { readonly name: string; readonly description?: string; readonly execute: (input: OcCommandInvocation) => Promise<void> }
 
 export type OcContext = {
   /** the folder this copy of the plugin runs for (OpenCode starts one copy per folder a session works in) */
   readonly location: { readonly directory: string; readonly project?: { readonly directory: string } }
   readonly permission: { readonly hook: (name: 'evaluate', fn: (e: OcPermissionEvaluation) => Promise<void> | void) => Promise<OcRegistration> }
-  readonly tool: { readonly hook: (name: 'execute.before', fn: (e: OcToolBefore) => Promise<void> | void) => Promise<OcRegistration> }
+  readonly tool: {
+    readonly hook: (name: 'execute.before', fn: (e: OcToolBefore) => Promise<void> | void) => Promise<OcRegistration>
+    /** changes the tools this copy offers (the editor's add puts one in) */
+    readonly transform: (fn: (editor: { add: (tool: OcToolInfo) => void }) => void) => Promise<OcRegistration>
+  }
+  /** changes the slash commands this copy offers */
+  readonly command: { readonly transform: (fn: (editor: { add: (command: OcCommandDefinition) => void }) => void) => Promise<OcRegistration> }
   readonly session: OcSessionApi
 }
 

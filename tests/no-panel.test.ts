@@ -214,6 +214,15 @@ test('no panel: /symcc-help says /symcc shows the board, not that it opens the p
   expect(bare).toContain(`/${S.N.name}                     show the board`)
   expect(manual('', BARE)).not.toContain('open the board panel (')
   expect(manual('commands')).toContain(`/${S.N.name}                     open the board panel (`)
+  // T-465: no panel-only lines (the panel's keys, "opens everything", Esc) without a panel; the panel's help keeps them
+  const panelLines = [`/${S.N.name} opens everything`, 'the whole panel', 'On the board: t tasks', 'In the settings view', 'In the panel nothing needs Esc', 'In an open task: b back', 'p on its page', 'answer it in the board panel', 'the c tab in the', 'on its page press Allow', 'press g in the board']
+  for (const line of panelLines) {
+    expect(manual('', BARE)).not.toContain(line)
+    expect(manual('')).toContain(line)
+  }
+  expect(bare).toContain(`/${S.N.name} shows the board as text`)
+  expect(bare).toContain(`/${S.N.name}-settings [NAME VALUE]  show the settings, or set one setting`)
+  expect(bare).toContain('Everything else, just say to the lead')
   // through the command, with the host's features
   const w = world()
   const r = await runCommand(w.host, `${S.N.name}-help`, 'commands')

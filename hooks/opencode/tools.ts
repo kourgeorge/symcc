@@ -1,0 +1,113 @@
+// symcc's tools and slash commands in OpenCode (T-465), mapped from the same lists the Claude host registers
+// (hooks/claude/registration.ts): the lead's tools (TOOLS, hooks/app/tools.ts) and the workers' question tool
+// (ASK_TOOL_DEF), each added with ctx.tool.transform as a normal tool (options.codemode false: by default a plugin tool
+// is only reachable from inside OpenCode's Code Mode), named as the host's words say ("symcc_board"); and the slash
+// commands (COMMANDS, hooks/app/symcc.ts) with ctx.command.transform. A tool call runs symcc's own toolCall, a command
+// runCommand: nothing is decided here that Claude Code's wiring doesn't decide too, except that a worker (which in
+// Claude Code only has the question tool among symcc's) is refused the lead's tools.
+// Each session is offered only what it may call, as in Claude Code: a worker only ask_owner, a scout or a checker only
+// board and stats (read-only), the lead every lead tool (not ask_owner); see offeredTools, used by plugin.ts's
+// "context" hook, which also gives the lead its guide (leadGuideText).
+import type { Host } from '../host'
+import { TOOLS } from '../app/tools'
+import { ASK_TOOL_DEF } from '../app/ask'
+import { COMMANDS, runCommand, toolCall, toolCallFailed, type CommandAnswer } from '../app/symcc'
+import { S, useName, toolName, workers, scoutRuns, checkerRuns } from '../app/state'
+import { agentOnBoard } from '../app/workers'
+import { ASK_TOOL } from '../core/ask'
+import { SCOUT_BOARD_TOOLS } from '../core/scouts'
+import type { OcCommandDefinition, OcSessionApi, OcToolInfo } from './ctx'
+
+/** Who calls a tool: the lead (or any session that is none of symcc's agents), a worker, or a scout or checker. */
+export type Caller = 'lead' | 'worker' | 'scout'
+
+/** symcc's tools in its plain names, with their JSON schemas: the lead's, then the workers' question tool. */
+export function symccTools(): { name: string; description: string; inputSchema: Readonly<Record<string, unknown>> }[] {
+  return [...TOOLS(), ASK_TOOL_DEF()]
+}
+
+/** Whether a `caller` may call symcc tool `tool` (plain name): a worker only ask_owner, a scout or checker board and stats, the lead the rest. */
+export function mayCall(caller: Caller, tool: string): boolean {
+  if (caller === 'worker') return tool === ASK_TOOL
+  if (caller === 'scout') return SCOUT_BOARD_TOOLS.includes(tool)
+  return tool !== ASK_TOOL
+}
+
+/** Why a worker's call of lead tool `tool` is refused (in Claude Code a worker has no such tool at all). */
+export const workerToolRefusal = (tool: string) =>
+  `Refused: ${toolName(tool)} is only for the ${S.N.name} lead; a worker can only call ${toolName(ASK_TOOL)}. Do your task in your folder, and put anything for the board in your final summary.`
+
+/**
+ * Who session `id` is: a worker, scout or checker this copy runs, or one the board names (another copy's, see
+ * agentOnBoard), or a session OpenCode made for one of symcc's agents (its metadata `symcc` says the kind, `kind()`);
+ * else the lead.
+ */
+export async function callerOf(host: Host, id: string, kind: () => Promise<unknown> = async () => undefined): Promise<Caller> {
+  if (workers.has(id)) return 'worker'
+  if (scoutRuns.has(id) || checkerRuns.has(id)) return 'scout'
+  const on = await agentOnBoard(host, id).catch(() => undefined)
+  if (on?.kind === 'worker') return 'worker'
+  if (on?.kind === 'checker') return 'scout'
+  const k = await kind().catch(() => undefined)
+  if (k === 'worker') return 'worker'
+  if (k === 'scout' || k === 'checker') return 'scout'
+  return 'lead'
+}
+
+/** The names (the host's, e.g. "symcc_add") of symcc's tools a `caller` may not call, to take out of what its session is offered. */
+export function hiddenTools(caller: Caller): string[] {
+  return symccTools()
+    .filter(t => !mayCall(caller, t.name))
+    .map(t => toolName(t.name))
+}
+
+/**
+ * The tools to add with ctx.tool.transform: every one of symcc's, a normal tool (codemode false), whose execute runs
+ * symcc's toolCall with the calling session as the agent (so a stopped agent, a scout's or checker's call of a tool
+ * that changes the board, and a worker's question are judged as in Claude Code). A refusal fails the call with its
+ * reason. `kind` tells the kind metadata of a session (see callerOf).
+ */
+export function opencodeTools(host: Host, kind: (sessionID: string) => Promise<unknown> = async () => undefined): OcToolInfo[] {
+  return symccTools().map(t => ({
+    name: toolName(t.name),
+    description: t.description,
+    input: t.inputSchema,
+    options: { codemode: false },
+    async execute(input, context) {
+      useName(host)
+      const name = toolName(t.name)
+      const args = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
+      if (t.name !== ASK_TOOL && (await callerOf(host, context.sessionID, () => kind(context.sessionID))) === 'worker') throw new Error(workerToolRefusal(t.name))
+      const r = await toolCall(host, name, context.sessionID, args).catch((err: Error) => toolCallFailed(host, name, context.sessionID, { kind: 'error', message: err?.message ?? String(err) }))
+      if (!r) throw new Error(`${S.N.name} has no tool ${name}`)
+      if ('deny' in r) throw new Error(r.deny)
+      return { content: r.result }
+    },
+  }))
+}
+
+/** The arguments of a slash command: the text after it (OpenCode may give the command's own "/<name>" in front too). */
+export function commandArgs(name: string, text: string): string {
+  const t = text.trim()
+  const head = `/${name}`
+  return (t === head || t.startsWith(`${head} `) ? t.slice(head.length) : t).trim()
+}
+
+/**
+ * The slash commands to add with ctx.command.transform: each runs symcc's runCommand. Its answer goes into the
+ * session's chat: one only for the owner (isTextDisplayOnly) as a synthetic message that doesn't wake the model, any
+ * other as a prompt the model answers (as Claude Code does with a command's text).
+ */
+export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt' | 'synthetic'>): OcCommandDefinition[] {
+  return COMMANDS().map(c => ({
+    name: c.name,
+    description: c.description,
+    async execute(inv) {
+      useName(host)
+      const answer: CommandAnswer | null = await runCommand(host, c.name, commandArgs(c.name, inv.prompt.text)).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
+      if (!answer) return
+      if (answer.isTextDisplayOnly) await session.synthetic({ sessionID: inv.sessionID, text: answer.text, description: `/${c.name}`, delivery: inv.delivery, resume: false })
+      else await session.prompt({ sessionID: inv.sessionID, text: answer.text, delivery: inv.delivery })
+    },
+  }))
+}

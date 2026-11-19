@@ -13,13 +13,14 @@
 //   - every copy registers the edit guard (guard.ts).
 // A copy that is unloaded and loaded again (a file edit reloads every copy) starts cleanly: cleanup ends its engine
 // and timers (sessionEnd), and the next setup starts them again. Only the engine copy may act on OpenCode's events
-// (every copy sees every session's): the next OpenCode tasks add those, and the tools and TUI. The agents are
+// (every copy sees every session's): the next OpenCode tasks add those, and the TUI. Every copy adds symcc's tools and
+// slash commands (tools.ts, T-465); the lead gets its guide through the "context" hook. The agents are
 // OpenCode sessions (agents.ts, T-463), children of the lead's session. The lead (lead.ts, T-464) is the session the
 // owner talks to: the last one in a main copy's folder given a prompt that is no child session and none of symcc's
 // agents. It is kept per board owner (by real main folder, see leads), so a copy that takes over the engine, or one
 // loaded again, still knows it; board updates sent before it was known go to it then.
 import type { Host, HostAgentKind } from '../host'
-import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished } from '../app/symcc'
+import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished, leadGuideText } from '../app/symcc'
 import { useName, scoutRuns } from '../app/state'
 import { mainRoot, isWorkerFolder } from '../app/store'
 import { agentOnBoard } from '../app/workers'
@@ -28,6 +29,7 @@ import { opencodeHost, type OpencodeHostOptions } from './host'
 import { onEvaluate, onToolBefore, realPathOf } from './guard'
 import { opencodeAgents, type OpencodeAgentsOptions } from './agents'
 import { opencodeLead } from './lead'
+import { opencodeTools, opencodeCommands, callerOf, hiddenTools } from './tools'
 
 /** What a copy does with symcc's engine: run it (the main folder's copy), only guard (any other), or end it. */
 export type Engine = {
@@ -129,6 +131,8 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       let leadKey: string | undefined
       const lead = () => (leadKey ? leads().get(leadKey) : undefined) ?? ownLead
       const ref: { host?: Host } = {}
+      // whether this copy runs symcc's engine now (see takeOver)
+      let running = false
       const agents = o.hostOptions?.agents
         ? undefined
         : opencodeAgents(ctx.session, {
@@ -173,6 +177,27 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       // the guard first, so a session's edits are judged from the start (an unknown project refuses nothing)
       regs.push(await ctx.permission.hook('evaluate', onEvaluate(host, dir)))
       regs.push(await ctx.tool.hook('execute.before', onToolBefore(host, dir)))
+      // symcc's tools and slash commands (tools.ts), before the engine starts, as Claude Code registers them first;
+      // a guard-only copy answers its lead tools and commands that the board runs from the main folder
+      const kindOf = (sessionID: string) => ctx.session.get({ sessionID }).then(i => i.metadata?.symcc)
+      const tools = opencodeTools(host, kindOf)
+      regs.push(await ctx.tool.transform(t => tools.forEach(x => t.add(x))))
+      const commands = opencodeCommands(host, ctx.session)
+      regs.push(await ctx.command.transform(c => commands.forEach(x => c.add(x))))
+      // each model request: a session is offered only the symcc tools it may call (callerOf), and the lead (in the
+      // copy running the engine) gets its guide in the system prompt, read on every request as Claude Code's
+      // prompt.compose does (so /symcc-off counts from the next message)
+      regs.push(
+        await ctx.session.hook('context', async e => {
+          useName(host)
+          const isLead = e.sessionID === lead()
+          const caller = isLead ? 'lead' : await callerOf(host, e.sessionID, () => kindOf(e.sessionID))
+          for (const name of hiddenTools(caller)) delete e.tools[name]
+          if (!isLead || !running) return
+          const guide = await leadGuideText(host).catch(() => undefined)
+          if (guide) e.system.push({ type: 'text', text: guide, metadata: { symcc: 'lead-guide' } })
+        }),
+      )
       const main = await mainRoot(host, dir).catch(() => dir)
       const realMain = await realPathOf(main || dir)
       // the main folder or any folder inside it (not a worker's folder) is a main copy, as Claude Code's sessionStart
@@ -180,7 +205,6 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       const inMain = !(await isWorkerFolder(host, dir, main || dir).catch(() => false))
       placed({ main: main || dir, realMain, inMain })
       const token = {}
-      let running = false
       let slot: Slot | undefined
       const takeOver = async () => {
         running = true
