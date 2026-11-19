@@ -455,3 +455,130 @@ test('a to do task worked on before shows ● in the panel list and on its page;
   expect(row(f)).not.toContain(STATUS_MARK.todo)
   expect(panelLines(f, { opened: 'T-4', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('● to do'))).toBe(true)
 })
+
+/** The row boxes of a drawn node, each with its text and its own props (the fake keeps what setProp is given). */
+function rowEls(node: unknown): { text: string; el: El; segs: El[] }[] {
+  const flat = (x: unknown): unknown[] => (typeof x === 'function' ? flat(x()) : Array.isArray(x) ? x.flatMap(flat) : x == null ? [] : [x])
+  const text = (x: unknown): string => flat(x).map(k => (typeof k === 'string' ? k : text((k as El).kids))).join('')
+  const rows = (x: unknown): { text: string; el: El; segs: El[] }[] =>
+    flat(x).flatMap(k => (typeof k === 'string' ? [] : (k as El).props.flexDirection === 'row' ? [{ text: text((k as El).kids), el: k as El, segs: flat((k as El).kids) as El[] }] : rows((k as El).kids)))
+  return rows(node)
+}
+
+test('T-558: the mouse works like the keys: a click on a row opens its task, on a group opens or closes it, on a key hint runs its key; the wheel scrolls the list', async () => {
+  const f0 = viewFile()
+  // more backlog than the list shows, and a dropped task, so the groups and the scroll have something to do
+  let b: Board = { ...emptyBoard(), tasks: f0.view.tasks, next_id: 6 } as Board
+  for (let i = 0; i < 7; i++) b = addTask(b, { origin: { why: 'a test' }, title: `an idea ${i}`, files: ['src/'] }, AT)[0]
+  for (let i = 6; i <= 12; i++) b = patchTask(b, `T-${i}`, { status: 'backlog' }, AT)
+  b = patchTask(b, 'T-4', { status: 'dropped' }, AT)
+  const f = { ...f0, view: { ...f0.view, tasks: b.tasks } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => 'too big', select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  let focusedBy = 0
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: false, close: () => undefined, focus: () => void focusedBy++ } as never) as El
+  const row = (has: (t: string) => boolean) => rowEls(panel).find(r => has(r.text))!
+  const clickRow = async (has: (t: string) => boolean) => {
+    const r = row(has)
+    expect(typeof r.el.props.onMouseUp).toBe('function')
+    ;(r.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    await Promise.resolve()
+  }
+  const clickHint = async (hint: string) => {
+    const seg = rowEls(panel).at(-1)!.segs.find(s => s.kids.join('') === hint)!
+    expect(typeof seg.props.onMouseUp).toBe('function')
+    ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    await new Promise<void>(res => setTimeout(res, 0))
+  }
+  // the list's banner and other plain lines do nothing on a click
+  expect(rowEls(panel)[0]!.el.props.onMouseUp).toBe(undefined)
+  // a click on a task's row opens its page and gives the panel the keyboard; a right click does nothing
+  ;(row(t => t.includes('T-2 ')).el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 2 })
+  expect(board.state().opened).toBe('')
+  await clickRow(t => t.includes('T-2 '))
+  expect(board.state().opened).toBe('T-2')
+  expect(focusedBy).toBe(1)
+  expect(rowEls(panel).some(r => r.text.startsWith('Status:'))).toBe(true)
+  // the page's key hints are buttons: approve, reject (asks the reason), back
+  await clickHint('a approve')
+  await clickHint('x reject')
+  expect(sent).toEqual([
+    { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
+    { sessionID: 'ses_1', name: 'symcc-reject', text: 'T-2 too big' },
+  ])
+  await clickHint('b back')
+  expect(board.state().opened).toBe('')
+  // a click on a group's row opens it (its tasks show), and again closes it
+  expect(rowEls(panel).some(r => r.text.includes('T-4 '))).toBe(false)
+  await clickRow(t => t.includes('▸ Dropped'))
+  expect(board.state().groups.dropped).toBe(true)
+  expect(row(t => t.includes('Dropped')).text).toContain('▾ Dropped')
+  expect(rowEls(panel).some(r => r.text.includes('T-4 '))).toBe(true)
+  await clickRow(t => t.includes('▾ Dropped'))
+  expect(board.state().groups.dropped).toBe(false)
+  expect(rowEls(panel).some(r => r.text.includes('T-4 '))).toBe(false)
+  // the backlog closes the same way; Enter on a group's row toggles it too
+  await clickRow(t => t.includes('▾ Backlog'))
+  expect(row(t => t.includes('Backlog')).text).toContain('▸ Backlog')
+  expect(rowEls(panel).some(r => r.text.includes('an idea 0'))).toBe(false)
+  await board.press('open', 'ses_1')
+  expect(board.state().groups.backlog).toBe(true)
+  // a click on Done's row opens it: the done task shows, and a click on it opens its page
+  await clickRow(t => t.includes('▸ Done'))
+  await clickRow(t => t.includes('T-5 '))
+  expect(board.state().opened).toBe('T-5')
+  await clickHint('b back')
+  // the mouse wheel scrolls the list down and back up, never above its top
+  const scroll = (direction: string) => (panel.props.onMouseScroll as (e: unknown) => void)({ type: 'scroll', scroll: { direction }, stopPropagation: () => undefined })
+  const before = rowEls(panel).map(r => r.text)
+  scroll('down')
+  expect(board.state().scroll).toBe(3)
+  const after = rowEls(panel).map(r => r.text)
+  expect(after.length).toBe(before.length - 3)
+  // the banner and the footer stay; the list's first lines scroll away
+  expect(after[0]).toBe(before[0])
+  expect(after.at(-1)).toBe(before.at(-1))
+  scroll('up')
+  scroll('up')
+  expect(board.state().scroll).toBe(0)
+  for (let i = 0; i < 50; i++) scroll('down')
+  // it stops at the list's last line
+  expect(rowEls(panel).map(r => r.text).filter(t => t.includes('▸ Dropped')).length).toBe(1)
+  expect(board.state().scroll).toBe(panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, scroll: 999 }, NOW, 98).scroll)
+  board.stop()
+})
+
+test('T-558: panelLines gives each list row what a click on it does, and scrolls the list between the banner and the footer', () => {
+  const f = viewFile()
+  const d = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)
+  expect(d.hits.length).toBe(d.lines.length)
+  const at = (s: string) => d.lines.findIndex(l => lineText(l).includes(s))
+  expect(d.hits[at('T-3 ')]).toEqual({ open: 'T-3' })
+  expect(d.hits[at('▸ Done')]).toEqual({ group: 'done' })
+  expect(d.hits[at('NEEDS YOU')]).toBe(null)
+  expect(d.ids).toContain('group:done')
+  // the footer's hints are buttons; "move" isn't one
+  const foot = d.lines.at(-1)!
+  expect(foot.find(s => s.text === 'Enter open')?.hit).toEqual({ key: 'open' })
+  expect(foot.find(s => s.text === '↑↓ move')?.hit).toBe(undefined)
+  // with the panel's height known, the scroll stops when the list's last line is at the bottom
+  const rows = d.lines.length - 2
+  expect(panelLines(f, { opened: '', cursor: 0, scroll: 99, rows }, NOW, 100).scroll).toBe(2)
+  expect(panelLines(f, { opened: '', cursor: 0, scroll: 99, rows: 200 }, NOW, 100).scroll).toBe(0)
+})

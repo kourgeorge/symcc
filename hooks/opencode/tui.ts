@@ -10,11 +10,16 @@
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, then the questions, and
 //     the tasks that need the owner or run).
 // What is drawn comes from board-view.ts (bandLines, panelLines), made with hooks/core's helpers; this file only
-// turns those lines into OpenTUI elements (box and text) with Solid signals, and wires the keys. OpenCode's TUI
+// turns those lines into OpenTUI elements (box and text) with Solid signals, and wires the keys and the mouse (T-558:
+// OpenTUI gives every box and text onMouseUp and onMouseScroll, and a click bubbles up from the text under it to its
+// row and the panel, as OpenCode's own sidebar and panels use them; OpenCode turns the mouse on unless its tui
+// config says mouse: false). OpenCode's TUI
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, type ViewFile, type Line, type PanelAction } from './board-view'
+import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup } from './board-view'
+
+export type { PanelKey, PanelHit }
 
 /** The panel's name for ui.panel.open (OpenCode shows the session.panel claims for the open name). */
 export const BOARD_PANEL = 'symcc.board'
@@ -84,7 +89,13 @@ export function setupFailed(ctx: Pick<TuiContext, 'ui'>, e: unknown, name: strin
 }
 
 /** The session.panel slot's input (PanelInput): the panel's session, width and focus. */
-export type TuiPanelInput = { readonly name: string; readonly sessionID: string; readonly width: number; readonly focused: boolean; readonly close: () => void }
+export type TuiPanelInput = { readonly name: string; readonly sessionID: string; readonly width: number; readonly focused: boolean; readonly close: () => void; readonly focus?: () => void }
+
+/** An OpenTUI mouse event, as far as symcc uses it: the button (0 = left) and, for the wheel, its direction. */
+export type TuiMouseEvent = { readonly type?: string; readonly button?: number; readonly scroll?: { readonly direction?: string }; stopPropagation?: () => void }
+
+/** How many lines one turn of the mouse wheel scrolls (as OpenTUI's own scroll boxes). */
+export const WHEEL_LINES = 3
 
 /** One keymap command (KeymapCommand), as far as symcc uses it. */
 export type TuiKeyCommand = {
@@ -169,17 +180,25 @@ export function colorOf(theme: unknown, name: string): unknown {
 /** OpenTUI's bold text attribute (TextAttributes.BOLD). */
 const BOLD = 1
 
-/** Lines as OpenTUI elements: a column box with one row box per line, a text per colored piece. */
-export function drawLines(r: TuiRuntime, theme: unknown, lines: Line[]): TuiNode {
+/** Lines as OpenTUI elements: a column box with one row box per line, a text per colored piece. With `onHit`, a left
+ *  click on a line with a hit (`hits`, by line) or on a piece with its own hit (a key hint) calls it. */
+export function drawLines(r: TuiRuntime, theme: unknown, lines: Line[], hits: (PanelHit | null)[] = [], onHit?: (hit: PanelHit) => void): TuiNode {
+  const clicked = (hit: PanelHit) => (e?: TuiMouseEvent) => {
+    if (e?.button !== undefined && e.button !== 0) return
+    e?.stopPropagation?.()
+    onHit?.(hit)
+  }
   const col = r.createElement('box')
   r.setProp(col, 'flexDirection', 'column')
   r.insert(
     col,
-    lines.map(line => {
+    lines.map((line, i) => {
       const row = r.createElement('box')
       r.setProp(row, 'flexDirection', 'row')
       // a line too long for its place is cut at the edge, not wrapped piece by piece (each piece is its own text)
       r.setProp(row, 'overflow', 'hidden')
+      const hit = onHit ? hits[i] : null
+      if (hit) r.setProp(row, 'onMouseUp', clicked(hit))
       r.insert(
         row,
         line.map(seg => {
@@ -188,6 +207,7 @@ export function drawLines(r: TuiRuntime, theme: unknown, lines: Line[]): TuiNode
           r.setProp(text, 'wrapMode', 'none')
           r.setProp(text, 'fg', colorOf(theme, seg.color))
           if (seg.bold) r.setProp(text, 'attributes', BOLD)
+          if (seg.hit && onHit) r.setProp(text, 'onMouseUp', clicked(seg.hit))
           r.insert(text, seg.text)
           return text
         }),
@@ -223,15 +243,12 @@ export async function readViewFile(dir: string, readText: TuiDeps['readText'], n
 export type TuiBoard = {
   /** reads the view file again now */
   refresh: () => Promise<void>
-  /** the panel's state: the open task ('' = the list) and the cursor */
-  state: () => { opened: string; cursor: number }
+  /** the panel's state: the open task ('' = the list), the cursor, the open groups and the scroll */
+  state: () => { opened: string; cursor: number; groups: Record<PanelGroup, boolean>; scroll: number }
   /** runs one of the panel's keys, as the keymap does */
   press: (key: PanelKey, sessionID: string) => Promise<void>
   stop: () => void
 }
-
-/** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close'
 
 /** The keymap bindings of the panel's keys. */
 const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape' }
@@ -245,14 +262,24 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [now, setNow] = r.createSignal(d.now())
   const [opened, setOpened] = r.createSignal('')
   const [cursor, setCursor] = r.createSignal(0)
+  const [groups, setGroups] = r.createSignal<Record<PanelGroup, boolean>>({ ...GROUPS_OPEN })
+  const [scroll, setScroll] = r.createSignal(0)
   let width = 80
+  // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
+  let rows: number | undefined
   const refresh = async () => {
     const f = await readViewFile(dir, d.readText, name)
     setFile(f)
     setNow(d.now())
     // the open task left the view: back to the list, so the list's keys work again
-    if (opened() && !hasPage(f, opened())) setOpened('')
+    if (opened() && !hasPage(f, opened())) openPage('')
   }
+  /** Opens a page ('' = back to the list), from its top. */
+  const openPage = (id: string) => {
+    setOpened(id)
+    setScroll(0)
+  }
+  const toggle = (g: PanelGroup) => setGroups({ ...groups(), [g]: !groups()[g] })
   const say = (message: string, variant: 'info' | 'error' = 'info') => ctx.ui.toast.show({ title: name, message, variant })
   const send = async (sessionID: string, a: PanelAction) => {
     const c = actionCommand(a, name)
@@ -261,23 +288,25 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       (err: Error) => say(`/${c.name} ${c.text} failed: ${err?.message ?? err}`, 'error'),
     )
   }
-  const draw = () => panelLines(file(), { opened: opened(), cursor: cursor() }, now(), width)
+  const draw = () => panelLines(file(), { opened: opened(), cursor: cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
   const press = async (key: PanelKey, sessionID: string) => {
     // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
     if (key === 'close') return ctx.ui.panel.close()
     const f = file()
-    if (opened() && !hasPage(f, opened())) setOpened('')
+    if (opened() && !hasPage(f, opened())) openPage('')
     const open = opened()
     if (!open) {
       const ids = draw().ids
       if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
       if (key === 'open') {
         const id = ids[moveCursor(cursor(), 0, ids.length)]
-        if (id) setOpened(id)
+        const g = id ? groupOf(id) : null
+        if (g) toggle(g)
+        else if (id) openPage(id)
       }
       return
     }
-    if (key === 'back') return void setOpened('')
+    if (key === 'back') return openPage('')
     const offered = panelKeys(f, open).map(k => k.word)
     if (key === 'x' && offered.includes('reject')) {
       const reason = (await ctx.ui.dialog.prompt({ title: `Reject ${open}`, description: 'What is wrong and what to change, for the next worker', placeholder: 'the reason' }))?.trim()
@@ -293,6 +322,24 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const answer = picked === OWN_ANSWER ? (await ctx.ui.dialog.prompt({ title: `Your answer to ${open}`, placeholder: 'type and press Enter' }))?.trim() : picked
     if (answer) await send(sessionID, { kind: 'answer', id: open, answer })
   }
+  /** A click on the panel (T-558): a row opens its task or question, a group's row opens or closes it, a key hint
+   *  does what its key does. The cursor goes to the clicked row, so the keys go on from there. */
+  const click = (hit: PanelHit, sessionID: string) => {
+    if ('key' in hit) return press(hit.key, sessionID)
+    const id = 'open' in hit ? hit.open : groupId(hit.group)
+    const at = draw().ids.indexOf(id)
+    if (at >= 0) setCursor(at)
+    if ('group' in hit) return void toggle(hit.group)
+    if (hasPage(file(), hit.open)) openPage(hit.open)
+  }
+  /** The mouse wheel: scrolls the list or page by WHEEL_LINES (draw keeps it within the list's or page's length). */
+  const wheel = (e: TuiMouseEvent) => {
+    const by = e.scroll?.direction === 'up' ? -WHEEL_LINES : e.scroll?.direction === 'down' ? WHEEL_LINES : 0
+    if (!by) return
+    e.stopPropagation?.()
+    setScroll(Math.max(0, scroll() + by))
+    setScroll(draw().scroll)
+  }
   let panelSession = ''
   // a drawing that fails shows nothing in OpenCode: say it once in a toast instead, so the owner isn't left with an
   // empty place and no word (T-505)
@@ -303,9 +350,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     told.add(message)
     say(message, 'error')
   }
-  const drawn = (where: string, lines: () => Line[]) => {
+  const drawn = (where: string, make: () => Line[] | { lines: Line[]; hits: (PanelHit | null)[] }, onHit?: (hit: PanelHit) => void) => {
     try {
-      return drawLines(r, ctx.theme, lines())
+      const got = make()
+      return Array.isArray(got) ? drawLines(r, ctx.theme, got) : drawLines(r, ctx.theme, got.lines, got.hits, onHit)
     } catch (e) {
       failed(where, e)
       return null
@@ -325,11 +373,25 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
         }))
         const col = r.createElement('box')
         r.setProp(col, 'flexDirection', 'column')
+        // the board fills the panel, so its height is the panel's (what the scroll is bounded by)
+        r.setProp(col, 'flexGrow', 1)
+        r.setProp(col, 'minHeight', 0)
+        r.setProp(col, 'overflow', 'hidden')
+        const session = () => input.sessionID || panelSession
+        // a click also gives the panel the keyboard, so the keys go on from the clicked row
+        const onHit = (hit: PanelHit) => {
+          if (input.name !== BOARD_PANEL) return
+          input.focus?.()
+          void click(hit, session())
+        }
+        r.setProp(col, 'onMouseScroll', (e: TuiMouseEvent) => input.name === BOARD_PANEL && wheel(e))
         r.insert(col, () => {
           if (input.name !== BOARD_PANEL) return null
           width = Math.max(20, (input.width || 80) - 2)
+          const h = (col as { height?: unknown }).height
+          rows = typeof h === 'number' && h > 0 ? h : undefined
           panelSession = input.sessionID
-          return drawn('board panel', () => draw().lines)
+          return drawn('board panel', draw, onHit)
         })
         return col
       },
@@ -362,7 +424,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const stopTimer = d.every(REFRESH_MS, reread)
   return {
     refresh,
-    state: () => ({ opened: opened(), cursor: cursor() }),
+    state: () => ({ opened: opened(), cursor: cursor(), groups: groups(), scroll: scroll() }),
     press,
     stop: () => {
       stopTimer()

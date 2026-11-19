@@ -52,8 +52,21 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
   }
 }
 
+/** The panel's keys (see panelKeys for which ones each page offers). */
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close'
+
+/** The list's groups that open and close (▸ Backlog, ▸ Done, ▸ Dropped). */
+export type PanelGroup = 'backlog' | 'done' | 'dropped'
+
+/** What a mouse click on a line or a piece of it does (T-558): open a task or question, open or close a group, or
+ *  press one of the panel's keys (a key hint in the footer works as a button). */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey }
+
+/** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
+export type DrawSeg = Seg & { hit?: PanelHit }
+
 /** One drawn line: colored pieces of text (colors are core's names: 'ide', 'inactive', 'warning', ...). */
-export type Line = Seg[]
+export type Line = DrawSeg[]
 
 /** A line's plain text (for tests and plain output). */
 export const lineText = (l: Line) => l.map(s => s.text).join('')
@@ -104,11 +117,33 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
 
 // ---------------- the board panel ----------------
 
-/** What the panel has chosen: the task or question open ('' = the list) and the row the cursor is on in the list. */
-export type PanelChoice = { opened: string; cursor: number }
+/** What the panel has chosen: the task or question open ('' = the list), the row the cursor is on in the list, the
+ *  groups opened or closed (GROUPS_OPEN when left out), how many lines the list or page is scrolled down, and the
+ *  panel's height in rows when known (it bounds the scroll). */
+export type PanelChoice = { opened: string; cursor: number; groups?: Partial<Record<PanelGroup, boolean>>; scroll?: number; rows?: number }
 
-/** The panel as drawn: its lines, the ids of the rows one can open (in order), the one under the cursor, and its keys. */
-export type PanelDraw = { lines: Line[]; ids: string[]; selected: string; keys: KeyHint[] }
+/** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
+ *  goes over (tasks, questions and the groups' rows, see groupId; in order), the one under the cursor, its keys, and
+ *  the scroll it was drawn with (kept within the list's or page's length). */
+export type PanelDraw = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string; keys: KeyHint[]; scroll: number }
+
+/** Which groups are open at first: the backlog (its first rows), not Done and Dropped. */
+export const GROUPS_OPEN: Record<PanelGroup, boolean> = { backlog: true, done: false, dropped: false }
+
+/** A group's row as a cursor id ("group:done"), and back (null for a task's or question's id). */
+export const groupId = (g: PanelGroup) => `group:${g}`
+export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
+
+/** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x' }
+
+/** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
+export function hintSegs(keys: KeyHint[]): Line {
+  return keys.flatMap((k, i) => [
+    ...(i ? [{ text: ' · ', color: 'inactive' }] : []),
+    { text: hintLineText([k]), color: 'inactive', ...(HINT_KEY[k.word] ? { hit: { key: HINT_KEY[k.word]! } } : {}) },
+  ])
+}
 
 /** The banner's tones in core's color names. */
 const TONE: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'inactive', warning: 'warning' }
@@ -142,7 +177,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   const w = Math.max(20, Math.floor(width))
   if (!f) {
     const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
-    return { lines, ids: [], selected: '', keys: [] }
+    return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0 }
   }
   // the shared note's "(g)" names the Claude Code panel's key; this panel has none, so it says to ask the lead (setup_git)
   const v = { ...f.view, ...(f.view.git_state && f.view.branch_note ? { branch_note: gitNote(f.view.git_state, 'ask the lead') } : {}) }
@@ -152,34 +187,58 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   ])
   const top = [...banner, [{ text: bannerRule(w), color: 'ide' }]]
   const page = choice.opened ? openedPage(f, choice.opened, nowMs, w) : null
-  const body = page ?? listBody(f, choice.cursor, nowMs, w)
+  const body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
   const keys = panelKeys(f, page ? choice.opened : '')
-  return { lines: [...top, ...body.lines, [{ text: footerRule(w), color: 'subtle' }], [{ text: hintLineText(keys), color: 'inactive' }]], ids: body.ids, selected: body.selected, keys }
+  // the mouse wheel scrolls the list or page between the banner and the footer, down to its last screenful (its last
+  // line when the panel's height isn't known)
+  const room = choice.rows ? choice.rows - top.length - 2 : 1
+  const scroll = Math.max(0, Math.min(Math.floor(choice.scroll ?? 0), body.lines.length - Math.max(1, room)))
+  const hits = body.hits ?? body.lines.map(() => null)
+  return {
+    lines: [...top, ...body.lines.slice(scroll), [{ text: footerRule(w), color: 'subtle' }], hintSegs(keys)],
+    hits: [...top.map(() => null), ...hits.slice(scroll), null, null],
+    ids: body.ids,
+    selected: body.selected,
+    keys,
+    scroll,
+  }
 }
 
-/** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, the backlog (its first rows), and
- *  the done and dropped counts; the row under the cursor is marked with "›". */
-function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { lines: Line[]; ids: string[]; selected: string } {
+/** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, then the groups: the backlog (its
+ *  first rows when open), done and dropped (their rows when open); the row under the cursor is marked with "›". */
+function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>, nowMs: number, w: number): { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string } {
   const v = f.view
   const parts = panelSections(v.tasks, nowMs, localOffset(nowMs))
   const questions = v.questions ?? []
-  const backlog = parts.backlog.slice(0, BACKLOG_SHOWN)
-  const listed = [...parts.needsYou, ...parts.doing, ...parts.todo, ...backlog]
-  const ids = [...questions.map(q => q.id), ...listed.map(t => t.id)]
+  const backlog = open.backlog ? parts.backlog.slice(0, BACKLOG_SHOWN) : []
+  const done = open.done ? parts.done : []
+  const dropped = open.dropped ? parts.dropped : []
+  const gone = archivedOf(v).done
+  const groups: { g: PanelGroup; label: string; all: SymccTask[]; rows: SymccTask[] }[] = [
+    { g: 'backlog' as const, label: 'Backlog', all: parts.backlog, rows: backlog },
+    { g: 'done' as const, label: 'Done', all: parts.done, rows: done },
+    { g: 'dropped' as const, label: 'Dropped', all: parts.dropped, rows: dropped },
+  ].filter(x => x.all.length || (x.g === 'done' && gone))
+  const running = [...parts.doing, ...parts.todo]
+  const listed = [...parts.needsYou, ...running, ...groups.flatMap(x => x.rows)]
+  // the cursor's rows in the order drawn: questions, tasks, and each group's row before its tasks
+  const ids = [...questions.map(q => q.id), ...parts.needsYou.map(t => t.id), ...running.map(t => t.id), ...groups.flatMap(x => [groupId(x.g), ...x.rows.map(t => t.id)])]
   const at = ids.length ? Math.min(Math.max(0, cursor), ids.length - 1) : -1
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
-  const idWidth = Math.max(4, ...ids.map(id => id.length))
+  const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id)).map(id => id.length))
   // a doing task: the total work time of all tries, "1h40m", "test 9m"; narrow, the time is left out
   const cells = fittedCells(listed, nowMs, since, w - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))
   const lines: Line[] = []
-  const blank = () => lines.length && lines.push([{ text: ' ', color: 'text' }])
-  const head = (text: string) => lines.push([{ text, color: 'text', bold: true }])
+  const hits: (PanelHit | null)[] = []
+  const add = (l: Line, hit: PanelHit | null = null) => (lines.push(l), hits.push(hit))
+  const blank = () => lines.length && add([{ text: ' ', color: 'text' }])
+  const head = (text: string) => add([{ text, color: 'text', bold: true }])
   if (questions.length) {
     head(questionsLabel(questions.length))
-    for (const q of questions) lines.push(questionRow(q, pointer(q.id, 2), idWidth, w))
+    for (const q of questions) add(questionRow(q, pointer(q.id, 2), idWidth, w), { open: q.id })
   }
   const row = (x: SymccTask, indent: number): Line => {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
@@ -189,37 +248,31 @@ function listBody(f: ViewFile, cursor: number, nowMs: number, w: number): { line
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${statusMark(x)} ${cells.get(x.id)!.padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
+      { text: ` ${statusMark(x)} ${(cells.get(x.id) ?? '').padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x) || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
   }
+  const task = (t: SymccTask, indent: number) => add(row(t, indent), { open: t.id })
   if (parts.needsYou.length) {
     blank()
     head(SECTION_LABEL.needsYou)
-    for (const t of parts.needsYou) lines.push(row(t, 2))
+    for (const t of parts.needsYou) task(t, 2)
   }
-  const running = [...parts.doing, ...parts.todo]
   if (running.length) {
     blank()
-    for (const t of running) lines.push(row(t, 2))
+    for (const t of running) task(t, 2)
   }
-  if (!questions.length && !parts.needsYou.length && !running.length) for (const l of ALL_CLEAR) lines.push([{ text: `  ${l}`, color: 'inactive' }])
+  if (!questions.length && !parts.needsYou.length && !running.length) for (const l of ALL_CLEAR) add([{ text: `  ${l}`, color: 'inactive' }])
   const countWidth = Math.max(1, ...[parts.backlog, parts.done, parts.dropped].map(ts => String(ts.length).length))
-  const gone = archivedOf(v).done
-  const folded: Line[] = []
-  if (parts.backlog.length) {
-    folded.push([{ text: `  ${foldedRow('Backlog', parts.backlog.length, true, countWidth)}`, color: 'text' }])
-    for (const t of backlog) folded.push(row(t, 4))
-    if (parts.backlog.length > backlog.length) folded.push([{ text: `    ${backlogMoreLabel(parts.backlog.length - backlog.length).replace(/ \(Enter to show all\)$/, '')}`, color: 'inactive' }])
+  if (groups.length) blank()
+  for (const x of groups) {
+    const label = foldedRow(x.label, x.all.length, open[x.g], countWidth)
+    add([{ text: `${pointer(groupId(x.g), 2)}${[label, x.g === 'done' ? archivedNote(gone) : ''].filter(Boolean).join(' ')}`, color: 'text', ...(groupId(x.g) === selected ? { bold: true } : {}) }], { group: x.g })
+    for (const t of x.rows) task(t, 4)
+    if (x.g === 'backlog' && x.rows.length && x.all.length > x.rows.length) add([{ text: `    ${backlogMoreLabel(x.all.length - x.rows.length).replace(/ \(Enter to show all\)$/, '')}`, color: 'inactive' }])
   }
-  if (parts.done.length || gone) folded.push([{ text: `  ${[foldedRow('Done', parts.done.length, false, countWidth), archivedNote(gone)].filter(Boolean).join(' ')}`, color: 'text' }])
-  if (parts.dropped.length) folded.push([{ text: `  ${foldedRow('Dropped', parts.dropped.length, false, countWidth)}`, color: 'text' }])
-  if (folded.length) {
-    blank()
-    lines.push(...folded)
-  }
-  return { lines, ids, selected }
+  return { lines, hits, ids, selected }
 }
 
 /** A question's row in the list: "  Q-3 ? Which database?". */
@@ -233,13 +286,13 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
 }
 
 /** The page of the task or question `id`: its title and rows (detailRows), its question and choices; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines: Line[]; ids: string[]; selected: string } | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines: Line[]; hits: null; ids: string[]; selected: string } | null {
   const v = f.view
   const q = v.questions?.find(x => x.id === id)
   if (q) {
     const lines: Line[] = [...wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w)]
     lines.push([{ text: ' ', color: 'text' }], ...choiceLines(answerOptions(f, id), w))
-    return { lines, ids: [], selected: id }
+    return { lines, hits: null, ids: [], selected: id }
   }
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
@@ -251,7 +304,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines:
     lines.push(...choiceLines(answerOptions(f, id), w))
   }
   if (t.details?.trim() && t.details.trim() !== t.title) lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
-  return { lines, ids: [], selected: id }
+  return { lines, hits: null, ids: [], selected: id }
 }
 
 /** The numbered choices of a question ("1 Allow", "2 Don't allow", "3 Answer…"). */
