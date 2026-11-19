@@ -180,12 +180,23 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 120_000 })
     expect((await cli({}, 'add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
-    // the fake worker waits 600 s before it writes, far past the tick's wait (about 3 s), however busy the machine is
+    // the fake worker waits 600 s before it writes, far past the tick's wait, however busy the machine is
     const pidFile = `${repo}/.symcc/fake.pid`
-    const tick = await cli({ FAKE_SLEEP: '600', FAKE_PID: pidFile }, '--wait-minutes', '0.05', 'tick')
-    expect(tick.stdout).toContain('stopped waiting')
+    const board = async () => JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
+    // T-524: on a busy machine the worker's start (its worktree, its settings) can outlast the tick's wait, and then no
+    // worker process ever ran, so there was nothing to stop. That tick must also leave the task "todo" with no worker
+    // (no pid, no edit); the next tick waits longer, until one stops a worker that really ran.
+    let tick = { stdout: '', stderr: '' }
+    for (const minutes of ['0.05', '0.25', '1']) {
+      tick = await cli({ FAKE_SLEEP: '600', FAKE_PID: pidFile }, '--wait-minutes', minutes, 'tick')
+      expect(tick.stdout).toContain('stopped waiting')
+      if (tick.stderr.includes('stopped T-1')) break
+      expect(`${minutes}: ${(await board()).status}`).toBe(`${minutes}: todo`)
+      expect(await readFile(pidFile, 'utf8').catch(() => 'none')).toBe('none')
+      expect(await readFile(`${repo}/.symcc/worktrees/T-1/hello.txt`, 'utf8').catch(() => 'none')).toBe('none')
+    }
     expect(tick.stderr).toContain('stopped T-1')
-    const t = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
+    const t = await board()
     expect(t.status).toBe('todo')
     expect(t.note).toContain('continues on the next run')
 
