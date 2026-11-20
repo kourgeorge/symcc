@@ -336,6 +336,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const draw = () => {
     return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
   }
+  /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
+   *  can put the list cursor on that task and b comes back to it (T-568). */
+  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), scroll: 0 }, now(), width).ids
   /** Changes setting `setting` (Enter or a click on its row): on/off flips, a setting with choices is picked from a
    *  list, the rest is typed; then /<name>-settings NAME VALUE sets it. */
   const changeSetting = async (setting: SettingName, sessionID: string) => {
@@ -479,7 +482,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return hasPage(file(), hit.page, 'settings') ? openPage(hit.page) : undefined
     }
     const id = 'open' in hit ? hit.open : groupId(hit.group)
-    const at = draw().ids.indexOf(id)
+    const at = (tab() === 'tasks' ? listIds() : draw().ids).indexOf(id)
     if (at >= 0) setCursor(at)
     if ('group' in hit) return void toggle(hit.group)
     if (hasPage(file(), hit.open)) openPage(hit.open)
@@ -578,7 +581,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if ('board' in hit) return openBoard()
     if (ctx.ui.panel.current()?.name !== BOARD_PANEL && !ctx.ui.panel.open(BOARD_PANEL)) return say(`Open or start a session first: the ${name} board opens next to a session.`)
     if (tab() !== 'tasks') showTab('tasks')
-    const at = draw().ids.indexOf(hit.open)
+    const at = listIds().indexOf(hit.open)
     if (at >= 0) setCursor(at)
     if (hasPage(file(), hit.open)) openPage(hit.open)
   }
