@@ -281,13 +281,15 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   // no dollar cost, so `cost` stays empty until Claude Code reports one.
   // The task is marked as being tested and merged (refreshed while that runs), so a reloaded
   // copy of the plugin sees it and doesn't send the task back to "todo" meanwhile.
+  // T-613: its worker has handed back, so a "more time?" question still open is dropped: a task in a check step
+  // never waits for the owner's time answer.
   const ended = now()
   try {
     tryNo = await change(host, x => {
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
       limitMs = finishLimitMs(x.test_commands.length, testMinutesOf(x))
-      return [patchTask(x, w.task, { finishing: ended, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) } : {}) }, ended), t.attempts] as [Board, number]
+      return [patchTask(x, w.task, { finishing: ended, time_ask: undefined, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) } : {}) }, ended), t.attempts] as [Board, number]
     })
   } catch {
     // T-452: board.json can't be read (load already told the owner, once). The report is kept here and
