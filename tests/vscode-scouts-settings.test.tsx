@@ -12,7 +12,9 @@ import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
 import { CLICK_HINT } from '../hooks/claude/ui/surface'
-import { reportStart } from '../hooks/claude/ui/vscode-scouts'
+import { reportStart, scoutRowEnd } from '../hooks/claude/ui/vscode-scouts'
+import { vsRowRoom } from '../hooks/claude/ui/vscode-list'
+import { scoutListRows } from '../hooks/board'
 import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -117,59 +119,75 @@ function readable(tree: unknown, page: string) {
   expect(elements(tree).filter(n => n.type === 'Text' && n.props?.wrap === 'truncate' && !/^[─━]+$/.test(texts(n).join(''))), page).toEqual([])
 }
 
-test('the Scouts list in VS Code at width 50: whole names, summaries and report starts, the color on the mark only', async ($, on) => {
+/** A VS Code Scouts list row as plain text: its Texts and its name link's text (no Markdown marks, plain spaces). */
+const vsRowText = (box: Node | undefined) =>
+  (box?.children ?? [])
+    .filter((n): n is Node => !!n && typeof n === 'object')
+    .map(n => texts(n).join(''))
+    .join('')
+    .replace(/\*\*/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\\(.)/g, '$1')
+    .replace(/ /g, ' ')
+
+test('T-697 the Scouts list in VS Code at width 50: one line per scout, the terminal list\'s parts, the state in its color', async ($, on) => {
   seedScouts(on, 'scouts')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const tree = await ui.drawn()
-  readable(tree, 'scouts list')
   expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
-  for (const s of SCOUTS) {
+  for (const re of KEY_HINTS) expect(texts(tree).filter(s => re.test(s)), `scouts list ${re}`).toEqual([])
+  const room = vsRowRoom(50)
+  const rows = scoutListRows(SCOUTS as never, T0, room)
+  for (const [i, s] of SCOUTS.entries()) {
     const box = await ui.find({ key: `vs-scout-${s.name}` })
-    expect(box, s.name).toBeDefined()
-    const open = await ui.find({ key: `scout:${s.name}` })
-    expect(open?.type, s.name).toBe('Markdown')
-    expect(texts(open).join(''), s.name).toContain(s.name)
-    // the status color is on the mark only, never on the name or the summary
-    const colored = elements(box!.children).filter(n => n.type === 'Text' && STATUS_COLORS.has(String(n.props?.color)))
-    for (const n of colored) expect(texts(n).join(''), s.name).not.toContain(s.name)
-    if (s.summary) {
-      const sum = await ui.find({ type: 'Text', text: s.summary })
-      expect(sum?.props.wrap, s.name).toBe('wrap')
+    expect(box?.props?.flexDirection, s.name).toBe('row')
+    // one line: no wrapping Text and no Box in a column inside the row
+    expect(elements(box!.children).filter(n => n.props?.wrap === 'wrap' || n.props?.flexDirection === 'column'), s.name).toEqual([])
+    expect(elements(box).filter(n => n.type === 'Button'), s.name).toEqual([])
+    const line = vsRowText(box)
+    expect(line.length, `${s.name}: ${line}`).toBeLessThanOrEqual(room)
+    // the same parts as the terminal list's row, in its order: icon, name, how often, state, "last:", model
+    const r = rows[i]!
+    const parts = [r.icon, s.name, r.every.trim(), r.state.trim(), r.last.trim(), r.model.trim()].filter(Boolean)
+    let at = 0
+    for (const p of parts) {
+      const found = line.indexOf(p, at)
+      expect(found, `${s.name}: "${p}" in "${line}"`).toBeGreaterThanOrEqual(0)
+      at = found + p.length
     }
-  }
-  const row = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(n => texts(n).join(' '))
-  expect(await row('dependency-updates')).toMatch(/◉ running now/)
-  expect(await row('dependency-updates')).toMatch(/every 30 min · haiku · ran 40m ago/)
-  expect(await row('security-advisories-for-node-packages')).toMatch(/next in 3h 00m/)
-  expect(await row('security-advisories-for-node-packages')).toMatch(/found 5: The package left-pad has a security advisory/)
-  expect(await row('docs-drift')).toMatch(/○ paused/)
-  expect(await row('docs-drift')).toMatch(/last report: nothing/)
-  expect(await row('on-demand-check')).toMatch(/on demand · never ran/)
-  expect(await row('broken')).toMatch(/every_minutes "-5" is not valid/)
-  // T-448: each scout's name is a link in a Markdown (no Button: VS Code draws a Button as a filled blue box), its status
-  // a filled badge beside it, then dim lines; the start of the last report dim too
-  for (const s of SCOUTS) {
+    // the name a link that opens the scout; the state in its color, the rest dim
     const open = await ui.find({ key: `scout:${s.name}` })
     expect([open?.type, open?.props.pressableLinks], s.name).toEqual(['Markdown', [vsHref('scout', s.name)]])
-    const box = await ui.find({ key: `vs-scout-${s.name}` })
-    expect(elements(box).filter(n => n.type === 'Button'), s.name).toEqual([])
-    const badge = elements(box!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
-    expect([badge?.props?.color, badge?.props?.bold], s.name).toEqual(['inverseText', true])
+    // the row's Texts: the icon (in the scout's tone), then how often, the state, the end
+    const cells = (box!.children as Node[]).filter(n => n.type === 'Text').map(n => [texts(n).join('').replace(/\u00a0/g, ' '), n.props?.color])
+    expect(cells[0], s.name).toEqual([`${r.icon} `, r.tone])
+    for (const [text, color] of cells.slice(1)) expect(color, `${s.name}: ${text}`).toBe(text === r.state ? r.stateTone : 'inactive')
+    if (r.state.trim()) expect(cells.some(([text]) => text === r.state), s.name).toBe(true)
   }
-  const running = elements((await ui.find({ key: 'vs-scout-dependency-updates' }))!.children).find(n => n.props?.backgroundColor)
-  expect([texts(running).join(''), running?.props?.backgroundColor]).toEqual([' ◉ running now ', 'ide'])
-  const report = elements((await ui.find({ key: 'vs-scout-security-advisories-for-node-packages' }))!.children).find(n => n.type === 'Text' && /^last report: /.test(texts(n).join('')))
-  expect(report?.props?.color).toBe('inactive')
+  const line = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(vsRowText)
+  expect(await line('dependency-updates')).toMatch(/^◉ dependency-updates +every 30 min +running now… +haiku$/)
+  const stateColor = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(b => ((b!.children as Node[]).filter(n => n.type === 'Text').find(n => /running|paused|bad every|next in/.test(texts(n).join(''))))?.props?.color)
+  expect(await stateColor('dependency-updates')).toBe('ide')
+  expect(await stateColor('docs-drift')).toBe('inactive')
+  expect(await stateColor('broken')).toBe('warning')
+  expect(await line('docs-drift')).toMatch(/paused +last: nothing$/)
+  // a long report: its start after "last: found 5", cut with "…" so the row stays one line
+  const long = await line('security-advisories-for-node-packages')
+  expect(long).toMatch(/next in 3h 00m +last: found 5: The package.*…$/)
+  expect(long.length).toBeLessThanOrEqual(room)
+  expect(scoutRowEnd(SCOUTS[1] as never, rows[1]!, 40)).toMatch(/^  last: found 5: The package left-pad…$/)
+  expect(scoutRowEnd(SCOUTS[1] as never, rows[1]!, 40).length).toBeLessThanOrEqual(40)
   expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('secondary')
   // a new scout: a button, then a box for its name with a Cancel button
   await ui.press({ key: 'scout-new' })
-  readable(await ui.drawn(), 'new scout')
   expect((await ui.find({ key: 'scout-new-name' }))?.type).toBe('Input')
   expect((await ui.find({ key: 'scout-new-cancel' }))?.props.label).toBe('Cancel')
-  // a press on a row opens the scout's page
+  // a press on a name opens that scout's page
   await ui.press({ key: 'scout-new-cancel' })
   await ui.press({ key: 'scout:docs-drift', link: { href: vsHref('scout', 'docs-drift') } })
   expect(await ui.find({ key: 'vs-scout-facts' }), 'the scout page').toBeDefined()
+  expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('← Scouts')
+  expect(texts(await ui.drawn()).join(' ')).toContain('Compare docs/guide.md with the code.')
   await ui.unmount()
 })
 
