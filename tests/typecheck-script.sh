@@ -120,6 +120,23 @@ expect_host_bound "hooks/opencode/: import of hooks/claude/" hooks/opencode/o.ts
 rm -f "$tmp/hooks/opencode/o.ts"
 expect_host_bound "opencode/: import of hooks/claude/" opencode/server.ts "export const h = await import('../hooks/claude/host')\n" "the OpenCode plugin imports Claude Code.*server.ts:1"
 rm -rf "$tmp/hooks/opencode" "$tmp/opencode"
+# T-634: hooks/process/ and hooks/opencode/board-view.ts import no host either (imports only: tool names stay allowed)
+mkdir -p "$tmp/hooks/process" "$tmp/hooks/opencode"
+printf "// the claude -p runner, no import of 'claude-code'\nimport { c } from '../core/c'\nexport const p = [c, 'Read', 'Claude']\n" > "$tmp/hooks/process/p.ts"
+printf "import { c } from '../core/c'\nexport const v = c\n" > "$tmp/hooks/opencode/board-view.ts"
+clean
+out="$(sh "$tmp/tests/host-free.sh" "$tmp" 2>&1)"; code=$?
+[ "$code" -eq 0 ] || bad "host-free with a clean hooks/process/ and board-view.ts: expected exit 0, got $code: $out"
+expect_host_bound "hooks/process/: claude-code import" hooks/process/p.ts "import type { On } from 'claude-code'\n" "a host-bound import.*hooks/process/p.ts:1"
+expect_host_bound "hooks/process/: node: import" hooks/process/p.ts "import { spawn } from 'node:child_process'\n" "a host-bound import.*hooks/process/p.ts:1"
+expect_host_bound "hooks/process/: import of hooks/opencode/" hooks/process/p.ts "import { x } from '../opencode/host'\n" "a host-bound import.*hooks/process/p.ts:1"
+# put p.ts back to its clean form, so the board-view.ts cases below fail on board-view.ts alone
+printf "import { c } from '../core/c'\nexport const p = c\n" > "$tmp/hooks/process/p.ts"
+expect_host_bound "board-view.ts: @opencode import" hooks/opencode/board-view.ts "import type { Plugin } from '@opencode/plugin'\n" "a host-bound import.*board-view.ts:1"
+expect_host_bound "board-view.ts: fs import" hooks/opencode/board-view.ts "import { readFileSync } from 'fs'\n" "a host-bound import.*board-view.ts:1"
+expect_host_bound "board-view.ts: import of a sibling OpenCode file" hooks/opencode/board-view.ts "import { tui } from './tui'\n" "a host-bound import.*board-view.ts:1"
+expect_host_bound "board-view.ts: require of a sibling OpenCode file" hooks/opencode/board-view.ts "const t = require('./tui')\n" "board-view.ts may not import hooks/opencode/ files.*board-view.ts:1"
+rm -rf "$tmp/hooks/process" "$tmp/hooks/opencode"
 # and through scripts/typecheck.sh, on code that type-checks fine with Claude Code's types
 clean
 printf "export const c = 'WebFetch'\n" > "$tmp/hooks/core/c.ts"

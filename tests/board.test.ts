@@ -329,7 +329,8 @@ test('time and cost: tries add up, and a running try counts up to now', async ()
   expect(boardText(b)).not.toContain('total:')
   b = { ...b, tasks: b.tasks.map(t => ({ ...t, runs: runs.slice(0, 2) })) }
   expect(boardTotal(b).tries).toBe(2)
-  expect(boardText(b).split('\n').at(-1)).toBe('total: 1h 12m · 1k tokens in all · ~$3.40 over 2 tries')
+  // the board shows no all-time total (T-630): /symcc-stats has it
+  expect(boardText(b)).not.toMatch(/total:|tokens in all over/)
 })
 
 test('time and cost: formatting', async () => {
@@ -466,8 +467,10 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
-    '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
+    '2 doing · 1 to do · 1 done',
   ])
+  // no all-time total of the tries on the counts line (T-630): /symcc-stats has it
+  expect(more.map(bannerText).join('\n')).not.toMatch(/tokens|8m/)
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
   expect(more[0]!.parts.at(-1)).toEqual({ text: '⏸ paused: nothing starts', tone: 'warning' })
   // disabled: the header says how to turn it back on in words, the command in the accent color (as the name), the rest a warning
@@ -3459,7 +3462,7 @@ test('archive: the totals and the Done count include archived tasks', () => {
   const before = boardTotal(b, A_NOW)
   const y = removeArchived(b, toArchive(b, A_NOW))
   expect(boardTotal(y, A_NOW)).toEqual(before)
-  expect(boardText(y, A_NOW)).toContain('total: 1m · 1k tokens in all over 1 try')
+  expect(boardText(y, A_NOW)).not.toMatch(/total:|tokens in all over/)
   expect(boardText(y, A_NOW)).toContain('archived: 1 done, 1 dropped (in .symcc/archive.json')
   expect(boardText(y, A_NOW)).not.toMatch(/old done|old dropped/)
   expect(archivedNote(96)).toBe('(+96 archived)')

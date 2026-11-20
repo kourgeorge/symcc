@@ -726,9 +726,9 @@ are about changes; under "How tasks ended" a read investigation shows as
   what it waits for and the latest worker report). A toast says `T-12 copied`, or why it
   couldn't, e.g. `couldn't copy: this terminal has no clipboard access`.
 - **Ctrl+T** (Claude Code's background tasks) shows running workers; open one to watch it.
-- Each task lists how long each try took and the tokens it used; the board ends with a
-  total, e.g. `total: 1h 12m · 1.2M tokens in all over 4 tries`. "In all" means every kind of
-  token added up; `/symcc-stats` shows the kinds apart (see below).
+- Each task lists how long each try took and the tokens it used, with the task's total
+  ("In all" means every kind of token added up). The board shows no all-time total;
+  `/symcc-stats` has the totals, with the kinds of tokens apart (see below).
 
 ### In VS Code
 
@@ -1332,7 +1332,7 @@ So `board.json` stays small, done and dropped tasks that have not changed for
 - **Never in the way:** a done task that an unfinished task still waits for (its `after`)
   stays on the board. A task waiting on an archived done task still starts.
 - **Still counted:** the Done row says how many were archived, e.g. `▸ Done  12 (+96 archived)`,
-  and the board's total time and tokens include them. Task numbers are never reused.
+  and `/symcc-stats` counts their time and tokens. Task numbers are never reused.
 - **Finding one:** `/symcc-task T-12` shows an archived task (or ask the lead, who can look
   it up with its `board` tool). Archived tasks are read-only: change, ask, approve and so on
   answer "T-12 is archived". Retrying an archived *dropped* task brings it back to the
@@ -1419,7 +1419,7 @@ its read-only `stats` tool.
   average tokens and time; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
-  entries from older boards have no times. The worker time is the same as the total on the board's banner.
+  entries from older boards have no times.
 
 ---
 

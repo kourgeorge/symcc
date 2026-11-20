@@ -10,6 +10,9 @@
 #   3. does not type-check with no Claude Code types loaded (plain es2023, "types": []);
 #   4. (hooks/app/ and hooks/core/ only) says "Claude" or "ctrl+x" in its code, not in comments (T-475): the texts the
 #      owner sees take those from the host's words (HostWords.assistant, app, backToBoard; claude/host.ts CLAUDE_WORDS).
+# The engine's other host-free files (T-634, step S1 of docs/research/standalone-app.md section 12): hooks/process/ and
+# the board's view helpers in hooks/opencode/board-view.ts get check 1 only (imports), so a later standalone client can
+# load them too. They may still name Claude Code tools and words (the `claude -p` runner does).
 set -u
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 cd "$root"
@@ -26,17 +29,29 @@ tsc() {
 shared=$(find hooks/app hooks/core -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
 files=$(printf '%s\n' $shared; ls hooks/board.ts hooks/name.ts hooks/host.ts types/index.d.ts prompts/*.ts kinds/*.ts 2>/dev/null)
 files=$(echo $files)
-[ -n "$files" ] || { echo "host-free: no shared files here, nothing to check"; exit 0; }
+# imports only (T-634): every .ts file under hooks/process/, and hooks/opencode/board-view.ts
+imports_only=$(echo $(find hooks/process -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort; ls hooks/opencode/board-view.ts 2>/dev/null))
+[ -n "$files$imports_only" ] || { echo "host-free: no shared files here, nothing to check"; exit 0; }
 
 # the code without its comment lines (// ..., and the * lines of /** ... */ blocks), as "file:line:text"
-code() { grep -nHvE '^[[:space:]]*(//|/?\*)' $files; }
+code() { [ -n "$files" ] || return 0; grep -nHvE '^[[:space:]]*(//|/?\*)' $files; }
+imports_code() { grep -nHvE '^[[:space:]]*(//|/?\*)' $files $imports_only; }
 
 NODE='fs|fs/promises|path|os|child_process|process|crypto|util|events|stream|url|http|https|net|tty|readline|buffer|assert|zlib|worker_threads|module|vm'
-hits=$(code | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]" |
+hits=$(imports_code | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]" |
   grep -E "['\"](claude-code(/[^'\"]*)?|@opencode/[^'\"]*|node:[^'\"]*|bun(:[^'\"]*)?|($NODE))['\"]|['\"][^'\"]*(/claude/|/claude['\"]|/opencode/|/opencode['\"]|register(\.tsx)?['\"])")
 if [ -n "$hits" ]; then
   echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (keep it in hooks/claude/ or hooks/opencode/): $hit" >&2; done
   fails=$((fails + 1))
+fi
+
+# board-view.ts lives inside hooks/opencode/, so a './...' import is an OpenCode file (T-634)
+if [ -f hooks/opencode/board-view.ts ]; then
+  hits=$(grep -nHvE '^[[:space:]]*(//|/?\*)' hooks/opencode/board-view.ts | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]\./")
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (board-view.ts may not import hooks/opencode/ files): $hit" >&2; done
+    fails=$((fails + 1))
+  fi
 fi
 
 # Claude Code's tool names, quoted. Role files use symcc's words (tools: web); only hooks/claude/ maps them.
@@ -114,4 +129,4 @@ if [ -n "$oc_files" ]; then
   fi
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hosts/node/ and hooks/opencode/ need no Claude Code"; else exit 1; fi
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/ and hooks/opencode/ need no Claude Code"; else exit 1; fi

@@ -237,10 +237,9 @@ export function fmtTokens(n: number): string {
 /**
  * One total in words: "1h 12m · 1.2M tokens in all · ~$3.40" (tokens and cost only when known).
  * The one tokens figure is every kind added up ("in all"); /<name>-stats shows the kinds apart.
- * `label` is the word after the figure; the banner passes just "tokens" so its line fits in 50 columns.
  */
-export function fmtTotal(t: RunTotal, label = 'tokens in all'): string {
-  return [fmtDuration(t.ms), t.tokens !== undefined && `${fmtTokens(tokenCount(t.tokens))} ${label}`, t.cost !== undefined && `~${fmtCost(t.cost)}`].filter(Boolean).join(' · ')
+export function fmtTotal(t: RunTotal): string {
+  return [fmtDuration(t.ms), t.tokens !== undefined && `${fmtTokens(tokenCount(t.tokens))} tokens in all`, t.cost !== undefined && `~${fmtCost(t.cost)}`].filter(Boolean).join(' · ')
 }
 
 /** One try in words: "try 2: 12m · 40k tokens in all · finished: merged", with "(running)" while it has not ended. */
@@ -249,8 +248,3 @@ export function fmtRun(r: SymccRun, i: number, nowMs?: number): string {
   return `try ${i + 1}: ${fmtTotal(sumRuns([r], nowMs))}${end ? ` · ${end}` : ''}${r.ended ? '' : ' (running)'}`
 }
 
-/** The board's total line, e.g. "total: 1h 12m · 1.2M tokens in all over 4 tries"; '' when no try has run. */
-export function totalLine(b: Totalled, nowMs?: number): string {
-  const t = boardTotal(b, nowMs)
-  return t.tries ? `total: ${fmtTotal(t)} over ${t.tries} ${t.tries === 1 ? 'try' : 'tries'}` : ''
-}
