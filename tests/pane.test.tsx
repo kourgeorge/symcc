@@ -1311,7 +1311,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   const who = await ui.find({ type: 'Text', text: /^owner$/ })
   expect(who?.props.color).toBe('claude')
   expect(L.some(l => /^Branch:\s+symcc\/T-3$/.test(l))).toBe(true)
-  expect(L.some(l => /^Tries:\s+2 tries$/.test(l))).toBe(true)
+  expect(L.some(l => /^Tries:\s+2$/.test(l))).toBe(true)
   // the section headings, in order
   const heads = L.filter(l => /^▍/.test(l))
   expect(heads[0]).toBe('▍Details')
@@ -1387,7 +1387,7 @@ test('an old task without an origin still opens, with From: unknown and no Why r
   expect(L.some(l => /^From:\s+unknown/.test(l))).toBe(true)
   expect(L.some(l => /^Why:/.test(l))).toBe(false)
   expect(L.some(l => /^Files:\s+anywhere in the project$/.test(l))).toBe(true)
-  expect(L.some(l => /^Tries:\s+0 tries$/.test(l))).toBe(true)
+  expect(L.some(l => /^Tries:\s+0$/.test(l))).toBe(true)
   await ui.unmount()
 })
 

@@ -26,3 +26,7 @@ symcc runs these four before merging, so you don't need to run them all at the e
     sh scripts/typecheck.sh
     sh scripts/test-opencode-host.sh
     sh scripts/test-node-host.sh
+
+## Engine and clients
+
+What is engine, what is a client, and the rule between them: `docs/engine-and-clients.md`.
