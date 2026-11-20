@@ -47,7 +47,7 @@ fi
 
 # board-view.ts lives inside hooks/opencode/, so a './...' import is an OpenCode file (T-634)
 if [ -f hooks/opencode/board-view.ts ]; then
-  hits=$(grep -nHvE '^[[:space:]]*(//|/?\*)' hooks/opencode/board-view.ts | grep -E "(from|import)[[:space:]]*\(?[[:space:]]*['\"]\./")
+  hits=$(grep -nHvE '^[[:space:]]*(//|/?\*)' hooks/opencode/board-view.ts | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]\./")
   if [ -n "$hits" ]; then
     echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (board-view.ts may not import hooks/opencode/ files): $hit" >&2; done
     fails=$((fails + 1))

@@ -130,9 +130,12 @@ out="$(sh "$tmp/tests/host-free.sh" "$tmp" 2>&1)"; code=$?
 expect_host_bound "hooks/process/: claude-code import" hooks/process/p.ts "import type { On } from 'claude-code'\n" "a host-bound import.*hooks/process/p.ts:1"
 expect_host_bound "hooks/process/: node: import" hooks/process/p.ts "import { spawn } from 'node:child_process'\n" "a host-bound import.*hooks/process/p.ts:1"
 expect_host_bound "hooks/process/: import of hooks/opencode/" hooks/process/p.ts "import { x } from '../opencode/host'\n" "a host-bound import.*hooks/process/p.ts:1"
+# put p.ts back to its clean form, so the board-view.ts cases below fail on board-view.ts alone
+printf "import { c } from '../core/c'\nexport const p = c\n" > "$tmp/hooks/process/p.ts"
 expect_host_bound "board-view.ts: @opencode import" hooks/opencode/board-view.ts "import type { Plugin } from '@opencode/plugin'\n" "a host-bound import.*board-view.ts:1"
 expect_host_bound "board-view.ts: fs import" hooks/opencode/board-view.ts "import { readFileSync } from 'fs'\n" "a host-bound import.*board-view.ts:1"
 expect_host_bound "board-view.ts: import of a sibling OpenCode file" hooks/opencode/board-view.ts "import { tui } from './tui'\n" "a host-bound import.*board-view.ts:1"
+expect_host_bound "board-view.ts: require of a sibling OpenCode file" hooks/opencode/board-view.ts "const t = require('./tui')\n" "board-view.ts may not import hooks/opencode/ files.*board-view.ts:1"
 rm -rf "$tmp/hooks/process" "$tmp/hooks/opencode"
 # and through scripts/typecheck.sh, on code that type-checks fine with Claude Code's types
 clean
