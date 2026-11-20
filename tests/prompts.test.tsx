@@ -79,7 +79,8 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(q).toContain(`${SCRATCH}\n${WRITE_SCRIPTS}\n`)
   const c = checkerPrompt({ name: 'symcc', task_id: 'T-1', title: 'a', details: 'b', branch: 'symcc/T-1', folder: WT, into: 'main', role: '', diff: '(no diff)', changed_files: '  a.ts', tests: '' })
   expect(c).not.toContain('{{')
-  expect(c).toContain(`/tmp also works.\n${WRITE_SCRIPTS}\n`)
+  // the checker's line names no tool: on the Node host a checker may have no Write tool (T-474)
+  expect(c).toContain(`/tmp also works.\n${WRITE_SCRIPTS.replace('with the Write tool into .scratch/ (or /tmp)', 'as files into .scratch/ (or /tmp) with your file-writing tool')}\n`)
   // every placeholder written in a built-in prompt is one symcc knows
   for (const k of PROMPT_KINDS) for (const p of placeholdersIn(BUILT_IN_PROMPTS[k])) expect(PROMPT_PLACEHOLDERS[k]).toHaveProperty(p)
 })
