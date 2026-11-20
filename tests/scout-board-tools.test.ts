@@ -65,7 +65,7 @@ test("a scout's or checker's call of a tool that changes things is refused with 
   scoutRuns.set('scout-1', 'bugs')
   checkerRuns.set('checker-1', { task: 'T-1', worktree: '/w', end: () => undefined })
   const before = files.get(`${ROOT}/${S.N.dir}/board.json`)
-  const changing = ['add', 'change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume', 'scouts', 'roles', 'kinds', 'settings', 'setup_git', 'ask_owner']
+  const changing = ['add', 'change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume', 'scouts', 'roles', 'kinds', 'settings', 'setup_git', 'orgmem', 'ask_owner']
   for (const id of ['scout-1', 'checker-1'])
     for (const tool of changing) {
       const r = await app.toolCall(host, tool, id, { task: 'T-1', title: 'x', details: 'y', why: 'z', origin_by: 'scout', mode: 'off' })

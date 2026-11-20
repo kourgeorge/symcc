@@ -12,7 +12,7 @@ import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
 import { startAgent } from './starts'
-import { orgMemText, learnFrom } from './org-mem'
+import { orgMemText, keepSuggestions } from './org-mem'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
 export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean }
@@ -100,8 +100,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   await markChecker($, t, agentId, false)
   await cleanFolder($, dir)
   const back = await putBack($, dir, saved)
-  // T-600: its "Learned:" lines go into organizational memory (org-mem), whatever its verdict
-  if (end.answer) await learnFrom($, t.id, end.answer)
+  // T-600, T-632: its "Learned:" lines are kept on the task as org-mem suggestions for the lead, whatever its verdict
+  if (end.answer) await keepSuggestions($, t.id, end.answer)
   let verdict = end.answer === null ? null : checkerVerdict(end.answer)
   let why = end.answer === null ? end.why : verdict ? undefined : 'it handed back nothing'
   if (back === 'failed') {

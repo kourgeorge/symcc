@@ -11,7 +11,7 @@ import { stopOrphans } from '../hooks/app/cleanup'
 import { checkerFinished } from '../hooks/app/checker'
 import { checkEdit, stoppedText } from '../hooks/app/ask'
 import { load, saveBoard } from '../hooks/app/store'
-import { runTool } from '../hooks/app/tools'
+import { runTool, leadGuide } from '../hooks/app/tools'
 import { test, resetPlugin } from './reset'
 import { agentFinished, toolCall } from '../hooks/app/symcc'
 import { moveOldOrgMem } from '../hooks/app/org-mem'
@@ -1090,27 +1090,70 @@ for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is
 
 const GUIDE = `${ROOT}/.symcc/org-mem.md`
 
-test('T-600: a worker\'s and its checker\'s "Learned:" lines go into organizational memory (org-mem) once; the checker\'s prompt has the guide, and its verdict ignores the section', async () => {
+test('T-600, T-632: a worker\'s and its checker\'s "Learned:" lines never change org-mem; they are kept on the task and listed in the lead\'s update when it merges, then taken off', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
-  await w.$.fs.write(GUIDE, '- T-0 2026-11-01: Run one test file with sh scripts/test-files.sh <file>.\n')
+  const GUIDE_TEXT = '- 2026-11-01: Run one test file with sh scripts/test-files.sh <file>.\n'
+  await w.$.fs.write(GUIDE, GUIDE_TEXT)
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  const report = 'made the change\n\nLearned:\n- run one test file with sh scripts/test-files.sh <file>\n- The guard refuses a new repo inside the project; use /tmp.'
+  const report = 'made the change\n\nLearned:\n- The guard refuses a new repo inside the project; use /tmp.\n- the guard refuses a new repo inside the project; use /tmp'
   const done = withStarts(w.$, workerFinished(w.$, 'ag1', report))
   await until(() => checkerRuns.size > 0)
   const prompt = w.spawns[0]!.prompt
   expect(prompt).toContain('Organizational memory (org-mem): notes earlier agents left about this project')
   expect(prompt).toContain('Run one test file with sh scripts/test-files.sh <file>.')
-  expect(prompt).toContain('The guard refuses a new repo inside the project; use /tmp.')
   expect(prompt).toContain('"Learned:" section')
+  // kept on the task (the exact repeat once), not in org-mem
+  expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toEqual(['The guard refuses a new repo inside the project; use /tmp.'])
+  expect(await w.$.fs.read(GUIDE)).toBe(GUIDE_TEXT)
   await checkerFinished([...checkerRuns.keys()][0]!, 'I tried empty input.\nOK\n\nLearned:\n- Snapshot files live in tests/*-snapshot.ts.')
   await done
+  await turns(50)
   const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
   expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
-  const lines = (await w.$.fs.read(GUIDE)).trim().split('\n')
-  expect(lines).toHaveLength(3)
-  expect(lines[1]).toMatch(/^- T-1 \d{4}-\d{2}-\d{2}: The guard refuses a new repo inside the project; use \/tmp\.$/)
-  expect(lines[2]).toMatch(/: Snapshot files live in tests\/\*-snapshot\.ts\.$/)
+  expect(await w.$.fs.read(GUIDE)).toBe(GUIDE_TEXT)
+  const said = leadQueue.join('\n')
+  expect(said).toContain('T-1: Suggested for org-mem')
+  expect(said).toContain('- The guard refuses a new repo inside the project; use /tmp.\n- Snapshot files live in tests/*-snapshot.ts.')
+  expect((t as { suggested?: string[] }).suggested).toBe(undefined)
+})
+
+test('T-632: a dropped task\'s org-mem suggestions are thrown away, never listed for the lead', async () => {
+  const w = world()
+  const b = boardWith(false, { status: 'todo' })
+  await saveBoard(w.$, { ...b, tasks: b.tasks.map(t => ({ ...t, suggested: ['a trap only this task saw'] })) })
+  await runTool(w.$, 'drop', { task: 'T-1' })
+  await turns(50)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('dropped')
+  expect((t as { suggested?: string[] }).suggested).toBe(undefined)
+  expect(leadQueue.join('\n')).not.toContain('Suggested for org-mem')
+  expect(await w.$.fs.exists(GUIDE)).toBe(false)
+})
+
+test('T-632: the lead\'s orgmem tool adds, replaces, removes and lists notes in org-mem.md; it refuses a near repeat and an add past 60 lines', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false))
+  const day = new Date().toISOString().slice(0, 10)
+  expect(await runTool(w.$, 'orgmem', {})).toContain('has no notes yet')
+  expect(await runTool(w.$, 'orgmem', { action: 'add', notes: ['The guard refuses a new repo inside the project; use /tmp.', 'Snapshots are in tests/*-snapshot.ts.'] })).toContain('Added to .symcc/org-mem.md')
+  expect(await w.$.fs.read(GUIDE)).toBe(`- ${day}: The guard refuses a new repo inside the project; use /tmp.\n- ${day}: Snapshots are in tests/*-snapshot.ts.\n`)
+  const again = await runTool(w.$, 'orgmem', { action: 'add', notes: ['the guard refuses a new repo inside the project, use /tmp'] })
+  expect(again).toContain('Not added, already there')
+  expect((await w.$.fs.read(GUIDE)).split('\n').filter(Boolean)).toHaveLength(2)
+  expect(await runTool(w.$, 'orgmem', { action: 'replace', which: '2', by: 'Saved-picture tests are in tests/*-snapshot.ts.' })).toContain('Replaced note 2')
+  expect(await runTool(w.$, 'orgmem', { action: 'list' })).toContain(`#2 ${day}: Saved-picture tests are in tests/*-snapshot.ts.`)
+  expect(await runTool(w.$, 'orgmem', { action: 'remove', which: 1 })).toContain('Removed note 1')
+  expect(await w.$.fs.read(GUIDE)).toBe(`- ${day}: Saved-picture tests are in tests/*-snapshot.ts.\n`)
+  // full: an add past the limit adds nothing and says to remove or replace first
+  const full = Array.from({ length: 60 }, (_, i) => `- ${day}: lesson number ${i} about thing${i}`).join('\n') + '\n'
+  await w.$.fs.write(GUIDE, full)
+  expect(await runTool(w.$, 'orgmem', { action: 'add', notes: ['a brand new trap in the merge line'] })).toContain('Remove or replace a note first')
+  expect(await w.$.fs.read(GUIDE)).toBe(full)
+  // the lead's guide: decide briefly, add only what is surprising and new, merge close ones with replace, don't ask the owner
+  const g = leadGuide()
+  for (const words of ['Suggested for org-mem', "don't ask the owner about each", 'surprising', 'useful to agents on other tasks', 'replace it with the better one', 'most suggestions are skipped', 'Mention in one line what you added']) expect(g).toContain(words)
 })
 
 test('T-600: a report without a "Learned:" section adds nothing, and with no guide file the prompts have no notes heading', async () => {
@@ -1126,27 +1169,21 @@ test('T-600: a report without a "Learned:" section adds nothing, and with no gui
   expect(WORKER_PROMPT(t, await load(w.$), WT, undefined, '\nOrganizational memory (org-mem): notes earlier agents left about this project (from .symcc/org-mem.md; they may be out of date):\n- x\n')).toContain('they may be out of date):\n- x')
 })
 
-test('T-620: an old .symcc/field-guide.md moves to org-mem.md once, with its notes; an existing org-mem.md is never overwritten', async () => {
+test('T-620, T-632: an old .symcc/field-guide.md moves to org-mem.md once and its lines lose their task ids; an existing org-mem.md is never overwritten', async () => {
   const OLD = `${ROOT}/.symcc/field-guide.md`
   const w = world()
-  await w.$.fs.write(OLD, '- T-0 2026-11-01: an old note\n')
+  await w.$.fs.write(OLD, '- T-0 2026-11-01: an old note\n- written by hand\n')
   await moveOldOrgMem(w.$)
   expect(await w.$.fs.exists(OLD)).toBe(false)
-  expect(await w.$.fs.read(GUIDE)).toBe('- T-0 2026-11-01: an old note\n')
-  // a new note lands in org-mem.md, after the moved one
-  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  await saveBoard(w.$, boardWith(true))
-  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'done\n\nLearned:\n- Snapshot files live in tests/*-snapshot.ts.'))
-  await until(() => checkerRuns.size > 0)
-  expect(w.spawns[0]!.prompt).toContain('Organizational memory (org-mem): notes earlier agents left about this project (from .symcc/org-mem.md')
-  expect(w.spawns[0]!.prompt).toContain('an old note')
-  await checkerFinished([...checkerRuns.keys()][0]!, 'OK')
-  await done
-  expect((await w.$.fs.read(GUIDE)).trim().split('\n')[1]).toMatch(/: Snapshot files live in tests\/\*-snapshot\.ts\.$/)
-  // a second start with both files: nothing moves
+  expect(await w.$.fs.read(GUIDE)).toBe('- 2026-11-01: an old note\n- written by hand\n')
+  // a second start with both files: nothing moves, and lines without ids stay as they are
   await w.$.fs.write(OLD, '- T-9 2026-11-02: left behind\n')
   const before = await w.$.fs.read(GUIDE)
   await moveOldOrgMem(w.$)
   expect(await w.$.fs.read(GUIDE)).toBe(before)
   expect(await w.$.fs.exists(OLD)).toBe(true)
+  // an org-mem.md with old ids (written before T-632) is converted once at start
+  await w.$.fs.write(GUIDE, '- T-611 2026-11-20: a note\n- 2026-11-20: a new one\n')
+  await moveOldOrgMem(w.$)
+  expect(await w.$.fs.read(GUIDE)).toBe('- 2026-11-20: a note\n- 2026-11-20: a new one\n')
 })

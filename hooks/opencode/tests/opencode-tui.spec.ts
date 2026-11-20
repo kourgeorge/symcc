@@ -54,6 +54,23 @@ test('T-630: the panel and the band show no all-time total of the tries ("total:
   expect(panelLines(g, { opened: 'T-5', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')).toMatch(/total: 12m · 40k tokens in all/)
 })
 
+test('T-631: the task page Tries row shows the last try and the sum (one try: just that try; no tokens: no token parts)', () => {
+  const f = viewFile()
+  const page = (attempts: number, runs: { started: string; ended?: string; tokens?: { input: number } }[]) => {
+    const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-5' ? { ...t, attempts, runs } : t)) } }
+    return panelLines(g, { opened: 'T-5', cursor: 0 }, NOW, 120).lines.map(lineText).find(l => /^Tries:/.test(l))!
+  }
+  const r1 = { started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:05:00.000Z', tokens: { input: 1_200_000 } }
+  const r2 = { started: '2026-11-19T11:00:00.000Z', ended: '2026-11-19T11:06:00.000Z', tokens: { input: 1_200_000 } }
+  const r3 = { started: '2026-11-19T12:00:00.000Z', ended: '2026-11-19T12:06:00.000Z', tokens: { input: 1_200_000 } }
+  expect(page(1, [r1])).toMatch(/^Tries:\s+1 · 5m · 1\.2M tokens$/)
+  expect(page(3, [r1, r2, r3])).toMatch(/^Tries:\s+3 · last: 6m · 1\.2M tokens · all: 17m · 3\.6M tokens$/)
+  const running = { started: new Date(NOW - 4 * 60_000).toISOString(), tokens: { input: 300_000 } }
+  expect(page(2, [r1, running])).toMatch(/^Tries:\s+2 · last: 4m \(running\) · 300k tokens · all: 9m · 1\.5M tokens$/)
+  const bare = [r1, r2, r3].map(({ tokens: _, ...r }) => r)
+  expect(page(3, bare)).toMatch(/^Tries:\s+3 · last: 6m · all: 17m$/)
+})
+
 test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {
@@ -1505,19 +1522,20 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     return lines.slice(at + 1, end < 0 ? undefined : end)
   }
   const cases = [
-    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep'],
-    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)'],
-    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test'],
-    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge'],
+    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep', '1 in prep'],
+    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)', '1 in queue'],
+    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test', '1 testing'],
+    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge', '1 merging'],
   ] as const
-  for (const [extra, icon, badge] of cases) {
+  for (const [extra, icon, badge, crew] of cases) {
     const f = withT2(extra)
     const lines = list(f)
     expect(needsBlock(lines).some(l => /T-2 /.test(l))).toBe(false)
     expect(lines.find(l => /\bT-2 /.test(l))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const band = bandLines(f, NOW, 200, 20).map(lineText)
     expect(band[0]).toContain('2 doing')
-    expect(band[0]).toContain('1 merging')
+    // T-646: the band names the step it is at
+    expect(band[0]).toContain(crew)
     expect(band[0]).not.toContain('review')
     expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
@@ -1586,12 +1604,12 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
 // ---------------- T-619: the Organizational memory page under Settings ----------------
 
 /** The roles-and-kinds view file with three org-mem notes (newest first, as view.ts writes them). */
-function orgMemViewFile(text = `- T-3 2026-11-18: run one test file\n- written by hand\n- T-7 2026-11-20: the type check is separate\n`): ViewFile {
+function orgMemViewFile(text = `- 2026-11-18: run one test file\n- written by hand\n- 2026-11-20: the type check is separate\n`): ViewFile {
   const f = defsViewFile()
   return { ...f, view: { ...f.view, org_mem: orgMemNotes(text) } }
 }
 
-test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with id and date; an empty one says "No notes yet."', () => {
+test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
   const f = orgMemViewFile()
   // the notes ride in the view file
   expect(parseViewFile(viewFileText(f))!.view.org_mem).toEqual(f.view.org_mem)
@@ -1607,13 +1625,13 @@ test('T-619: the Settings tab has an Org-mem row with the count; its page lists 
   const page = panelLines(f, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140)
   const p = page.lines.map(lineText)
   expect(p).toContain('Organizational memory (org-mem)')
-  expect(p.join(' ')).toContain('.symcc/org-mem.md (the newest 60 lines)')
+  expect(p.join(' ')).toContain('.symcc/org-mem.md (at most 60 lines)')
   expect(page.ids).toEqual(['note:3', 'note:2', 'note:1'])
   const at = (x: string) => p.findIndex(l => l.includes(x))
-  expect(p[at('#3')]).toBe('› #3 · T-7 · 2026-11-20')
+  expect(p[at('#3')]).toBe('› #3 · 2026-11-20')
   expect(p[at('#3') + 1]).toBe('    the type check is separate')
   expect(p[at('#2')]).toBe('  #2 · written by hand')
-  expect(p[at('#1')]).toBe('  #1 · T-3 · 2026-11-18')
+  expect(p[at('#1')]).toBe('  #1 · 2026-11-18')
   expect(at('#2')).toBeGreaterThan(at('#3'))
   expect(at('#1')).toBeGreaterThan(at('#2'))
   expect(panelKeys(f, 'orgmem', 'settings').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
@@ -1656,13 +1674,13 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   clickRow('▸ Workers')
   clickRow('3 notes')
   expect(board.state().opened).toBe('orgmem')
-  expect(lines().some(l => l.includes('#3 · T-7 · 2026-11-20'))).toBe(true)
+  expect(lines().some(l => l.includes('#3 · 2026-11-20'))).toBe(true)
   // x on the newest note, Cancel: nothing sent; down, x, Yes: note 2 is deleted
   answers.select.push('no', 'yes')
   await board.press('x', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('x', 'ses_1')
-  expect(asked).toEqual(['Delete note #3 · T-7 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
+  expect(asked).toEqual(['Delete note #3 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
   // the note's check word goes along, so a number that moved meanwhile deletes nothing
   expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: `orgmem delete 2 ${orgMemNoteKey('written by hand')}` }])
   // b: back to the Settings list

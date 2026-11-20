@@ -428,7 +428,7 @@ Lead (b) loses nothing compared with today, except that workers are processes, n
    symcc engine". So the old question "does the TUI start the engine, or `symcc serve`?" waits. It is
    not decided and not needed for Phase 1.
 
-## 12. Phase 1: separate the engine from its clients (now)
+## 12. Phase 1: separate the engine from its clients (partly done)
 
 This is the only part planned for now. No new feature, no server. It only draws one clear line
 between "the engine" and "the things that use it", and makes the code and tests keep to that line.
@@ -493,8 +493,15 @@ The same three hosts keep working, with no change in what the owner sees.
 ### Tasks (small, in order)
 
 Each keeps the four standard commands green (`claude plugin test .`, `sh scripts/typecheck.sh`,
-`sh scripts/test-opencode-host.sh`, `sh scripts/test-node-host.sh`). These are plans. They are not
-created yet.
+`sh scripts/test-opencode-host.sh`, `sh scripts/test-node-host.sh`). Status (owner, 2026-11-20): Phase 1
+is narrowed to steps that change nothing for anyone.
+
+- **Done now:** the S2 check, in a smaller form (T-634: `tests/host-free.sh` also covers `hooks/process/`,
+  `board-view.ts` and `hooks/engine.ts`, with no file moved); S3 without the `package.json` `exports`
+  (T-635: `hooks/engine.ts` as a list nothing imports yet; it may lag behind the hosts, and
+  `tests/engine-names.mjs` only reports drift as a note); and S6 (T-638: [the engine and clients page](../engine-and-clients.md)).
+- **Later, when the separate app is built:** S1 (the file move), S4 (pointing the hosts at the entry) and
+  S5 (the host-side check).
 
 | # | Title | Files | After | How tested |
 |---|---|---|---|---|

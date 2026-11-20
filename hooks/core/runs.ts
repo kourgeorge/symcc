@@ -242,6 +242,24 @@ export function fmtTotal(t: RunTotal): string {
   return [fmtDuration(t.ms), t.tokens !== undefined && `${fmtTokens(tokenCount(t.tokens))} tokens in all`, t.cost !== undefined && `~${fmtCost(t.cost)}`].filter(Boolean).join(' · ')
 }
 
+/** One try or a sum on the task page's Tries row: "6m · 0.9M tokens" (every kind added, no "in all"), "(running)" after
+ *  the time while `running`; the tokens only when known. */
+const triesPart = (t: RunTotal, running = false): string =>
+  [`${fmtDuration(t.ms)}${running ? ' (running)' : ''}`, t.tokens !== undefined && `${fmtTokens(tokenCount(t.tokens))} tokens`].filter(Boolean).join(' · ')
+
+/**
+ * What the task page's Tries row says after the count: the latest try and the sum of all of them,
+ * " · last: 6m · 0.9M tokens · all: 17m · 2.7M tokens"; with one try only that try, " · 6m · 0.9M tokens". A try still
+ * running counts up to `nowMs` and says "(running)". '' when there is no try yet.
+ */
+export function triesSummary(runs: SymccRun[] | undefined, nowMs?: number): string {
+  const rs = runs ?? []
+  const last = rs[rs.length - 1]
+  if (!last) return ''
+  const one = triesPart(sumRuns([last], nowMs), !last.ended)
+  return rs.length === 1 ? ` · ${one}` : ` · last: ${one} · all: ${triesPart(sumRuns(rs, nowMs))}`
+}
+
 /** One try in words: "try 2: 12m · 40k tokens in all · finished: merged", with "(running)" while it has not ended. */
 export function fmtRun(r: SymccRun, i: number, nowMs?: number): string {
   const end = runEndText(r)

@@ -87,7 +87,7 @@ picks up again next time.
 | `todo` | Ready to be picked up (once the tasks it waits for are done) |
 | `doing` | A worker is on it right now |
 | `waiting` | It needs an answer from you (shown under NEEDS YOU) |
-| `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
+| `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it. Once you approve, the task leaves NEEDS YOU and shows with the running tasks (prep, queue, test, merge) until the merge ends |
 | `paused` | Stopped on purpose, until resumed |
 | `failed` | It could not be finished; the lead decides what next. Its page starts with a "Why it failed" block: one plain sentence for the reason (tests failed, the checker found problems, files outside the task, no change, no result, out of time, an API error or refusal, the worker ended its turn before its work finished, could not start, a merge conflict), what the worker's report asks for (a `NEED FILES:` line or a question), and what to do next (Retry, ask the lead in the chat to change the task, or Drop). Its key line lists `r retry` and `x drop`. The board row and the lead's board show the same sentence |
 | `done` | Merged into your branch. This is final |
@@ -1015,7 +1015,7 @@ switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is r
 read-only commands with options or settings that write files or run programs (such as
 `git diff --output=...` or `-c` settings that run a program). This check works on the command text and
 is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
-get through. The real fix is the worker sandbox (T-365).
+get through. There is no sandbox yet.
 
 **Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
 `add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
@@ -1027,7 +1027,10 @@ shell is not in the temp folder, a `cd` with a word before it such as `builtin c
 and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
 `config -f` file outside the scratch folder, and any word with a space after the git command (a
 command given in quotes, as in `rebase -x '...'`; the message of `commit`, `tag`, `merge`, `notes`
-or `stash -m` and `--author=` are fine); scouts stay read-only. This rule stops honest mistakes; it
+or `stash -m` and `--author=` are fine); scouts stay read-only. When symcc stops an agent process it
+started earlier (after a reload or a crash), it first checks that the process is still that agent
+(same program, started at about the recorded time), so a process that took over a reused number is
+never stopped. This rule stops honest mistakes; it
 is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
 `sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
 is the accepted risk and is not checked further.
@@ -1416,7 +1419,10 @@ its read-only `stats` tool.
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
-  average tokens and time; done per day for the last 7 days with activity, oldest first.
+  average tokens and time. Each scout's line has a small scorecard under it: how many tasks its
+  findings became (how many merged, were dropped or are still open), its own tokens in the range,
+  and the tokens per merged fix (its tokens plus its merged tasks' tokens, divided by the number
+  merged; "—" when none merged). A scout that used tokens but made no task is listed too; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
   entries from older boards have no times.
@@ -1456,7 +1462,7 @@ your-project/
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
     ├── events.jsonl      the activity log: every task event, one JSON line each (see Task events)
-    ├── org-mem.md        organizational memory (org-mem): short notes agents left for the next ones (see below)
+    ├── org-mem.md        organizational memory (org-mem): short notes for the agents, kept by the lead (see below)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged
@@ -1478,21 +1484,30 @@ start with `symcc/` are never touched.
 after them, so the next worker doesn't have to find the same things again (how to run one
 test, a trap, where something is).
 
-- **How lines get in:** a worker, a checker or an investigation may end its report with a
-  `Learned:` section of up to 3 short `- ` lines (the section ends at the first blank line or
-  line that isn't a `- ` line; code blocks in it are left out). When its report comes in (merged or not), symcc
-  adds them as `- T-12 2026-11-20: the note`. Each line is made one line and cut at 200
-  characters; lines that look like a secret or like file contents are left out, and a line
-  that says about the same as one already in org-mem is skipped.
-- **The limit:** the file keeps at most 60 lines; when more come in, the oldest are dropped first.
+- **Agents suggest, the lead decides:** a worker, a checker or an investigation may end its report
+  with a `Learned:` section of up to 3 suggested notes, one `- ` line each (the section ends at the
+  first blank line or line that isn't a `- ` line; code blocks in it are left out). A note should be
+  surprising (a careful agent would not guess it), useful to agents on other tasks (not about this
+  task), one short plain sentence, and not already in org-mem; most reports have none. Nothing goes
+  into org-mem from a report. symcc keeps the suggestions on the task (each made one line and cut
+  at about 120 characters; secret-looking lines, file contents and exact repeats are left out).
+  When the task merges (or an investigation is marked Done), the lead's board update lists them
+  under "Suggested for org-mem"; a dropped task's suggestions are thrown away.
+- **The lead's orgmem tool:** the lead adds what is worth keeping (most suggestions are skipped),
+  or replaces a close note with a better one, and tells you in one line what it added. The tool
+  can `list` the notes, `add` one or more, `remove` one (by number or text) and `replace` one. New
+  lines look like `- 2026-11-20: the note` (no task id). It refuses a note that repeats one already
+  there (even in other words).
+- **The limit:** the file keeps at most 60 lines; an add past that is refused until a note is
+  removed or replaced.
 - **Who reads it:** every new worker, checker and scout gets the whole file in its prompt,
   under "Organizational memory (org-mem): notes earlier agents left about this project". A missing
   or empty file adds nothing.
-- **Editing:** you (or the lead) may edit, fix or trim the file by hand at any time; any line
-  counts, with or without the task id and date.
+- **Editing:** you may edit, fix or trim the file by hand at any time; any line counts, with or
+  without a date.
 - **Seeing and deleting notes:** Settings → Workers has an **Org-mem: n notes** row (in VS Code
   **Organizational memory**). It opens the "Organizational memory (org-mem)" page: every note, newest
-  first, with its number, task id, date and text ("No notes yet." when there are none). To delete
+  first, with its number, date and text ("No notes yet." when there are none). To delete
   a note, put the cursor on it and press `x` (or Enter; in VS Code click its Delete link), then
   `y` to confirm: exactly that line is taken out of the file. From the prompt (and in OpenCode,
   where the page does it for you): `/symcc-settings orgmem delete N`, N being the note's number on the page.

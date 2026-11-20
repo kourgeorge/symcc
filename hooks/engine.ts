@@ -1,0 +1,53 @@
+// The engine's names the hosts use (T-635, groundwork for the engine/client split in docs/research/standalone-app.md
+// section 12). Re-exports only: every name the hosts (hooks/claude/, hooks/register.tsx, hooks/opencode/ and its
+// opencode/ entries, hosts/node/) import today from the engine side (hooks/app/, hooks/core/, hooks/board.ts,
+// hooks/name.ts, hooks/host.ts, hooks/process/, hooks/opencode/board-view.ts, types/), each from the file it lives in.
+// Nothing imports this file yet; the hosts still import those files directly.
+// The list may lag behind the hosts (T-645): a host starting or stopping to use an engine name needs no edit here.
+// tests/engine-names.mjs (run by tests/host-free.sh) only prints the differences as notes; refresh this list from
+// them when the split starts. tests/engine.test.ts checks each value is the same as in its source file. A name the hosts take from two files (answerChoices: hooks/board.ts and hooks/core/panel.ts) is
+// listed once, from hooks/board.ts, which re-exports hooks/core/.
+export { ASK_TOOL_DEF, hookFailed, listedKind } from './app/ask'
+export { setBoardMode, stopForQuit } from './app/board-mode'
+export { setupGit } from './app/git'
+export { changeKind, kindDraftOf, kindLists, kindView, loadKinds, newKindFile, saveKindDraft } from './app/kinds'
+export { logoNow, noteLogoWidth } from './app/logo'
+export { openPane, paneArgs, type PaneTab, resetPane } from './app/open'
+export { deleteOrgMem, orgMemNow, orgMemView, resetOrgMemView } from './app/org-mem'
+export { seePlan } from './app/plan'
+export { answerOnBoard, boardAnswered, popupCall } from './app/questions'
+export { changedFiles, folderDiff } from './app/review'
+export { changeRole, loadRoles, newRoleFile, roleDraftOf, roleLists, roleView, saveRoleDraft } from './app/roles'
+export { cancelScoutEdit, editScout, loadScoutResults, loadScoutRunHistory, newScout, readScoutRunReport, runScoutNow, saveScout, scoutPlace, scoutPlaceValue, setScoutPaused } from './app/scouts'
+export { drainStarts, leadTurn, StartCancelled } from './app/starts'
+export { approving, changesCache, checkerRuns, finishing, openDays, type PaneView, queuedWorkers, S, scoutRuns, starting, toolName, useName, workers } from './app/state'
+export { findRoot, isAbsolute, isWorkerFolder, load, mainRoot, normalPath, path, safeWrite } from './app/store'
+export { agentFinished, type AgentRunEnd, BOARD_OPENED, type CommandAnswer, COMMANDS, guardStart, leadGuideText, leadUpdate, otherToolDone, ownerTyped, runCommand, sessionCleared, sessionEnd, sessionStart, sessionStarting, toolCall, toolCallFailed, toolCheck, toolCheckFailed } from './app/symcc'
+export { brief, noteForLead, tellLead } from './app/tell'
+export { allowAskedFiles, ownerSettings, refuseAskedFiles, runTool, TOOLS } from './app/tools'
+export { agentOnBoard, mergeOutcome, mergingNow, pump, type TurnEnd } from './app/workers'
+export { actionButtonLabel, ALL_CLEAR, ALWAYS_ON_KINDS, answerChoices, answeredLeadLine, answerText, archivedNote, archivedOf, BACKLOG_SHOWN, backlogMoreLabel, BAD_EVERY_STATE, bandBrand, bandLeads, bandNote, bandWhere, bannerCounts, bannerLines, bannerRule, type BannerTone, type BoardTask, boxHint, canMarkMerged, canPickRole, cantPlayNotify, checkerOn, copyToast, crossBranchNotes, cutDiff, DEFAULT_ROLE, type DetailRow, detailRows, DIFF_COLOR, DIFF_LINES, type DiffFile, diffKeys, diffKinds, emptyBoard, everyMinutesOf, everyText, failAsks, failNext, fileWaitText, findKind, findRole, fitRow, fmtDuration, fmtRun, fmtTotal, foldedRow, folderName, footerRule, groupLabel, groupSummaryParts, hintLines, intoOf, isAnswered, isCheckerRole, isInvestigation, isNothing, isScoutRunReport, isSettingPage, type KeyHint, type KindDef, kindMark, kindNameError, kindsKeys, kindTag, listKeys, localOffset, mergeKinds, mergeRoles, MODE_MEANING, MODE_NAME, modeButton, modeLabel, modeOf, needsYou, newestFirst, nextMode, offStatusParts, originOf, originSegs, type OwnerQuestion, ownersTurn, packRows, panelSections, parseScoutRuns, parseSettingValue, pickHint, planBandText, promptsOfRole, questionsForYou, questionsLabel, ROLE_PLACEHOLDERS, ROLE_PROMPTS, ROLE_SLOT, roleChoices, type RoleDef, roleEditKeys, roleKeys, roleMark, roleNameError, roleOf, rolePromptKeys, type RolePromptKind, rolesKeys, roleTag, rowCell, rowEndText, rowExtra, rowMark, rowStates, safeScoutFile, type ScoutEditField, scoutEditKeys, scoutFile, scoutHowTo, scoutIcon, scoutKeys, scoutLastRunProblem, scoutLastText, scoutListKeys, scoutListRows, scoutOutcomeTone, scoutRow, scoutRunLine, scoutRunsFile, scoutRunTasks, scoutTone, SEARCH_WORDS, searchBoxHint, searchLine, searchTasks, SECTION_LABEL, type Seg, SETTING_GROUPS, settingChoices, settingInfo, type SettingName, type SettingPage, SETTINGS, type SettingsInput, settingsKeys, settingValue, shownStatus, showsAnswer, sortScouts, type StageMark, stageSegs, STATE_LABEL, stateText, STATUS_BADGE, STATUS_MARK, STATUS_WORD, statusBadge, statusCell, statusCounts, statusMark, sumRuns, type TaskAction, type TaskActionId, taskActions, taskAsks, taskCopyText, taskKeys, taskPhase, taskReports, taskStage, testsShort, TITLE_ROOM, versionMark, whyFailed, withCrew, wrapSegs, YOUR_EDITS } from './board'
+export { ASK_TOOL } from './core/ask'
+export { shortHome } from './core/banner'
+export { normId } from './core/board-file'
+export { when } from './core/days'
+export { type BrokenDef, brokenLabel, brokenNamed, defNamed, defSource, type DefSource, sourceLabel } from './core/def-files'
+export { HISTORY_COLOR, historyEvent, historyTime } from './core/history'
+export { ORG_MEM_EMPTY, ORG_MEM_TITLE, orgMemAbout, orgMemCount, orgMemDeleteAsk, orgMemFile, orgMemKeys, type OrgMemNote, orgMemNoteHead, orgMemNoteKey, orgMemSummary } from './core/org-mem'
+export { spawnFailedText } from './core/path-guard'
+export { basePromptFor, SCOUT_BASE, WORKER_BASE } from './core/prompts'
+export { normQid } from './core/questions'
+export { ROLE_TOOL_WORDS } from './core/roles'
+export { cleanTokens, fmtTokens, sumTokens, TOKEN_KINDS, tokenCount } from './core/runs'
+export { SCOUT_BOARD_TOOLS } from './core/scouts'
+export { type LeadCall, rangeSpan, type StatsRange } from './core/stats'
+export { type SectionLine, type TaskSection, taskSections } from './core/task-sections'
+export { jsonObj, squash } from './core/text'
+export { ALL_FEATURES, type FileTouch, type Host, type HostAgent, type HostAgentKind, type HostAgentStart, type HostFeatures, type HostFileEntry, type HostFileStat, type HostLead, type HostRunResult, type HostWords, type LeadSend, type LeadUsage, manifestVersion, noUi, type PanelValues, SYMCC_WORDS } from './host'
+export { cleanName, dataDir, DEFAULT_NAME, ICON, namesFor } from './name'
+export { actionCommand, answerOptions, approveInProgress, approveSent, type ApproveSent, bandDraw, type BandHit, CHOICE_KEYS, type ChoiceKey, groupId, groupOf, GROUPS_OPEN, hasPage, LETTER_KEYS, type LetterKey, type Line, moveCursor, orgMemNoteOf, OWN_ANSWER, PANEL_TABS, type PanelAction, type PanelGroup, type PanelHit, type PanelKey, panelKeys, panelLines, panelRoleChoices, type PanelTab, panelTaskActions, parseViewFile, type ScoutRuns, scoutRunsIn, settingGroupId, settingGroupOf, SETTINGS_OPEN, settingsPlace, TASK_ACTION_COMMANDS, VIEW_FILE, VIEW_RUNS_KEPT, type ViewChanges, type ViewDef, viewDefs, type ViewFile, viewFileText } from './opencode/board-view'
+export { type AgentRunner, processAgents, type ProcessAgents } from './process/agents'
+export { claudeRunner } from './process/claude-runner'
+export { PROCESSES_FILE } from './process/record'
+export type { ProcessSystem } from './process/system'
+export type { SymccMode, SymccScout, SymccStatus, SymccTask, SymccTokens, SymccView } from '../types'

@@ -2602,6 +2602,24 @@ test('a task lists its commits newest first with the merged one marked', () => {
   expect(detailRows(base, { roles: [], all: [], when: s => s, nowMs: 0 }).some(r => r.label === 'Commits')).toBe(false)
 })
 
+test('T-631: the Tries row shows the last try and the sum of all on one line', () => {
+  const [, base] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
+  const at = (m: number) => new Date(Date.parse('2026-11-20T10:00:00.000Z') + m * 60_000).toISOString()
+  const NOW = Date.parse(at(40))
+  const tries = (attempts: number, runs: { started: string; ended?: string; tokens?: { input: number } }[]) =>
+    detailRows({ ...base, attempts, runs }, { roles: [], all: [], when: s => s, nowMs: NOW }).find(r => r.label === 'Tries')!.segs.map(s => s.text).join('')
+  const done = (from: number, mins: number, input?: number) => ({ started: at(from), ended: at(from + mins), ...(input !== undefined && { tokens: { input } }) })
+  // one try: no "last" / "all" split
+  expect(tries(1, [done(0, 6, 1_200_000)])).toBe('1 · 6m · 1.2M tokens')
+  // three tries: the last one and the sum
+  expect(tries(3, [done(0, 5, 1_200_000), done(10, 6, 1_200_000), done(20, 6, 1_200_000)])).toBe('3 · last: 6m · 1.2M tokens · all: 17m · 3.6M tokens')
+  // the last try still running counts up to now and says so
+  expect(tries(2, [done(0, 6, 1_200_000), { started: at(36), tokens: { input: 300_000 } }])).toBe('2 · last: 4m (running) · 300k tokens · all: 10m · 1.5M tokens')
+  // no tokens known: the token parts are left out
+  expect(tries(3, [done(0, 5), done(10, 6), done(20, 6)])).toBe('3 · last: 6m · all: 17m')
+  expect(tries(0, [])).toBe('0')
+})
+
 import { mergedDone, alreadyMergedLine } from '../hooks/board'
 
 test('a task found already merged names its commit by the short sha', () => {
@@ -2777,10 +2795,21 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   // a task symcc is only testing and merging (a fresh finishing mark) is "merging", not a worker
   const fresh = new Date(now - 10_000).toISOString()
   const working = { status: 'doing' as const }
-  const merging = { status: 'doing' as const, finishing: fresh }
+  const at = (step: 'prep' | 'checker' | 'queue' | 'testing' | 'merging') => ({ status: 'doing' as const, finishing: fresh, checking: { step, at: fresh } })
+  const merging = at('merging')
   expect(crewParts({ max_parallel: 3, tasks: [working], scouts: [] }, now).workers).toBe('1/3 workers')
   expect(crewParts({ max_parallel: 3, tasks: [merging], scouts: [] }, now).workers).toBe('1 merging')
   expect(crewParts({ max_parallel: 3, tasks: [working, merging], scouts: [] }, now).workers).toBe('1/3 workers · 1 merging')
+  // T-646: each task counts at its real step (a task in the checker is not "merging"), in pipeline order
+  expect(crewParts({ tasks: [at('checker')], scouts: [] }, now).workers).toBe('1 in checker')
+  expect(crewParts({ tasks: [at('queue')], scouts: [] }, now).workers).toBe('1 in queue')
+  expect(crewParts({ tasks: [at('testing')], scouts: [] }, now).workers).toBe('1 testing')
+  expect(crewParts({ tasks: [at('prep')], scouts: [] }, now).workers).toBe('1 in prep')
+  // handed back, no check step on the board yet: in prep
+  expect(crewParts({ tasks: [{ status: 'doing', finishing: fresh }], scouts: [] }, now).workers).toBe('1 in prep')
+  expect(crewParts({ max_parallel: 3, tasks: [merging, at('testing'), working, at('queue'), at('checker'), at('queue')], scouts: [] }, now).workers).toBe('1/3 workers · 1 in checker · 2 in queue · 1 testing · 1 merging')
+  // a running approve (a task in review with a fresh check step) counts at its own step
+  expect(crewParts({ tasks: [{ status: 'review', checking: { step: 'checker', at: fresh } }], scouts: [] }, now).workers).toBe('1 in checker')
   // a stale mark (the copy that merged it is gone) is not merging now
   expect(crewParts({ max_parallel: 3, tasks: [{ status: 'doing', finishing: new Date(now - 3_600_000).toISOString() }], scouts: [] }, now).workers).toBe('1/3 workers')
   expect(withCrew((w, s) => [w, s].join('|'), undefined, now)).toBe('|')
@@ -3958,7 +3987,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
     expect(line).toContain('T-1 doing')
     expect(line).not.toContain('to review')
     expect(core.bannerCounts({ ...emptyBoard(), tasks: [t] }, now).map(c => c.text)[0]).toBe('1 doing')
-    expect(crewParts({ tasks: [t], scouts: [] }, now).workers).toBe('1 merging')
+    expect(crewParts({ tasks: [t], scouts: [] }, now).workers).toBe(`1 ${({ prep: 'in prep', queue: 'in queue', testing: 'testing', merging: 'merging' } as const)[checking.step]}`)
     expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toMatch(new RegExp(`T-1 +${icon} review`))
   }
   // no approve (or a stale mark, its copy gone): it needs the owner, "to review"
