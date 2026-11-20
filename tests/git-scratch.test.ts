@@ -1,0 +1,150 @@
+// T-591: workers and checkers may run git writes in throwaway repositories under /tmp (or the system temp folder)
+// named by plain literal paths; git aimed at the project, .symcc/, a worktree, or a folder that can't be told (a
+// variable, mktemp, ~, ..) stays refused, and scouts stay read-only. A simple rule, not a security boundary.
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
+import { checkEdit } from '../hooks/app/ask'
+import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, literalPath, scratchTemps, scratchGitAllow } from '../hooks/board'
+import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
+import { fakeHost } from './fake-host'
+
+const ROOT = '/repo'
+const WT = `${ROOT}/.symcc/worktrees/T-1`
+
+function setup(tmpdir?: string) {
+  S.root = ROOT
+  scoutRuns.set('s1', 'gaps-bot')
+  workers.set('w1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  checkerRuns.set('c1', { task: 'T-1', worktree: WT, end: () => undefined })
+  return fakeHost({ env: async name => (name === 'TMPDIR' ? tmpdir : undefined) }).host
+}
+
+const ALLOWED = [
+  'git init /tmp/x',
+  'git init -q /tmp/x',
+  'git init -b main "/tmp/my x"',
+  "git init '/private/tmp/x'",
+  'git -C /tmp/x add . && git -C /tmp/x commit -m m',
+  'cd /tmp/x && git commit -am m',
+  'cd /tmp/x && git init && git add . && git commit -m "first: see /docs"',
+  'mkdir -p /tmp/x && cd /tmp/x && git init && echo a > f && git add f && git commit -qm m',
+  'git -C /tmp/x config user.name me && git -C /tmp/x config user.email me@x',
+  'git -C /tmp/x checkout -b side && git -C /tmp/x merge main',
+  'git -C /tmp/x commit -m m > /dev/null 2>&1',
+  'cd /tmp && git init x',
+  'git -C /tmp/a clone /tmp/b c',
+]
+
+const REFUSED = [
+  // the project, .symcc/, the worktree
+  'git -C /repo commit -m m',
+  'git -C /repo/.symcc add .',
+  `git -C ${WT} commit -am m`,
+  `cd ${WT} && git commit -am m`,
+  'git init /repo/.symcc/x',
+  'git commit -am m',
+  // folders that can't be told
+  'git -C $TMPDIR/x commit -m m',
+  'git -C "$TMPDIR/x" commit -m m',
+  'd=/tmp/x; git -C $d commit -m m',
+  'cd $d && git commit -m m',
+  'git init $(mktemp -d)',
+  'cd $(mktemp -d) && git init',
+  'cd `mktemp -d` && git init',
+  'git -C ~/x commit -m m',
+  'cd ~/x && git init',
+  'git -C /tmp/../repo commit -m m',
+  'cd /tmp/x/.. && git commit -m m',
+  'git init /tmp/*',
+  'git -C /tmp/"x" commit -m m',
+  'git -C x commit -m m',
+  // a cd that may fail, or whose effect is lost
+  'cd /tmp/x; git commit -am m',
+  'cd /tmp/x || git commit -am m',
+  'false || cd /tmp/x && git commit -am m',
+  'cd /tmp/x && true || git commit -am m',
+  '(cd /tmp/x && git init) && git commit -am m',
+  'cd /tmp/x | git commit -am m',
+  // aimed elsewhere from a scratch repo
+  `git -C /tmp/x push ${WT} HEAD:refs/heads/main`,
+  'git -C /tmp/x push /repo main',
+  'git -C /tmp/x remote add o ../../repo',
+  'git -C /tmp/x fetch file:///repo',
+  'git -C /tmp/x push https://example.com/r main',
+  'git -C /tmp/x --git-dir=/repo/.git commit -m m',
+  'git -C /tmp/x --work-tree /repo add .',
+  'git init --separate-git-dir /repo/.git /tmp/x',
+  'git -C /tmp/x push ~/r',
+  // not at the line's top
+  "sh -c 'git -C /tmp/x commit -m m'",
+  'sudo git -C /tmp/x commit -m m',
+  'GIT_DIR=/repo/.git git -C /tmp/x commit -m m',
+]
+
+test('a worker and a checker may run git writes in /tmp scratch repos named by plain literal paths (T-591)', async () => {
+  const $ = setup()
+  for (const command of ALLOWED) {
+    expect([command, await checkEdit($, 'w1', { command }, WT)]).toEqual([command, undefined])
+    expect([command, await checkEdit($, 'c1', { command }, WT)]).toEqual([command, undefined])
+  }
+})
+
+test('git writes aimed at the project, .symcc/, the worktree, or a folder that cannot be told stay refused (T-591)', async () => {
+  const $ = setup()
+  for (const command of REFUSED) {
+    const what = gitWriteIn(command)!
+    expect([command, typeof what]).toEqual([command, 'string'])
+    // a worker's command that names the owner's copy is refused for that first (bashOutsideText)
+    const w = await checkEdit($, 'w1', { command }, WT)
+    expect([command, w === workerGitWriteText(what) || w?.includes("in the owner's copy of the project")]).toEqual([command, true])
+    expect([command, await checkEdit($, 'c1', { command }, WT)]).toEqual([command, gitWriteText(what)])
+  }
+})
+
+test('a scout stays read-only with git, even in /tmp (T-591)', async () => {
+  const $ = setup()
+  for (const command of ['git init /tmp/x', 'git -C /tmp/x commit -m m', 'cd /tmp/x && git commit -am m']) {
+    expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText(gitWriteIn(command)!))
+  }
+})
+
+test('the shell folder counts when it is under /tmp, never when it is the worktree (T-591)', async () => {
+  const $ = setup()
+  expect(await checkEdit($, 'w1', { command: 'git commit -am m' }, '/tmp/x')).toBeUndefined()
+  expect(await checkEdit($, 'c1', { command: 'git add . && git commit -m m' }, '/private/tmp/x')).toBeUndefined()
+  expect(await checkEdit($, 'w1', { command: 'git commit -am m' }, WT)).toBe(workerGitWriteText('git commit'))
+  expect(await checkEdit($, 'c1', { command: 'cd /repo && git commit -am m' }, '/tmp/x')).toBe(gitWriteText('git commit'))
+  expect(await checkEdit($, 'w1', { command: 'cd /repo && git commit -am m' }, '/tmp/x')).toBeDefined()
+})
+
+test('the system temp folder counts only under /var/folders (T-591)', async () => {
+  const sys = '/var/folders/ab/cd123/T'
+  expect(scratchTemps(sys)).toEqual(['/tmp', sys])
+  expect(scratchTemps(`${sys}/`)).toEqual(['/tmp', sys])
+  expect(scratchTemps('/Users/me')).toEqual(['/tmp'])
+  expect(scratchTemps('/')).toEqual(['/tmp'])
+  expect(scratchTemps('/var/folders/../../repo')).toEqual(['/tmp'])
+  expect(scratchTemps(undefined)).toEqual(['/tmp'])
+  const $ = setup(sys)
+  expect(await checkEdit($, 'w1', { command: `git init ${sys}/x` }, WT)).toBeUndefined()
+  expect(await checkEdit($, 'w1', { command: `git -C /private${sys}/x commit -m m` }, WT)).toBeUndefined()
+  const other = setup('/Users/me')
+  expect(await checkEdit(other, 'w1', { command: 'git init /Users/me/x' }, WT)).toBe(workerGitWriteText('git init'))
+})
+
+test('a project or worktree under /tmp is still refused (T-591)', () => {
+  const allow = scratchGitAllow(scratchTemps(), ['/tmp/proj', '/tmp/proj/.symcc/worktrees/T-1'])
+  expect(gitWriteIn('git -C /tmp/proj commit -m m', allow)).toBe('git commit')
+  expect(gitWriteIn('git -C /TMP/PROJ/.symcc commit -m m', allow)).toBe('git commit')
+  expect(gitWriteIn('git init /tmp/proj/.symcc/worktrees/T-1/x', allow)).toBe('git init')
+  expect(gitWriteIn('git -C /tmp/other commit -m m', allow)).toBeUndefined()
+  // /tmp itself is no scratch repo
+  expect(gitWriteIn('git -C /tmp commit -m m', allow)).toBe('git commit')
+})
+
+test('literalPath takes only plain literal absolute paths (T-591)', () => {
+  expect(literalPath('/tmp/x')).toBe('/tmp/x')
+  expect(literalPath('"/tmp/a b"')).toBe('/tmp/a b')
+  expect(literalPath("'/tmp/x/'")).toBe('/tmp/x')
+  for (const bad of ['tmp/x', '$TMPDIR/x', '"$TMPDIR"', '~/x', '/tmp/../repo', '/tmp/*', '/tmp/"x"', '/tmp/a b', '`mktemp`', '/tmp/x\\y']) expect([bad, literalPath(bad)]).toEqual([bad, undefined])
+})

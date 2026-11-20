@@ -8,7 +8,7 @@ The change is in this folder, on branch {{branch}} (everything is committed):
 Everything you need is in that folder or below: the task, its changed files and the diff. Work only in that folder; there is no need to look at the board or the main project folder.
 You may read anything there and run commands. Do NOT edit, create or delete files in that folder (outside .scratch/) or anywhere in the project; anything you change there is thrown away.
 Put any throwaway script or note under .scratch/ in that folder (never commit it); /tmp also works.
-Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...): the branch must stay where the worker left it, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine.
+Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...): the branch must stay where the worker left it, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine. A throwaway repository under /tmp for a probe is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it.
 
 Task {{task_id}}: {{title}}
 {{details}}

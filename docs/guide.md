@@ -928,6 +928,16 @@ read-only commands with options or settings that write files or run programs (su
 is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
 get through. The real fix is the worker sandbox (T-365).
 
+**Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
+`add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
+under `/var/folders/...`), when every folder the command acts in is a plain literal path:
+`git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m` (the `cd` joined
+by `&&`). A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
+told from the text (`$TMPDIR`, `$d`, `$(mktemp -d)`, `~`, `..`, a glob, no `-C` or `cd` while the
+shell is not in the temp folder), stays refused; scouts stay read-only. This rule stops honest
+mistakes, not a determined agent: symbolic links inside `.git`, files the same line writes (such as
+a remote added by editing `.git/config`), and git hooks or settings are deliberately not checked.
+
 - **OK:** the task joins the merge line: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
   as one of the `auto_retries`. The task never joins the merge line, so no tests run for that try.

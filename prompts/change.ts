@@ -15,7 +15,7 @@ Task {{task_id}}: {{title}}
 {{files}}
 {{test_command}}
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.
-Do not run git commands that change anything (commit, push, merge, reset, checkout or switch of branches, stash, branch, tag, update-ref...); they are refused. Read-only ones like git status, diff, log and show are fine. {{name}} commits, tests and merges your work.
+Do not run git commands that change anything (commit, push, merge, reset, checkout or switch of branches, stash, branch, tag, update-ref...); they are refused. Read-only ones like git status, diff, log and show are fine. A throwaway repository under /tmp is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it. {{name}} commits, tests and merges your work.
 {{merge_main}}{{test_output}}{{earlier_tries}}
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.
 When you are done, answer in one or two plain sentences: what you changed.
