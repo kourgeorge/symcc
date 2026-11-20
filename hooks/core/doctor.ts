@@ -2,7 +2,7 @@
 // migration backups, task branches already in their branch, leftover task folders, stale git worktree entries, data
 // files near the 4 MB read limit, stray files and a board that looks stuck, and lists them with their sizes. Only the
 // items marked fixable can be fixed, and only when the owner says so (`/<name>-doctor fix`, or `fix b-T-5 m-1101-1000`
-// for some); everything else is only listed. app/doctor.ts gathers the facts and does the fixes.
+// for some); everything else is only listed. While a merge runs the list is still shown, but fixes wait (T-684). app/doctor.ts gathers the facts and does the fixes.
 import { mbText } from './board-parts'
 
 /** What a found item is about. */
@@ -135,9 +135,16 @@ export function fixedText(done: DoctorFixed[], name: string, gone: string[] = []
   ].join('\n')
 }
 
-/** Why the doctor doesn't run now: a merge (task `id`'s, or one git is in the middle of) is going on. */
+/** Which merge is going on: task `id`'s, or one git is in the middle of (no id). */
+export const mergeWhat = (id?: string) => (id ? `${id}'s work is being checked and merged` : 'git is in the middle of a merge in the project folder')
+
+/** The line over the list while a merge runs: the check still ran, only fixes wait. */
+export const mergeNoteText = (name: string, id?: string) =>
+  `A merge is in progress (${mergeWhat(id)}): this is only the list; /${name}-doctor fix waits until it is done.`
+
+/** Why `fix` changed nothing now: a merge is going on (task `id`'s, or one git is in the middle of). */
 export const mergeRunsText = (name: string, id?: string) =>
-  `${name} doctor doesn't run while a merge is in progress (${id ? `${id}'s work is being checked and merged` : 'git is in the middle of a merge in the project folder'}); nothing was checked or changed. Try /${name}-doctor again when it is done.`
+  `${name} doctor doesn't fix anything while a merge is in progress (${mergeWhat(id)}); nothing was changed. Try /${name}-doctor fix again when it is done.`
 
 /** The lines of `git worktree prune --dry-run` (git says each on stderr, "Removing worktrees/x: ..."). */
 export const pruneLines = (out: string): string[] =>

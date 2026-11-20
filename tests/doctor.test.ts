@@ -7,7 +7,7 @@ import { oldBackups, parseDoctorArgs, backupIds } from '../hooks/core/doctor'
 import { doctor } from '../hooks/app/doctor'
 import { runCommand, COMMANDS } from '../hooks/app/symcc'
 import { runTool, TOOLS } from '../hooks/app/tools'
-import { S } from '../hooks/app/state'
+import { S, finishing } from '../hooks/app/state'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
 import { test } from './reset'
 import { fakeHost, done } from './fake-host'
@@ -219,13 +219,50 @@ test('T-676: fix with ids cleans up only those; an id no longer offered is skipp
   expect(w.branches.size).toBe(5)
 })
 
-test('T-676: the doctor does nothing while a merge is in progress', async () => {
+test('T-684: during a merge the doctor still lists (leaving out the merging task) and changes nothing', async () => {
+  // T-7 is being merged on the board: its folder and branch are marked "being merged", never offered
+  const tasks = [task('T-2', 'done'), task('T-5', 'done'), task('T-7', 'doing', { finishing: new Date().toISOString() })]
+  const w = world({ tasks })
+  const text = await doctor(w.host, '')
+  expect(text).toContain("A merge is in progress (T-7's work is being checked and merged): this is only the list; /symcc-doctor fix waits until it is done.")
+  expect(text).toContain('m-1101-1000  old migration backup')
+  expect(text).toContain('w-T-5  folder .symcc/worktrees/T-5/ (T-5 is done)')
+  expect(text).toContain('b-T-2  branch symcc/T-2')
+  expect(text).toContain('- folder .symcc/worktrees/T-7/ (T-7 is being merged), left alone')
+  expect(text).toContain('- branch symcc/T-7 (T-7 is being merged), left alone')
+  expect(text).not.toContain('w-T-7')
+  expect(text).not.toContain('b-T-7')
+  expect(w.writes).toEqual([])
+  // a done task this copy is merging now (in `finishing`): its folder and branch are not offered either
+  const m = world()
+  finishing.add('T-5')
+  const mine = await doctor(m.host, '')
+  expect(mine).toContain("A merge is in progress (T-5's work is being checked and merged)")
+  expect(mine).toContain('- folder .symcc/worktrees/T-5/ (T-5 is being merged), left alone')
+  expect(mine).not.toContain('w-T-5')
+  expect(mine).not.toContain('b-T-5')
+  expect(mine).toContain('b-T-2  branch symcc/T-2')
+  finishing.clear()
+  expect(m.writes).toEqual([])
+})
+
+test('T-684: during a merge, fix changes nothing and says which merge runs (the list is still shown)', async () => {
   const w = world({ tasks: [task('T-2', 'done'), task('T-9', 'doing', { finishing: new Date().toISOString() })] })
-  expect(await doctor(w.host, 'fix')).toContain("doesn't run while a merge is in progress (T-9's work is being checked and merged)")
+  const said = await doctor(w.host, 'fix')
+  expect(said).toContain("doesn't fix anything while a merge is in progress (T-9's work is being checked and merged); nothing was changed. Try /symcc-doctor fix again when it is done.")
+  expect(said).toContain('b-T-2  branch symcc/T-2')
+  expect(said).not.toContain('doctor cleaned up')
   const g = world()
   g.setMerging(true)
-  expect(await doctor(g.host, 'fix')).toContain('git is in the middle of a merge')
+  const git = await runTool(g.host, 'doctor', { fix: 'all' })
+  expect(git).toContain("doesn't fix anything while a merge is in progress (git is in the middle of a merge in the project folder)")
+  expect(git).toContain('w-T-5  folder')
   expect([...w.writes, ...g.writes]).toEqual([])
+  expect(g.branches.size).toBe(6)
+  // once the merge is done, the same fix works as before
+  g.setMerging(false)
+  expect(await doctor(g.host, 'fix')).toContain('cleaned up 7 of 7')
+  expect(g.dirs.has(`${D}/worktrees/T-5`)).toBe(false)
 })
 
 test('T-676: the lead tool, the command and the words', async () => {
