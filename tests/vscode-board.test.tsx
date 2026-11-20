@@ -707,10 +707,12 @@ test('T-590: a waiting question that starts with "after you …" is a normal lon
   await ui.unmount()
 })
 
-test('T-644: paneWidth: VS Code takes the wider of the pane and the surface, and a wide default when it tells neither', () => {
+test('T-644: paneWidth: VS Code takes the pane width, the surface width only when the pane tells none, and a wide default when it tells neither', () => {
   expect(paneWidth(true, undefined, undefined)).toBe(VS_WIDE)
   expect(VS_WIDE).toBeGreaterThanOrEqual(150)
-  expect(paneWidth(true, 60, 140)).toBe(140)
+  // a pane docked beside the transcript is narrower than the whole surface: its own width wins
+  expect(paneWidth(true, 60, 140)).toBe(60)
+  expect(paneWidth(true, 40, 160)).toBe(40)
   expect(paneWidth(true, undefined, 120)).toBe(120)
   expect(paneWidth(true, 90, undefined)).toBe(90)
   expect(paneWidth(true, 0, undefined)).toBe(VS_WIDE)
@@ -748,8 +750,8 @@ test('T-644: in VS Code a wide panel shows a long title whole on one line with i
     await ui.unmount()
   }
   // narrow: the title is cut with "…", the state stays between the ID and the title
-  for (const bodyColumns of [25, 40]) {
-    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+  for (const [bodyColumns, viewport] of [[25], [40], [40, { columns: 160, rows: 40 }]] as [number, { columns: number; rows: number }?][]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, ...(viewport ? { viewport } : {}), surface: 'vscode' })
     const row = await rowText(ui, 'T-401')
     expect(row, `width ${bodyColumns}`).toMatch(/^T-401 ▶ 2m\s+Engine\S*( \S+)*…/)
     expect(row.length, `width ${bodyColumns}`).toBeLessThanOrEqual(vsRowRoom(bodyColumns))

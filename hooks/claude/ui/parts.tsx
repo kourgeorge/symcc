@@ -22,15 +22,16 @@ export type PaneEvent = Parameters<PaneHook>[1]
  *  there; the panel's own CSS clips what is really too wide. */
 export const VS_WIDE = 200
 
-/** The columns a board page is laid out in: the pane's `bodyColumns` (60 when it gives none). In VS Code the wider of
- *  that and the surface's measured columns, and VS_WIDE when it gives neither: never a small made-up column count,
- *  which cut every row in a wide panel after about 30 characters (T-644). Never under 20. */
+/** The columns a board page is laid out in: the pane's `bodyColumns` (60 when it gives none). In VS Code the pane's own
+ *  `bodyColumns` when given (the surface's `viewport.columns` is the whole surface, wider than a docked pane), else the
+ *  surface's columns, and VS_WIDE when it gives neither: never a small made-up column count, which cut every row in a
+ *  wide panel after about 30 characters (T-644). Never under 20. */
 export const paneWidth = (vscode: boolean, bodyColumns: number | undefined, viewColumns: number | undefined): number => {
   const given = (n: number | undefined) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : undefined)
   const body = given(bodyColumns)
   const view = given(viewColumns)
   if (!vscode) return Math.max(20, body ?? 60)
-  return Math.max(20, body === undefined && view === undefined ? VS_WIDE : Math.max(body ?? 0, view ?? 0))
+  return Math.max(20, body ?? view ?? VS_WIDE)
 }
 
 /** What every page of the board panel draws with: the elements, the view, and the shared pieces (banner, tabs, key hints, text). */
