@@ -896,12 +896,13 @@ unchanged.
 
 ## Tracing a task back
 
-Every task records who made it, why, and your words that started it. Open the board
-with `/symcc`, or one task with `/symcc-task T-3`: the `from:` line says, for example,
-`from: owner — “add a search command…”` or `from: scout bugs`, and the history lists each
-try. Every merge commit starts with the task ID, so `git log --grep "T-3"` finds the work
-for a task, and the ID on a commit takes you back to the task and your request. Tasks made
-before this was kept show `from: unknown`.
+Every task records who made it, why, and the words that started it.
+
+Open the board with `/symcc`, or one task with `/symcc-task T-3`. The `from:` line says, for
+example, `from: owner — “add a search command…”` or `from: scout bugs`. The history lists each try.
+
+Every merge commit starts with the task ID. So `git log --grep "T-3"` finds the work for a
+task, and the ID on a commit takes you back to the task and your request.
 
 ## Where to see what a task did
 
@@ -923,8 +924,8 @@ before this was kept show `from: unknown`.
   everything not done, dropped or backlog) and `search` (words, matched the same way as the
   board panel's `f` search) narrow the list.
 - **The report files.** Every try's full final answer (the worker's hand-back, also
-  when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
-  Tasks from before this was kept say "no saved report".
+  also when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text,
+  up to 50 KB; longer ones are cut, and the file says so).
 - **The research note.** When a task's merged work adds or changes a file under
   `docs/research/`, the task page shows it in Details as `Research: docs/research/<file>.md`.
 - **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
@@ -956,13 +957,16 @@ Two things listen today:
   failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
   list a retrying worker sees, so they never push out what went wrong.
 
-Code that wants to know (a host, a future feature) calls `onTaskEvent(fn)` from
-`hooks/app/events.ts`: `fn` gets the events of each save, and the call answers a function
-that stops listening. The events come from `phaseEvents` in `hooks/core/events.ts` (pure, the
-same on every host); `writeBoard` in `hooks/app/store.ts` is the one place every board save
-goes through. A listener that fails never stops the save; you are told once. Listeners are
-called after the board lock is let go, so a listener may change the board itself (the
-activity log is written while the lock is still held).
+For developers: code that wants these events calls `onTaskEvent(fn)` from
+`hooks/app/events.ts`. `fn` gets the events of each save, and the call returns a function that
+stops listening.
+
+The events come from `phaseEvents` in `hooks/core/events.ts` (pure, the same on every host).
+`writeBoard` in `hooks/app/store.ts` is the one place every board save goes through.
+
+A listener that fails never stops the save; you are told once. Listeners run after the board
+lock is let go, so a listener may change the board itself. (The activity log is written while
+the lock is still held.)
 
 ## Scouts
 
@@ -1116,21 +1120,25 @@ get through. There is no sandbox yet.
 
 **Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
 `add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
-under `/var/folders/...`), when every folder the command acts in is a plain literal path:
+under `/var/folders/...`). Every folder the command acts in must be a plain literal path:
 `git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m` (the `cd` joined
-by `&&`). A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
+by `&&`).
+
+A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
 told from the text (`$TMPDIR`, `$d`, `$(mktemp -d)`, `~`, `..`, a glob, no `-C` or `cd` while the
 shell is not in the temp folder, a `cd` with a word before it such as `builtin cd`), stays refused,
 and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
 `config -f` file outside the scratch folder, and any word with a space after the git command (a
 command given in quotes, as in `rebase -x '...'`; the message of `commit`, `tag`, `merge`, `notes`
-or `stash -m` and `--author=` are fine); scouts stay read-only. When symcc stops an agent process it
-started earlier (after a reload or a crash), it first checks that the process is still that agent
-(same program, started at about the recorded time), so a process that took over a reused number is
-never stopped. This rule stops honest mistakes; it
-is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
+or `stash -m` and `--author=` are fine); scouts stay read-only.
+
+This rule stops honest mistakes; it is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
 `sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
 is the accepted risk and is not checked further.
+
+Separately, when symcc stops an agent process it started earlier (after a reload or a crash),
+it first checks that the process is still that agent (same program, started at about the
+recorded time). A process that took over a reused number is never stopped.
 
 - **OK:** the task joins the merge queue: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
@@ -1217,7 +1225,7 @@ Roles page (Enter opens a kind, `n` adds a new one, `b` goes back).
 - **Off** means the lead never picks the kind for a new task. A task that already has it keeps
   it. `change` and `investigation` can't be turned off. **On** turns it back.
 
-A separate workflow for each kind was designed but is not built; the owner chose against it. See
+A separate workflow for each kind was designed but never built, by choice. See
 [the old design](research/task-kinds-and-workflows.md) for the history.
 
 ---
@@ -1245,8 +1253,6 @@ skills: [code-review]
   the word into its own tools: in Claude Code, `web` is WebSearch and WebFetch, on top of Read,
   Edit, Write, Glob, Grep and Bash, and the task starts as the `symcc:worker-web` worker type;
   other roles keep the usual tools.
-- Role files from before that name Claude Code's tools (`tools: WebSearch, WebFetch`) are
-  changed to `tools: web` once, the first time symcc reads them.
 - The built-in roles live in the plugin's `roles/` folder: `general`, `docs`, `refactor`,
   `researcher`, `security` and `tester`.
 - `researcher` is for "find out whether / how ..." tasks. The worker reads the project, the
@@ -1306,20 +1312,28 @@ in the board panel and press `l` (Role) to pick one. That works on a task to do,
 failed or in the backlog. The board list shows a role at the right end
 of the task's row (`tester`); `general` shows nothing.
 
-When a task is doing and this is not its first try, the board says which try it is: `(2)`
-right after the time in its row, in the band above the prompt and in the board's task list
-(terminal, VS Code and OpenCode; dim, from `(3)` on in the warning colour), `T-5 doing (try 2)`
-in the status line, and `T-5 doing · try 2/3` in the lead's
-board (the `/3` shows the limit while the try is an automatic retry after failing tests).
-A first try shows no mark. The time in a doing task's row is the total work time of all its
-tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` (1 hour 40 over all
-three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
-step the step's icon takes the place of `▶`: `T-5 ⊛ 9m` (see "What a task shows on its way to
-the merge"). This is the
-same number as the task page's "Time and cost" total: each try's time from start to end, added
-up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between
-tries is not counted. When a row is short of room, the time is left out, then the try. When the status line is short of room, the try marks are left out
-first, so failed tasks and reviews always stay in view.
+**Which try is it?** When a task is doing and this is not its first try, the board says so. A
+first try shows no mark.
+
+- In a task's row (the band above the prompt and the board's task list in the terminal, VS
+  Code and OpenCode): `(2)` right after the time. It is dim, and from `(3)` on it uses the
+  warning colour.
+- In the status line: `T-5 doing (try 2)`.
+- In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
+  automatic retry after failing tests.
+
+**How long has it worked?** The time in a doing task's row is the total work time of all its
+tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` is 1 hour 40 over three
+tries. On the first try it is just that try's time, `T-5 ▶ 15m`. During a check step the
+step's icon takes the place of `▶`: `T-5 ⊛ 9m` (see "What a task shows on its way to the
+merge").
+
+This is the same number as the "Time and cost" total on the task page: each try's time from
+start to end, added up. Time while the task was paused, waiting for you, waiting on other
+tasks, or in todo between tries is not counted.
+
+When a row is short of room, the time is left out first, then the try. When the status line
+is short of room, the try marks go first, so failed tasks and reviews always stay in view.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big
 enough to stand alone, the lead splits it into one task per role and links them with `after`:
