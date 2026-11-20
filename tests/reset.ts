@@ -15,6 +15,7 @@ import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/app/workers'
 import { saidNeedsYou } from '../hooks/app/voice'
 import { guardLogged } from '../hooks/app/ask'
 import { resetBackground } from '../hooks/claude/background'
+import { resetClaudeSelf } from '../hooks/claude/host'
 import { resetDebriefs } from '../hooks/app/debrief'
 import { resetEvidence } from '../hooks/app/evidence'
 
@@ -38,6 +39,7 @@ export function resetPlugin() {
   resetMergeLine()
   resetLogo()
   resetBackground()
+  resetClaudeSelf()
   resetDebriefs()
   resetEvidence()
   for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
