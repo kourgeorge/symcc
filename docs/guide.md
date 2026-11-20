@@ -172,8 +172,9 @@ briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` 
 question on the board by itself:
 
 - A question about a task that waits for you (a review, an answered investigation, a
-  worker's question or file request, more time) names the task (T-5) and is tied to that
-  task's own board question: no extra `Q-` entry.
+  worker's question or file request, more time) has the task's id (T-5) as its header and is
+  tied to that task's own board question: no extra `Q-` entry. A task id only mentioned in
+  the question's text doesn't tie it.
 - Any other question becomes a `Q-` question with the same text and choices (or, when the
   lead already put that exact question on the board, that one is used).
 
@@ -183,7 +184,11 @@ answer as the pop-up's answer (no extra board update for it). Answer in the pop-
 `Q-` question closes with your answer, or your answer goes into the task as the board's
 buttons would put it (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a
 note; a reject or "ask more" still needs the lead, which gets your reason). Close the pop-up
-without answering and the question stays on the board. The pop-up holds at most 4 choices,
+without answering and the question stays on the board. When one pop-up holds several
+questions and one of them can't go on the board (say a free-text one), your board answers are
+kept but the pop-up stays open for the rest. If you type your own words instead of picking,
+they answer the question when the pop-up has only one; with several, the lead is told which
+board questions are still open. The pop-up holds at most 4 choices,
 so a question with more shows the first 3 plus "the rest on the board" (or type yours under
 Other); picking "the rest on the board" is no answer, so the question stays open on the board
 for you to answer there. Workers never get the pop-up. On a host with no pop-up the lead puts the question on

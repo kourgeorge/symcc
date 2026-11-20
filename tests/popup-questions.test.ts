@@ -154,7 +154,7 @@ test("a question about a task waiting for the owner is tied to that task's board
   await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
   // the board answers first (the task page's buttons call boardAnswered)
   const d = dialog()
-  const r = popupCall(w.host, undefined, { questions: [ask('T-1 asks: red or blue?', ['Red', 'Blue'])] }, d.open, w.notice)
+  const r = popupCall(w.host, undefined, { questions: [ask('T-1 asks: red or blue?', ['Red', 'Blue'], { header: 'T-1' })] }, d.open, w.notice)
   await pause(0)
   expect(w.board().questions ?? []).toEqual([])
   expect(w.notices).toEqual(['or answer on the board (T-1)'])
@@ -164,7 +164,7 @@ test("a question about a task waiting for the owner is tied to that task's board
 
   // the dialog answers first: the answer goes into the task, as the board's answer would
   const d2 = dialog()
-  const r2 = popupCall(w.host, undefined, { questions: [ask('T-1 asks: red or blue?', ['Red', 'Blue'])] }, d2.open, w.notice)
+  const r2 = popupCall(w.host, undefined, { questions: [ask('T-1 asks: red or blue?', ['Red', 'Blue'], { header: 'T-1' })] }, d2.open, w.notice)
   await pause(0)
   d2.answer({ 'T-1 asks: red or blue?': 'Red' })
   const out = (await r2) as { context: string[] }
@@ -178,7 +178,7 @@ test("a file request answered Allow in the pop-up allows the files", async () =>
   const w = world()
   await waitingTask(w.host as never, { asked_files: ['b.ts'], note: 'asks to change b.ts' })
   const d = dialog()
-  const r = popupCall(w.host, undefined, { questions: [ask('T-1 wants to change b.ts. Allow?', ['Allow', "Don't allow"])] }, d.open, w.notice)
+  const r = popupCall(w.host, undefined, { questions: [ask('T-1 wants to change b.ts. Allow?', ['Allow', "Don't allow"], { header: 'T-1' })] }, d.open, w.notice)
   await pause(0)
   d.answer({ 'T-1 wants to change b.ts. Allow?': 'Allow' })
   expect(((await r) as { context: string[] }).context[0]).toContain('files allowed (b.ts)')
@@ -218,7 +218,7 @@ test('picking "the rest on the board" in the pop-up is no answer: the Q-n or the
   const w2 = world()
   await waitingTask(w2.host as never, { question: 'Which color?', options: ['Red', 'Blue', 'Green', 'Pink', 'Gray'] })
   const d2 = dialog()
-  const r2 = popupCall(w2.host, undefined, { questions: [ask('T-1 asks: which color?', ['Red', 'Blue', 'Green', 'the rest on the board'])] }, d2.open, w2.notice)
+  const r2 = popupCall(w2.host, undefined, { questions: [ask('T-1 asks: which color?', ['Red', 'Blue', 'Green', 'the rest on the board'], { header: 'T-1' })] }, d2.open, w2.notice)
   await pause(0)
   d2.answer({ 'T-1 asks: which color?': 'the rest on the board' })
   expect(((await r2) as { context: string[] }).context[0]).toContain('T-1 stays open on the board')
@@ -243,4 +243,89 @@ test('repeated or blank option labels are dropped before the board question is m
   expect(openQuestions(w2.board()).map(q => q.options)).toEqual([['A', 'a', 'B']])
   d2.answer({ 'Which?': 'B' })
   await r2
+})
+
+test("only a header that is exactly the task's id ties a pop-up to it; an id in the question text doesn't", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const d = dialog()
+  const q = 'Should I start the docs task first, while T-1 waits for you?'
+  const r = popupCall(w.host, undefined, { questions: [ask(q, ['Yes, start it', 'No, wait'])] }, d.open, w.notice)
+  await pause(0)
+  // a Q-n of its own, not T-1's question
+  expect(w.notices).toEqual(['or answer on the board (Q-1)'])
+  d.answer({ [q]: 'Yes, start it' })
+  expect(((await r) as { context: string[] }).context).toEqual(['symcc closed Q-1 on the board with the owner\'s answer "Yes, start it".'])
+  const t = w.board().tasks[0]!
+  expect(t.status).toBe('waiting')
+  expect(t.details).not.toContain('Yes, start it')
+  // a header with more than the id doesn't tie it either
+  const d2 = dialog()
+  const r2 = popupCall(w.host, undefined, { questions: [ask('Red or blue for it?', ['Red', 'Blue'], { header: 'T-1 color' })] }, d2.open, w.notice)
+  await pause(0)
+  expect(w.notices[1]).toBe('or answer on the board (Q-2)')
+  d2.answer({})
+  await r2
+})
+
+test('with an untied question in the call, a board answer is kept but the dialog stays open for the rest', async () => {
+  const w = world()
+  const d = dialog()
+  const questions = [ask('Which color?', ['Red', 'Blue']), { question: 'Anything else to add?', header: 'More', kind: 'text', options: [], multiSelect: false }]
+  const r = popupCall(w.host, undefined, { questions }, d.open, w.notice)
+  let settled = false
+  void r.then(() => (settled = true))
+  await pause(0)
+  expect(await answerOnBoard(w.host, 'Q-1', 'Blue')).toBe("Q-1 answered: Blue; the lead's pop-up got it")
+  await pause(0)
+  expect(settled).toBe(false)
+  d.answer({ 'Which color?': 'Red', 'Anything else to add?': 'no' })
+  const out = (await r) as unknown as { ref: string; result: { answers: Record<string, string> }; context: string[] }
+  // the dialog's own result, with the board's answer for Q-1 in the context
+  expect(out.ref).toBe('r1')
+  expect(out.result.answers).toEqual({ 'Which color?': 'Red', 'Anything else to add?': 'no' })
+  expect(out.context).toEqual(['Q-1 was already answered on the board: "Blue" (that answer stands for it).'])
+  expect(w.board().questions![0]).toMatchObject({ answer: 'Blue', answered_by: 'board' })
+  await pause(0)
+  expect(w.toLead).toEqual([])
+})
+
+/** A fake next(e) whose dialog the owner answers by typing (only `response`, no answers). */
+const typedDialog = (response: string) => {
+  let answer = () => undefined as void
+  const shown = new Promise<{ ref: number; result: { questions: unknown[]; answers: Record<string, string>; response: string }; text: string }>(res => (answer = () => res({ ref: 1, result: { questions: [], answers: {}, response }, text: 'x' })))
+  return { open: () => shown, answer: () => answer() }
+}
+
+test("a typed answer (only response) answers a one-question call; with more the lead is told what is still open", async () => {
+  const w = world()
+  const d = typedDialog('Green please')
+  const r = popupCall(w.host, undefined, { questions: [ask('Which color?', ['Red', 'Blue'])] }, d.open, w.notice)
+  await pause(0)
+  d.answer()
+  const out = (await r) as unknown as { ref: number; context: string[] }
+  expect(out.ref).toBe(1)
+  expect(out.context).toEqual(['symcc closed Q-1 on the board with the owner\'s answer "Green please".'])
+  expect(w.board().questions![0]).toMatchObject({ answer: 'Green please', answered_by: 'chat' })
+
+  // a task's question: the typed words go into the task
+  const w2 = world()
+  await waitingTask(w2.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const d2 = typedDialog('Green please')
+  const r2 = popupCall(w2.host, undefined, { questions: [ask('T-1 asks: red or blue?', ['Red', 'Blue'], { header: 'T-1' })] }, d2.open, w2.notice)
+  await pause(0)
+  d2.answer()
+  expect(((await r2) as { context: string[] }).context[0]).toMatch(/^symcc put the owner's answer into T-1: /)
+  expect(w2.board().tasks[0]!.status).not.toBe('waiting')
+
+  // two questions: which one the words answer is unknown, so both stay open and the lead is told
+  const w3 = world()
+  const d3 = typedDialog('Green, and the top')
+  const r3 = popupCall(w3.host, undefined, { questions: [ask('Which color?', ['Red', 'Blue']), ask('Which part?', ['Top', 'Side'])] }, d3.open, w3.notice)
+  await pause(0)
+  d3.answer()
+  const out3 = (await r3) as { context: string[] }
+  expect(out3.context.length).toBe(1)
+  expect(out3.context[0]).toContain('Q-1, Q-2 still wait on the board')
+  expect(openQuestions(w3.board()).map(q => q.id)).toEqual(['Q-1', 'Q-2'])
 })

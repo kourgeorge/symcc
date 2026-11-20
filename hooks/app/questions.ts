@@ -24,10 +24,10 @@ export const optionsVia = (n: number): string =>
     ? `with ${S.W.askPopup}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "${REST_ON_BOARD}", or the owner types one under Other)` : ''}`
     : 'as numbered plain chat text'
 
-/** After "If they answer on the board first …": with a pop-up, one that names task `id` is tied to its board question (T-579); '' with none. */
+/** After "If they answer on the board first …": with a pop-up, one whose header is task `id` is tied to its board question (T-579); '' with none. */
 export const popupTied = (id: string): string =>
   S.W.askPopup
-    ? ` Name ${id} in the ${S.W.askPopup} question: ${S.N.name} then ties the pop-up to ${id}'s board question, so whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into ${id} for you (the tool result says what was done, and what is left for you).`
+    ? ` Set the ${S.W.askPopup} question's header to exactly ${id}: ${S.N.name} then ties the pop-up to ${id}'s board question, so whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into ${id} for you (the tool result says what was done, and what is left for you).`
     : ''
 
 /** The question tool's actions. */
@@ -113,13 +113,15 @@ export function boardAnswered(id: string, answer: string): boolean {
 /** Does task `t` wait for the owner's answer: it asks something (taskAsks), or is in review? */
 const waitsForOwner = (t: BoardTask) => asksOwner(t) || t.status === 'review'
 
-/** The task waiting for the owner that pop-up question `q` names (T-5, T5), or undefined. */
+/**
+ * The task waiting for the owner that pop-up question `q` is about: its header is exactly that task's id (T-5), or
+ * undefined. A task id only mentioned in the question text doesn't count (it may be about something else).
+ */
 export function popupTask(b: Board, q: Pick<PopupQuestion, 'question' | 'header'>): string | undefined {
-  for (const m of `${q.question} ${q.header ?? ''}`.matchAll(/\bT-?(\d+)\b/gi)) {
-    const t = find(b, `T-${m[1]}`) as BoardTask | undefined
-    if (t && waitsForOwner(t)) return t.id
-  }
-  return undefined
+  const m = /^T-(\d+)$/i.exec(typeof q.header === 'string' ? q.header.trim() : '')
+  if (!m) return undefined
+  const t = find(b, `T-${m[1]}`) as BoardTask | undefined
+  return t && waitsForOwner(t) ? t.id : undefined
 }
 
 /** The pop-up questions of a call's input (`questions`), each with a text; others left out. */
@@ -215,6 +217,9 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
   const links = await linkQuestions(host, qs)
   const tied = qs.flatMap((q, i) => (links[i] ? [{ q, link: links[i]! }] : []))
   if (!tied.length) return open()
+  // the board may close the dialog only when it can answer every question in it: with an untied one (e.g. free
+  // text) board answers are kept, but the dialog stays open for the rest
+  const boardCloses = tied.length === qs.length && qs.length === (Array.isArray(input.questions) ? input.questions.length : 0)
   // the board's answers, by question text (as the pop-up's result keys them)
   const fromBoard: Record<string, string> = {}
   const ids = [...new Set(tied.map(x => x.link.id))]
@@ -237,15 +242,28 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
     const opened = open()
     // once the board has won, the dialog is closed under it: how it ends no longer matters
     opened.catch(() => undefined)
-    won = await Promise.race([opened.then(r => ({ dialog: r })), boardDone.then(() => ({ board: true as const }))])
+    const dialog = opened.then(r => ({ dialog: r }))
+    won = await (boardCloses ? Promise.race([dialog, boardDone.then(() => ({ board: true as const }))]) : dialog)
   } finally {
     for (const [id, take] of takers) if (popupWaits.get(id) === take) popupWaits.delete(id)
   }
   if ('board' in won)
     return { result: { questions: input.questions, answers: fromBoard }, context: [`The owner answered on the ${name} board (${ids.join(', ')}), which closed the pop-up; the board question is closed. Act on the answer and don't ask again.`] }
   const r = won.dialog
-  const answers = ((r as { result?: { answers?: unknown } } | null)?.result?.answers ?? {}) as Record<string, unknown>
+  const res = (r as { result?: { answers?: unknown; response?: unknown } } | null)?.result
+  const answers = { ...((res?.answers ?? {}) as Record<string, unknown>) }
+  const typed = typeof res?.response === 'string' ? res.response.trim() : ''
   const notes: string[] = []
+  // the owner typed instead of picking (only `response`, no answers): with one question that is its answer;
+  // with more, which one it answers is unknown, so the lead is told what is still open
+  if (typed && !Object.values(answers).some(a => typeof a === 'string' && a.trim())) {
+    if (qs.length === 1) answers[qs[0]!.question] = typed
+    else {
+      const open = [...new Set(tied.filter(x => fromBoard[x.q.question] === undefined).map(x => x.link.id))]
+      if (open.length)
+        notes.push(`The owner typed "${brief(typed)}" instead of picking, so ${name} could not tell which question it answers: ${open.join(', ')} still ${open.length === 1 ? 'waits' : 'wait'} on the board. Close ${open.length === 1 ? 'it' : 'them'} yourself from their words (${name} question action answer for a Q-n, ${name} change with answer, approve or reject for a task), or ask again.`)
+    }
+  }
   for (const { q, link } of tied) {
     const board = fromBoard[q.question]
     if (board !== undefined) {
