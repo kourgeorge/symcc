@@ -71,6 +71,33 @@ test('T-631: the task page Tries row shows the last try and the sum (one try: ju
   expect(page(3, bare)).toMatch(/^Tries:\s+3 · last: 6m · all: 17m$/)
 })
 
+test('T-643: a session that does not drive: a warning line under the banner and a warning mark in the band; doing rows run in the other session', () => {
+  const f = viewFile()
+  // T-1 was claimed a minute ago ("worker starting") and has no worker here
+  const fresh = new Date(NOW - 60_000).toISOString()
+  const view = (driving: boolean, updated_at = fresh): ViewFile => ({ ...f, view: { ...f.view, driving, working: [], tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, updated_at } : t)) } })
+  const warnLines = (g: ViewFile, w = 120) => panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.filter(l => l.some(s => s.color === 'warning' && s.text.startsWith('⚠')))
+  const full = '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.'
+  expect(warnLines(view(false)).map(lineText)).toEqual([full])
+  // narrow: a shorter form that fits
+  const narrow = warnLines(view(false), 40).map(lineText)
+  expect(narrow.length).toBe(1)
+  expect(narrow[0]!.length <= 40).toBe(true)
+  expect(narrow[0]).toContain('/symcc-drive')
+  // the band: the mark right after the brand, in the warning color; T-1's row says where it runs
+  const band = bandDraw(view(false), NOW, 120).lines
+  expect(band[0]![1]).toEqual({ text: ' ⚠ driven by another session', color: 'warning' })
+  expect(band.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — runs in the other session$/)
+  // claimed an hour ago and still not started there: it looks idle
+  expect(warnLines(view(false, AT), 140).map(lineText)).toEqual(['⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.'])
+  expect(bandDraw(view(false, AT), NOW, 120).lines[0]![1]!.text).toBe(' ⚠ driven by another session (it looks idle)')
+  // the driving session: neither, and the row keeps its own note
+  expect(warnLines(view(true))).toEqual([])
+  const own = bandDraw(view(true), NOW, 120).lines
+  expect(own.map(lineText).join('\n')).not.toContain('⚠')
+  expect(own.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — worker starting$/)
+})
+
 test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {
@@ -240,14 +267,14 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // a waiting task: its question and the numbered choices, the last one the owner's own answer
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
-  expect(asks).toContain('  [2] postgres')
+  expect(asks).toContain('  2. postgres')
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'drop', 'needs review', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
   const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
   expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'pause', 'drop', 'needs review', 'back'])
   expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
-  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  [1] +30 min')
+  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  1. +30 min')
   // a waiting task whose finished work only waits for the owner's files: nothing to answer
   const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
   expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['merge now', 'drop', 'needs review', 'back'])
@@ -968,6 +995,10 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(s.find(l => /^› /.test(l))).toContain('mode')
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
+  // T-650: the sound set row, right after notify, with the set in use
+  expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('sound_set')
+  expect(s.find(l => l.includes('sound_set'))).toMatch(/sound_set +\d · default picked from the project name · 1 \/ 2 \/ 3/)
+  expect(panelLines({ ...f, view: { ...f.view, sound_set: 3 } as typeof f.view }, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140).lines.map(lineText).find(l => l.includes('sound_set'))).toMatch(/sound_set +3 · /)
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
@@ -1273,11 +1304,19 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const page = (id: string) => panelLines(f, { opened: id, cursor: 0 }, NOW, 100)
   // the choices are numbered lines, each with its click
   const d = page('Q-3')
-  const at = d.lines.map(lineText).indexOf('  [1] Once a day')
+  const at = d.lines.map(lineText).indexOf('  1. Once a day')
   expect(at).toBeGreaterThan(0)
   expect(d.hits[at]).toEqual({ choice: 1 })
-  expect(d.lines.map(lineText)).toContain(`  [3] ${OWN_ANSWER}`)
-  expect(page('T-4').lines.map(lineText)).toContain("  [2] Don't allow")
+  expect(d.lines.map(lineText)).toContain(`  3. ${OWN_ANSWER}`)
+  expect(page('T-4').lines.map(lineText)).toContain("  2. Don't allow")
+  // T-651: a long choice wraps under its text inside the width, and a click on any of its lines picks it
+  const long = { ...f, view: { ...f.view, questions: [{ id: 'Q-4', text: 'Cap?', options: ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it'], asked_at: AT }] } }
+  const narrow = panelLines(long, { opened: 'Q-4', cursor: 0 }, NOW, 40)
+  const first = narrow.lines.map(lineText).indexOf('  1. Invalid: doctor and run reject it')
+  expect(first).toBeGreaterThan(0)
+  expect(narrow.lines.map(lineText).slice(first, first + 4)).toEqual(['  1. Invalid: doctor and run reject it', "     (scout's suggestion)", '  2. Unlimited: run until another cap', '     stops it'])
+  expect(narrow.hits.slice(first, first + 4)).toEqual([{ choice: 1 }, { choice: 1 }, { choice: 2 }, { choice: 2 }])
+  expect(narrow.lines.map(lineText).every(l => l.length <= 40)).toBe(true)
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
   const slots: { append: string; render: (input: never) => unknown }[] = []
@@ -1314,9 +1353,9 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const back = () => board.press('back', 'ses_1')
   // Q-3: a right click does nothing; a left click on a choice answers it; the page says it was sent
   await openPage('Q-3')
-  await clickChoice('  [2] Once a week', 2)
+  await clickChoice('  2. Once a week', 2)
   expect(sent).toEqual([])
-  await clickChoice('  [2] Once a week')
+  await clickChoice('  2. Once a week')
   expect(rowEls(panel).some(r => r.text.includes('answer sent: Once a week'))).toBe(true)
   // the number key does the same; "Answer…" asks for a typed answer
   await board.press('1', 'ses_1')
@@ -1327,21 +1366,21 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   // T-3: its own options
   await openPage('T-3')
   expect(rowEls(panel).some(r => r.text.includes('answer sent'))).toBe(false)
-  await clickChoice('  [1] mysql')
+  await clickChoice('  1. mysql')
   await board.press('2', 'ses_1')
   await back()
   // T-1: more time
   await openPage('T-1')
-  await clickChoice('  [2] +60 min')
+  await clickChoice('  2. +60 min')
   await board.press('3', 'ses_1')
   await back()
   // T-4: Allow / Don't allow files
   await openPage('T-4')
-  await clickChoice('  [1] Allow')
+  await clickChoice('  1. Allow')
   await board.press('2', 'ses_1')
   // a typed answer left empty sends nothing
   answers.prompt = ''
-  await clickChoice(`  [3] ${OWN_ANSWER}`)
+  await clickChoice(`  3. ${OWN_ANSWER}`)
   expect(sent.map(x => `${x.name} ${x.text}`)).toEqual([
     'symcc-answer Q-3 Once a week',
     'symcc-answer Q-3 Once a day',
@@ -1791,8 +1830,9 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
   const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
-  // before OpenTUI lays the panel out, its height is the screen's less OpenCode's own lines
-  expect(shown(panel).length).toBe(200 - 2)
+  // before OpenTUI lays the panel out, its height isn't known (T-649): the panel has no padding, the footer comes
+  // right after the page
+  expect(shown(panel)).toEqual(panelLines(f, { opened: '', cursor: 0 }, NOW, 60).lines.map(lineText))
   ;(panel as El & { height?: number }).height = 22
   ;(panel.props.onSizeChange as () => void)()
   expect(shown(panel).length).toBe(22)
@@ -1818,6 +1858,48 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   expect(after).toEqual(panelLines(short, { opened: 'T-2', cursor: 0, scroll: board.state().scroll, rows: 22 }, NOW, 60).lines.map(lineText))
   expect(after.some(l => l.includes('step ') || l.includes('report line'))).toBe(false)
   board.stop()
+})
+
+test('T-649: a backlog and a doing task page show their footer with the buttons: with no height known, a small one, and a box taller than the screen', async () => {
+  const base = viewFile()
+  const f = { ...base, view: { ...base.view, tasks: base.view.tasks.map(t => (t.id === 'T-4' ? { ...t, status: 'backlog' } : t)) as ViewFile['view']['tasks'] } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  for (const [id, words] of [['T-4', ['o move to todo', 'x drop', 'b back']], ['T-1', ['p pause', 'x drop', 'b back']]] as const) {
+    const fc = fakeCtx({})
+    const board = startTui({ ...fc.ctx, renderer: { width: 120, height: 40 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+    const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 60).ids
+    for (let i = 0; i < ids.indexOf(id); i++) await board.press('down', 's')
+    await board.press('open', 's')
+    expect(board.state().opened).toBe(id)
+    const footerOk = (rows: string[]) => {
+      expect(rows.at(-2)).toBe('─'.repeat(60))
+      for (const w of words) expect(rows.at(-1)).toContain(w)
+    }
+    // no height known: no padding, the footer right after the page
+    const page = panelLines(f, { opened: id, cursor: 0 }, NOW, 60).lines.map(lineText)
+    expect(shown(panel)).toEqual(page)
+    footerOk(shown(panel))
+    // the footer is its own box that never shrinks, under a body box that does (the layout keeps it in sight)
+    const tree = (panel.kids.map(k => (typeof k === 'function' ? (k as () => unknown)() : k)) as El[])[0]!
+    const [body, foot] = tree.kids.flat() as El[]
+    expect(body!.props.flexShrink).toBe(1)
+    expect(body!.props.overflow).toBe('hidden')
+    expect(foot!.props.flexShrink).toBe(0)
+    expect(shown(foot)).toEqual(page.slice(-2))
+    // a small known height: exactly that many rows, the footer last
+    ;(panel as El & { height?: number }).height = 12
+    ;(panel.props.onSizeChange as () => void)()
+    expect(shown(panel).length).toBe(12)
+    footerOk(shown(panel))
+    // a box said to be taller than the screen is never trusted past the screen's height less OpenCode's lines
+    ;(panel as El & { height?: number }).height = 300
+    ;(panel.props.onSizeChange as () => void)()
+    expect(shown(panel).length).toBe(40 - 2)
+    footerOk(shown(panel))
+    board.stop()
+  }
 })
 
 test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and between words at the width, under its indent, keeping colors and hits', () => {

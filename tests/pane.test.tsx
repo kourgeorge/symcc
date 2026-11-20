@@ -73,6 +73,24 @@ test('the panel shows the board, newest task first, with their question', async 
   }
 })
 
+// T-643: the terminal panel of a session that doesn't drive: a warning line under the banner with how to take over
+test('T-643: the terminal panel shows the yellow "another session drives" line when not driving, and none when driving', async ($, on) => {
+  let driving = false
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [], mode: 'auto', test_commands: ['npm test'], driving } }, version: 1 } }))
+  const warn = async () => {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
+    // the line's colored part (the outer Text of the line matches too, with no color of its own)
+    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives this board/ })).find(x => x.props.color)
+    await ui.unmount()
+    return t
+  }
+  const t = await warn()
+  expect(t?.text).toBe('⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.')
+  expect(t?.props.color).toBe('warning')
+  driving = true
+  expect(await warn()).toBeUndefined()
+})
+
 test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('inactive')
@@ -121,7 +139,7 @@ test('the band above the prompt shows the busy workers and the scouts; when narr
   const soon = new Date(Date.now() + 38.2 * 60_000).toISOString()
   on('state.get', () => ({
     value: {
-      value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command'), task('T-4', 'todo', 'Docs')], working: [], scouts: [scout('gaps-bot', { next_run: soon }), scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [] } },
+      value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command'), task('T-4', 'todo', 'Docs')], working: [], scouts: [scout('gaps-bot', { next_run: soon }), scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [], driving: true } },
       version: 1,
     },
   }))
@@ -138,6 +156,40 @@ test('the band above the prompt shows the busy workers and the scouts; when narr
   const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 70 }, surface: 'terminal' })
   expect(await tight.find({ type: 'Text', text: /1\/3 workers · 1 doing · 1 to do $/ })).toBeDefined()
   await tight.unmount()
+})
+
+// T-643: a session that doesn't drive: a yellow mark right after the brand, and a claimed doing task's row says it runs
+// in the other session (not "starting at the next turn", which never comes here); "it looks idle" after 5 minutes.
+test('T-643: the band of a session that does not drive has a yellow "driven by another session" mark and "runs in the other session" rows', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const view = (driving: boolean, ago: number) => ({ tasks: [task('T-3', 'doing', 'Search command', { note: 'starting at the next turn', updated_at: iso(T0 - ago) }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], mode: 'auto', test_commands: [], driving })
+  let v = view(false, 60_000)
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: v }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const band = async (columns = 80) => {
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: columns }, surface: 'terminal' })
+    const all = await ui.findAll({ type: 'Text' })
+    await ui.unmount()
+    return all
+  }
+  const mark = (all: Awaited<ReturnType<typeof band>>) => all.find(t => /^ ⚠ driven by another session/.test(String(t.text)))
+  let all = await band()
+  expect(mark(all)?.text).toBe(' ⚠ driven by another session')
+  expect(mark(all)?.props.color).toBe('warning')
+  expect(all.some(t => t.text === ' — runs in the other session')).toBe(true)
+  expect(all.some(t => /starting at the next turn/.test(String(t.text)))).toBe(false)
+  // still there when the band is narrow: it comes right after the brand
+  expect(mark(await band(50))).toBeDefined()
+  // claimed 6 minutes ago and still not started there: it looks idle
+  v = view(false, 6 * 60_000)
+  expect(mark(await band())?.text).toBe(' ⚠ driven by another session (it looks idle)')
+  // the driving session: no mark, and the row keeps its own note
+  v = view(true, 60_000)
+  all = await band()
+  expect(mark(all)).toBeUndefined()
+  expect(all.some(t => t.text === ' — starting at the next turn')).toBe(true)
 })
 
 test("the band's doing rows show the list's state and time, lined up, with the try from try 2 on (T-455)", async ($, on) => {
@@ -516,11 +568,12 @@ test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on key
   for (const [n, label] of [[1, 'Allow'], [2, "Don't allow"], [3, 'Answer…']] as const) {
     const b = await ui.find({ key: `choice-${n}` })
     expect(b?.props.label).toBe(label)
-    expect(b?.props.hotkey).toBe(String(n))
+    expect(b?.text).toBe(`${n}. ${label}`)
+    expect((await ui.find({ key: `choice-key-${n}` }))?.props.hotkey).toBe(String(n))
   }
   // the keys are told once, in the dim line under the buttons, not again in the bottom key list (T-513)
   expect(await ui.find({ type: 'Text', text: 'keys 1-3 pick a choice' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: / allow/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^[\d-]+ allow/ })).toBeUndefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
@@ -578,12 +631,57 @@ test('the answer buttons show only the choice (no number key inside); keys 1-5 s
   for (const [i, label] of [...options, 'Answer…'].entries()) {
     const b = await ui.find({ key: `choice-${i + 1}` })
     expect(b?.props.label).toBe(label)
-    expect(b?.props.hotkey).toBe(String(i + 1))
+    expect(b?.props.hotkey).toBe(undefined)
+    expect((await ui.find({ key: `choice-key-${i + 1}` }))?.props.hotkey).toBe(String(i + 1))
   }
   expect(await ui.find({ type: 'Text', text: 'keys 1-5 pick a choice' })).toBeDefined()
   await ui.press({ key: 'choice-2' })
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
   expect(saved[0].tasks[0].history.at(-1)?.text).toBe('the owner answered: “Once a day”')
+  await ui.unmount()
+})
+
+test('T-651: the choices are numbered lines like the question pop-up; a long one wraps inside the box, and a click on any of its lines or its number key answers', async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const board = { tasks: [task('T-2', 'waiting', 'Caps', { question: 'What should a cap of 0 mean?', options })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 44 }, surface: 'terminal' })
+  // each choice in its own Box, one line under the other (a column), numbered, wrapped to the 40 columns inside the box
+  const rows = await ui.find({ key: 'answer-choices' })
+  expect(rows?.props.flexDirection).toBe('column')
+  const shown = async (key: string) => !!(await ui.find({ key }))
+  expect([await shown('choice-row-1'), await shown('choice-row-2'), await shown('choice-row-3'), await shown('choice-row-4')]).toEqual([true, true, true, false])
+  expect([await shown('choice-1-line-2'), await shown('choice-1-line-3'), await shown('choice-2-line-2'), await shown('choice-3-line-2')]).toEqual([true, false, true, false])
+  const text = async (key: string) => (await ui.find({ key }))?.text
+  expect(await text('choice-1')).toBe('1. Invalid: doctor and run reject it')
+  expect(await text('choice-1-line-2')).toBe("   (scout's suggestion)")
+  expect(await text('choice-2')).toBe('2. Unlimited: run until another cap')
+  expect(await text('choice-2-line-2')).toBe('   stops it')
+  expect(await text('choice-3')).toBe('3. Answer…')
+  for (const key of ['choice-1', 'choice-1-line-2', 'choice-2', 'choice-2-line-2', 'choice-3']) expect((await text(key))!.length <= 40, key).toBe(true)
+  // no "[ … ]" around them: plain lines, and the number keys on hidden Buttons
+  expect((await ui.find({ key: 'choice-1-line-2' }))?.props.plain).toBe(true)
+  expect((await ui.find({ key: 'choice-key-1' }))?.props.hotkey).toBe('1')
+  expect((await ui.find({ key: 'choice-key-2' }))?.props.hotkey).toBe('2')
+  const answered = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, t]) => JSON.parse(t).tasks[0].history.at(-1)?.text)
+  // a click on the second line of choice 1 answers with choice 1
+  await ui.press({ key: 'choice-1-line-2' })
+  expect(answered()).toEqual([`the owner answered: “${options[0]}”`])
+  await ui.unmount()
+})
+
+test('T-651: on a task page the number key answers too (its hidden Button sends the same answer)', async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const board = { tasks: [task('T-2', 'waiting', 'Caps', { question: 'What should a cap of 0 mean?', options })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'choice-key-2' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, t]) => JSON.parse(t))
+  expect(saved[0].tasks[0].history.at(-1)?.text).toBe(`the owner answered: “${options[1]}”`)
   await ui.unmount()
 })
 
@@ -980,7 +1078,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(tasksTab?.props.color).toBe('inactive')
   for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'sound_set', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -1029,7 +1127,7 @@ test('Settings groups its rows under 5 headings, in order; with every group open
     'Checks before merging': ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
     Workers: ['Roles', 'Kinds'],
     Scouts: ['scout_findings'],
-    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
+    'Board and alerts': ['notify', 'sound_set', 'open_on_start', 'archive_days'],
   }
   titles.forEach((t, i) => {
     const from = at[i]!
@@ -1100,7 +1198,7 @@ test('a closed group summary is cut to fit', () => {
   const board = SETTING_GROUPS.find(g => g.title === 'Board and alerts')!
   expect(groupSummary(board, { archive_days: 0 }, 80)).toContain('never archive')
   expect(groupSummary(board, { archive_days: 0 }, 80)).not.toContain('archive after')
-  expect(groupSummary(board, { archive_days: 1 }, 80)).toContain('archive after 1 day')
+  expect(groupSummary(board, { archive_days: 1 }, 100)).toContain('archive after 1 day')
   // a long title is kept whole even when narrow; the values that don't fit are left out
   const checks = SETTING_GROUPS.find(g => g.title === 'Checks before merging')!
   expect(groupSummary(checks, { test_commands: ['npm test'] }, 20)).toBe('Checks before merging')

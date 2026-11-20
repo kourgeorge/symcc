@@ -18,6 +18,22 @@ import { type VsKit, logoWidthFor, vsBanner, vsFooter, vsTabs } from './vscode'
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
 export type PaneEvent = Parameters<PaneHook>[1]
 
+/** The width VS Code's panel is drawn to when it tells none (T-644): wide, so a row's title is not cut by a column count
+ *  there; the panel's own CSS clips what is really too wide. */
+export const VS_WIDE = 200
+
+/** The columns a board page is laid out in: the pane's `bodyColumns` (60 when it gives none). In VS Code the pane's own
+ *  `bodyColumns` when given (the surface's `viewport.columns` is the whole surface, wider than a docked pane), else the
+ *  surface's columns, and VS_WIDE when it gives neither: never a small made-up column count, which cut every row in a
+ *  wide panel after about 30 characters (T-644). Never under 20. */
+export const paneWidth = (vscode: boolean, bodyColumns: number | undefined, viewColumns: number | undefined): number => {
+  const given = (n: number | undefined) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : undefined)
+  const body = given(bodyColumns)
+  const view = given(viewColumns)
+  if (!vscode) return Math.max(20, body ?? 60)
+  return Math.max(20, body ?? view ?? VS_WIDE)
+}
+
 /** What every page of the board panel draws with: the elements, the view, and the shared pieces (banner, tabs, key hints, text). */
 export async function paneParts($: $, e: PaneEvent) {
   const els = $.ui.resolve(e)
@@ -30,7 +46,7 @@ export async function paneParts($: $, e: PaneEvent) {
   /** The time the page is drawn at (the host's clock: see now.ts). */
   const nowMs = await drawNow($)
   const open = await panelValues($).readOpened()
-  const width = Math.max(20, e.props.bodyColumns ?? 60)
+  const width = paneWidth(vscode, e.props.bodyColumns, e.viewport?.columns)
   noteLogoWidth(logoWidthFor(vscode, width))
   // Theme colors, so the board reads well in both light and dark themes.
   const color: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }

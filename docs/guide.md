@@ -52,6 +52,36 @@ And the ideas that tie them together:
 symcc is proactive while your Claude Code session is open. Work stops when you close it and
 picks up again next time.
 
+### Why it is built this way
+
+Each part is there for a reason. Knowing it makes the rest of this guide easier to follow.
+
+- **A lead, so you talk to one place.** Ideas come at any time. The lead takes them without
+  stopping the work that is running, turns them into tasks and decides the order. Without it, you
+  would split the work, track it and start each agent yourself.
+- **Workers, each with its own folder and file list.** Workers run side by side. A separate git
+  folder and branch per task keeps them from overwriting each other, and keeps your own branch
+  untouched until a merge. The file list (the scope) is what makes the check possible: an edit
+  outside it is refused and becomes a question to you, instead of a surprise in the diff.
+- **Scouts, so work is found while you are away.** They only read. Anything they find goes to the
+  lead as a note, and becomes a task only if the lead adds it, so a scout can never change your
+  project by itself.
+- **A checker (optional), a second pair of eyes.** A fresh agent that did not write the change
+  tries to break it before it reaches the tests. It is off by default because it costs time and
+  tokens.
+- **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
+  your branch, runs the tests and merges, so your branch cannot move in between and the code
+  that was tested is exactly the code that merges.
+- **Guards that stop honest mistakes.** symcc refuses a scout's or checker's file edit and git
+  writes, and a worker's edit outside its file list. These checks read the command text. They
+  catch a worker that makes a mistake. They are not a security boundary and do not stop an agent
+  that works around them on purpose.
+- **Org-mem goes through the lead.** Agents only suggest notes at the end of a report. The lead
+  decides which ones to keep, so the shared file stays short (60 lines at most), free of repeats,
+  and free of notes that only matter for one task.
+- **Investigations wait for you.** An investigation is a question, and the answer is for you. Even
+  in `auto` mode it ends only when you read it and pick Done, Keep as a note or Ask more.
+
 ---
 
 ## A task's life
@@ -93,6 +123,68 @@ picks up again next time.
 | `done` | Merged into your branch. This is final |
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |
+
+### States, stages and the queue
+
+A task has one **state**. Inside `doing`, a change also goes through **stages**. All finished
+tasks then take turns in **one merge queue**. Here is each part in plain words.
+
+**States: what the task is.**
+
+| State | What it means for you | What moves it on |
+|---|---|---|
+| `backlog` | A parked idea. Nothing happens | You (or the lead on your word) move it to `todo` |
+| `todo` | Waits for a free worker and for the tasks it comes after | A worker is started: `doing` |
+| `doing` | A worker works, or the change is on its way to the merge | The merge ends: `done`. A failed try: back to `todo`, or `failed` when the retries are used up |
+| `paused` | Stopped on purpose | You resume it |
+| `waiting` | A worker or the lead asked you something, or your own files block the merge | Your answer, your OK for files, or clearing your files |
+| `review` | Done and tested, waiting for your approve | Approve: it merges. Reject: back to `todo` with your reason |
+| `failed` | Could not be finished; its page says why | You retry it, change it, or drop it |
+| `done` | Merged. Final | Nothing |
+| `dropped` | Cancelled. Never runs on its own | Retry brings it back to `todo` |
+
+**Needs you.** A task is under NEEDS YOU when the next move is yours: it is in `review`,
+`waiting` or `failed`, or a running worker asked for more time. A task leaves NEEDS YOU when
+you act on it. When you approve a task in review, it leaves NEEDS YOU at once and shows with the
+running tasks (as `doing`) until the merge ends. A task waiting for your own files does the same
+once you have cleared them and its merge runs.
+
+**Stages: the steps inside `doing`.** Each has an icon:
+
+| Stage | Icon | What happens |
+|---|---|---|
+| worker | `▶` | The worker changes the code in its own folder |
+| prep | `✎` | symcc commits, leaves out secret-looking files and checks the scope |
+| checker | `⌕` | A fresh agent tries to break the change. Only with the `checker` setting on |
+| queue | `⋯` | The task waits for its turn. Its note says "queue (n)", n being its place (1 = merging now) |
+| test | `⧗` | Your test commands run |
+| merge | `⇢` | The branch moves forward |
+
+The board row shows the stage icon instead of `▶`, then the time. The band above the prompt
+counts the same tasks. A doing task's page names the stage in its badge and has a **Stage** line
+for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
+[What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
+in review or waiting shows as `doing` while its approve or merge runs.
+
+**The queue.** There is one merge queue for the whole project (all sessions, all target
+branches), oldest first. Only the task at the front has its turn. In its turn, in one go, it
+catches up with the target branch, runs the tests (skipped when this exact code already passed),
+and then merges (or stops in `review` when you want to approve first). Any failure on the way
+(a clash, failing tests, out of time, the branch moved by hand) is one normal failed try and uses
+one of the `auto_retries`. The checker runs before the queue, side by side with other checkers,
+and never runs the project's tests. The tests run once per try, in the task's turn.
+
+**Why it is built this way.**
+
+- Before, several tasks could merge into a moving branch at once. Each one had to catch up, test
+  again and sometimes clash with the others. Now the branch moves only at the front of the queue.
+  So the code a task was tested with is exactly the code that merges: the main branch is always
+  tested as it will be after the merge.
+- No two merges race, and no test run is wasted because another merge came first.
+- One rule for every way into a merge (hand-back, approve, retry), so it is simple to follow and
+  to trust.
+- The cost: tasks wait their turn. When five tasks with 10-minute tests finish together, the
+  fifth waits about 40 minutes before its own turn. Testing several tasks together is not built.
 
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
@@ -216,13 +308,7 @@ happens, never the words in its hand-back:
 - otherwise it is finished, and its work goes through these steps (an investigation goes to
   review with its answer instead):
 
-### Why finished tasks take turns
-
-Before, several tasks could merge into a moving branch at the same time. Each one had to catch up,
-test again and sometimes clash with the others (one task once needed 7 tries). Now every finished
-task joins **one queue** for the whole project (all sessions, all target branches, oldest first),
-and only the task at the front has its turn. The branch it merges into moves only at the front of
-the queue, so the code a task was tested with is exactly the code that merges.
+The reasons for the queue are in [States, stages and the queue](#states-stages-and-the-queue).
 
 ### The way to the merge
 
@@ -287,9 +373,7 @@ The steps, in this order:
    never joins the queue, so no tests run for that try (see [The checker](#the-checker)).
 4. **Queue.** The task joins the merge queue and waits for its turn. The queue is kept in
    `.symcc/merge-line.json`; it survives a reload (a task that was in the queue just joins again), and
-   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time, so when
-   several tasks finish together the last one waits longer: the fifth of five tasks with 10-minute
-   tests waits about 40 minutes before its own turn.
+   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time.
 5. **Catch up.** At its turn, if the target branch has moved since the worker started (another
    task was merged), symcc brings those changes into the task's copy first. If they clash, that
    try failed like failing tests do: it uses one of the `auto_retries`, and the next worker is told
@@ -718,6 +802,10 @@ are about changes; under "How tasks ended" a read investigation shows as
   `/symcc-settings` and from the lead. If the saved choice can't play on this computer (the
   board was set on another one), you are told once and nothing plays; the setting is kept.
   Task text is always passed to these programs as a plain argument, never as shell code.
+- `sound_set` (1, 2 or 3) picks which chimes `sound` plays, so you can tell which project chimed: each set has its own
+  "done" and "needs you" chime (macOS: Glass / Ping, Hero / Pop, Submarine / Funk; Linux and Windows use other system sounds,
+  and a sound missing on this computer falls back to set 1's). Unset, it is picked from the project folder's name, so two
+  projects usually differ with no setup; the Settings page shows the one in use, and picking one there plays its chime.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
   `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
   page, `t` / `s` / `c` switch views, `b` back.
@@ -1290,6 +1378,10 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+A window that doesn't drive shows a yellow warning under the board's banner ("Another session
+drives this board … /symcc-drive to drive it from here") and "⚠ driven by another session" in the
+band above the prompt. Its doing tasks say "runs in the other session", and the warning adds
+"it looks idle" when a task has waited over 5 minutes for the driving window to start it.
 To move driving to the window you are in, type `/symcc-drive` there. If another window
 drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
 ones), steps down, and your window starts driving and restarts those tasks from their kept
@@ -1419,7 +1511,7 @@ its read-only `stats` tool.
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
-  average tokens and time. Each scout's line has a small scorecard under it: how many tasks its
+  average tokens and time. Each scout's line has a small scorecard under it (what its findings became is also on each scout's page, as "Results · last 7 days: … · in all: …"): how many tasks its
   findings became (how many merged, were dropped or are still open), its own tokens in the range,
   and the tokens per merged fix (its tokens plus its merged tasks' tokens, divided by the number
   merged; "—" when none merged). A scout that used tokens but made no task is listed too; done per day for the last 7 days with activity, oldest first.
@@ -1636,7 +1728,7 @@ The script links symcc's `opencode/` folder into OpenCode's plugins folder for y
 opencode plugin add github:kourgeorge/symcc
 ```
 
-`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). This works: in a scratch run with OpenCode 2.3.2 (T-560), it printed `Plugin "github:kourgeorge/symcc" installed and added to ~/.config/opencode/opencode.json`, adding `"plugins": ["github:kourgeorge/symcc"]` there, and put symcc's files in OpenCode's cache, `~/.cache/opencode/npm/git-symcc-<hash>/<number>/node_modules/symcc`. OpenCode then loaded `opencode/server.ts` from there with no "Plugin failed", and `opencode plugin list` showed `symcc  932aaf3  github:kourgeorge/symcc` (the version is the commit it fetched).
+`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). This works: in a scratch run with OpenCode 2.3.2, it printed `Plugin "github:kourgeorge/symcc" installed and added to ~/.config/opencode/opencode.json`, adding `"plugins": ["github:kourgeorge/symcc"]` there, and put symcc's files in OpenCode's cache, `~/.cache/opencode/npm/git-symcc-<hash>/<number>/node_modules/symcc`. OpenCode then loaded `opencode/server.ts` from there with no "Plugin failed", and `opencode plugin list` showed `symcc  932aaf3  github:kourgeorge/symcc` (the version is the commit it fetched).
 
 - **The first `opencode plugin list` can say "No plugins found":** it starts OpenCode's background service, which is still loading plugins then. Run it again.
 - **Updates:** this copy doesn't follow `git pull`; `opencode plugin check` and `opencode plugin update` fetch a newer one. Remove it with `opencode plugin remove github:kourgeorge/symcc`.
@@ -1685,7 +1777,7 @@ The panel reads `.symcc/view.json` once a second; the board writes that file on 
 ### How it works inside
 
 - **One copy runs the board.** OpenCode starts the plugin once for each folder a session works in, workers' folders too. Only the copy for the project's main folder runs symcc's engine: it takes the lead (`.symcc/lead.json`, the same lock as in Claude Code), starts the timers and seeds the scouts. The copies in workers' folders only guard. If two copies point at the same real folder (on macOS, `/tmp/...` and `/private/tmp/...`), the first one runs the board and the other takes over when the first is unloaded.
-- **Edits are guarded** through OpenCode's permission check, with symcc's usual checks. A tool-call hook stays behind it as a backstop: it reads OpenCode 2.3's own tools that change files (`edit` and `write` with a `path`, `patch` with its patch text, and `shell` with its command and folder), plus a `multiedit` tool if a plugin adds one. So far these refusals are covered by symcc's tests with a stand-in for OpenCode's session API; a check in a real OpenCode run (a worker's folder copy refusing an edit outside its files, and a real `patch` call) comes with T-484.
+- **Edits are guarded** through OpenCode's permission check, with symcc's usual checks. A tool-call hook stays behind it as a backstop: it reads OpenCode 2.3's own tools that change files (`edit` and `write` with a `path`, `patch` with its patch text, and `shell` with its command and folder), plus a `multiedit` tool if a plugin adds one. So far these refusals are covered by symcc's tests with a stand-in for OpenCode's session API; a check in a real OpenCode run (a worker's folder copy refusing an edit outside its files, and a real `patch` call) is still to be done.
 - **Starting a worker.** symcc makes the session a child of the lead's (the last session in your project folder you typed in), moves it into its task's folder and waits until OpenCode shows it there (a child session first opens in its parent's folder), and only then gives it its prompt, once the board names it, so the guard in that folder knows it. When it ends, symcc reads its final answer and its tokens.
 - **The lead** is never a child session or one of symcc's own. symcc remembers it for the project while OpenCode runs, also across plugin reloads. As in Claude Code, reports close together go in one update, your own board actions wait as "Meanwhile" lines, and starting a worker sends nothing. An update sent before you have typed anywhere waits for your first prompt.
 - **Tools per session.** Each session is offered only what it may use: a worker only `symcc_ask_owner`, a scout or a checker only `symcc_board` and `symcc_stats`; a call of anything else is refused. The tools are normal OpenCode tools, not hidden in OpenCode's Code Mode. An answer meant only for you is put in the chat without waking the model. Where the TUI part doesn't take `/symcc`, `/symcc-help` leaves out the Claude panel's keys and lines.

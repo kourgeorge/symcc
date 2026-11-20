@@ -6,7 +6,7 @@
 // answers (`onLinkPress`, see vsLink); real Buttons stay for the actions on a page (Approve, Retry, Save ...).
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort, driveWarning } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -53,13 +53,38 @@ export const logoWidthFor = (vscode: boolean, width: number) => (vscode ? 0 : wi
 export const VS_LINK_BASE = 'https://symcc.invalid/'
 /** The link for a place on the board: vsHref('task', 'T-372') is "https://symcc.invalid/task/T-372". "(" and ")" are
  *  encoded too, since an unmatched one would end the markdown link early (a file named "src/a).ts"). */
-export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more' | 'file' | 'run' | 'role' | 'kind' | 'page' | 'do', id: string) =>
+export const vsHref = (kind: 'task' | 'question' | 'scout' | 'fold' | 'tab' | 'mode' | 'more' | 'file' | 'run' | 'role' | 'kind' | 'page' | 'do' | 'choice', id: string) =>
   `${VS_LINK_BASE}${kind}/${encodeURIComponent(id).replace(/[()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())}`
 
 /** Text put into markdown as it is: on one line, every markdown mark escaped (a title with "*" or "[x]" stays plain). */
 export const mdText = (s: string) => s.replace(/\s+/g, ' ').trim().replace(/[\\`*_[\]<>~|#!&]/g, '\\$&')
 /** A markdown link, its text escaped (see mdText). */
 export const mdLink = (text: string, href: string) => `[${mdText(text)}](${href})`
+
+/**
+ * A question's answer choices in VS Code (T-651): one numbered line each, "1. Only the first part", like Claude Code's
+ * question pop-up; each line is a link (key `choice-1`) that wraps as text does and picks the choice wherever it is
+ * clicked. VS Code's Buttons never wrap their label, so a long choice drawn as one ran past the panel.
+ * The keyboard: keys 1-9 pick a choice while the panel has the focus, through hidden Buttons (`choice-key-1`, in a Box
+ * drawn `display="none"`, as the terminal's answer box does). A Markdown link can't take `autoFocus`, so Enter no
+ * longer picks the first choice at once; the "Your answer" box keeps no focus either, so the number keys still reach it.
+ */
+export function vsChoices(k: VsKit, choices: readonly string[], onChoice: (i: number) => () => void): RenderChildren {
+  const { Box, Button } = k
+  return (
+    <Box key="vs-answers" flexDirection="column">
+      {choices.map((c, i) => {
+        const href = vsHref('choice', String(i + 1))
+        return vsLink(k, `choice-${i + 1}`, mdLink(`${i + 1}. ${c}`, href), [[href, onChoice(i)]])
+      })}
+      <Box key="vs-choice-keys" display="none">
+        {choices.slice(0, 9).map((c, i) => (
+          <Button key={`choice-key-${i + 1}`} label={c} hotkey={String(i + 1)} onPress={onChoice(i)} />
+        ))}
+      </Box>
+    </Box>
+  )
+}
 
 /**
  * Clickable text in VS Code: a Markdown block with links the plugin answers. `links` pairs each href written in `text`
@@ -78,7 +103,7 @@ export function vsLink(k: VsKit, key: string, text: string, links: [href: string
  *    the name, version and folder; the mode as a pill with its meaning dim beside it; the branch and who drives on one dim line;
  *    the tests and the limits on one dim line;
  *  - under it the counts as small badges ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
- * A warning line when symcc is disabled sits under the name.
+ * A warning line when symcc is disabled sits under the name; one when another session drives the board sits under the counts.
  */
 export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderChildren[]): RenderChildren[] {
   const { Box, Text, C } = k
@@ -91,6 +116,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const retries = v.auto_retries ?? d.auto_retries
   const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}`
   const counts = bannerCounts({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: retries, mode }, k.nowMs)
+  const warn = driveWarning(driving, v.tasks ?? [], k.nowMs, S.N.name, 'board')
   const dot = (key: string) => <Text key={key} color={C('subtle')}> · </Text>
   return [
     <Box key="vs-top" flexDirection="row" gap={1}>
@@ -137,6 +163,8 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           </Box>,
         ]
       : []),
+    // T-643: a session that doesn't drive says so in the warning color, with how to take over (VS Code wraps it)
+    ...(warn ? [<Text key="vs-drive" wrap="wrap" color={C('warning')}>{warn}</Text>] : []),
     ...gitRow,
   ]
 }

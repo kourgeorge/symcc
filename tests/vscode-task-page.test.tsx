@@ -49,7 +49,7 @@ const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[â
 const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
   'T-501': { keys: ['approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'], primary: 'approve' },
   'T-502': { keys: ['stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'], primary: 'retry' },
-  'T-503': { keys: ['already-merged', 'drop', 'needs-review', 'copy'], primary: 'choice-1' },
+  'T-503': { keys: ['already-merged', 'drop', 'needs-review', 'copy'] }, // its answers are numbered link lines (T-651), no primary Button
   'T-504': { keys: ['pause', 'drop', 'needs-review', 'copy'] },
   'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'], primary: 'resume' },
   'T-506': { keys: ['pause', 'stash', 'role', 'drop', 'needs-review', 'copy'] },
@@ -57,7 +57,7 @@ const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
   'T-508': { keys: ['copy'] },
   'T-509': { keys: ['retry', 'already-merged', 'copy'] },
   'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'needs-review', 'copy'], primary: 'done' },
-  'T-511': { keys: ['already-merged', 'drop', 'needs-review', 'copy'], primary: 'choice-1' },
+  'T-511': { keys: ['already-merged', 'drop', 'needs-review', 'copy'] },
 }
 
 for (const id of RICH_IDS) {
@@ -165,12 +165,16 @@ test('in VS Code a long report shows its first part, and "Show all" shows the re
   await ui.unmount()
 })
 
-test('in VS Code a waiting question shows plainly, with its answers as buttons and a box for your own', async ($, on) => {
+test('in VS Code a waiting question shows plainly, with its answers as numbered lines you click and a box for your own', async ($, on) => {
   seedRich(on, 'T-503')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   expect(await ui.find({ type: 'Text', text: /^Should the report show all of its lines/ })).toBeDefined()
-  expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('Only the first part')
-  expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('All of it')
+  // T-651: one numbered line each, under one another, each a link that wraps as text does
+  expect((await ui.find({ key: 'vs-answers' }))?.props.flexDirection).toBe('column')
+  for (const [n, c] of [[1, 'Only the first part'], [2, 'All of it']] as const) {
+    const line = await ui.find({ key: `choice-${n}` })
+    expect([line?.type, line?.props.text, line?.props.pressableLinks]).toEqual(['Markdown', mdLink(`${n}. ${c}`, vsHref('choice', String(n))), [vsHref('choice', String(n))]])
+  }
   expect(await ui.find({ key: 'choice-3' })).toBeUndefined() // no "Answerâ€¦": the box is always there
   expect((await ui.find({ key: 'answer' }))?.type).toBe('Input')
   await ui.unmount()
@@ -180,8 +184,8 @@ test('in VS Code a file request shows the files, with Allow files and Don\'t all
   seedRich(on, 'T-511')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   expect(await ui.find({ type: 'Text', text: '  hooks/board.ts' })).toBeDefined()
-  expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('Allow files')
-  expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe("Don't allow")
+  expect((await ui.find({ key: 'choice-1' }))?.props.text).toBe(mdLink('1. Allow files', vsHref('choice', '1')))
+  expect((await ui.find({ key: 'choice-2' }))?.props.text).toBe(mdLink("2. Don't allow", vsHref('choice', '2')))
   await ui.unmount()
 })
 
@@ -257,7 +261,7 @@ for (const [id, want] of Object.entries(CARDS))
         const [key, tone, button] = want.callout
         const box = await ui.find({ key })
         expect(box?.props, at).toMatchObject({ borderStyle: 'round', borderColor: tone })
-        expect(elements(box!.children).some(n => n.type === 'Button' && n.props?.key === button), at).toBe(true)
+        expect(elements(box!.children).some(n => (n.type === 'Button' || n.type === 'Markdown') && n.props?.key === button), at).toBe(true)
         const top = (await ui.drawn()) as Node
         const order = (top.children ?? []).map(n => (n as Node)?.props?.key)
         expect(order.indexOf(key), at).toBeLessThan(order.indexOf('vs-actions'))

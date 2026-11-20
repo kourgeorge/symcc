@@ -2,7 +2,7 @@
 //   bun scripts/build-site.ts [--root <repo folder>] [--out <build folder>]
 // --root defaults to the repo this script is in, --out to <root>/_site.
 // It copies site/ (index.html, style.css) into the build folder and turns README.md, docs/guide.md,
-// docs/reference.md and docs/research/*.md into HTML pages with the same header and footer as
+// docs/reference.md, docs/engine-and-clients.md and docs/research/*.md into HTML pages with the same header and footer as
 // site/index.html. Links to these pages are rewritten from .md to .html; links to other files in the
 // repo point to GitHub; images that pages use are copied next to them. HTML in the markdown text is
 // escaped (README's centered <p> banner blocks at the top are left out: the landing page covers them).
@@ -293,6 +293,7 @@ const MAIN_SUMMARY: Record<string, string> = {
   'README.md': 'What symcc is, how to install it, a quick start, how it works, and the full feature list.',
   'docs/guide.md': 'How to use symcc day to day: talking to the lead, the board, tasks, workers, scouts and merges.',
   'docs/reference.md': 'Every command, setting, file and board key of symcc, in one place.',
+  'docs/engine-and-clients.md': 'For people who change symcc: what the engine is, what a client is, the rule between them and the checks that watch it.',
 }
 
 export function llmsTxt(pages: Page[], root: string): string {
@@ -406,6 +407,7 @@ export function build(root: string, out: string): string[] {
     { src: 'docs/guide.md', out: 'guide.html', title: 'Guide' },
     { src: 'docs/reference.md', out: 'reference.html', title: 'Reference' },
   ]
+  if (existsSync(join(root, 'docs/engine-and-clients.md'))) pages.push({ src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' })
   const researchDir = join(root, 'docs/research')
   const research = existsSync(researchDir) ? readdirSync(researchDir).filter(n => n.endsWith('.md')).sort() : []
   for (const n of research) {

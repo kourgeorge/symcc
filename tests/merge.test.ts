@@ -24,7 +24,7 @@ import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../hooks/app/store'
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld, saveArchiveMigrated } from '../hooks/app/archive'
-import { commandsOf } from './fakes'
+import { commandsOf, pause } from './fakes'
 import { runCommand } from '../hooks/app/symcc'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
@@ -2837,6 +2837,22 @@ test("notify can't be set to a choice this machine can't play: the owner and the
   expect(await ownerSettings(m.$, { notify: 'loud' }, 'from the board')).toContain('notify must be "off", "sound" or "voice"')
   expect(await ownerSettings(m.$, { notify: 'sound' }, 'from the board')).toBe('notify set to sound')
   expect((await load(m.$)).notify).toBe('sound')
+})
+
+test('T-650: the owner and the lead set sound_set; the owner hears the picked set once; a bad value is refused', async () => {
+  const m = machine('Darwin', ['afplay'], ['Glass', 'Ping', 'Hero', 'Pop', 'Submarine', 'Funk'].map(n => `/System/Library/Sounds/${n}.aiff`))
+  await saveBoard(m.$, emptyBoard())
+  expect(await ownerSettings(m.$, { sound_set: '3' }, 'from the board')).toBe('sound_set set to 3')
+  expect((await load(m.$)).sound_set).toBe(3)
+  await pause(0)
+  expect(m.ran.filter(r => r.argv[0] === 'afplay').map(r => r.argv)).toEqual([['afplay', '/System/Library/Sounds/Submarine.aiff']])
+  expect(await runTool(m.$, 'settings', { sound_set: 2 })).toBe('notify sound plays sound set 2')
+  expect(await runTool(m.$, 'settings', { sound_set: 5 })).toBe('sound_set must be 1, 2 or 3 (got 5)')
+  expect((await load(m.$)).sound_set).toBe(2)
+  // the lead only changes it: nothing more is played
+  expect(m.ran.filter(r => r.argv[0] === 'afplay').length).toBe(1)
+  // the settings list shows the set in use
+  expect(await runTool(m.$, 'settings', {})).toContain('sound_set: 2 (default picked from the project name')
 })
 
 // ---------------- how each try ended ----------------
