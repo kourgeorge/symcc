@@ -438,20 +438,20 @@ tr:last-child td { border-bottom: 0; }
     <line x1="455" y1="90" x2="418" y2="188" class="svg-line" marker-end="url(#s1)"/>
     <text x="400" y="246" class="svg-l" text-anchor="middle">worker asks, file refused, over time</text>
     <line x1="490" y1="90" x2="525" y2="188" class="svg-line" marker-end="url(#s1)"/>
-    <text x="512" y="130" class="svg-l">checks passed in</text><text x="512" y="142" class="svg-l">review mode</text>
+    <text x="538" y="144" class="svg-l">checks</text><text x="538" y="157" class="svg-l">passed in</text><text x="538" y="170" class="svg-l">review mode</text>
     <line x1="510" y1="90" x2="660" y2="188" class="svg-line" marker-end="url(#s1)"/>
     <text x="620" y="130" class="svg-l">tests, API error,</text><text x="620" y="142" class="svg-l">retries used up</text>
     <line x1="370" y1="190" x2="300" y2="92" class="svg-dash" marker-end="url(#s1)"/>
-    <text x="316" y="150" class="svg-l">owner answers</text>
+    <text x="354" y="140" class="svg-l">owner</text><text x="354" y="152" class="svg-l">answers</text>
     <path d="M540 230 V268 H290 V92" class="svg-dash" marker-end="url(#s1)"/>
     <path d="M680 230 V268 H540" class="svg-dash"/>
-    <text x="420" y="262" class="svg-l" text-anchor="middle">owner rejects (review) / owner or lead retries (failed)</text>
+    <text x="302" y="286" class="svg-l">owner rejects (review)</text><text x="302" y="299" class="svg-l">owner or lead retries (failed)</text>
     <path d="M580 190 C 600 160 790 160 800 94" class="svg-main" marker-end="url(#s2)"/>
     <text x="796" y="170" class="svg-l">owner approves,</text><text x="796" y="182" class="svg-l">then merge runs</text>
     <line x1="235" y1="92" x2="130" y2="318" class="svg-dash" marker-end="url(#s1)" marker-start="url(#s1)"/>
-    <text x="60" y="296" class="svg-l">owner: pause / resume</text>
+    <text x="128" y="296" class="svg-l" text-anchor="end">owner: pause / resume</text>
     <line x1="260" y1="92" x2="260" y2="318" class="svg-dash" marker-end="url(#s1)" marker-start="url(#s1)"/>
-    <text x="268" y="300" class="svg-l">owner/lead: drop</text>
+    <text x="252" y="300" class="svg-l" text-anchor="end">owner/lead: drop</text>
     <text x="420" y="345" class="svg-l">dashed = a person (or the lead for the owner) moves it.</text>
     <text x="420" y="361" class="svg-l">solid blue = the main line. Orange = automatic retry.</text>
     <text x="420" y="377" class="svg-l">dropped: retry brings it back to todo. Done is final.</text>
@@ -477,8 +477,8 @@ tr:last-child td { border-bottom: 0; }
     <g class="svg-main"><line x1="190" y1="80" x2="338" y2="80" marker-end="url(#c1)"/><line x1="540" y1="80" x2="698" y2="80" marker-end="url(#c1)"/></g>
     <text x="620" y="70" class="svg-t" style="fill:var(--good)">OK</text>
     <path d="M440 110 V180 H105 V112" class="svg-retry" marker-end="url(#c2)"/>
-    <text x="270" y="172" class="svg-l" style="fill:var(--warn)">problems found: a new worker gets the report</text>
-    <text x="270" y="206" class="svg-l" style="fill:var(--warn)">counts as one of the auto_retries</text>
+    <text x="125" y="200" class="svg-l" style="fill:var(--warn)">problems found: a new worker gets the report</text>
+    <text x="125" y="216" class="svg-l" style="fill:var(--warn)">counts as one of the auto_retries</text>
   </svg></div>
   <div class="grid g3">
     <div class="card good"><h3>It can</h3><p>Read the task and the whole diff, and try the change for real with small probe scripts.</p></div>
