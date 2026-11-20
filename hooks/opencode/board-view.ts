@@ -23,7 +23,7 @@ import {
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
-  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase,
+  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -935,7 +935,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
   const choices = () => {
-    answerOptions(f, id).forEach((c, i) => b.add(choiceLine(c, i, w), { choice: i + 1 }))
+    answerOptions(f, id).forEach((c, i) => choiceLine(c, i, w).forEach(l => b.add(l, { choice: i + 1 })))
     if (sent) addAll(wrapSegs([{ text: '  answer sent: ', color: 'success', bold: true }, { text: sent, color: 'text' }], w))
   }
   const q = v.questions?.find(x => x.id === id)
@@ -982,8 +982,9 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   return { ...b, ids: [], selected: id, head }
 }
 
-/** A numbered choice of a question, a line a click picks ("  [1] Allow", "  [3] Answer…"). */
-const choiceLine = (c: string, i: number, w: number): Line => [{ text: `  ${fitRow(2, `[${i + 1}] ${c}`, '', w).title}`, color: c === OWN_ANSWER ? 'inactive' : 'text' }]
+/** A numbered choice of a question as Claude Code's question pop-up shows it ("  1. Allow", "  3. Answer…"; T-651):
+ *  a long one wraps under its text (core's choiceLines), and a click on any of its lines picks it. */
+const choiceLine = (c: string, i: number, w: number): Line[] => choiceLines(c, i + 1, w, '  ').map(text => [{ text, color: c === OWN_ANSWER ? 'inactive' : 'text' }])
 
 /** The last choice of a question: the owner types their own answer. */
 export const OWN_ANSWER = 'Answer…'

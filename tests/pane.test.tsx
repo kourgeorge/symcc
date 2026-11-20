@@ -516,11 +516,12 @@ test('a file request (NEED FILES) shows Allow, Don\'t allow and Answer… on key
   for (const [n, label] of [[1, 'Allow'], [2, "Don't allow"], [3, 'Answer…']] as const) {
     const b = await ui.find({ key: `choice-${n}` })
     expect(b?.props.label).toBe(label)
-    expect(b?.props.hotkey).toBe(String(n))
+    expect(b?.text).toBe(`${n}. ${label}`)
+    expect((await ui.find({ key: `choice-key-${n}` }))?.props.hotkey).toBe(String(n))
   }
   // the keys are told once, in the dim line under the buttons, not again in the bottom key list (T-513)
   expect(await ui.find({ type: 'Text', text: 'keys 1-3 pick a choice' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: / allow/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^[\d-]+ allow/ })).toBeUndefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
@@ -578,12 +579,57 @@ test('the answer buttons show only the choice (no number key inside); keys 1-5 s
   for (const [i, label] of [...options, 'Answer…'].entries()) {
     const b = await ui.find({ key: `choice-${i + 1}` })
     expect(b?.props.label).toBe(label)
-    expect(b?.props.hotkey).toBe(String(i + 1))
+    expect(b?.props.hotkey).toBe(undefined)
+    expect((await ui.find({ key: `choice-key-${i + 1}` }))?.props.hotkey).toBe(String(i + 1))
   }
   expect(await ui.find({ type: 'Text', text: 'keys 1-5 pick a choice' })).toBeDefined()
   await ui.press({ key: 'choice-2' })
   const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
   expect(saved[0].tasks[0].history.at(-1)?.text).toBe('the owner answered: “Once a day”')
+  await ui.unmount()
+})
+
+test('T-651: the choices are numbered lines like the question pop-up; a long one wraps inside the box, and a click on any of its lines or its number key answers', async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const board = { tasks: [task('T-2', 'waiting', 'Caps', { question: 'What should a cap of 0 mean?', options })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 44 }, surface: 'terminal' })
+  // each choice in its own Box, one line under the other (a column), numbered, wrapped to the 40 columns inside the box
+  const rows = await ui.find({ key: 'answer-choices' })
+  expect(rows?.props.flexDirection).toBe('column')
+  const shown = async (key: string) => !!(await ui.find({ key }))
+  expect([await shown('choice-row-1'), await shown('choice-row-2'), await shown('choice-row-3'), await shown('choice-row-4')]).toEqual([true, true, true, false])
+  expect([await shown('choice-1-line-2'), await shown('choice-1-line-3'), await shown('choice-2-line-2'), await shown('choice-3-line-2')]).toEqual([true, false, true, false])
+  const text = async (key: string) => (await ui.find({ key }))?.text
+  expect(await text('choice-1')).toBe('1. Invalid: doctor and run reject it')
+  expect(await text('choice-1-line-2')).toBe("   (scout's suggestion)")
+  expect(await text('choice-2')).toBe('2. Unlimited: run until another cap')
+  expect(await text('choice-2-line-2')).toBe('   stops it')
+  expect(await text('choice-3')).toBe('3. Answer…')
+  for (const key of ['choice-1', 'choice-1-line-2', 'choice-2', 'choice-2-line-2', 'choice-3']) expect((await text(key))!.length <= 40, key).toBe(true)
+  // no "[ … ]" around them: plain lines, and the number keys on hidden Buttons
+  expect((await ui.find({ key: 'choice-1-line-2' }))?.props.plain).toBe(true)
+  expect((await ui.find({ key: 'choice-key-1' }))?.props.hotkey).toBe('1')
+  expect((await ui.find({ key: 'choice-key-2' }))?.props.hotkey).toBe('2')
+  const answered = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, t]) => JSON.parse(t).tasks[0].history.at(-1)?.text)
+  // a click on the second line of choice 1 answers with choice 1
+  await ui.press({ key: 'choice-1-line-2' })
+  expect(answered()).toEqual([`the owner answered: “${options[0]}”`])
+  await ui.unmount()
+})
+
+test('T-651: on a task page the number key answers too (its hidden Button sends the same answer)', async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const board = { tasks: [task('T-2', 'waiting', 'Caps', { question: 'What should a cap of 0 mean?', options })] }
+  stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'choice-key-2' })
+  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, t]) => JSON.parse(t))
+  expect(saved[0].tasks[0].history.at(-1)?.text).toBe(`the owner answered: “${options[1]}”`)
   await ui.unmount()
 })
 
