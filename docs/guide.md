@@ -1520,8 +1520,10 @@ sizes. It changes nothing until you say so.
   checked again right before it goes, so work added in between is kept. The same works in OpenCode and on the command line (`cmd symcc-doctor fix`), and the
   lead has a `doctor` tool, which it uses to clean up only after you said yes.
 - **Never touched:** reports, org-mem, scouts, roles and kinds, a running task's folder or
-  branch, and anything unmerged or uncommitted. While a merge is going on, the doctor doesn't
-  run at all; try again when it is done. When `board.json` can't be read, it can't tell which
+  branch, and anything unmerged or uncommitted. While a merge is going on, the doctor still
+  checks and shows the list (the task being merged has its folder and branch marked "being
+  merged" and never offered), but `fix` changes nothing and says which merge is running; try the
+  fix again when it is done. When `board.json` can't be read, it can't tell which
   tasks are finished, so it leaves every folder and branch alone and only checks the files.
 
 ### A worker over its time limit

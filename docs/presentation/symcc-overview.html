@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>symcc Overview</title>
+<title>symcc Features</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -114,10 +114,6 @@ table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
 th { background: var(--surface-2); font-weight: 600; }
 tr:last-child td { border-bottom: 0; }
-.math { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: "Times New Roman", "STIX Two Math", Cambria, serif; font-size: 20px; line-height: 1.8; overflow-x: auto; margin: 0 0 12px; }
-.math i { font-style: italic; }
-.math .row { white-space: nowrap; }
-.math .lbl { font-family: "Inter", sans-serif; font-size: 12px; color: var(--muted); margin-left: 10px; }
 .title-slide { min-height: 100%; display: flex; align-items: center; }
 .refs li { font-size: 14px; }
 .nav {
@@ -152,8 +148,52 @@ tr:last-child td { border-bottom: 0; }
   body { font-size: 16px; }
   .g2, .g3, .g4 { grid-template-columns: minmax(0, 1fr); }
   .slide { padding: 16px 16px 24px; }
-  .math { font-size: 17px; }
+  }
+
+.mock { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px; min-width: 0; box-shadow: var(--shadow); }
+.mock h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tk { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin: 0 0 6px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.tk b { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; margin-right: 4px; }
+.tk.need { border-left: 4px solid var(--bad); }
+.tk.run { border-left: 4px solid var(--accent); }
+.tk.todo { border-left: 4px solid var(--muted); }
+.tk.ok { border-left: 4px solid var(--good); }
+.tk.pulse { animation: pulse 2s ease-in-out infinite; }
+.term { background: #10151b; color: #d6dde8; border-radius: 8px; padding: 8px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; line-height: 1.5; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.term .r { color: #f07a77; } .term .g { color: #5fcf94; } .term .b { color: #7aa2ff; } .term .d { color: #8794a6; }
+.bubble { border-radius: 14px; padding: 10px 12px; font-size: 15px; min-width: 0; }
+.bubble.me { background: var(--accent-soft); border: 1px solid var(--accent); }
+.bubble.ai { background: var(--surface); border: 1px solid var(--border); }
+.flow { display: grid; grid-template-columns: minmax(0,1fr) 36px minmax(0,1fr) 36px minmax(0,1fr); gap: 6px; align-items: center; }
+.arrow { text-align: center; color: var(--accent); font-size: 26px; font-weight: 700; }
+.switch { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+.switch div { text-align: center; padding: 8px 4px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.switch div.on { background: var(--accent); color: #fff; }
+.bar { height: 14px; border-radius: 4px; background: var(--accent); }
+.barrow { display: grid; grid-template-columns: 44px minmax(0,1fr) 56px; gap: 8px; align-items: center; font-size: 12px; margin: 0 0 6px; }
+.barrow .track { background: var(--surface-2); border-radius: 4px; }
+.stamp { display: inline-block; border: 2px dashed var(--warn); color: var(--warn); border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: 12px; }
+.deckcards { display: flex; flex-wrap: wrap; gap: 6px; }
+.deckcards span { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow); }
+.deckcards span.sp { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.sweep { transform-origin: 150px 130px; animation: spin 4s linear infinite; }
+.blink { animation: blink 2s ease-in-out infinite; }
+.flowdash { stroke-dasharray: 6 6; animation: dash 1.2s linear infinite; }
+.grow { transform-origin: left center; animation: grow 1.4s ease-out both; transform-box: fill-box; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes dash { to { stroke-dashoffset: -12; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 3px var(--bad-soft); } }
+@media (prefers-reduced-motion: reduce) {
+  .sweep, .blink, .flowdash, .grow, .tk.pulse { animation: none !important; }
 }
+@media (max-width: 760px) {
+  .flow { grid-template-columns: minmax(0,1fr); }
+  .arrow { transform: rotate(90deg); }
+}
+
 </style>
 </head>
 <body>
@@ -163,174 +203,170 @@ tr:last-child td { border-bottom: 0; }
 <!-- 1 -->
 <section class="slide" data-title="Title">
 <div class="inner title-slide"><div>
-  <p class="kicker">symcc overview</p>
-  <h1>One Claude session, working as an agent organization</h1>
-  <p class="lead">symcc turns one Claude session into an agent organization that works from a shared task board.</p>
-  <p class="small">What it is, how a change travels from idea to merge, and the research question behind it. Use the arrow keys or the buttons below.</p>
+  <p class="kicker">symcc features</p>
+  <h1>One chat. A whole team that builds, checks and merges.</h1>
+  <p class="lead">symcc turns one Claude session into a small agent organization that works from a shared task board.</p>
+  <div class="diagram"><svg viewBox="0 0 700 90" role="img" aria-label="A chat bubble leads to a board, workers and a merged result">
+    <defs><marker id="t1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <rect x="10" y="20" width="130" height="50" rx="14" class="svg-acc"/><text x="75" y="50" class="svg-t">You: a request</text>
+    <rect x="190" y="20" width="130" height="50" rx="10" class="svg-box"/><text x="255" y="50" class="svg-t">Task board</text>
+    <rect x="370" y="20" width="130" height="50" rx="10" class="svg-box"/><text x="435" y="50" class="svg-t">Workers</text>
+    <rect x="550" y="20" width="140" height="50" rx="10" class="svg-good"/><text x="620" y="50" class="svg-t">Checked merge</text>
+    <g class="svg-main flowdash"><line x1="140" y1="45" x2="188" y2="45" marker-end="url(#t1)"/><line x1="320" y1="45" x2="368" y2="45" marker-end="url(#t1)"/><line x1="500" y1="45" x2="548" y2="45" marker-end="url(#t1)"/></g>
+  </svg></div>
+  <p class="small">A tour of the features, with pictures. Use the arrow keys or the buttons below.</p>
 </div></div>
 </section>
 
 <!-- 2 -->
-<section class="slide" data-title="The organization">
+<section class="slide" data-title="One team">
 <div class="inner">
-  <p class="kicker">Overview</p>
-  <h2>The organization</h2>
-  <p class="lead">You talk to one lead. The lead runs the board. Everyone else does one narrow job.</p>
+  <p class="kicker">The big picture</p>
+  <h2>One conversation, a whole team</h2>
+  <p class="lead">You talk to one lead. Everyone else does one narrow job.</p>
   <div class="diagram wide"><svg viewBox="0 0 900 330" role="img" aria-label="Org chart: the owner talks to the lead; the lead directs workers; scouts report to the lead; the checker reviews worker output">
-    <defs>
-      <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker>
-    </defs>
+    <defs><marker id="o1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker></defs>
     <rect x="360" y="14" width="180" height="50" rx="10" class="svg-box"/>
     <text x="450" y="37" class="svg-t">Owner (you)</text><text x="450" y="53" class="svg-s">sets goals, answers questions</text>
-    <line x1="450" y1="64" x2="450" y2="100" class="svg-line" marker-end="url(#ah1)" marker-start="url(#ah1)"/>
+    <line x1="450" y1="64" x2="450" y2="100" class="svg-line" marker-end="url(#o1)" marker-start="url(#o1)"/>
     <rect x="320" y="100" width="260" height="62" rx="10" class="svg-acc"/>
-    <text x="450" y="126" class="svg-t">Lead</text><text x="450" y="144" class="svg-s">the main chat: plans, splits, orders, decides</text>
-    <path d="M400 162 L160 214" class="svg-line" marker-end="url(#ah1)"/>
-    <path d="M450 162 L450 214" class="svg-line" marker-end="url(#ah1)"/>
-    <path d="M500 162 L740 214" class="svg-line" marker-start="url(#ah1)"/>
+    <text x="450" y="126" class="svg-t">Lead</text><text x="450" y="144" class="svg-s">the main chat: plans, splits, orders</text>
+    <path d="M400 162 L160 214" class="svg-line" marker-end="url(#o1)"/>
+    <path d="M450 162 L450 214" class="svg-line" marker-end="url(#o1)"/>
+    <path d="M500 162 L740 214" class="svg-line" marker-start="url(#o1)"/>
     <rect x="50" y="214" width="220" height="62" rx="10" class="svg-good"/>
     <text x="160" y="240" class="svg-t">Workers</text><text x="160" y="258" class="svg-s">one per task, own folder</text>
     <rect x="340" y="214" width="220" height="62" rx="10" class="svg-warn"/>
     <text x="450" y="240" class="svg-t">Checker</text><text x="450" y="258" class="svg-s">fresh agent, tries to break it</text>
     <rect x="630" y="214" width="220" height="62" rx="10" class="svg-box"/>
     <text x="740" y="240" class="svg-t">Scouts</text><text x="740" y="258" class="svg-s">look for work, timer or on demand</text>
-    <line x1="270" y1="245" x2="340" y2="245" class="svg-dash" marker-end="url(#ah1)"/>
-    <text x="305" y="238" class="svg-l" text-anchor="middle">change</text>
+    <line x1="270" y1="245" x2="338" y2="245" class="svg-dash" marker-end="url(#o1)"/>
     <rect x="50" y="296" width="800" height="26" rx="8" class="svg-box"/>
     <text x="450" y="313" class="svg-s">Shared task board (.symcc/board.json) and organizational memory (.symcc/org-mem.md)</text>
   </svg></div>
+  <p class="small">The one who writes a change is never the one who checks it. Scouts cannot change your project by themselves.</p>
+</div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-title="The board">
+<div class="inner">
+  <p class="kicker">Feature 1</p>
+  <h2>The board: everything in one place</h2>
+  <p class="lead">Every task, its status and what needs you. A simplified drawing:</p>
   <div class="grid g2">
-    <div class="card"><p><strong>The board is the shared state.</strong> Nobody passes work by chat. Tasks, order, file lists and results all live on the board.</p></div>
-    <div class="card"><p><strong>Roles are separate on purpose.</strong> The one who writes a change is never the one who checks it, and scouts can never change your project by themselves.</p></div>
+    <div class="mock">
+      <h4>Board</h4>
+      <p class="small" style="margin:0 0 4px"><span class="tag bad">NEEDS YOU</span></p>
+      <div class="tk need pulse"><b>T-5</b> Add login page <span class="tag warn">waiting</span><br><span class="small">worker asks: which colors?</span></div>
+      <div class="tk need"><b>T-7</b> Fix date bug <span class="tag">review</span></div>
+      <p class="small" style="margin:6px 0 4px"><span class="tag">RUNNING</span></p>
+      <div class="tk run"><b>T-6</b> Speed up search <span class="tag">tester</span> <span class="tag good">test</span></div>
+      <div class="tk run"><b>T-8</b> Update docs <span class="tag">docs</span> <span class="tag good">worker</span></div>
+      <p class="small" style="margin:6px 0 4px"><span class="tag">TO DO</span></p>
+      <div class="tk todo"><b>T-9</b> Rename settings <span class="small">after T-6</span></div>
+      <p class="small" style="margin:6px 0 4px"><span class="tag good">DONE</span></p><div class="tk ok"><b>T-4</b> Add export button</div>
+    </div>
+    <div>
+      <p><strong>Where you see it</strong></p>
+      <div class="grid g3" style="gap:8px">
+        <div class="mock"><h4>Claude Code terminal</h4><div class="term"><span class="b">NEEDS YOU</span>
+<span class="r">T-5</span> waiting
+<span class="d">RUNNING</span>
+<span class="g">T-6</span> test
+<span class="g">T-8</span> worker</div></div>
+        <div class="mock"><h4>VS Code</h4><div class="tk need"><b>T-5</b> waiting</div><div class="tk run"><b>T-6</b> test</div><div class="tk run"><b>T-8</b> worker</div></div>
+        <div class="mock"><h4>OpenCode</h4><div class="tk need" style="margin-bottom:6px"><b>1 needs you</b></div><div class="tk run"><b>T-6</b> test</div><div class="tk run"><b>T-8</b> worker</div></div>
+      </div>
+      <p class="small" style="margin-top:8px">Same board, three places: the Claude Code terminal, VS Code and OpenCode. Hand-drawn here, not screenshots.</p>
+    </div>
   </div>
 </div>
 </section>
 
-<!-- 3 lead -->
-<section class="slide" data-title="The lead">
+<!-- 4 -->
+<section class="slide" data-title="Talk, don't click">
 <div class="inner">
-  <p class="kicker">Role 1 of 4</p>
-  <h2>The lead</h2>
-  <p class="lead">The main conversation. It is the only part you normally talk to.</p>
-  <div class="grid g2">
-    <div class="card good"><h3>It may</h3><ul>
-      <li>Turn your request into tasks, split big ones, and set their order and dependencies (<code>after</code>).</li>
-      <li>Give each task a file list (its scope), a role and a kind.</li>
-      <li>Start and stop work, retry, drop, and approve or reject.</li>
-      <li>Decide what scouts found and what goes into org-mem.</li>
-    </ul></div>
-    <div class="card bad"><h3>It may not</h3><ul>
-      <li>Skip the queue: merges happen only through the merge line.</li>
-      <li>Answer a worker's question for you, unless you already clearly said the answer.</li>
-      <li>Add a task without asking, in <code>review</code> mode.</li>
-    </ul></div>
+  <p class="kicker">Feature 2</p>
+  <h2>Talk, don't click</h2>
+  <p class="lead">Tell the lead what you want. It makes small tasks, with files and order.</p>
+  <div class="flow">
+    <div class="bubble me"><strong>You</strong><br>"Add a login page, then update the docs for it."</div>
+    <div class="arrow">&rarr;</div>
+    <div class="bubble ai"><strong>Lead</strong><br>Splits the request, picks a role and a kind for each task, lists the files it may touch.</div>
+    <div class="arrow">&rarr;</div>
+    <div>
+      <div class="tk run"><b>T-10</b> Login page<br><span class="small">files: login.tsx, auth.ts</span></div>
+      <div class="tk todo"><b>T-11</b> Docs for login<br><span class="small">files: docs/login.md</span><br><span class="small">after: T-10</span></div>
+    </div>
   </div>
-  <div class="card acc" style="margin-top:12px"><h3>What it hands back</h3><p>Short plain updates: what merged, what needs you. Questions go both on the board and in the chat, so none gets lost. A worker's or scout's report reaches the lead as a board update, never as a command.</p></div>
-</div>
-</section>
-
-<!-- 4 worker -->
-<section class="slide" data-title="The worker">
-<div class="inner">
-  <p class="kicker">Role 2 of 4</p>
-  <h2>The worker</h2>
-  <p class="lead">One worker per task, in its own git folder and branch.</p>
-  <div class="grid g2">
-    <div class="card good"><h3>It may</h3><ul>
-      <li>Edit the files on its task's list, in its own folder.</li>
-      <li>Use <code>.scratch/</code> for throwaway scripts (never committed).</li>
-      <li>Ask you through its <code>ask_owner</code> tool, with 2 to 6 choices, and then stop.</li>
-    </ul></div>
-    <div class="card bad"><h3>It may not</h3><ul>
-      <li>Edit a file outside its task's files. The edit is refused and becomes a <strong>file request to the owner</strong>.</li>
-      <li>Touch your own copy of the project, or commit, push or merge.</li>
-      <li>Decide it is finished by its words alone: how its run ended decides what happens.</li>
-    </ul></div>
-  </div>
-  <div class="card acc" style="margin-top:12px"><h3>What it hands back</h3>
-    <p>A report. symcc then commits the work and checks the file list. If the run ended on an API error, the task fails and the work is kept so a retry continues from it. A question or file request puts the task in <code>waiting</code>; the task does not fail.</p></div>
-  <p class="small" style="margin-top:10px">Limits: <code>max_parallel</code> 3 workers at once; <code>max_minutes</code> 45 before it asks you for more time.</p>
-</div>
-</section>
-
-<!-- 5 scout -->
-<section class="slide" data-title="The scout">
-<div class="inner">
-  <p class="kicker">Role 3 of 4</p>
-  <h2>The scout</h2>
-  <p class="lead">A read-only agent that looks for work while you are away.</p>
-  <div class="grid g2">
-    <div class="card good"><h3>It may</h3><ul>
-      <li>Read files, run shell commands under your normal permission rules, and search the web.</li>
-      <li>Run on a timer (set in its file) or on demand (<code>/symcc-scout &lt;name&gt;</code>).</li>
-      <li>Look for bugs, missing tests, old dependencies, security notices.</li>
-    </ul></div>
-    <div class="card bad"><h3>It may not</h3><ul>
-      <li>Edit files in the project, or run a git command that writes.</li>
-      <li>Create a task. Its findings become tasks <strong>only through the lead</strong>.</li>
-    </ul></div>
-  </div>
-  <div class="card acc" style="margin-top:12px"><h3>What it hands back</h3>
-    <p>Findings, as a note to the lead. The <code>scout_findings</code> setting says where an added task goes: <code>auto</code> (to do) or <code>backlog</code> (waits for you). Scouts also get the org-mem notes in their prompt.</p></div>
-</div>
-</section>
-
-<!-- 6 checker -->
-<section class="slide" data-title="The checker">
-<div class="inner">
-  <p class="kicker">Role 4 of 4</p>
-  <h2>The checker</h2>
-  <p class="lead">A fresh agent that did not write the change and tries to break it before it merges. Off by default, because it costs time and tokens.</p>
-  <div class="grid g2">
-    <div class="card good"><h3>It may</h3><ul>
-      <li>Read the task and the whole diff.</li>
-      <li>Try the change for real with its own small probe scripts in <code>.scratch/</code> or <code>/tmp</code>.</li>
-      <li>Run side by side with other checkers.</li>
-    </ul></div>
-    <div class="card bad"><h3>It may not</h3><ul>
-      <li>Edit the project's files or change git.</li>
-      <li>Run the project's own tests. They run once, later, in the merge queue.</li>
-    </ul></div>
-  </div>
-  <div class="grid g2" style="margin-top:12px">
-    <div class="card acc"><h3>What it hands back</h3><p>Either OK, or only the problems it showed for real, each with file and line and how to reproduce.</p></div>
-    <div class="card warn"><h3>Detail worth knowing</h3><p>If it finds problems, the report goes to a new worker as a failed try. The task <strong>never joins the queue</strong>, and the send-back <strong>uses one of the <code>auto_retries</code></strong>. Investigations and docs-only changes skip the checker.</p></div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card acc"><h3>Files</h3><p>Each task has a file list. A worker may only change those files.</p></div>
+    <div class="card acc"><h3><code>after</code></h3><p>A task can wait for others to be merged first.</p></div>
+    <div class="card acc"><h3>Order</h3><p>Among free tasks, the lowest order starts first, then the lower task number.</p></div>
   </div>
 </div>
 </section>
 
-<!-- 7 types -->
-<section class="slide" data-title="Roles and kinds">
+<!-- 5 -->
+<section class="slide" data-title="Parallel workers">
 <div class="inner">
-  <p class="kicker">Types</p>
-  <h2>Roles and kinds</h2>
-  <p class="lead">Every worker has a role. Every task has a kind. They do different things.</p>
-  <div class="grid g2">
-    <div class="card acc"><h3>Role = who does it</h3>
-      <p><span class="tag">general</span><span class="tag">docs</span><span class="tag">refactor</span><span class="tag">researcher</span><span class="tag">security</span><span class="tag">tester</span><span class="tag">checker</span> and your own.</p>
-      <p>A role is one Markdown file. Its checklist goes into the worker's prompt. It can also pick a model, skills, and extra tools (for example web access). <code>general</code> is the default. The <code>checker</code> role is used only by the checker setting, never for a task.</p></div>
-    <div class="card acc"><h3>Kind = what the task is</h3>
-      <p><span class="tag">change</span><span class="tag">bug</span><span class="tag">feature</span><span class="tag">refactor</span><span class="tag">docs</span><span class="tag">investigation</span> and your own.</p>
-      <p>A kind is a <strong>label</strong> with a description. It does not change how a task runs, with two exceptions:</p></div>
-  </div>
-  <div class="grid g2" style="margin-top:12px">
-    <div class="card warn"><h3>Investigation</h3><p>The result is an answer, not a change. Nothing is merged, there is no file list, and the task always waits for you, even in <code>auto</code> mode.</p></div>
-    <div class="card warn"><h3>Docs-only changes</h3><p>Skip the checker and are never flagged for having no tests.</p></div>
-  </div>
-  <p class="small" style="margin-top:10px">An earlier idea gave each kind its own workflow of stages. The guide says it was designed but never built, by choice. Kinds stay simple labels.</p>
+  <p class="kicker">Feature 3</p>
+  <h2>Workers in parallel</h2>
+  <p class="lead">Up to 3 workers run at once (<code>max_parallel</code>). Each has its own folder and branch. Merges go one by one. The times below are only a picture.</p>
+  <div class="diagram wide"><svg viewBox="0 0 900 250" role="img" aria-label="Timeline of three workers running at the same time, each merging one after another">
+    <defs><marker id="p1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker></defs>
+    <text x="10" y="50" class="svg-t" style="text-anchor:start">Worker 1</text><text x="10" y="64" class="svg-l" style="text-anchor:start">T-1, branch symcc/T-1</text>
+    <text x="10" y="110" class="svg-t" style="text-anchor:start">Worker 2</text><text x="10" y="124" class="svg-l" style="text-anchor:start">T-2, branch symcc/T-2</text>
+    <text x="10" y="170" class="svg-t" style="text-anchor:start">Worker 3</text><text x="10" y="184" class="svg-l" style="text-anchor:start">T-3, branch symcc/T-3</text>
+    <rect class="svg-acc grow" x="200" y="36" width="440" height="30" rx="6"/><text x="420" y="56" class="svg-t">working</text>
+    <rect class="svg-acc grow" x="250" y="96" width="520" height="30" rx="6"/><text x="510" y="116" class="svg-t">working</text>
+    <rect class="svg-acc grow" x="300" y="156" width="250" height="30" rx="6"/><text x="425" y="176" class="svg-t">working</text>
+    <circle cx="560" cy="171" r="9" class="svg-good"/><text x="560" y="204" class="svg-s">merge 1st</text>
+    <circle cx="650" cy="51" r="9" class="svg-good"/><text x="650" y="84" class="svg-s">merge 2nd</text>
+    <circle cx="780" cy="111" r="9" class="svg-good"/><text x="780" y="144" class="svg-s">merge 3rd</text>
+    <line x1="200" y1="228" x2="860" y2="228" class="svg-line" marker-end="url(#p1)"/><text x="860" y="244" class="svg-s" style="text-anchor:end">time</text>
+  </svg></div>
+  <p class="small">One merge queue for the whole project. Only the front task catches up, runs tests and merges, so the tested code is exactly the merged code.</p>
 </div>
 </section>
 
-<!-- 8 pipeline -->
-<section class="slide" data-title="The line pipeline">
+<!-- 6 -->
+<section class="slide" data-title="Sandboxed worktrees">
 <div class="inner">
-  <p class="kicker">The line pipeline (1 of 3)</p>
-  <h2>One straight line for every change</h2>
-  <p class="lead">Every change walks the same line. The exits on the side are where a human or a retry takes over.</p>
+  <p class="kicker">Feature 4</p>
+  <h2>Sandboxed worktrees</h2>
+  <p class="lead">Each task works in <code>.symcc/worktrees/T-n</code> on branch <code>symcc/T-n</code>. Your own branch stays untouched until a merge.</p>
+  <div class="diagram wide"><svg viewBox="0 0 900 200" role="img" aria-label="Your branch with three task branches that merge back through one checked merge">
+    <defs><marker id="w1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker></defs>
+    <text x="10" y="40" class="svg-t" style="text-anchor:start">your branch</text>
+    <line x1="120" y1="36" x2="890" y2="36" class="svg-main"/>
+    <g class="svg-line">
+      <path d="M200 36 C230 36 230 90 260 90 H460 C490 90 490 36 520 36" marker-end="url(#w1)"/>
+      <path d="M260 36 C290 36 290 130 320 130 H580 C610 130 610 36 640 36" marker-end="url(#w1)"/>
+      <path d="M320 36 C350 36 350 170 380 170 H700 C730 170 730 36 760 36" marker-end="url(#w1)"/>
+    </g>
+    <text x="360" y="84" class="svg-l">symcc/T-1</text><text x="420" y="124" class="svg-l">symcc/T-2</text><text x="480" y="164" class="svg-l">symcc/T-3</text>
+    <text x="520" y="26" class="svg-l">checked merge</text><text x="640" y="26" class="svg-l">checked merge</text><text x="760" y="26" class="svg-l">checked merge</text>
+  </svg></div>
+  <div class="grid g3">
+    <div class="card good"><h3>The checked merge</h3><ol style="margin:0;padding-left:20px"><li>Bring the task up to date with the branch.</li><li>Scope check against the task's files.</li><li>Run your test commands.</li><li>Only then move the branch.</li></ol></div>
+    <div class="card warn"><h3>Work is kept on failure</h3><p>A failed or stopped task keeps its folder and branch. A retry continues from there.</p></div>
+    <div class="card"><h3>An honest limit</h3><p>The guards read command text and stop honest mistakes. They are not a security boundary.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-title="The line">
+<div class="inner">
+  <p class="kicker">Feature 5</p>
+  <h2>The line: one straight road for every change</h2>
+  <p class="lead">The exits on the side are where a person or a retry takes over.</p>
   <div class="diagram wide"><svg viewBox="0 0 900 250" role="img" aria-label="The straight line: todo, doing, prep, checker, queue, tests, merge, done, with side exits">
     <defs>
-      <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker>
-      <marker id="ah2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker>
+      <marker id="l1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker>
+      <marker id="l2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker>
     </defs>
     <g>
       <rect x="6" y="30" width="86" height="52" rx="8" class="svg-box"/><text x="49" y="53" class="svg-t">todo</text><text x="49" y="70" class="svg-s">ready</text>
@@ -343,17 +379,17 @@ tr:last-child td { border-bottom: 0; }
       <rect x="816" y="30" width="78" height="52" rx="8" class="svg-good"/><text x="855" y="53" class="svg-t">done</text><text x="855" y="70" class="svg-s">final</text>
     </g>
     <g class="svg-main">
-      <line x1="92" y1="56" x2="114" y2="56" marker-end="url(#ah2)"/><line x1="212" y1="56" x2="234" y2="56" marker-end="url(#ah2)"/>
-      <line x1="332" y1="56" x2="354" y2="56" marker-end="url(#ah2)"/><line x1="452" y1="56" x2="474" y2="56" marker-end="url(#ah2)"/>
-      <line x1="572" y1="56" x2="594" y2="56" marker-end="url(#ah2)"/><line x1="692" y1="56" x2="714" y2="56" marker-end="url(#ah2)"/>
-      <line x1="796" y1="56" x2="814" y2="56" marker-end="url(#ah2)"/>
+      <line x1="92" y1="56" x2="114" y2="56" marker-end="url(#l1)"/><line x1="212" y1="56" x2="234" y2="56" marker-end="url(#l1)"/>
+      <line x1="332" y1="56" x2="354" y2="56" marker-end="url(#l1)"/><line x1="452" y1="56" x2="474" y2="56" marker-end="url(#l1)"/>
+      <line x1="572" y1="56" x2="594" y2="56" marker-end="url(#l1)"/><line x1="692" y1="56" x2="714" y2="56" marker-end="url(#l1)"/>
+      <line x1="796" y1="56" x2="814" y2="56" marker-end="url(#l1)"/>
     </g>
     <text x="450" y="112" class="svg-s" font-weight="600">side exits</text>
     <g>
-      <line x1="164" y1="82" x2="110" y2="136" class="svg-line" marker-end="url(#ah2b)"/>
-      <line x1="404" y1="82" x2="300" y2="136" class="svg-line" marker-end="url(#ah2b)"/>
-      <line x1="644" y1="82" x2="500" y2="136" class="svg-line" marker-end="url(#ah2b)"/>
-      <line x1="644" y1="82" x2="700" y2="136" class="svg-line" marker-end="url(#ah2b)"/>
+      <line x1="164" y1="82" x2="110" y2="136" class="svg-line" marker-end="url(#l2)"/>
+      <line x1="404" y1="82" x2="300" y2="136" class="svg-line" marker-end="url(#l2)"/>
+      <line x1="644" y1="82" x2="500" y2="136" class="svg-line" marker-end="url(#l2)"/>
+      <line x1="644" y1="82" x2="700" y2="136" class="svg-line" marker-end="url(#l2)"/>
     </g>
     <rect x="30" y="136" width="160" height="50" rx="8" class="svg-warn"/><text x="110" y="158" class="svg-t">waiting</text><text x="110" y="175" class="svg-s">question, file, over time</text>
     <rect x="220" y="136" width="160" height="50" rx="8" class="svg-bad"/><text x="300" y="158" class="svg-t">failed (back to todo)</text><text x="300" y="175" class="svg-s">checker problems: a retry</text>
@@ -364,24 +400,23 @@ tr:last-child td { border-bottom: 0; }
   </svg></div>
   <div class="grid g3">
     <div class="card"><h3>Prep</h3><p>symcc commits, leaves out secret-looking files (<code>.env</code>, <code>*.pem</code>, ...) and checks every changed file is on the task's list.</p></div>
-    <div class="card"><h3>Queue</h3><p>One merge queue for the whole project, oldest first. Only the front task catches up, tests and merges, so the tested code is exactly the merged code.</p></div>
-    <div class="card"><h3>Merge</h3><p>Only now does your branch move forward. Uncommitted work of yours in other files is never overwritten.</p></div>
+    <div class="card"><h3>Queue</h3><p>One merge queue, oldest first.</p></div>
+    <div class="card"><h3>Merge</h3><p>Only now does your branch move forward. Your uncommitted work in other files is never overwritten.</p></div>
   </div>
 </div>
 </section>
 
-<!-- 9 state diagram -->
-<section class="slide" data-title="Status diagram">
+<!-- 8 -->
+<section class="slide" data-title="Status map">
 <div class="inner">
-  <p class="kicker">The line pipeline (2 of 3)</p>
-  <h2>The nine statuses and who moves a task</h2>
+  <p class="kicker">Feature 5, the map</p>
+  <h2>Nine statuses and who moves a task</h2>
   <div class="diagram wide"><svg viewBox="0 -24 900 420" role="img" aria-label="State transition diagram of task statuses with who triggers each move">
     <defs>
-      <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker>
-      <marker id="ah3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker>
-      <marker id="ah3w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-w"/></marker>
+      <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker>
+      <marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker>
+      <marker id="s3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-w"/></marker>
     </defs>
-    <!-- nodes -->
     <rect x="30" y="50" width="100" height="40" rx="8" class="svg-box"/><text x="80" y="75" class="svg-t">backlog</text>
     <rect x="210" y="50" width="100" height="40" rx="8" class="svg-box"/><text x="260" y="75" class="svg-t">todo</text>
     <rect x="420" y="50" width="100" height="40" rx="8" class="svg-acc"/><text x="470" y="75" class="svg-t">doing</text>
@@ -391,343 +426,267 @@ tr:last-child td { border-bottom: 0; }
     <rect x="630" y="190" width="100" height="40" rx="8" class="svg-bad"/><text x="680" y="215" class="svg-t">failed</text>
     <rect x="60" y="320" width="100" height="40" rx="8" class="svg-box"/><text x="110" y="345" class="svg-t">paused</text>
     <rect x="210" y="320" width="100" height="40" rx="8" class="svg-box"/><text x="260" y="345" class="svg-t">dropped</text>
-    <!-- main edges -->
-    <line x1="130" y1="70" x2="208" y2="70" class="svg-line" marker-end="url(#ah3)" marker-start="url(#ah3)"/>
+    <line x1="130" y1="70" x2="208" y2="70" class="svg-line" marker-end="url(#s1)" marker-start="url(#s1)"/>
     <text x="170" y="62" class="svg-l" text-anchor="middle">owner/lead</text>
-    <line x1="310" y1="70" x2="418" y2="70" class="svg-main" marker-end="url(#ah3a)"/>
+    <line x1="310" y1="70" x2="418" y2="70" class="svg-main" marker-end="url(#s2)"/>
     <text x="364" y="62" class="svg-l" text-anchor="middle">symcc starts it</text>
-    <line x1="520" y1="70" x2="738" y2="70" class="svg-main" marker-end="url(#ah3a)"/>
+    <line x1="520" y1="70" x2="738" y2="70" class="svg-main" marker-end="url(#s2)"/>
     <text x="629" y="60" class="svg-l" text-anchor="middle">tests pass, merge</text>
     <text x="629" y="86" class="svg-l" text-anchor="middle">(symcc, in the queue)</text>
-    <!-- retry loop -->
-    <path d="M470 50 C470 -18 260 -18 260 50" class="svg-retry" marker-end="url(#ah3w)"/>
-    <text x="365" y="-6" class="svg-l" text-anchor="middle" fill="currentColor" style="fill:var(--warn)">retry loop: tests fail / checker sends back (auto_retries)</text>
-    <!-- doing exits -->
-    <line x1="455" y1="90" x2="418" y2="188" class="svg-line" marker-end="url(#ah3)"/>
+    <path d="M470 50 C470 -18 260 -18 260 50" class="svg-retry" marker-end="url(#s3)"/>
+    <text x="365" y="-6" class="svg-l" text-anchor="middle" style="fill:var(--warn)">retry loop: tests fail / checker sends back (auto_retries)</text>
+    <line x1="455" y1="90" x2="418" y2="188" class="svg-line" marker-end="url(#s1)"/>
     <text x="400" y="246" class="svg-l" text-anchor="middle">worker asks, file refused, over time</text>
-    <line x1="490" y1="90" x2="525" y2="188" class="svg-line" marker-end="url(#ah3)"/>
-    <text x="512" y="130" class="svg-l">checks passed in</text><text x="512" y="142" class="svg-l">review mode</text>
-    <line x1="510" y1="90" x2="660" y2="188" class="svg-line" marker-end="url(#ah3)"/>
+    <line x1="490" y1="90" x2="525" y2="188" class="svg-line" marker-end="url(#s1)"/>
+    <text x="538" y="144" class="svg-l">checks</text><text x="538" y="157" class="svg-l">passed in</text><text x="538" y="170" class="svg-l">review mode</text>
+    <line x1="510" y1="90" x2="660" y2="188" class="svg-line" marker-end="url(#s1)"/>
     <text x="620" y="130" class="svg-l">tests, API error,</text><text x="620" y="142" class="svg-l">retries used up</text>
-    <!-- returns to todo -->
-    <line x1="370" y1="190" x2="300" y2="92" class="svg-dash" marker-end="url(#ah3)"/>
-    <text x="316" y="150" class="svg-l">owner answers</text>
-    <path d="M540 230 V268 H290 V92" class="svg-dash" marker-end="url(#ah3)"/>
+    <line x1="370" y1="190" x2="300" y2="92" class="svg-dash" marker-end="url(#s1)"/>
+    <text x="354" y="140" class="svg-l">owner</text><text x="354" y="152" class="svg-l">answers</text>
+    <path d="M540 230 V268 H290 V92" class="svg-dash" marker-end="url(#s1)"/>
     <path d="M680 230 V268 H540" class="svg-dash"/>
-    <text x="420" y="262" class="svg-l" text-anchor="middle">owner rejects (review) / owner or lead retries (failed)</text>
-    <!-- approve -->
-    <path d="M580 190 C 600 160 790 160 800 94" class="svg-main" marker-end="url(#ah3a)"/>
+    <text x="302" y="286" class="svg-l">owner rejects (review)</text><text x="302" y="299" class="svg-l">owner or lead retries (failed)</text>
+    <path d="M580 190 C 600 160 790 160 800 94" class="svg-main" marker-end="url(#s2)"/>
     <text x="796" y="170" class="svg-l">owner approves,</text><text x="796" y="182" class="svg-l">then merge runs</text>
-    <!-- paused / dropped -->
-    <line x1="235" y1="92" x2="130" y2="318" class="svg-dash" marker-end="url(#ah3)" marker-start="url(#ah3)"/>
-    <text x="60" y="296" class="svg-l">owner: pause / resume</text>
-    <line x1="260" y1="92" x2="260" y2="318" class="svg-dash" marker-end="url(#ah3)" marker-start="url(#ah3)"/>
-    <text x="268" y="300" class="svg-l">owner/lead: drop</text><text x="268" y="312" class="svg-l" opacity="0"> </text>
+    <line x1="235" y1="92" x2="130" y2="318" class="svg-dash" marker-end="url(#s1)" marker-start="url(#s1)"/>
+    <text x="128" y="296" class="svg-l" text-anchor="end">owner: pause / resume</text>
+    <line x1="260" y1="92" x2="260" y2="318" class="svg-dash" marker-end="url(#s1)" marker-start="url(#s1)"/>
+    <text x="252" y="300" class="svg-l" text-anchor="end">owner/lead: drop</text>
     <text x="420" y="345" class="svg-l">dashed = a person (or the lead for the owner) moves it.</text>
     <text x="420" y="361" class="svg-l">solid blue = the main line. Orange = automatic retry.</text>
     <text x="420" y="377" class="svg-l">dropped: retry brings it back to todo. Done is final.</text>
   </svg></div>
-  <div class="grid g2">
-    <div class="card"><p><strong>Who triggers what.</strong> Worker: ends its run, asks, or has a file refused. Checker: finds problems (one retry). Tests: pass or fail. symcc itself: starts ready tasks and runs the merge queue. Lead: plans, orders, drops. Owner: answers, approves, rejects, pauses, retries.</p></div>
-    <div class="card"><p><strong>Needs you</strong> means the next move is yours: the task is in <code>review</code>, <code>waiting</code> or <code>failed</code>, or a worker asked for more time.</p></div>
-  </div>
+  <p class="small"><strong>Needs you</strong> means the next move is yours: the task is in <code>review</code>, <code>waiting</code> or <code>failed</code>, or a worker asked for more time.</p>
 </div>
 </section>
 
-<!-- 10 retry + modes -->
-<section class="slide" data-title="Retries and modes">
+<!-- 9 -->
+<section class="slide" data-title="The checker">
 <div class="inner">
-  <p class="kicker">The line pipeline (3 of 3)</p>
-  <h2>The retry loop and the board modes</h2>
-  <div class="grid g2">
-    <div class="card warn"><h3>Retry loop</h3>
-      <ul>
-        <li>Failing tests, a clash with your branch, or checker problems send the task back to <code>todo</code>. A <strong>new worker</strong> gets the failing output.</li>
-        <li>The task's folder and branch are kept, so the new try continues the old work.</li>
-        <li>Up to <code>auto_retries</code> times (default 2, range 0 to 10). Then the task becomes <code>failed</code> and the lead is told.</li>
-        <li>An API error or refusal fails the task at once with its reason; work is kept.</li>
-      </ul></div>
-    <div class="card acc"><h3>Board modes</h3>
-      <ul>
-        <li><strong><code>paused</code></strong>: every worker and scout stops, nothing new starts. Tasks in review can still be approved.</li>
-        <li><strong><code>review</code></strong>: work runs, but each task that passes waits in <code>review</code> for you. The lead asks before adding any task.</li>
-        <li><strong><code>auto</code></strong> (default): a task that passes the tests merges at once. You can still mark one task <code>needs_review</code>.</li>
-      </ul></div>
-  </div>
-  <div class="tablewrap" style="margin-top:12px"><table>
-    <tr><th>What happened</th><th>What the task does</th></tr>
-    <tr><td>Worker asks the owner, or a file outside the list is refused</td><td>Goes to <code>waiting</code>. No try is used. The answer sends it back to work.</td></tr>
-    <tr><td>Checker finds problems</td><td>New try; no tests run for that try.</td></tr>
-    <tr><td>Merge clash or failing tests</td><td>New try with the output; one of the retries is used.</td></tr>
-    <tr><td>Worker over <code>max_minutes</code> (45)</td><td>You are asked for more time; if you stop it, the task fails with its work kept.</td></tr>
-    <tr><td>Investigation finished</td><td>Goes to <code>review</code> with its answer. Nothing is merged.</td></tr>
-  </table></div>
-</div>
-</section>
-
-<!-- 11 sandbox -->
-<section class="slide" data-title="Sandboxed work">
-<div class="inner">
-  <p class="kicker">Isolation</p>
-  <h2>Sandboxed work: a worktree per task</h2>
-  <p class="lead">Each task runs in its own git worktree and branch: <code>.symcc/worktrees/T-n</code> on branch <code>symcc/T-n</code>. It starts from the branch you were on.</p>
-  <div class="diagram"><svg viewBox="0 0 900 190" role="img" aria-label="Your branch with three task branches that merge back through one checked merge">
-    <defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker></defs>
-    <text x="20" y="40" class="svg-t" text-anchor="start">your branch</text>
-    <line x1="120" y1="36" x2="880" y2="36" class="svg-main"/>
-    <g class="svg-line">
-      <path d="M200 36 C230 36 230 84 260 84 H460 C490 84 490 36 520 36" marker-end="url(#ah4)"/>
-      <path d="M260 36 C290 36 290 126 320 126 H580 C610 126 610 36 640 36" marker-end="url(#ah4)"/>
-      <path d="M320 36 C350 36 350 166 380 166 H700 C730 166 730 36 760 36" marker-end="url(#ah4)"/>
-    </g>
-    <text x="360" y="78" class="svg-l">symcc/T-1 worktree</text>
-    <text x="420" y="120" class="svg-l">symcc/T-2 worktree</text>
-    <text x="480" y="160" class="svg-l">symcc/T-3 worktree</text>
-    <text x="530" y="28" class="svg-l">checked merge</text>
+  <p class="kicker">Feature 6</p>
+  <h2>The checker: a fresh agent tries to break it</h2>
+  <p class="lead">Off by default, because it costs time and tokens. It did not write the change, so it looks with fresh eyes.</p>
+  <div class="diagram wide"><svg viewBox="0 0 900 230" role="img" aria-label="Worker finishes, checker tries the change; problems send the task back as a retry, OK goes to the queue">
+    <defs>
+      <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker>
+      <marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-w"/></marker>
+    </defs>
+    <rect x="20" y="50" width="170" height="60" rx="10" class="svg-good"/><text x="105" y="76" class="svg-t">Worker</text><text x="105" y="94" class="svg-s">finishes the change</text>
+    <rect x="340" y="50" width="200" height="60" rx="10" class="svg-warn"/><text x="440" y="76" class="svg-t">Checker</text><text x="440" y="94" class="svg-s">runs its own probe scripts</text>
+    <rect x="700" y="50" width="180" height="60" rx="10" class="svg-acc"/><text x="790" y="76" class="svg-t">Merge queue</text><text x="790" y="94" class="svg-s">tests run once, later</text>
+    <g class="svg-main"><line x1="190" y1="80" x2="338" y2="80" marker-end="url(#c1)"/><line x1="540" y1="80" x2="698" y2="80" marker-end="url(#c1)"/></g>
+    <text x="620" y="70" class="svg-t" style="fill:var(--good)">OK</text>
+    <path d="M440 110 V180 H105 V112" class="svg-retry" marker-end="url(#c2)"/>
+    <text x="125" y="200" class="svg-l" style="fill:var(--warn)">problems found: a new worker gets the report</text>
+    <text x="125" y="216" class="svg-l" style="fill:var(--warn)">counts as one of the auto_retries</text>
   </svg></div>
   <div class="grid g3">
-    <div class="card good"><h3>The checked merge</h3><ol style="margin:0;padding-left:20px"><li>Bring the task up to date with the branch.</li><li>Scope check against the task's files.</li><li>Run your test commands.</li><li>Only then move the branch.</li></ol></div>
-    <div class="card acc"><h3>Why it matters</h3><ul><li>No shared-file clobbering between workers.</li><li>Conflicts show up at merge, where they can be handled, not as silent overwrites.</li><li>Your own branch stays untouched until a merge.</li></ul></div>
-    <div class="card warn"><h3>Work is kept on failure</h3><p>A failed or stopped task keeps its folder and branch, so a retry continues from there instead of starting over.</p></div>
+    <div class="card good"><h3>It can</h3><p>Read the task and the whole diff, and try the change for real with small probe scripts.</p></div>
+    <div class="card bad"><h3>It cannot</h3><p>Edit the project's files, change git, or run your tests (they run once, in the queue).</p></div>
+    <div class="card warn"><h3>Skipped for</h3><p>Investigations and docs-only changes.</p></div>
   </div>
-  <p class="small" style="margin-top:10px">The guards read command text and stop honest mistakes. They are not a security boundary.</p>
 </div>
 </section>
 
-<!-- 12 org-mem -->
-<section class="slide" data-title="Organizational memory">
+<!-- 10 -->
+<section class="slide" data-title="Scouts">
 <div class="inner">
-  <p class="kicker">Learning across tasks</p>
-  <h2>Organizational memory (org-mem)</h2>
-  <p class="lead"><code>.symcc/org-mem.md</code> holds short notes that every new worker, checker and scout gets in its prompt.</p>
-  <div class="diagram"><svg viewBox="0 0 900 150" role="img" aria-label="Agents suggest notes, the lead curates, the notes go into the next agents' prompts">
-    <defs><marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head"/></marker></defs>
-    <rect x="20" y="40" width="190" height="60" rx="10" class="svg-box"/><text x="115" y="66" class="svg-t">Workers, checkers</text><text x="115" y="84" class="svg-s">suggest 0 to a few notes</text>
+  <p class="kicker">Feature 7</p>
+  <h2>Scouts: they look for work while you are away</h2>
+  <p class="lead">Read-only agents. They run on a timer or on demand with <code>/symcc-scout &lt;name&gt;</code>.</p>
+  <div class="grid g2">
+    <div class="diagram" style="margin:0"><svg viewBox="0 0 300 260" role="img" aria-label="A radar sweep that finds three blips: a bug, a test gap and a board issue">
+      <circle cx="150" cy="130" r="110" class="svg-box"/><circle cx="150" cy="130" r="72" class="svg-box"/><circle cx="150" cy="130" r="34" class="svg-box"/>
+      <line x1="40" y1="130" x2="260" y2="130" class="svg-dash"/><line x1="150" y1="20" x2="150" y2="240" class="svg-dash"/>
+      <g class="sweep"><path d="M150 130 L150 20 A110 110 0 0 1 228 52 Z" style="fill:var(--accent);opacity:0.25"/><line x1="150" y1="130" x2="150" y2="20" class="svg-main"/></g>
+      <circle cx="205" cy="85" r="6" class="svg-bad blink"/><circle cx="105" cy="170" r="6" class="svg-warn blink"/><circle cx="190" cy="185" r="6" class="svg-good blink"/>
+      <text x="150" y="254" class="svg-s">the scouts' sweep</text>
+    </svg></div>
+    <div>
+      <div class="tk need"><b>bug</b> a slip in the date code</div>
+      <div class="tk"><b>test gap</b> a file with no tests</div>
+      <div class="tk ok"><b>board</b> a task that looks stuck</div>
+      <p style="margin-top:10px">Also: old dependencies and security notices.</p>
+      <div class="row"><span class="tag">finding</span><span class="arrow" style="font-size:18px">&rarr;</span><span class="tag">lead decides</span><span class="arrow" style="font-size:18px">&rarr;</span><span class="tag good">todo</span> <span class="small">or</span> <span class="tag warn">backlog</span></div>
+      <p class="small" style="margin-top:8px">The <code>scout_findings</code> setting picks <code>auto</code> (to do) or <code>backlog</code> (waits for you). Scouts cannot edit files or create tasks themselves.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-title="Roles and kinds">
+<div class="inner">
+  <p class="kicker">Feature 8</p>
+  <h2>Roles and kinds: two decks of cards</h2>
+  <div class="grid g2">
+    <div class="card acc"><h3>Role = who does it</h3>
+      <div class="deckcards"><span>general</span><span>docs</span><span>refactor</span><span>researcher</span><span>security</span><span>tester</span><span class="sp">your own</span></div>
+      <p class="small" style="margin-top:8px">A role is one Markdown file. Its checklist goes into the worker's prompt. It can also pick a model. <code>general</code> is the default.</p></div>
+    <div class="card acc"><h3>Kind = what the task is</h3>
+      <div class="deckcards"><span>change</span><span>bug</span><span>feature</span><span>refactor</span><span>docs</span><span>investigation</span><span class="sp">your own</span></div>
+      <p class="small" style="margin-top:8px">A kind is a label. It changes how a task runs in only two cases:</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card warn"><h3>Investigation</h3><p>The result is an answer, not a change. It never merges, and the task waits for you, even in <code>auto</code> mode.</p></div>
+    <div class="card warn"><h3>Docs-only change</h3><p>Skips the checker and is never flagged for having no tests.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-title="Asking you">
+<div class="inner">
+  <p class="kicker">Feature 9</p>
+  <h2>Asking you, so nothing gets lost</h2>
+  <div class="flow">
+    <div class="card good"><h3>Worker</h3><p>Calls <code>ask_owner</code> with 2 to 6 choices, then stops.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="card warn"><h3>NEEDS YOU</h3><p>The task goes to <code>waiting</code>. No try is used.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="card acc"><h3>You answer</h3><p>With buttons on the board, or in a pop-up in the chat.</p></div>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="mock"><h4>Question</h4><div class="tk need pulse"><b>T-5</b> Which colors?</div><div class="row"><span class="tag">1 Blue</span><span class="tag">2 Green</span></div></div>
+    <div class="mock"><h4>File request</h4><div class="tk need"><b>T-6</b> wants: api.ts</div><div class="row"><span class="tag good">1 Allow</span><span class="tag bad">2 Don't allow</span></div></div>
+    <div class="mock"><h4>Over time</h4><div class="tk need"><b>T-8</b> over 45 min</div><div class="row"><span class="tag">+30 min</span><span class="tag">+60 min</span><span class="tag bad">Stop it</span></div></div>
+  </div>
+  <p class="small" style="margin-top:10px">With <code>notify</code> on, you hear "symcc: T-5 needs you" (<code>voice</code>) or a short chime (<code>sound</code>). A file request is an edit outside the task's files that was refused.</p>
+</div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-title="Org memory">
+<div class="inner">
+  <p class="kicker">Feature 10</p>
+  <h2>Organizational memory</h2>
+  <p class="lead"><code>.symcc/org-mem.md</code> holds short notes. Every new worker, checker and scout gets them in its prompt.</p>
+  <div class="diagram wide"><svg viewBox="0 0 900 150" role="img" aria-label="Agents suggest notes, the lead curates, the notes go into the next agents' prompts">
+    <defs><marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <rect x="20" y="40" width="190" height="60" rx="10" class="svg-box"/><text x="115" y="66" class="svg-t">Workers, checkers</text><text x="115" y="84" class="svg-s">suggest a few notes</text>
     <rect x="260" y="40" width="170" height="60" rx="10" class="svg-acc"/><text x="345" y="66" class="svg-t">Lead</text><text x="345" y="84" class="svg-s">keeps only surprising ones</text>
     <rect x="480" y="40" width="170" height="60" rx="10" class="svg-good"/><text x="565" y="66" class="svg-t">org-mem.md</text><text x="565" y="84" class="svg-s">at most 60 lines</text>
     <rect x="700" y="40" width="180" height="60" rx="10" class="svg-box"/><text x="790" y="66" class="svg-t">Next agents</text><text x="790" y="84" class="svg-s">notes in their prompt</text>
-    <g class="svg-line"><line x1="210" y1="70" x2="258" y2="70" marker-end="url(#ah5)"/><line x1="430" y1="70" x2="478" y2="70" marker-end="url(#ah5)"/><line x1="650" y1="70" x2="698" y2="70" marker-end="url(#ah5)"/></g>
+    <g class="svg-main flowdash"><line x1="210" y1="70" x2="258" y2="70" marker-end="url(#m1)"/><line x1="430" y1="70" x2="478" y2="70" marker-end="url(#m1)"/><line x1="650" y1="70" x2="698" y2="70" marker-end="url(#m1)"/></g>
   </svg></div>
-  <div class="grid g2">
-    <div class="card"><ul>
-      <li>Agents only <strong>suggest</strong>, at the end of a report. Nothing is added on its own.</li>
-      <li>The lead decides. The file stays short, free of repeats and of notes that matter for one task only.</li>
-      <li>A note is one plain sentence, true beyond the task, with no secrets and no task ids.</li>
-    </ul></div>
-    <div class="card acc"><p><strong>Why it counts as learning.</strong> One task's trap (a slow test, a refused command, where something lives) saves time on every later task. It is memory that belongs to the organization, not to one chat.</p></div>
-  </div>
+  <div class="card acc"><p>One task's trap (a slow test, a refused command) saves time on every later task. Agents only suggest. The lead decides, so the file stays short and free of repeats.</p></div>
 </div>
 </section>
 
-<!-- 13 board coordination -->
-<section class="slide" data-title="Coordination">
+<!-- 14 -->
+<section class="slide" data-title="Modes and safety">
 <div class="inner">
-  <p class="kicker">Coordination</p>
-  <h2>Coordination through the board, not chat</h2>
-  <div class="grid g2">
-    <div class="card"><h3>What lives on the board</h3><ul>
-      <li><strong>Dependencies:</strong> <code>after</code> lists tasks that must be done (merged) first.</li>
-      <li><strong>Order:</strong> among free tasks, the lowest <code>order</code> goes first, then the lower task number.</li>
-      <li><strong>File scopes:</strong> each task's file list. Tasks that change the same files wait on each other.</li>
-      <li><strong>Questions:</strong> asked on the board and in the chat.</li>
-    </ul></div>
-    <div class="card"><h3>Triage health checks</h3><p>Every two minutes (and after each change) symcc looks for:</p><ul>
-      <li>Stuck: waiting on a dropped or failed task, or a loop.</li>
-      <li>Starving: an older task pushed back again and again.</li>
-      <li>Too serial: three or more tasks in a chain that share no files.</li>
-      <li>Needs you for over an hour.</li></ul>
-      <p>A problem is reported once. A healthy board sends nothing.</p></div>
-  </div>
-  <div class="grid g2" style="margin-top:12px">
-    <div class="card"><h3>Board parts files</h3><p>Claude Code refuses to read a file over 4 MiB. So a finished task keeps only a short stub in <code>board.json</code>; the rest goes to parts files under <code>.symcc/tasks/</code>. Every view still sees the whole task.</p></div>
-    <div class="card acc"><h3>Telemetry symcc records</h3><p>Every try is a run: its time, tokens and how it ended. The board history keeps each step (prep, checker, queue, test, merge). <code>/symcc-stats</code> shows time, tokens, outcomes, by role and by day. It shows tokens, not dollars: the model's prices are not known.</p></div>
-  </div>
-</div>
-</section>
-
-<!-- 14 evidence -->
-<section class="slide" data-title="Why organization matters">
-<div class="inner">
-  <p class="kicker">The science (1 of 6)</p>
-  <h2>Why organization matters: the evidence</h2>
+  <p class="kicker">Feature 11</p>
+  <h2>Modes and safety: you pick how much runs alone</h2>
   <div class="grid g3">
-    <div class="card acc"><h3>Google Research, 2026</h3><p><em>Towards a Science of Scaling Agent Systems</em>. 180 configurations.</p><ul>
-      <li>Centralized coordination: about +81% on work that can run in parallel.</li>
-      <li>The same on sequential planning: about -39% to -70%.</li>
-      <li>Uncoordinated teams amplify errors.</li></ul></div>
-    <div class="card warn"><h3>Cursor</h3><p><em>Agent swarms and the new model economics</em>.</p><ul>
-      <li>An old harness: over 70,000 merge conflicts.</li>
-      <li>A redesigned one: under 1,000.</li>
-      <li>Much apparent productivity is organizational waste.</li></ul></div>
-    <div class="card good"><h3>Anthropic</h3><p>Multi-agent engineering.</p><ul>
-      <li>Match the structure to the workload.</li>
-      <li>Use deterministic safeguards, not only prompts.</li></ul></div>
+    <div class="mock"><h4>paused</h4><div class="switch"><div class="on">paused</div><div>review</div><div>auto</div></div><p class="small" style="margin-top:8px">Every worker and scout stops. Nothing new starts.</p></div>
+    <div class="mock"><h4>review</h4><div class="switch"><div>paused</div><div class="on">review</div><div>auto</div></div><p class="small" style="margin-top:8px">Work runs. Each passed task waits for your approval.</p></div>
+    <div class="mock"><h4>auto (default)</h4><div class="switch"><div>paused</div><div>review</div><div class="on">auto</div></div><p class="small" style="margin-top:8px">A task that passes its tests merges at once.</p></div>
   </div>
-  <div class="card" style="margin-top:12px"><p><strong>The point.</strong> Commits and tokens are poor measures of productivity. A team can produce many commits and still get little done. What counts is <strong>verified progress</strong>: changes that passed the checks and merged.</p>
-  <p class="small">That is why symcc ties its line to tests and a checked merge, and counts a task only when it is merged.</p></div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card good"><h3>Scope guard</h3><p>An edit outside the task's files is refused.</p></div>
+    <div class="card good"><h3>Tests before merge</h3><p>Your test commands run on the merged code.</p></div>
+    <div class="card good"><h3>Review before merge</h3><p>In <code>review</code> mode, nothing merges until you approve.</p></div>
+  </div>
 </div>
 </section>
 
-<!-- 15 literature -->
-<section class="slide" data-title="Literature map">
+<!-- 15 -->
+<section class="slide" data-title="Stats">
 <div class="inner">
-  <p class="kicker">The science (2 of 6)</p>
-  <h2>Literature map: six streams</h2>
-  <div class="tablewrap"><table>
-    <tr><th>Stream</th><th>Work</th><th>Where symcc connects</th></tr>
-    <tr><td><strong>A</strong> Topology optimization</td><td>GPTSwarm, AgentPrune, Guided Topology Diffusion, Adaptive Graph Pruning, ACTS</td><td>The org chart and the <code>after</code> graph are set by the lead, not learned</td></tr>
-    <tr><td><strong>B</strong> Organization design</td><td>Toward an Organizational Science of Multi-Agent LLM Systems (IMACS): organization, coordination, collaboration protocol</td><td>Roles, the line, the board modes and the rules between them</td></tr>
-    <tr><td><strong>C</strong> Empirical coordination and failure</td><td>Nature MI 2026 "Capable language models can outgrow the benefits of collaboration"; MAST (NeurIPS 2025, 14 failure modes); "When Agents Coordinate" (1,902 runs)</td><td>Failure reasons on the board, retry counts, triage checks</td></tr>
-    <tr><td><strong>D</strong> Context allocation</td><td>Dynamic Context Allocation (EMNLP 2026)</td><td>File scopes and each worker's small prompt</td></tr>
-    <tr><td><strong>E</strong> Asynchronous SE agents</td><td>Centralized asynchronous isolated delegation; Coordinating Agents on a Shared Git Workspace</td><td>Worktrees + tests + board = isolated execution, shared coordination state, explicit verification</td></tr>
-    <tr><td><strong>F</strong> Persistent self-improving organizations</td><td>Survey "Beyond Individual Intelligence"</td><td>org-mem, kept and curated across tasks</td></tr>
-  </table></div>
-  <p class="small" style="margin-top:10px">symcc is closest to stream E in how it works, and to F in how it remembers.</p>
+  <p class="kicker">Feature 12</p>
+  <h2>Stats: where the time and tokens go</h2>
+  <p class="lead"><code>/symcc-stats</code> prints a report from what the board already keeps. <code>/symcc-stats html</code> writes a web page. <span class="stamp">ILLUSTRATIVE: NOT REAL NUMBERS</span></p>
+  <div class="grid g2">
+    <div class="mock"><h4>Tokens per task (example)</h4>
+      <div class="barrow"><span>T-1</span><div class="track"><div class="bar" style="width:80%"></div></div><span>big</span></div>
+      <div class="barrow"><span>T-2</span><div class="track"><div class="bar" style="width:45%"></div></div><span>mid</span></div>
+      <div class="barrow"><span>T-3</span><div class="track"><div class="bar" style="width:25%"></div></div><span>small</span></div>
+      <div class="barrow"><span>T-4</span><div class="track"><div class="bar" style="width:60%"></div></div><span>mid</span></div>
+    </div>
+    <div class="mock"><h4>Outcomes (example)</h4>
+      <svg viewBox="0 0 300 40" style="width:100%;display:block" role="img" aria-label="Example outcome bar"><rect x="0" y="8" width="190" height="24" class="svg-good"/><rect x="190" y="8" width="60" height="24" class="svg-warn"/><rect x="250" y="8" width="50" height="24" class="svg-bad"/></svg>
+      <p class="row" style="margin-top:8px"><span class="tag good">done</span><span class="tag warn">retried</span><span class="tag bad">failed</span></p>
+      <p class="small">Also by role and by day, with time per task. Ranges work: <code>/symcc-stats 7d</code>. Tokens, not dollars.</p>
+    </div>
+  </div>
 </div>
 </section>
 
-<!-- 16 gap -->
-<section class="slide" data-title="Research gap">
+<!-- 16 -->
+<section class="slide" data-title="Health checks">
 <div class="inner">
-  <p class="kicker">The science (3 of 6)</p>
-  <h2>The gap and the thesis: Adaptive Organizational Control</h2>
-  <div class="grid g3">
-    <div class="card"><h3>Workload level</h3><p>Choose how to split and order the whole job: which tasks, which dependencies, how many workers.</p></div>
-    <div class="card"><h3>Execution level</h3><p>Adapt while work runs: add time, stop a stuck worker, split a task, call a review.</p></div>
-    <div class="card"><h3>Across tasks</h3><p>Learn from finished tasks so the next job is organized better.</p></div>
+  <p class="kicker">Feature 13</p>
+  <h2>A board that keeps itself in order</h2>
+  <p class="lead">symcc checks the board after every change and every two minutes. A healthy board sends nothing.</p>
+  <div class="grid g2">
+    <div class="mock"><h4>Triage looks for</h4>
+      <div class="tk need"><b>Stuck</b> waits on a dropped or failed task, or a loop</div>
+      <div class="tk"><b>Starving</b> an older task pushed back again and again</div>
+      <div class="tk"><b>Too serial</b> a chain that shares no files</div>
+      <div class="tk need"><b>Too long</b> needs you for over an hour</div>
+    </div>
+    <div class="mock"><h4>Tidy-up</h4>
+      <div class="tk ok"><b>Archive</b> done and dropped tasks move off the board after 14 days (<code>archive_days</code>)</div>
+      <div class="tk ok"><b>/symcc-doctor</b> lists old backups, branches and folders with sizes. Changes nothing until you say <code>fix</code></div>
+      <div class="tk ok"><b>Small files</b> finished tasks keep only a short stub in board.json</div>
+    </div>
   </div>
-  <p style="margin-top:12px">Existing work mostly handles one of these at a time. <strong>The thesis:</strong> one controller should adapt at all three levels, using what it sees on the board.</p>
-  <div class="diagram"><svg viewBox="0 0 900 130" role="img" aria-label="Closed loop: observe, diagnose, act">
-    <defs><marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
-    <rect x="40" y="35" width="220" height="56" rx="10" class="svg-box"/><text x="150" y="60" class="svg-t">Observe</text><text x="150" y="78" class="svg-s">runs, tokens, conflicts, waits</text>
-    <rect x="340" y="35" width="220" height="56" rx="10" class="svg-box"/><text x="450" y="60" class="svg-t">Diagnose</text><text x="450" y="78" class="svg-s">stuck? too serial? failing?</text>
-    <rect x="640" y="35" width="220" height="56" rx="10" class="svg-acc"/><text x="750" y="60" class="svg-t">Act</text><text x="750" y="78" class="svg-s">assign, split, stop, review, replan</text>
-    <g class="svg-main"><line x1="260" y1="63" x2="338" y2="63" marker-end="url(#ah6)"/><line x1="560" y1="63" x2="638" y2="63" marker-end="url(#ah6)"/><path d="M750 91 V118 H150 V93" marker-end="url(#ah6)"/></g>
+</div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-title="Toward autonomy">
+<div class="inner">
+  <p class="kicker">A few ideas</p>
+  <h2>Toward autonomous agent organizations</h2>
+  <p class="lead">symcc is practical today. Here is where the idea could go.</p>
+  <div class="diagram wide"><svg viewBox="0 0 900 140" role="img" aria-label="Closed loop: observe, diagnose, act">
+    <defs><marker id="i1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <rect x="40" y="25" width="220" height="56" rx="10" class="svg-box"/><text x="150" y="50" class="svg-t">Observe</text><text x="150" y="68" class="svg-s">runs, tokens, conflicts, waits</text>
+    <rect x="340" y="25" width="220" height="56" rx="10" class="svg-box"/><text x="450" y="50" class="svg-t">Diagnose</text><text x="450" y="68" class="svg-s">stuck? too serial? failing?</text>
+    <rect x="640" y="25" width="220" height="56" rx="10" class="svg-acc"/><text x="750" y="50" class="svg-t">Act</text><text x="750" y="68" class="svg-s">reorder, split, add reviewers</text>
+    <g class="svg-main"><line x1="260" y1="53" x2="338" y2="53" marker-end="url(#i1)"/><line x1="560" y1="53" x2="638" y2="53" marker-end="url(#i1)"/><path d="M750 81 V118 H150 V83" marker-end="url(#i1)"/></g>
+    <text x="450" y="112" class="svg-s">also change how many workers run in parallel</text>
   </svg></div>
-  <p class="small">symcc already has a small, rule-based version of this loop: the triage checks. The research asks whether a better controller beats such simple rules.</p>
-</div>
-</section>
-
-<!-- 17 formal -->
-<section class="slide" data-title="Formal model">
-<div class="inner">
-  <p class="kicker">The science (4 of 6)</p>
-  <h2>Formal model</h2>
-  <p class="small">A partially observed decision process (POMDP): the controller does not see everything, only telemetry.</p>
-  <div class="math">
-    <div class="row"><i>s<sub>t</sub></i> = (<i>G<sub>t</sub></i>, <i>W<sub>t</sub></i>, <i>A<sub>t</sub></i>, <i>M<sub>t</sub></i>, <i>H<sub>t</sub></i>) <span class="lbl">state: task graph, workers, artifacts, coordination state, history</span></div>
-    <div class="row"><i>o<sub>t</sub></i> = telemetry <span class="lbl">what the controller sees</span></div>
-    <div class="row"><i>a<sub>t</sub></i> ∈ {Assign, Spawn, Stop, Split, Merge, Review, Replan}</div>
-    <div class="row"><i>J</i>(<i>π</i>) = 𝔼 [ <i>Q<sub>T</sub></i> − <i>λ C<sub>T</sub></i> − <i>μ T</i> ] <span class="lbl">quality minus cost minus time</span></div>
-    <div class="row"><i>r<sub>t</sub></i> = Δ<i>Q<sub>t</sub></i> − <i>λ c<sub>t</sub></i> − <i>α d<sub>t</sub></i> − <i>β f<sub>t</sub></i> <span class="lbl">event reward</span></div>
+  <div class="grid g3">
+    <div class="card acc"><h3>It learns</h3><p>Org-mem already keeps lessons across tasks.</p></div>
+    <div class="card acc"><h3>It adapts</h3><p>Triage is a small, rule-based version of the loop above. A smarter controller is an open question.</p></div>
+    <div class="card acc"><h3>It is measured</h3><p>By verified progress (changes that passed the checks and merged), not by commits or tokens.</p></div>
   </div>
-  <p class="small">Reward validated transitions (a change that passed checks and merged), not messages or commits. Here <i>d</i> and <i>f</i> are penalty terms for coordination waste such as duplicated work and failures.</p>
-  <div class="tablewrap"><table>
-    <tr><th>Term</th><th>symcc has today</th><th>Missing</th></tr>
-    <tr><td><i>G<sub>t</sub></i></td><td>Board tasks and <code>after</code></td><td>Predicted size or difficulty per task</td></tr>
-    <tr><td><i>W<sub>t</sub></i></td><td>Workers, roles, <code>max_parallel</code></td><td>Per-worker skill or load model</td></tr>
-    <tr><td><i>A<sub>t</sub></i>, <i>M<sub>t</sub></i></td><td>Branches, file scopes, merge queue</td><td>Conflict risk score</td></tr>
-    <tr><td><i>H<sub>t</sub></i></td><td>Runs, history lines, reports, events</td><td>Compact summary for a controller</td></tr>
-    <tr><td><i>C<sub>T</sub></i></td><td>Tokens and time in <code>/symcc-stats</code></td><td>Dollar cost (prices unknown)</td></tr>
-    <tr><td>Assign / Spawn</td><td>Worker start, scouts on a timer</td><td>Learned choice of when and who</td></tr>
-    <tr><td>Stop / Split / Replan</td><td>Owner stop, lead splits and changes tasks</td><td>Automatic triggers</td></tr>
-    <tr><td>Merge / Review</td><td>Merge queue, checker, owner review</td><td>Choosing when review is worth its cost</td></tr>
-    <tr><td><i>Q<sub>T</sub></i>, <i>r<sub>t</sub></i></td><td>Merged tasks, test results, retries</td><td>A quality score beyond pass/fail</td></tr>
-  </table></div>
 </div>
 </section>
 
-<!-- 18 hypotheses -->
-<section class="slide" data-title="Hypotheses">
+<!-- 18 -->
+<section class="slide" data-title="Structure matters">
 <div class="inner">
-  <p class="kicker">The science (5 of 6)</p>
-  <h2>Hypotheses and baselines</h2>
+  <p class="kicker">A few ideas</p>
+  <h2>Structure matters</h2>
+  <p class="lead">Research on agent teams points the same way.</p>
   <div class="grid g2">
-    <div class="card acc"><h3>Hypotheses H1 to H4</h3>
-      <p>The four hypotheses are numbered H1 to H4 in the owner's research plan. They ask whether adaptive control beats a fixed structure on verified progress at the same budget, and on which kinds of workload.</p>
-      <p class="small">The exact wording of each is in the research plan, not repeated here.</p></div>
-    <div class="card"><h3>Baselines B0 to B6</h3>
-      <p>From the simplest to the most adaptive:</p>
-      <p><span class="tag">B0</span> single agent<br><span class="tag">B1 to B5</span> fixed and rule-based structures in between, including a dependency-aware scheduler and rule-based adaptation<br><span class="tag">B6</span> learned adaptive controller</p></div>
+    <div class="mock"><h4>Parallel work</h4>
+      <svg viewBox="0 0 300 70" style="width:100%;display:block" role="img" aria-label="Three tasks side by side"><rect x="10" y="6" width="280" height="14" rx="4" class="svg-acc"/><rect x="10" y="28" width="280" height="14" rx="4" class="svg-acc"/><rect x="10" y="50" width="280" height="14" rx="4" class="svg-acc"/></svg>
+      <p class="small" style="margin-top:6px">Coordination helps.</p></div>
+    <div class="mock"><h4>Sequential work</h4>
+      <svg viewBox="0 0 300 70" style="width:100%;display:block" role="img" aria-label="Tasks one after another"><rect x="10" y="6" width="80" height="14" rx="4" class="svg-warn"/><rect x="100" y="28" width="90" height="14" rx="4" class="svg-warn"/><rect x="200" y="50" width="90" height="14" rx="4" class="svg-warn"/></svg>
+      <p class="small" style="margin-top:6px">Coordination can hurt.</p></div>
   </div>
-  <div class="card warn" style="margin-top:12px"><p><strong>The decisive comparison</strong> is the learned controller against the <strong>dependency-aware scheduler</strong> and <strong>rule-based adaptation</strong>, under <strong>matched budgets</strong>. If simple rules win, that is a result too.</p></div>
+  <div class="card warn" style="margin-top:12px"><p>Much apparent agent productivity is organizational waste, such as clashing edits. This is why symcc isolates work in worktrees, orders tasks with <code>after</code> and counts a task only when it is merged.</p></div>
 </div>
 </section>
 
-<!-- 19 experiments -->
-<section class="slide" data-title="Experiments">
-<div class="inner">
-  <p class="kicker">The science (6 of 6)</p>
-  <h2>Experiments</h2>
-  <div class="grid g2">
-    <div class="card"><h3>Benchmarks</h3><ul>
-      <li>AsynCodeBench, TeamBench, SWE-bench Verified and Pro.</li>
-      <li>Custom workload families: <strong>A</strong> parallel, <strong>B</strong> sequential, <strong>C</strong> high contention, <strong>D</strong> changing requirements.</li></ul></div>
-    <div class="card"><h3>Two stages</h3><p>First a <strong>simulator</strong>, where many cheap runs are possible. Then <strong>real runs</strong> on the board to check the findings carry over.</p></div>
-  </div>
-  <div class="card" style="margin-top:12px"><h3>Metrics</h3><div class="grid g3">
-    <div><span class="tag good">Progress</span><p class="small">Verified progress at a fixed budget</p></div>
-    <div><span class="tag">Efficiency</span><p class="small">Progress per token and per hour</p></div>
-    <div><span class="tag warn">Coordination</span><p class="small">Conflicts, duplicated work, blocked time</p></div>
-  </div><p class="small">And safety: no harmful changes slip through.</p></div>
-  <div class="card acc" style="margin-top:12px"><h3>Minimum viable experiment</h3><p>Run the same workloads under a few of the baselines, at matched budgets, on one benchmark plus the custom families, and compare verified progress and coordination waste. Start small: if the simple baselines already match, stop there.</p></div>
-</div>
-</section>
-
-<!-- 20 roadmap -->
-<section class="slide" data-title="Roadmap and risks">
-<div class="inner">
-  <p class="kicker">Next</p>
-  <h2>Roadmap, platform and risks</h2>
-  <div class="grid g2">
-    <div class="card"><h3>Phases 1 to 5</h3><p>The roadmap has five phases. Instrumentation comes first: you cannot control what you cannot see.</p>
-      <p class="small">The detailed content of each phase is in the research plan.</p></div>
-    <div class="card acc"><h3>symcc as the research platform</h3><ul>
-      <li>Real tasks, real merges, real tests.</li>
-      <li>Runs, history and events are already recorded.</li>
-      <li>Rules are plain files, so a controller can replace them.</li></ul></div>
-  </div>
-  <div class="grid g3" style="margin-top:12px">
-    <div class="card warn"><h3>Novelty overlap</h3><p>Someone may already have built the same idea. Keep the literature map up to date.</p></div>
-    <div class="card warn"><h3>Simple baselines win</h3><p>A good scheduler may be enough. Test it honestly and report it.</p></div>
-    <div class="card warn"><h3>Reward hacking</h3><p>A controller may chase the score, not the goal. So reward only validated transitions, not commits or messages.</p></div>
-  </div>
-</div>
-</section>
-
-<!-- 21 closing -->
+<!-- 19 -->
 <section class="slide" data-title="Closing">
 <div class="inner title-slide"><div>
   <p class="kicker">Closing</p>
-  <h1>Practical today, scientific tomorrow</h1>
-  <div class="grid g2" style="margin-top:14px">
-    <div class="card good"><h3>Today</h3><p>symcc already gives you a lead, workers, scouts, an optional checker, isolated folders, a checked merge line and shared notes, from inside your Claude session.</p></div>
-    <div class="card acc"><h3>Tomorrow</h3><p>The same board becomes a place to measure whether an organization can adapt itself, with verified progress as the score.</p></div>
+  <h1>Ask for it in chat. Let the team build it.</h1>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card good"><h3>See it</h3><p>One board in the terminal, VS Code or OpenCode.</p></div>
+    <div class="card acc"><h3>Trust it</h3><p>Own folders, a checker, tests and a checked merge.</p></div>
+    <div class="card warn"><h3>Steer it</h3><p>Modes, questions and review keep you in charge.</p></div>
   </div>
+  <p class="small" style="margin-top:14px"><strong>Further reading</strong> (titles only): <em>Towards a Science of Scaling Agent Systems</em> (Google Research, 2026); <em>Agent swarms and the new model economics</em> (Cursor); <em>Toward an Organizational Science of Multi-Agent LLM Systems</em>.</p>
 </div></div>
-</section>
-
-<!-- 22 refs -->
-<section class="slide" data-title="References">
-<div class="inner">
-  <p class="kicker">References</p>
-  <h2>References</h2>
-  <ol class="refs">
-    <li>Google Research (2026). <em>Towards a Science of Scaling Agent Systems</em>.</li>
-    <li>Cursor. <em>Agent swarms and the new model economics</em>.</li>
-    <li>Anthropic. Multi-agent engineering.</li>
-    <li>GPTSwarm; AgentPrune; Guided Topology Diffusion; Adaptive Graph Pruning; ACTS (topology optimization).</li>
-    <li><em>Toward an Organizational Science of Multi-Agent LLM Systems</em> (IMACS).</li>
-    <li><em>Capable language models can outgrow the benefits of collaboration</em>. Nature Machine Intelligence, 2026.</li>
-    <li>MAST. NeurIPS 2025 (14 failure modes).</li>
-    <li><em>When Agents Coordinate</em> (1,902 runs).</li>
-    <li><em>Dynamic Context Allocation</em>. EMNLP 2026.</li>
-    <li>Centralized asynchronous isolated delegation; <em>Coordinating Agents on a Shared Git Workspace</em>.</li>
-    <li><em>Beyond Individual Intelligence</em> (survey on persistent self-improving organizations).</li>
-    <li>Benchmarks: AsynCodeBench, TeamBench, SWE-bench Verified and Pro.</li>
-  </ol>
-  <p class="small">Titles are given as in the owner's research plan; no links or extra results are added here.</p>
-</div>
 </section>
 
 </div>

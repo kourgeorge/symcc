@@ -4,7 +4,7 @@
 // roles and kinds are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
 import { type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver } from '../board'
-import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK } from '../core/doctor'
+import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK } from '../core/doctor'
 import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/board-parts'
 import { type Host, agentState } from '../host'
 import { S, workers, starting, finishing, approving } from './state'
@@ -17,15 +17,18 @@ type Found = DoctorItem & { fix?: () => Promise<string> }
 
 const FINISHED = ['done', 'dropped']
 
+/** A merge going on now: `id` is the task whose work is being merged (none for a git merge in the project folder). */
+type Merging = { id?: string }
+
 /** Whether a merge is going on now: a task's work being checked or merged (in any session), or a git merge in the project folder. */
-async function mergeRuns(host: Host, b: Board | null): Promise<string | null> {
+async function mergeRuns(host: Host, b: Board | null): Promise<Merging | null> {
   const nowMs = Date.now()
   const t = b?.tasks.find(x => finishingNow(x, nowMs) || !!checkStepNow(x, nowMs))
-  if (t) return mergeRunsText(S.N.name, t.id)
+  if (t) return { id: t.id }
   const mine = [...finishing, ...approving][0]
-  if (mine) return mergeRunsText(S.N.name, mine)
+  if (mine) return { id: mine }
   const m = await git(host, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => null)
-  if (m?.exitCode === 0 && m.stdout.trim()) return mergeRunsText(S.N.name)
+  if (m?.exitCode === 0 && m.stdout.trim()) return {}
   return null
 }
 
@@ -77,14 +80,19 @@ async function folderBytes(host: Host, dir: string): Promise<number | undefined>
 }
 
 /**
- * Everything the doctor finds now, in the order the list shows it (and the fixes run in), or the
- * reason it doesn't run (a merge is in progress, or the project folder isn't known).
+ * Everything the doctor finds now, in the order the list shows it (and the fixes run in), and the merge going on
+ * (if any: the check is read-only, so it still runs, but the task being merged has its folder and branch only listed
+ * as "being merged"); or the reason it doesn't run (the project folder isn't known).
  */
-export async function doctorCheck(host: Host): Promise<Found[] | string> {
+export async function doctorCheck(host: Host): Promise<{ found: Found[]; merging: Merging | null } | string> {
   if (!S.root) return `${S.N.name} doesn't know the project folder yet; try again in a moment.`
   const b = await load(host).catch(() => null)
   const merging = await mergeRuns(host, b)
-  if (merging) return merging
+  return { found: await findAll(host, b, merging?.id), merging }
+}
+
+/** What doctorCheck finds; `mergingId` is the task being merged now (its folder and branch are left alone). */
+async function findAll(host: Host, b: Board | null, mergingId: string | undefined): Promise<Found[]> {
   const dir = path(S.N.dir)
   const shown = (p: string) => (p.startsWith(`${S.root}/`) ? p.slice(S.root.length + 1) : p)
   const archived = await readArchiveFile(host).then(r => (r.broken ? [] : r.archive.tasks), () => [] as BoardTask[])
@@ -135,8 +143,13 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
   for (const e of (await host.fs.list(wtRoot).catch(() => [])).filter(x => x.kind === 'dir').sort((x, y) => x.name.localeCompare(y.name, undefined, { numeric: true }))) {
     const id = e.name
     const t = taskOf(id)
-    if (t && !FINISHED.includes(t.status)) continue
     const wt = `${wtRoot}/${id}`
+    if (id === mergingId) {
+      listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${id} is being merged), left alone` })
+      keptDirs.set(wt, 'is being merged')
+      continue
+    }
+    if (t && !FINISHED.includes(t.status)) continue
     if (!t) {
       listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${id} is not on the board), kept; remove it by hand if you don't need it` })
       keptDirs.set(wt, 'is not on the board')
@@ -209,6 +222,10 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
   for (const [br, sha] of rows.sort((x, y) => x[0].localeCompare(y[0], undefined, { numeric: true }))) {
     const id = br.slice(S.N.branch('').length)
     const t = taskOf(id)
+    if (id === mergingId) {
+      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is being merged), left alone` })
+      continue
+    }
     if (!t || !FINISHED.includes(t.status)) continue
     const into = intoOf(t)
     const anc = await git(host, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`]).catch(() => null)
@@ -239,7 +256,8 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
   // another live session's workers aren't in this session's agent list: only the driver (or nobody) can tell
   if (b && agents && (!driver || driver === S.me))
     for (const t of b.tasks) {
-      if (t.status !== 'doing' || inUse(t.id, t, agents)) continue
+      // the task being merged has no worker on purpose: never tell the owner to retry it
+      if (t.status !== 'doing' || t.id === mergingId || inUse(t.id, t, agents)) continue
       const since = Date.parse(t.runs?.at(-1)?.started ?? t.updated_at)
       const min = Number.isFinite(since) ? Math.round((nowMs - since) / 60_000) : NaN
       if (!(min >= DOCTOR_STUCK_MIN)) continue
@@ -257,9 +275,13 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
 export async function doctor(host: Host, args: string): Promise<string> {
   const ask = parseDoctorArgs(args, S.N.name)
   if ('bad' in ask) return ask.bad
-  const found = await doctorCheck(host)
-  if (typeof found === 'string') return found
-  if (ask.fix === null) return doctorText(found, S.N.name, S.N.dir)
+  const check = await doctorCheck(host)
+  if (typeof check === 'string') return check
+  const { found, merging } = check
+  const list = doctorText(found, S.N.name, S.N.dir)
+  // the list is read-only, so it runs during a merge too; only the fixes wait for the merge to end
+  if (merging) return `${(ask.fix === null ? mergeNoteText : mergeRunsText)(S.N.name, merging.id)}\n${list}`
+  if (ask.fix === null) return list
   const fixable = found.filter(f => f.fixable && f.fix && f.id)
   const want = ask.fix
   const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()

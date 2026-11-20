@@ -1,5 +1,5 @@
 import { type Board, type BoardRead, parseBoard, readBoard, readBoardValue, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
-import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
+import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFileOf, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -222,6 +222,9 @@ export function resetStore() {
   queues.clear()
   reported.clear()
   partsSeen.clear()
+  stubbed = new Set()
+  missingParts = new Set()
+  toldMissing.clear()
   sizeNotes.clear()
   toldTooBig.clear()
 }
@@ -284,15 +287,19 @@ export async function load(host: Host): Promise<Board> {
     S.enabledNow = symccOn(b)
     return b
   }
-  const { text, read: r } = await readJoined(host)
+  const { text, read: r, missing, missingFiles } = await readJoined(host)
   if (r.broken) {
     // Never go on with a stand-in board: it would be saved over the file and lose every task.
     // Throwing here refuses every change, start and merge until the file is fixed; workers already running are left alone.
     const copy = await keepCopy(host, text, 'broken', c => brokenBoardText(S.N.boardFile, r.broken!, c || undefined))
     throw new Error(brokenBoardText(S.N.boardFile, r.broken, copy || undefined))
   }
-  if (r.skipped || r.fixed.length)
-    await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, r.fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
+  // T-681: a missing parts file is warned about (and a copy kept) once per session, not on every load and save
+  for (const f of toldMissing) if (!missingFiles.has(f)) toldMissing.delete(f)
+  const fixed = [...r.fixed, ...missing.filter(m => !toldMissing.has(m.file)).map(m => m.text)]
+  for (const f of missingFiles) toldMissing.add(f)
+  if (r.skipped || fixed.length)
+    await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   S.enabledNow = symccOn(r.board)
   return r.board
 }
@@ -317,20 +324,38 @@ export async function saveMigrated(host: Host): Promise<void> {
 /** The parts files last read or written (path → their text and tasks), so a save writes only the ones that changed. */
 const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>> }>()
 
+/**
+ * The finished tasks the last read loaded as stubs, their parts missing (T-681): a save leaves them out of their parts
+ * files, so it never writes their empty parts over the real ones (a file deleted by hand and put back later, or one
+ * still being written). A parts file that would hold only such tasks is not written at all.
+ */
+let stubbed = new Set<string>()
+
+/** Whether task `id` loaded as a stub in the last read, its parts file missing (T-681: archiveOld leaves it on the board). */
+export const isStubbed = (id: string) => stubbed.has(id)
+
+/**
+ * The parts files (relative, "tasks/T-600.json") that board.json named but the last read did not find (T-681). Until
+ * one is back, a save never writes it: a task newly finished in its range stays whole in board.json instead, so
+ * putting the good file back restores every task (the next save then moves that task's parts into it).
+ */
+let missingParts = new Set<string>()
+
 /** A parts file's path, from its name in board.json ("tasks/T-600.json"). */
 const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
 
 /**
  * Reads board.json and joins each done or dropped task's stub with its parts from .<name>/tasks/ (T-675, see
  * core/board-parts.ts), then reads it as a board (readBoardValue). A parts file that is there but is not one makes the
- * board broken (never saved over); a task whose parts are missing loads as its stub, and that is said in `fixed`.
+ * board broken (never saved over), and so does one whose exists check fails (T-681: it may well be there); a task
+ * whose parts are missing loads as its stub, and that is said in `fixed` (and kept in `stubbed`).
  * `whole`: board.json still keeps a finished task whole (saveMigrated moves its parts out once); then its size is not
  * warned about, as the migration's save makes it small (and notes its new size).
  * A read without the board lock can see another session's save half done (its new board.json, or the old one with
  * the parts files already trimmed for the new one), so parts found missing are read once more (board.json and all)
  * before they count as missing.
  */
-async function readJoined(host: Host, again = true): Promise<{ text: string; read: BoardRead; whole: boolean }> {
+async function readJoined(host: Host, again = true): Promise<{ text: string; read: BoardRead; whole: boolean; missing: { text: string; file: string }[]; missingFiles: Set<string> }> {
   const file = path(S.N.boardFile)
   const text = await readWhole(host, file, true)
   let raw: unknown
@@ -338,28 +363,45 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     raw = JSON.parse(text)
   } catch {
     noteRead(host, file, text)
-    return { text, read: readBoard(text), whole: false }
+    return { text, read: readBoard(text), whole: false, missing: [], missingFiles: new Set<string>() }
   }
-  const whole = hasWholeFinished(raw)
-  if (!whole) noteRead(host, file, text)
   const files = new Map<string, Record<string, Record<string, unknown>>>()
+  const missingNow = new Set<string>()
   for (const rel of partsFilesNamed(raw)) {
     const file = partsPath(rel)
-    if (!(await host.fs.exists(file).catch(() => false))) {
+    const there = await host.fs.exists(file).then(
+      x => x,
+      (e: unknown) => ({ failed: String((e as Error)?.message ?? e).slice(0, 120) }),
+    )
+    if (typeof there === 'object') return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be checked (${there.failed})` }, whole: false, missing: [], missingFiles: new Set<string>() }
+    if (!there) {
       partsSeen.delete(file)
+      missingNow.add(rel)
       continue
     }
     const t = await readWhole(host, file)
     const p = readParts(t)
-    if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false }
+    if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false, missing: [], missingFiles: new Set<string>() }
     files.set(rel, p.tasks)
     partsSeen.set(file, { text: t, tasks: p.tasks })
   }
   const j = joinParts(raw, files)
   if (j.missing.length && again) return readJoined(host, false)
+  stubbed = new Set(j.stubbed.map(s => s.id))
+  missingParts = missingNow
+  // a finished task kept whole only because its parts file is missing is not one to migrate (see missingParts)
+  const whole = hasWholeFinished(raw, missingNow)
+  if (!whole) noteRead(host, file, text)
   const read = readBoardValue(j.raw)
-  return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole }
+  return { text, read, whole, missing: j.missing.map((text, i) => ({ text, file: j.stubbed[i]!.file })), missingFiles: missingNow }
 }
+
+/**
+ * The missing parts files (relative) this session already warned about (T-681): while one stays missing, every load
+ * and save would warn and keep a board.json copy again (board.json's text changes with each save), so it is said once.
+ * A file that comes back is taken out, so losing it again is warned about again.
+ */
+const toldMissing = new Set<string>()
 
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
 export async function isOn(host: Host): Promise<boolean> {
@@ -443,8 +485,21 @@ export async function dropIfSame(host: Host, file: string, text: string) {
  * entries no task needs any more are taken out (a file left with none is removed).
  */
 export async function saveBoard(host: Host, b: Board) {
-  const { board: slim, parts } = splitBoard(b)
-  const want = new Map([...parts].map(([rel, tasks]) => [partsPath(rel), tasks] as const))
+  // a finished task whose parts file is missing stays whole, unless it loaded as a stub (it keeps pointing there)
+  const hold = new Set(b.tasks.filter(t => !stubbed.has(t.id) && missingParts.has(partsFileOf(t.id))).map(t => t.id))
+  const { board: slim, parts } = splitBoard(b, hold)
+  const want = new Map<string, Record<string, Record<string, unknown>>>()
+  for (const [rel, all] of parts) {
+    const file = partsPath(rel)
+    const seen = partsSeen.get(file)?.tasks ?? {}
+    // a task loaded as a stub whose parts file is wholly missing keeps no parts here: the real file may come back
+    // (T-681). Accepted losses while its file is missing: history added to it meanwhile is not kept, and a stubbed
+    // task reopened meanwhile is saved whole with an empty history and details (it then no longer points to the parts
+    // file put back later). A parts file that is there but lacks the task's entry gets its stub entry written, as before.
+    const gone = missingParts.has(rel)
+    const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen))
+    if (Object.keys(tasks).length) want.set(file, tasks)
+  }
   if (want.size) await host.run(['mkdir', '-p', path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => undefined)
   const first = new Map<string, string>()
   for (const [file, tasks] of want) {
