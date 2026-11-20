@@ -537,7 +537,7 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   expect(await rowText(ui, 'T-408')).toMatch(/^T-408 ●\s+Add/)
   expect(await rowText(ui, 'T-406')).toMatch(/^T-406 ○\s+Write/)
   await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ● to do /)
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status● to do/)
   await ui.unmount()
 })
 
