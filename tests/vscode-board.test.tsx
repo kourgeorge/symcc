@@ -261,6 +261,8 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     const badges = (counts!.children as Node[]).filter(n => n && typeof n === 'object')
     expect(texts(badges[0]).join(''), at).toBe('● 2 doing · ')
     expect(elements(badges[0]).find(n => texts(n).join('') === '● ')?.props?.color, at).toBe('success')
+    // no all-time total of the tries among the counts (T-630): /symcc-stats has it
+    expect(texts(counts!).join(''), at).not.toMatch(/tokens|total:/)
     // the tabs: one line of text that wraps (a Markdown, no Button and no bordered box): the shown tab bold and no link,
     // the others links
     const tabs = await ui.find({ key: 'tabs' })

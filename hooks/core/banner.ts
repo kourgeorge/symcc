@@ -8,7 +8,6 @@ import { modeLabel, modeText } from './review'
 import { kindMark } from './kinds'
 import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
-import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE, fileWaitText } from './panel'
 import { checkStepNow, shownStatus } from './lead'
@@ -200,11 +199,11 @@ export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask,
 
 const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'backlog', 'done']
 
-/** One count of the banner's counts line: its text ("2 doing", "3 in backlog", "5 done (+2 archived)", the token
- *  total) and the status it counts (none for the total). */
+/** One count of the banner's counts line: its text ("2 doing", "3 in backlog", "5 done (+2 archived)") and the status it
+ *  counts. The all-time total of the tries is not on the board (T-630); /<name>-stats shows it. */
 export type BannerCount = { text: string; status?: SymccStatus }
 
-/** The banner's counts, in BANNER_ORDER, then the total of the runs (when any ran); none on an empty board with nothing archived. */
+/** The banner's counts, in BANNER_ORDER; none on an empty board with nothing archived. */
 export function bannerCounts(b: BannerBoard, nowMs?: number): BannerCount[] {
   const gone = archivedOf(b).done
   if (!b.tasks.length && !gone) return []
@@ -212,8 +211,6 @@ export function bannerCounts(b: BannerBoard, nowMs?: number): BannerCount[] {
     .filter(([, n]) => n > 0)
     .map(([st, n]) => ({ status: st, text: st === 'backlog' ? `${n} in backlog` : st === 'done' ? `${n} done${gone ? ` ${archivedNote(gone)}` : ''}` : `${n} ${STATUS_WORD[st]}` }))
   if (gone && !b.tasks.some(t => t.status === 'done')) counts.push({ status: 'done', text: `${gone} done (archived)` })
-  const t = boardTotal(b, nowMs)
-  if (t.tries) counts.push({ text: fmtTotal(t, 'tokens') })
   return counts
 }
 
@@ -234,7 +231,7 @@ function cutParts(parts: BannerPart[], room: number): BannerPart[] {
 
 /**
  * The banner lines for the board panel: the name and folder (and a warning when nothing starts), where and who drives, the
- * settings, and (when there are tasks) the counts and total. With `width` of at least
+ * settings, and (when there are tasks) the counts. With `width` of at least
  * BANNER_NARROW the drawing sits on the left; narrower, only the text, cut to fit.
  * The separator under it is `bannerRule(width)`. `logo`: the drawing's frame now (see core/logo.ts; the logo at rest when not given),
  * LOGO_AREA columns wide, so the text beside it never moves. `version`: the plugin's version for the first line ('' = none);
@@ -353,7 +350,7 @@ export function hiddenLine(done: number, dropped: number): string {
 }
 
 /** The board for the model (the lead's board tool): the project's path (with `where`), the settings line, then the rows,
- *  newest first (with a short "from:" line under each, see fromText), then the archived count and the total time (and cost).
+ *  newest first (with a short "from:" line under each, see fromText), then the archived count.
  *  With no `filter`: the open tasks and the backlog in full, the done and dropped ones only as counts (see hiddenLine).
  *  With a filter: every task on the board with one of its statuses and matching its search words (as the panel's search).
  *  `version`: the plugin's version for the top line ('' = none). */
@@ -368,7 +365,6 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const closed = [...s.today, ...s.days.flatMap(g => g.tasks)]
   const all = [...s.open, ...s.backlog, ...closed]
   const head = `${modeText(modeOf(b))} · tests: ${testsShort(b.test_commands)} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
-  const total = totalLine(b, nowMs)
   const search = filter.search?.trim() ?? ''
   let body: string[]
   if (filter.status?.length || search || filter.limit !== undefined || filter.sort) {
@@ -391,5 +387,5 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
     body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now())), ...(hidden ? [hidden] : [])]
   }
-  return [...top, head, ...asks, ...body, ...(gone ? [gone] : []), ...(total ? [total] : [])].join('\n')
+  return [...top, head, ...asks, ...body, ...(gone ? [gone] : [])].join('\n')
 }

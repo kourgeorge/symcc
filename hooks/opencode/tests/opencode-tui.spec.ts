@@ -43,6 +43,16 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toContain('/work/proj/.symcc/view.json')
 })
 
+test('T-630: the panel and the band show no all-time total of the tries ("total: … tokens in all over N tries"); a task page keeps its own', () => {
+  const f = viewFile()
+  const runs = [{ started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', tokens: { input: 40_000 } }]
+  const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => ({ ...t, runs })) } }
+  const list = panelLines(g, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')
+  const band = bandLines(g, NOW, 120).map(lineText).join('\n')
+  for (const text of [list, band]) expect(text).not.toMatch(/total:|tokens in all over|40k tokens/)
+  expect(panelLines(g, { opened: 'T-5', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')).toMatch(/total: 12m · 40k tokens in all/)
+})
+
 test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {

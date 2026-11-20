@@ -2138,7 +2138,7 @@ test('archiving moves old done and dropped tasks to archive.json, written first,
   expect(after.archived_done).toEqual(['T-1'])
   expect(JSON.parse(w.files.get(ARCHIVE)!).tasks.map((t: SymccTask) => t.id)).toEqual(['T-1', 'T-2'])
   expect(await runTool(w.$, 'board', {})).toMatch(/archived: 1 done, 1 dropped/)
-  expect(await runTool(w.$, 'board', {})).toMatch(/total: 10m · 500 tokens in all over 1 try/)
+  expect(await runTool(w.$, 'board', {})).not.toMatch(/total:|tokens in all over/)
   // at most once an hour
   expect(await archiveOld(w.$, T0 + 60_000)).toEqual([])
 })
