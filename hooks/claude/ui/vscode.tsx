@@ -6,7 +6,7 @@
 // answers (`onLinkPress`, see vsLink); real Buttons stay for the actions on a page (Approve, Retry, Save ...).
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -28,12 +28,8 @@ export type VsKit = {
   surface: RenderSurface
 }
 
-/** The tests line, short: the first command whole, then how many more ("claude plugin test . (+1 more)"). */
-export const shortTests = (cmds: readonly string[]): string => {
-  const list = cmds.map(c => c.trim()).filter(Boolean)
-  if (!list.length) return ''
-  return list.length === 1 ? list[0]! : `${list[0]} (+${list.length - 1} more)`
-}
+/** The tests line, short: the shared testsShort ("claude, typecheck", "5 commands"); '' when none is set. */
+export const shortTests = (cmds: readonly string[]): string => (cmds.some(c => c.trim()) ? testsShort(cmds) : '')
 
 /** The color a mode's word is drawn in (the same as the terminal footer's). */
 export const modeColor = (m: SymccMode) => (m === 'paused' ? 'warning' : m === 'review' ? 'suggestion' : 'text')

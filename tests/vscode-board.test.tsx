@@ -165,7 +165,7 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   // tabs without key labels, the one shown bold and not a link
   expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`**Tasks 20** \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
   // the header on readable lines: the tests line short, the mode with its meaning
-  expect(await ui.find({ type: 'Text', text: 'tests: claude plugin test . (+1 more)' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'tests: claude, typecheck' })).toBeDefined()
   expect(all.join(' ')).toMatch(/⏵ auto/)
   // no key hints; at most one primary button; the mode switch is a quiet link and the search an Input
   for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), String(re)).toEqual([])
@@ -225,7 +225,9 @@ test('plainLabel and shortTests', () => {
   expect(plainLabel('Approve')).toBe('Approve')
   expect(plainLabel('+ New scout')).toBe('+ New scout')
   expect(shortTests(['npm test'])).toBe('npm test')
-  expect(shortTests(['a', 'b', 'c'])).toBe('a (+2 more)')
+  expect(shortTests(['a', 'b', 'c'])).toBe('a, b, c')
+  expect(shortTests(['npx tsc --noEmit', 'node --test x', 'sh a.sh', 'sh b.sh', 'claude plugin test .'].map(c => c + ' --with-a-long-flag'))).toBe('tsc, node, a, b, claude')
+  expect(shortTests(Array(5).fill('AI_API_KEY=test-not-a-real-key node --test $(ls tests)'))).toBe('5 commands')
   expect(shortTests([])).toBe('')
 })
 
@@ -252,7 +254,7 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     const pill = elements(lines[1]).find(n => n.type === 'Text' && n.props?.backgroundColor)
     expect([pill?.props?.backgroundColor, pill?.props?.color], at).toEqual(['success', 'inverseText'])
     expect(texts(lines[2]).join(''), at).toBe('branch main · driven by another session')
-    expect(texts(lines[3]).join(''), at).toMatch(/^tests: claude plugin test \. \(\+1 more\) · \d+ at once · \d+ min · \d+ retr(y|ies)$/)
+    expect(texts(lines[3]).join(''), at).toMatch(/^tests: claude, typecheck · \d+ at once · \d+ min · \d+ retr(y|ies)$/)
     // the counts as badges: a colored dot, then the count, " · " between
     const counts = await ui.find({ key: 'vs-counts' })
     expect(counts?.props.flexWrap, at).toBe('wrap')
