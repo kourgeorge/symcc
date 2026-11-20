@@ -1468,6 +1468,7 @@ its read-only `stats` tool.
   range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
   are weighed, where the lead's tokens come from, and why waiting time is not shown. The lead's
   `stats` tool gets the full text, unless it asks for the short one.
+- **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the same figures as one self-contained page with charts, `.symcc/stats.html` (no outside links, works offline, light and dark, fits a phone, prints well), says where it is and tries to open it in your browser.
 - **Kinds of tokens:** symcc keeps four counts apart wherever it records tokens (each try,
   each scout run, the lead's calls): *input*, *output*, *cache write* (input saved to the
   prompt cache) and *cache read* (input read back from it). They cost very different amounts:

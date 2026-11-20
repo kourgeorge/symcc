@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -8,6 +8,7 @@ import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, toolName } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
+import { statsHtml, openCommands } from '../core/stats-html'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
 import { pump, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
@@ -115,11 +116,12 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
                        "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-stats [full] [7d|T-1..T-9]  time and token stats, with bar charts:
+  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try, the biggest tasks, how tasks ended, by role,
                        origin and day (all tasks, the last N days, or an id range);
-                       "full" adds the long explanations
+                       "full" adds the long explanations; "html" writes them as a web page
+                       with charts (${S.N.dir}/stats.html) and opens it
   /${S.N.name}-disable             disable ${S.N.name} for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-enable              turn it back on, in the mode the board had
@@ -402,7 +404,7 @@ export const TOOLS = () => [
     description: `Read or change organizational memory (org-mem, ${S.N.dir}/org-mem.md): short notes every new worker, checker and scout gets in its prompt, one line each ("- 2026-11-20: the note"), at most ${ORG_MEM_MAX_LINES}. Only you change it (agents only suggest notes; see "Suggested for org-mem" in board updates). action "list" (the default): every note with its number, oldest first. "add": notes (one or more short plain sentences, no task ids) go at the end with today's date; one that repeats a note there, even in other words, is refused (use replace to improve that note), and an add that would go past ${ORG_MEM_MAX_LINES} lines adds nothing (remove or replace first). "remove": takes out the note which names (its number from list, or its text). "replace": puts by in the place of the note which names (refused if by repeats another note).`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'remove', 'replace'], description: 'What to do; list when left out.' }, notes: { type: 'array', items: { type: 'string' }, description: 'For add: the new notes, each one short plain sentence.' }, which: { type: 'string', description: 'For remove / replace: the note, by its number from list (e.g. "3") or its text.' }, by: { type: 'string', description: 'For replace: the new note.' } } },
   },
-  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
+  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' }, html: { type: 'boolean', description: 'Optional: true writes the report as a web page with charts (.symcc/stats.html), tries to open it in the browser, and answers where it is.' } } } },
   {
     name: 'setup_git',
     description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.* but not templates like .env.example (!.env*.example etc.), .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
@@ -436,7 +438,35 @@ export async function statsText($: Host, args: string, full?: boolean): Promise<
   const team: TeamInput = { ...($.features.leadUsage ? await $.lead.usage(S.root, range, nowMs) : { leadProblem: LEAD_USAGE_UNREAD }), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
-  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })
+  const input = { tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full }
+  if (!words.html) return statsReport(input)
+  // "html" (T-674): the same figures (statsData) as a web page, written to .<name>/stats.html and opened in the browser
+  const out = path(`${S.N.dir}/stats.html`)
+  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root
+  await $.fs.write(out, statsHtml(statsData(input), project))
+  const opened = await openInBrowser($, out)
+  return `${S.N.name} stats written to ${out}${opened ? ' (opened in your browser)' : ' (open it in your browser)'}`
+}
+
+/** The platform's words ('darwin', 'linux', 'win32'), from `uname -s` or the OS variable; undefined when neither tells. */
+async function platformOf($: Host): Promise<string | undefined> {
+  const u = await $.run(['uname', '-s'], { timeoutMs: 5000 }).catch(() => null)
+  const name = u && u.exitCode === 0 ? u.stdout.trim().toLowerCase() : ''
+  if (name.startsWith('darwin')) return 'darwin'
+  if (name.startsWith('linux') || name.endsWith('bsd')) return 'linux'
+  if (/^(mingw|msys|cygwin)/.test(name) || (await $.env('OS').catch(() => undefined)) === 'Windows_NT') return 'win32'
+  return undefined
+}
+
+/** Tries to open `file` in the browser (open / xdg-open / start); true when one of them worked. Every failure is ignored. */
+export async function openInBrowser($: Host, file: string): Promise<boolean> {
+  try {
+    for (const argv of openCommands(file, await platformOf($))) {
+      const r = await $.run(argv, { timeoutMs: 15000 }).catch(() => null)
+      if (r && r.exitCode === 0) return true
+    }
+  } catch { /* a host that can't run commands: the path is enough */ }
+  return false
 }
 
 export type In = Record<string, unknown>
@@ -755,7 +785,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     case 'orgmem':
       return orgMemTool($, a)
     case 'stats':
-      return statsText($, str(a.range) ?? '', a.short !== true)
+      return statsText($, `${a.html === true ? 'html ' : ''}${str(a.range) ?? ''}`, a.short !== true)
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {
