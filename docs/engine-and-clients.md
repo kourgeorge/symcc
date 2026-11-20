@@ -30,7 +30,7 @@ Run the first one alone with `sh tests/host-free.sh`.
 
 ## What is done and what is next
 
-Done now (no code moves, nothing the owner sees changes): the `host-free` check also covers `hooks/process/`, `board-view.ts` and `hooks/engine.ts` (T-634), and `hooks/engine.ts` exists as a list (T-635).
+Done now (no code moves, nothing the owner sees changes): the `host-free` check also covers `hooks/process/`, `board-view.ts` and `hooks/engine.ts`, and `hooks/engine.ts` exists as a list.
 
 Next, for when the separate app is built:
 

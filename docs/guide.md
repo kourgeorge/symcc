@@ -52,6 +52,36 @@ And the ideas that tie them together:
 symcc is proactive while your Claude Code session is open. Work stops when you close it and
 picks up again next time.
 
+### Why it is built this way
+
+Each part is there for a reason. Knowing it makes the rest of this guide easier to follow.
+
+- **A lead, so you talk to one place.** Ideas come at any time. The lead takes them without
+  stopping the work that is running, turns them into tasks and decides the order. Without it, you
+  would split the work, track it and start each agent yourself.
+- **Workers, each with its own folder and file list.** Workers run side by side. A separate git
+  folder and branch per task keeps them from overwriting each other, and keeps your own branch
+  untouched until a merge. The file list (the scope) is what makes the check possible: an edit
+  outside it is refused and becomes a question to you, instead of a surprise in the diff.
+- **Scouts, so work is found while you are away.** They only read. Anything they find goes to the
+  lead as a note, and becomes a task only if the lead adds it, so a scout can never change your
+  project by itself.
+- **A checker (optional), a second pair of eyes.** A fresh agent that did not write the change
+  tries to break it before it reaches the tests. It is off by default because it costs time and
+  tokens.
+- **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
+  your branch, runs the tests and merges, so your branch cannot move in between and the code
+  that was tested is exactly the code that merges.
+- **Guards that stop honest mistakes.** symcc refuses a scout's or checker's file edit and git
+  writes, and a worker's edit outside its file list. These checks read the command text. They
+  catch a worker that makes a mistake. They are not a security boundary and do not stop an agent
+  that works around them on purpose.
+- **Org-mem goes through the lead.** Agents only suggest notes at the end of a report. The lead
+  decides which ones to keep, so the shared file stays short (60 lines at most), free of repeats,
+  and free of notes that only matter for one task.
+- **Investigations wait for you.** An investigation is a question, and the answer is for you. Even
+  in `auto` mode it ends only when you read it and pick Done, Keep as a note or Ask more.
+
 ---
 
 ## A task's life
@@ -1694,7 +1724,7 @@ The script links symcc's `opencode/` folder into OpenCode's plugins folder for y
 opencode plugin add github:kourgeorge/symcc
 ```
 
-`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). This works: in a scratch run with OpenCode 2.3.2 (T-560), it printed `Plugin "github:kourgeorge/symcc" installed and added to ~/.config/opencode/opencode.json`, adding `"plugins": ["github:kourgeorge/symcc"]` there, and put symcc's files in OpenCode's cache, `~/.cache/opencode/npm/git-symcc-<hash>/<number>/node_modules/symcc`. OpenCode then loaded `opencode/server.ts` from there with no "Plugin failed", and `opencode plugin list` showed `symcc  932aaf3  github:kourgeorge/symcc` (the version is the commit it fetched).
+`opencode plugin add` takes an npm package or a git address with a `package.json` at its top. symcc's repository has one at its root (it only points OpenCode at `opencode/server.ts` and `opencode/tui.ts`; it installs nothing, and the Claude Code plugin doesn't use it). This works: in a scratch run with OpenCode 2.3.2, it printed `Plugin "github:kourgeorge/symcc" installed and added to ~/.config/opencode/opencode.json`, adding `"plugins": ["github:kourgeorge/symcc"]` there, and put symcc's files in OpenCode's cache, `~/.cache/opencode/npm/git-symcc-<hash>/<number>/node_modules/symcc`. OpenCode then loaded `opencode/server.ts` from there with no "Plugin failed", and `opencode plugin list` showed `symcc  932aaf3  github:kourgeorge/symcc` (the version is the commit it fetched).
 
 - **The first `opencode plugin list` can say "No plugins found":** it starts OpenCode's background service, which is still loading plugins then. Run it again.
 - **Updates:** this copy doesn't follow `git pull`; `opencode plugin check` and `opencode plugin update` fetch a newer one. Remove it with `opencode plugin remove github:kourgeorge/symcc`.
@@ -1743,7 +1773,7 @@ The panel reads `.symcc/view.json` once a second; the board writes that file on 
 ### How it works inside
 
 - **One copy runs the board.** OpenCode starts the plugin once for each folder a session works in, workers' folders too. Only the copy for the project's main folder runs symcc's engine: it takes the lead (`.symcc/lead.json`, the same lock as in Claude Code), starts the timers and seeds the scouts. The copies in workers' folders only guard. If two copies point at the same real folder (on macOS, `/tmp/...` and `/private/tmp/...`), the first one runs the board and the other takes over when the first is unloaded.
-- **Edits are guarded** through OpenCode's permission check, with symcc's usual checks. A tool-call hook stays behind it as a backstop: it reads OpenCode 2.3's own tools that change files (`edit` and `write` with a `path`, `patch` with its patch text, and `shell` with its command and folder), plus a `multiedit` tool if a plugin adds one. So far these refusals are covered by symcc's tests with a stand-in for OpenCode's session API; a check in a real OpenCode run (a worker's folder copy refusing an edit outside its files, and a real `patch` call) comes with T-484.
+- **Edits are guarded** through OpenCode's permission check, with symcc's usual checks. A tool-call hook stays behind it as a backstop: it reads OpenCode 2.3's own tools that change files (`edit` and `write` with a `path`, `patch` with its patch text, and `shell` with its command and folder), plus a `multiedit` tool if a plugin adds one. So far these refusals are covered by symcc's tests with a stand-in for OpenCode's session API; a check in a real OpenCode run (a worker's folder copy refusing an edit outside its files, and a real `patch` call) is still to be done.
 - **Starting a worker.** symcc makes the session a child of the lead's (the last session in your project folder you typed in), moves it into its task's folder and waits until OpenCode shows it there (a child session first opens in its parent's folder), and only then gives it its prompt, once the board names it, so the guard in that folder knows it. When it ends, symcc reads its final answer and its tokens.
 - **The lead** is never a child session or one of symcc's own. symcc remembers it for the project while OpenCode runs, also across plugin reloads. As in Claude Code, reports close together go in one update, your own board actions wait as "Meanwhile" lines, and starting a worker sends nothing. An update sent before you have typed anywhere waits for your first prompt.
 - **Tools per session.** Each session is offered only what it may use: a worker only `symcc_ask_owner`, a scout or a checker only `symcc_board` and `symcc_stats`; a call of anything else is refused. The tools are normal OpenCode tools, not hidden in OpenCode's Code Mode. An answer meant only for you is put in the chat without waking the model. Where the TUI part doesn't take `/symcc`, `/symcc-help` leaves out the Claude panel's keys and lines.
