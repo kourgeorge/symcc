@@ -12,7 +12,8 @@
 #      owner sees take those from the host's words (HostWords.assistant, app, backToBoard; claude/host.ts CLAUDE_WORDS).
 # The engine's other host-free files (T-634, step S1 of docs/research/standalone-app.md section 12): hooks/process/ and
 # the board's view helpers in hooks/opencode/board-view.ts get check 1 only (imports), so a later standalone client can
-# load them too. They may still name Claude Code tools and words (the `claude -p` runner does).
+# load them too; so does hooks/engine.ts (T-635: it may re-export './opencode/board-view', no other hooks/opencode/
+# file). They may still name Claude Code tools and words (the `claude -p` runner does).
 set -u
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 cd "$root"
@@ -29,8 +30,8 @@ tsc() {
 shared=$(find hooks/app hooks/core -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
 files=$(printf '%s\n' $shared; ls hooks/board.ts hooks/name.ts hooks/host.ts types/index.d.ts prompts/*.ts kinds/*.ts 2>/dev/null)
 files=$(echo $files)
-# imports only (T-634): every .ts file under hooks/process/, and hooks/opencode/board-view.ts
-imports_only=$(echo $(find hooks/process -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort; ls hooks/opencode/board-view.ts 2>/dev/null))
+# imports only (T-634): every .ts file under hooks/process/, hooks/opencode/board-view.ts, and hooks/engine.ts (T-635)
+imports_only=$(echo $(find hooks/process -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort; ls hooks/opencode/board-view.ts hooks/engine.ts 2>/dev/null))
 [ -n "$files$imports_only" ] || { echo "host-free: no shared files here, nothing to check"; exit 0; }
 
 # the code without its comment lines (// ..., and the * lines of /** ... */ blocks), as "file:line:text"
@@ -39,7 +40,8 @@ imports_code() { grep -nHvE '^[[:space:]]*(//|/?\*)' $files $imports_only; }
 
 NODE='fs|fs/promises|path|os|child_process|process|crypto|util|events|stream|url|http|https|net|tty|readline|buffer|assert|zlib|worker_threads|module|vm'
 hits=$(imports_code | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]" |
-  grep -E "['\"](claude-code(/[^'\"]*)?|@opencode/[^'\"]*|node:[^'\"]*|bun(:[^'\"]*)?|($NODE))['\"]|['\"][^'\"]*(/claude/|/claude['\"]|/opencode/|/opencode['\"]|register(\.tsx)?['\"])")
+  grep -E "['\"](claude-code(/[^'\"]*)?|@opencode/[^'\"]*|node:[^'\"]*|bun(:[^'\"]*)?|($NODE))['\"]|['\"][^'\"]*(/claude/|/claude['\"]|/opencode/|/opencode['\"]|register(\.tsx)?['\"])" |
+  grep -vE "^hooks/engine\.ts:[0-9]+:.*from '\./opencode/board-view'$")
 if [ -n "$hits" ]; then
   echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (keep it in hooks/claude/ or hooks/opencode/): $hit" >&2; done
   fails=$((fails + 1))
@@ -51,6 +53,17 @@ if [ -f hooks/opencode/board-view.ts ]; then
   if [ -n "$hits" ]; then
     echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (board-view.ts may not import hooks/opencode/ files): $hit" >&2; done
     fails=$((fails + 1))
+  fi
+fi
+
+# hooks/engine.ts (T-635) lists the engine names the hosts import; tests/engine-names.mjs prints where it lags behind
+# the hosts as notes only (T-645: drift never fails), and fails only when hooks/engine.ts itself is not re-exports only
+if [ -f hooks/engine.ts ] && [ -f tests/engine-names.mjs ]; then
+  if command -v node >/dev/null 2>&1; then js=node; else js=bun; fi
+  "$js" tests/engine-names.mjs "$root" || bad "hooks/engine.ts is not a plain list of engine re-exports (see above)"
+  # drift (a host starting or stopping to use an engine name) is only noted, never a failure
+  if [ -f tests/engine-drift.sh ]; then
+    sh tests/engine-drift.sh "$root" >/dev/null || bad "tests/engine-drift.sh: drift in hooks/engine.ts must only be noted (see above)"
   fi
 fi
 
@@ -129,4 +142,4 @@ if [ -n "$oc_files" ]; then
   fi
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/ and hooks/opencode/ need no Claude Code"; else exit 1; fi
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/ and hooks/opencode/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi
