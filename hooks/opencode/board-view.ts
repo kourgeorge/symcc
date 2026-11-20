@@ -23,7 +23,7 @@ import {
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
-  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines,
+  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -223,10 +223,13 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const facts = (room: number) => withCrew((w, s) => `${bandWhere(f.root, f.name)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')}`, crew, nowMs, room)
   // "𝄞 symcc", then " · <project>" only when it isn't called symcc too (see bandBrand), then the state
   const brand = bandBrand(f.name)
-  const head = { brand, facts: facts(width - brand.length - 1) }
-  const headLen = head.brand.length + head.facts.length
+  // T-643: another session drives: a warning mark right after the brand, so it is never cut off
+  const drive = driveWarning(v.driving ?? false, tasks, nowMs, f.name, 'band')
+  const mark = drive ? ` ${drive}` : ''
+  const head = { brand, facts: facts(width - brand.length - mark.length - 1) }
+  const headLen = head.brand.length + mark.length + head.facts.length
   const hint = headLen + BAND_CLICK_HINT.length <= width ? [{ text: BAND_CLICK_HINT, color: 'inactive' }] : []
-  const out: Line[] = [[{ text: head.brand, color: 'ide', bold: true }, { text: head.facts, color: 'inactive' }, ...hint]]
+  const out: Line[] = [[{ text: head.brand, color: 'ide', bold: true }, ...(mark ? [{ text: mark, color: 'warning' }] : []), { text: head.facts, color: 'inactive' }, ...hint]]
   const hits: (BandHit | null)[] = [{ board: true }]
   const asks = questions.slice(0, rows)
   for (const q of asks) hits.push({ open: q.id }), out.push([{ text: `${q.id} for you`, color: 'yellow' }, { text: ` ${q.text}`, color: 'text' }, ...(q.options.length ? [{ text: ` — ${q.options.join(' | ')}`, color: 'inactive' }] : [])])
@@ -235,7 +238,7 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const leads = bandLeads(shown, nowMs, since, width)
   for (const t of shown) {
     // the row's end text, the same in Claude Code's band and the lead's board (rowEndText)
-    const end = rowEndText(t, taskPhase(t, nowMs), bandNote(t, nowMs, since(t.id)))
+    const end = rowEndText(t, taskPhase(t, nowMs), bandNote(t, nowMs, since(t.id), v.driving ?? false))
     const tail = end ? ` — ${end}` : ''
     hits.push({ open: t.id })
     out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t, nowMs)] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])

@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, questionsForYou, shownStatus, rowEndText, taskPhase } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, questionsForYou, shownStatus, rowEndText, taskPhase, driveWarning } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -39,7 +39,11 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // the mode, the busy workers, the counts and the scouts, fitted beside the name and the "open board" button:
   // "(next: …)" goes first when short of room, then the scouts (see withCrew)
   const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: (v as PaneView | undefined)?.max_parallel, tasks, scouts: v?.scouts ?? [] }
-  const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${bandWhere(S.root, S.N.name)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, nowMs, room))
+  // T-643: another session drives: a warning mark right after the brand, so it is never cut off
+  const driving = (v as PaneView | undefined)?.driving ?? S.driving
+  const drive = driveWarning(driving, tasks, nowMs, S.N.name, 'band')
+  const mark = drive ? ` ${drive}` : ''
+  const { brand, facts } = bandTitle((e.props.bodyColumns ?? 80) - mark.length, room => withCrew((w, s) => `${bandWhere(S.root, S.N.name)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, nowMs, room))
   // the questions take the first rows, then the tasks that need you or run
   const asks = questions.slice(0, rows)
   const taskRows = Math.max(0, rows - asks.length)
@@ -48,7 +52,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const since = (id: string) => v?.working?.find(w => w.task === id)?.since
   const leads = bandLeads(shownTasks, nowMs, since, e.props.bodyColumns ?? 80)
   // a note the row's state already says ("worker on it" beside "▶ 12m") is left out; every other note stays (see bandNote)
-  const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id))
+  const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id), driving)
   // the row's end text, the same in OpenCode's band and the lead's board (rowEndText)
   const tail = (t: (typeof live)[number]) => {
     const end = rowEndText(t, taskPhase(t, nowMs), note(t))
@@ -59,6 +63,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
       <Box flexDirection="row">
         <Text wrap="truncate">
           <Text bold color={'ide' as never}>{brand}</Text>
+          {mark ? <Text color={'warning' as never}>{mark}</Text> : null}
           <Text color={'inactive' as never}>{facts}</Text>
         </Text>
         <Button key="open-board" label="open board" dimColor onPress={() => void openPane(claudeHost($))} />

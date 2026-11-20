@@ -468,7 +468,9 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
     '2 doing · 1 to do · 1 done',
+    '⚠ Another session drives this board. /symcc-drive to drive it from here.',
   ])
+  expect(more[5]!.parts).toEqual([{ text: '⚠ Another session drives this board. /symcc-drive to drive it from here.', tone: 'warning' }])
   // no all-time total of the tries on the counts line (T-630): /symcc-stats has it
   expect(more.map(bannerText).join('\n')).not.toMatch(/tokens|8m/)
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
@@ -915,8 +917,8 @@ test('the status line lists running and failed task IDs, without the folder or "
     '⏵ auto · 2 failed (T-28, T-29)',
     '⏸ paused · 1 to do',
     '⏵ auto · 1 paused · 1 waiting for you',
-    '⏵ auto · all done (driven by another session)',
-    '⏵ auto · empty (driven by another session)',
+    '⏵ auto · driven by another session · all done',
+    '⏵ auto · driven by another session · empty',
     'on dev, not main',
     '⏵ auto · T-1, T-2, T-3 +2 doing',
     '⏵ auto · 4 failed (T-1, T-2, T-3 +1)',
@@ -931,7 +933,7 @@ test('the status line lists running and failed task IDs, without the folder or "
 test('the status line keeps the backlog quiet, but says "all done · N in backlog" when only backlog is left', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   expect(statusLine({ tasks: [t('done', 'T-1'), t('backlog', 'T-2'), t('backlog', 'T-3')] }, true)).toBe('⏵ auto · all done · 2 in backlog')
-  expect(statusLine({ tasks: [t('backlog', 'T-2')] }, false)).toBe('⏵ auto · all done · 1 in backlog (driven by another session)')
+  expect(statusLine({ tasks: [t('backlog', 'T-2')] }, false)).toBe('⏵ auto · driven by another session · all done · 1 in backlog')
   expect(statusLine({ tasks: [t('todo', 'T-1'), t('backlog', 'T-2')] }, true)).toBe('⏵ auto · 1 to do')
   expect(backlogLabel(3)).toBe('▸ Backlog (3)')
   expect(backlogLabel(3, true)).toBe('▾ Backlog (3)')
@@ -959,10 +961,10 @@ test('the status line starts with the board mode: paused, review or auto', () =>
   expect(statusLine({ tasks: [] }, true, '', 'auto')).toBeUndefined()
   expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'auto')).toBe('on dev, not main')
   // driven by another session: the label shows in every mode
-  expect(statusLine({ tasks: [] }, false, '', 'paused')).toBe('⏸ paused · empty (driven by another session)')
-  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review merge · empty (driven by another session)')
-  expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto · empty (driven by another session)')
-  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review merge · 1 to do (driven by another session)')
+  expect(statusLine({ tasks: [] }, false, '', 'paused')).toBe('⏸ paused · driven by another session · empty')
+  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review merge · driven by another session · empty')
+  expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto · driven by another session · empty')
+  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review merge · driven by another session · 1 to do')
   // a bad mode shows as auto
   expect(statusLine({ tasks }, true, '', 'later' as never)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
   expect(modeLabel('paused')).toBe('⏸ paused')
