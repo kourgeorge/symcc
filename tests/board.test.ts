@@ -8,7 +8,7 @@ import { SPEED_CAP_MS, bestMsOf, bestPairMsOf, growsSlowly } from './timing'
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
-import { putTask, tryMark, tryTone, bandLeads } from '../hooks/board'
+import { putTask, tryMark, tryTag, tryTone, bandLeads } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -2817,11 +2817,11 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(b1.tasks[0]!.checking).toEqual({ step: 'testing', at: stamp })
   expect(patchTask(b1, 'T-1', { status: 'done' }, stamp).tasks[0]!.checking).toBeUndefined()
   expect(['review', 'waiting', 'failed', 'paused', 'todo', 'done'].map(status => statusCell({ status: status as never }, now))).toEqual(['review', 'waiting', 'failed', 'paused', '', ''])
-  // a first try shows no try mark; a later one shows "try N"
+  // the try is not in the extra: it shows after the row's time (rowStates, T-604)
   expect(rowExtra({ ...base, attempts: 1 }, tasks)).toBe('frontend')
-  expect(rowExtra({ ...base, attempts: 2 }, tasks)).toBe('frontend · try 2')
+  expect(rowExtra({ ...base, attempts: 2 }, tasks)).toBe('frontend')
   expect(rowExtra({ ...base, role: 'general', attempts: 1 }, tasks)).toBe('')
-  expect(rowExtra({ ...base, role: 'general', attempts: 3 }, tasks)).toBe('try 3')
+  expect(rowExtra({ ...base, role: 'general', attempts: 3 }, tasks)).toBe('')
   expect(rowExtra(tasks[1]!, tasks)).toBe('after T-5')
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
@@ -3604,7 +3604,10 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-369 doing (try 2)')
   // the band above the prompt
   expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 1 }], 0).get('T-369')).toBe('T-369 ▶ ')
-  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶ try 2')
+  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶ (2)')
+  expect(tryTag({ status: 'doing', attempts: 3 })).toBe('(3)')
+  expect(tryTag({ status: 'doing', attempts: 1 })).toBe('')
+  expect(tryTag({ status: 'review', attempts: 3 })).toBe('')
   // the lead's text board, with the auto retry limit while the retry is automatic
   let [b] = addTask(emptyBoard(), { origin: W, title: 'First' }, at)
   ;[b] = addTask(b, { origin: W, title: 'Second' }, at)
@@ -3644,20 +3647,30 @@ test('a doing row shows one time, the total work time of all tries without the g
   expect(bandLeads([testing], now).get('T-3')).toBe('T-3  ⧗ 9m')
   // the band: lined up, the try after the one time
   const leads = bandLeads([first, third], now)
-  expect(leads.get('T-2')).toBe('T-2  ▶ 1h40m · try 3')
+  expect(leads.get('T-2')).toBe('T-2  ▶ 1h40m (3)')
+  expect(leads.get('T-1')).toBe('T-1  ▶ 15m      ')
   for (const l of [...leads.values(), ...bandLeads([testing, prep], now).values()]) {
     expect(l).not.toContain('Σ')
     expect(l).not.toContain('in all')
   }
   expect(leads.get('T-1')!.length).toBe(leads.get('T-2')!.length)
-  // narrow: the time is left out; the try stays
+  // narrow: the time is left out first, then the try (T-604)
   const lead = (w: number) => bandLeads([first, third], now, () => undefined, w).get('T-2')
-  expect(lead(60)).toBe('T-2  ▶ 1h40m · try 3')
-  expect(lead(41)).toBe('T-2  ▶ 1h40m · try 3')
-  expect(lead(40)).toBe('T-2  ▶ try 3')
-  // the lists' cells the same way
+  expect(lead(60)).toBe('T-2  ▶ 1h40m (3)')
+  expect(lead(37)).toBe('T-2  ▶ 1h40m (3)')
+  expect(lead(36)).toBe('T-2  ▶ (3)')
+  expect(lead(31)).toBe('T-2  ▶ (3)')
+  expect(lead(30)).toBe('T-2  ▶ ')
+  for (const w of [60, 36, 30]) expect(lead(w)).not.toContain('try')
+  // the lists' states the same way, the try tag apart so it gets its own colour
+  const state = (room: number) => core.rowStates([first, third], now, () => undefined, w => w <= room).states.get('T-2')
+  expect(state(30)).toEqual({ front: '1h40m ', tag: '(3)', back: '' })
+  expect(core.stateText(core.rowStates([first, third], now, () => undefined, () => true).states.get('T-1'))).toBe('15m      ')
+  expect(state(9)).toEqual({ front: '1h40m ', tag: '(3)', back: '' })
+  expect(state(8)).toEqual({ front: '', tag: '(3)', back: '' })
+  expect(state(2)).toEqual({ front: '', tag: '', back: '' })
+  // the lists' plain cells the same way
   const cells = (room: number) => core.fittedCells([first, third], now, () => undefined, room).get('T-2')
-  expect(cells(30)).toBe('1h40m')
   expect(cells(5)).toBe('1h40m')
   expect(cells(4)).toBe('')
   // not doing: no time
@@ -3665,7 +3678,7 @@ test('a doing row shows one time, the total work time of all tries without the g
   // a later try with no time to show (its last try ended, no fresh step): no stray " · "
   const ended = { id: 'T-9', status: 'doing' as const, attempts: 2, runs: [{ started: at(0), ended: at(50) }, { started: at(900), ended: at(990) }] as SymccTask['runs'] }
   expect(core.rowCell(ended, now)).toBe('')
-  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ try 2$/)
+  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ \(2\)$/)
   // with no open try, the session worker's start counts as this try (added to the earlier tries)
   expect(core.rowCell(ended, now, now - 10 * 60_000)).toBe('2h30m')
 })

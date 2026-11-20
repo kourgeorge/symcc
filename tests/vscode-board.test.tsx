@@ -151,7 +151,7 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
     expect(rowBox!.props.color ?? rowBox!.props.backgroundColor).toBeUndefined()
     expect(elements(rowBox).filter(n => n.type === 'Button').length, t.id).toBe(0)
     const colored = elements(rowBox!.children).filter(n => n.type === 'Text' && STATUS_COLORS.has(String(n.props?.color)))
-    expect(colored.length, t.id).toBeLessThanOrEqual(3) // the needs-you mark, the status words, a later try's "try 3"
+    expect(colored.length, t.id).toBeLessThanOrEqual(3) // the needs-you mark, the status words, a later try's "(3)"
     for (const n of colored) expect(texts(n).join(''), t.id).not.toContain(t.title)
   }
   expect((await ui.find({ key: 'vs-task-T-405' }))?.text).toMatch(/✗ failed/)
@@ -551,6 +551,10 @@ test('in VS Code a doing row shows only the total work time of all tries, no Σ,
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   expect(await rowText(ui, 'T-402')).toContain('▶ 1h27m')
+  // the try "(3)" right after the time, in the warning colour; never "try 3" (T-604)
+  expect(await rowText(ui, 'T-402')).toContain('▶ 1h27m (3)')
+  expect(await rowText(ui, 'T-402')).not.toContain('try 3')
+  expect((await ui.find({ key: `vs-task-T-402` }).then(r => elements(r!.children).find(n => n.type === 'Text' && texts(n).join('') === ' (3)')))?.props?.color).toBe('warning')
   expect(await rowText(ui, 'T-402')).not.toContain('Σ')
   expect(await rowText(ui, 'T-402')).not.toContain('in all')
   expect(await rowText(ui, 'T-401')).not.toContain('Σ')

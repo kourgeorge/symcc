@@ -9,7 +9,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, waitsForYou, shownStatus, approveRunning } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, searchTasks, SEARCH_WORDS, tryTag, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, waitsForYou, shownStatus, approveRunning } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -85,8 +85,9 @@ export function listPageVs($: $, pane: PaneParts) {
     const ended = x.status === 'done' || x.status === 'dropped'
     const needs = needsYou(x, nowMs)
     const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
-    const tried = tryMark(x)
-    let rest = tried && extra.endsWith(tried) ? extra.slice(0, extra.length - tried.length).replace(/ · $/, '') : extra
+    // a later try right after the time: "▶ 12m (3)" (see tryTag)
+    const tried = tryTag(x)
+    let rest = extra
     const kind = kindMark(x)
     // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
     // or failure reason that only mentions the word does not count
@@ -108,8 +109,8 @@ export function listPageVs($: $, pane: PaneParts) {
         {ended ? null : (
           <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
             <Text color={C(tone[shownStatus(x, nowMs)]!)}>{statusText(x)}</Text>
+            {tried ? <Text color={C(tryTone(x))}>{` ${tried}`}</Text> : null}
             {rest ? ` · ${rest}` : ''}
-            {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
           </Text>
         )}
       </Box>

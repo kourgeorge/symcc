@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, fittedCells, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, waitsForYou, shownStatus, approveRunning } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryTone, questionsLabel, type OwnerQuestion, waitsForYou, shownStatus, approveRunning } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -87,9 +87,9 @@ export function listPage($: $, pane: PaneParts) {
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
-  // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⧗ 9m"; narrow, the time is left out
-  const cells = fittedCells(shown, nowMs, since, width - (4 + idWidth + 3 + 2) - TITLE_ROOM)
-  const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
+  // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⧗ 9m",
+  // then its try from try 2 on: "⧗ 9m (3)"; narrow, the time is left out, then the try (see rowStates)
+  const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
   const tone: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
@@ -161,8 +161,7 @@ export function listPage($: $, pane: PaneParts) {
         const x = r.task
         const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
         const lead = r.indent + idWidth + 3 + cellWidth + 2
-        // a later try ("try 2") is dim, from try 3 on in the warning colour (see tryMark)
-        const tried = tryMark(x)
+        const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
         const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => x.id))}>
@@ -171,16 +170,18 @@ export function listPage($: $, pane: PaneParts) {
               {x.id.padEnd(idWidth)}
             </Text>
             {/* an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold */}
-            <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
+            {/* a later try ("(2)") is dim, from try 3 on in the warning colour (see tryTone) */}
+            {state.tag
+              ? [
+                  <Text key="state" color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${state.front}`}</Text>,
+                  <Text key="try" color={C(tryTone(x))}>{state.tag}</Text>,
+                  <Text key="pad" color={C(tone[shownStatus(x, nowMs)]!)}>{`${state.back}  `}</Text>,
+                ]
+              : <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${stateText(state)}  `}</Text>}
             <Text bold={waitsForYou(x, nowMs) || x.status === 'failed' || (x.status === 'review' && !approveRunning(x, nowMs))} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>
-            {fit.extra && tried && fit.extra.endsWith(tried)
-              ? [
-                  <Text key="extra" color={C('inactive')}>{`${fit.pad}${fit.extra.slice(0, fit.extra.length - tried.length)}`}</Text>,
-                  <Text key="try" color={C(tryTone(x))}>{tried}</Text>,
-                ]
-              : fit.extra ? <Text color={C('inactive')}>{`${fit.pad}${fit.extra}`}</Text> : null}
+            {fit.extra ? <Text color={C('inactive')}>{`${fit.pad}${fit.extra}`}</Text> : null}
           </Button>
         )
       })}
