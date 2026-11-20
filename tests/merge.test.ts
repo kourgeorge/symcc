@@ -12,6 +12,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
+import { taskStage, stageText } from '../hooks/core/details'
 import { taskPhase, FINISH_STALE_MS, needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
@@ -4598,21 +4599,26 @@ test('T-550: every note symcc sets between a hand-back and its merge is in the o
 /** Records the check steps task T-1 has on the board (with the queue's place), like notesOf. */
 function stepsOf(w: ReturnType<typeof world>) {
   const seen: string[] = []
+  const stages: string[] = []
   const look = () => {
     const text = w.files.get(BOARD)
-    const c = text ? find(parseBoard(text), 'T-1')?.checking : undefined
+    const t = text ? find(parseBoard(text), 'T-1') : undefined
+    const c = t?.checking
     const s = c ? (c.place ? `${c.step} ${c.place}` : c.step) : ''
     if (s && seen.at(-1) !== s) seen.push(s)
+    const g = t && c && taskStage(t, Date.parse(c.at))
+    const st = g ? stageText(g) : ''
+    if (st && stages.at(-1) !== st) stages.push(st)
   }
   w.onRun(async () => look())
-  return { seen, look }
+  return { seen, stages, look }
 }
 
 test('T-612: a task waiting in the merge queue has the check step "queue" with its place; the catch-up with main shows as "testing"; the steps only move on', async () => {
   S.me = 'me'
   const w = world()
   await aboutToFinish(w)
-  const { seen, look } = stepsOf(w)
+  const { seen, stages, look } = stepsOf(w)
   const { free, ran, all } = earlierMerges(w, 1)
   let ended = false
   void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
@@ -4628,8 +4634,9 @@ test('T-612: a task waiting in the merge queue has the check step "queue" with i
   await all[0]
   await turns(w, () => (look(), ended))
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
-  // after the queue its step goes back to prep for a moment, then the catch-up and the tests are "testing", then the merge
-  expect(seen).toEqual(['prep', 'queue 2', 'prep', 'testing', 'merging'])
+  // after the queue its turn starts straight at "testing" (the catch-up and the tests), then the merge: never back to prep
+  expect(seen).toEqual(['prep', 'queue 2', 'testing', 'merging'])
+  expect(stages.slice(stages.findIndex(s => s.includes('● queue')))).not.toContainEqual(expect.stringContaining('● prep'))
 })
 
 test('T-550: an approve shows the same small set of notes as a worker\'s hand-back, then its outcome', async () => {
@@ -5364,8 +5371,8 @@ test('two tasks in the merge line take turns; the second waits noted "queue (2)"
   expect(turn1).toEqual(['start', 'stop'])
   expect(turn2).toEqual(['start', 'stop'])
   expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
-  // and its step goes back to the one it had, fresh
-  expect(find(await load(w.$), 'T-2')!.checking).toEqual({ step: 'merging', at: expect.any(String) })
+  // its step is not put back to the one it had (no step back from the queue): its turn's first step replaces it
+  expect(find(await load(w.$), 'T-2')!.checking).toMatchObject({ step: 'queue', place: 2 })
   expect(w.files.has(LINE)).toBe(false)
 })
 
@@ -5614,6 +5621,8 @@ test('a task stopped while it waits in the merge line stops waiting, runs nothin
   expect(ran).toBe(false)
   expect(parseMergeLine(w.files.get(LINE)!)).toEqual([theirs])
   expect(noteOf(w, 'T-1')).toBe(CHECKING_NOTE)
+  // T-612: leaving the line without its turn, its step goes back to the one it had, fresh
+  expect(find(await load(w.$), 'T-1')!.checking).toEqual({ step: 'merging', at: expect.any(String) })
 })
 
 test("a finished task waiting a long time in the merge line behind another session's task still merges: the wait counts neither as running over nor as hung", async () => {

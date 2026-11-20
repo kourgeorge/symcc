@@ -198,6 +198,7 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
   void o.release?.then(() => leave($, me), () => leave($, me))
   let shown = 0
   let before: LineMark | undefined
+  let turn = false
   try {
     await joined
     // a go given up as stuck (`release`) is out of the line: the ones behind it no longer wait, and it waits for no one
@@ -224,16 +225,19 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
       if (others) await $.clock.sleep(MERGE_LINE_POLL_MS)
       else await next
     }
+    turn = true
   } catch (e) {
     await leave($, me)
     throw e
   } finally {
-    // the waiting note and the check step go back to what they were (the step fresh), unless something else changed them meanwhile
+    // the waiting note goes back to what it was, unless something else changed it meanwhile. A task going on to its turn
+    // keeps the queue step until the turn's first step (markStep 'testing') replaces it, so the Stage line never steps
+    // back from the queue; a task leaving the line without its turn (stopped, failed) gets its old step back, fresh.
     if (o.t && shown) {
       const was = before
       await markLine($, o.t, cur => ({
         ...(cur.note === inLineNote(shown) ? { note: was?.note } : {}),
-        ...(cur.checking?.step === 'queue' ? { checking: was?.checking && { ...was.checking, at: now() } } : {}),
+        ...(!turn && cur.checking?.step === 'queue' ? { checking: was?.checking && { ...was.checking, at: now() } } : {}),
       }))
     }
   }
