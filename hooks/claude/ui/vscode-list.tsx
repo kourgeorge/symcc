@@ -4,10 +4,11 @@
 // kind or role, "after …", the question or why it failed:
 //   T-401 ▶ 5m  Show the plugin version in the board title · [investigation · researcher]
 //   ● T-404 ? waiting for 1m  Pick the colors for the review mark · Yellow or blue for review?
-// The row is fitted to the panel's width (paneWidth in parts.tsx: wide when VS Code tells none); only when it is too
+// The row is fitted to the panel's width (paneWidth in parts.tsx: wide when VS Code tells none) times VS_ROW_SCALE,
+// since VS Code counts columns in its code font but draws titles narrower; only when it is too
 // narrow is the title cut with "…" (the whole title is on the task's page). A done or dropped task is one line:
 // "✓ T-12 title", its mark first, no state. What needs you sits under headings with their colored mark and a count
-// badge (Questions for you, Waiting for you, Review, Failed); doing and to do follow as one list with no heading, in the
+// badge (Questions for you, Waiting for you, Review, Failed, Needs you for a running task asking for more time); doing and to do follow as one list with no heading, in the
 // terminal list's order (T-644); a line of space between them, then Backlog, Done and Dropped, folded (each fold a link). No Buttons for rows or folds: VS Code draws a Button as a filled blue box whose label never wraps.
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
@@ -26,6 +27,18 @@ const GROUPS: { label: string; has: SymccStatus[] }[] = [
   { label: 'Review', has: ['review'] },
   { label: 'Failed', has: ['failed'] },
 ]
+
+/** How many characters of a list row fit in one of the columns VS Code reports (T-644). VS Code counts the panel's
+ *  columns in its code font's cells, but draws a row's title in its narrower text font: in the owner's 950px panel it
+ *  reported about 70-80 columns, yet a 66-character row filled less than half the line. So a row is fitted to this many
+ *  times the reported columns (a bit under the 2 that screenshot shows, so a title of wide letters still fits on its
+ *  one line); only a really narrow panel cuts the title with "…". */
+export const VS_ROW_SCALE = 1.8
+/** The characters a VS Code list row is fitted to, for a panel of `columns` reported columns (see VS_ROW_SCALE). */
+export const vsRowRoom = (columns: number) => Math.floor(columns * VS_ROW_SCALE)
+
+/** The heading of what needs you but has no heading of its own (a running task that asks for more time). */
+export const NEEDS_YOU_OTHER = 'Needs you'
 
 /** Spaces that HTML does not squeeze, so a state cell keeps its padding in VS Code's panel. */
 const hard = (s: string) => s.replace(/ /g, ' ')
@@ -94,6 +107,8 @@ async function askLead($: $) {
 
 export function listPageVs($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, mark, word, act, C, banner, tabs, vs, switchMode, mode, width } = pane
+  /** The characters an open row is fitted to: more than the reported columns (see VS_ROW_SCALE). */
+  const room = vsRowRoom(width)
   const { nowMs } = pane
   const query = S.search?.text.trim() ?? ''
   const filtering = query !== ''
@@ -191,7 +206,7 @@ export function listPageVs($: $, pane: PaneParts) {
     const cell = col?.cells.get(x.id) ?? soloCell(x)
     const idWidth = col?.idWidth ?? x.id.length
     const lead = (needs ? 2 : 0) + idWidth + 1 + cell.length + 2
-    const fit = fitRow(x.title.trim() || NO_TITLE, width - depth - lead, '', parts)
+    const fit = fitRow(x.title.trim() || NO_TITLE, room - depth - lead, '', parts)
     const words = x.title.trim() ? mdText(fit.title) : ''
     rest = fit.rest
     return (
@@ -228,7 +243,7 @@ export function listPageVs($: $, pane: PaneParts) {
   const cellsOf = (ts: SymccTask[], terminal: boolean): Column => {
     const idWidth = Math.max(0, ...ts.map(x => x.id.length))
     if (terminal) {
-      const { states } = rowStates(ts, nowMs, since, w => w <= width - (2 + idWidth + 3 + 2) - TITLE_ROOM, false)
+      const { states } = rowStates(ts, nowMs, since, w => w <= room - (2 + idWidth + 3 + 2) - TITLE_ROOM, false)
       return { cells: new Map(ts.map(x => [x.id, `${rowMark(x, nowMs)} ${stateText(states.get(x.id))}`])), idWidth }
     }
     const cells = new Map(ts.map(x => [x.id, statusText(x)]))
@@ -237,11 +252,16 @@ export function listPageVs($: $, pane: PaneParts) {
   }
 
   // what needs you, under its headings; an approved task whose approve runs is listed with the running ones (shownStatus)
-  const groups = GROUPS.map(g => ({ ...g, tasks: parts.needsYou.filter(t => g.has.includes(shownStatus(t, nowMs))) })).filter(g => g.tasks.length)
+  const found = GROUPS.map(g => ({ ...g, mark: mark[g.has[0]!]!, tone: tone[g.has[0]!]!, tasks: parts.needsYou.filter(t => g.has.includes(shownStatus(t, nowMs))) }))
+  // anything else that needs you (a running task asking for more time) under its own heading, as the terminal list
+  // keeps it in its needs-you part: never in the running list, where its "●" and longer cell would put its row out
+  // of line with the others (T-644)
+  const inGroup = new Set(found.flatMap(g => g.tasks.map(t => t.id)))
+  const others = parts.needsYou.filter(t => !inGroup.has(t.id))
+  const groups = [...found, { label: NEEDS_YOU_OTHER, has: [] as SymccStatus[], mark: '●', tone: 'warning', tasks: others }].filter(g => g.tasks.length)
   const grouped = new Set(groups.flatMap(g => g.tasks.map(t => t.id)))
-  // then doing and to do as one list, the terminal list's order (T-644); a task that needs you but shows as running
-  // (more time asked) leads it
-  const running = [...parts.needsYou.filter(t => !grouped.has(t.id)), ...parts.doing, ...parts.todo].filter((t, i, all) => !grouped.has(t.id) && all.findIndex(o => o.id === t.id) === i)
+  // then doing and to do as one list, the terminal list's order (T-644)
+  const running = [...parts.doing, ...parts.todo].filter((t, i, all) => !grouped.has(t.id) && all.findIndex(o => o.id === t.id) === i)
   const runCol = cellsOf(running, true)
   // the lead's open questions for the owner, first of all (not while searching); each row opens its answer page
   const questions = filtering ? [] : (v.questions ?? [])
@@ -257,7 +277,7 @@ export function listPageVs($: $, pane: PaneParts) {
             const href = vsHref('question', q.id)
             const cell = qCells.get(q.id)!.padEnd(qCell)
             const more = choices ? `${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''
-            const fit = fitRow(q.text.trim() || NO_TITLE, width - 2 - qId - 1 - cell.length - 2, '', [{ text: more, drop: 2 }])
+            const fit = fitRow(q.text.trim() || NO_TITLE, room - 2 - qId - 1 - cell.length - 2, '', [{ text: more, drop: 2 }])
             const words = q.text.trim() ? mdText(fit.title) : ''
             return (
               <Box key={`vs-question-${q.id}`} flexDirection="column">
@@ -290,7 +310,7 @@ export function listPageVs($: $, pane: PaneParts) {
       const col = cellsOf(g.tasks, false)
       return (
         <Box key={`vs-group-${g.label}`} flexDirection="column">
-          {vsHeading(vs, `vs-head-${g.label}`, mark[g.has[0]!]!, tone[g.has[0]!]!, g.label, g.tasks.length)}
+          {vsHeading(vs, `vs-head-${g.label}`, g.mark, g.tone, g.label, g.tasks.length)}
           {g.tasks.map(t => taskRow(t, 0, col))}
         </Box>
       )

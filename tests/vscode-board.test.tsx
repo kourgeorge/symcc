@@ -6,7 +6,7 @@ import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } 
 import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/claude/ui/surface'
 import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from '../hooks/claude/ui/vscode'
-import { ASK_LEAD, ASK_LEAD_DRAFT, fitRow } from '../hooks/claude/ui/vscode-list'
+import { ASK_LEAD, ASK_LEAD_DRAFT, fitRow, vsRowRoom, VS_ROW_SCALE, NEEDS_YOU_OTHER } from '../hooks/claude/ui/vscode-list'
 import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING, panelSections } from '../hooks/board'
@@ -298,6 +298,8 @@ async function rowText(ui: Mounted, id: string, kind = id.startsWith('Q-') ? 'vs
   return texts((await ui.find({ key: `${kind}-${id}` })) as Node).join('').replace(/\u00a0/g, ' ')
 }
 /** A row's one line (its title and then its dim state part). */
+/** The panel columns VS Code reports when its list rows get at most `room` characters (see VS_ROW_SCALE). */
+const colsFor = (room: number) => Math.floor(room / VS_ROW_SCALE)
 const infoLine = async (ui: Mounted, id: string) => (await ui.find({ key: `vs-task-${id}-top` })) as Node
 
 test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows and folds as links, no Buttons', async ($, on) => {
@@ -305,7 +307,7 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
   on('ui.toast', () => ({ value: undefined }))
   for (const bodyColumns of [40, 80]) {
     const at = `width ${bodyColumns}`
-    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
     const tree = await ui.drawn()
     const all = texts(tree)
     // headings: the colored mark, the name, the count as a filled badge in the same color
@@ -582,7 +584,7 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
   on('ui.toast', () => ({ value: undefined }))
   for (const bodyColumns of [40, 60, 80]) {
     const at = `width ${bodyColumns}`
-    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
     await ui.drawn()
     // a row is one row box: no second info line under it, never "(more)"
     for (const [id, kind] of [['T-401', 'vs-task'], ['T-406', 'vs-task'], ['T-404', 'vs-task'], ['T-578', 'vs-task'], ['Q-3', 'vs-question']] as const) {
@@ -689,7 +691,7 @@ test('T-590: a waiting question that starts with "after you …" is a normal lon
   const tasks = BOARD_TASKS.map(t => (t.id === 'T-404' ? { ...t, title: 'Pick the colors for the review mark on light themes', question } : t))
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
   // "● T-404  " takes 9 columns: bodyColumns 82 leaves the row 73
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 82 }, surface: 'vscode' })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(82) }, surface: 'vscode' })
   await ui.drawn()
   const line = await rowText(ui, 'T-404')
   expect(line.length).toBeLessThanOrEqual(82)
@@ -724,8 +726,10 @@ test('T-644: in VS Code a wide panel shows a long title whole on one line with i
   const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', order: 635, kind: 'refactor', title: long }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), todo] } } })
   on('ui.toast', () => ({ value: undefined }))
-  // wide: as the panel tells it (bodyColumns), as the surface measured it, or not told at all
+  // wide: as the panel tells it (bodyColumns; 80 is about what VS Code told for the owner's ~950px panel, where main cut
+  // T-635 to "Engine/client split: add…"), as the surface measured it, or not told at all
   const wide = [
+    { at: 'bodyColumns 80', props: { ...PANE.props, bodyColumns: 80 } },
     { at: 'bodyColumns 160', props: { ...PANE.props, bodyColumns: 160 } },
     { at: 'viewport 160', props: { ...PANE.props, bodyColumns: undefined as never }, viewport: { columns: 160, rows: 50 } },
     { at: 'no width', props: { ...PANE.props, bodyColumns: undefined as never } },
@@ -744,11 +748,35 @@ test('T-644: in VS Code a wide panel shows a long title whole on one line with i
     await ui.unmount()
   }
   // narrow: the title is cut with "…", the state stays between the ID and the title
-  for (const bodyColumns of [40, 60]) {
+  for (const bodyColumns of [25, 40]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
     const row = await rowText(ui, 'T-401')
     expect(row, `width ${bodyColumns}`).toMatch(/^T-401 ▶ 2m\s+Engine\S*( \S+)*…/)
-    expect(row.length, `width ${bodyColumns}`).toBeLessThanOrEqual(bodyColumns)
+    expect(row.length, `width ${bodyColumns}`).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
+    await ui.unmount()
+  }
+})
+
+test('T-644: in VS Code a running task that asks for more time sits under a needs-you heading, not in the running list, so the states stay in one column', async ($, on) => {
+  const tasks = BOARD_TASKS.map(t => (t.id === 'T-402' ? { ...t, time_ask: 'need 10 more minutes' } : t))
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [40, 100]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const group = (await ui.find({ key: `vs-group-${NEEDS_YOU_OTHER}` })) as Node
+    expect(group, at).toBeDefined()
+    expect(texts(group).join('').replace(/ /g, ' '), at).toContain('more time?')
+    expect(await rowText(ui, 'T-402'), at).toMatch(/^● T-402 ▶ more time\?\s+\S/)
+    // the running list has no row with "●" first, and keeps every doing task's time
+    const list = (await ui.find({ key: 'vs-group-running' })) as Node
+    const ids = (list.children!.filter(n => n && typeof n === 'object') as Node[]).map(n => String(n.key ?? n.props?.key).replace(/^vs-task-/, ''))
+    expect(ids, at).not.toContain('T-402')
+    const lines = await Promise.all(ids.map(id => rowText(ui, id)))
+    for (const l of lines) expect(l, at).not.toMatch(/^●/)
+    expect(await rowText(ui, 'T-401'), at).toMatch(/^T-401 ▶ 2m\s+Show/)
+    const cells = await Promise.all(ids.map(async id => texts((await ui.find({ key: `vs-task-${id}-state` })) as Node).join('')))
+    expect(new Set(cells.map(c => c.length)).size, at).toBe(1)
     await ui.unmount()
   }
 })
