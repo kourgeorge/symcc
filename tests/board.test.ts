@@ -2180,6 +2180,10 @@ test('leftover temp files: the names tmpName makes for every saved file match; o
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: now - 1_000 })), now)).toEqual([])
   expect(new Set(['1-a', '2-a', '1-b'].map(n => tmpName('scouts.json', 's', n))).size).toBe(3)
   expect(leftoverTmpFiles(['scouts.json.tmp', 'archive.json.tmp', 'stats.json.s.1.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
+  // T-675: the archive's later files and the finished tasks' parts files (in .symcc/tasks/) are saved the same way
+  const more = ['archive-2.json', 'archive-13.json', 'T-600.json', 'T-0.json'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
+  expect(leftoverTmpFiles(more.map(name => ({ name, mtimeMs: old })), now)).toEqual(more)
+  expect(leftoverTmpFiles(['archive-x.json.a.1.tmp', 'T-.json.a.1.tmp', 'T-1.jsonx.a.1.tmp', 'archive-2.json.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
 })
 
 test('leftover temp files: fresh ones, or ones with no or future time, are kept', () => {

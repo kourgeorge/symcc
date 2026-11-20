@@ -9,6 +9,7 @@ import { debriefs } from './debrief'
 import { type Host, type HostAgent, ENDED_STATUSES, agentState } from '../host'
 import { load, change, now, path, aboutToWait } from './store'
 import { tellLead } from './tell'
+import { PARTS_DIR } from '../core/board-parts'
 import { sayNeedsYou } from './voice'
 import { optionsVia, popupTied } from './questions'
 
@@ -93,18 +94,20 @@ async function waitingOnOld(host: Host, agents: HostAgent[]): Promise<boolean> {
  * file in a toast, and never stop the check.
  */
 export async function cleanLeftoverTmp(host: Host) {
-  const dir = path(S.N.dir)
-  const entries = await host.fs.list(dir).catch(() => [])
-  const files: { name: string; mtimeMs?: number }[] = []
-  for (const f of entries) {
-    if (f.kind !== 'file' || !f.name.endsWith('.tmp')) continue
-    const st = await host.fs.stat(`${dir}/${f.name}`).catch(() => null)
-    if (st) files.push({ name: f.name, mtimeMs: st.mtimeMs })
-  }
   const failed: string[] = []
-  for (const name of leftoverTmpFiles(files, Date.now())) {
-    const r = await host.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
-    if (r.exitCode !== 0) failed.push(`${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`)
+  // T-675: the finished tasks' parts files in .<name>/tasks/ are saved through temp files too
+  for (const [dir, sub] of [[path(S.N.dir), ''], [path(`${S.N.dir}/${PARTS_DIR}`), `${PARTS_DIR}/`]] as const) {
+    const entries = await host.fs.list(dir).catch(() => [])
+    const files: { name: string; mtimeMs?: number }[] = []
+    for (const f of entries) {
+      if (f.kind !== 'file' || !f.name.endsWith('.tmp')) continue
+      const st = await host.fs.stat(`${dir}/${f.name}`).catch(() => null)
+      if (st) files.push({ name: f.name, mtimeMs: st.mtimeMs })
+    }
+    for (const name of leftoverTmpFiles(files, Date.now())) {
+      const r = await host.run(['rm', '-f', `${dir}/${name}`]).catch((e: unknown) => ({ exitCode: 1, stderr: String(e), stdout: '' }))
+      if (r.exitCode !== 0) failed.push(`${sub}${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`)
+    }
   }
   // Say it once per file, not every two minutes.
   const nameOf = (f: string) => f.slice(0, f.indexOf(':'))

@@ -10,6 +10,7 @@ import { scoutToolLines } from '../hooks/core/scouts'
 import { load, readWhole, saveBoard, saveMigrated } from '../hooks/app/store'
 import { readArchiveFile, saveArchive } from '../hooks/app/archive'
 import { publish } from '../hooks/app/lead'
+import { cleanLeftoverTmp } from '../hooks/app/cleanup'
 import { statsText } from '../hooks/app/tools'
 import { S, leadQueue, sizeNotes, type PaneView } from '../hooks/app/state'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -129,6 +130,10 @@ test('T-675: the owner\'s board from before is migrated once, a copy kept first;
   expect(copies.length).toBe(1)
   expect(w.files.get(copies[0]!)).toBe(old)
   expect(w.toasts.join('\n')).toMatch(/history, tries and details were moved to \.symcc\/tasks\//)
+  // the board about to be migrated is not warned about as close to the limit (the migration makes it small)
+  expect(w.toasts.some(t => t.includes('close to the 4 MB limit'))).toBe(false)
+  expect(leadQueue.some(t => t.includes('close to the 4 MB limit'))).toBe(false)
+  expect(sizeNotes.size).toBe(0)
   expect(w.files.get(BOARD)!.length).toBeLessThan(1.5 * 1024 * 1024)
   // every task, whole
   expect((await load(w.host)).tasks).toEqual(readBoard(old).board.tasks)
@@ -181,8 +186,49 @@ test('T-675: a data file past 3 MB warns the owner, the lead and the board once;
   const big = `${ROOT}/.symcc/archive.json`
   w.host.fs.read = async () => Promise.reject(new Error('EFBIG'))
   w.host.fs.stat = async () => ({ kind: 'file', size: READ_LIMIT_BYTES + 300_000, mtimeMs: 0, isLink: false })
+  const toastsBefore = w.toasts.length
+  const leadBefore = leadQueue.length
   await expect(readWhole(w.host, big)).rejects.toThrow('.symcc/archive.json is 4.3 MB, over the 4 MB limit on reading one file, so symcc can\'t read it')
   expect(leadQueue.some(t => t.includes('.symcc/archive.json is 4.3 MB, over the 4 MB limit'))).toBe(true)
+  // one message each to the owner and the lead, not two
+  expect(w.toasts.slice(toastsBefore).length).toBe(1)
+  expect(w.toasts.slice(toastsBefore)[0]).toContain('over the 4 MB limit')
+  expect(leadQueue.slice(leadBefore).length).toBe(1)
+  // said once per file: a second refused read of it is quiet; board.json refused for load is said on its own
+  await expect(readWhole(w.host, big)).rejects.toThrow('over the 4 MB limit')
+  expect(w.toasts.slice(toastsBefore).length).toBe(1)
+  await expect(load(w.host)).rejects.toThrow('.symcc/board.json is 4.3 MB, over the 4 MB limit')
+  expect(w.toasts.slice(toastsBefore).length).toBe(2)
+  expect(leadQueue.slice(leadBefore).length).toBe(2)
+})
+
+test('T-675: a read without the lock that sees another session\'s save half done reads again: no alarm, no copy, the task whole', async () => {
+  const w = world()
+  const b0 = bigBoard()
+  const b = { ...b0, tasks: b0.tasks.slice(0, 60) }
+  await saveBoard(w.host, b)
+  // another session turns done T-1 back to todo (a retry) right after this one read board.json, before it reads the parts
+  const retried = { ...b, tasks: b.tasks.map(t => (t.id === 'T-1' ? { ...t, status: 'todo' as const } : t)) }
+  const read = w.host.fs.read
+  let other = true
+  w.host.fs.read = async (f: string) => {
+    const t = await read(f)
+    if (f === BOARD && other) {
+      other = false
+      await saveBoard(w.host, retried)
+    }
+    return t
+  }
+  const toasts = w.toasts.length
+  const got = await load(w.host)
+  const t1 = got.tasks.find(t => t.id === 'T-1')!
+  expect(t1.status).toBe('todo')
+  expect(t1.history.length).toBe(30)
+  expect(t1.details).toBe(b.tasks[0]!.details)
+  expect(w.toasts.slice(toasts)).toEqual([])
+  expect([...w.files.keys()].filter(f => f.includes('.before-fix-'))).toEqual([])
+  // every other task is whole too
+  expect(got.tasks.find(t => t.id === 'T-2')!.history.length).toBe(30)
 })
 
 test('T-675: the archive is split by size into archive.json, archive-2.json, ...; each stays under 2 MB and all read back', async () => {
@@ -240,4 +286,16 @@ test('T-675: a slim view task gets empty details and history to draw with; a who
   const slim = viewTask(b.tasks[611]!)
   expect(viewStubFilled(slim)).toEqual({ ...slim, details: '', history: [] })
   expect(viewStubFilled(b.tasks[690]!)).toBe(b.tasks[690]!)
+})
+
+test('T-675: leftover temp files of archive-2.json and of the parts files in .symcc/tasks/ are cleaned up', async () => {
+  const w = world()
+  const keep = [`${ROOT}/.symcc/archive-2.json`, `${ROOT}/.symcc/tasks/T-600.json`]
+  const gone = [`${ROOT}/.symcc/archive-2.json.s.1-ab.tmp`, `${ROOT}/.symcc/tasks/T-600.json.s.2-cd.tmp`, `${ROOT}/.symcc/board.json.s.3-ef.tmp`]
+  for (const f of [...keep, ...gone]) w.files.set(f, 'x')
+  w.host.fs.list = async (dir: string) => [...w.files.keys()].filter(f => f.startsWith(`${dir}/`) && !f.slice(dir.length + 1).includes('/')).map(f => ({ name: f.slice(dir.length + 1), kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false }))
+  // old enough (mtime 0 in this fake)
+  await cleanLeftoverTmp(w.host)
+  expect(gone.filter(f => w.files.has(f))).toEqual([])
+  expect(keep.filter(f => w.files.has(f))).toEqual(keep)
 })

@@ -269,12 +269,13 @@ export function tmpName(file: string, session: string, n: string): string {
 }
 
 /** Names of the temp files a save leaves behind if its session is killed mid-save (see tmpName). */
-const LEFTOVER_TMP = new RegExp(`^(?:${TMP_OWNERS.map(n => n.replace(/\./g, '\\.')).join('|')})\\.[\\w.-]+\\.tmp$`)
+// T-675: also the archive's later files (archive-2.json, ...) and the finished tasks' parts files (tasks/T-600.json)
+const LEFTOVER_TMP = new RegExp(`^(?:${[...TMP_OWNERS.map(n => n.replace(/\./g, '\\.')), 'archive-\\d+\\.json', 'T-\\d+\\.json'].join('|')})\\.[\\w.-]+\\.tmp$`)
 
 /**
  * Which files in the data folder are leftover temp files that may be deleted: only
  * <file>.<session>[.<n>].tmp of the files in TMP_OWNERS (board.lock, merge-line.json, lead.json, board.json, scouts.json,
- * archive.json, passed-trees.json), and only once they are older than maxAgeMs (a fresh one may still be in use by another
+ * archive.json, passed-trees.json, and also archive-<n>.json and the parts files T-<n>.json), and only once they are older than maxAgeMs (a fresh one may still be in use by another
  * session). A file with no usable time, or dated in the future, is kept. Anything else (board.json, lead.json,
  * ...) is never chosen.
  */

@@ -148,15 +148,18 @@ export const fileName = (file: string) => (S.root && file.startsWith(`${S.root}/
  * Notes how big data file `file` is, as read or written whole (T-675): past SIZE_WARN_BYTES the owner (a toast) and the
  * lead are told once (until it is smaller again) and the board shows the warning (sizeNotes, see publish). Never throws.
  */
-export function noteSize(host: Host, file: string, bytes: number) {
+export function noteSize(host: Host, file: string, bytes: number, refused?: string) {
   const name = fileName(file)
   if (bytes <= SIZE_WARN_BYTES) {
     sizeNotes.delete(name)
+    toldTooBig.delete(name)
     return
   }
-  const told = sizeNotes.has(name)
-  const msg = sizeWarnText(name, bytes)
+  // `refused`: a read refused for size (readWhole), said once more even after the "close to the limit" warning
+  const told = sizeNotes.has(name) && (!refused || toldTooBig.has(name))
+  const msg = refused ?? sizeWarnText(name, bytes)
   sizeNotes.set(name, msg)
+  if (refused) toldTooBig.add(name)
   if (told || S.guardOnly) return
   try {
     host.ui.toast(S.N.toast(msg))
@@ -166,14 +169,15 @@ export function noteSize(host: Host, file: string, bytes: number) {
   }
 }
 
-/** File sizes symcc already told the lead it can't read (once each). */
+/** Files symcc already told the owner and the lead it can't read (once each, until they are small again). */
 const toldTooBig = new Set<string>()
 
 /**
- * Reads data file `file` whole, noting its size (noteSize). A read refused because the file is over the 4 MB limit
- * throws a clear error saying so (and the owner and the lead are told once), never a bare host error.
+ * Reads data file `file` whole, noting its size (noteSize; `quiet`: the caller notes it, see noteRead). A read refused
+ * because the file is over the 4 MB limit throws a clear error saying so (the owner and the lead are told once, in one
+ * message), never a bare host error.
  */
-export async function readWhole(host: Host, file: string): Promise<string> {
+export async function readWhole(host: Host, file: string, quiet = false): Promise<string> {
   let text: string
   try {
     text = await host.fs.read(file)
@@ -181,16 +185,16 @@ export async function readWhole(host: Host, file: string): Promise<string> {
     const st = await host.fs.stat(file).catch(() => null)
     if (!st || !(st.size > READ_LIMIT_BYTES)) throw e
     const msg = tooBigText(fileName(file), st.size)
-    noteSize(host, file, st.size)
-    if (!toldTooBig.has(file) && !S.guardOnly) {
-      toldTooBig.add(file)
-      host.ui.toast(S.N.toast(msg))
-      tellLead(host, `${msg}. Tell the owner.`)
-    }
+    noteSize(host, file, st.size, msg)
     throw new Error(msg)
   }
-  if (typeof text === 'string' && (text.length * 3 > SIZE_WARN_BYTES || sizeNotes.has(fileName(file)))) noteSize(host, file, utf8Bytes(text))
+  if (!quiet) noteRead(host, file, text)
   return text
+}
+
+/** Notes the size of `text`, just read whole from `file` (counted only when it may be near the warning, or was). */
+function noteRead(host: Host, file: string, text: string) {
+  if (typeof text === 'string' && (text.length * 3 > SIZE_WARN_BYTES || sizeNotes.has(fileName(file)))) noteSize(host, file, utf8Bytes(text))
 }
 
 /** The last job queued for each key (see oneAtATime). */
@@ -320,16 +324,24 @@ const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
  * Reads board.json and joins each done or dropped task's stub with its parts from .<name>/tasks/ (T-675, see
  * core/board-parts.ts), then reads it as a board (readBoardValue). A parts file that is there but is not one makes the
  * board broken (never saved over); a task whose parts are missing loads as its stub, and that is said in `fixed`.
- * `whole`: board.json still keeps a finished task whole (saveMigrated moves its parts out once).
+ * `whole`: board.json still keeps a finished task whole (saveMigrated moves its parts out once); then its size is not
+ * warned about, as the migration's save makes it small (and notes its new size).
+ * A read without the board lock can see another session's save half done (its new board.json, or the old one with
+ * the parts files already trimmed for the new one), so parts found missing are read once more (board.json and all)
+ * before they count as missing.
  */
-async function readJoined(host: Host): Promise<{ text: string; read: BoardRead; whole: boolean }> {
-  const text = await readWhole(host, path(S.N.boardFile))
+async function readJoined(host: Host, again = true): Promise<{ text: string; read: BoardRead; whole: boolean }> {
+  const file = path(S.N.boardFile)
+  const text = await readWhole(host, file, true)
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch {
+    noteRead(host, file, text)
     return { text, read: readBoard(text), whole: false }
   }
+  const whole = hasWholeFinished(raw)
+  if (!whole) noteRead(host, file, text)
   const files = new Map<string, Record<string, Record<string, unknown>>>()
   for (const rel of partsFilesNamed(raw)) {
     const file = partsPath(rel)
@@ -344,8 +356,9 @@ async function readJoined(host: Host): Promise<{ text: string; read: BoardRead; 
     partsSeen.set(file, { text: t, tasks: p.tasks })
   }
   const j = joinParts(raw, files)
+  if (j.missing.length && again) return readJoined(host, false)
   const read = readBoardValue(j.raw)
-  return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole: hasWholeFinished(raw) }
+  return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole }
 }
 
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
