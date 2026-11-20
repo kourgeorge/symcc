@@ -105,9 +105,53 @@ export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardT
  *  "worker starting" without it, e.g. on OpenCode). */
 const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.merging, 'starting at the next turn', 'worker starting'])
 
-/** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
-export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>
-  !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : t.note
+/** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note.
+ *  `driving` false (another session drives the board): a claim note ("starting at the next turn") becomes
+ *  OTHER_SESSION_NOTE, as that task's worker starts in the driving session, not here (T-643). */
+export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string, driving = true): string =>
+  !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : !driving && t.status === 'doing' && CLAIM_NOTES.has(t.note) ? OTHER_SESSION_NOTE : t.note
+
+// ---------------- another session drives the board (T-643) ----------------
+
+/** The notes a task gets when claimed, before its worker started (app/starts.ts: QUEUED_NOTE and STARTING_NOTE). */
+const CLAIM_NOTES = new Set(['starting at the next turn', 'worker starting'])
+/** The end text of a doing task whose worker starts in the session that drives the board, shown in the other sessions. */
+export const OTHER_SESSION_NOTE = 'runs in the other session'
+/** A task claimed this long ago whose worker still hasn't started makes the "another session drives" warning add "it looks idle". */
+export const DRIVER_IDLE_MS = 5 * 60_000
+
+type DriveTask = Pick<SymccTask, 'status'> & Partial<Pick<SymccTask, 'note' | 'runs' | 'updated_at'>>
+
+/**
+ * Whether the session that drives the board looks idle: a doing task was claimed (a claim note, no try running) more
+ * than DRIVER_IDLE_MS ago and its worker still hasn't started. (The driver's heartbeat is fresh, else this session
+ * would have taken the board over; but its workers start only on its own turns, see app/starts.ts.)
+ */
+export function driverLooksIdle(tasks: readonly DriveTask[], nowMs: number): boolean {
+  return tasks.some(t => t.status === 'doing' && CLAIM_NOTES.has(t.note ?? '') && !t.runs?.some(r => !r.ended) && nowMs - Date.parse(t.updated_at ?? '') > DRIVER_IDLE_MS)
+}
+
+/**
+ * The warning a session that doesn't drive the board shows, '' when it drives. `where` 'board': the line under the
+ * board's banner, the longest form that fits in `width` ("⚠ Another session drives this board — its workers run there,
+ * not here. /symcc-drive to drive it from here."); 'band': the short mark at the start of the band above the prompt
+ * ("⚠ driven by another session"). Both add that the driver looks idle when driverLooksIdle says so.
+ */
+export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, where: 'board' | 'band' = 'board', width = Infinity): string {
+  if (driving) return ''
+  const idle = driverLooksIdle(tasks, nowMs)
+  if (where === 'band') return `⚠ driven by another session${idle ? ' (it looks idle)' : ''}`
+  const cmd = `/${namesFor(name).name}-drive`
+  const who = `Another session drives this board${idle ? ', but it looks idle' : ''}`
+  const forms = [
+    `⚠ ${who} — its workers run there, not here. ${cmd} to drive it from here.`,
+    `⚠ ${who}. ${cmd} to drive it from here.`,
+    `⚠ ${who}. ${cmd} to take over.`,
+    `⚠ Other session drives${idle ? ' (idle?)' : ''} · ${cmd}`,
+    `⚠ ${cmd} to drive here`,
+  ]
+  return forms.find(f => f.length <= width) ?? forms[forms.length - 1]!
+}
 
 /**
  * The end text of a task's row, the same in both bands (Claude Code's and OpenCode's) and the lead's text board,
@@ -144,7 +188,8 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
   // an approved task in review whose approve runs is listed as doing (see shownStatus)
   const ids = (st: SymccStatus) => b.tasks.filter(t => shownStatus(t, nowMs) === st).map(t => t.id)
-  const other = driving ? '' : ' (driven by another session)'
+  // T-643: not driving is said right after the mode (and the questions), so it is never cut off
+  const other = driving ? '' : driveWarning(false, b.tasks, nowMs, DEFAULT_NAME, 'band').replace(/^⚠ /, '')
   const m = modeOf({ mode })
   const label = modeLabel(m)
   const c = crew && { ...crew, mode: m, plan_mode: plan }
@@ -162,8 +207,8 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
       ].filter((x): x is string => !!x)
       // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
       const parked = ids('backlog').length
-      const counts = (join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')) + other
-      return withCrew((w, s) => join([label, asks, w, counts, s, branch_note]), c, nowMs, width)
+      const counts = join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')
+      return withCrew((w, s) => join([label, other, asks, w, counts, s, branch_note]), c, nowMs, width)
     }
     // the try marks are extra: they are kept only when they fit without cutting anything else (scouts, "(next: …)")
     const plain = line('')
@@ -171,7 +216,7 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
     const full = line(note)
     return full.length <= width && full.length === plain.length + note.length ? full : plain
   }
-  if (!driving) return withCrew((w, s) => join([label, asks, w, 'empty' + other, s, branch_note]), c, nowMs, width)
+  if (!driving) return withCrew((w, s) => join([label, other, asks, w, 'empty', s, branch_note]), c, nowMs, width)
   // an empty board in mode auto stays quiet (unless there are scouts), so a fresh project shows nothing
   if (m !== 'auto') return withCrew((w, s) => join([label, asks, w, s, branch_note]), c, nowMs, width)
   return withCrew((w, s) => join([(s || asks) && label, asks, w, s, branch_note]), c, nowMs, width) || undefined
@@ -189,7 +234,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'checking'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -283,6 +328,9 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // The three fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook)
   // stand alone, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
   if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, ICON_ART.length - 3) }, () => [] as BannerPart[]))
+  // T-643: a session that doesn't drive says so in the warning color under it all, with how to take over
+  const warn = driveWarning(driving, b.tasks, nowMs ?? Date.now(), name, 'board', w)
+  if (warn) texts.push([{ text: warn, tone: 'warning' }])
   return texts.map((parts, i) => {
     const art = wide && logo[i] !== undefined ? `${logo[i]} ` : ''
     return { art, parts: cutParts(parts, w - art.length) }

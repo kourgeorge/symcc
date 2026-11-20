@@ -71,6 +71,33 @@ test('T-631: the task page Tries row shows the last try and the sum (one try: ju
   expect(page(3, bare)).toMatch(/^Tries:\s+3 · last: 6m · all: 17m$/)
 })
 
+test('T-643: a session that does not drive: a warning line under the banner and a warning mark in the band; doing rows run in the other session', () => {
+  const f = viewFile()
+  // T-1 was claimed a minute ago ("worker starting") and has no worker here
+  const fresh = new Date(NOW - 60_000).toISOString()
+  const view = (driving: boolean, updated_at = fresh): ViewFile => ({ ...f, view: { ...f.view, driving, working: [], tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, updated_at } : t)) } })
+  const warnLines = (g: ViewFile, w = 120) => panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.filter(l => l.some(s => s.color === 'warning' && s.text.startsWith('⚠')))
+  const full = '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.'
+  expect(warnLines(view(false)).map(lineText)).toEqual([full])
+  // narrow: a shorter form that fits
+  const narrow = warnLines(view(false), 40).map(lineText)
+  expect(narrow.length).toBe(1)
+  expect(narrow[0]!.length <= 40).toBe(true)
+  expect(narrow[0]).toContain('/symcc-drive')
+  // the band: the mark right after the brand, in the warning color; T-1's row says where it runs
+  const band = bandDraw(view(false), NOW, 120).lines
+  expect(band[0]![1]).toEqual({ text: ' ⚠ driven by another session', color: 'warning' })
+  expect(band.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — runs in the other session$/)
+  // claimed an hour ago and still not started there: it looks idle
+  expect(warnLines(view(false, AT), 140).map(lineText)).toEqual(['⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.'])
+  expect(bandDraw(view(false, AT), NOW, 120).lines[0]![1]!.text).toBe(' ⚠ driven by another session (it looks idle)')
+  // the driving session: neither, and the row keeps its own note
+  expect(warnLines(view(true))).toEqual([])
+  const own = bandDraw(view(true), NOW, 120).lines
+  expect(own.map(lineText).join('\n')).not.toContain('⚠')
+  expect(own.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — worker starting$/)
+})
+
 test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {

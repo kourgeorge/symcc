@@ -253,7 +253,7 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     expect(texts(lines[1]).join(''), at).toBe(` ${modeLabel('auto')}  ${MODE_MEANING.auto}`)
     const pill = elements(lines[1]).find(n => n.type === 'Text' && n.props?.backgroundColor)
     expect([pill?.props?.backgroundColor, pill?.props?.color], at).toEqual(['success', 'inverseText'])
-    expect(texts(lines[2]).join(''), at).toBe('branch main · driven by another session')
+    expect(texts(lines[2]).join(''), at).toBe('branch main · this session drives')
     expect(texts(lines[3]).join(''), at).toMatch(/^tests: claude, typecheck · \d+ at once · \d+ min · \d+ retr(y|ies)$/)
     // the counts as badges: a colored dot, then the count, " · " between
     const counts = await ui.find({ key: 'vs-counts' })
@@ -277,6 +277,25 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     await ui.unmount()
   }
 })
+
+// T-643: a session that doesn't drive the board gets a warning line in the warning color, with how to take over, and
+// "it looks idle" when a task has waited more than 5 minutes for its worker to start in the driving session.
+const QUEUED_402 = { ...BOARD_TASKS.find(t => t.id === 'T-402')!, note: 'starting at the next turn', updated_at: new Date(T0 - 6 * 60_000).toISOString() }
+for (const [name, driving, tasks, want] of [
+  ['the driving session has no warning line', true, BOARD_TASKS, undefined],
+  ['another session drives: the warning line', false, BOARD_TASKS, '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.'],
+  ['another session drives and a task waits 6 min to start: "it looks idle"', false, [...BOARD_TASKS.filter(t => t.id !== 'T-402'), QUEUED_402], '⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.'],
+] as const)
+  test(`T-643: in VS Code ${name}`, async ($, on) => {
+    on('ui.toast', () => ({ value: undefined }))
+    seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, driving } } })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+    // the line under the counts, in the warning color, wrapped (never cut)
+    const warn = elements(await ui.find({ key: 'vs-header' })).find(n => n.type === 'Text' && texts(n).join('').startsWith('⚠'))
+    expect(warn ? texts(warn).join('') : undefined).toBe(want)
+    if (warn) expect([warn.props?.color, warn.props?.wrap]).toEqual(['warning', 'wrap'])
+    await ui.unmount()
+  })
 
 // T-444, T-448: VS Code's lists: headings with a count badge, each task two lines of text that wrap (its ID a link that
 // opens it, the title up to two lines, then a dim line with the status in color, the kind, the try and the time), the
