@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, cantPlayNotify, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -523,11 +523,8 @@ export async function settingsPage($: $, pane: PaneParts) {
     if (info.kind === 'onoff') return saveIt({ [name]: now !== 'on' })()
     S.settingEdit = null
     S.settingPick = null
-    if (info.kind === 'mode') S.settingPick = { name, options: ['off', 'review', 'auto'] }
-    else if (info.kind === 'findings') S.settingPick = { name, options: [...SCOUT_FINDINGS_CHOICES] }
-    else if (info.kind === 'untested') S.settingPick = { name, options: [...TESTS_WITH_CHANGES_CHOICES] }
-    // only what this machine can play (off always)
-    else if (info.kind === 'notify') S.settingPick = { name, options: v.notify_choices?.length ? v.notify_choices : ['off'] }
+    const options = settingChoices(name, v.notify_choices)
+    if (options.length) S.settingPick = { name, options }
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
     $.ui.invalidate('ui.render')
   })
@@ -588,7 +585,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       <Button key={row(`setting:${x.name}`)} plain onPress={pressRow(x.name)}>
         <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
-        {x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
+        {x.name === 'notify' && cantPlayNotify(v) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
         <Text color={C('inactive')}> · default {x.default} · {x.range} · {x.meaning}</Text>
       </Button>,
       ...[editBox(x.name), pickBox(x.name)].filter(Boolean),

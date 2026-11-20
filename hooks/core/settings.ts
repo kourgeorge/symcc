@@ -1,7 +1,7 @@
 // Failing tests, turning things on and off, and the settings.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
+import { type Board, type Notify, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { ellipsis, num } from './text'
 import { MAX_TEST_MINUTES } from './test-timeout'
 
@@ -312,6 +312,21 @@ export const isSettingPage = (x: string): x is SettingPage => (SETTING_PAGES as 
 export const groupSettings = (g: SettingGroup): SettingInfo[] => g.items.flatMap(x => (isSettingPage(x) ? [] : [settingInfo(x)!]))
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
+
+/** The values setting `name` is picked from: mode, scout_findings, tests_with_changes, and notify (only what this
+ *  machine can play, `notifyChoices`; off always). [] for a setting that flips as on/off or is typed in a box. */
+export function settingChoices(name: string, notifyChoices?: readonly string[]): string[] {
+  const kind = settingInfo(name)?.kind
+  if (kind === 'mode') return [...MODES]
+  if (kind === 'findings') return [...SCOUT_FINDINGS_CHOICES]
+  if (kind === 'untested') return [...TESTS_WITH_CHANGES_CHOICES]
+  if (kind === 'notify') return notifyChoices?.length ? [...notifyChoices] : ['off']
+  return []
+}
+
+/** True when notify is set to something this machine can't play (nothing plays then). */
+export const cantPlayNotify = (v: { notify?: string; notify_choices?: readonly string[] }): boolean =>
+  !!v.notify_choices && !!v.notify && !v.notify_choices.includes(v.notify)
 
 /** One setting's value in a few words, for a closed group's summary line ("3 at once", "45 min"); '' leaves it out. */
 function shortValue(b: Partial<Board>, name: SettingName): string {

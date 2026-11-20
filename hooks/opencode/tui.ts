@@ -19,8 +19,8 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingChoices, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab } from './board-view'
-import { isScoutRunReport, parseSettingValue, settingInfo, settingValue, type SettingName } from '../board'
+import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab } from './board-view'
+import { isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, type SettingName } from '../board'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -339,7 +339,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const f = file()
     if (!info || !f) return
     const now = settingValue(f.view, setting)
-    const choices = settingChoices(f, setting)
+    const choices = settingChoices(setting, f.view.notify_choices)
     let value: string | undefined
     if (info.kind === 'onoff') value = now === 'on' ? 'off' : 'on'
     else if (choices.length) value = await ctx.ui.dialog.select({ title: `${setting} (now ${now})`, options: choices.map(c => ({ title: c === now ? `${c} (now)` : c, value: c })) })

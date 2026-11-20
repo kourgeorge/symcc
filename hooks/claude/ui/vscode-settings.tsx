@@ -7,7 +7,7 @@
 //   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
 //   Roles  7 roles · 1 off                  (a link that opens the Roles page; Kinds the same)
 // Only real actions are Buttons (an Input's Save). No key hints.
-import { SETTINGS, SETTING_GROUPS, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, isSettingPage, settingValue, parseSettingValue, type SettingName, type SettingsInput } from '../../board'
+import { SETTINGS, SETTING_GROUPS, isSettingPage, settingChoices, settingValue, parseSettingValue, type SettingName, type SettingsInput } from '../../board'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import type { PaneParts } from './parts'
@@ -20,18 +20,6 @@ export type VsSettingsCtx = {
   save: (input: SettingsInput) => () => void
   openRoles: () => void
   openKinds: () => void
-}
-
-/** The choices of a setting with a fixed set of them, or null for a setting typed in a box (numbers, test commands). */
-export function settingChoices(name: SettingName, notifyChoices: readonly string[] | undefined): string[] | null {
-  const info = SETTINGS.find(x => x.name === name)!
-  if (info.kind === 'onoff') return ['on', 'off']
-  if (info.kind === 'mode') return ['off', 'review', 'auto']
-  if (info.kind === 'findings') return [...SCOUT_FINDINGS_CHOICES]
-  if (info.kind === 'untested') return [...TESTS_WITH_CHANGES_CHOICES]
-  // only what this machine can play (off always)
-  if (info.kind === 'notify') return notifyChoices?.length ? [...notifyChoices] : ['off']
-  return null
 }
 
 /** The Settings page in VS Code. */
@@ -48,7 +36,9 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
   const settingRow = (name: SettingName) => {
     const x = SETTINGS.find(s => s.name === name)!
     const now = settingValue(v, name)
-    const choices = settingChoices(name, v.notify_choices)
+    // a Select for on/off and for a setting with a fixed set of choices, a box for the typed ones (numbers, test commands)
+    const picks = x.kind === 'onoff' ? ['on', 'off'] : settingChoices(name, v.notify_choices)
+    const choices = picks.length ? picks : null
     const about = `default ${x.default} · ${x.range} · ${x.meaning}`
     if (choices) {
       // a value this machine can't play (notify) stays in the list, marked, so the Select shows what is set

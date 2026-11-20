@@ -16,7 +16,7 @@ import {
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify,
   type SettingName, type ScoutRunRecord,
 } from '../board'
 import { restFrame } from '../core/logo'
@@ -410,7 +410,7 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
       const x = settingInfo(item)!
       const hit = { setting: x.name }
       const sel = x.name === selected
-      const unplayable = x.name === 'notify' && v.notify_choices && v.notify && !v.notify_choices.includes(v.notify)
+      const unplayable = x.name === 'notify' && cantPlayNotify(v)
       b.add(
         [
           { text: sel ? '› ' : '  ', color: 'ide', bold: true },
@@ -427,17 +427,6 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
   b.blank()
   b.add([{ text: `Enter changes a setting (on/off flips) · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
   return { ...b, ids: [...SETTING_ROWS], selected }
-}
-
-/** The values setting `name` is picked from ([] when it is typed, or flips as on/off). */
-export function settingChoices(f: ViewFile | null, name: SettingName): string[] {
-  const kind = settingInfo(name)?.kind
-  if (kind === 'mode') return ['off', 'review', 'auto']
-  if (kind === 'findings') return [...SCOUT_FINDINGS_CHOICES]
-  if (kind === 'untested') return [...TESTS_WITH_CHANGES_CHOICES]
-  // only what this machine can play (off always)
-  if (kind === 'notify') return f?.view.notify_choices?.length ? [...f.view.notify_choices] : ['off']
-  return []
 }
 
 /** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, then the groups: the backlog (its
