@@ -449,3 +449,19 @@ test('stats: with no scouts the report says nothing extra about scouts (T-622)',
   expect(text).not.toContain('all scouts')
   expect(statsReport({ tasks, nowMs: NOW })).not.toContain('scout tokens')
 })
+
+test('stats: scouts named like built-in object names (constructor, toString, __proto__) work (T-622)', () => {
+  const names = ['constructor', 'toString', 'valueOf', '__proto__']
+  const tasks = names.map((s, i) => task(`T-${i + 1}`, { origin: { by: 'scout', scout: s, why: '', at: '' }, status: 'todo' }))
+  for (const range of [{ kind: 'days' as const, days: 7 }, undefined]) {
+    const text = statsReport({ tasks, nowMs: NOW, ...(range ? { range } : {}), team: { scouts: {} } })
+    expect(text).not.toContain('NaN')
+    expect(text).toContain('1 task (0 merged, 0 dropped, 1 open) · 0 scout tokens · — per merged')
+  }
+  const empty = parseScoutUsage(null)
+  for (const s of names) expect(scoutResultsLine(tasks, s, Object.hasOwn(empty, s) ? empty[s] : undefined, NOW)).toContain('last 7 days: 1 task (0 merged, 0 dropped, 1 open) · 0 scout tokens')
+  // a scout really named __proto__ keeps its own usage
+  const u = parseScoutUsage(addScoutRun(null, '__proto__', { endMs: NOW, ms: 1000, tokens: { input: 3000 } }))
+  expect(Object.hasOwn(u, '__proto__')).toBe(true)
+  expect(statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, team: { scouts: u } })).toContain('1 task (0 merged, 0 dropped, 1 open) · 3k scout tokens')
+})

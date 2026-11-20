@@ -398,7 +398,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   // scouts that used tokens in the range but made no task here are listed too
   const usage = input.team?.scouts ?? {}
   const span = rangeSpan(range, all, nowMs)
-  const scoutTok = (s: string) => (usage[s] ? tokenCount(scoutTotals({ [s]: usage[s]! }, span).tokens) : 0)
+  const scoutTok = (s: string) => (Object.hasOwn(usage, s) ? tokenCount(scoutTotals({ [s]: usage[s]! }, span).tokens) : 0)
   const idle = Object.keys(usage).filter(s => !scouts.some(([k]) => k === s) && scoutTok(s) > 0).sort()
   if (idle.length && !byOrigin.has('scout')) origins.push(['scout', []])
   const originW = Math.max(14, ...[...scouts.map(([k]) => k), ...idle].map(k => k.length + 4))
@@ -454,7 +454,7 @@ const figs = (v: unknown): ScoutUsageFigures | null => {
 /** The scouts' tokens and time kept in scouts.json under "usage" (scout name → totals); {} for a missing or broken file. */
 export function parseScoutUsage(text: string | null | undefined): Record<string, ScoutUsage> {
   const u = jsonObj(text)?.usage
-  const out: Record<string, ScoutUsage> = {}
+  const out: Record<string, ScoutUsage> = Object.create(null)
   if (!u || typeof u !== 'object' || Array.isArray(u)) return out
   for (const [name, v] of Object.entries(u as Record<string, unknown>)) {
     const f = figs(v)

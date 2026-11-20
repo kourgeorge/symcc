@@ -138,7 +138,7 @@ export async function loadScoutResults(host: Pick<Host, 'fs'>, scouts: string[],
   const r = readArchive(await host.fs.read(path(S.N.archiveFile)).catch(() => null))
   const onBoard = new Set(tasks.map(t => t.id))
   const all = [...tasks, ...(r.broken ? [] : r.archive.tasks.filter(t => !onBoard.has(t.id)))]
-  return Object.fromEntries(scouts.map(s => [s, scoutResultsLine(all, s, usage[s], nowMs)]))
+  return Object.fromEntries(scouts.map(s => [s, scoutResultsLine(all, s, Object.hasOwn(usage, s) ? usage[s] : undefined, nowMs)]))
 }
 
 /** The full report of a run (its file's text), or null when it has none or it can't be read. */
