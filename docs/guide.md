@@ -1419,7 +1419,7 @@ its read-only `stats` tool.
   average tokens and time; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
-  entries from older boards have no times. The worker time is the same as the total on the board's banner.
+  entries from older boards have no times.
 
 ---
 
