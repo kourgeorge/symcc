@@ -857,6 +857,8 @@ has examples that work in most code projects:
   the code, and broken links.
 - [`simplify.md`](../examples/scouts/simplify.md): code that could be simpler without changing what
   it does.
+- [`big-files.md`](../examples/scouts/big-files.md): source files grown too large (or that many
+  tasks keep touching at once), with a concrete way to split each one.
 
 A new project starts with these example scouts. The first time symcc starts in a project with
 no `.symcc/scouts/` folder yet, it copies every example there and marks each one paused (in
